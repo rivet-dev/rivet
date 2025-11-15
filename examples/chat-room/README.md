@@ -1,10 +1,10 @@
-# Chat Room for RivetKit
+# Chat Room for Rivet
 
-Example project demonstrating real-time messaging and actor state management with [RivetKit](https://rivetkit.org).
+Example project demonstrating real-time messaging and actor state management with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating real-time messaging and actor state management wit
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/chat-room
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/chat-room
 npm install
 ```
 
@@ -44,7 +44,7 @@ npm run dev:cli
 - Real-time messaging with automatic persistence
 - Multiple chat rooms support
 - Both web and CLI interfaces
-- Event-driven architecture with RivetKit actors
+- Event-driven architecture with Rivet actors
 - TypeScript support throughout
 
 ## License

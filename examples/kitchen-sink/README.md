@@ -1,23 +1,23 @@
-# Kitchen Sink Example for RivetKit
+# Kitchen Sink Example for Rivet
 
-Example project demonstrating all RivetKit features with [RivetKit](https://rivetkit.org).
+Example project demonstrating all Rivet features with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+ or Bun
-- RivetKit development environment
+- Rivet development environment
 
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/kitchen-sink
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/kitchen-sink
 npm install
 ```
 

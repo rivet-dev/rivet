@@ -1,10 +1,10 @@
-# Real-time Collaborative Cursors for RivetKit
+# Real-time Collaborative Cursors for Rivet
 
-Example project demonstrating real-time cursor tracking and collaborative canvas with [RivetKit](https://rivetkit.org).
+Example project demonstrating real-time cursor tracking and collaborative canvas with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating real-time cursor tracking and collaborative canvas
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/cursors
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/cursors
 npm install
 ```
 
@@ -35,7 +35,7 @@ Open your browser to `http://localhost:5173`. Open multiple tabs or windows to s
 - Click-to-place text on canvas
 - Multiple room support for different collaborative spaces
 - Persistent text labels across sessions
-- Event-driven architecture with RivetKit actors
+- Event-driven architecture with Rivet actors
 - TypeScript support throughout
 
 ## License

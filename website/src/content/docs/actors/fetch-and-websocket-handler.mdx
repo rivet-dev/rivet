@@ -93,7 +93,7 @@ export const honoActor = actor({
 </Tab>
 </Tabs>
 
-Also see the [raw fetch handler example project](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-fetch-handler).
+Also see the [raw fetch handler example project](https://github.com/rivet-dev/rivet/tree/main/examples/raw-fetch-handler).
 
 <Tip>
 	`onFetch` can be used to expose Server-Sent Events from Rivet Actors.
@@ -123,7 +123,7 @@ export const websocketActor = actor({
 });
 ```
 
-Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
+Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-dev/rivet/tree/main/examples/raw-websocket-handler-proxy).
 
 <Note>
 	Connection lifecycle hooks like `onConnect` and `onDisconnect` do not get called when opening WebSockets for `onWebSocket`. This is because `onWebSocket` provides a low-level connection. Use `ws.addEventListener("open")` and `ws.addEventListener("close")` instead.

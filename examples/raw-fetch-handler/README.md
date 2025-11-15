@@ -1,10 +1,10 @@
-# Raw Fetch Handler Example for RivetKit
+# Raw Fetch Handler Example for Rivet
 
-Example project demonstrating raw HTTP fetch handling with Hono integration in [RivetKit](https://rivetkit.org).
+Example project demonstrating raw HTTP fetch handling with Hono integration in [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Overview
 
@@ -13,7 +13,7 @@ This example demonstrates:
 - Creating named counter actors that maintain independent state
 - Making fetch requests to actors through the frontend client
 - Forwarding requests from custom Hono endpoints to actor fetch handlers
-- Building a React frontend that interacts with RivetKit actors
+- Building a React frontend that interacts with Rivet actors
 - Testing actors with fetch handlers
 
 ## Project Structure
@@ -21,7 +21,7 @@ This example demonstrates:
 ```
 raw-fetch-handler/
 ├── src/
-│   ├── backend/     # RivetKit server with counter actors
+│   ├── backend/     # Rivet server with counter actors
 │   └── frontend/    # React app demonstrating client interactions
 └── tests/           # Vitest test suite
 ```
@@ -35,8 +35,8 @@ raw-fetch-handler/
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/raw-fetch-handler
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/raw-fetch-handler
 pnpm install
 ```
 
@@ -88,7 +88,7 @@ A React app demonstrating:
 1. The backend defines a counter actor with a Hono router
 2. Each counter is identified by a unique name
 3. The frontend can interact with counters in two ways:
-   - Direct actor fetch calls using the RivetKit client
+   - Direct actor fetch calls using the Rivet client
    - HTTP requests through the forward endpoint
 4. Multiple counters maintain independent state
 

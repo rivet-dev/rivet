@@ -1,10 +1,10 @@
-# Database Notes for RivetKit
+# Database Notes for Rivet
 
-Example project demonstrating persistent data storage and real-time updates with [RivetKit](https://rivetkit.org).
+Example project demonstrating persistent data storage and real-time updates with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating persistent data storage and real-time updates with
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/database
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/database
 npm install
 ```
 
@@ -42,7 +42,7 @@ Open your browser to `http://localhost:3000`
 
 This example demonstrates:
 
-1. **Actor State Management**: Using RivetKit actors to manage persistent application state
+1. **Actor State Management**: Using Rivet actors to manage persistent application state
 2. **Authentication**: Basic token-based authentication for user identification
 3. **Real-time Events**: Broadcasting changes to all connected clients using actor events
 4. **State Persistence**: Actor state is automatically persisted between sessions
@@ -50,8 +50,8 @@ This example demonstrates:
 
 ## Architecture
 
-- **Backend**: RivetKit actor that manages note storage and user authentication
-- **Frontend**: React application with real-time updates via RivetKit hooks
+- **Backend**: Rivet actor that manages note storage and user authentication
+- **Frontend**: React application with real-time updates via Rivet hooks
 - **State Management**: Each user gets their own actor instance for data isolation
 - **Authentication**: Mock token-based auth (replace with real auth in production)
 

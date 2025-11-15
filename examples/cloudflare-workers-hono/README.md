@@ -1,10 +1,10 @@
-# Cloudflare Workers with Hono for RivetKit
+# Cloudflare Workers with Hono for Rivet
 
-Example project demonstrating Cloudflare Workers deployment with Hono router using [RivetKit](https://rivetkit.org).
+Example project demonstrating Cloudflare Workers deployment with Hono router using [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -17,8 +17,8 @@ Example project demonstrating Cloudflare Workers deployment with Hono router usi
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/cloudflare-workers-hono
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/cloudflare-workers-hono
 npm install
 ```
 

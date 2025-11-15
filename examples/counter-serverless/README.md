@@ -1,10 +1,10 @@
-# Counter (Serverless) for RivetKit
+# Counter (Serverless) for Rivet
 
-Example project demonstrating serverless actor deployment with automatic engine configuration using [RivetKit](https://rivetkit.org).
+Example project demonstrating serverless actor deployment with automatic engine configuration using [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -16,8 +16,8 @@ Example project demonstrating serverless actor deployment with automatic engine 
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/counter-serverless
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/counter-serverless
 npm install
 ```
 

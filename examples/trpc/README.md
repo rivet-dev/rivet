@@ -1,10 +1,10 @@
-# tRPC Integration for RivetKit
+# tRPC Integration for Rivet
 
-Example project demonstrating tRPC integration with [RivetKit](https://rivetkit.org).
+Example project demonstrating tRPC integration with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating tRPC integration with [RivetKit](https://rivetkit.
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/trpc
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/trpc
 npm install
 ```
 

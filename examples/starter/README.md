@@ -1,10 +1,10 @@
-# Rivet Platform for RivetKit
+# Rivet Platform for Rivet
 
-Example project demonstrating Rivet cloud platform deployment with [RivetKit](https://rivetkit.org).
+Example project demonstrating Rivet cloud platform deployment with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -17,8 +17,8 @@ Example project demonstrating Rivet cloud platform deployment with [RivetKit](ht
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/rivet
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/rivet
 npm install
 ```
 
@@ -39,7 +39,7 @@ export RIVET_ENVIRONMENT=your_environment
 npm run dev
 ```
 
-This will start the RivetKit server locally at http://localhost:8080.
+This will start the Rivet server locally at http://localhost:8080.
 
 ### Testing the Client
 

@@ -1,10 +1,10 @@
-# Hono React Integration for RivetKit
+# Hono React Integration for Rivet
 
-Example project demonstrating full-stack Hono backend with React frontend integration with [RivetKit](https://rivetkit.org).
+Example project demonstrating full-stack Hono backend with React frontend integration with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating full-stack Hono backend with React frontend integr
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/hono-react
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/hono-react
 npm install
 ```
 

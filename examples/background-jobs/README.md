@@ -1,10 +1,10 @@
-# Daily Email Campaign for RivetKit
+# Daily Email Campaign for Rivet
 
-Example project demonstrating scheduled background emails with [RivetKit](https://rivetkit.org).
+Example project demonstrating scheduled background emails with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -16,8 +16,8 @@ Example project demonstrating scheduled background emails with [RivetKit](https:
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/background-jobs
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/background-jobs
 npm install
 ```
 

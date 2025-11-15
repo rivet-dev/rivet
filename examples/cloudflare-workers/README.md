@@ -1,10 +1,10 @@
-# Cloudflare Workers for RivetKit
+# Cloudflare Workers for Rivet
 
-Example project demonstrating Cloudflare Workers deployment with [RivetKit](https://rivetkit.org).
+Example project demonstrating Cloudflare Workers deployment with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -17,8 +17,8 @@ Example project demonstrating Cloudflare Workers deployment with [RivetKit](http
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/cloudflare-workers
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/cloudflare-workers
 npm install
 ```
 

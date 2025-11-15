@@ -1,10 +1,10 @@
-# Raw WebSocket Handler Proxy for RivetKit
+# Raw WebSocket Handler Proxy for Rivet
 
-Example project demonstrating raw WebSocket handling with [RivetKit](https://rivetkit.org).
+Example project demonstrating raw WebSocket handling with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -16,8 +16,8 @@ Example project demonstrating raw WebSocket handling with [RivetKit](https://riv
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/raw-websocket-handler-proxy
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/raw-websocket-handler-proxy
 npm install
 ```
 

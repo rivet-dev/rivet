@@ -1,10 +1,10 @@
-# Tenant Dashboard for RivetKit
+# Tenant Dashboard for Rivet
 
-Example project demonstrating multi-tenant organization management with role-based access control using [RivetKit](https://rivetkit.org).
+Example project demonstrating multi-tenant organization management with role-based access control using [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating multi-tenant organization management with role-bas
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/tenant
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/tenant
 npm install
 ```
 
@@ -51,7 +51,7 @@ This tenant system demonstrates:
 
 ## Architecture
 
-- **Backend**: RivetKit actor with authentication and role-based permissions
+- **Backend**: Rivet actor with authentication and role-based permissions
 - **Frontend**: React application with conditional rendering based on user roles
 - **Authentication**: Token-based with connection state for user context
 - **Authorization**: Server-side permission checks for all sensitive operations
