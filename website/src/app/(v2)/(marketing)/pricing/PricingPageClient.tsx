@@ -6,6 +6,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import { Icon, faArrowRight } from "@rivet-gg/icons";
 
+
 const tiers = [
 	{
 		name: "Free",
@@ -490,27 +491,27 @@ export default function PricingPageClient() {
 	return (
 		<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8">
 			<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-48">
-				<div className="mx-auto max-w-[1200px] px-6 lg:px-8">
-					<div className="text-center">
-						<h1 className="text-6xl font-normal text-white leading-[1.1] tracking-normal">
-							Rivet {activeTab === "cloud" ? "Cloud Pricing" : "Self-Host"}
-						</h1>
-						<p className="mt-6 max-w-2xl mx-auto text-xl leading-[1.2] tracking-tight font-extralight text-white/60">
-							{activeTab === "cloud" 
-								? "Start with free and scale as you grow."
-								: "Deploy Rivet on your own infrastructure."
-							}
-						</p>
-						<div className="mt-8">
-							<Toggle
-								options={toggleOptions}
-								activeValue={activeTab}
-								onChange={setActiveTab}
-							/>
+					<div className="mx-auto max-w-[1200px] px-6 lg:px-8">
+						<div className="text-center">
+							<h1 className="font-heading text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter" style={{ color: '#FAFAFA' }}>
+								Rivet {activeTab === "cloud" ? "Cloud Pricing" : "Self-Host"}
+							</h1>
+							<p className="mt-6 max-w-2xl mx-auto text-lg md:text-xl leading-[1.2]" style={{ color: '#A0A0A0' }}>
+								{activeTab === "cloud" 
+									? "Start with free and scale as you grow."
+									: "Deploy Rivet on your own infrastructure."
+								}
+							</p>
+							<div className="mt-8">
+								<Toggle
+									options={toggleOptions}
+									activeValue={activeTab}
+									onChange={setActiveTab}
+								/>
+							</div>
 						</div>
 					</div>
 				</div>
-			</div>
 
 			{activeTab === "cloud" ? (
 				<>
@@ -519,7 +520,7 @@ export default function PricingPageClient() {
 						<UsagePricingTable />
 					</div>
 
-					<div className="mx-auto max-w-2xl px-6 pt-16 sm:pt-24 lg:max-w-7xl lg:px-8 pb-24">
+					<div className="relative mx-auto max-w-2xl px-6 pt-16 sm:pt-24 lg:max-w-7xl lg:px-8 pb-24">
 						<PricingTable />
 						<MobilePricingTabs />
 					</div>

@@ -29,7 +29,7 @@ export function Login() {
 		if (user) {
 			navigate({ to: "/" });
 		}
-	}, [user]);
+	}, [user, navigate]);
 
 	return (
 		<motion.div

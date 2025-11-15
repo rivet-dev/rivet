@@ -5,7 +5,7 @@ export function NewCTASection() {
 		<section className="py-24 md:py-32 text-center">
 			<div className="animate-on-scroll animate-fade-up">
 				<h2 className="font-heading text-4xl sm:text-5xl font-bold tracking-tighter text-text-primary">
-					Build Your Next App with Rivet.
+					Build your app with Rivet Actors
 				</h2>
 
 				<p className="mt-6 text-lg md:text-xl text-text-secondary max-w-2xl mx-auto">

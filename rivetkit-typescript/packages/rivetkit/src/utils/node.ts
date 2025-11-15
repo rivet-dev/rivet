@@ -29,7 +29,7 @@ function getRequireFn() {
 	}
 
 	// ESM context - use createRequire with import.meta.url
-	// @ts-ignore - import.meta.url is available in ESM
+	// @ts-expect-error - import.meta.url is available in ESM
 	return createRequire(import.meta.url);
 }
 
@@ -50,21 +50,21 @@ export function importNodeDependencies(): void {
 		const requireFn = getRequireFn();
 
 		// Use requireFn with webpack ignore comment to prevent bundling
-		// @ts-ignore - dynamic require usage
+		// @ts-expect-error - dynamic require usage
 		nodeCrypto = requireFn(/* webpackIgnore: true */ "node:crypto");
-		// @ts-ignore
+		// @ts-expect-error
 		nodeFsSync = requireFn(/* webpackIgnore: true */ "node:fs");
-		// @ts-ignore
+		// @ts-expect-error
 		nodeFs = requireFn(/* webpackIgnore: true */ "node:fs/promises");
-		// @ts-ignore
+		// @ts-expect-error
 		nodePath = requireFn(/* webpackIgnore: true */ "node:path");
-		// @ts-ignore
+		// @ts-expect-error
 		nodeOs = requireFn(/* webpackIgnore: true */ "node:os");
-		// @ts-ignore
+		// @ts-expect-error
 		nodeChildProcess = requireFn(
 			/* webpackIgnore: true */ "node:child_process",
 		);
-		// @ts-ignore
+		// @ts-expect-error
 		nodeStream = requireFn(
 			/* webpackIgnore: true */ "node:stream/promises",
 		);

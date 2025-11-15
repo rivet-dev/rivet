@@ -94,7 +94,7 @@ function Event(props: RecordedRealtimeEvent) {
 				},
 			);
 		}
-	}, []);
+	}, [props.timestamp]);
 
 	if (props.type === "action") {
 		return (

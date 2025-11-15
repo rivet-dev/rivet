@@ -56,7 +56,7 @@ export default function Layout({ params: { section, page }, children }) {
 					) : null
 				}
 			/>
-			<div className="w-full">
+			<div className="w-full relative z-10">
 				<div
 					className="md:grid-cols-docs-no-sidebar lg:grid-cols-docs mx-auto flex w-full flex-col justify-center md:grid min-h-content"
 					style={{ "--header-height": "6.5rem" } as CSSProperties}
