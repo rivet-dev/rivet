@@ -1,6 +1,6 @@
 use anyhow::*;
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use pegboard_actor_kv as actor_kv;
 use rivet_api_builder::ApiCtx;
 use rivet_util::Id;

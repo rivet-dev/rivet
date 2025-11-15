@@ -12,6 +12,48 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
+// StyleInjector Component - Injects custom CSS for background grid
+const StyleInjector = () => (
+	<style
+		dangerouslySetInnerHTML={{
+			__html: `
+    /* --- Background Grid --- */
+    .changelog-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #0a0a0a;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      background-size: 3rem 3rem;
+      animation: pan-grid 60s linear infinite;
+    }
+    
+    .changelog-background-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at 50% 50%, rgba(10, 10, 10, 0.2) 0%, rgba(10, 10, 10, 1) 90%);
+    }
+    
+    @keyframes pan-grid {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 3rem 3rem; }
+    }
+  `,
+		}}
+	/>
+);
+
 export const metadata: Metadata = {
 	title: "Changelog - Rivet",
 };
@@ -93,25 +135,36 @@ export default async function BlogPage() {
 	);
 	return (
 		<>
-			<div className="mt-8 flex w-full items-center justify-center">
-				<h1 className="text-6xl font-bold">Changelog</h1>
-			</div>
-			<div className="mb-8 mt-4 flex items-center justify-center">
-				<div className="bg-card rounded-md border">
-					<Button variant="ghost" asChild>
-						<Link href="/blog">All Posts</Link>
-					</Button>
-					<Button variant="secondary" asChild>
-						<Link href="/changelog">Changelog</Link>
-					</Button>
+			<StyleInjector />
+			<div className="relative min-h-screen w-full overflow-hidden">
+				{/* Background Grid */}
+				<div className="changelog-background" aria-hidden="true"></div>
+				<div className="changelog-background-overlay" aria-hidden="true"></div>
+				
+				<div className="relative z-10">
+					<div className="mt-8 flex w-full items-center justify-center">
+						<h1 className="font-heading text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter" style={{ color: '#FAFAFA' }}>
+							Changelog
+						</h1>
+					</div>
+					<div className="mb-8 mt-4 flex items-center justify-center">
+						<div className="bg-card rounded-md border">
+							<Button variant="ghost" asChild>
+								<Link href="/blog">All Posts</Link>
+							</Button>
+							<Button variant="secondary" asChild>
+								<Link href="/changelog">Changelog</Link>
+							</Button>
+						</div>
+					</div>
+					<div className="mx-auto mb-8 mt-16 flex max-w-prose flex-col">
+						{entries
+							.sort((a, b) => b.published - a.published)
+							.map((article) => (
+								<Article key={article.slug} {...article} />
+							))}
+					</div>
 				</div>
-			</div>
-			<div className="mx-auto mb-8 mt-16 flex max-w-prose flex-col">
-				{entries
-					.sort((a, b) => b.published - a.published)
-					.map((article) => (
-						<Article key={article.slug} {...article} />
-					))}
 			</div>
 		</>
 	);

@@ -130,7 +130,13 @@ function useStream<T = unknown>(
 		return () => {
 			controller.abort();
 		};
-	}, [url, actorId, opts.enabled, stableOnMessage]);
+	}, [
+		url,
+		actorId,
+		opts.enabled,
+		stableOnMessage,
+		queries.createActorInspectorFetchConfiguration,
+	]);
 }
 
 export const useActorStateStream = (

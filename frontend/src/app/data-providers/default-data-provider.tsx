@@ -82,7 +82,6 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return {} as PaginatedActorResponse;
 			},
 			getNextPageParam: (lastPage) => {
 				if (lastPage.pagination.cursor) {
@@ -110,7 +109,6 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return {} as PaginatedBuildsResponse;
 			},
 			getNextPageParam: () => {
 				return undefined;
@@ -232,7 +230,6 @@ const defaultContext = {
 			queryKey: ["actor", actorId, "build"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return {} as Build;
 			},
 			enabled: false,
 		});
@@ -242,7 +239,6 @@ const defaultContext = {
 			queryKey: ["actor", actorId, "metrics"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return {} as ActorMetrics;
 			},
 			enabled: false,
 		});
@@ -283,7 +279,6 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return [] as ActorLogEntry[];
 			},
 			getNextPageParam: () => null,
 		});
@@ -333,7 +328,6 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return {} as PaginatedRegionsResponse;
 			},
 			getNextPageParam: () => null,
 			select: (data) => data.pages.flatMap((page) => page.regions),
@@ -345,7 +339,6 @@ const defaultContext = {
 			enabled: !!regionId,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return {} as Region;
 			},
 		});
 	},
@@ -357,7 +350,6 @@ const defaultContext = {
 			retry: 0,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-				return false as boolean;
 			},
 		});
 	},
@@ -366,7 +358,6 @@ const defaultContext = {
 			mutationKey: ["createActor"] as QueryKey,
 			mutationFn: async (_: CreateActor) => {
 				throw new Error("Not implemented");
-				return "";
 			},
 			onSuccess: () => {
 				const keys = this.actorsQueryOptions({}).queryKey.filter(

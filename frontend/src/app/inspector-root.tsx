@@ -39,7 +39,7 @@ export function InspectorRoot() {
 		if (search.t) {
 			formRef.current?.requestSubmit();
 		}
-	}, []);
+	}, [search.t]);
 
 	const ctxValue = useMemo(() => {
 		return { credentials, setCredentials };
