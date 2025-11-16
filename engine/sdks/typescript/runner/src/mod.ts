@@ -3,14 +3,15 @@ import type { Logger } from "pino";
 import type WebSocket from "ws";
 import { logger, setLogger } from "./log.js";
 import { stringifyCommandWrapper, stringifyEvent } from "./stringify";
-import { Tunnel } from "./tunnel";
+import { HibernatingWebSocketMetadata, Tunnel } from "./tunnel";
 import {
 	calculateBackoff,
 	parseWebSocketCloseReason,
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
-import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+
+export { HibernatingWebSocketMetadata } from "./tunnel";
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 3;
@@ -51,36 +52,149 @@ export interface RunnerConfig {
 	onConnected: () => void;
 	onDisconnected: (code: number, reason: string) => void;
 	onShutdown: () => void;
+
+	/** Called when receiving a network request. */
 	fetch: (
 		runner: Runner,
 		actorId: string,
 		requestId: protocol.RequestId,
 		request: Request,
 	) => Promise<Response>;
-	websocket?: (
+
+	/**
+	 * Called when receiving a WebSocket connection.
+	 *
+	 * All event listeners must be added synchronously inside this function or
+	 * else events may be missed. The open event will fire immediately after
+	 * this function finishes.
+	 *
+	 * Any errors thrown here will disconnect the WebSocket immediately.
+	 *
+	 * ## Hibernating Web Sockets
+	 *
+	 * ### Implementation Requirements
+	 *
+	 * **Requirement 1: Persist HWS Immediately**
+	 *
+	 * This is responsible for persisting hibernatable WebSockets immediately
+	 * (do not wait for open event). It is not time sensitive to flush the
+	 * connection state. If this fails to persist the HWS, the client's
+	 * WebSocket will be disconnected on next wake in
+	 * `Tunnel::restoreHibernatingRequests` since the connection entry will not
+	 * exist.
+	 *
+	 * **Requirement 2: Persist Message Index On `message`**
+	 *
+	 * In the `message` event listener, this handler must persist the message
+	 * index from the event. The request ID is available at
+	 * `event.rivetRequestId` and message index at `event.rivetMessageIndex`.
+	 *
+	 * The message index should not be flushed immediately. Instead, this
+	 * should:
+	 *
+	 * - Debounce calls to persist the message index
+	 * - After each persist, call
+	 *   `Runner::sendHibernatableWebSocketMessageAck` to acknowledge the
+	 *   message
+	 *
+	 * This mechanism allows us to buffer messages on the gateway so we can
+	 * batch-persist events on our end on a given interval.
+	 *
+	 * If this fails to persist, then the gateway will replay unacked
+	 * messages when the actor starts again.
+	 *
+	 * **Requirement 3: Remove HWS From Storage On `close`**
+	 *
+	 * This handler should add an event listener for `close` to remove the
+	 * connection from storage.
+	 *
+	 * If the connection remove fails to persist, the close event will be
+	 * called again on the next actor start in
+	 * `Tunnel::restoreHibernatingRequests` since there will be no request for
+	 * the given connection.
+	 *
+	 * ### Restoring Connections
+	 *
+	 * `loadAll` will be called from `Tunnel::restoreHibernatingRequests` to
+	 * restore this connection on the next actor wake.
+	 *
+	 * `restoreHibernatingRequests` is responsible for both making sure that
+	 * new connections are registered with the actor and zombie connections are
+	 * appropriately cleaned up.
+	 *
+	 * ### No Open Event On Restoration
+	 *
+	 * When restoring a HWS, the open event will not be called again. It will
+	 * go straight to the message or close event.
+	 */
+	websocket: (
 		runner: Runner,
 		actorId: string,
 		ws: any,
 		requestId: protocol.RequestId,
 		request: Request,
-	) => Promise<void>;
+	) => void;
+
+	hibernatableWebSocket: {
+		/**
+		 * Determines if a WebSocket can continue to live while an actor goes to
+		 * sleep.
+		 */
+		canHibernate: (
+			actorId: string,
+			requestId: ArrayBuffer,
+			request: Request,
+		) => boolean;
+
+		/**
+		 * Returns all hibernatable WebSockets that are stored for this actor.
+		 *
+		 * This is called on actor start.
+		 *
+		 * This list will be diffed with the list of hibernating requests in
+		 * the ActorStart message.
+		 *
+		 * This that are connected but not loaded (i.e. were not successfully
+		 * persisted to this actor) will be disconnected.
+		 *
+		 * This that are not connected but were loaded (i.e. disconnected but
+		 * this actor has not received the event yet) will also be
+		 * disconnected.
+		 */
+		loadAll(actorId: string): HibernatingWebSocketMetadata[];
+
+		/**
+		 * Notify the HWS message index needs to be persisted in the background.
+		 *
+		 * The message index should not be flushed immediately. Instead, this
+		 * should:
+		 *
+		 * - Debounce calls to persist the message index
+		 * - After each persist, call
+		 *   `Runner::sendHibernatableWebSocketMessageAck` to acknowledge the
+		 *   message
+		 *
+		 * This mechanism allows us to buffer messages on the gateway so we can
+		 * batch-persist events on our end on a given interval.
+		 *
+		 * If this fails to persist, then the gateway will replay unacked
+		 * messages when the actor starts again.
+		 */
+		persistMessageIndex: (
+			actorId: string,
+			requestId: protocol.RequestId,
+			messageIndex: number,
+		) => void;
+	};
+
 	onActorStart: (
 		actorId: string,
 		generation: number,
 		config: ActorConfig,
 	) => Promise<void>;
-	onActorStop: (actorId: string, generation: number) => Promise<void>;
-	getActorHibernationConfig: (
-		actorId: string,
-		requestId: ArrayBuffer,
-		request: Request,
-	) => HibernationConfig;
-	noAutoShutdown?: boolean;
-}
 
-export interface HibernationConfig {
-	enabled: boolean;
-	lastMsgIndex: number | undefined;
+	onActorStop: (actorId: string, generation: number) => Promise<void>;
+	noAutoShutdown?: boolean;
 }
 
 export interface KvListOptions {
@@ -105,7 +219,6 @@ export class Runner {
 	}
 
 	#actors: Map<string, ActorInstance> = new Map();
-	#actorWebSockets: Map<string, Set<WebSocketTunnelAdapter>> = new Map();
 
 	// WebSocket
 	#pegboardWebSocket?: WebSocket;
@@ -809,6 +922,8 @@ export class Runner {
 	}
 
 	#handleCommandStartActor(commandWrapper: protocol.CommandWrapper) {
+		if (!this.#tunnel) throw new Error("missing tunnel on actor start");
+
 		const startCommand = commandWrapper.inner
 			.val as protocol.CommandStartActor;
 
@@ -850,6 +965,11 @@ export class Runner {
 				// Send stopped state update if start failed
 				this.forceStopActor(actorId, generation);
 			});
+
+		this.#tunnel.restoreHibernatingRequests(
+			actorId,
+			startCommand.hibernatingRequestIds,
+		);
 	}
 
 	#handleCommandStopActor(commandWrapper: protocol.CommandWrapper) {
@@ -1427,8 +1547,10 @@ export class Runner {
 		}
 	}
 
-	sendWebsocketMessageAck(requestId: ArrayBuffer, index: number) {
-		this.#tunnel?.__ackWebsocketMessage(requestId, index);
+	sendHibernatableWebSocketMessageAck(requestId: ArrayBuffer, index: number) {
+		if (!this.#tunnel)
+			throw new Error("missing tunnel to send message ack");
+		this.#tunnel.sendHibernatableWebSocketMessageAck(requestId, index);
 	}
 
 	getServerlessInitPacket(): string | undefined {

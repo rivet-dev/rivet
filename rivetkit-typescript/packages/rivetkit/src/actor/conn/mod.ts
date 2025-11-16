@@ -9,10 +9,11 @@ import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
 import type { AnyDatabaseProvider } from "../database";
 import { InternalError } from "../errors";
 import type { ActorInstance } from "../instance/mod";
-import type { PersistedConn } from "../instance/persisted";
+import type { PersistedConn, RequestId } from "./persisted";
 import { CachedSerializer } from "../protocol/serde";
 import type { ConnDriver } from "./driver";
-import { StateManager } from "./state-manager";
+import { ConnData, ConnDataInput, StateManager } from "./state-manager";
+import { HibernatingWebSocketMetadata } from "@rivetkit/engine-runner";
 
 export function generateConnRequestId(): string {
 	return crypto.randomUUID();
@@ -24,13 +25,9 @@ export type AnyConn = Conn<any, any, any, any, any, any>;
 
 export const CONN_CONNECTED_SYMBOL = Symbol("connected");
 export const CONN_SPEAKS_RIVETKIT_SYMBOL = Symbol("speaksRivetKit");
-export const CONN_PERSIST_SYMBOL = Symbol("persist");
 export const CONN_DRIVER_SYMBOL = Symbol("driver");
 export const CONN_ACTOR_SYMBOL = Symbol("actor");
-export const CONN_STATE_ENABLED_SYMBOL = Symbol("stateEnabled");
-export const CONN_PERSIST_RAW_SYMBOL = Symbol("persistRaw");
-export const CONN_HAS_CHANGES_SYMBOL = Symbol("hasChanges");
-export const CONN_MARK_SAVED_SYMBOL = Symbol("markSaved");
+export const CONN_STATE_MANAGER_SYMBOL = Symbol("stateManager");
 export const CONN_SEND_MESSAGE_SYMBOL = Symbol("sendMessage");
 
 /**
@@ -41,31 +38,38 @@ export const CONN_SEND_MESSAGE_SYMBOL = Symbol("sendMessage");
  * @see {@link https://rivet.dev/docs/connections|Connection Documentation}
  */
 export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
-	subscriptions: Set<string> = new Set<string>();
-
-	// TODO: Remove this cyclical reference
 	#actor: ActorInstance<S, CP, CS, V, I, DB>;
-
-	// MARK: - Managers
-	#stateManager!: StateManager<CP, CS>;
-
-	/**
-	 * If undefined, then nothing is connected to this.
-	 */
-	[CONN_DRIVER_SYMBOL]?: ConnDriver;
-
-	// MARK: - Public Getters
 
 	get [CONN_ACTOR_SYMBOL](): ActorInstance<S, CP, CS, V, I, DB> {
 		return this.#actor;
 	}
 
-	/** Connections exist before being connected to an actor. If true, this connection has been connected. */
+	#stateManager!: StateManager<CP, CS>;
+
+	get [CONN_STATE_MANAGER_SYMBOL]() {
+		return this.#stateManager;
+	}
+
+	/**
+	 * Connections exist before being connected to an actor. If true, this
+	 * connection has been connected.
+	 **/
 	[CONN_CONNECTED_SYMBOL] = false;
 
+	/**
+	 * If undefined, then no socket is connected to this conn
+	 */
+	[CONN_DRIVER_SYMBOL]?: ConnDriver;
+
+	/**
+	 * If this connection is speaking the RivetKit protocol. If false, this is
+	 * a raw connection for WebSocket or fetch or inspector.
+	 **/
 	[CONN_SPEAKS_RIVETKIT_SYMBOL](): boolean {
 		return this[CONN_DRIVER_SYMBOL]?.rivetKitProtocol !== undefined;
 	}
+
+	subscriptions: Set<string> = new Set<string>();
 
 	#assertConnected() {
 		if (!this[CONN_CONNECTED_SYMBOL])
@@ -74,16 +78,9 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			);
 	}
 
-	get [CONN_PERSIST_SYMBOL](): PersistedConn<CP, CS> {
-		return this.#stateManager.persist;
-	}
-
+	// MARK: - Public Getters
 	get params(): CP {
-		return this.#stateManager.params;
-	}
-
-	get [CONN_STATE_ENABLED_SYMBOL](): boolean {
-		return this.#stateManager.stateEnabled;
+		return this.#stateManager.ephemeralData.parameters;
 	}
 
 	/**
@@ -108,7 +105,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * Unique identifier for the connection.
 	 */
 	get id(): ConnId {
-		return this.#stateManager.persist.connId;
+		return this.#stateManager.ephemeralData.id;
 	}
 
 	/**
@@ -117,26 +114,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * If the underlying connection can hibernate.
 	 */
 	get isHibernatable(): boolean {
-		const hibernatableRequestId =
-			this.#stateManager.persist.hibernatableRequestId;
-		if (!hibernatableRequestId) {
-			return false;
-		}
-		return (
-			this.#actor.persist.hibernatableConns.findIndex((conn: any) =>
-				arrayBuffersEqual(
-					conn.hibernatableRequestId,
-					hibernatableRequestId,
-				),
-			) > -1
-		);
-	}
-
-	/**
-	 * Timestamp of the last time the connection was seen, i.e. the last time the connection was active and checked for liveness.
-	 */
-	get lastSeen(): number {
-		return this.#stateManager.persist.lastSeen;
+		return this[CONN_DRIVER_SYMBOL]?.hibernatable ?? false;
 	}
 
 	/**
@@ -148,34 +126,15 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	constructor(
 		actor: ActorInstance<S, CP, CS, V, I, DB>,
-		persist: PersistedConn<CP, CS>,
+		data: ConnDataInput<CP, CS>,
 	) {
 		this.#actor = actor;
-		this.#stateManager = new StateManager(this);
-		this.#stateManager.initPersistProxy(persist);
+		this.#stateManager = new StateManager(this, data);
 	}
 
 	/**
-	 * Returns whether this connection has unsaved changes
+	 * Sends a raw message to the underlying connection.
 	 */
-	[CONN_HAS_CHANGES_SYMBOL](): boolean {
-		return this.#stateManager.hasChanges();
-	}
-
-	/**
-	 * Marks changes as saved
-	 */
-	[CONN_MARK_SAVED_SYMBOL]() {
-		this.#stateManager.markSaved();
-	}
-
-	/**
-	 * Gets the raw persist data for serialization
-	 */
-	get [CONN_PERSIST_RAW_SYMBOL](): PersistedConn<CP, CS> {
-		return this.#stateManager.persistRaw;
-	}
-
 	[CONN_SEND_MESSAGE_SYMBOL](message: CachedSerializer<any, any, any>) {
 		if (this[CONN_DRIVER_SYMBOL]) {
 			const driver = this[CONN_DRIVER_SYMBOL];

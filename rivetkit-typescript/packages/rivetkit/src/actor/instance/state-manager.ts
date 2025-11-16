@@ -13,7 +13,7 @@ import * as errors from "../errors";
 import { isConnStatePath, isStatePath } from "../utils";
 import { KEYS } from "./kv";
 import type { ActorInstance } from "./mod";
-import type { PersistedActor } from "./persisted";
+import { convertActorToBarePersisted, type PersistedActor } from "./persisted";
 
 export interface SaveStateOptions {
 	/**
@@ -33,8 +33,8 @@ export class StateManager<S, CP, CS, I> {
 	#actorDriver: ActorDriver;
 
 	// State tracking
-	#persist!: PersistedActor<S, CP, CS, I>;
-	#persistRaw!: PersistedActor<S, CP, CS, I>;
+	#persist!: PersistedActor<S, I>;
+	#persistRaw!: PersistedActor<S, I>;
 	#persistChanged = false;
 	#isInOnStateChange = false;
 
@@ -61,11 +61,11 @@ export class StateManager<S, CP, CS, I> {
 
 	// MARK: - Public API
 
-	get persist(): PersistedActor<S, CP, CS, I> {
+	get persist(): PersistedActor<S, I> {
 		return this.#persist;
 	}
 
-	get persistRaw(): PersistedActor<S, CP, CS, I> {
+	get persistRaw(): PersistedActor<S, I> {
 		return this.#persistRaw;
 	}
 
@@ -93,7 +93,7 @@ export class StateManager<S, CP, CS, I> {
 	 * Initializes state from persisted data or creates new state.
 	 */
 	async initializeState(
-		persistData: PersistedActor<S, CP, CS, I>,
+		persistData: PersistedActor<S, I>,
 	): Promise<void> {
 		if (!persistData.hasInitialized) {
 			// Create initial state
@@ -132,7 +132,7 @@ export class StateManager<S, CP, CS, I> {
 	/**
 	 * Creates proxy for persist object that handles automatic state change detection.
 	 */
-	initPersistProxy(target: PersistedActor<S, CP, CS, I>) {
+	initPersistProxy(target: PersistedActor<S, I>) {
 		// Set raw persist object
 		this.#persistRaw = target;
 
@@ -252,79 +252,11 @@ export class StateManager<S, CP, CS, I> {
 
 		this.#persistChanged = false;
 
-		const bareData = this.convertToBarePersisted(this.#persistRaw);
+		const bareData = convertActorToBarePersisted<S, I>(this.#persistRaw);
 		return [
 			KEYS.PERSIST_DATA,
 			ACTOR_VERSIONED.serializeWithEmbeddedVersion(bareData),
 		];
-	}
-
-	// MARK: - BARE Conversion
-
-	convertToBarePersisted(
-		persist: PersistedActor<S, CP, CS, I>,
-	): persistSchema.Actor {
-		const hibernatableConns: persistSchema.HibernatableConn[] =
-			persist.hibernatableConns.map((conn) => ({
-				id: conn.id,
-				parameters: bufferToArrayBuffer(
-					cbor.encode(conn.parameters || {}),
-				),
-				state: bufferToArrayBuffer(cbor.encode(conn.state || {})),
-				subscriptions: conn.subscriptions.map((sub) => ({
-					eventName: sub.eventName,
-				})),
-				hibernatableRequestId: conn.hibernatableRequestId,
-				lastSeenTimestamp: BigInt(conn.lastSeenTimestamp),
-				msgIndex: BigInt(conn.msgIndex),
-			}));
-
-		return {
-			input:
-				persist.input !== undefined
-					? bufferToArrayBuffer(cbor.encode(persist.input))
-					: null,
-			hasInitialized: persist.hasInitialized,
-			state: bufferToArrayBuffer(cbor.encode(persist.state)),
-			hibernatableConns,
-			scheduledEvents: persist.scheduledEvents.map((event) => ({
-				eventId: event.eventId,
-				timestamp: BigInt(event.timestamp),
-				action: event.action,
-				args: event.args ?? null,
-			})),
-		};
-	}
-
-	convertFromBarePersisted(
-		bareData: persistSchema.Actor,
-	): PersistedActor<S, CP, CS, I> {
-		const hibernatableConns = bareData.hibernatableConns.map((conn) => ({
-			id: conn.id,
-			parameters: cbor.decode(new Uint8Array(conn.parameters)),
-			state: cbor.decode(new Uint8Array(conn.state)),
-			subscriptions: conn.subscriptions.map((sub) => ({
-				eventName: sub.eventName,
-			})),
-			hibernatableRequestId: conn.hibernatableRequestId,
-			lastSeenTimestamp: Number(conn.lastSeenTimestamp),
-			msgIndex: Number(conn.msgIndex),
-		}));
-
-		return {
-			input: bareData.input
-				? cbor.decode(new Uint8Array(bareData.input))
-				: undefined,
-			hasInitialized: bareData.hasInitialized,
-			state: cbor.decode(new Uint8Array(bareData.state)),
-			hibernatableConns,
-			scheduledEvents: bareData.scheduledEvents.map((event) => ({
-				eventId: event.eventId,
-				timestamp: Number(event.timestamp),
-				action: event.action,
-				args: event.args ?? undefined,
-			})),
-		};
 	}
 
 	// MARK: - Private Helpers
@@ -428,8 +360,8 @@ export class StateManager<S, CP, CS, I> {
 		}
 	}
 
-	async #writePersistedDataDirect(persistData: PersistedActor<S, CP, CS, I>) {
-		const bareData = this.convertToBarePersisted(persistData);
+	async #writePersistedDataDirect(persistData: PersistedActor<S, I>) {
+		const bareData = convertActorToBarePersisted<S, I>(persistData);
 		await this.#actorDriver.kvBatchPut(this.#actor.id, [
 			[
 				KEYS.PERSIST_DATA,

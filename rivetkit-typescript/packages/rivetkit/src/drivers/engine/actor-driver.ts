@@ -1,7 +1,7 @@
 import type {
 	ActorConfig as EngineActorConfig,
 	RunnerConfig as EngineRunnerConfig,
-	HibernationConfig,
+	HibernatingWebSocketMetadata,
 } from "@rivetkit/engine-runner";
 import { Runner } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
@@ -36,6 +36,7 @@ import {
 	getInitialActorKvState,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
+import { CONN_STATE_MANAGER_SYMBOL, type AnyConn } from "@/actor/conn/mod";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
@@ -48,6 +49,7 @@ import {
 	stringifyError,
 } from "@/utils";
 import { logger } from "./log";
+import { RequestId } from "@/schemas/actor-persist/mod";
 
 const RUNNER_SSE_PING_INTERVAL = 1000;
 
@@ -78,12 +80,14 @@ export class EngineActorDriver implements ActorDriver {
 	// protocol is updated to send the intent directly (see RVT-5284)
 	#actorStopIntent: Map<string, "sleep" | "destroy"> = new Map();
 
-	// WebSocket message acknowledgment debouncing for hibernatable websockets
-	#hibernatableWebSocketAckQueue: Map<
+	// Request IDs that are waiting to be acknowledged after the next persist
+	//
+	// We store the RequestId since it's the array buffer version we need to
+	// pass back to the runner.
+	#hibernatableWebSocketAckQueue = new Map<
 		string,
-		{ requestIdBuf: ArrayBuffer; messageIndex: number }
-	> = new Map();
-	#wsAckFlushInterval?: NodeJS.Timeout;
+		{ actorId: string; requestId: RequestId; messageIndex: number }
+	>();
 
 	constructor(
 		registryConfig: RegistryConfig,
@@ -132,168 +136,15 @@ export class EngineActorDriver implements ActorDriver {
 			},
 			fetch: this.#runnerFetch.bind(this),
 			websocket: this.#runnerWebSocket.bind(this),
+			hibernatableWebSocket: {
+				canHibernate: this.#hwsCanHibernate.bind(this),
+				loadAll: this.#hwsLoadAll.bind(this),
+				persistMessageIndex: this.#hwsPersistMessageIndex.bind(this),
+				removePersisted: this.#hwsRemovePersisted.bind(this),
+			},
 			onActorStart: this.#runnerOnActorStart.bind(this),
 			onActorStop: this.#runnerOnActorStop.bind(this),
 			logger: getLogger("engine-runner"),
-			getActorHibernationConfig: (
-				actorId: string,
-				requestId: ArrayBuffer,
-				request: Request,
-			): HibernationConfig => {
-				const url = new URL(request.url);
-				const path = url.pathname;
-
-				// Get actor instance from runner to access actor name
-				const actorInstance = this.#runner.getActor(actorId);
-				if (!actorInstance) {
-					logger().warn({
-						msg: "actor not found in getActorHibernationConfig",
-						actorId,
-					});
-					return { enabled: false, lastMsgIndex: undefined };
-				}
-
-				// Load actor handler to access persisted data
-				const handler = this.#actors.get(actorId);
-				if (!handler) {
-					logger().warn({
-						msg: "actor handler not found in getActorHibernationConfig",
-						actorId,
-					});
-					return { enabled: false, lastMsgIndex: undefined };
-				}
-				if (!handler.actor) {
-					logger().warn({
-						msg: "actor not found in getActorHibernationConfig",
-						actorId,
-					});
-					return { enabled: false, lastMsgIndex: undefined };
-				}
-
-				// Check for existing WS
-				const hibernatableArray =
-					handler.actor.persist.hibernatableConns;
-				logger().debug({
-					msg: "checking hibernatable websockets",
-					requestId: idToStr(requestId),
-					existingHibernatableWebSockets: hibernatableArray.length,
-					actorId,
-				});
-
-				const existingWs = hibernatableArray.find((conn) =>
-					arrayBuffersEqual(conn.hibernatableRequestId, requestId),
-				);
-
-				// Determine configuration for new WS
-				let hibernationConfig: HibernationConfig;
-				if (existingWs) {
-					// Convert msgIndex to number, treating -1 as undefined (no messages processed yet)
-					const lastMsgIndex =
-						existingWs.msgIndex >= 0n
-							? Number(existingWs.msgIndex)
-							: undefined;
-					logger().debug({
-						msg: "found existing hibernatable websocket",
-						requestId: idToStr(requestId),
-						lastMsgIndex: lastMsgIndex ?? -1,
-					});
-					hibernationConfig = {
-						enabled: true,
-						lastMsgIndex,
-					};
-				} else {
-					logger().debug({
-						msg: "no existing hibernatable websocket found",
-						requestId: idToStr(requestId),
-					});
-					if (path === PATH_CONNECT) {
-						hibernationConfig = {
-							enabled: true,
-							lastMsgIndex: undefined,
-						};
-					} else if (path.startsWith(PATH_WEBSOCKET_PREFIX)) {
-						// Find actor config
-						const definition = lookupInRegistry(
-							this.#registryConfig,
-							actorInstance.config.name,
-						);
-
-						// Check if can hibernate
-						const canHibernateWebSocket =
-							definition.config.options?.canHibernateWebSocket;
-						if (canHibernateWebSocket === true) {
-							hibernationConfig = {
-								enabled: true,
-								lastMsgIndex: undefined,
-							};
-						} else if (
-							typeof canHibernateWebSocket === "function"
-						) {
-							try {
-								// Truncate the path to match the behavior on onRawWebSocket
-								const newPath = truncateRawWebSocketPathPrefix(
-									url.pathname,
-								);
-								const truncatedRequest = new Request(
-									`http://actor${newPath}`,
-									request,
-								);
-
-								const canHibernate =
-									canHibernateWebSocket(truncatedRequest);
-								hibernationConfig = {
-									enabled: canHibernate,
-									lastMsgIndex: undefined,
-								};
-							} catch (error) {
-								logger().error({
-									msg: "error calling canHibernateWebSocket",
-									error,
-								});
-								hibernationConfig = {
-									enabled: false,
-									lastMsgIndex: undefined,
-								};
-							}
-						} else {
-							hibernationConfig = {
-								enabled: false,
-								lastMsgIndex: undefined,
-							};
-						}
-					} else {
-						logger().warn({
-							msg: "unexpected path for getActorHibernationConfig",
-							path,
-						});
-						hibernationConfig = {
-							enabled: false,
-							lastMsgIndex: undefined,
-						};
-					}
-				}
-
-				// Save or update hibernatable WebSocket
-				if (existingWs) {
-					logger().debug({
-						msg: "updated existing hibernatable websocket timestamp",
-						requestId: idToStr(requestId),
-						currentMsgIndex: existingWs.msgIndex,
-					});
-					existingWs.lastSeenTimestamp = Date.now();
-				} else if (path === PATH_CONNECT) {
-					// For new hibernatable connections, we'll create a placeholder entry
-					// The actual connection data will be populated when the connection is created
-					logger().debug({
-						msg: "will create hibernatable conn when connection is created",
-						requestId: idToStr(requestId),
-					});
-					// Note: The actual hibernatable connection is created in connection-manager.ts
-					// when createConn is called with a hibernatable requestId
-				}
-
-				return hibernationConfig;
-			},
 		};
 
 		// Create and start runner
@@ -305,18 +156,10 @@ export class EngineActorDriver implements ActorDriver {
 			namespace: runConfig.namespace,
 			runnerName: runConfig.runnerName,
 		});
+	}
 
-		// Start WebSocket ack flush interval
-		//
-		// Decreasing this reduces the amount of buffered messages on the
-		// gateway
-		//
-		// Gateway timeout configured to 30s
-		// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/pegboard-gateway/src/shared_state.rs#L17
-		this.#wsAckFlushInterval = setInterval(
-			() => this.#flushHibernatableWebSocketAcks(),
-			1000,
-		);
+	getExtraActorLogParams(): Record<string, string> {
+		return { runnerId: this.#runner.runnerId ?? "-" };
 	}
 
 	async #loadActorHandler(actorId: string): Promise<ActorHandler> {
@@ -327,25 +170,6 @@ export class EngineActorDriver implements ActorDriver {
 		if (handler.actorStartPromise) await handler.actorStartPromise.promise;
 		if (!handler.actor) throw new Error("Actor should be loaded");
 		return handler;
-	}
-
-	async loadActor(actorId: string): Promise<AnyActorInstance> {
-		const handler = await this.#loadActorHandler(actorId);
-		if (!handler.actor) throw new Error(`Actor ${actorId} failed to load`);
-		return handler.actor;
-	}
-
-	#flushHibernatableWebSocketAcks(): void {
-		if (this.#hibernatableWebSocketAckQueue.size === 0) return;
-
-		for (const {
-			requestIdBuf: requestId,
-			messageIndex: index,
-		} of this.#hibernatableWebSocketAckQueue.values()) {
-			this.#runner.sendWebsocketMessageAck(requestId, index);
-		}
-
-		this.#hibernatableWebSocketAckQueue.clear();
 	}
 
 	getContext(actorId: string): DriverContext {
@@ -382,17 +206,11 @@ export class EngineActorDriver implements ActorDriver {
 		return undefined;
 	}
 
-	// Batch KV operations
+	// MARK: - Batch KV operations
 	async kvBatchPut(
 		actorId: string,
 		entries: [Uint8Array, Uint8Array][],
 	): Promise<void> {
-		logger().debug({
-			msg: "batch writing KV entries",
-			actorId,
-			entryCount: entries.length,
-		});
-
 		await this.#runner.kvPut(actorId, entries);
 	}
 
@@ -400,22 +218,10 @@ export class EngineActorDriver implements ActorDriver {
 		actorId: string,
 		keys: Uint8Array[],
 	): Promise<(Uint8Array | null)[]> {
-		logger().debug({
-			msg: "batch reading KV entries",
-			actorId,
-			keyCount: keys.length,
-		});
-
 		return await this.#runner.kvGet(actorId, keys);
 	}
 
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
-		logger().debug({
-			msg: "batch deleting KV entries",
-			actorId,
-			keyCount: keys.length,
-		});
-
 		await this.#runner.kvDelete(actorId, keys);
 	}
 
@@ -423,16 +229,126 @@ export class EngineActorDriver implements ActorDriver {
 		actorId: string,
 		prefix: Uint8Array,
 	): Promise<[Uint8Array, Uint8Array][]> {
-		logger().debug({
-			msg: "listing KV entries with prefix",
-			actorId,
-			prefixLength: prefix.length,
-		});
-
 		return await this.#runner.kvListPrefix(actorId, prefix);
 	}
 
-	// Runner lifecycle callbacks
+	// MARK: - Actor Lifecycle
+	async loadActor(actorId: string): Promise<AnyActorInstance> {
+		const handler = await this.#loadActorHandler(actorId);
+		if (!handler.actor) throw new Error(`Actor ${actorId} failed to load`);
+		return handler.actor;
+	}
+
+	startSleep(actorId: string) {
+		// HACK: Track intent for onActorStop (see RVT-5284)
+		this.#actorStopIntent.set(actorId, "sleep");
+		this.#runner.sleepActor(actorId);
+	}
+
+	startDestroy(actorId: string) {
+		// HACK: Track intent for onActorStop (see RVT-5284)
+		this.#actorStopIntent.set(actorId, "destroy");
+		this.#runner.stopActor(actorId);
+	}
+
+	async shutdownRunner(immediate: boolean): Promise<void> {
+		logger().info({ msg: "stopping engine actor driver", immediate });
+
+		// TODO: We need to update the runner to have a draining state so:
+		// 1. Send ToServerDraining
+		//		- This causes Pegboard to stop allocating actors to this runner
+		// 2. Pegboard sends ToClientStopActor for all actors on this runner which handles the graceful migration of each actor independently
+		// 3. Send ToServerStopping once all actors have successfully stopped
+		//
+		// What's happening right now is:
+		// 1. All actors enter stopped state
+		// 2. Actors still respond to requests because only RivetKit knows it's
+		//    stopping, this causes all requests to issue errors that the actor is
+		//    stopping. (This will NOT return a 503 bc the runner has no idea the
+		//    actors are stopping.)
+		// 3. Once the last actor stops, then the runner finally stops + actors
+		//    reschedule
+		//
+		// This means that:
+		// - All actors on this runner are bricked until the slowest onStop finishes
+		// - Guard will not gracefully handle requests bc it's not receiving a 503
+		// - Actors can still be scheduled to this runner while the other
+		//   actors are stopping, meaning that those actors will NOT get onStop
+		//   and will potentiall corrupt their state
+		//
+		// HACK: Stop all actors to allow state to be saved
+		// NOTE: onStop is only supposed to be called by the runner, we're
+		// abusing it here
+		logger().debug({
+			msg: "stopping all actors before shutdown",
+			actorCount: this.#actors.size,
+		});
+		const stopPromises: Promise<void>[] = [];
+		for (const [_actorId, handler] of this.#actors.entries()) {
+			if (handler.actor) {
+				stopPromises.push(
+					handler.actor.onStop("sleep").catch((err) => {
+						handler.actor?.rLog.error({
+							msg: "onStop errored",
+							error: stringifyError(err),
+						});
+					}),
+				);
+			}
+		}
+		await Promise.all(stopPromises);
+		logger().debug({ msg: "all actors stopped" });
+
+		await this.#runner.shutdown(immediate);
+	}
+
+	async serverlessHandleStart(c: HonoContext): Promise<Response> {
+		return streamSSE(c, async (stream) => {
+			// NOTE: onAbort does not work reliably
+			stream.onAbort(() => {});
+			c.req.raw.signal.addEventListener("abort", () => {
+				logger().debug("SSE aborted, shutting down runner");
+
+				// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
+				//
+				// If we did not use a graceful shutdown, the runner would
+				this.shutdownRunner(false);
+			});
+
+			await this.#runnerStarted.promise;
+
+			// Runner id should be set if the runner started
+			const payload = this.#runner.getServerlessInitPacket();
+			invariant(payload, "runnerId not set");
+			await stream.writeSSE({ data: payload });
+
+			// Send ping every second to keep the connection alive
+			while (true) {
+				if (this.#isRunnerStopped) {
+					logger().debug({
+						msg: "runner is stopped",
+					});
+					break;
+				}
+
+				if (stream.closed || stream.aborted) {
+					logger().debug({
+						msg: "runner sse stream closed",
+						closed: stream.closed,
+						aborted: stream.aborted,
+					});
+					break;
+				}
+
+				await stream.writeSSE({ event: "ping", data: "" });
+				await stream.sleep(RUNNER_SSE_PING_INTERVAL);
+			}
+
+			// Wait for the runner to stop if the SSE stream aborted early for any reason
+			await this.#runnerStopped.promise;
+		});
+	}
+
 	async #runnerOnActorStart(
 		actorId: string,
 		generation: number,
@@ -543,6 +459,7 @@ export class EngineActorDriver implements ActorDriver {
 		logger().debug({ msg: "runner actor stopped", actorId, reason });
 	}
 
+	// MARK: - Runner Networking
 	async #runnerFetch(
 		_runner: Runner,
 		actorId: string,
@@ -558,13 +475,13 @@ export class EngineActorDriver implements ActorDriver {
 		return await this.#actorRouter.fetch(request, { actorId });
 	}
 
-	async #runnerWebSocket(
+	#runnerWebSocket(
 		_runner: Runner,
 		actorId: string,
 		websocketRaw: any,
 		requestIdBuf: ArrayBuffer,
 		request: Request,
-	): Promise<void> {
+	): void {
 		const websocket = websocketRaw as UniversalWebSocket;
 		const requestId = idToStr(requestIdBuf);
 
@@ -604,8 +521,6 @@ export class EngineActorDriver implements ActorDriver {
 			throw new Error(`Unreachable path: ${url.pathname}`);
 		}
 
-		// TODO: Add close
-
 		// Connect the Hono WS hook to the adapter
 		const wsContext = new WSContext(websocket);
 
@@ -625,313 +540,192 @@ export class EngineActorDriver implements ActorDriver {
 		}
 
 		websocket.addEventListener("message", (event: RivetMessageEvent) => {
-			invariant(event.rivetRequestId, "missing rivetRequestId");
-			invariant(event.rivetMessageIndex, "missing rivetMessageIndex");
-
-			// Handle hibernatable WebSockets:
-			// - Check for out of sequence messages
-			// - Save msgIndex for WS restoration
-			// - Queue WS acks
-			const actorHandler = this.#actors.get(actorId);
-			if (actorHandler?.actor) {
-				const hibernatableWs =
-					actorHandler.actor.persist.hibernatableConns.find(
-						(conn: any) =>
-							arrayBuffersEqual(
-								conn.hibernatableRequestId,
-								requestIdBuf,
-							),
-					);
-
-				if (hibernatableWs) {
-					// Track msgIndex for sending acks
-					const currentEntry =
-						this.#hibernatableWebSocketAckQueue.get(requestId);
-					if (currentEntry) {
-						const previousIndex = currentEntry.messageIndex;
-
-						// Check for out-of-sequence messages
-						if (event.rivetMessageIndex !== previousIndex + 1) {
-							let closeReason: string;
-							let sequenceType: string;
-
-							if (event.rivetMessageIndex < previousIndex) {
-								closeReason = "ws.message_index_regressed";
-								sequenceType = "regressed";
-							} else if (
-								event.rivetMessageIndex === previousIndex
-							) {
-								closeReason = "ws.message_index_duplicate";
-								sequenceType = "duplicate";
-							} else {
-								closeReason = "ws.message_index_skip";
-								sequenceType = "gap/skipped";
-							}
-
-							logger().warn({
-								msg: "hibernatable websocket message index out of sequence, closing connection",
-								requestId,
-								actorId,
-								previousIndex,
-								expectedIndex: previousIndex + 1,
-								receivedIndex: event.rivetMessageIndex,
-								sequenceType,
-								closeReason,
-								gap:
-									event.rivetMessageIndex > previousIndex
-										? event.rivetMessageIndex -
-											previousIndex -
-											1
-										: 0,
-							});
-
-							// Close the WebSocket and skip processing
-							wsContext.close(1008, closeReason);
-							return;
-						}
-
-						// Update to the next index
-						currentEntry.messageIndex = event.rivetMessageIndex;
-					} else {
-						this.#hibernatableWebSocketAckQueue.set(requestId, {
-							requestIdBuf,
-							messageIndex: event.rivetMessageIndex,
-						});
-					}
-
-					// Update msgIndex for next WebSocket open msgIndex restoration
-					const oldMsgIndex = hibernatableWs.msgIndex;
-					hibernatableWs.msgIndex = event.rivetMessageIndex;
-					hibernatableWs.lastSeenTimestamp = Date.now();
-
-					logger().debug({
-						msg: "updated hibernatable websocket msgIndex in engine driver",
-						requestId,
-						oldMsgIndex: oldMsgIndex.toString(),
-						newMsgIndex: event.rivetMessageIndex,
-						actorId,
-					});
-				}
-			} else {
-				// Warn if we receive a message for a hibernatable websocket but can't find the actor
-				logger().warn({
-					msg: "received websocket message but actor not found for hibernatable tracking",
-					actorId,
-					requestId,
-					messageIndex: event.rivetMessageIndex,
-					hasHandler: !!actorHandler,
-					hasActor: !!actorHandler?.actor,
-				});
-			}
-
 			// Process the message after all hibernation logic and validation in case the message is out of order
 			wsHandlerPromise.then((x) => x.onMessage?.(event, wsContext));
 		});
 
 		websocket.addEventListener("close", (event) => {
-			// Flush any pending acks before closing
-			this.#flushHibernatableWebSocketAcks();
-
-			// Clean up hibernatable WebSocket
-			this.#cleanupHibernatableWebSocket(
-				actorId,
-				requestIdBuf,
-				requestId,
-				"close",
-				event,
-			);
-
 			wsHandlerPromise.then((x) => x.onClose?.(event, wsContext));
 		});
 
 		websocket.addEventListener("error", (event) => {
-			// Clean up hibernatable WebSocket on error
-			this.#cleanupHibernatableWebSocket(
-				actorId,
-				requestIdBuf,
-				requestId,
-				"error",
-				event,
-			);
-
 			wsHandlerPromise.then((x) => x.onError?.(event, wsContext));
 		});
 	}
 
-	/**
-	 * Helper method to clean up hibernatable WebSocket entries
-	 * Eliminates duplication between close and error handlers
-	 */
-	#cleanupHibernatableWebSocket(
+	// MARK: - Hibernating WebSockets
+	#hwsCanHibernate(
 		actorId: string,
-		requestIdBuf: ArrayBuffer,
-		requestId: string,
-		eventType: "close" | "error",
-		event?: any,
-	) {
-		const actorHandler = this.#actors.get(actorId);
-		if (actorHandler?.actor) {
-			const hibernatableArray =
-				actorHandler.actor.persist.hibernatableConns;
-			const wsIndex = hibernatableArray.findIndex((conn: any) =>
-				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
+		requestId: ArrayBuffer,
+		request: Request,
+	): boolean {
+		const url = new URL(request.url);
+		const path = url.pathname;
+
+		// Get actor instance from runner to access actor name
+		const actorInstance = this.#runner.getActor(actorId);
+		if (!actorInstance) {
+			logger().warn({
+				msg: "actor not found in #hwsCanHibernate",
+				actorId,
+			});
+			return false;
+		}
+
+		// Load actor handler to access persisted data
+		const handler = this.#actors.get(actorId);
+		if (!handler) {
+			logger().warn({
+				msg: "actor handler not found in #hwsCanHibernate",
+				actorId,
+			});
+			return false;
+		}
+		if (!handler.actor) {
+			logger().warn({
+				msg: "actor not found in #hwsCanHibernate",
+				actorId,
+			});
+			return false;
+		}
+
+		// Determine configuration for new WS
+		logger().debug({
+			msg: "no existing hibernatable websocket found",
+			requestId: idToStr(requestId),
+		});
+		if (path === PATH_CONNECT) {
+			return true;
+		} else if (path.startsWith(PATH_WEBSOCKET_PREFIX)) {
+			// Find actor config
+			const definition = lookupInRegistry(
+				this.#registryConfig,
+				actorInstance.config.name,
 			);
 
-			if (wsIndex !== -1) {
-				const removed = hibernatableArray.splice(wsIndex, 1);
-				const logData: any = {
-					msg: `removed hibernatable websocket on ${eventType}`,
-					requestId,
-					actorId,
-					removedMsgIndex:
-						removed[0]?.msgIndex?.toString() ?? "unknown",
-				};
-				// Add error context if this is an error event
-				if (eventType === "error" && event) {
-					logData.error = event;
+			// Check if can hibernate
+			const canHibernateWebSocket =
+				definition.config.options?.canHibernateWebSocket;
+			if (canHibernateWebSocket === true) {
+				return true;
+			} else if (typeof canHibernateWebSocket === "function") {
+				try {
+					// Truncate the path to match the behavior on onRawWebSocket
+					const newPath = truncateRawWebSocketPathPrefix(
+						url.pathname,
+					);
+					const truncatedRequest = new Request(
+						`http://actor${newPath}`,
+						request,
+					);
+
+					const canHibernate =
+						canHibernateWebSocket(truncatedRequest);
+					return canHibernate;
+				} catch (error) {
+					logger().error({
+						msg: "error calling canHibernateWebSocket",
+						error,
+					});
+					return false;
 				}
-				logger().debug(logData);
+			} else {
+				return false;
 			}
 		} else {
-			// Warn if actor not found during cleanup
-			const warnData: any = {
-				msg: `websocket ${eventType === "close" ? "closed" : "error"} but actor not found for hibernatable cleanup`,
-				actorId,
-				requestId,
-				hasHandler: !!actorHandler,
-				hasActor: !!actorHandler?.actor,
-			};
-			// Add error context if this is an error event
-			if (eventType === "error" && event) {
-				warnData.error = event;
-			}
-			logger().warn(warnData);
-		}
-
-		// Also remove from ack queue
-		this.#hibernatableWebSocketAckQueue.delete(requestId);
-	}
-
-	startSleep(actorId: string) {
-		// HACK: Track intent for onActorStop (see RVT-5284)
-		this.#actorStopIntent.set(actorId, "sleep");
-		this.#runner.sleepActor(actorId);
-	}
-
-	startDestroy(actorId: string) {
-		// HACK: Track intent for onActorStop (see RVT-5284)
-		this.#actorStopIntent.set(actorId, "destroy");
-		this.#runner.stopActor(actorId);
-	}
-
-	async shutdownRunner(immediate: boolean): Promise<void> {
-		logger().info({ msg: "stopping engine actor driver", immediate });
-
-		// TODO: We need to update the runner to have a draining state so:
-		// 1. Send ToServerDraining
-		//		- This causes Pegboard to stop allocating actors to this runner
-		// 2. Pegboard sends ToClientStopActor for all actors on this runner which handles the graceful migration of each actor independently
-		// 3. Send ToServerStopping once all actors have successfully stopped
-		//
-		// What's happening right now is:
-		// 1. All actors enter stopped state
-		// 2. Actors still respond to requests because only RivetKit knows it's
-		//    stopping, this causes all requests to issue errors that the actor is
-		//    stopping. (This will NOT return a 503 bc the runner has no idea the
-		//    actors are stopping.)
-		// 3. Once the last actor stops, then the runner finally stops + actors
-		//    reschedule
-		//
-		// This means that:
-		// - All actors on this runner are bricked until the slowest onStop finishes
-		// - Guard will not gracefully handle requests bc it's not receiving a 503
-		// - Actors can still be scheduled to this runner while the other
-		//   actors are stopping, meaning that those actors will NOT get onStop
-		//   and will potentiall corrupt their state
-		//
-		// HACK: Stop all actors to allow state to be saved
-		// NOTE: onStop is only supposed to be called by the runner, we're
-		// abusing it here
-		logger().debug({
-			msg: "stopping all actors before shutdown",
-			actorCount: this.#actors.size,
-		});
-		const stopPromises: Promise<void>[] = [];
-		for (const [_actorId, handler] of this.#actors.entries()) {
-			if (handler.actor) {
-				stopPromises.push(
-					handler.actor.onStop("sleep").catch((err) => {
-						handler.actor?.rLog.error({
-							msg: "onStop errored",
-							error: stringifyError(err),
-						});
-					}),
-				);
-			}
-		}
-		await Promise.all(stopPromises);
-		logger().debug({ msg: "all actors stopped" });
-
-		// Clear the ack flush interval
-		if (this.#wsAckFlushInterval) {
-			clearInterval(this.#wsAckFlushInterval);
-			this.#wsAckFlushInterval = undefined;
-		}
-
-		// Flush any remaining acks
-		this.#flushHibernatableWebSocketAcks();
-
-		await this.#runner.shutdown(immediate);
-	}
-
-	async serverlessHandleStart(c: HonoContext): Promise<Response> {
-		return streamSSE(c, async (stream) => {
-			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
-			c.req.raw.signal.addEventListener("abort", () => {
-				logger().debug("SSE aborted, shutting down runner");
-
-				// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
-				//
-				// If we did not use a graceful shutdown, the runner would
-				this.shutdownRunner(false);
+			logger().warn({
+				msg: "unexpected path for getActorHibernationConfig",
+				path,
 			});
-
-			await this.#runnerStarted.promise;
-
-			// Runner id should be set if the runner started
-			const payload = this.#runner.getServerlessInitPacket();
-			invariant(payload, "runnerId not set");
-			await stream.writeSSE({ data: payload });
-
-			// Send ping every second to keep the connection alive
-			while (true) {
-				if (this.#isRunnerStopped) {
-					logger().debug({
-						msg: "runner is stopped",
-					});
-					break;
-				}
-
-				if (stream.closed || stream.aborted) {
-					logger().debug({
-						msg: "runner sse stream closed",
-						closed: stream.closed,
-						aborted: stream.aborted,
-					});
-					break;
-				}
-
-				await stream.writeSSE({ event: "ping", data: "" });
-				await stream.sleep(RUNNER_SSE_PING_INTERVAL);
-			}
-
-			// Wait for the runner to stop if the SSE stream aborted early for any reason
-			await this.#runnerStopped.promise;
-		});
+			return false;
+		}
 	}
 
-	getExtraActorLogParams(): Record<string, string> {
-		return { runnerId: this.#runner.runnerId ?? "-" };
+	#hwsLoadAll(actorId: string): HibernatingWebSocketMetadata[] {
+		// TODO: Load actor in a better way
+		const actor = this.#actors.get(actorId);
+		invariant(actor?.actor, "actor not loaded");
+
+		return actor.actor.conns
+			.values()
+			.map((conn) => {
+				const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+				const hibernatable = connStateManager.hibernatableData;
+				if (!hibernatable) return undefined;
+				return {
+					requestId: hibernatable.hibernatableRequestId,
+					path: hibernatable.requestPath,
+					headers: hibernatable.requestHeaders,
+					messageIndex: hibernatable.msgIndex,
+				} satisfies HibernatingWebSocketMetadata;
+			})
+			.filter((x) => x !== undefined)
+			.toArray();
+	}
+
+	#hwsPersistMessageIndex(actorId: string, requestId: RequestId) {
+		// TODO: is this the right way of getting the actor
+
+		const actor = this.#actors.get(actorId);
+		const conn = actor?.actor?.connectionManager.findHibernatableConn(requestId);
+
+		if (!conn) {
+			logger().warn({
+				msg: "cannot find conn to persist message index to",
+				actorId,
+				requestId: idToStr(requestId),
+			});
+			return;
+		}
+
+		this.#hibernatableWebSocketAckQueue.set(conn.id, {});
+
+		// TODO: Find conn with request ID
+		// TODO: Add conn to persist queue
+		// TODO: Start timer to force save
+	}
+
+	#hwsRemovePersisted(actorId: string, requestId: RequestId) {
+		// // TODO: persist immediately
+		// const actorHandler = this.#actors.get(actorId);
+		// if (actorHandler?.actor) {
+		// 	const hibernatableArray =
+		// 		actorHandler.actor.persist.hibernatableConns;
+		// 	const wsIndex = hibernatableArray.findIndex((conn: any) =>
+		// 		arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
+		// 	);
+		//
+		// 	if (wsIndex !== -1) {
+		// 		const removed = hibernatableArray.splice(wsIndex, 1);
+		// 		logger().debug({
+		// 			msg: "removed hibernatable websocket",
+		// 			requestId,
+		// 			actorId,
+		// 			removedMsgIndex:
+		// 				removed[0]?.msgIndex?.toString() ?? "unknown",
+		// 		});
+		// 	}
+		// } else {
+		// 	// Warn if actor not found during cleanup
+		// 	logger().warn({
+		// 		msg: "websocket but actor not found for hibernatable cleanup",
+		// 		actorId,
+		// 		requestId,
+		// 		hasHandler: !!actorHandler,
+		// 		hasActor: !!actorHandler?.actor,
+		// 	});
+		// }
+		//
+		// // Also remove from ack queue
+		// this.#hibernatableWebSocketAckQueue.delete(requestId);
+	}
+
+	onAfterPersistConn(conn: AnyConn) {
+		// TODO:
+		// this.#runner.sendHibernatableWebSocketMessageAck(
+		// 	requestId,
+		// 	messageIndex,
+		// );
+		// this.#hibernatableWebSocketAckQueue.delete(conn.id);
 	}
 }

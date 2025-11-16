@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
 import type { WSContext } from "hono/ws";
-import type { AnyConn } from "@/actor/conn/mod";
+import { type AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts/action";
 import * as errors from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
@@ -104,6 +104,8 @@ export async function handleWebSocketConnect(
 	parameters: unknown,
 	requestId: string,
 	requestIdBuf: ArrayBuffer | undefined,
+	isHibernatable: boolean,
+	isRestoringHibernatable: boolean,
 ): Promise<UpgradeWebSocketArgs> {
 	const exposeInternalError = req
 		? getRequestExposeInternalError(req)
@@ -122,12 +124,6 @@ export async function handleWebSocketConnect(
 		});
 
 		// Check if this is a hibernatable websocket
-		const isHibernatable =
-			!!requestIdBuf &&
-			actor.persist.hibernatableConns.findIndex((conn) =>
-				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-			) !== -1;
-
 		const { driver, setWebSocket } = createWebSocketSocket(
 			requestId,
 			requestIdBuf,
@@ -139,6 +135,7 @@ export async function handleWebSocketConnect(
 			driver,
 			parameters,
 			req,
+			isRestoringHibernatable,
 		);
 		createdConn = conn;
 
@@ -149,6 +146,8 @@ export async function handleWebSocketConnect(
 
 				setWebSocket(ws);
 
+				// This will not be called by restoring hibernatable
+				// connections. All restoratino is done in prepareConn.
 				actor.connectionManager.connectConn(conn);
 			},
 			onMessage: (evt: { data: any }, ws: WSContext) => {
@@ -328,7 +327,7 @@ export async function handleAction(
 		}),
 	);
 
-	// TODO: Remvoe any, Hono is being a dumbass
+	// TODO: Remove any, Hono is being a dumbass
 	return c.body(serialized as Uint8Array as any, 200, {
 		"Content-Type": contentTypeForEncoding(encoding),
 	});
@@ -383,12 +382,12 @@ export async function handleRawWebSocket(
 		// Promise used to wait for the websocket close in `disconnect`
 		const closePromiseResolvers = promiseWithResolvers<void>();
 
+		// TODO: Is there a better way to determine this?
 		// Extract rivetRequestId provided by engine runner
 		const isHibernatable =
 			!!requestIdBuf &&
-			actor.persist.hibernatableConns.findIndex((conn) =>
-				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-			) !== -1;
+			actor.connectionManager.findHibernatableConn(requestIdBuf) !==
+				undefined;
 
 		const newPath = truncateRawWebSocketPathPrefix(path);
 		let newRequest: Request;

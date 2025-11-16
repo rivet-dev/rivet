@@ -7,7 +7,10 @@ import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor";
 import type { Registry } from "@/mod";
-import { ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
+import {
+	ACTOR_VERSIONED,
+	CONN_VERSIONED,
+} from "@/schemas/actor-persist/versioned";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
@@ -17,9 +20,7 @@ import type { ConnDriver } from "../conn/driver";
 import { createHttpSocket } from "../conn/drivers/http";
 import {
 	CONN_DRIVER_SYMBOL,
-	CONN_PERSIST_SYMBOL,
-	CONN_SEND_MESSAGE_SYMBOL,
-	CONN_STATE_ENABLED_SYMBOL,
+	CONN_STATE_MANAGER_SYMBOL,
 	type Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -43,9 +44,16 @@ import {
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./kv";
-import type { PersistedActor, PersistedConn } from "./persisted";
+import {
+	convertActorFromBarePersisted,
+	type PersistedActor,
+} from "./persisted";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
+import {
+	convertConnFromBarePersistedConn,
+	PersistedConn,
+} from "../conn/persisted";
 
 export type { SaveStateOptions };
 
@@ -148,24 +156,31 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			getConnections: async () => {
 				return Array.from(
 					this.connectionManager.connections.entries(),
-				).map(([id, conn]) => ({
-					type: conn[CONN_DRIVER_SYMBOL]?.type,
-					id,
-					params: conn.params as any,
-					state: conn[CONN_STATE_ENABLED_SYMBOL]
-						? conn.state
-						: undefined,
-					subscriptions: conn.subscriptions.size,
-					lastSeen: conn.lastSeen,
-					stateEnabled: conn[CONN_STATE_ENABLED_SYMBOL],
-					isHibernatable: conn.isHibernatable,
-					hibernatableRequestId: conn[CONN_PERSIST_SYMBOL]
-						.hibernatableRequestId
-						? idToStr(
-								conn[CONN_PERSIST_SYMBOL].hibernatableRequestId,
-							)
-						: undefined,
-				}));
+				).map(([id, conn]) => {
+					const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+					return {
+						type: conn[CONN_DRIVER_SYMBOL]?.type,
+						id,
+						params: conn.params as any,
+						stateEnabled: connStateManager.stateEnabled,
+						state: connStateManager.stateEnabled
+							? connStateManager.state
+							: undefined,
+						subscriptions: conn.subscriptions.size,
+						lastSeen:
+							connStateManager.hibernatableDataRaw
+								?.lastSeenTimestamp,
+						isHibernatable: conn.isHibernatable,
+						hibernatableRequestId: connStateManager
+							.hibernatableDataRaw?.hibernatableRequestId
+							? idToStr(
+									connStateManager.hibernatableDataRaw
+										.hibernatableRequestId,
+								)
+							: undefined,
+						// TODO: Include the underlying request for path & headers?
+					};
+				});
 			},
 			setState: async (state: unknown) => {
 				if (!this.stateEnabled) {
@@ -265,7 +280,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: - State Access
-	get persist(): PersistedActor<S, CP, CS, I> {
+	get persist(): PersistedActor<S, I> {
 		return this.#stateManager.persist;
 	}
 
@@ -506,7 +521,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Save connection changes
 		if (this.connectionManager.changedConnections.size > 0) {
-			const entries = this.connectionManager.getChangedConnectionsData();
+			const entries =
+				this.connectionManager.getChangedConnectionsKvEntries();
 			if (entries.length > 0) {
 				await this.driver.kvBatchPut(this.#actorId, entries);
 			}
@@ -780,8 +796,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		const bareData =
 			ACTOR_VERSIONED.deserializeWithEmbeddedVersion(persistDataBuffer);
-		const persistData =
-			this.#stateManager.convertFromBarePersisted(bareData);
+		const persistData = convertActorFromBarePersisted<S, I>(bareData);
 
 		if (persistData.hasInitialized) {
 			// Restore existing actor
@@ -795,7 +810,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#scheduleManager.setPersist(this.#stateManager.persist);
 	}
 
-	async #restoreExistingActor(persistData: PersistedActor<S, CP, CS, I>) {
+	async #restoreExistingActor(persistData: PersistedActor<S, I>) {
 		// List all connection keys
 		const connEntries = await this.driver.kvListPrefix(
 			this.#actorId,
@@ -806,7 +821,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		const connections: PersistedConn<CP, CS>[] = [];
 		for (const [_key, value] of connEntries) {
 			try {
-				const conn = cbor.decode(value) as PersistedConn<CP, CS>;
+				const bareData = CONN_VERSIONED.deserializeWithEmbeddedVersion(
+					new Uint8Array(value),
+				);
+				const conn = convertConnFromBarePersistedConn<CP, CS>(bareData);
 				connections.push(conn);
 			} catch (error) {
 				this.#rLog.error({
@@ -819,7 +837,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#rLog.info({
 			msg: "actor restoring",
 			connections: connections.length,
-			hibernatableWebSockets: persistData.hibernatableConns.length,
 		});
 
 		// Initialize state
@@ -829,7 +846,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.connectionManager.restoreConnections(connections);
 	}
 
-	async #createNewActor(persistData: PersistedActor<S, CP, CS, I>) {
+	async #createNewActor(persistData: PersistedActor<S, I>) {
 		this.#rLog.info({ msg: "actor creating" });
 
 		// Initialize state

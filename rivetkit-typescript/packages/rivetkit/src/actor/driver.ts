@@ -4,6 +4,7 @@ import type { ManagerDriver } from "@/manager/driver";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import type { AnyActorInstance } from "./instance/mod";
+import { AnyConn, Conn } from "./conn/mod";
 
 export type ActorDriverBuilder = (
 	registryConfig: RegistryConfig,
@@ -77,4 +78,7 @@ export interface ActorDriver {
 
 	/** Extra properties to add to logs for each actor. */
 	getExtraActorLogParams?(): Record<string, string>;
+
+	onAfterPersistActor?(actor: AnyActorInstance): void;
+	onAfterPersistConn?(actor: AnyConn): void;
 }
