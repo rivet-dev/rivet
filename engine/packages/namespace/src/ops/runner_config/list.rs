@@ -64,7 +64,7 @@ pub async fn namespace_runner_config_list(
 
 			tx.get_ranges_keyvalues(
 				universaldb::RangeOption {
-					mode: StreamingMode::WantAll,
+					mode: StreamingMode::Exact,
 					limit: Some(input.limit),
 					..(start, end).into()
 				},
