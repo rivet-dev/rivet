@@ -443,10 +443,10 @@ pub async fn recover_keys_chunk(
 
 				// Scan for key instances
 				let range_option = RangeOption {
-					begin: begin_key,
-					end: end_key,
+					mode: StreamingMode::Exact,
 					limit: Some(count as usize),
-					mode: StreamingMode::WantAll,
+					end: end_key,
+					begin: begin_key,
 					..Default::default()
 				};
 
