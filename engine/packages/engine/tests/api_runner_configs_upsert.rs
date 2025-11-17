@@ -580,3 +580,49 @@ fn upsert_runner_config_idempotent() {
 		assert!(response2.endpoint_config_changed || !response2.endpoint_config_changed);
 	});
 }
+
+// MARK: Runner validation tests
+
+#[test]
+fn upsert_runner_config_serverless_slots_per_runner_zero() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+
+		let runner_name = "zero-slots-runner";
+		let mut datacenters = HashMap::new();
+		datacenters.insert(
+			"dc-1".to_string(),
+			rivet_api_types::namespaces::runner_configs::RunnerConfig {
+				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Serverless {
+					url: "http://example.com".to_string(),
+					headers: None,
+					request_lifespan: 30,
+					slots_per_runner: 0, // Invalid: should be rejected
+					min_runners: Some(1),
+					max_runners: 5,
+					runners_margin: Some(2),
+				},
+				metadata: None,
+			},
+		);
+
+		// Attempt to upsert runner config with slots_per_runner = 0
+		let result = common::api::public::runner_configs_upsert(
+			ctx.leader_dc().guard_port(),
+			rivet_api_peer::runner_configs::UpsertPath {
+				runner_name: runner_name.to_string(),
+			},
+			rivet_api_peer::runner_configs::UpsertQuery {
+				namespace: namespace.clone(),
+			},
+			rivet_api_public::runner_configs::upsert::UpsertRequest { datacenters },
+		)
+		.await;
+
+		// Should fail because slots_per_runner cannot be 0
+		assert!(
+			result.is_err(),
+			"Upsert should fail when slots_per_runner is 0"
+		);
+	});
+}
