@@ -7,11 +7,22 @@ use super::api;
 
 pub struct TestOpts {
 	pub datacenter_count: usize,
+	pub timeout_secs: u64,
 }
 
 impl TestOpts {
 	pub fn new(datacenter_count: usize) -> Self {
-		Self { datacenter_count }
+		Self {
+			datacenter_count,
+			..Default::default()
+		}
+	}
+
+	pub fn new_with_timeout(datacenter_count: usize, timeout_secs: u64) -> Self {
+		Self {
+			datacenter_count,
+			timeout_secs,
+		}
 	}
 }
 
@@ -19,6 +30,7 @@ impl Default for TestOpts {
 	fn default() -> Self {
 		Self {
 			datacenter_count: 1,
+			timeout_secs: 10,
 		}
 	}
 }
@@ -37,11 +49,6 @@ pub struct TestDatacenter {
 }
 
 impl TestCtx {
-	/// Creates a test context with multiple datacenters
-	pub async fn new_multi(dc_count: usize) -> Result<Self> {
-		Self::new_with_opts(TestOpts::new(dc_count)).await
-	}
-
 	/// Creates a test context with custom options
 	pub async fn new_with_opts(opts: TestOpts) -> Result<Self> {
 		// Set up logging

@@ -23,39 +23,17 @@ pub async fn setup_test_namespace(leader_dc: &TestDatacenter) -> (String, rivet_
 // Setup namespace with runner
 pub async fn setup_test_namespace_with_runner(
 	dc: &super::TestDatacenter,
-) -> (String, rivet_util::Id, super::runner::TestRunner) {
+) -> (String, rivet_util::Id, super::test_runner::TestRunner) {
 	let (namespace_name, namespace_id) = setup_test_namespace(dc).await;
 
-	let runner = setup_runner(
-		dc,
-		&namespace_name,
-		&format!("key-{:012x}", rand::random::<u64>()),
-		1,
-		20,
-		None,
-	)
+	let runner = setup_runner(dc, &namespace_name, |builder| {
+		builder.with_actor_behavior("test-actor", |_config| {
+			Box::new(super::test_runner::EchoActor::new())
+		})
+	})
 	.await;
 
 	(namespace_name, namespace_id, runner)
-}
-
-pub async fn setup_runner(
-	dc: &super::TestDatacenter,
-	namespace_name: &str,
-	key: &str,
-	version: u32,
-	total_slots: u32,
-	runner_name: Option<String>,
-) -> super::runner::TestRunner {
-	super::runner::TestRunner::new(
-		dc.guard_port(),
-		&namespace_name,
-		key,
-		version,
-		total_slots,
-		runner_name,
-	)
-	.await
 }
 
 pub async fn cleanup_test_namespace(namespace_id: rivet_util::Id, _guard_port: u16) {
@@ -183,10 +161,62 @@ pub fn get_test_datacenter_name(label: u16) -> String {
 	format!("dc-{}", label)
 }
 
-pub async fn setup_multi_datacenter_test() -> super::TestCtx {
-	super::TestCtx::new_multi(2)
+// Timing helpers for eventual consistency
+pub async fn wait_for_eventual_consistency() {
+	tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+}
+
+pub async fn wait_for_actor_propagation(actor_id: &str, _generation: u32) {
+	// Wait for actor state to propagate through all systems
+	tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+}
+
+// Test runner helper functions
+
+/// Build a test runner with specified configuration
+///
+/// Defaults to 20 total slots, but can be overridden in the builder closure.
+///
+/// Example:
+/// ```
+/// // Default 20 slots
+/// let runner = setup_runner(ctx.leader_dc(), &namespace, |builder| {
+///     builder
+///         .with_actor_behavior("test-actor", |_| Box::new(EchoActor::new()))
+///         .with_actor_behavior("crash-actor", |_| Box::new(CrashOnStartActor::new(1)))
+/// }).await;
+///
+/// // Override slots
+/// let runner = setup_runner(ctx.leader_dc(), &namespace, |builder| {
+///     builder
+///         .with_total_slots(2)
+///         .with_actor_behavior("test-actor", |_| Box::new(EchoActor::new()))
+/// }).await;
+/// ```
+pub async fn setup_runner<F>(
+	dc: &super::TestDatacenter,
+	namespace: &str,
+	configure: F,
+) -> super::test_runner::TestRunner
+where
+	F: FnOnce(super::test_runner::TestRunnerBuilder) -> super::test_runner::TestRunnerBuilder,
+{
+	let builder = super::test_runner::TestRunnerBuilder::new(namespace)
+		.with_runner_key(&format!("key-{:012x}", rand::random::<u64>()))
+		.with_version(1)
+		.with_total_slots(20);
+
+	let builder = configure(builder);
+
+	let runner = builder
+		.build(dc)
 		.await
-		.expect("Failed to setup multi-datacenter test")
+		.expect("failed to build test runner");
+
+	runner.start().await.expect("failed to start runner");
+	runner.wait_ready().await;
+
+	runner
 }
 
 pub fn convert_strings_to_ids(actor_ids: Vec<String>) -> Vec<rivet_util::Id> {
@@ -194,4 +224,8 @@ pub fn convert_strings_to_ids(actor_ids: Vec<String>) -> Vec<rivet_util::Id> {
 		.iter()
 		.map(|x| rivet_util::Id::from_str(&x).expect("failed to convert actor ids to string"))
 		.collect::<Vec<_>>()
+}
+
+pub fn generate_dummy_rivet_id(dc: &super::TestDatacenter) -> rivet_util::Id {
+	rivet_util::Id::new_v1(dc.config.dc_label())
 }
