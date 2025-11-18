@@ -1,8 +1,110 @@
 use anyhow::{Ok, Result, bail};
 use vbare::OwnedVersionedData;
 
-use crate::generated::{v1, v2, v3};
+use crate::generated::{v1, v2, v3, v4};
 use crate::uuid_compat::{decode_bytes_from_uuid, encode_bytes_to_uuid};
+
+pub enum ToClientMk2 {
+	V4(v4::ToClient),
+}
+
+impl OwnedVersionedData for ToClientMk2 {
+	type Latest = v4::ToClient;
+
+	fn wrap_latest(latest: v4::ToClient) -> Self {
+		ToClientMk2::V4(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let ToClientMk2::V4(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			4 => Ok(ToClientMk2::V4(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			ToClientMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+pub enum ToServerMk2 {
+	V4(v4::ToServer),
+}
+
+impl OwnedVersionedData for ToServerMk2 {
+	type Latest = v4::ToServer;
+
+	fn wrap_latest(latest: v4::ToServer) -> Self {
+		ToServerMk2::V4(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let ToServerMk2::V4(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			4 => Ok(ToServerMk2::V4(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			ToServerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+pub enum ToRunnerMk2 {
+	V4(v4::ToRunner),
+}
+
+impl OwnedVersionedData for ToRunnerMk2 {
+	type Latest = v4::ToRunner;
+
+	fn wrap_latest(latest: v4::ToRunner) -> Self {
+		ToRunnerMk2::V4(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let ToRunnerMk2::V4(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			4 => Ok(ToRunnerMk2::V4(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			ToRunnerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
 
 pub enum ToClient {
 	V1(v1::ToClient),
@@ -736,20 +838,20 @@ impl OwnedVersionedData for ToRunner {
 }
 
 pub enum ToGateway {
-	// No change between v1 and v3
-	V3(v3::ToGateway),
+	// No change between v1 and v4
+	V4(v4::ToGateway),
 }
 
 impl OwnedVersionedData for ToGateway {
-	type Latest = v3::ToGateway;
+	type Latest = v4::ToGateway;
 
-	fn wrap_latest(latest: v3::ToGateway) -> Self {
-		ToGateway::V3(latest)
+	fn wrap_latest(latest: v4::ToGateway) -> Self {
+		ToGateway::V4(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let ToGateway::V3(data) = self {
+		if let ToGateway::V4(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -758,14 +860,14 @@ impl OwnedVersionedData for ToGateway {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
-			1 | 2 | 3 => Ok(ToGateway::V3(serde_bare::from_slice(payload)?)),
+			1 | 2 | 4 => Ok(ToGateway::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
-			ToGateway::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToGateway::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
@@ -781,20 +883,20 @@ impl OwnedVersionedData for ToGateway {
 }
 
 pub enum ToServerlessServer {
-	// No change between v1 and v3
-	V3(v3::ToServerlessServer),
+	// No change between v1 and v4
+	V4(v4::ToServerlessServer),
 }
 
 impl OwnedVersionedData for ToServerlessServer {
-	type Latest = v3::ToServerlessServer;
+	type Latest = v4::ToServerlessServer;
 
-	fn wrap_latest(latest: v3::ToServerlessServer) -> Self {
-		ToServerlessServer::V3(latest)
+	fn wrap_latest(latest: v4::ToServerlessServer) -> Self {
+		ToServerlessServer::V4(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let ToServerlessServer::V3(data) = self {
+		if let ToServerlessServer::V4(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -803,14 +905,14 @@ impl OwnedVersionedData for ToServerlessServer {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
-			1 | 2 | 3 => Ok(ToServerlessServer::V3(serde_bare::from_slice(payload)?)),
+			1 | 2 | 3 | 4 => Ok(ToServerlessServer::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
-			ToServerlessServer::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToServerlessServer::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 

@@ -319,18 +319,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											// Send signal to stop actor now that we know it will be sleeping
-											ctx.signal(crate::workflows::runner2::Command {
-												inner: protocol::Command::CommandStopActor(
-													protocol::CommandStopActor {
-														actor_id: input.actor_id.to_string(),
-														generation: state.generation,
-													},
-												),
-											})
-											.to_workflow_id(runner_workflow_id)
-											.send()
-											.await?;
+											// TODO: Send message to tunnel
+											// // Send signal to stop actor now that we know it will be sleeping
+											// ctx.signal(crate::workflows::runner::Command {
+											// 	inner: protocol::Command::CommandStopActor(
+											// 		protocol::CommandStopActor {
+											// 			actor_id: input.actor_id.to_string(),
+											// 			generation: state.generation,
+											// 		},
+											// 	),
+											// })
+											// .to_workflow_id(runner_workflow_id)
+											// .send()
+											// .await?;
 										}
 									}
 									protocol::ActorIntent::ActorIntentStop => {
@@ -349,17 +350,18 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											ctx.signal(crate::workflows::runner2::Command {
-												inner: protocol::Command::CommandStopActor(
-													protocol::CommandStopActor {
-														actor_id: input.actor_id.to_string(),
-														generation: state.generation,
-													},
-												),
-											})
-											.to_workflow_id(runner_workflow_id)
-											.send()
-											.await?;
+											// TODO: Send message to tunnel
+											// ctx.signal(crate::workflows::runner::Command {
+											// 	inner: protocol::Command::CommandStopActor(
+											// 		protocol::CommandStopActor {
+											// 			actor_id: input.actor_id.to_string(),
+											// 			generation: state.generation,
+											// 		},
+											// 	),
+											// })
+											// .to_workflow_id(runner_workflow_id)
+											// .send()
+											// .await?;
 										}
 									}
 								},
@@ -492,29 +494,31 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								})
 								.await?;
 
-								ctx.signal(crate::workflows::runner2::Command {
-									inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-										actor_id: input.actor_id.to_string(),
-										generation: state.generation,
-									}),
-								})
-								.to_workflow_id(runner_workflow_id)
-								.send()
-								.await?;
+								// TODO: Send message to tunnel
+								// ctx.signal(crate::workflows::runner::Command {
+								// 	inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+								// 		actor_id: input.actor_id.to_string(),
+								// 		generation: state.generation,
+								// 	}),
+								// })
+								// .to_workflow_id(runner_workflow_id)
+								// .send()
+								// .await?;
 							}
 						}
 						Main::Destroy(_) => {
 							// If allocated, send stop actor command
 							if let Some(runner_workflow_id) = state.runner_workflow_id {
-								ctx.signal(crate::workflows::runner2::Command {
-									inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-										actor_id: input.actor_id.to_string(),
-										generation: state.generation,
-									}),
-								})
-								.to_workflow_id(runner_workflow_id)
-								.send()
-								.await?;
+								// TODO: Send message to tunnel
+								// ctx.signal(crate::workflows::runner::Command {
+								// 	inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+								// 		actor_id: input.actor_id.to_string(),
+								// 		generation: state.generation,
+								// 	}),
+								// })
+								// .to_workflow_id(runner_workflow_id)
+								// .send()
+								// .await?;
 							}
 
 							return Ok(Loop::Break(runtime::LifecycleResult {
@@ -623,15 +627,16 @@ async fn handle_stopped(
 	if let (StoppedVariant::Lost { .. }, Some(old_runner_workflow_id)) =
 		(&variant, old_runner_workflow_id)
 	{
-		ctx.signal(crate::workflows::runner2::Command {
-			inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-				actor_id: input.actor_id.to_string(),
-				generation: state.generation,
-			}),
-		})
-		.to_workflow_id(old_runner_workflow_id)
-		.send()
-		.await?;
+		// TODO: Send message to tunnel
+		// ctx.signal(crate::workflows::runner::Command {
+		// 	inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+		// 		actor_id: input.actor_id.to_string(),
+		// 		generation: state.generation,
+		// 	}),
+		// })
+		// .to_workflow_id(old_runner_workflow_id)
+		// .send()
+		// .await?;
 	}
 
 	// Reschedule no matter what
@@ -752,6 +757,11 @@ pub struct Allocate {
 #[signal("pegboard_actor_event")]
 pub struct Event {
 	pub inner: protocol::Event,
+}
+
+#[signal("pegboard_actor_events")]
+pub struct Events {
+	pub inner: Vec<protocol::Event>,
 }
 
 #[signal("pegboard_actor_wake")]

@@ -14,20 +14,15 @@ use crate::{LifecycleResult, conn::Conn, errors};
 pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
-	mut sub: Subscriber,
+	mut tunnel_sub: Subscriber,
 	mut eviction_sub: Subscriber,
+	mut init_rx: watch::Receiver<()>,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
-	loop {
-		let ups_msg = tokio::select! {
-			res = sub.next() => {
-				if let NextOutput::Message(ups_msg) = res.context("pubsub_to_client_task sub failed")? {
-					ups_msg
-				} else {
-					tracing::debug!("tunnel sub closed");
-					bail!("tunnel sub closed");
-				}
-			}
+	if protocol::is_mk2(conn.protocol) {
+		// Must first receive init from adjacent task before processing messages
+		tokio::select! {
+			_ = init_rx.changed() => {}
 			_ = eviction_sub.next() => {
 				tracing::debug!("runner evicted");
 				return Err(errors::WsError::Eviction.build());
@@ -38,100 +33,220 @@ pub async fn task(
 			}
 		};
 
-		tracing::debug!(
-			payload_len = ups_msg.payload.len(),
-			"received message from pubsub, forwarding to WebSocket"
-		);
-
-		// Parse message
-		let msg = match versioned::ToRunner::deserialize_with_embedded_version(&ups_msg.payload) {
-			Result::Ok(x) => x,
-			Err(err) => {
-				tracing::error!(?err, "failed to parse tunnel message");
-				continue;
+		loop {
+			match recv_msg().await? {
+				Ok(msg) => handle_message_mk2(msg).await?,
+				Err(lifecycle_res) => return Ok(lifecycle_res),
 			}
-		};
-
-		// Convert to ToClient types
-		let to_client_msg = match msg {
-			protocol::ToRunner::ToRunnerPing(ping) => {
-				// Publish pong to UPS
-				let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
-				let msg_serialized = versioned::ToGateway::wrap_latest(
-					protocol::ToGateway::ToGatewayPong(protocol::ToGatewayPong {
-						request_id: ping.request_id,
-						ts: ping.ts,
-					}),
-				)
-				.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
-				.context("failed to serialize pong message for gateway")?;
-				ctx.ups()
-					.context("failed to get UPS instance for tunnel message")?
-					.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
-					.await
-					.with_context(|| {
-						format!(
-							"failed to publish tunnel message to gateway reply topic: {}",
-							gateway_reply_to
-						)
-					})?;
-
-				// Not sent to client
-				continue;
+		}
+	} else {
+		loop {
+			match recv_msg().await? {
+				Ok(msg) => handle_message_mk1(msg).await?,
+				Err(lifecycle_res) => return Ok(lifecycle_res),
 			}
-			protocol::ToRunner::ToClientInit(x) => protocol::ToClient::ToClientInit(x),
-			protocol::ToRunner::ToClientClose => return Err(errors::WsError::Eviction.build()),
-			// Dynamically populate hibernating request ids
-			protocol::ToRunner::ToClientCommands(mut command_wrappers) => {
-				for command_wrapper in &mut command_wrappers {
-					if let protocol::Command::CommandStartActor(protocol::CommandStartActor {
+		}
+	}
+}
+
+async fn recv_msg() -> Result<std::result::Result<(), LifecycleResult>> {
+	let tunnel_msg = tokio::select! {
+		res = tunnel_sub.next() => {
+			if let NextOutput::Message(tunnel_msg) = res.context("pubsub_to_client_task sub failed")? {
+				tunnel_msg
+			} else {
+				tracing::debug!("tunnel sub closed");
+				bail!("tunnel sub closed");
+			}
+		}
+		_ = eviction_sub.next() => {
+			tracing::debug!("runner evicted");
+			return Err(errors::WsError::Eviction.build());
+		}
+		_ = tunnel_to_ws_abort_rx.changed() => {
+			tracing::debug!("task aborted");
+			return Ok(Err(LifecycleResult::Aborted));
+		}
+	};
+
+	tracing::debug!(
+		payload_len = tunnel_msg.payload.len(),
+		"received message from pubsub, forwarding to WebSocket"
+	);
+
+	Ok(Ok(tunnel_msg))
+}
+
+async fn handle_message_mk2() -> Result<()> {
+	// Parse message
+	let msg = match versioned::ToRunner2::deserialize_with_embedded_version(&tunnel_msg.payload) {
+		Result::Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?err, "failed to parse tunnel message");
+			return Ok(());
+		}
+	};
+
+	// Convert to ToClient types
+	let to_client_msg = match msg {
+		protocol::mk2::ToRunner::ToRunnerPing(ping) => {
+			// Publish pong to UPS
+			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
+			let msg_serialized = versioned::ToGateway::wrap_latest(
+				protocol::ToGateway::ToGatewayPong(protocol::ToGatewayPong {
+					request_id: ping.request_id,
+					ts: ping.ts,
+				}),
+			)
+			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
+			.context("failed to serialize pong message for gateway")?;
+			ctx.ups()
+				.context("failed to get UPS instance for tunnel message")?
+				.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
+				.await
+				.with_context(|| {
+					format!(
+						"failed to publish tunnel message to gateway reply topic: {}",
+						gateway_reply_to
+					)
+				})?;
+
+			// Not sent to client
+			return Ok(());
+		}
+		protocol::mk2::ToRunner::ToRunnerClose => return Err(errors::WsError::Eviction.build()),
+		protocol::mk2::ToRunner::ToClientCommands(mut command_wrappers) => {
+			for command_wrapper in &mut command_wrappers {
+				if let protocol::mk2::Command::CommandStartActor(
+					protocol::mk2::CommandStartActor {
 						actor_id,
 						hibernating_requests,
 						..
-					}) = &mut command_wrapper.inner
-					{
-						let ids = ctx
-							.op(pegboard::ops::actor::hibernating_request::list::Input {
-								actor_id: Id::parse(actor_id)?,
-							})
-							.await?;
+					},
+				) = &mut command_wrapper.inner
+				{
+					let ids = ctx
+						.op(pegboard::ops::actor::hibernating_request::list::Input {
+							actor_id: Id::parse(actor_id)?,
+						})
+						.await?;
 
-						*hibernating_requests = ids
-							.into_iter()
-							.map(|x| protocol::HibernatingRequest {
-								gateway_id: x.gateway_id,
-								request_id: x.request_id,
-							})
-							.collect();
-					}
+					// Dynamically populate hibernating request ids
+					*hibernating_requests = ids
+						.into_iter()
+						.map(|x| protocol::mk2::HibernatingRequest {
+							gateway_id: x.gateway_id,
+							request_id: x.request_id,
+						})
+						.collect();
 				}
+			}
 
-				// NOTE: `command_wrappers` is mutated in this match arm, it is not the same as the
-				// ToRunner data
-				protocol::ToClient::ToClientCommands(command_wrappers)
-			}
-			protocol::ToRunner::ToClientAckEvents(x) => protocol::ToClient::ToClientAckEvents(x),
-			protocol::ToRunner::ToClientKvResponse(x) => protocol::ToClient::ToClientKvResponse(x),
-			protocol::ToRunner::ToClientTunnelMessage(x) => {
-				protocol::ToClient::ToClientTunnelMessage(x)
-			}
-		};
+			// NOTE: `command_wrappers` is mutated in this match arm, it is not the same as the
+			// ToRunner data
+			protocol::mk2::ToClient::ToClientCommands(command_wrappers)
+		}
+		protocol::mk2::ToRunner::ToClientTunnelMessage(x) => {
+			protocol::mk2::ToClient::ToClientTunnelMessage(x)
+		}
+	};
 
-		// Forward raw message to WebSocket
-		tracing::debug!(?to_client_msg, "sending runner message to client");
-		let serialized_msg = match versioned::ToClient::wrap_latest(to_client_msg)
-			.serialize(conn.protocol_version)
-		{
-			Result::Ok(x) => x,
-			Err(err) => {
-				tracing::error!(?err, "failed to serialize tunnel message");
-				continue;
+	// Forward raw message to WebSocket
+	let serialized_msg =
+		versioned::ToClientMk2::wrap_latest(to_client_msg).serialize(conn.protocol_version)?;
+	let ws_msg = WsMessage::Binary(serialized_msg.into());
+	conn.ws_handle
+		.send(ws_msg)
+		.await
+		.context("failed to send message to WebSocket")?;
+
+	Ok(())
+}
+
+async fn handle_message_mk1() -> Result<()> {
+	// Parse message
+	let msg = match versioned::ToRunner::deserialize_with_embedded_version(&tunnel_msg.payload) {
+		Result::Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?err, "failed to parse tunnel message");
+			return Ok(());
+		}
+	};
+
+	// Convert to ToClient types
+	let to_client_msg = match msg {
+		protocol::ToRunner::ToRunnerPing(ping) => {
+			// Publish pong to UPS
+			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
+			let msg_serialized = versioned::ToGateway::wrap_latest(
+				protocol::ToGateway::ToGatewayPong(protocol::ToGatewayPong {
+					request_id: ping.request_id,
+					ts: ping.ts,
+				}),
+			)
+			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
+			.context("failed to serialize pong message for gateway")?;
+			ctx.ups()
+				.context("failed to get UPS instance for tunnel message")?
+				.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
+				.await
+				.with_context(|| {
+					format!(
+						"failed to publish tunnel message to gateway reply topic: {}",
+						gateway_reply_to
+					)
+				})?;
+
+			// Not sent to client
+			continue;
+		}
+		protocol::ToRunner::ToClientInit(x) => protocol::ToClient::ToClientInit(x),
+		protocol::ToRunner::ToClientClose => return Err(errors::WsError::Eviction.build()),
+		// Dynamically populate hibernating request ids
+		protocol::ToRunner::ToClientCommands(mut command_wrappers) => {
+			for command_wrapper in &mut command_wrappers {
+				if let protocol::Command::CommandStartActor(protocol::CommandStartActor {
+					actor_id,
+					hibernating_requests,
+					..
+				}) = &mut command_wrapper.inner
+				{
+					let ids = ctx
+						.op(pegboard::ops::actor::hibernating_request::list::Input {
+							actor_id: Id::parse(actor_id)?,
+						})
+						.await?;
+
+					*hibernating_requests = ids
+						.into_iter()
+						.map(|x| protocol::HibernatingRequest {
+							gateway_id: x.gateway_id,
+							request_id: x.request_id,
+						})
+						.collect();
+				}
 			}
-		};
-		let ws_msg = WsMessage::Binary(serialized_msg.into());
-		conn.ws_handle
-			.send(ws_msg)
-			.await
-			.context("failed to send message to WebSocket")?
-	}
+
+			// NOTE: `command_wrappers` is mutated in this match arm, it is not the same as the
+			// ToRunner data
+			protocol::ToClient::ToClientCommands(command_wrappers)
+		}
+		protocol::ToRunner::ToClientAckEvents(x) => protocol::ToClient::ToClientAckEvents(x),
+		protocol::ToRunner::ToClientKvResponse(x) => protocol::ToClient::ToClientKvResponse(x),
+		protocol::ToRunner::ToClientTunnelMessage(x) => {
+			protocol::ToClient::ToClientTunnelMessage(x)
+		}
+	};
+
+	// Forward raw message to WebSocket
+	tracing::debug!(?to_client_msg, "sending runner message to client");
+	let serialized_msg =
+		versioned::ToClient::wrap_latest(to_client_msg).serialize(conn.protocol_version)?;
+	let ws_msg = WsMessage::Binary(serialized_msg.into());
+	conn.ws_handle
+		.send(ws_msg)
+		.await
+		.context("failed to send message to WebSocket")?;
+
+	Ok(())
 }
