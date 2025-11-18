@@ -1502,6 +1502,10 @@ impl Database for DatabaseKv {
 													.get_mut(key.index)
 												{
 													input_chunks.push(entry);
+												} else {
+													current_event
+														.indexed_input_chunks
+														.insert(key.index, vec![entry]);
 												}
 											}
 
@@ -1935,7 +1939,7 @@ impl Database for DatabaseKv {
 
 				async move {
 					// Fetch signals from all streams at the same time
-					let signals = futures_util::stream::iter(owned_filter.clone())
+					let mut signals = futures_util::stream::iter(owned_filter.clone())
 						.map(|signal_name| {
 							let pending_signal_subspace = self.subspace.subspace(
 								&keys::workflow::PendingSignalKey::subspace(
@@ -1969,6 +1973,9 @@ impl Database for DatabaseKv {
 						.await?;
 
 					if !signals.is_empty() {
+						// Sort by ts
+						signals.sort_by_key(|key| key.ts);
+
 						let now = rivet_util::timestamp::now();
 
 						// Insert history event
@@ -1981,13 +1988,14 @@ impl Database for DatabaseKv {
 							now,
 						)?;
 
-						let mut signals =
-							futures_util::stream::iter(signals.into_iter().enumerate())
+						let signals =
+							futures_util::stream::iter(signals.into_iter().take(limit).enumerate())
 								.map(|(index, key)| {
 									let tx = tx.clone();
 									async move {
 										let ack_ts_key = keys::signal::AckTsKey::new(key.signal_id);
-										let packed_key = tx.pack(&key);
+
+										let packed_key = self.subspace.pack(&key);
 
 										// Ack signal
 										tx.add_conflict_range(
@@ -1997,7 +2005,7 @@ impl Database for DatabaseKv {
 										)?;
 										tx.set(
 											&self.subspace.pack(&ack_ts_key),
-											&ack_ts_key.serialize(rivet_util::timestamp::now())?,
+											&ack_ts_key.serialize(now)?,
 										);
 
 										update_metric(
@@ -2053,11 +2061,7 @@ impl Database for DatabaseKv {
 								.try_collect::<Vec<_>>()
 								.await?;
 
-						// Sort by ts
-						signals.sort_by_key(|key| key.create_ts);
-
-						// Apply limit
-						Ok(signals.into_iter().take(limit).collect())
+						Ok(signals)
 					}
 					// No signals found
 					else {
