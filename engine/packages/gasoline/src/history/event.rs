@@ -41,7 +41,6 @@ impl Deref for Event {
 #[derive(Debug)]
 pub enum EventData {
 	Activity(ActivityEvent),
-	Signal(SignalEvent),
 	SignalSend(SignalSendEvent),
 	MessageSend(MessageSendEvent),
 	SubWorkflow(SubWorkflowEvent),
@@ -50,17 +49,13 @@ pub enum EventData {
 	Removed(RemovedEvent),
 	VersionCheck,
 	Branch,
-
-	/// NOTE: Strictly used as a placeholder for backfilling. When using this, the coordinate of the `Event`
-	/// must still be valid.
-	Empty,
+	Signals(SignalsEvent),
 }
 
 impl std::fmt::Display for EventData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match &self {
 			EventData::Activity(activity) => write!(f, "activity {:?}", activity.name),
-			EventData::Signal(signal) => write!(f, "signal {:?}", signal.name),
 			EventData::SignalSend(signal_send) => write!(f, "signal send {:?}", signal_send.name),
 			EventData::MessageSend(message_send) => {
 				write!(f, "message send {:?}", message_send.name)
@@ -79,7 +74,13 @@ impl std::fmt::Display for EventData {
 			}
 			EventData::VersionCheck => write!(f, "version check"),
 			EventData::Branch => write!(f, "branch"),
-			EventData::Empty => write!(f, "empty"),
+			EventData::Signals(signals) => {
+				let mut unique_names = signals.names.clone();
+				unique_names.sort();
+				unique_names.dedup();
+
+				write!(f, "signals {:?}", unique_names.join(", "))
+			}
 		}
 	}
 }
@@ -87,6 +88,7 @@ impl std::fmt::Display for EventData {
 #[derive(Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum EventType {
 	Activity = 0,
+	/// Deprecated.
 	Signal = 1,
 	SignalSend = 2,
 	MessageSend = 3,
@@ -96,6 +98,7 @@ pub enum EventType {
 	Branch = 7,
 	Removed = 8,
 	VersionCheck = 9,
+	Signals = 10,
 }
 
 impl std::fmt::Display for EventType {
@@ -111,6 +114,7 @@ impl std::fmt::Display for EventType {
 			EventType::Removed => write!(f, "removed event"),
 			EventType::VersionCheck => write!(f, "version check"),
 			EventType::Branch => write!(f, "branch"),
+			EventType::Signals => write!(f, "signals"),
 		}
 	}
 }
@@ -133,12 +137,6 @@ impl ActivityEvent {
 			.transpose()
 			.map_err(WorkflowError::DeserializeActivityOutput)
 	}
-}
-
-#[derive(Debug)]
-pub struct SignalEvent {
-	pub name: String,
-	pub body: Box<serde_json::value::RawValue>,
 }
 
 #[derive(Debug)]
@@ -207,4 +205,10 @@ impl std::fmt::Display for SleepState {
 pub struct RemovedEvent {
 	pub event_type: EventType,
 	pub name: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct SignalsEvent {
+	pub names: Vec<String>,
+	pub bodies: Vec<Box<serde_json::value::RawValue>>,
 }

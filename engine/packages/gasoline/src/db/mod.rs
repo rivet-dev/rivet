@@ -129,8 +129,8 @@ pub trait Database: Send {
 		error: &str,
 	) -> WorkflowResult<()>;
 
-	/// Pulls the oldest signal with the given filter.
-	async fn pull_next_signal(
+	/// Pulls signals in order from oldest to newest with the given filter.
+	async fn pull_next_signals(
 		&self,
 		workflow_id: Id,
 		workflow_name: &str,
@@ -138,8 +138,9 @@ pub trait Database: Send {
 		location: &Location,
 		version: usize,
 		loop_location: Option<&Location>,
-		last_try: bool,
-	) -> WorkflowResult<Option<SignalData>>;
+		limit: usize,
+		last_attempt: bool,
+	) -> WorkflowResult<Vec<SignalData>>;
 
 	/// Retrieves a workflow with the given ID. Can only be called from a workflow context.
 	async fn get_sub_workflow(

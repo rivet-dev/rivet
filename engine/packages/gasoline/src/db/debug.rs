@@ -91,10 +91,7 @@ pub enum EventData {
 	Removed(RemovedEvent),
 	VersionCheck,
 	Branch,
-
-	/// NOTE: Strictly used as a placeholder for backfilling. When using this, the coordinate of the `Event`
-	/// must still be valid.
-	Empty,
+	Signals(SignalsEvent),
 }
 
 impl std::fmt::Display for EventData {
@@ -120,7 +117,13 @@ impl std::fmt::Display for EventData {
 			}
 			EventData::VersionCheck => write!(f, "version check"),
 			EventData::Branch => write!(f, "branch"),
-			EventData::Empty => write!(f, "empty"),
+			EventData::Signals(signals) => {
+				let mut unique_names = signals.names.clone();
+				unique_names.sort();
+				unique_names.dedup();
+
+				write!(f, "signals {:?}", unique_names.join(", "))
+			}
 		}
 	}
 }
@@ -170,6 +173,13 @@ pub struct LoopEvent {
 	/// If the loop completes, this will be some.
 	pub output: Option<serde_json::Value>,
 	pub iteration: usize,
+}
+
+#[derive(Debug)]
+pub struct SignalsEvent {
+	pub signal_ids: Vec<Id>,
+	pub names: Vec<String>,
+	pub bodies: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
