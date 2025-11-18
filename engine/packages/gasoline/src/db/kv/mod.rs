@@ -2576,23 +2576,41 @@ impl Database for DatabaseKv {
 								keys::history::HistorySubspaceVariant::Forgotten,
 							));
 
-					let loop_events_subspace =
-						self.subspace
-							.subspace(&keys::history::EventHistorySubspaceKey::entire(
-								from_workflow_id,
-								location.clone(),
-								false,
-							));
+					// Start is {loop location, 0, ...}
+					let loop_events_subspace_start = self
+						.subspace
+						.subspace(&keys::history::EventHistorySubspaceKey::entire(
+							from_workflow_id,
+							location.clone(),
+							false,
+						))
+						.range()
+						.0;
+					// End is {loop location, iteration - 1, ...}
+					let loop_events_subspace_end = self
+						.subspace
+						.subspace(&keys::history::EventHistorySubspaceKey::new(
+							from_workflow_id,
+							location.clone(),
+							iteration.saturating_sub(1),
+							false,
+						))
+						.range()
+						.1;
 
 					let mut stream = tx.get_ranges_keyvalues(
 						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
-							..(&loop_events_subspace).into()
+							..(
+								loop_events_subspace_start.as_slice(),
+								loop_events_subspace_end.as_slice(),
+							)
+								.into()
 						},
 						Serializable,
 					);
 
-					// Move all current events under this loop to the forgotten history
+					// Move all events under this loop up to the current iteration to the forgotten history
 					loop {
 						let Some(entry) = stream.try_next().await? else {
 							break;
@@ -2602,7 +2620,7 @@ impl Database for DatabaseKv {
 							return Err(universaldb::tuple::PackError::BadPrefix.into());
 						}
 
-						// Truncate tuple up to ACTIVE and replace it with FORGOTTEN
+						// Truncate tuple up to ...ACTIVE and replace it with ...FORGOTTEN
 						let truncated_key = &entry.key()[active_history_subspace.bytes().len()..];
 						let forgotten_key =
 							[forgotten_history_subspace.bytes(), truncated_key].concat();
@@ -2610,7 +2628,7 @@ impl Database for DatabaseKv {
 						tx.set(&forgotten_key, entry.value());
 					}
 
-					tx.clear_subspace_range(&loop_events_subspace);
+					tx.clear_range(&loop_events_subspace_start, &loop_events_subspace_end);
 
 					// Only retain last 100 events in forgotten history
 					if iteration > 100 {

@@ -103,10 +103,8 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 					Main::Forward(sig) => {
 						match sig.inner {
 							protocol::ToServer::ToServerInit(init_sig) => {
-								if init.is_none() {
-									init = Some(init_sig);
-									check_queue = true;
-								}
+								init = Some(init_sig);
+								check_queue = true;
 							}
 							protocol::ToServer::ToServerEvents(new_events) => {
 								// Ignore events that were already received
@@ -234,8 +232,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 			let last_event_idx = events.last().map(|event| event.index);
 
 			// NOTE: This should not be parallelized because signals should be sent in order
-			// Forward to actor workflows
-			// Process events
+			// Forward events to actor workflows
 			for event in &events {
 				let actor_id = crate::utils::event_actor_id(&event.inner).to_string();
 				let res = ctx

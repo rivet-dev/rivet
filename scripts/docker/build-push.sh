@@ -23,7 +23,12 @@ for tag in "${TAGS[@]}"; do
   BUILD_TAG_ARGS+=("-t" "${IMAGE_REPO}:${tag}")
 done
 
-docker build -f "${DOCKERFILE}" --target "${TARGET}" --platform linux/x86_64 --build-arg BUILD_FRONTEND=true "${BUILD_TAG_ARGS[@]}" "${CONTEXT}"
+docker build -f "${DOCKERFILE}" --target "${TARGET}" \
+  --platform linux/x86_64 \
+  --build-arg BUILD_FRONTEND=true \
+  # --build-arg CARGO_BUILD_MODE=release \
+  "${BUILD_TAG_ARGS[@]}" \
+  "${CONTEXT}"
 
 echo "Pushing images..."
 for tag in "${TAGS[@]}"; do
