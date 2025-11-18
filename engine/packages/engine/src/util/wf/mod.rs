@@ -467,6 +467,35 @@ pub async fn print_history(
 					}
 				}
 			}
+			EventData::Signals(data) => {
+				// Indent
+				print!("{}{c} ", "  ".repeat(indent));
+
+				for ((signal_id, name), body) in
+					data.signal_ids.iter().zip(&data.names).zip(&data.bodies)
+				{
+					// Indent
+					print!("{}{c}   - ", "  ".repeat(indent));
+					println!("{}", event_style.apply_to(name));
+
+					print!("{}{c}   ", "  ".repeat(indent));
+					println!("id {}", style(signal_id).green());
+
+					if !exclude_json {
+						// Indent
+						print!("{}{c}   ", "  ".repeat(indent));
+
+						println!(
+							"body {}",
+							indent_string(
+								&colored_json(body)?,
+								format!("{}{c}   ", "  ".repeat(indent)),
+								true
+							)
+						);
+					}
+				}
+			}
 			_ => {}
 		}
 	}
@@ -543,7 +572,7 @@ pub fn event_style(event: &Event) -> Style {
 		EventData::Removed(_) => Style::new().red(),
 		EventData::VersionCheck => Style::new().red(),
 		EventData::Branch => Style::new(),
-		EventData::Empty => Style::new(),
+		EventData::Signals(_) => Style::new().cyan(),
 	}
 }
 
@@ -595,7 +624,11 @@ pub fn print_event_name(event: &Event) {
 		}
 		EventData::VersionCheck => print!("{}", style.apply_to("version check").bold()),
 		EventData::Branch => print!("{}", style.apply_to("branch").bold()),
-		EventData::Empty => print!("{}", style.apply_to("empty").bold()),
+		EventData::Signals(signal) => print!(
+			"{} {}",
+			style.apply_to("signal receive").bold(),
+			style.apply_to(&signal.names.len())
+		),
 	}
 }
 

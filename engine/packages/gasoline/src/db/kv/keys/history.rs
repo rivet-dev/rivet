@@ -1167,6 +1167,272 @@ impl<'de> TupleUnpack<'de> for TagKey {
 	}
 }
 
+#[derive(Debug)]
+pub struct IndexedSignalIdKey {
+	workflow_id: Id,
+	location: Location,
+	forgotten: bool,
+	pub index: usize,
+}
+
+impl IndexedSignalIdKey {
+	pub fn new(workflow_id: Id, location: Location, index: usize) -> Self {
+		IndexedSignalIdKey {
+			workflow_id,
+			location,
+			forgotten: false,
+			index,
+		}
+	}
+}
+
+impl FormalKey for IndexedSignalIdKey {
+	type Value = Id;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(Id::from_slice(raw)?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.as_bytes().to_vec())
+	}
+}
+
+impl TuplePack for IndexedSignalIdKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		pack_indexed_history_key(
+			self.workflow_id,
+			&self.location,
+			w,
+			tuple_depth,
+			self.forgotten,
+			SIGNAL,
+			self.index,
+			SIGNAL_ID,
+		)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for IndexedSignalIdKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (workflow_id, location, forgotten, index)) = unpack_indexed_history_key(
+			input,
+			tuple_depth,
+			SIGNAL,
+			"SIGNAL",
+			SIGNAL_ID,
+			"SIGNAL_ID",
+		)?;
+
+		Ok((
+			input,
+			IndexedSignalIdKey {
+				workflow_id,
+				location,
+				forgotten,
+				index,
+			},
+		))
+	}
+}
+
+#[derive(Debug)]
+pub struct IndexedNameKey {
+	workflow_id: Id,
+	location: Location,
+	forgotten: bool,
+	pub index: usize,
+}
+
+impl IndexedNameKey {
+	pub fn new(workflow_id: Id, location: Location, index: usize) -> Self {
+		IndexedNameKey {
+			workflow_id,
+			location,
+			forgotten: false,
+			index,
+		}
+	}
+}
+
+impl FormalKey for IndexedNameKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		String::from_utf8(raw.to_vec()).map_err(Into::into)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for IndexedNameKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		pack_indexed_history_key(
+			self.workflow_id,
+			&self.location,
+			w,
+			tuple_depth,
+			self.forgotten,
+			SIGNAL,
+			self.index,
+			NAME,
+		)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for IndexedNameKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (workflow_id, location, forgotten, index)) =
+			unpack_indexed_history_key(input, tuple_depth, SIGNAL, "SIGNAL", NAME, "NAME")?;
+
+		Ok((
+			input,
+			IndexedNameKey {
+				workflow_id,
+				location,
+				forgotten,
+				index,
+			},
+		))
+	}
+}
+
+#[derive(Debug)]
+pub struct IndexedInputKey {
+	workflow_id: Id,
+	location: Location,
+	forgotten: bool,
+	pub index: usize,
+}
+
+impl IndexedInputKey {
+	pub fn new(workflow_id: Id, location: Location, index: usize) -> Self {
+		IndexedInputKey {
+			workflow_id,
+			location,
+			forgotten: false,
+			index,
+		}
+	}
+
+	pub fn split_ref(&self, value: &serde_json::value::RawValue) -> Result<Vec<Vec<u8>>> {
+		Ok(value
+			.get()
+			.as_bytes()
+			.chunks(universaldb::utils::CHUNK_SIZE)
+			.map(|x| x.to_vec())
+			.collect())
+	}
+}
+
+impl FormalChunkedKey for IndexedInputKey {
+	type ChunkKey = IndexedInputChunkKey;
+	type Value = Box<serde_json::value::RawValue>;
+
+	fn chunk(&self, chunk: usize) -> Self::ChunkKey {
+		IndexedInputChunkKey {
+			workflow_id: self.workflow_id,
+			location: self.location.clone(),
+			forgotten: self.forgotten,
+			index: self.index,
+			chunk,
+		}
+	}
+
+	fn combine(&self, chunks: Vec<Value>) -> Result<Self::Value> {
+		serde_json::value::RawValue::from_string(String::from_utf8(
+			chunks
+				.iter()
+				.map(|x| x.value().iter().map(|x| *x))
+				.flatten()
+				.collect(),
+		)?)
+		.context("failed to combine `InputKey`")
+	}
+
+	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
+		self.split_ref(value.as_ref())
+	}
+}
+
+impl TuplePack for IndexedInputKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		pack_indexed_history_key(
+			self.workflow_id,
+			&self.location,
+			w,
+			tuple_depth,
+			self.forgotten,
+			SIGNAL,
+			self.index,
+			INPUT,
+		)
+	}
+}
+
+pub struct IndexedInputChunkKey {
+	workflow_id: Id,
+	location: Location,
+	forgotten: bool,
+	pub index: usize,
+	chunk: usize,
+}
+
+impl TuplePack for IndexedInputChunkKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		pack_indexed_history_key(
+			self.workflow_id,
+			&self.location,
+			w,
+			tuple_depth,
+			self.forgotten,
+			SIGNAL,
+			self.index,
+			INPUT,
+		)?;
+
+		self.chunk.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for IndexedInputChunkKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (workflow_id, location, forgotten, index)) =
+			unpack_indexed_history_key(input, tuple_depth, SIGNAL, "SIGNAL", INPUT, "INPUT")?;
+
+		let (input, chunk) = <usize>::unpack(input, tuple_depth)?;
+
+		Ok((
+			input,
+			IndexedInputChunkKey {
+				workflow_id,
+				location,
+				forgotten,
+				index,
+				chunk,
+			},
+		))
+	}
+}
+
 fn pack_history_key<W: std::io::Write>(
 	workflow_id: Id,
 	location: &Location,
@@ -1237,6 +1503,88 @@ fn unpack_history_key<'de>(
 	))
 }
 
+fn pack_indexed_history_key<W: std::io::Write>(
+	workflow_id: Id,
+	location: &Location,
+	w: &mut W,
+	tuple_depth: TupleDepth,
+	forgotten: bool,
+	variant: usize,
+	index: usize,
+	variant2: usize,
+) -> std::io::Result<VersionstampOffset> {
+	let mut offset = VersionstampOffset::None { size: 0 };
+
+	let t = (
+		WORKFLOW,
+		DATA,
+		workflow_id,
+		HISTORY,
+		if forgotten { FORGOTTEN } else { ACTIVE },
+	);
+	offset += t.pack(w, tuple_depth)?;
+
+	for coord in &**location {
+		offset += coord.pack(w, tuple_depth)?;
+	}
+
+	let t = (DATA, variant, index, variant2);
+	offset += t.pack(w, tuple_depth)?;
+
+	Ok(offset)
+}
+
+fn unpack_indexed_history_key<'de>(
+	input: &'de [u8],
+	tuple_depth: TupleDepth,
+	variant: usize,
+	variant_str: &str,
+	variant2: usize,
+	variant2_str: &str,
+) -> PackResult<(&'de [u8], (Id, Location, bool, usize))> {
+	let (mut input, (_, _, workflow_id, data, history_variant)) =
+		<(usize, usize, Id, usize, usize)>::unpack(input, tuple_depth)?;
+	if data != HISTORY {
+		return Err(PackError::Message("expected HISTORY data".into()));
+	}
+
+	let mut coords = Vec::new();
+
+	loop {
+		let Ok((input2, coord)) = Coordinate::unpack(input, tuple_depth) else {
+			break;
+		};
+
+		coords.push(coord);
+		input = input2;
+	}
+
+	let (input, (_, data, index, data2)) =
+		<(usize, usize, usize, usize)>::unpack(input, tuple_depth)?;
+
+	if data != variant {
+		return Err(PackError::Message(
+			format!("expected {variant_str} data").into(),
+		));
+	}
+
+	if data2 != variant2 {
+		return Err(PackError::Message(
+			format!("expected {variant2_str} data").into(),
+		));
+	}
+
+	Ok((
+		input,
+		(
+			workflow_id,
+			Location::from_iter(coords),
+			history_variant == FORGOTTEN,
+			index,
+		),
+	))
+}
+
 pub mod insert {
 	use anyhow::Result;
 	use rivet_util::Id;
@@ -1281,16 +1629,13 @@ pub mod insert {
 		Ok(())
 	}
 
-	pub fn signal_event(
+	pub fn signals_event(
 		subspace: &universaldb::tuple::Subspace,
 		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
 		create_ts: i64,
-		signal_id: Id,
-		signal_name: &str,
-		body: &serde_json::value::RawValue,
 	) -> Result<()> {
 		common(
 			subspace,
@@ -1300,21 +1645,32 @@ pub mod insert {
 			EventType::Signal,
 			version,
 			create_ts,
-		)?;
+		)
+	}
 
-		let signal_id_key = super::SignalIdKey::new(workflow_id, location.clone());
+	pub fn signals_event_signal(
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
+		workflow_id: Id,
+		location: &Location,
+		index: usize,
+		signal_id: Id,
+		signal_name: &str,
+		body: &serde_json::value::RawValue,
+	) -> Result<()> {
+		let signal_id_key = super::IndexedSignalIdKey::new(workflow_id, location.clone(), index);
 		tx.set(
 			&subspace.pack(&signal_id_key),
 			&signal_id_key.serialize(signal_id)?,
 		);
 
-		let signal_name_key = super::NameKey::new(workflow_id, location.clone());
+		let signal_name_key = super::IndexedNameKey::new(workflow_id, location.clone(), index);
 		tx.set(
 			&subspace.pack(&signal_name_key),
 			&signal_name_key.serialize(signal_name.to_string())?,
 		);
 
-		let signal_body_key = super::InputKey::new(workflow_id, location.clone());
+		let signal_body_key = super::IndexedInputKey::new(workflow_id, location.clone(), index);
 
 		// Write signal body
 		for (i, chunk) in signal_body_key.split_ref(&body)?.into_iter().enumerate() {
