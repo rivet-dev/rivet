@@ -95,11 +95,6 @@ lazy_static::lazy_static! {
 		.with_boundaries(BUCKETS.to_vec())
 		.build();
 	/// Expected attributes: "workflow_name", "signal_name"
-	pub static ref SIGNAL_PULL_DURATION: Histogram<f64> = METER.f64_histogram("rivet_gasoline_signal_pull_duration")
-		.with_description("Total duration to pull signals.")
-		.with_boundaries(BUCKETS.to_vec())
-		.build();
-	/// Expected attributes: "workflow_name", "signal_name"
 	pub static ref SIGNAL_PUBLISHED: Counter<u64> = METER.u64_counter("rivet_gasoline_signal_published")
 		.with_description("Total published signals.")
 		.build();

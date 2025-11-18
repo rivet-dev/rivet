@@ -9,7 +9,7 @@ use crate::{
 	builder::{WorkflowRepr, workflow as builder},
 	ctx::{WorkflowCtx, workflow::Loop},
 	executable::{AsyncResult, Executable},
-	listen::{CustomListener, Listen},
+	listen::Listen,
 	message::Message,
 	signal::Signal,
 	utils::time::{DurationToMillis, TsToMillis},
@@ -122,17 +122,6 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	pub async fn listen<T: Listen>(&mut self) -> Result<T> {
 		wrap!(self, "listen", {
 			self.inner.listen::<T>().in_current_span().await
-		})
-	}
-
-	/// Execute a custom listener.
-	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
-	pub async fn custom_listener<T: CustomListener>(
-		&mut self,
-		listener: &T,
-	) -> Result<<T as CustomListener>::Output> {
-		wrap!(self, "listen", {
-			self.inner.custom_listener(listener).in_current_span().await
 		})
 	}
 
