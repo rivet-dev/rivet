@@ -819,7 +819,7 @@ impl WorkflowCtx {
 		let loop_location = self.cursor.current_location_for(&history_res);
 
 		// Loop existed before
-		let (mut iteration, mut state, output, mut loop_event_commit_fut) =
+		let (mut iteration, mut state, output, mut loop_event_init_fut) =
 			if let HistoryResult::Event(loop_event) = history_res {
 				let state = loop_event.parse_state()?;
 				let output = loop_event.parse_output()?;
@@ -838,7 +838,7 @@ impl WorkflowCtx {
 				let nested_loop_location = self.loop_location().cloned();
 
 				// This future is deferred until later for parallelization
-				let loop_event_commit_fut = async move {
+				let loop_event_init_fut = async move {
 					db2.upsert_workflow_loop_event(
 						workflow_id,
 						&name,
@@ -852,7 +852,7 @@ impl WorkflowCtx {
 					.await
 				};
 
-				(0, state, None, Some(loop_event_commit_fut))
+				(0, state, None, Some(loop_event_init_fut))
 			};
 
 		// Create a branch for the loop event
@@ -868,6 +868,9 @@ impl WorkflowCtx {
 		// Run loop
 		else {
 			tracing::debug!("running loop");
+
+			// Used to defer loop upsertion for parallelization
+			let mut loop_event_upsert_fut = None;
 
 			loop {
 				self.check_stop()?;
@@ -898,14 +901,23 @@ impl WorkflowCtx {
 					// NOTE: Great care has been taken to optimize this function. This join allows multiple
 					// txns to run simultaneously instead of in series but is hard to read.
 					//
-					// 1. First, but not necessarily chronologically first because its parallelized, we
+					// 1. First (but not necessarily chronologically first because its parallelized), we
 					//    commit the loop event. This only happens on the first iteration of the loop
 					// 2. Second, we commit the branch event for the current iteration
-					// 3. Last, we run the user's loop code
-					let (loop_event_commit_res, branch_commit_res, loop_res) = tokio::join!(
+					// 3. Third, we run the user's loop code
+					// 4. Last, if we have to upsert the loop event, we save the future and process it in the
+					//    next iteration of the loop as part of this join
+					let (loop_event_commit_res, loop_event_upsert_res, branch_commit_res, loop_res) = tokio::join!(
 						async {
-							if let Some(loop_event_commit_fut) = loop_event_commit_fut.take() {
-								loop_event_commit_fut.await
+							if let Some(loop_event_init_fut) = loop_event_init_fut.take() {
+								loop_event_init_fut.await
+							} else {
+								Ok(())
+							}
+						},
+						async {
+							if let Some(loop_event_upsert_fut) = loop_event_upsert_fut.take() {
+								loop_event_upsert_fut.await
 							} else {
 								Ok(())
 							}
@@ -928,6 +940,7 @@ impl WorkflowCtx {
 					);
 
 					loop_event_commit_res?;
+					loop_event_upsert_res?;
 					branch_commit_res?;
 
 					// Run loop
@@ -936,23 +949,33 @@ impl WorkflowCtx {
 							let dt2 = start_instant2.elapsed().as_secs_f64();
 							iteration += 1;
 
-							let state_val = serde_json::value::to_raw_value(&state)
-								.map_err(WorkflowError::SerializeLoopOutput)?;
-
 							// Commit workflow state to db
 							if iteration % LOOP_ITERS_PER_COMMIT == 0 {
-								self.db
-									.upsert_workflow_loop_event(
-										self.workflow_id,
-										&self.name,
+								let state_val = serde_json::value::to_raw_value(&state)
+									.map_err(WorkflowError::SerializeLoopOutput)?;
+
+								// Clone data to move into future
+								let loop_location = loop_location.clone();
+								let db2 = self.db.clone();
+								let workflow_id = self.workflow_id;
+								let name = self.name.clone();
+								let version = self.version;
+								let nested_loop_location = self.loop_location().cloned();
+
+								// Defer upsertion to next iteration so it runs in parallel
+								loop_event_upsert_fut = Some(async move {
+									db2.upsert_workflow_loop_event(
+										workflow_id,
+										&name,
 										&loop_location,
-										self.version,
+										version,
 										iteration,
 										&state_val,
 										None,
-										self.loop_location(),
+										nested_loop_location.as_ref(),
 									)
-									.await?;
+									.await
+								});
 							}
 
 							anyhow::Ok((dt2, None))
@@ -966,7 +989,8 @@ impl WorkflowCtx {
 							let output_val = serde_json::value::to_raw_value(&res)
 								.map_err(WorkflowError::SerializeLoopOutput)?;
 
-							// Commit loop output and final state to db
+							// Commit loop output and final state to db. Note that we don't defer this because
+							// there will be no more loop iterations afterwards.
 							self.db
 								.upsert_workflow_loop_event(
 									self.workflow_id,
@@ -1338,7 +1362,7 @@ impl WorkflowCtx {
 
 		// Existing event
 		if self.cursor.compare_removed::<T>()? {
-			tracing::debug!("skipping removed step",);
+			tracing::debug!("skipping removed step");
 		}
 		// New "removed" event
 		else {

@@ -932,6 +932,10 @@ impl DatabaseDebug for DatabaseKv {
 										current_event.indexed_input_chunks.get_mut(key.index)
 									{
 										input_chunks.push(entry);
+									} else {
+										current_event
+											.indexed_input_chunks
+											.insert(key.index, vec![entry]);
 									}
 								}
 

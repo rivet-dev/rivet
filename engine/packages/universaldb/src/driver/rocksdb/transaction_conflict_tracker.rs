@@ -64,7 +64,7 @@ impl TransactionConflictTracker {
 					for (cr2_start, cr2_end, cr2_type) in &txn2.conflict_ranges {
 						// Check conflict ranges overlap
 						if cr1_start < cr2_end && cr2_start < cr1_end && cr1_type != cr2_type {
-							tracing::info!(
+							tracing::debug!(
 								?cr1_start,
 								?cr1_end,
 								?cr1_type,
