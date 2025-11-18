@@ -21,15 +21,32 @@ pub async fn task(
 		}
 
 		update_runner_ping(&ctx, &conn).await?;
+
+		// Send ping to runner
+		let ping_msg = versioned::ToClient::wrap_latest(protocol::ToClient::ToClientPing(
+			protocol::ToClientPing {
+				ts: util::timestamp::now(),
+			},
+		));
+		let ping_msg_serialized = ping_msg.serialize(conn.protocol_version)?;
+		conn.ws_handle
+			.send(Message::Binary(ping_msg_serialized.into()))
+			.await?;
 	}
 }
 
 async fn update_runner_ping(ctx: &StandaloneCtx, conn: &Conn) -> Result<()> {
-	let Some(wf) = ctx
-		.workflow::<pegboard::workflows::runner2::Input>(conn.workflow_id)
-		.get()
-		.await?
-	else {
+	let wf = if protocol::is_mk2(conn.protocol_version) {
+		ctx.workflow::<pegboard::workflows::runner2::Input>(conn.workflow_id)
+			.get()
+			.await?
+	} else {
+		ctx.workflow::<pegboard::workflows::runner::Input>(conn.workflow_id)
+			.get()
+			.await?
+	};
+
+	let Some(wf) = wf else {
 		tracing::error!(?conn.runner_id, "workflow does not exist");
 		return Ok(());
 	};
@@ -55,10 +72,17 @@ async fn update_runner_ping(ctx: &StandaloneCtx, conn: &Conn) -> Result<()> {
 		if let RunnerEligibility::ReEligible = notif.eligibility {
 			tracing::debug!(runner_id=?notif.runner_id, "runner has become eligible again");
 
-			ctx.signal(pegboard::workflows::runner2::CheckQueue {})
-				.to_workflow_id(notif.workflow_id)
-				.send()
-				.await?;
+			if protocol::is_mk2(conn.protocol_version) {
+				ctx.signal(pegboard::workflows::runner2::CheckQueue {})
+					.to_workflow_id(notif.workflow_id)
+					.send()
+					.await?;
+			} else {
+				ctx.signal(pegboard::workflows::runner::CheckQueue {})
+					.to_workflow_id(notif.workflow_id)
+					.send()
+					.await?;
+			}
 		}
 	}
 

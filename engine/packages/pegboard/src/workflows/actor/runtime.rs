@@ -121,6 +121,7 @@ pub enum AllocateActorOutput {
 	Allocated {
 		runner_id: Id,
 		runner_workflow_id: Id,
+		runner_protocol_version: Option<u16>,
 	},
 	Pending {
 		pending_allocation_ts: i64,
@@ -285,6 +286,7 @@ async fn allocate_actor(
 							workflow_id: old_runner_alloc_key_data.workflow_id,
 							remaining_slots: new_remaining_slots,
 							total_slots: old_runner_alloc_key_data.total_slots,
+							protocol_version: old_runner_alloc_key_data.protocol_version,
 						},
 					)?;
 
@@ -317,6 +319,8 @@ async fn allocate_actor(
 						AllocateActorOutput::Allocated {
 							runner_id: old_runner_alloc_key.runner_id,
 							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
+							runner_protocol_version: old_runner_alloc_key_data
+								.runner_protocol_version,
 						},
 					));
 				}
@@ -373,6 +377,7 @@ async fn allocate_actor(
 		AllocateActorOutput::Allocated {
 			runner_id,
 			runner_workflow_id,
+			..
 		} => {
 			state.sleep_ts = None;
 			state.pending_allocation_ts = None;
@@ -511,40 +516,46 @@ pub async fn spawn_actor(
 		AllocateActorOutput::Allocated {
 			runner_id,
 			runner_workflow_id,
+			runner_protocol_version,
 		} => {
 			// Bump the autoscaler so it can scale up
 			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
 				.send()
 				.await?;
 
-			ctx.signal(crate::workflows::runner2::Command {
-				inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
-					actor_id: input.actor_id.to_string(),
-					generation,
-					config: protocol::ActorConfig {
-						name: input.name.clone(),
-						key: input.key.clone(),
-						// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
-						// changes (like activity inputs) so this is fine for now.
-						create_ts: util::timestamp::now(),
-						input: input
-							.input
-							.as_ref()
-							.map(|x| BASE64_STANDARD.decode(x))
-							.transpose()?,
-					},
-					// Empty because request ids are ephemeral. This is intercepted by guard and
-					// populated before it reaches the runner
-					hibernating_requests: Vec::new(),
-				}),
-			})
-			.to_workflow_id(runner_workflow_id)
-			.send()
-			.await?;
+			if protocol::is_new(runner_protocol_version) {
+				// TODO: Send message to tunnel
+			} else {
+				ctx.signal(crate::workflows::runner::Command {
+					inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
+						actor_id: input.actor_id.to_string(),
+						generation,
+						config: protocol::ActorConfig {
+							name: input.name.clone(),
+							key: input.key.clone(),
+							// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
+							// changes (like activity inputs) so this is fine for now.
+							create_ts: util::timestamp::now(),
+							input: input
+								.input
+								.as_ref()
+								.map(|x| BASE64_STANDARD.decode(x))
+								.transpose()?,
+						},
+						// Empty because request ids are ephemeral. This is intercepted by guard and
+						// populated before it reaches the runner
+						hibernating_requests: Vec::new(),
+					}),
+				})
+				.to_workflow_id(runner_workflow_id)
+				.send()
+				.await?;
+			}
 
 			Ok(SpawnActorOutput::Allocated {
 				runner_id,
 				runner_workflow_id,
+				runner_protocol_version,
 			})
 		}
 		AllocateActorOutput::Pending {
@@ -576,32 +587,39 @@ pub async fn spawn_actor(
 					})
 					.await?;
 
-					ctx.signal(crate::workflows::runner2::Command {
-						inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
-							actor_id: input.actor_id.to_string(),
-							generation,
-							config: protocol::ActorConfig {
-								name: input.name.clone(),
-								key: input.key.clone(),
-								create_ts: util::timestamp::now(),
-								input: input
-									.input
-									.as_ref()
-									.map(|x| BASE64_STANDARD.decode(x))
-									.transpose()?,
-							},
-							// Empty because request ids are ephemeral. This is intercepted by guard and
-							// populated before it reaches the runner
-							hibernating_requests: Vec::new(),
-						}),
-					})
-					.to_workflow_id(sig.runner_workflow_id)
-					.send()
-					.await?;
+					if protocol::is_new(sig.runner_protocol_version) {
+						// TODO: Send message to tunnel
+					} else {
+						ctx.signal(crate::workflows::runner::Command {
+							inner: protocol::Command::CommandStartActor(
+								protocol::CommandStartActor {
+									actor_id: input.actor_id.to_string(),
+									generation,
+									config: protocol::ActorConfig {
+										name: input.name.clone(),
+										key: input.key.clone(),
+										create_ts: util::timestamp::now(),
+										input: input
+											.input
+											.as_ref()
+											.map(|x| BASE64_STANDARD.decode(x))
+											.transpose()?,
+									},
+									// Empty because request ids are ephemeral. This is intercepted by guard and
+									// populated before it reaches the runner
+									hibernating_requests: Vec::new(),
+								},
+							),
+						})
+						.to_workflow_id(sig.runner_workflow_id)
+						.send()
+						.await?;
+					}
 
 					Ok(SpawnActorOutput::Allocated {
 						runner_id: sig.runner_id,
 						runner_workflow_id: sig.runner_workflow_id,
+						runner_protocol_version: sig.runner_protocol_version,
 					})
 				}
 				Some(PendingAllocation::Destroy(_)) => {
@@ -747,11 +765,13 @@ pub async fn reschedule_actor(
 	if let SpawnActorOutput::Allocated {
 		runner_id,
 		runner_workflow_id,
+		runner_protocol_version,
 	} = &spawn_res
 	{
 		state.generation = next_generation;
 		state.runner_id = Some(*runner_id);
 		state.runner_workflow_id = Some(*runner_workflow_id);
+		state.runner_protocol_version = runner_protocol_version;
 
 		// Reset gc timeout once allocated
 		state.gc_timeout_ts =
