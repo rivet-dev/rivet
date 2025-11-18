@@ -3,7 +3,7 @@ use gas::prelude::*;
 use rivet_runner_protocol as protocol;
 use rivet_types::actors::CrashPolicy;
 
-use crate::{errors, workflows::runner::AllocatePendingActorsInput};
+use crate::{errors, workflows::runner2::AllocatePendingActorsInput};
 
 mod destroy;
 mod keys;

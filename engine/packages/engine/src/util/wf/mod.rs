@@ -468,22 +468,19 @@ pub async fn print_history(
 				}
 			}
 			EventData::Signals(data) => {
-				// Indent
-				print!("{}{c} ", "  ".repeat(indent));
-
 				for ((signal_id, name), body) in
 					data.signal_ids.iter().zip(&data.names).zip(&data.bodies)
 				{
 					// Indent
-					print!("{}{c}   - ", "  ".repeat(indent));
+					print!("{}{c} - ", "  ".repeat(indent));
 					println!("{}", event_style.apply_to(name));
 
-					print!("{}{c}   ", "  ".repeat(indent));
+					print!("{}{c}     ", "  ".repeat(indent));
 					println!("id {}", style(signal_id).green());
 
 					if !exclude_json {
 						// Indent
-						print!("{}{c}   ", "  ".repeat(indent));
+						print!("{}{c}     ", "  ".repeat(indent));
 
 						println!(
 							"body {}",
@@ -590,7 +587,7 @@ pub fn print_event_name(event: &Event) {
 		),
 		EventData::Signal(signal) => print!(
 			"{} {}",
-			style.apply_to("signal receive").bold(),
+			style.apply_to("signal").bold(),
 			style.apply_to(&signal.name)
 		),
 		EventData::SignalSend(signal_send) => print!(
@@ -626,7 +623,7 @@ pub fn print_event_name(event: &Event) {
 		EventData::Branch => print!("{}", style.apply_to("branch").bold()),
 		EventData::Signals(signal) => print!(
 			"{} {}",
-			style.apply_to("signal receive").bold(),
+			style.apply_to("signal recv").bold(),
 			style.apply_to(&signal.names.len())
 		),
 	}
