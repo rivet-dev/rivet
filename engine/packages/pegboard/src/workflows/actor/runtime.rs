@@ -517,7 +517,7 @@ pub async fn spawn_actor(
 				.send()
 				.await?;
 
-			ctx.signal(crate::workflows::runner::Command {
+			ctx.signal(crate::workflows::runner2::Command {
 				inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
 					actor_id: input.actor_id.to_string(),
 					generation,
@@ -576,7 +576,7 @@ pub async fn spawn_actor(
 					})
 					.await?;
 
-					ctx.signal(crate::workflows::runner::Command {
+					ctx.signal(crate::workflows::runner2::Command {
 						inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
 							actor_id: input.actor_id.to_string(),
 							generation,
