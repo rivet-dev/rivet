@@ -15,4 +15,3 @@ RIVET__PEGBOARD__RESCHEDULE_BACKOFF_MAX_EXPONENT="1" \
 RIVET__PEGBOARD__RUNNER_ELIGIBLE_THRESHOLD="5000" \
 RIVET__PEGBOARD__RUNNER_LOST_THRESHOLD="7000" \
 cargo run --bin rivet-engine -- start "$@" 2>&1 | tee -i /tmp/rivet-engine.log
-
