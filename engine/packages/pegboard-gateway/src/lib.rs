@@ -152,6 +152,11 @@ impl CustomServeTrait for PegboardGateway {
 			.context("failed to read body")?
 			.to_bytes();
 
+		let mut stopped_sub = self
+			.ctx
+			.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id))
+			.await?;
+
 		// Build subject to publish to
 		let tunnel_subject =
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
@@ -211,6 +216,10 @@ impl CustomServeTrait for PegboardGateway {
 							);
 							break;
 						}
+					}
+					_ = stopped_sub.next() => {
+						tracing::debug!("actor stopped while waiting for request response");
+						return Err(ServiceUnavailable.build());
 					}
 					_ = drop_rx.changed() => {
 						tracing::warn!("tunnel message timeout");
@@ -278,6 +287,11 @@ impl CustomServeTrait for PegboardGateway {
 			}
 		}
 
+		let mut stopped_sub = self
+			.ctx
+			.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id))
+			.await?;
+
 		// Build subject to publish to
 		let tunnel_subject =
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
@@ -339,6 +353,10 @@ impl CustomServeTrait for PegboardGateway {
 								break;
 							}
 						}
+						_ = stopped_sub.next() => {
+							tracing::debug!("actor stopped while waiting for websocket open");
+							return Err(WebSocketServiceUnavailable.build());
+						}
 						_ = drop_rx.changed() => {
 							tracing::warn!("websocket open timeout");
 							return Err(WebSocketServiceUnavailable.build());
@@ -364,7 +382,7 @@ impl CustomServeTrait for PegboardGateway {
 			open_msg.can_hibernate
 		};
 
-		// Send reclaimed messages
+		// Send pending messages
 		self.shared_state
 			.resend_pending_websocket_messages(request_id)
 			.await?;
@@ -413,6 +431,15 @@ impl CustomServeTrait for PegboardGateway {
 							} else {
 								tracing::debug!("tunnel sub closed");
 								return Err(WebSocketServiceHibernate.build());
+							}
+						}
+						_ = stopped_sub.next() => {
+							tracing::debug!("actor stopped during websocket handler loop");
+
+							if can_hibernate {
+								return Err(WebSocketServiceHibernate.build());
+							} else {
+								return Err(WebSocketServiceUnavailable.build());
 							}
 						}
 						_ = drop_rx.changed() => {
@@ -579,6 +606,15 @@ impl CustomServeTrait for PegboardGateway {
 		client_ws: WebSocketHandle,
 		unique_request_id: Uuid,
 	) -> Result<HibernationResult> {
+		// Immediately rewake if we have pending messages
+		if self
+			.shared_state
+			.has_pending_websocket_messages(unique_request_id.into_bytes())
+			.await?
+		{
+			return Ok(HibernationResult::Continue);
+		}
+
 		// Start keepalive task
 		let ctx = self.ctx.clone();
 		let actor_id = self.actor_id;
