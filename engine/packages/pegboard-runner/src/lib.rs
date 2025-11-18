@@ -12,7 +12,7 @@ use rivet_guard_core::{
 use rivet_runner_protocol as protocol;
 use std::time::Duration;
 use tokio::sync::watch;
-use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
@@ -243,30 +243,19 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			);
 		}
 
-		// Send WebSocket close messages to all remaining active requests
+		// Send close messages to all remaining active requests
 		let active_requests = conn.tunnel_active_requests.lock().await;
 		for (request_id, req) in &*active_requests {
-			let close_msg_kind = if req.is_ws {
-				let (close_code, close_reason) = if lifecycle_res.is_ok() {
-					(CloseCode::Normal.into(), None)
-				} else {
-					(CloseCode::Error.into(), Some("ws.upstream_closed".into()))
-				};
+			// Websockets are not ephemeral like requests. If the runner ws closes they are not informed;
+			// instead they wait for the actor itself to stop.
+			if req.is_ws {
+				continue;
+			}
 
-				protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(
-					protocol::ToServerWebSocketClose {
-						code: Some(close_code),
-						reason: close_reason,
-						hibernate: true,
-					},
-				)
-			} else {
-				protocol::ToServerTunnelMessageKind::ToServerResponseAbort
-			};
 			let close_message = protocol::ToServerTunnelMessage {
 				request_id: request_id.clone(),
 				message_id: Uuid::new_v4().into_bytes(),
-				message_kind: close_msg_kind,
+				message_kind: protocol::ToServerTunnelMessageKind::ToServerResponseAbort,
 			};
 
 			let msg_serialized = protocol::versioned::ToGateway::wrap_latest(protocol::ToGateway {

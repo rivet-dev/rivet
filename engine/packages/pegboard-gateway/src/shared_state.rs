@@ -344,6 +344,18 @@ impl SharedState {
 		Ok(())
 	}
 
+	pub async fn has_pending_websocket_messages(&self, request_id: RequestId) -> Result<bool> {
+		let Some(req) = self.in_flight_requests.get_async(&request_id).await else {
+			bail!("request not in flight");
+		};
+
+		if let Some(hs) = &req.hibernation_state {
+			Ok(!hs.pending_ws_msgs.is_empty())
+		} else {
+			Ok(false)
+		}
+	}
+
 	pub async fn ack_pending_websocket_messages(
 		&self,
 		request_id: RequestId,
