@@ -3455,7 +3455,10 @@ dependencies = [
  "futures-util",
  "gasoline",
  "pegboard",
+ "portpicker",
+ "rivet-config",
  "rivet-runner-protocol",
+ "rivet-test-deps",
  "rivet-util-id",
  "serde",
  "serde_bare",
@@ -3464,6 +3467,8 @@ dependencies = [
  "tracing-logfmt",
  "tracing-subscriber",
  "universaldb",
+ "url",
+ "uuid",
 ]
 
 [[package]]
