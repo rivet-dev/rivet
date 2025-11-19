@@ -4,6 +4,7 @@ use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_tungstenite::tungstenite::Message;
+use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
@@ -333,7 +334,7 @@ async fn handle_message(
 			}
 		}
 		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, &conn, tunnel_msg)
+			handle_tunnel_message(&ctx, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -361,31 +362,15 @@ async fn handle_message(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	conn: &Arc<Conn>,
 	msg: protocol::ToServerTunnelMessage,
 ) -> Result<()> {
-	// Determine reply to subject
-	let request_id = msg.request_id;
-	let gateway_reply_to = {
-		let active_requests = conn.tunnel_active_requests.lock().await;
-		if let Some(req) = active_requests.get(&request_id) {
-			req.gateway_reply_to.clone()
-		} else {
-			tracing::warn!(request_id=?Uuid::from_bytes(msg.request_id), message_id=?Uuid::from_bytes(msg.message_id), "no active request for tunnel message, may have timed out");
-			return Ok(());
-		}
-	};
-
-	// Remove active request entries when terminal
-	if is_to_server_tunnel_message_kind_request_close(&msg.message_kind) {
-		let mut active_requests = conn.tunnel_active_requests.lock().await;
-		active_requests.remove(&request_id);
-	}
-
 	// Publish message to UPS
-	let msg_serialized = versioned::ToGateway::wrap_latest(protocol::ToGateway { message: msg })
-		.serialize_with_embedded_version(PROTOCOL_VERSION)
-		.context("failed to serialize tunnel message for gateway")?;
+	let gateway_reply_to =
+		GatewayReceiverSubject::new(Uuid::from_bytes(msg.gateway_id)).to_string();
+	let msg_serialized =
+		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToServerTunnelMessage(msg))
+			.serialize_with_embedded_version(PROTOCOL_VERSION)
+			.context("failed to serialize tunnel message for gateway")?;
 	ctx.ups()
 		.context("failed to get UPS instance for tunnel message")?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
@@ -398,19 +383,4 @@ async fn handle_tunnel_message(
 		})?;
 
 	Ok(())
-}
-
-/// Determines if a given message kind will terminate the request.
-fn is_to_server_tunnel_message_kind_request_close(
-	kind: &protocol::ToServerTunnelMessageKind,
-) -> bool {
-	match kind {
-		// HTTP terminal states
-		protocol::ToServerTunnelMessageKind::ToServerResponseStart(resp) => !resp.stream,
-		protocol::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.finish,
-		protocol::ToServerTunnelMessageKind::ToServerResponseAbort => true,
-		// WebSocket terminal states (either side closes)
-		protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(_) => true,
-		_ => false,
-	}
 }

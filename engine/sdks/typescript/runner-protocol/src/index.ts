@@ -918,6 +918,20 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
+export type GatewayId = ArrayBuffer
+
+export function readGatewayId(bc: bare.ByteCursor): GatewayId {
+    return bare.readFixedData(bc, 16)
+}
+
+export function writeGatewayId(bc: bare.ByteCursor, x: GatewayId): void {
+    assert(x.byteLength === 16)
+    bare.writeFixedData(bc, x)
+}
+
+/**
+ * UUIDv4
+ */
 export type RequestId = ArrayBuffer
 
 export function readRequestId(bc: bare.ByteCursor): RequestId {
@@ -942,11 +956,6 @@ export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
     assert(x.byteLength === 16)
     bare.writeFixedData(bc, x)
 }
-
-/**
- * Ack
- */
-export type TunnelAck = null
 
 function read9(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
@@ -1204,7 +1213,6 @@ export function writeToServerWebSocketClose(bc: bare.ByteCursor, x: ToServerWebS
  * To Server
  */
 export type ToServerTunnelMessageKind =
-    | { readonly tag: "TunnelAck"; readonly val: TunnelAck }
     /**
      * HTTP
      */
@@ -1224,20 +1232,18 @@ export function readToServerTunnelMessageKind(bc: bare.ByteCursor): ToServerTunn
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "TunnelAck", val: null }
-        case 1:
             return { tag: "ToServerResponseStart", val: readToServerResponseStart(bc) }
-        case 2:
+        case 1:
             return { tag: "ToServerResponseChunk", val: readToServerResponseChunk(bc) }
-        case 3:
+        case 2:
             return { tag: "ToServerResponseAbort", val: null }
-        case 4:
+        case 3:
             return { tag: "ToServerWebSocketOpen", val: readToServerWebSocketOpen(bc) }
-        case 5:
+        case 4:
             return { tag: "ToServerWebSocketMessage", val: readToServerWebSocketMessage(bc) }
-        case 6:
+        case 5:
             return { tag: "ToServerWebSocketMessageAck", val: readToServerWebSocketMessageAck(bc) }
-        case 7:
+        case 6:
             return { tag: "ToServerWebSocketClose", val: readToServerWebSocketClose(bc) }
         default: {
             bc.offset = offset
@@ -1248,41 +1254,37 @@ export function readToServerTunnelMessageKind(bc: bare.ByteCursor): ToServerTunn
 
 export function writeToServerTunnelMessageKind(bc: bare.ByteCursor, x: ToServerTunnelMessageKind): void {
     switch (x.tag) {
-        case "TunnelAck": {
-            bare.writeU8(bc, 0)
-            break
-        }
         case "ToServerResponseStart": {
-            bare.writeU8(bc, 1)
+            bare.writeU8(bc, 0)
             writeToServerResponseStart(bc, x.val)
             break
         }
         case "ToServerResponseChunk": {
-            bare.writeU8(bc, 2)
+            bare.writeU8(bc, 1)
             writeToServerResponseChunk(bc, x.val)
             break
         }
         case "ToServerResponseAbort": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 2)
             break
         }
         case "ToServerWebSocketOpen": {
-            bare.writeU8(bc, 4)
+            bare.writeU8(bc, 3)
             writeToServerWebSocketOpen(bc, x.val)
             break
         }
         case "ToServerWebSocketMessage": {
-            bare.writeU8(bc, 5)
+            bare.writeU8(bc, 4)
             writeToServerWebSocketMessage(bc, x.val)
             break
         }
         case "ToServerWebSocketMessageAck": {
-            bare.writeU8(bc, 6)
+            bare.writeU8(bc, 5)
             writeToServerWebSocketMessageAck(bc, x.val)
             break
         }
         case "ToServerWebSocketClose": {
-            bare.writeU8(bc, 7)
+            bare.writeU8(bc, 6)
             writeToServerWebSocketClose(bc, x.val)
             break
         }
@@ -1290,6 +1292,7 @@ export function writeToServerTunnelMessageKind(bc: bare.ByteCursor, x: ToServerT
 }
 
 export type ToServerTunnelMessage = {
+    readonly gatewayId: GatewayId
     readonly requestId: RequestId
     readonly messageId: MessageId
     readonly messageKind: ToServerTunnelMessageKind
@@ -1297,6 +1300,7 @@ export type ToServerTunnelMessage = {
 
 export function readToServerTunnelMessage(bc: bare.ByteCursor): ToServerTunnelMessage {
     return {
+        gatewayId: readGatewayId(bc),
         requestId: readRequestId(bc),
         messageId: readMessageId(bc),
         messageKind: readToServerTunnelMessageKind(bc),
@@ -1304,6 +1308,7 @@ export function readToServerTunnelMessage(bc: bare.ByteCursor): ToServerTunnelMe
 }
 
 export function writeToServerTunnelMessage(bc: bare.ByteCursor, x: ToServerTunnelMessage): void {
+    writeGatewayId(bc, x.gatewayId)
     writeRequestId(bc, x.requestId)
     writeMessageId(bc, x.messageId)
     writeToServerTunnelMessageKind(bc, x.messageKind)
@@ -1313,7 +1318,6 @@ export function writeToServerTunnelMessage(bc: bare.ByteCursor, x: ToServerTunne
  * To Client
  */
 export type ToClientTunnelMessageKind =
-    | { readonly tag: "TunnelAck"; readonly val: TunnelAck }
     /**
      * HTTP
      */
@@ -1332,18 +1336,16 @@ export function readToClientTunnelMessageKind(bc: bare.ByteCursor): ToClientTunn
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "TunnelAck", val: null }
-        case 1:
             return { tag: "ToClientRequestStart", val: readToClientRequestStart(bc) }
-        case 2:
+        case 1:
             return { tag: "ToClientRequestChunk", val: readToClientRequestChunk(bc) }
-        case 3:
+        case 2:
             return { tag: "ToClientRequestAbort", val: null }
-        case 4:
+        case 3:
             return { tag: "ToClientWebSocketOpen", val: readToClientWebSocketOpen(bc) }
-        case 5:
+        case 4:
             return { tag: "ToClientWebSocketMessage", val: readToClientWebSocketMessage(bc) }
-        case 6:
+        case 5:
             return { tag: "ToClientWebSocketClose", val: readToClientWebSocketClose(bc) }
         default: {
             bc.offset = offset
@@ -1354,36 +1356,32 @@ export function readToClientTunnelMessageKind(bc: bare.ByteCursor): ToClientTunn
 
 export function writeToClientTunnelMessageKind(bc: bare.ByteCursor, x: ToClientTunnelMessageKind): void {
     switch (x.tag) {
-        case "TunnelAck": {
-            bare.writeU8(bc, 0)
-            break
-        }
         case "ToClientRequestStart": {
-            bare.writeU8(bc, 1)
+            bare.writeU8(bc, 0)
             writeToClientRequestStart(bc, x.val)
             break
         }
         case "ToClientRequestChunk": {
-            bare.writeU8(bc, 2)
+            bare.writeU8(bc, 1)
             writeToClientRequestChunk(bc, x.val)
             break
         }
         case "ToClientRequestAbort": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 2)
             break
         }
         case "ToClientWebSocketOpen": {
-            bare.writeU8(bc, 4)
+            bare.writeU8(bc, 3)
             writeToClientWebSocketOpen(bc, x.val)
             break
         }
         case "ToClientWebSocketMessage": {
-            bare.writeU8(bc, 5)
+            bare.writeU8(bc, 4)
             writeToClientWebSocketMessage(bc, x.val)
             break
         }
         case "ToClientWebSocketClose": {
-            bare.writeU8(bc, 6)
+            bare.writeU8(bc, 5)
             writeToClientWebSocketClose(bc, x.val)
             break
         }
@@ -1391,6 +1389,7 @@ export function writeToClientTunnelMessageKind(bc: bare.ByteCursor, x: ToClientT
 }
 
 export type ToClientTunnelMessage = {
+    readonly gatewayId: GatewayId
     readonly requestId: RequestId
     readonly messageId: MessageId
     readonly messageKind: ToClientTunnelMessageKind
@@ -1402,6 +1401,7 @@ export type ToClientTunnelMessage = {
 
 export function readToClientTunnelMessage(bc: bare.ByteCursor): ToClientTunnelMessage {
     return {
+        gatewayId: readGatewayId(bc),
         requestId: readRequestId(bc),
         messageId: readMessageId(bc),
         messageKind: readToClientTunnelMessageKind(bc),
@@ -1410,6 +1410,7 @@ export function readToClientTunnelMessage(bc: bare.ByteCursor): ToClientTunnelMe
 }
 
 export function writeToClientTunnelMessage(bc: bare.ByteCursor, x: ToClientTunnelMessage): void {
+    writeGatewayId(bc, x.gatewayId)
     writeRequestId(bc, x.requestId)
     writeMessageId(bc, x.messageId)
     writeToClientTunnelMessageKind(bc, x.messageKind)
@@ -1832,20 +1833,154 @@ export function decodeToClient(bytes: Uint8Array): ToClient {
 }
 
 /**
- * MARK: To Gateway
+ * MARK: To Runner
  */
-export type ToGateway = {
-    readonly message: ToServerTunnelMessage
+export type ToRunnerKeepAlive = {
+    readonly requestId: RequestId
 }
 
-export function readToGateway(bc: bare.ByteCursor): ToGateway {
+export function readToRunnerKeepAlive(bc: bare.ByteCursor): ToRunnerKeepAlive {
     return {
-        message: readToServerTunnelMessage(bc),
+        requestId: readRequestId(bc),
+    }
+}
+
+export function writeToRunnerKeepAlive(bc: bare.ByteCursor, x: ToRunnerKeepAlive): void {
+    writeRequestId(bc, x.requestId)
+}
+
+/**
+ * We have to re-declare the entire union since BARE will not generate the
+ * ser/de for ToClient if it's not a top-level type
+ */
+export type ToRunner =
+    | { readonly tag: "ToRunnerKeepAlive"; readonly val: ToRunnerKeepAlive }
+    | { readonly tag: "ToClientInit"; readonly val: ToClientInit }
+    | { readonly tag: "ToClientClose"; readonly val: ToClientClose }
+    | { readonly tag: "ToClientCommands"; readonly val: ToClientCommands }
+    | { readonly tag: "ToClientAckEvents"; readonly val: ToClientAckEvents }
+    | { readonly tag: "ToClientKvResponse"; readonly val: ToClientKvResponse }
+    | { readonly tag: "ToClientTunnelMessage"; readonly val: ToClientTunnelMessage }
+
+export function readToRunner(bc: bare.ByteCursor): ToRunner {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "ToRunnerKeepAlive", val: readToRunnerKeepAlive(bc) }
+        case 1:
+            return { tag: "ToClientInit", val: readToClientInit(bc) }
+        case 2:
+            return { tag: "ToClientClose", val: null }
+        case 3:
+            return { tag: "ToClientCommands", val: readToClientCommands(bc) }
+        case 4:
+            return { tag: "ToClientAckEvents", val: readToClientAckEvents(bc) }
+        case 5:
+            return { tag: "ToClientKvResponse", val: readToClientKvResponse(bc) }
+        case 6:
+            return { tag: "ToClientTunnelMessage", val: readToClientTunnelMessage(bc) }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeToRunner(bc: bare.ByteCursor, x: ToRunner): void {
+    switch (x.tag) {
+        case "ToRunnerKeepAlive": {
+            bare.writeU8(bc, 0)
+            writeToRunnerKeepAlive(bc, x.val)
+            break
+        }
+        case "ToClientInit": {
+            bare.writeU8(bc, 1)
+            writeToClientInit(bc, x.val)
+            break
+        }
+        case "ToClientClose": {
+            bare.writeU8(bc, 2)
+            break
+        }
+        case "ToClientCommands": {
+            bare.writeU8(bc, 3)
+            writeToClientCommands(bc, x.val)
+            break
+        }
+        case "ToClientAckEvents": {
+            bare.writeU8(bc, 4)
+            writeToClientAckEvents(bc, x.val)
+            break
+        }
+        case "ToClientKvResponse": {
+            bare.writeU8(bc, 5)
+            writeToClientKvResponse(bc, x.val)
+            break
+        }
+        case "ToClientTunnelMessage": {
+            bare.writeU8(bc, 6)
+            writeToClientTunnelMessage(bc, x.val)
+            break
+        }
+    }
+}
+
+export function encodeToRunner(x: ToRunner, config?: Partial<bare.Config>): Uint8Array {
+    const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
+    const bc = new bare.ByteCursor(
+        new Uint8Array(fullConfig.initialBufferLength),
+        fullConfig,
+    )
+    writeToRunner(bc, x)
+    return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
+}
+
+export function decodeToRunner(bytes: Uint8Array): ToRunner {
+    const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
+    const result = readToRunner(bc)
+    if (bc.offset < bc.view.byteLength) {
+        throw new bare.BareError(bc.offset, "remaining bytes")
+    }
+    return result
+}
+
+/**
+ * MARK: To Gateway
+ */
+export type ToGatewayKeepAlive = null
+
+export type ToGateway =
+    | { readonly tag: "ToGatewayKeepAlive"; readonly val: ToGatewayKeepAlive }
+    | { readonly tag: "ToServerTunnelMessage"; readonly val: ToServerTunnelMessage }
+
+export function readToGateway(bc: bare.ByteCursor): ToGateway {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "ToGatewayKeepAlive", val: null }
+        case 1:
+            return { tag: "ToServerTunnelMessage", val: readToServerTunnelMessage(bc) }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
     }
 }
 
 export function writeToGateway(bc: bare.ByteCursor, x: ToGateway): void {
-    writeToServerTunnelMessage(bc, x.message)
+    switch (x.tag) {
+        case "ToGatewayKeepAlive": {
+            bare.writeU8(bc, 0)
+            break
+        }
+        case "ToServerTunnelMessage": {
+            bare.writeU8(bc, 1)
+            writeToServerTunnelMessage(bc, x.val)
+            break
+        }
+    }
 }
 
 export function encodeToGateway(x: ToGateway, config?: Partial<bare.Config>): Uint8Array {

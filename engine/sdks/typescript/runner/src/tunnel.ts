@@ -438,29 +438,6 @@ export class Tunnel {
 		this.#runner.__sendToServer(message);
 	}
 
-	#sendAck(requestId: RequestId, messageId: MessageId) {
-		if (!this.#runner.__webSocketReady()) {
-			return;
-		}
-
-		const message: protocol.ToServer = {
-			tag: "ToServerTunnelMessage",
-			val: {
-				requestId,
-				messageId,
-				messageKind: { tag: "TunnelAck", val: null },
-			},
-		};
-
-		this.log?.debug({
-			msg: "ack tunnel msg",
-			requestId: idToStr(requestId),
-			messageId: idToStr(messageId),
-		});
-
-		this.#runner.__sendToServer(message);
-	}
-
 	#startGarbageCollector() {
 		if (this.#gcInterval) {
 			clearInterval(this.#gcInterval);
@@ -609,71 +586,43 @@ export class Tunnel {
 			message: stringifyToClientTunnelMessageKind(message.messageKind),
 		});
 
-		if (message.messageKind.tag === "TunnelAck") {
-			// Mark pending message as acknowledged and remove it
-			const actor = this.getRequestActor(requestIdStr);
-			if (actor) {
-				const didDelete =
-					actor.pendingTunnelMessages.delete(messageIdStr);
-				if (!didDelete) {
-					this.log?.warn({
-						msg: "received tunnel ack for nonexistent message",
-						requestId: requestIdStr,
-						messageId: messageIdStr,
-					});
-				}
+		switch (message.messageKind.tag) {
+			case "ToClientRequestStart":
+				await this.#handleRequestStart(
+					message.requestId,
+					message.messageKind.val,
+				);
+				break;
+			case "ToClientRequestChunk":
+				await this.#handleRequestChunk(
+					message.requestId,
+					message.messageKind.val,
+				);
+				break;
+			case "ToClientRequestAbort":
+				await this.#handleRequestAbort(message.requestId);
+				break;
+			case "ToClientWebSocketOpen":
+				await this.#handleWebSocketOpen(
+					message.requestId,
+					message.messageKind.val,
+				);
+				break;
+			case "ToClientWebSocketMessage": {
+				this.#handleWebSocketMessage(
+					message.requestId,
+					message.messageKind.val,
+				);
+				break;
 			}
-		} else {
-			switch (message.messageKind.tag) {
-				case "ToClientRequestStart":
-					this.#sendAck(message.requestId, message.messageId);
-
-					await this.#handleRequestStart(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientRequestChunk":
-					this.#sendAck(message.requestId, message.messageId);
-
-					await this.#handleRequestChunk(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientRequestAbort":
-					this.#sendAck(message.requestId, message.messageId);
-
-					await this.#handleRequestAbort(message.requestId);
-					break;
-				case "ToClientWebSocketOpen":
-					this.#sendAck(message.requestId, message.messageId);
-
-					await this.#handleWebSocketOpen(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientWebSocketMessage": {
-					this.#sendAck(message.requestId, message.messageId);
-
-					this.#handleWebSocketMessage(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				}
-				case "ToClientWebSocketClose":
-					this.#sendAck(message.requestId, message.messageId);
-
-					await this.#handleWebSocketClose(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				default:
-					unreachable(message.messageKind);
-			}
+			case "ToClientWebSocketClose":
+				await this.#handleWebSocketClose(
+					message.requestId,
+					message.messageKind.val,
+				);
+				break;
+			default:
+				unreachable(message.messageKind);
 		}
 	}
 

@@ -7,11 +7,7 @@ use tokio::sync::watch;
 use universalpubsub::{NextOutput, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{
-	LifecycleResult,
-	conn::{Conn, TunnelActiveRequest},
-	errors,
-};
+use crate::{LifecycleResult, conn::Conn, errors};
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -47,8 +43,7 @@ pub async fn task(
 		);
 
 		// Parse message
-		let mut msg = match versioned::ToClient::deserialize_with_embedded_version(&ups_msg.payload)
-		{
+		let msg = match versioned::ToRunner::deserialize_with_embedded_version(&ups_msg.payload) {
 			Result::Ok(x) => x,
 			Err(err) => {
 				tracing::error!(?err, "failed to parse tunnel message");
@@ -56,11 +51,17 @@ pub async fn task(
 			}
 		};
 
-		match &mut msg {
-			protocol::ToClient::ToClientClose => return Err(errors::WsError::Eviction.build()),
+		// Convert to ToClient types
+		let to_client_msg = match msg {
+			protocol::ToRunner::ToRunnerKeepAlive(_) => {
+				// TODO:
+				continue;
+			}
+			protocol::ToRunner::ToClientInit(x) => protocol::ToClient::ToClientInit(x),
+			protocol::ToRunner::ToClientClose => return Err(errors::WsError::Eviction.build()),
 			// Dynamically populate hibernating request ids
-			protocol::ToClient::ToClientCommands(command_wrappers) => {
-				for command_wrapper in command_wrappers {
+			protocol::ToRunner::ToClientCommands(mut command_wrappers) => {
+				for command_wrapper in &mut command_wrappers {
 					if let protocol::Command::CommandStartActor(protocol::CommandStartActor {
 						actor_id,
 						hibernating_request_ids,
@@ -77,71 +78,28 @@ pub async fn task(
 							ids.into_iter().map(|x| x.into_bytes().to_vec()).collect();
 					}
 				}
+
+				// NOTE: `command_wrappers` is mutated in this match arm, it is not the same as the
+				// ToRunner data
+				protocol::ToClient::ToClientCommands(command_wrappers)
 			}
-			// Handle tunnel messages
-			protocol::ToClient::ToClientTunnelMessage(tunnel_msg) => {
-				match tunnel_msg.message_kind {
-					protocol::ToClientTunnelMessageKind::ToClientRequestStart(_) => {
-						// Save active request
-						//
-						// This will remove gateway_reply_to from the message since it does not need to be sent to the
-						// client
-						if let Some(reply_to) = tunnel_msg.gateway_reply_to.take() {
-							tracing::debug!(request_id=?Uuid::from_bytes(tunnel_msg.request_id), ?reply_to, "creating active request");
-							let mut active_requests = conn.tunnel_active_requests.lock().await;
-							active_requests.insert(
-								tunnel_msg.request_id,
-								TunnelActiveRequest {
-									gateway_reply_to: reply_to,
-									is_ws: false,
-								},
-							);
-						}
-					}
-					// If terminal, remove active request tracking
-					protocol::ToClientTunnelMessageKind::ToClientRequestAbort => {
-						tracing::debug!(request_id=?Uuid::from_bytes(tunnel_msg.request_id), "removing active conn due to close message");
-						let mut active_requests = conn.tunnel_active_requests.lock().await;
-						active_requests.remove(&tunnel_msg.request_id);
-					}
-					protocol::ToClientTunnelMessageKind::ToClientWebSocketOpen(_) => {
-						// Save active request
-						//
-						// This will remove gateway_reply_to from the message since it does not need to be sent to the
-						// client
-						if let Some(reply_to) = tunnel_msg.gateway_reply_to.take() {
-							tracing::debug!(request_id=?Uuid::from_bytes(tunnel_msg.request_id), ?reply_to, "creating active request");
-							let mut active_requests = conn.tunnel_active_requests.lock().await;
-							active_requests.insert(
-								tunnel_msg.request_id,
-								TunnelActiveRequest {
-									gateway_reply_to: reply_to,
-									is_ws: true,
-								},
-							);
-						}
-					}
-					// If terminal, remove active request tracking
-					protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(_) => {
-						tracing::debug!(request_id=?Uuid::from_bytes(tunnel_msg.request_id), "removing active conn due to close message");
-						let mut active_requests = conn.tunnel_active_requests.lock().await;
-						active_requests.remove(&tunnel_msg.request_id);
-					}
-					_ => {}
-				}
+			protocol::ToRunner::ToClientAckEvents(x) => protocol::ToClient::ToClientAckEvents(x),
+			protocol::ToRunner::ToClientKvResponse(x) => protocol::ToClient::ToClientKvResponse(x),
+			protocol::ToRunner::ToClientTunnelMessage(x) => {
+				protocol::ToClient::ToClientTunnelMessage(x)
 			}
-			_ => {}
-		}
+		};
 
 		// Forward raw message to WebSocket
-		let serialized_msg =
-			match versioned::ToClient::wrap_latest(msg).serialize(conn.protocol_version) {
-				Result::Ok(x) => x,
-				Err(err) => {
-					tracing::error!(?err, "failed to serialize tunnel message");
-					continue;
-				}
-			};
+		let serialized_msg = match versioned::ToClient::wrap_latest(to_client_msg)
+			.serialize(conn.protocol_version)
+		{
+			Result::Ok(x) => x,
+			Err(err) => {
+				tracing::error!(?err, "failed to serialize tunnel message");
+				continue;
+			}
+		};
 		let ws_msg = WsMessage::Binary(serialized_msg.into());
 		conn.ws_handle
 			.send(ws_msg)

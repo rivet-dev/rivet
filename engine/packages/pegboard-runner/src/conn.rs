@@ -8,20 +8,12 @@ use rivet_guard_core::WebSocketHandle;
 use rivet_runner_protocol as protocol;
 use rivet_runner_protocol::*;
 use std::{
-	collections::HashMap,
 	sync::{Arc, atomic::AtomicU32},
 	time::Duration,
 };
-use tokio::sync::Mutex;
 use vbare::OwnedVersionedData;
 
 use crate::{errors::WsError, utils::UrlData};
-
-pub struct TunnelActiveRequest {
-	/// Subject to send replies to.
-	pub gateway_reply_to: String,
-	pub is_ws: bool,
-}
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -32,10 +24,6 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub last_rtt: AtomicU32,
-
-	/// Active HTTP & WebSocket requests. They are separate but use the same mechanism to
-	/// maintain state.
-	pub tunnel_active_requests: Mutex<HashMap<RequestId, TunnelActiveRequest>>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -191,6 +179,5 @@ pub async fn init_conn(
 		protocol_version,
 		ws_handle,
 		last_rtt: AtomicU32::new(0),
-		tunnel_active_requests: Mutex::new(HashMap::new()),
 	}))
 }
