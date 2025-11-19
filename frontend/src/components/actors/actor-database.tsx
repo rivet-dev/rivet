@@ -13,8 +13,8 @@ import {
 	SelectValue,
 } from "../ui/select";
 import { WithTooltip } from "../ui/tooltip";
-import { useActor } from "./actor-queries-context";
 import { DatabaseTable } from "./database/database-table";
+import { useActorInspector } from "./inspector-context";
 import type { ActorId } from "./queries";
 
 interface ActorDatabaseProps {
@@ -22,9 +22,9 @@ interface ActorDatabaseProps {
 }
 
 export function ActorDatabase({ actorId }: ActorDatabaseProps) {
-	const actorQueries = useActor();
+	const actorInspector = useActorInspector();
 	const { data, refetch } = useQuery(
-		actorQueries.actorDatabaseQueryOptions(actorId),
+		actorInspector.actorDatabaseQueryOptions(actorId),
 	);
 	const [table, setTable] = useState<string | undefined>(
 		() => data?.db?.[0]?.table.name,
@@ -36,11 +36,13 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 		data: rows,
 		refetch: refetchData,
 		isLoading,
-	} = useQuery(
-		actorQueries.actorDatabaseRowsQueryOptions(actorId, selectedTable!, {
-			enabled: !!selectedTable,
-		}),
-	);
+	} = useQuery({
+		...actorInspector.actorDatabaseRowsQueryOptions(
+			actorId,
+			selectedTable!,
+		),
+		enabled: !!selectedTable,
+	});
 
 	const currentTable = data?.db?.find(
 		(db) => db.table.name === selectedTable,
@@ -126,7 +128,7 @@ function TableSelect({
 	onSelect: (table: string) => void;
 	value: string | undefined;
 }) {
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
 	const { data: tables } = useQuery(
 		actorQueries.actorDatabaseTablesQueryOptions(actorId),
 	);

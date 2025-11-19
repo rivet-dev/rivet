@@ -18,12 +18,23 @@ const InitMessageSchema = z.object({
 	engineToken: z.string().optional(),
 	namespace: z.string().optional(),
 	runnerName: z.string().optional(),
-	inspectorToken: z.string().optional(),
+	inspectorToken: z.string().nullish(),
+});
+
+const ActionResponseSchema = z.object({
+	type: z.literal("actionResponse"),
+	id: z.number(),
+	data: z.object({
+		result: z.any().optional(),
+		error: z.string().optional(),
+		success: z.boolean(),
+	}),
 });
 
 export const MessageSchema = z.discriminatedUnion("type", [
 	CodeMessageSchema,
 	InitMessageSchema,
+	ActionResponseSchema,
 ]);
 
 export const FormattedCodeSchema = z
@@ -70,6 +81,14 @@ export const ResponseSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("ready"),
 	}),
+	z.object({
+		type: z.literal("invokeAction"),
+		id: z.number(),
+		data: z.object({
+			name: z.string(),
+			args: z.array(z.any()),
+		}),
+	}),
 ]);
 
 export type Response = z.infer<typeof ResponseSchema>;
@@ -78,3 +97,4 @@ export type FormattedCode = z.infer<typeof FormattedCodeSchema>;
 export type Log = z.infer<typeof LogSchema>;
 export type InitMessage = z.infer<typeof InitMessageSchema>;
 export type CodeMessage = z.infer<typeof CodeMessageSchema>;
+export type ActionResponse = z.infer<typeof ActionResponseSchema>;

@@ -3,6 +3,7 @@ export * from "./ActorName";
 export * from "./ActorsCreateResponse";
 export * from "./ActorsDeleteResponse";
 export * from "./ActorsGetOrCreateResponse";
+export * from "./ActorsKvGetResponse";
 export * from "./ActorsListNamesResponse";
 export * from "./ActorsListResponse";
 export * from "./CrashPolicy";

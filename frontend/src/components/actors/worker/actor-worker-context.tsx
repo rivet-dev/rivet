@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: guarded by build constant */
 import { useQuery } from "@tanstack/react-query";
 import {
 	createContext,
@@ -9,11 +10,10 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { match } from "ts-pattern";
-import { useInspectorCredentials } from "@/app/credentials-context";
-import { assertNonNullable, ls } from "../../lib/utils";
-import { useActor } from "../actor-queries-context";
+import { assertNonNullable } from "../../lib/utils";
 import { useDataProvider, useEngineCompatDataProvider } from "../data-provider";
-import { ActorFeature, type ActorId } from "../queries";
+import { useActorInspector } from "../inspector-context";
+import type { ActorId } from "../queries";
 import { ActorWorkerContainer } from "./actor-worker-container";
 
 export const ActorWorkerContext = createContext<ActorWorkerContainer | null>(
@@ -24,23 +24,6 @@ export const useActorWorker = () => {
 	const value = useContext(ActorWorkerContext);
 	assertNonNullable(value);
 	return value;
-};
-
-const useInspectorToken = (runnerName: string) => {
-	return match(__APP_TYPE__)
-		.with("inspector", () => {
-			return useInspectorCredentials().credentials?.token;
-		})
-		.otherwise(() => {
-			const provider = useEngineCompatDataProvider();
-			const { data } = useQuery(
-				provider.runnerByNameQueryOptions({
-					runnerName,
-				}),
-			);
-
-			return (data?.metadata?.inspectorToken as string) || "";
-		});
 };
 
 const useConnectionDetails = () => {
@@ -70,7 +53,6 @@ export const ActorWorkerContextProvider = ({
 
 	const {
 		data: {
-			features,
 			name,
 			endpoint,
 			destroyedAt,
@@ -79,19 +61,17 @@ export const ActorWorkerContextProvider = ({
 			runner,
 		} = {},
 	} = useQuery(dataProvider.actorWorkerQueryOptions(actorId));
-	const inspectorToken = useInspectorToken(runner || "");
-
-	const enabled =
-		(features?.includes(ActorFeature.Console) &&
-			!destroyedAt &&
-			!sleepingAt &&
-			!!startedAt) ??
-		false;
-
-	const actorQueries = useActor();
-	const { data: { rpcs } = {} } = useQuery(
-		actorQueries.actorRpcsQueryOptions(actorId, { enabled }),
+	const { data: inspectorToken } = useQuery(
+		useDataProvider().actorInspectorTokenQueryOptions(actorId),
 	);
+
+	const enabled = (!destroyedAt && !sleepingAt && !!startedAt) ?? false;
+
+	const actorInspector = useActorInspector();
+	const { data: rpcs = [] } = useQuery({
+		...actorInspector.actorRpcsQueryOptions(actorId),
+		enabled,
+	});
 
 	const [container] = useState<ActorWorkerContainer>(
 		() => new ActorWorkerContainer(),
@@ -112,6 +92,7 @@ export const ActorWorkerContextProvider = ({
 				runnerName: runner,
 				namespace,
 				inspectorToken,
+				invokeAction: actorInspector.api.executeAction,
 			});
 		}
 
@@ -129,6 +110,7 @@ export const ActorWorkerContextProvider = ({
 		inspectorToken,
 		namespace,
 		runner,
+		actorInspector.api.executeAction,
 	]);
 
 	return (

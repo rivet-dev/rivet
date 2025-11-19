@@ -5,6 +5,7 @@ import { Button } from "../ui/button";
 import { ActorEditableState } from "./actor-editable-state";
 import { useActor } from "./actor-queries-context";
 import { useActorsView } from "./actors-view-context-provider";
+import { useActorInspector } from "./inspector-context";
 import type { ActorId } from "./queries";
 
 interface ActorStateTabProps {
@@ -14,12 +15,13 @@ interface ActorStateTabProps {
 export function ActorStateTab({ actorId }: ActorStateTabProps) {
 	const { links } = useActorsView();
 
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
+
 	const {
-		data: state,
+		data: isStateEnabled,
 		isError,
 		isLoading,
-	} = useQuery(actorQueries.actorStateQueryOptions(actorId));
+	} = useQuery(actorQueries.actorIsStateEnabledQueryOptions(actorId));
 
 	if (isError) {
 		return (
@@ -35,7 +37,7 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 		return <Info>Loading state...</Info>;
 	}
 
-	if (!state?.enabled) {
+	if (!isStateEnabled) {
 		return (
 			<Info>
 				<p>
@@ -51,7 +53,7 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 
 	return (
 		<div className="flex-1 w-full min-h-0 h-full flex flex-col">
-			<ActorEditableState actorId={actorId} state={state.state} />
+			<ActorEditableState actorId={actorId} />
 		</div>
 	);
 }

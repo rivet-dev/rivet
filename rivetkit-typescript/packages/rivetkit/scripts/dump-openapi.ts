@@ -42,7 +42,6 @@ async function main() {
 		proxyRequest: unimplemented,
 		proxyWebSocket: unimplemented,
 		displayInformation: unimplemented,
-		getOrCreateInspectorAccessToken: unimplemented,
 	};
 
 	const client = createClientWithDriver(

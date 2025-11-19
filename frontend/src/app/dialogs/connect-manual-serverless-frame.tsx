@@ -66,12 +66,12 @@ export default function ConnectManualServerlessFrameContent({
 	onClose,
 }: ConnectManualServerlessFrameContentProps) {
 	usePrefetchInfiniteQuery({
-		...useEngineCompatDataProvider().regionsQueryOptions(),
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
 	});
 
 	const { data: datacenters } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	return <FormStepper onClose={onClose} datacenters={datacenters} />;

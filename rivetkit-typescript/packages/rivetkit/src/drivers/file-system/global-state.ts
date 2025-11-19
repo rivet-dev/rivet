@@ -3,7 +3,6 @@ import { lookupInRegistry } from "@/actor/definition";
 import { ActorDuplicateKey } from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
-import { generateRandomString } from "@/actor/utils";
 import type { AnyClient } from "@/client/client";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
 import type { RegistryConfig } from "@/registry/config";
@@ -895,19 +894,6 @@ export class FileSystemGlobalState {
 				});
 			}
 		}, delay);
-	}
-
-	getOrCreateInspectorAccessToken(): string {
-		const path = getNodePath();
-		const fsSync = getNodeFsSync();
-		const tokenPath = path.join(this.#storagePath, "inspector-token");
-		if (fsSync.existsSync(tokenPath)) {
-			return fsSync.readFileSync(tokenPath, "utf-8");
-		}
-
-		const newToken = generateRandomString();
-		fsSync.writeFileSync(tokenPath, newToken);
-		return newToken;
 	}
 
 	/**

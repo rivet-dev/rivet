@@ -6,10 +6,6 @@ import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { chooseDefaultDriver } from "@/drivers/default";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import {
-	configureInspectorAccessToken,
-	getInspectorUrl,
-} from "@/inspector/utils";
 import { createManagerRouter } from "@/manager/router";
 import { createClientWithDriver } from "@/mod";
 import type { Registry } from "@/registry/mod";
@@ -40,7 +36,6 @@ async function serve(
 		managerDriver,
 		ClientConfigSchema.parse({}),
 	);
-	configureInspectorAccessToken(config, managerDriver);
 	const { router } = createManagerRouter(
 		registry.config,
 		runConfig,
