@@ -125,10 +125,8 @@ export class ConnectionManager<
 		// Create connection persist data
 		let connData: ConnDataInput<CP, CS>;
 		if (isHibernatable) {
-			invariant(
-				driver.requestIdBuf,
-				"must have requestIdBuf if hibernatable",
-			);
+			const hibernatable = driver.hibernatable;
+			invariant(hibernatable, "must have hibernatable");
 			invariant(requestPath, "missing requestPath for hibernatable ws");
 			invariant(
 				requestHeaders,
@@ -140,12 +138,11 @@ export class ConnectionManager<
 					parameters: params,
 					state: connState as CS,
 					subscriptions: [],
-					// Fallback to empty buf if not provided since we don't use this value
-					hibernatableRequestId: driver.hibernatable
-						? driver.requestIdBuf
-						: new ArrayBuffer(),
+					gatewayId: hibernatable.gatewayId,
+					requestId: hibernatable.requestId,
+					clientMessageIndex: 0,
 					// First message index will be 1, so we start at 0
-					msgIndex: 0,
+					serverMessageIndex: 0,
 					requestPath,
 					requestHeaders,
 				},
@@ -228,8 +225,11 @@ export class ConnectionManager<
 	}
 
 	#reconnectHibernatableConn(driver: ConnDriver): Conn<S, CP, CS, V, I, DB> {
-		invariant(driver.requestIdBuf, "missing requestIdBuf");
-		const existingConn = this.findHibernatableConn(driver.requestIdBuf);
+		invariant(driver.hibernatable, "missing requestIdBuf");
+		const existingConn = this.findHibernatableConn(
+			driver.hibernatable.gatewayId,
+			driver.hibernatable.requestId,
+		);
 		invariant(
 			existingConn,
 			"cannot find connection for restoring connection",
@@ -238,7 +238,6 @@ export class ConnectionManager<
 		this.#actor.rLog.debug({
 			msg: "reconnecting hibernatable websocket connection",
 			connectionId: existingConn.id,
-			requestId: driver.requestId,
 		});
 
 		// Clean up existing driver state if present
@@ -393,14 +392,16 @@ export class ConnectionManager<
 	// MARK: - Private Helpers
 
 	findHibernatableConn(
+		gatewayIdBuf: ArrayBuffer,
 		requestIdBuf: ArrayBuffer,
 	): Conn<S, CP, CS, V, I, DB> | undefined {
 		return Array.from(this.#connections.values()).find((conn) => {
 			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
-			const connRequestId =
-				connStateManager.hibernatableDataRaw?.hibernatableRequestId;
+			const h = connStateManager.hibernatableDataRaw;
 			return (
-				connRequestId && arrayBuffersEqual(connRequestId, requestIdBuf)
+				h &&
+				arrayBuffersEqual(h.gatewayId, gatewayIdBuf) &&
+				arrayBuffersEqual(h.requestId, requestIdBuf)
 			);
 		});
 	}

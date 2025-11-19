@@ -19,6 +19,7 @@ import { isConnStatePath, isStatePath } from "../utils";
 import { KEYS, makeConnKey } from "./kv";
 import type { ActorInstance } from "./mod";
 import { convertActorToBarePersisted, type PersistedActor } from "./persisted";
+import { tunnelId } from "@rivetkit/engine-runner";
 
 export interface SaveStateOptions {
 	/**
@@ -430,9 +431,14 @@ export class StateManager<S, CP, CS, I> {
 						this.#actor.rLog.info({
 							msg: "persisting connection",
 							connId,
-							hibernatableRequestId:
-								hibernatableDataRaw.hibernatableRequestId,
-							msgIndex: hibernatableDataRaw.msgIndex,
+							gatewayId: tunnelId.gatewayIdToString(
+								hibernatableDataRaw.requestId,
+							),
+							requestId: tunnelId.requestIdToString(
+								hibernatableDataRaw.requestId,
+							),
+							serverMessageIndex: hibernatableDataRaw.serverMessageIndex,
+							clientMessageIndex: hibernatableDataRaw.clientMessageIndex,
 							hasState: hibernatableDataRaw.state !== undefined,
 						});
 

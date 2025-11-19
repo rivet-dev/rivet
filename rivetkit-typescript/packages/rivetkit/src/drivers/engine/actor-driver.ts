@@ -3,7 +3,7 @@ import type {
 	RunnerConfig as EngineRunnerConfig,
 	HibernatingWebSocketMetadata,
 } from "@rivetkit/engine-runner";
-import { Runner } from "@rivetkit/engine-runner";
+import { Runner, tunnelId } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -11,7 +11,6 @@ import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
 import {
 	type AnyConn,
-	CONN_ACTOR_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
 } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
@@ -50,7 +49,6 @@ import type { RequestId } from "@/schemas/actor-persist/mod";
 import {
 	arrayBuffersEqual,
 	assertUnreachable,
-	idToStr,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
@@ -104,10 +102,10 @@ export class EngineActorDriver implements ActorDriver {
 	// Map of conn IDs to message index waiting to be persisted before sending
 	// an ack
 	//
-	// messageIndex is updated and pendingAck is flagged in needed in
+	// serverMessageIndex is updated and pendingAck is flagged in needed in
 	// onBeforePersistConnect, then the HWS ack message is sent in
 	// onAfterPersistConn. This allows us to track what's about to be written
-	// to storage to prevent race conditions with the messageIndex being
+	// to storage to prevent race conditions with the serverMessageIndex being
 	// updated while writing the existing state.
 	//
 	// bufferedMessageSize tracks the total bytes received since last persist
@@ -116,7 +114,7 @@ export class EngineActorDriver implements ActorDriver {
 	#hwsMessageIndex = new Map<
 		string,
 		{
-			messageIndex: number;
+			serverMessageIndex: number;
 			bufferedMessageSize: number;
 			pendingAckFromMessageIndex: boolean;
 			pendingAckFromBufferSize: boolean;
@@ -518,6 +516,7 @@ export class EngineActorDriver implements ActorDriver {
 	async #runnerFetch(
 		_runner: Runner,
 		actorId: string,
+		_gatewayIdBuf: ArrayBuffer,
 		_requestIdBuf: ArrayBuffer,
 		request: Request,
 	): Promise<Response> {
@@ -534,6 +533,7 @@ export class EngineActorDriver implements ActorDriver {
 		_runner: Runner,
 		actorId: string,
 		websocketRaw: any,
+		gatewayIdBuf: ArrayBuffer,
 		requestIdBuf: ArrayBuffer,
 		request: Request,
 		requestPath: string,
@@ -542,7 +542,6 @@ export class EngineActorDriver implements ActorDriver {
 		isRestoringHibernatable: boolean,
 	): Promise<void> {
 		const websocket = websocketRaw as UniversalWebSocket;
-		const requestId = idToStr(requestIdBuf);
 
 		// Add a unique ID to track this WebSocket object
 		const wsUniqueId = `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -581,7 +580,7 @@ export class EngineActorDriver implements ActorDriver {
 				actorId,
 				encoding,
 				connParams,
-				requestId,
+				gatewayIdBuf,
 				requestIdBuf,
 				isHibernatable,
 				isRestoringHibernatable,
@@ -673,8 +672,8 @@ export class EngineActorDriver implements ActorDriver {
 				);
 
 				// Persist message index
-				const previousMsgIndex = hibernate.msgIndex;
-				hibernate.msgIndex = event.rivetMessageIndex;
+				const previousMsgIndex = hibernate.serverMessageIndex;
+				hibernate.serverMessageIndex = event.rivetMessageIndex;
 				logger().info({
 					msg: "persisting message index",
 					connId: conn.id,
@@ -742,7 +741,8 @@ export class EngineActorDriver implements ActorDriver {
 				msg: "event listeners attached to restored websocket",
 				actorId,
 				connId: conn?.id,
-				requestId,
+				gatewayId: tunnelId.gatewayIdToString(gatewayIdBuf),
+				requestId: tunnelId.requestIdToString(requestIdBuf),
 				websocketType: websocket?.constructor?.name,
 				hasMessageListener: !!websocket.addEventListener,
 			});
@@ -752,6 +752,7 @@ export class EngineActorDriver implements ActorDriver {
 	// MARK: - Hibernating WebSockets
 	#hwsCanHibernate(
 		actorId: string,
+		gatewayId: ArrayBuffer,
 		requestId: ArrayBuffer,
 		request: Request,
 	): boolean {
@@ -788,7 +789,8 @@ export class EngineActorDriver implements ActorDriver {
 		// Determine configuration for new WS
 		logger().debug({
 			msg: "no existing hibernatable websocket found",
-			requestId: idToStr(requestId),
+			gatewayId: tunnelId.gatewayIdToString(gatewayId),
+			requestId: tunnelId.requestIdToString(requestId),
 		});
 		if (path === PATH_CONNECT) {
 			return true;
@@ -853,10 +855,12 @@ export class EngineActorDriver implements ActorDriver {
 				const hibernatable = connStateManager.hibernatableData;
 				if (!hibernatable) return undefined;
 				return {
-					requestId: hibernatable.hibernatableRequestId,
+					gatewayId: hibernatable.gatewayId,
+					requestId: hibernatable.requestId,
+					serverMessageIndex: hibernatable.serverMessageIndex,
+					clientMessageIndex: hibernatable.clientMessageIndex,
 					path: hibernatable.requestPath,
 					headers: hibernatable.requestHeaders,
-					messageIndex: hibernatable.msgIndex,
 				} satisfies HibernatingWebSocketMetadata;
 			})
 			.filter((x) => x !== undefined)
@@ -865,31 +869,29 @@ export class EngineActorDriver implements ActorDriver {
 
 	onCreateConn(conn: AnyConn) {
 		const hibernatable = conn[CONN_STATE_MANAGER_SYMBOL].hibernatableData;
-		logger().info({
-			msg: "EngineActorDriver.onCreateConn called",
-			connId: conn.id,
-			hasHibernatable: !!hibernatable,
-			msgIndex: hibernatable?.msgIndex,
-		});
-
 		if (!hibernatable) return;
 
 		this.#hwsMessageIndex.set(conn.id, {
-			messageIndex: hibernatable.msgIndex,
+			serverMessageIndex: hibernatable.serverMessageIndex,
 			bufferedMessageSize: 0,
 			pendingAckFromMessageIndex: false,
 			pendingAckFromBufferSize: false,
 		});
 
-		logger().info({
-			msg: "EngineActorDriver: created #hwsMessageIndex entry",
+		logger().debug({
+			msg: "created #hwsMessageIndex entry",
 			connId: conn.id,
-			msgIndex: hibernatable.msgIndex,
+			serverMessageIndex: hibernatable.serverMessageIndex,
 		});
 	}
 
 	onDestroyConn(conn: AnyConn) {
 		this.#hwsMessageIndex.delete(conn.id);
+
+		logger().debug({
+			msg: "removed #hwsMessageIndex entry",
+			connId: conn.id,
+		});
 	}
 
 	onBeforePersistConn(conn: AnyConn) {
@@ -907,8 +909,8 @@ export class EngineActorDriver implements ActorDriver {
 
 		// There is a newer message index
 		entry.pendingAckFromMessageIndex =
-			hibernatable.msgIndex > entry.messageIndex;
-		entry.messageIndex = hibernatable.msgIndex;
+			hibernatable.serverMessageIndex > entry.serverMessageIndex;
+		entry.serverMessageIndex = hibernatable.serverMessageIndex;
 	}
 
 	onAfterPersistConn(conn: AnyConn) {
@@ -930,8 +932,9 @@ export class EngineActorDriver implements ActorDriver {
 			entry.pendingAckFromBufferSize
 		) {
 			this.#runner.sendHibernatableWebSocketMessageAck(
-				hibernatable.hibernatableRequestId,
-				entry.messageIndex,
+				hibernatable.gatewayId,
+				hibernatable.requestId,
+				entry.serverMessageIndex,
 			);
 			entry.pendingAckFromMessageIndex = false;
 			entry.pendingAckFromBufferSize = false;

@@ -1,3 +1,4 @@
+pub mod compat;
 pub mod generated;
 pub mod versioned;
 

@@ -31,18 +31,12 @@ export interface ConnDriver {
 	};
 
 	/**
-	 * Unique request ID provided by the underlying provider. If none is
-	 * available for this conn driver, a random UUID is generated.
-	 **/
-	requestId: string;
-
-	/** ArrayBuffer version of requestId if relevant. */
-	requestIdBuf: ArrayBuffer | undefined;
-
-	/**
 	 * If the connection can be hibernated. If true, this will allow the actor to go to sleep while the connection is still active.
 	 **/
-	hibernatable: boolean;
+	hibernatable?: {
+		gatewayId: ArrayBuffer;
+		requestId: ArrayBuffer;
+	};
 
 	/**
 	 * This returns a promise since we commonly disconnect at the end of a program, and not waiting will cause the socket to not close cleanly.

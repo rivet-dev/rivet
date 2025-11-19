@@ -2,20 +2,26 @@ use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
-use uuid::Uuid;
 
 use crate::keys;
+use crate::tunnel::id::{GatewayId, RequestId};
 
 #[derive(Debug, Default)]
 pub struct Input {
 	pub actor_id: Id,
 }
 
+#[derive(Debug)]
+pub struct HibernatingRequestItem {
+	pub gateway_id: GatewayId,
+	pub request_id: RequestId,
+}
+
 #[operation]
 pub async fn pegboard_actor_hibernating_request_list(
 	ctx: &OperationCtx,
 	input: &Input,
-) -> Result<Vec<Uuid>> {
+) -> Result<Vec<HibernatingRequestItem>> {
 	let hibernating_request_eligible_threshold = ctx
 		.config()
 		.pegboard()
@@ -46,7 +52,10 @@ pub async fn pegboard_actor_hibernating_request_list(
 			)
 			.map(|res| {
 				let key = tx.unpack::<keys::actor::HibernatingRequestKey>(res?.key())?;
-				Ok(key.request_id)
+				Ok(HibernatingRequestItem {
+					gateway_id: key.gateway_id,
+					request_id: key.request_id,
+				})
 			})
 			.try_collect::<Vec<_>>()
 			.await

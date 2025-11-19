@@ -1,15 +1,20 @@
 use anyhow::Result;
 use universaldb::prelude::*;
-use uuid::Uuid;
+
+use crate::tunnel::id::{GatewayId, RequestId};
 
 #[derive(Debug)]
 pub struct LastPingTsKey {
-	request_id: Uuid,
+	gateway_id: GatewayId,
+	request_id: RequestId,
 }
 
 impl LastPingTsKey {
-	pub fn new(request_id: Uuid) -> Self {
-		LastPingTsKey { request_id }
+	pub fn new(gateway_id: GatewayId, request_id: RequestId) -> Self {
+		LastPingTsKey {
+			gateway_id,
+			request_id,
+		}
 	}
 }
 
@@ -32,17 +37,36 @@ impl TuplePack for LastPingTsKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (HIBERNATING_REQUEST, DATA, self.request_id, LAST_PING_TS);
+		let t = (
+			HIBERNATING_REQUEST,
+			DATA,
+			&self.gateway_id[..],
+			&self.request_id[..],
+			LAST_PING_TS,
+		);
 		t.pack(w, tuple_depth)
 	}
 }
 
 impl<'de> TupleUnpack<'de> for LastPingTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, request_id, _)) =
-			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, gateway_id_bytes, request_id_bytes, _)) =
+			<(usize, usize, Vec<u8>, Vec<u8>, usize)>::unpack(input, tuple_depth)?;
 
-		let v = LastPingTsKey { request_id };
+		let gateway_id: GatewayId = gateway_id_bytes
+			.as_slice()
+			.try_into()
+			.expect("invalid gateway_id length");
+
+		let request_id: RequestId = request_id_bytes
+			.as_slice()
+			.try_into()
+			.expect("invalid request_id length");
+
+		let v = LastPingTsKey {
+			gateway_id,
+			request_id,
+		};
 
 		Ok((input, v))
 	}

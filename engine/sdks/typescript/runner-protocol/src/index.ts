@@ -28,6 +28,38 @@ export function writeJson(bc: bare.ByteCursor, x: Json): void {
     bare.writeString(bc, x)
 }
 
+export type GatewayId = ArrayBuffer
+
+export function readGatewayId(bc: bare.ByteCursor): GatewayId {
+    return bare.readFixedData(bc, 4)
+}
+
+export function writeGatewayId(bc: bare.ByteCursor, x: GatewayId): void {
+    assert(x.byteLength === 4)
+    bare.writeFixedData(bc, x)
+}
+
+export type RequestId = ArrayBuffer
+
+export function readRequestId(bc: bare.ByteCursor): RequestId {
+    return bare.readFixedData(bc, 4)
+}
+
+export function writeRequestId(bc: bare.ByteCursor, x: RequestId): void {
+    assert(x.byteLength === 4)
+    bare.writeFixedData(bc, x)
+}
+
+export type MessageIndex = u16
+
+export function readMessageIndex(bc: bare.ByteCursor): MessageIndex {
+    return bare.readU16(bc)
+}
+
+export function writeMessageIndex(bc: bare.ByteCursor, x: MessageIndex): void {
+    bare.writeU16(bc, x)
+}
+
 /**
  * Basic types
  */
@@ -808,22 +840,39 @@ export function writeEventWrapper(bc: bare.ByteCursor, x: EventWrapper): void {
     writeEvent(bc, x.inner)
 }
 
-function read8(bc: bare.ByteCursor): readonly ArrayBuffer[] {
+export type HibernatingRequest = {
+    readonly gatewayId: GatewayId
+    readonly requestId: RequestId
+}
+
+export function readHibernatingRequest(bc: bare.ByteCursor): HibernatingRequest {
+    return {
+        gatewayId: readGatewayId(bc),
+        requestId: readRequestId(bc),
+    }
+}
+
+export function writeHibernatingRequest(bc: bare.ByteCursor, x: HibernatingRequest): void {
+    writeGatewayId(bc, x.gatewayId)
+    writeRequestId(bc, x.requestId)
+}
+
+function read8(bc: bare.ByteCursor): readonly HibernatingRequest[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
     }
-    const result = [bare.readData(bc)]
+    const result = [readHibernatingRequest(bc)]
     for (let i = 1; i < len; i++) {
-        result[i] = bare.readData(bc)
+        result[i] = readHibernatingRequest(bc)
     }
     return result
 }
 
-function write8(bc: bare.ByteCursor, x: readonly ArrayBuffer[]): void {
+function write8(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
-        bare.writeData(bc, x[i])
+        writeHibernatingRequest(bc, x[i])
     }
 }
 
@@ -831,7 +880,7 @@ export type CommandStartActor = {
     readonly actorId: Id
     readonly generation: u32
     readonly config: ActorConfig
-    readonly hibernatingRequestIds: readonly ArrayBuffer[]
+    readonly hibernatingRequests: readonly HibernatingRequest[]
 }
 
 export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
@@ -839,7 +888,7 @@ export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
         actorId: readId(bc),
         generation: bare.readU32(bc),
         config: readActorConfig(bc),
-        hibernatingRequestIds: read8(bc),
+        hibernatingRequests: read8(bc),
     }
 }
 
@@ -847,7 +896,7 @@ export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor
     writeId(bc, x.actorId)
     bare.writeU32(bc, x.generation)
     writeActorConfig(bc, x.config)
-    write8(bc, x.hibernatingRequestIds)
+    write8(bc, x.hibernatingRequests)
 }
 
 export type CommandStopActor = {
@@ -918,44 +967,66 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
-export type GatewayId = ArrayBuffer
-
-export function readGatewayId(bc: bare.ByteCursor): GatewayId {
-    return bare.readFixedData(bc, 16)
+export type MessageIdParts = {
+    /**
+     * Globally unique ID
+     */
+    readonly gatewayId: GatewayId
+    /**
+     * Unique ID to the gateway
+     */
+    readonly requestId: RequestId
+    /**
+     * Unique ID to the request
+     */
+    readonly messageIndex: MessageIndex
 }
 
-export function writeGatewayId(bc: bare.ByteCursor, x: GatewayId): void {
-    assert(x.byteLength === 16)
-    bare.writeFixedData(bc, x)
+export function readMessageIdParts(bc: bare.ByteCursor): MessageIdParts {
+    return {
+        gatewayId: readGatewayId(bc),
+        requestId: readRequestId(bc),
+        messageIndex: readMessageIndex(bc),
+    }
 }
 
-/**
- * UUIDv4
- */
-export type RequestId = ArrayBuffer
-
-export function readRequestId(bc: bare.ByteCursor): RequestId {
-    return bare.readFixedData(bc, 16)
+export function writeMessageIdParts(bc: bare.ByteCursor, x: MessageIdParts): void {
+    writeGatewayId(bc, x.gatewayId)
+    writeRequestId(bc, x.requestId)
+    writeMessageIndex(bc, x.messageIndex)
 }
 
-export function writeRequestId(bc: bare.ByteCursor, x: RequestId): void {
-    assert(x.byteLength === 16)
-    bare.writeFixedData(bc, x)
+export function encodeMessageIdParts(x: MessageIdParts, config?: Partial<bare.Config>): Uint8Array {
+    const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
+    const bc = new bare.ByteCursor(
+        new Uint8Array(fullConfig.initialBufferLength),
+        fullConfig,
+    )
+    writeMessageIdParts(bc, x)
+    return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
 }
 
-/**
- * UUIDv4
- */
+export function decodeMessageIdParts(bytes: Uint8Array): MessageIdParts {
+    const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
+    const result = readMessageIdParts(bc)
+    if (bc.offset < bc.view.byteLength) {
+        throw new bare.BareError(bc.offset, "remaining bytes")
+    }
+    return result
+}
+
 export type MessageId = ArrayBuffer
 
 export function readMessageId(bc: bare.ByteCursor): MessageId {
-    return bare.readFixedData(bc, 16)
+    return bare.readFixedData(bc, 12)
 }
 
 export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
-    assert(x.byteLength === 16)
+    assert(x.byteLength === 12)
     bare.writeFixedData(bc, x)
 }
+
+export type DeprecatedTunnelAck = null
 
 function read9(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
@@ -1097,21 +1168,18 @@ export function writeToClientWebSocketOpen(bc: bare.ByteCursor, x: ToClientWebSo
 }
 
 export type ToClientWebSocketMessage = {
-    readonly index: u16
     readonly data: ArrayBuffer
     readonly binary: boolean
 }
 
 export function readToClientWebSocketMessage(bc: bare.ByteCursor): ToClientWebSocketMessage {
     return {
-        index: bare.readU16(bc),
         data: bare.readData(bc),
         binary: bare.readBool(bc),
     }
 }
 
 export function writeToClientWebSocketMessage(bc: bare.ByteCursor, x: ToClientWebSocketMessage): void {
-    bare.writeU16(bc, x.index)
     bare.writeData(bc, x.data)
     bare.writeBool(bc, x.binary)
 }
@@ -1176,17 +1244,17 @@ export function writeToServerWebSocketMessage(bc: bare.ByteCursor, x: ToServerWe
 }
 
 export type ToServerWebSocketMessageAck = {
-    readonly index: u16
+    readonly index: MessageIndex
 }
 
 export function readToServerWebSocketMessageAck(bc: bare.ByteCursor): ToServerWebSocketMessageAck {
     return {
-        index: bare.readU16(bc),
+        index: readMessageIndex(bc),
     }
 }
 
 export function writeToServerWebSocketMessageAck(bc: bare.ByteCursor, x: ToServerWebSocketMessageAck): void {
-    bare.writeU16(bc, x.index)
+    writeMessageIndex(bc, x.index)
 }
 
 export type ToServerWebSocketClose = {
@@ -1213,6 +1281,7 @@ export function writeToServerWebSocketClose(bc: bare.ByteCursor, x: ToServerWebS
  * To Server
  */
 export type ToServerTunnelMessageKind =
+    | { readonly tag: "DeprecatedTunnelAck"; readonly val: DeprecatedTunnelAck }
     /**
      * HTTP
      */
@@ -1232,18 +1301,20 @@ export function readToServerTunnelMessageKind(bc: bare.ByteCursor): ToServerTunn
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToServerResponseStart", val: readToServerResponseStart(bc) }
+            return { tag: "DeprecatedTunnelAck", val: null }
         case 1:
-            return { tag: "ToServerResponseChunk", val: readToServerResponseChunk(bc) }
+            return { tag: "ToServerResponseStart", val: readToServerResponseStart(bc) }
         case 2:
-            return { tag: "ToServerResponseAbort", val: null }
+            return { tag: "ToServerResponseChunk", val: readToServerResponseChunk(bc) }
         case 3:
-            return { tag: "ToServerWebSocketOpen", val: readToServerWebSocketOpen(bc) }
+            return { tag: "ToServerResponseAbort", val: null }
         case 4:
-            return { tag: "ToServerWebSocketMessage", val: readToServerWebSocketMessage(bc) }
+            return { tag: "ToServerWebSocketOpen", val: readToServerWebSocketOpen(bc) }
         case 5:
-            return { tag: "ToServerWebSocketMessageAck", val: readToServerWebSocketMessageAck(bc) }
+            return { tag: "ToServerWebSocketMessage", val: readToServerWebSocketMessage(bc) }
         case 6:
+            return { tag: "ToServerWebSocketMessageAck", val: readToServerWebSocketMessageAck(bc) }
+        case 7:
             return { tag: "ToServerWebSocketClose", val: readToServerWebSocketClose(bc) }
         default: {
             bc.offset = offset
@@ -1254,37 +1325,41 @@ export function readToServerTunnelMessageKind(bc: bare.ByteCursor): ToServerTunn
 
 export function writeToServerTunnelMessageKind(bc: bare.ByteCursor, x: ToServerTunnelMessageKind): void {
     switch (x.tag) {
-        case "ToServerResponseStart": {
+        case "DeprecatedTunnelAck": {
             bare.writeU8(bc, 0)
+            break
+        }
+        case "ToServerResponseStart": {
+            bare.writeU8(bc, 1)
             writeToServerResponseStart(bc, x.val)
             break
         }
         case "ToServerResponseChunk": {
-            bare.writeU8(bc, 1)
+            bare.writeU8(bc, 2)
             writeToServerResponseChunk(bc, x.val)
             break
         }
         case "ToServerResponseAbort": {
-            bare.writeU8(bc, 2)
+            bare.writeU8(bc, 3)
             break
         }
         case "ToServerWebSocketOpen": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 4)
             writeToServerWebSocketOpen(bc, x.val)
             break
         }
         case "ToServerWebSocketMessage": {
-            bare.writeU8(bc, 4)
+            bare.writeU8(bc, 5)
             writeToServerWebSocketMessage(bc, x.val)
             break
         }
         case "ToServerWebSocketMessageAck": {
-            bare.writeU8(bc, 5)
+            bare.writeU8(bc, 6)
             writeToServerWebSocketMessageAck(bc, x.val)
             break
         }
         case "ToServerWebSocketClose": {
-            bare.writeU8(bc, 6)
+            bare.writeU8(bc, 7)
             writeToServerWebSocketClose(bc, x.val)
             break
         }
@@ -1292,24 +1367,18 @@ export function writeToServerTunnelMessageKind(bc: bare.ByteCursor, x: ToServerT
 }
 
 export type ToServerTunnelMessage = {
-    readonly gatewayId: GatewayId
-    readonly requestId: RequestId
     readonly messageId: MessageId
     readonly messageKind: ToServerTunnelMessageKind
 }
 
 export function readToServerTunnelMessage(bc: bare.ByteCursor): ToServerTunnelMessage {
     return {
-        gatewayId: readGatewayId(bc),
-        requestId: readRequestId(bc),
         messageId: readMessageId(bc),
         messageKind: readToServerTunnelMessageKind(bc),
     }
 }
 
 export function writeToServerTunnelMessage(bc: bare.ByteCursor, x: ToServerTunnelMessage): void {
-    writeGatewayId(bc, x.gatewayId)
-    writeRequestId(bc, x.requestId)
     writeMessageId(bc, x.messageId)
     writeToServerTunnelMessageKind(bc, x.messageKind)
 }
@@ -1318,6 +1387,7 @@ export function writeToServerTunnelMessage(bc: bare.ByteCursor, x: ToServerTunne
  * To Client
  */
 export type ToClientTunnelMessageKind =
+    | { readonly tag: "DeprecatedTunnelAck"; readonly val: DeprecatedTunnelAck }
     /**
      * HTTP
      */
@@ -1336,16 +1406,18 @@ export function readToClientTunnelMessageKind(bc: bare.ByteCursor): ToClientTunn
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToClientRequestStart", val: readToClientRequestStart(bc) }
+            return { tag: "DeprecatedTunnelAck", val: null }
         case 1:
-            return { tag: "ToClientRequestChunk", val: readToClientRequestChunk(bc) }
+            return { tag: "ToClientRequestStart", val: readToClientRequestStart(bc) }
         case 2:
-            return { tag: "ToClientRequestAbort", val: null }
+            return { tag: "ToClientRequestChunk", val: readToClientRequestChunk(bc) }
         case 3:
-            return { tag: "ToClientWebSocketOpen", val: readToClientWebSocketOpen(bc) }
+            return { tag: "ToClientRequestAbort", val: null }
         case 4:
-            return { tag: "ToClientWebSocketMessage", val: readToClientWebSocketMessage(bc) }
+            return { tag: "ToClientWebSocketOpen", val: readToClientWebSocketOpen(bc) }
         case 5:
+            return { tag: "ToClientWebSocketMessage", val: readToClientWebSocketMessage(bc) }
+        case 6:
             return { tag: "ToClientWebSocketClose", val: readToClientWebSocketClose(bc) }
         default: {
             bc.offset = offset
@@ -1356,32 +1428,36 @@ export function readToClientTunnelMessageKind(bc: bare.ByteCursor): ToClientTunn
 
 export function writeToClientTunnelMessageKind(bc: bare.ByteCursor, x: ToClientTunnelMessageKind): void {
     switch (x.tag) {
-        case "ToClientRequestStart": {
+        case "DeprecatedTunnelAck": {
             bare.writeU8(bc, 0)
+            break
+        }
+        case "ToClientRequestStart": {
+            bare.writeU8(bc, 1)
             writeToClientRequestStart(bc, x.val)
             break
         }
         case "ToClientRequestChunk": {
-            bare.writeU8(bc, 1)
+            bare.writeU8(bc, 2)
             writeToClientRequestChunk(bc, x.val)
             break
         }
         case "ToClientRequestAbort": {
-            bare.writeU8(bc, 2)
+            bare.writeU8(bc, 3)
             break
         }
         case "ToClientWebSocketOpen": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 4)
             writeToClientWebSocketOpen(bc, x.val)
             break
         }
         case "ToClientWebSocketMessage": {
-            bare.writeU8(bc, 4)
+            bare.writeU8(bc, 5)
             writeToClientWebSocketMessage(bc, x.val)
             break
         }
         case "ToClientWebSocketClose": {
-            bare.writeU8(bc, 5)
+            bare.writeU8(bc, 6)
             writeToClientWebSocketClose(bc, x.val)
             break
         }
@@ -1389,32 +1465,20 @@ export function writeToClientTunnelMessageKind(bc: bare.ByteCursor, x: ToClientT
 }
 
 export type ToClientTunnelMessage = {
-    readonly gatewayId: GatewayId
-    readonly requestId: RequestId
     readonly messageId: MessageId
     readonly messageKind: ToClientTunnelMessageKind
-    /**
-     * Should be stripped before sending to the runner.
-     */
-    readonly gatewayReplyTo: string | null
 }
 
 export function readToClientTunnelMessage(bc: bare.ByteCursor): ToClientTunnelMessage {
     return {
-        gatewayId: readGatewayId(bc),
-        requestId: readRequestId(bc),
         messageId: readMessageId(bc),
         messageKind: readToClientTunnelMessageKind(bc),
-        gatewayReplyTo: read5(bc),
     }
 }
 
 export function writeToClientTunnelMessage(bc: bare.ByteCursor, x: ToClientTunnelMessage): void {
-    writeGatewayId(bc, x.gatewayId)
-    writeRequestId(bc, x.requestId)
     writeMessageId(bc, x.messageId)
     writeToClientTunnelMessageKind(bc, x.messageKind)
-    write5(bc, x.gatewayReplyTo)
 }
 
 function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
