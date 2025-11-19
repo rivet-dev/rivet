@@ -91,10 +91,11 @@ async fn handle_message(
 	match msg {
 		protocol::ToServer::ToServerPing(ping) => {
 			let now = util::timestamp::now();
-			let rtt = if ping.ts <= now {
-				// Calculate RTT, clamping to u32::MAX if too large
-				let rtt_ms = now.saturating_sub(ping.ts);
-				rtt_ms.min(u32::MAX as i64) as u32
+
+			let delta = if ping.ts <= now {
+				// Calculate delta, clamping to u32::MAX if too large
+				let delta_ms = now.saturating_sub(ping.ts);
+				delta_ms.min(u32::MAX as i64) as u32
 			} else {
 				// If ping timestamp is in the future (clock skew), default to 0
 				tracing::warn!(
@@ -104,6 +105,9 @@ async fn handle_message(
 				);
 				0
 			};
+
+			// Assuming symmetric delta
+			let rtt = delta * 2;
 
 			conn.last_rtt.store(rtt, Ordering::Relaxed);
 		}

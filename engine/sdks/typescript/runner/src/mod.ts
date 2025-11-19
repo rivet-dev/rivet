@@ -2,8 +2,7 @@ import * as protocol from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
 import type WebSocket from "ws";
 import { logger, setLogger } from "./log.js";
-import { stringifyCommandWrapper, stringifyEvent } from "./stringify";
-import type { PendingRequest } from "./tunnel";
+import { stringifyToClient, stringifyToServer } from "./stringify";
 import { type HibernatingWebSocketMetadata, Tunnel } from "./tunnel";
 import {
 	calculateBackoff,
@@ -11,7 +10,6 @@ import {
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
-import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 import { RunnerActor, type ActorConfig } from "./actor";
 
 export type { HibernatingWebSocketMetadata };
@@ -501,20 +499,10 @@ export class Runner {
 
 					// NOTE: We don't use #sendToServer here because that function checks if the runner is
 					// shut down
-					const encoded = protocol.encodeToServer({
+					this.__sendToServer({
 						tag: "ToServerStopping",
 						val: null,
 					});
-					if (
-						this.#pegboardWebSocket &&
-						this.#pegboardWebSocket.readyState === 1
-					) {
-						this.#pegboardWebSocket.send(encoded);
-					} else {
-						this.log?.error(
-							"WebSocket not available or not open for sending data",
-						);
-					}
 
 					const closePromise = new Promise<void>((resolve) => {
 						if (!pegboardWebSocket)
@@ -708,6 +696,10 @@ export class Runner {
 
 			// Parse message
 			const message = protocol.decodeToClient(buf);
+			this.log?.debug({
+				msg: "received runner message",
+				data: stringifyToClient(message),
+			});
 
 			// Handle message
 			if (message.tag === "ToClientInit") {
@@ -849,10 +841,6 @@ export class Runner {
 		});
 
 		for (const commandWrapper of commands) {
-			this.log?.info({
-				msg: "received command",
-				command: stringifyCommandWrapper(commandWrapper),
-			});
 			if (commandWrapper.inner.tag === "CommandStartActor") {
 				// Spawn background promise
 				this.#handleCommandStartActor(commandWrapper);
@@ -1008,12 +996,6 @@ export class Runner {
 
 		this.#recordEvent(eventWrapper);
 
-		this.log?.info({
-			msg: "sending event to server",
-			event: stringifyEvent(eventWrapper.inner),
-			index: eventWrapper.index.toString(),
-		});
-
 		this.__sendToServer({
 			tag: "ToServerEvents",
 			val: [eventWrapper],
@@ -1063,12 +1045,6 @@ export class Runner {
 		};
 
 		this.#recordEvent(eventWrapper);
-
-		this.log?.info({
-			msg: "sending event to server",
-			event: stringifyEvent(eventWrapper.inner),
-			index: eventWrapper.index.toString(),
-		});
 
 		this.__sendToServer({
 			tag: "ToServerEvents",
@@ -1510,13 +1486,18 @@ export class Runner {
 			: false;
 	}
 
-	__sendToServer(message: protocol.ToServer) {
-		if (this.#shutdown) {
+	__sendToServer(message: protocol.ToServer, allowShutdown: boolean = false) {
+		if (!allowShutdown && this.#shutdown) {
 			this.log?.warn({
 				msg: "Runner is shut down, cannot send message to server",
 			});
 			return;
 		}
+
+		this.log?.debug({
+			msg: "sending runner message",
+			data: stringifyToServer(message),
+		});
 
 		const encoded = protocol.encodeToServer(message);
 		if (

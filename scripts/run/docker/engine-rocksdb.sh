@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 RUST_LOG="${RUST_LOG:-"opentelemetry_sdk=off,opentelemetry-otlp=info,tower::buffer::worker=info,debug"}" \
+RUST_LOG_TARGET=1 \
 RIVET__PEGBOARD__RETRY_RESET_DURATION="100" \
 RIVET__PEGBOARD__BASE_RETRY_TIMEOUT="100" \
 RIVET__PEGBOARD__RESCHEDULE_BACKOFF_MAX_EXPONENT="1" \

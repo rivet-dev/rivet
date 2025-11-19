@@ -182,3 +182,154 @@ export function stringifyEvent(event: protocol.Event): string {
 export function stringifyEventWrapper(wrapper: protocol.EventWrapper): string {
 	return `EventWrapper{index: ${stringifyBigInt(wrapper.index)}, inner: ${stringifyEvent(wrapper.inner)}}`;
 }
+
+/**
+ * Stringify ToServer for logging
+ * Handles ArrayBuffers, BigInts, and Maps that can't be JSON.stringified
+ */
+export function stringifyToServer(message: protocol.ToServer): string {
+	switch (message.tag) {
+		case "ToServerInit": {
+			const { name, version, totalSlots, lastCommandIdx, metadata } =
+				message.val;
+			const lastCommandIdxStr =
+				lastCommandIdx === null
+					? "null"
+					: stringifyBigInt(lastCommandIdx);
+			const metadataStr = metadata === null ? "null" : `"${metadata}"`;
+			return `ToServerInit{name: "${name}", version: ${version}, totalSlots: ${totalSlots}, lastCommandIdx: ${lastCommandIdxStr}, metadata: ${metadataStr}}`;
+		}
+		case "ToServerEvents": {
+			const events = message.val;
+			return `ToServerEvents{count: ${events.length}, events: [${events.map((e) => stringifyEventWrapper(e)).join(", ")}]}`;
+		}
+		case "ToServerAckCommands": {
+			const { lastCommandIdx } = message.val;
+			return `ToServerAckCommands{lastCommandIdx: ${stringifyBigInt(lastCommandIdx)}}`;
+		}
+		case "ToServerStopping":
+			return "ToServerStopping";
+		case "ToServerPing": {
+			const { ts } = message.val;
+			return `ToServerPing{ts: ${stringifyBigInt(ts)}}`;
+		}
+		case "ToServerKvRequest": {
+			const { actorId, requestId, data } = message.val;
+			const dataStr = stringifyKvRequestData(data);
+			return `ToServerKvRequest{actorId: "${actorId}", requestId: ${requestId}, data: ${dataStr}}`;
+		}
+		case "ToServerTunnelMessage": {
+			const { messageId, messageKind } = message.val;
+			const messageIdStr = stringifyArrayBuffer(messageId);
+			return `ToServerTunnelMessage{messageId: ${messageIdStr}, messageKind: ${stringifyToServerTunnelMessageKind(messageKind)}}`;
+		}
+	}
+}
+
+/**
+ * Stringify ToClient for logging
+ * Handles ArrayBuffers, BigInts, and Maps that can't be JSON.stringified
+ */
+export function stringifyToClient(message: protocol.ToClient): string {
+	switch (message.tag) {
+		case "ToClientInit": {
+			const { runnerId, lastEventIdx, metadata } = message.val;
+			const runnerLostThreshold = metadata?.runnerLostThreshold
+				? stringifyBigInt(metadata.runnerLostThreshold)
+				: "null";
+			return `ToClientInit{runnerId: "${runnerId}", lastEventIdx: ${stringifyBigInt(lastEventIdx)}, runnerLostThreshold: ${runnerLostThreshold}}`;
+		}
+		case "ToClientClose":
+			return "ToClientClose";
+		case "ToClientCommands": {
+			const commands = message.val;
+			return `ToClientCommands{count: ${commands.length}, commands: [${commands.map((c) => stringifyCommandWrapper(c)).join(", ")}]}`;
+		}
+		case "ToClientAckEvents": {
+			const { lastEventIdx } = message.val;
+			return `ToClientAckEvents{lastEventIdx: ${stringifyBigInt(lastEventIdx)}}`;
+		}
+		case "ToClientKvResponse": {
+			const { requestId, data } = message.val;
+			const dataStr = stringifyKvResponseData(data);
+			return `ToClientKvResponse{requestId: ${requestId}, data: ${dataStr}}`;
+		}
+		case "ToClientTunnelMessage": {
+			const { messageId, messageKind } = message.val;
+			const messageIdStr = stringifyArrayBuffer(messageId);
+			return `ToClientTunnelMessage{messageId: ${messageIdStr}, messageKind: ${stringifyToClientTunnelMessageKind(messageKind)}}`;
+		}
+	}
+}
+
+/**
+ * Stringify KvRequestData for logging
+ */
+function stringifyKvRequestData(data: protocol.KvRequestData): string {
+	switch (data.tag) {
+		case "KvGetRequest": {
+			const { keys } = data.val;
+			return `KvGetRequest{keys: ${keys.length}}`;
+		}
+		case "KvListRequest": {
+			const { query, reverse, limit } = data.val;
+			const reverseStr = reverse === null ? "null" : reverse.toString();
+			const limitStr = limit === null ? "null" : stringifyBigInt(limit);
+			return `KvListRequest{query: ${stringifyKvListQuery(query)}, reverse: ${reverseStr}, limit: ${limitStr}}`;
+		}
+		case "KvPutRequest": {
+			const { keys, values } = data.val;
+			return `KvPutRequest{keys: ${keys.length}, values: ${values.length}}`;
+		}
+		case "KvDeleteRequest": {
+			const { keys } = data.val;
+			return `KvDeleteRequest{keys: ${keys.length}}`;
+		}
+		case "KvDropRequest":
+			return "KvDropRequest";
+	}
+}
+
+/**
+ * Stringify KvListQuery for logging
+ */
+function stringifyKvListQuery(query: protocol.KvListQuery): string {
+	switch (query.tag) {
+		case "KvListAllQuery":
+			return "KvListAllQuery";
+		case "KvListRangeQuery": {
+			const { start, end, exclusive } = query.val;
+			return `KvListRangeQuery{start: ${stringifyArrayBuffer(start)}, end: ${stringifyArrayBuffer(end)}, exclusive: ${exclusive}}`;
+		}
+		case "KvListPrefixQuery": {
+			const { key } = query.val;
+			return `KvListPrefixQuery{key: ${stringifyArrayBuffer(key)}}`;
+		}
+	}
+}
+
+/**
+ * Stringify KvResponseData for logging
+ */
+function stringifyKvResponseData(data: protocol.KvResponseData): string {
+	switch (data.tag) {
+		case "KvErrorResponse": {
+			const { message } = data.val;
+			return `KvErrorResponse{message: "${message}"}`;
+		}
+		case "KvGetResponse": {
+			const { keys, values, metadata } = data.val;
+			return `KvGetResponse{keys: ${keys.length}, values: ${values.length}, metadata: ${metadata.length}}`;
+		}
+		case "KvListResponse": {
+			const { keys, values, metadata } = data.val;
+			return `KvListResponse{keys: ${keys.length}, values: ${values.length}, metadata: ${metadata.length}}`;
+		}
+		case "KvPutResponse":
+			return "KvPutResponse";
+		case "KvDeleteResponse":
+			return "KvDeleteResponse";
+		case "KvDropResponse":
+			return "KvDropResponse";
+	}
+}

@@ -804,7 +804,7 @@ export class Tunnel {
 		requestId: ArrayBuffer,
 		response: Response,
 	) {
-		if (this.#runner.hasActor(actorId, generation)) {
+		if (!this.#runner.hasActor(actorId, generation)) {
 			this.log?.warn({
 				msg: "actor not loaded to send response, assuming gateway has closed request",
 				actorId,
@@ -854,7 +854,7 @@ export class Tunnel {
 		status: number,
 		message: string,
 	) {
-		if (this.#runner.hasActor(actorId, generation)) {
+		if (!this.#runner.hasActor(actorId, generation)) {
 			this.log?.warn({
 				msg: "actor not loaded to send response, assuming gateway has closed request",
 				actorId,

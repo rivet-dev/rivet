@@ -38,14 +38,14 @@ export function buildMessageId(
 
 	const encoded = protocol.encodeMessageIdParts(parts);
 
-	if (encoded.byteLength !== 12) {
+	if (encoded.byteLength !== 10) {
 		throw new Error(
-			`message id serialization produced wrong size: expected 12 bytes, got ${encoded.byteLength}`,
+			`message id serialization produced wrong size: expected 10 bytes, got ${encoded.byteLength}`,
 		);
 	}
 
 	// Create a new ArrayBuffer from the Uint8Array
-	const messageId = new ArrayBuffer(12);
+	const messageId = new ArrayBuffer(10);
 	new Uint8Array(messageId).set(encoded);
 	return messageId;
 }
@@ -54,9 +54,9 @@ export function buildMessageId(
  * Parse a MessageId into its components
  */
 export function parseMessageId(messageId: MessageId): protocol.MessageIdParts {
-	if (messageId.byteLength !== 12) {
+	if (messageId.byteLength !== 10) {
 		throw new Error(
-			`invalid message id length: expected 12 bytes, got ${messageId.byteLength}`,
+			`invalid message id length: expected 10 bytes, got ${messageId.byteLength}`,
 		);
 	}
 	const uint8Array = new Uint8Array(messageId);

@@ -1,4 +1,3 @@
-import invariant from "invariant";
 import { type TestContext, vi } from "vitest";
 import { assertUnreachable } from "@/actor/utils";
 import { type Client, createClient } from "@/client/mod";
@@ -7,6 +6,7 @@ import { createClientWithDriver } from "@/mod";
 import type { registry } from "../../fixtures/driver-test-suite/registry";
 import type { DriverTestConfig } from "./mod";
 import { createTestInlineClientDriver } from "./test-inline-client-driver";
+import { logger } from "./log";
 
 export const FAKE_TIME = new Date("2024-01-01T00:00:00.000Z");
 
@@ -26,7 +26,10 @@ export async function setupDriverTest(
 	// Build drivers
 	const { endpoint, namespace, runnerName, cleanup } =
 		await driverTestConfig.start();
-	c.onTestFinished(cleanup);
+	c.onTestFinished(() => {
+		logger().info("cleaning up test");
+		cleanup();
+	});
 
 	let client: Client<typeof registry>;
 	if (driverTestConfig.clientType === "http") {
