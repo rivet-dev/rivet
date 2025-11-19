@@ -65,11 +65,7 @@ export class WebSocketTunnelAdapter {
 		/** @experimental */
 		public readonly request: Request,
 		sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void,
-		closeCallback: (
-			code?: number,
-			reason?: string,
-			hibernate?: boolean,
-		) => void,
+		closeCallback: (code?: number, reason?: string) => void,
 	) {
 		this.#tunnel = tunnel;
 		this.#actorId = actorId;
@@ -233,7 +229,7 @@ export class WebSocketTunnelAdapter {
 		code?: number,
 		reason?: string,
 	): void {
-		this.#closeInner(code, reason, false, true);
+		this.#closeInner(code, reason, true);
 	}
 
 	_handleError(error: Error): void {
@@ -246,12 +242,8 @@ export class WebSocketTunnelAdapter {
 		this.#fireEvent("error", event);
 	}
 
-	_closeWithHibernate(code?: number, reason?: string): void {
-		this.#closeInner(code, reason, true, true);
-	}
-
 	_closeWithoutCallback(code?: number, reason?: string): void {
-		this.#closeInner(code, reason, false, false);
+		this.#closeInner(code, reason, false);
 	}
 
 	#fireEvent(type: string, event: any): void {
@@ -328,7 +320,6 @@ export class WebSocketTunnelAdapter {
 	#closeInner(
 		code: number | undefined,
 		reason: string | undefined,
-		hibernate: boolean,
 		callback: boolean,
 	): void {
 		if (
@@ -342,7 +333,7 @@ export class WebSocketTunnelAdapter {
 
 		// Send close through tunnel
 		if (callback) {
-			this.#closeCallback(code, reason, hibernate);
+			this.#closeCallback(code, reason);
 		}
 
 		// Update state and fire event
@@ -500,7 +491,7 @@ export class WebSocketTunnelAdapter {
 	}
 
 	close(code?: number, reason?: string): void {
-		this.#closeInner(code, reason, false, true);
+		this.#closeInner(code, reason, true);
 	}
 
 	addEventListener(

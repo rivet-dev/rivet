@@ -317,7 +317,7 @@ export class Tunnel {
 					},
 				});
 			},
-			(code?: number, reason?: string, hibernate: boolean = false) => {
+			(code?: number, reason?: string) => {
 				// Send close through tunnel if engine doesn't already know it's closed
 				if (!engineAlreadyClosed) {
 					this.#sendMessage(requestId, {
@@ -325,7 +325,7 @@ export class Tunnel {
 						val: {
 							code: code || null,
 							reason: reason || null,
-							hibernate,
+							hibernate: false,
 						},
 					});
 				}
@@ -397,7 +397,7 @@ export class Tunnel {
 		// TODO: Switch this with runner WS
 		if (!this.#runner.__webSocketReady()) {
 			this.log?.warn({
-				msg: "cannot send tunnel message, socket not connected to engine",
+				msg: "cannot send tunnel message, socket not connected to engine. tunnel data dropped.",
 				requestId: idToStr(requestId),
 				message: stringifyToServerTunnelMessageKind(messageKind),
 			});
@@ -513,10 +513,7 @@ export class Tunnel {
 					const webSocket = actor.webSockets.get(requestIdStr);
 					if (webSocket) {
 						// Close the WebSocket connection
-						webSocket._closeWithHibernate(
-							1000,
-							"Message acknowledgment timeout",
-						);
+						webSocket.close(1000, "ws.ack_timeout");
 
 						// Clean up from webSockets map
 						actor.webSockets.delete(requestIdStr);
@@ -1070,6 +1067,7 @@ export class Tunnel {
 		if (actor) {
 			const adapter = actor.webSockets.get(requestIdStr);
 			if (adapter) {
+				// We don't need to send a close response
 				adapter._handleClose(
 					requestId,
 					close.code || undefined,
