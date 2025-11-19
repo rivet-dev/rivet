@@ -208,7 +208,9 @@ export function SolutionSection() {
 					{/* Left Side: Sticky Code */}
 					<div>
 						<div className="sticky top-32 md:top-40 z-10">
-							<div className="code-box-container flex-none rounded-xl border border-border bg-black/50" style={{ transformOrigin: "center center" }}>
+							<div className="code-box-container flex-none rounded-xl border border-border bg-black/50 relative overflow-hidden" style={{ transformOrigin: "center center" }}>
+								{/* Top Shine Highlight */}
+								<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent z-10" />
 								<div className="flex items-center justify-between border-b border-border px-4 py-3">
 									<span className="text-sm font-medium text-text-primary">ai-agent.ts</span>
 									<span className="text-sm text-text-secondary font-mono">actor.ts</span>
