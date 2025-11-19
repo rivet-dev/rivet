@@ -20,3 +20,12 @@ tracing.workspace = true
 universaldb.workspace = true
 
 pegboard.workspace = true
+
+[dev-dependencies]
+portpicker.workspace = true
+rivet-config.workspace = true
+rivet-test-deps.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+uuid.workspace = true

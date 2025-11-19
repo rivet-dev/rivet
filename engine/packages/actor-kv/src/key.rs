@@ -3,6 +3,14 @@ use universaldb::tuple::{
 	Bytes, PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset,
 };
 
+/// Wraps a key with a trailing NIL byte for exact key matching.
+///
+/// Encodes as: `[NESTED, ...bytes..., NIL]`
+///
+/// Use this for:
+/// - Storing keys
+/// - Getting/deleting specific keys
+/// - Range query end points (to create closed boundaries)
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeyWrapper(pub rp::KvKey);
 
@@ -44,7 +52,13 @@ impl<'de> TupleUnpack<'de> for KeyWrapper {
 	}
 }
 
-/// Same as Key: except when packing, it leaves off the NIL byte to allow for an open range.
+/// Wraps a key without a trailing NIL byte for prefix/range matching.
+///
+/// Encodes as: `[NESTED, ...bytes...]` (no trailing NIL)
+///
+/// Use this for:
+/// - Range query start points (to create open boundaries)
+/// - Prefix queries (to match all keys starting with these bytes)
 pub struct ListKeyWrapper(pub rp::KvKey);
 
 impl TuplePack for ListKeyWrapper {

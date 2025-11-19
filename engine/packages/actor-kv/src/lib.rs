@@ -172,17 +172,18 @@ pub async fn list(
 
 				let curr = if let Some(inner) = &mut current_entry {
 					if inner.key != key {
+						// Check limit before adding the key
+						if keys.len() >= limit {
+							current_entry = None;
+							break;
+						}
+
 						let (key, value, meta) =
 							std::mem::replace(inner, EntryBuilder::new(key)).build()?;
 
 						keys.push(key);
 						values.push(value);
 						metadata.push(meta);
-
-						if keys.len() >= limit {
-							current_entry = None;
-							break;
-						}
 					}
 
 					inner
@@ -203,12 +204,15 @@ pub async fn list(
 				}
 			}
 
+			// Only add the current entry if we haven't hit the limit yet
 			if let Some(inner) = current_entry {
-				let (key, value, meta) = inner.build()?;
+				if keys.len() < limit {
+					let (key, value, meta) = inner.build()?;
 
-				keys.push(key);
-				values.push(value);
-				metadata.push(meta);
+					keys.push(key);
+					values.push(value);
+					metadata.push(meta);
+				}
 			}
 
 			Ok((keys, values, metadata))
@@ -330,7 +334,24 @@ fn list_query_range(query: rp::KvListQuery, subspace: &Subspace) -> (Vec<u8>, Ve
 			},
 		),
 		rp::KvListQuery::KvListPrefixQuery(prefix) => {
-			subspace.subspace(&KeyWrapper(prefix.key)).range()
+			// For prefix queries, we need to create a range that matches all keys
+			// that start with the given prefix bytes. The tuple encoding adds a
+			// terminating 0 byte to strings, which would make the range too narrow.
+			//
+			// Instead, we construct the range manually:
+			// - Start: the prefix bytes within the subspace
+			// - End: the prefix bytes + 0xFF (next possible byte)
+
+			let mut start = subspace.pack(&ListKeyWrapper(prefix.key.clone()));
+			// Remove the trailing 0 byte that tuple encoding adds to strings
+			if let Some(&0) = start.last() {
+				start.pop();
+			}
+
+			let mut end = start.clone();
+			end.push(0xFF);
+
+			(start, end)
 		}
 	}
 }
