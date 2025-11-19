@@ -48,7 +48,7 @@ export const ObservabilitySection = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-lg text-zinc-400 max-w-2xl mb-8"
+						className="text-lg text-zinc-400 max-w-2xl mb-8 leading-relaxed"
 					>
 						Powerful debugging and monitoring tools that work seamlessly from local development to production
 						at scale.
@@ -60,11 +60,11 @@ export const ObservabilitySection = () => {
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row gap-4"
 					>
-						<button className="inline-flex items-center gap-2 text-sm font-medium text-white bg-zinc-800 px-4 py-2 rounded-full hover:bg-zinc-700 transition-colors border border-white/10">
+						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
 							Visit The Inspector
 							<ArrowRight className="w-4 h-4" />
 						</button>
-						<button className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors px-4 py-2">
+						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
 							<Play className="w-4 h-4" />
 							Watch Demo
 						</button>
@@ -104,11 +104,13 @@ export const ObservabilitySection = () => {
 					>
 						<div className="absolute -inset-4 bg-gradient-to-r from-[#FF4500]/20 to-blue-500/20 rounded-3xl blur-2xl opacity-20" />
 						<div className="relative rounded-xl border border-white/10 bg-zinc-900/50 backdrop-blur-xl shadow-2xl overflow-hidden aspect-video flex flex-col">
+							{/* Top Shine Highlight */}
+							<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
 							{/* Window Bar */}
 							<div className="h-10 border-b border-white/5 bg-white/5 flex items-center px-4 gap-2 flex-shrink-0">
-								<div className="w-3 h-3 rounded-full bg-[#FF5F57] border border-[#E0443E]" />
-								<div className="w-3 h-3 rounded-full bg-[#FEBC2E] border border-[#D89E24]" />
-								<div className="w-3 h-3 rounded-full bg-[#28C840] border border-[#1AAB29]" />
+								<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
+								<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
+								<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
 							</div>
 							{/* Content Area - Placeholder for Image */}
 							<div className="flex-grow flex items-center justify-center bg-zinc-900/50">

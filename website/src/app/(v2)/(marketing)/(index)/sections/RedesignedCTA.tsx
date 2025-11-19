@@ -16,7 +16,7 @@ export const RedesignedCTA = () => (
 				whileInView={{ opacity: 1, y: 0 }}
 				viewport={{ once: true }}
 				transition={{ duration: 0.5 }}
-				className="text-4xl md:text-5xl font-medium text-white mb-6 tracking-tight"
+				className="text-4xl md:text-5xl font-medium text-white mb-8 tracking-tight"
 			>
 				Ready to build better backends?
 			</motion.h2>
@@ -25,7 +25,7 @@ export const RedesignedCTA = () => (
 				whileInView={{ opacity: 1, y: 0 }}
 				viewport={{ once: true }}
 				transition={{ duration: 0.5, delay: 0.1 }}
-				className="text-lg text-zinc-400 mb-10"
+				className="text-lg text-zinc-400 mb-10 leading-relaxed"
 			>
 				Join thousands of developers building the next generation of{" "}
 				<br className="hidden md:block" />
@@ -38,10 +38,10 @@ export const RedesignedCTA = () => (
 				transition={{ duration: 0.5, delay: 0.2 }}
 				className="flex flex-col sm:flex-row items-center justify-center gap-4"
 			>
-				<button className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-black font-bold hover:bg-zinc-200 transition-all transform hover:-translate-y-1">
+				<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
 					Get Started for Free
 				</button>
-				<button className="w-full sm:w-auto px-8 py-4 rounded-full bg-zinc-900 text-white border border-zinc-800 font-medium hover:bg-zinc-800 transition-all">
+				<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
 					Read the Docs
 				</button>
 			</motion.div>

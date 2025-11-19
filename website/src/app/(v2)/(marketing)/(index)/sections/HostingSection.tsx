@@ -4,7 +4,7 @@ import { Github, Cloud, Server, Check } from "lucide-react";
 import { motion } from "framer-motion";
 
 export const HostingSection = () => (
-	<section className="py-24 bg-black border-t border-white/10">
+	<section className="py-32 bg-black border-t border-white/10">
 		<div className="max-w-7xl mx-auto px-6">
 			<div className="text-center mb-16">
 				<motion.h2
@@ -12,7 +12,7 @@ export const HostingSection = () => (
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
-					className="text-3xl md:text-4xl font-medium text-white mb-4 tracking-tight"
+					className="text-3xl md:text-5xl font-medium text-white mb-6 tracking-tight"
 				>
 					Deploy your way.
 				</motion.h2>
@@ -21,7 +21,7 @@ export const HostingSection = () => (
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5, delay: 0.1 }}
-					className="text-zinc-400 max-w-2xl mx-auto"
+					className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed"
 				>
 					Start with the open-source binary on your laptop. Scale with Rivet Cloud. Go hybrid when you need
 					total control over data residency.
@@ -35,9 +35,11 @@ export const HostingSection = () => (
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5, delay: 0.2 }}
-					className="p-8 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] backdrop-blur-sm transition-all duration-300 flex flex-col hover:border-white/20 hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]"
+					className="p-8 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] backdrop-blur-sm transition-all duration-300 flex flex-col hover:border-white/20 hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)] relative overflow-hidden"
 				>
-					<div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mb-6 text-white">
+					{/* Top Shine Highlight */}
+					<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+					<div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mb-6 text-white relative z-10">
 						<Github className="w-6 h-6" />
 					</div>
 					<h3 className="text-xl font-medium text-white mb-3">Open Source</h3>
@@ -65,6 +67,8 @@ export const HostingSection = () => (
 					transition={{ duration: 0.5, delay: 0.3 }}
 					className="p-8 rounded-2xl border border-white/10 bg-gradient-to-b from-[#FF4500]/10 to-transparent relative overflow-hidden group flex flex-col backdrop-blur-sm hover:border-[#FF4500]/30 transition-colors"
 				>
+					{/* Top Shine Highlight (Orange) */}
+					<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#FF4500]/40 to-transparent z-10" />
 					<div className="w-12 h-12 rounded-lg bg-[#FF4500]/10 flex items-center justify-center mb-6 text-[#FF4500] relative z-10">
 						<Cloud className="w-6 h-6" />
 					</div>
@@ -88,9 +92,11 @@ export const HostingSection = () => (
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5, delay: 0.4 }}
-					className="p-8 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] backdrop-blur-sm transition-all duration-300 flex flex-col hover:border-white/20 hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]"
+					className="p-8 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] backdrop-blur-sm transition-all duration-300 flex flex-col hover:border-white/20 hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)] relative overflow-hidden"
 				>
-					<div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mb-6 text-white">
+					{/* Top Shine Highlight */}
+					<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+					<div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mb-6 text-white relative z-10">
 						<Server className="w-6 h-6" />
 					</div>
 					<h3 className="text-xl font-medium text-white mb-3">Hybrid & On-Prem</h3>

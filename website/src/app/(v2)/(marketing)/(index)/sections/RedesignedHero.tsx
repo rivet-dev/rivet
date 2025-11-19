@@ -1,33 +1,18 @@
 "use client";
 
-import { Terminal, ArrowRight, Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { Terminal, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 
 const CodeBlock = ({ code, fileName = "actor.ts" }) => {
-	const [copied, setCopied] = useState(false);
-
-	const handleCopy = () => {
-		navigator.clipboard.writeText(code).catch(() => {});
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
-	};
-
 	return (
 		<div className="relative group rounded-xl overflow-hidden border border-white/10 bg-zinc-900/50 backdrop-blur-xl shadow-2xl">
 			<div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
 				<div className="flex items-center gap-2">
-					<div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50" />
-					<div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
-					<div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50" />
+					<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
+					<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
+					<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
 				</div>
 				<div className="text-xs text-zinc-500 font-mono">{fileName}</div>
-				<button
-					onClick={handleCopy}
-					className="text-zinc-500 hover:text-white transition-colors"
-				>
-					{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-				</button>
 			</div>
 			<div className="p-4 overflow-x-auto scrollbar-hide">
 				<pre className="text-sm font-mono leading-relaxed text-zinc-300">
@@ -147,11 +132,11 @@ export const RedesignedHero = () => (
 						transition={{ duration: 0.5, delay: 0.3 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<button className="w-full sm:w-auto h-12 px-8 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
+						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Start Building
 							<ArrowRight className="w-4 h-4" />
 						</button>
-						<button className="w-full sm:w-auto h-12 px-8 rounded-full border border-zinc-800 text-zinc-300 font-medium hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center gap-2 bg-black">
+						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
 							<Terminal className="w-4 h-4" />
 							npm install rivetkit
 						</button>
@@ -193,3 +178,10 @@ export const counter = actor({
 		</div>
 	</section>
 );
+
+
+
+
+
+
+
