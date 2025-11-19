@@ -5,6 +5,10 @@ import { motion } from "framer-motion";
 
 const FeatureCard = ({ title, description, code, graphic }) => (
 	<div className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] backdrop-blur-sm transition-all duration-500 hover:border-white/20 flex flex-col h-full hover:shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)]">
+		{/* Top Shine Highlight */}
+		<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/40 to-transparent z-10 opacity-70 group-hover:opacity-100 transition-opacity" />
+		{/* Bottom Fade Highlight */}
+		<div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent z-10 opacity-30" />
 		{/* Graphic Area */}
 		<div className="h-48 bg-white/[0.01] border-b border-white/5 flex items-center justify-center relative overflow-hidden group-hover:bg-white/[0.02] transition-colors">
 			{graphic}
@@ -212,20 +216,20 @@ export const FeaturesSection = () => {
 					<div className="absolute w-32 h-32 bg-[#FF4500]/5 rounded-full animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]" />
 
 					{/* The Process Shell */}
-					<div className="relative z-10 w-16 h-16 rounded-xl border-2 flex items-center justify-center transition-colors duration-300 animate-[shellRecover_4s_ease-in-out_infinite] bg-zinc-900">
+					<div className="relative z-10 w-16 h-16 rounded-xl border-2 border-solid flex items-center justify-center animate-[shellRecover_4s_ease-in-out_infinite] bg-zinc-900">
 						{/* The Persistent State (Core) */}
 						<div className="text-white z-20">
 							<Database className="w-6 h-6 text-[#FF4500] fill-[#FF4500]/20 drop-shadow-[0_0_10px_rgba(255,69,0,0.5)]" />
 						</div>
 
-						{/* Crash indicator overlay */}
+						{/* Crash indicator overlay (The 'X' or Alert) */}
 						<div className="absolute -top-3 -right-3 flex items-center justify-center text-red-500 opacity-0 animate-[crashIcon_4s_ease-in-out_infinite] z-30 bg-zinc-900 rounded-full border border-red-500/50 shadow-lg shadow-red-500/20 p-1">
 							<AlertCircle className="w-5 h-5 fill-red-500/20" />
 						</div>
 					</div>
 
-					{/* "Rebooting" Spinner ring */}
-					<div className="absolute w-24 h-24 rounded-full border-2 border-[#FF4500]/50 border-t-[#FF4500] opacity-0 animate-[spinRecover_4s_ease-in-out_infinite]" />
+					{/* "Rebooting" Spinner ring appearing during crash */}
+					<div className="absolute inset-0 m-auto w-24 h-24 rounded-full border-2 border-[#FF4500]/50 border-t-[#FF4500] opacity-0 animate-[spinRecover_4s_ease-in-out_infinite]" />
 				</div>
 			),
 		},
@@ -251,7 +255,7 @@ export const FeaturesSection = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-lg text-zinc-400"
+						className="text-lg text-zinc-400 leading-relaxed"
 					>
 						Rivet handles the hard parts of distributed systems: sharding, coordination, and persistence.
 						You just write the logic.
@@ -337,9 +341,9 @@ export const FeaturesSection = () => {
         }
 
         @keyframes shellRecover {
-          0%, 45% { border-color: rgb(255, 69, 0); }
-          50% { border-color: rgb(239 68 68); border-style: dashed; }
-          60% { border-color: transparent; }
+          0%, 47% { border-color: rgb(255, 69, 0); border-style: solid; }
+          48%, 59% { border-color: rgb(239 68 68); border-style: dashed; }
+          60% { border-color: transparent; border-style: solid; }
           70%, 100% { border-color: rgb(255, 69, 0); border-style: solid; }
         }
 

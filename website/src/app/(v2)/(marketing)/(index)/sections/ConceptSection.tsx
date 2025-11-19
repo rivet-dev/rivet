@@ -22,9 +22,11 @@ const ArchitectureComparison = () => {
 				whileInView={{ opacity: 1, x: 0 }}
 				viewport={{ once: true }}
 				transition={{ duration: 0.5 }}
-				className="p-6 rounded-2xl border border-white/5 bg-zinc-900/30 backdrop-blur-sm hover:bg-zinc-900/50 transition-colors duration-500"
+				className="p-6 rounded-2xl border border-white/5 bg-zinc-900/30 backdrop-blur-sm hover:bg-zinc-900/50 transition-colors duration-500 relative overflow-hidden"
 			>
-				<div className="flex items-center gap-2 mb-6">
+				{/* Top Shine Highlight */}
+				<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+				<div className="flex items-center gap-2 mb-6 relative z-10">
 					<div className="p-2 rounded bg-red-500/10 text-red-400">
 						<Server className="w-4 h-4" />
 					</div>
@@ -102,8 +104,10 @@ const ArchitectureComparison = () => {
 				transition={{ duration: 0.5 }}
 				className="p-6 rounded-2xl border border-white/10 bg-zinc-900/30 backdrop-blur-md relative overflow-hidden shadow-[0_0_50px_-12px_rgba(16,185,129,0.1)] hover:shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)] transition-shadow duration-500"
 			>
+				{/* Top Shine Highlight (Green tinted for the 'hero' card) */}
+				<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent z-10" />
 				<div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
-				<div className="flex items-center gap-2 mb-6">
+				<div className="flex items-center gap-2 mb-6 relative z-10">
 					<div className="p-2 rounded bg-emerald-500/10 text-emerald-500">
 						<Box className="w-4 h-4" />
 					</div>
@@ -176,7 +180,7 @@ const ArchitectureComparison = () => {
 };
 
 export const ConceptSection = () => (
-	<section id="actors" className="py-24 bg-zinc-900/10 border-y border-white/5">
+	<section id="actors" className="py-32 bg-zinc-900/10 border-y border-white/5">
 		<div className="max-w-7xl mx-auto px-6">
 			<div className="flex flex-col md:flex-row gap-16">
 				<motion.div
@@ -186,26 +190,24 @@ export const ConceptSection = () => (
 					transition={{ duration: 0.5 }}
 					className="flex-1"
 				>
-					<h2 className="text-3xl font-medium text-white mb-6 tracking-tight">
+					<h2 className="text-3xl md:text-5xl font-medium text-white mb-6 tracking-tight">
 						Think in Actors,
 						<br />
 						not just Functions.
 					</h2>
-					<div className="space-y-6 text-zinc-400 leading-relaxed">
-						<p>
-							<strong className="text-white">What is an Actor?</strong>
-							<br />
-							An Actor is a tiny, isolated server that holds its own data in memory. Unlike a stateless
-							function that forgets everything after it runs, an Actor remembers.
-						</p>
-						<p>
-							<strong className="text-white">Why use them?</strong>
-							<br />
-							When you need to manage state for a specific entity—like a Chat Room, a Game Match, or a User
-							Session—fetching that data from a database every 100ms is slow and expensive. Actors keep
-							that data in RAM, right next to your logic.
-						</p>
-					</div>
+					<p className="text-lg text-zinc-400 leading-relaxed mb-6">
+						<strong className="text-white">What is an Actor?</strong>
+						<br />
+						An Actor is a tiny, isolated server that holds its own data in memory. Unlike a stateless
+						function that forgets everything after it runs, an Actor remembers.
+					</p>
+					<p className="text-lg text-zinc-400 leading-relaxed">
+						<strong className="text-white">Why use them?</strong>
+						<br />
+						When you need to manage state for a specific entity—like a Chat Room, a Game Match, or a User
+						Session—fetching that data from a database every 100ms is slow and expensive. Actors keep
+						that data in RAM, right next to your logic.
+					</p>
 				</motion.div>
 				<div className="flex-1">
 					<ArchitectureComparison />

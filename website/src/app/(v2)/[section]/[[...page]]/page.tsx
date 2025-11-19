@@ -27,6 +27,9 @@ interface Param {
 	page?: string[];
 }
 
+// Ensure Next.js knows this is a dynamic route
+export const dynamicParams = false;
+
 function createParamsForFile(section, file): Param {
 	const step1 = file.replace("index.mdx", "");
 	const step2 = step1.replace(".mdx", "");
@@ -35,7 +38,7 @@ function createParamsForFile(section, file): Param {
 
 	return {
 		section,
-		page: step4,
+		page: step4.length > 0 ? step4 : undefined,
 	};
 }
 
@@ -66,8 +69,11 @@ async function loadContent(path: string[]) {
 }
 
 export async function generateMetadata({
-	params: { section, page },
+	params,
+}: {
+	params: { section: string; page?: string[] };
 }): Promise<Metadata> {
+	const { section, page } = params;
 	const path = buildPathComponents(section, page);
 	const {
 		component: { title, description },
@@ -85,7 +91,11 @@ export async function generateMetadata({
 	};
 }
 
-export default async function CatchAllCorePage({ params: { section, page } }) {
+export default async function CatchAllCorePage({
+	params: { section, page },
+}: {
+	params: { section: string; page?: string[] };
+}) {
 	if (!VALID_SECTIONS.includes(section)) {
 		return notFound();
 	}
@@ -172,20 +182,51 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 }
 
 export async function generateStaticParams() {
-	const staticParams: Param[] = [];
+	const staticParams: Array<{ section: string; page?: string[] }> = [];
+	const seenParams = new Set<string>();
 
 	for (const section of VALID_SECTIONS) {
 		const dir = path.join(process.cwd(), "src", "content", section);
 
-		const dirs = await fs.readdir(dir, { recursive: true });
-		const files = dirs.filter((file) => file.endsWith(".mdx"));
+		try {
+			// Always add base case first (section root with no page segments)
+			// For optional catch-all, omit page property when undefined
+			const baseKey = `${section}`;
+			if (!seenParams.has(baseKey)) {
+				seenParams.add(baseKey);
+				staticParams.push({ section });
+			}
 
-		const sectionParams = files.map((file) => {
-			const param = createParamsForFile(section, file);
-			return param;
-		});
+			// Read all MDX files recursively
+			const dirs = await fs.readdir(dir, { recursive: true });
+			const files = dirs.filter((file) => file.endsWith(".mdx"));
 
-		staticParams.push(...sectionParams);
+			for (const file of files) {
+				const param = createParamsForFile(section, file);
+				
+				// For optional catch-all routes, omit page when undefined
+				const finalParam: { section: string; page?: string[] } = param.page === undefined 
+					? { section: param.section }
+					: { section: param.section, page: param.page };
+
+				// Create unique key for deduplication
+				const key = finalParam.page 
+					? `${finalParam.section}/${finalParam.page.join("/")}`
+					: finalParam.section;
+
+				if (!seenParams.has(key)) {
+					seenParams.add(key);
+					staticParams.push(finalParam);
+				}
+			}
+		} catch (error) {
+			// If directory doesn't exist, still add base case
+			const baseKey = `${section}`;
+			if (!seenParams.has(baseKey)) {
+				seenParams.add(baseKey);
+				staticParams.push({ section });
+			}
+		}
 	}
 
 	return staticParams;

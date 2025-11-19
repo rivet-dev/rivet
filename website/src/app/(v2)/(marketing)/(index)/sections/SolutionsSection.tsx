@@ -81,7 +81,7 @@ export const SolutionsSection = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-lg text-zinc-400 max-w-2xl mx-auto"
+						className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed"
 					>
 						If it needs to remember something, it belongs in an Actor.
 					</motion.p>
@@ -95,16 +95,18 @@ export const SolutionsSection = () => {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: idx * 0.05 }}
-							className="p-6 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] backdrop-blur-sm transition-all duration-300 group flex flex-col justify-between hover:border-white/20 hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]"
+							className="p-6 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] backdrop-blur-sm transition-all duration-300 group flex flex-col justify-between hover:border-white/20 hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)] relative overflow-hidden"
 						>
-							<div className="flex items-center justify-between mb-4">
+							{/* Top Shine Highlight */}
+							<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-50 group-hover:opacity-100 transition-opacity z-10" />
+							<div className="flex items-center justify-between mb-4 relative z-10">
 								<div className="flex items-center gap-3">
 									<div className="text-white/80">{solution.icon}</div>
 									<h3 className="font-medium text-white tracking-tight">{solution.title}</h3>
 								</div>
 								<ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
 							</div>
-							<p className="text-sm text-zinc-400 leading-relaxed">{solution.description}</p>
+							<p className="text-sm text-zinc-400 leading-relaxed relative z-10">{solution.description}</p>
 						</motion.div>
 					))}
 				</div>
