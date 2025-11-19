@@ -14,7 +14,7 @@ use rivet_guard_core::{
 		ServiceUnavailable, WebSocketServiceHibernate, WebSocketServiceTimeout,
 		WebSocketServiceUnavailable,
 	},
-	proxy_service::ResponseBody,
+	proxy_service::{ResponseBody, is_ws_hibernate},
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
 };
@@ -559,28 +559,33 @@ impl CustomServeTrait for PegboardGateway {
 			(res, _) => res,
 		};
 
-		// Send WebSocket close message to runner
-		let (close_code, close_reason) = match &mut lifecycle_res {
-			// Taking here because it won't be used again
-			Ok(LifecycleResult::ClientClose(Some(close))) => {
-				(close.code, Some(std::mem::take(&mut close.reason)))
-			}
-			Ok(_) => (CloseCode::Normal.into(), None),
-			Err(_) => (CloseCode::Error.into(), Some("ws.downstream_closed".into())),
-		};
-		let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
-			protocol::ToClientWebSocketClose {
-				code: Some(close_code.into()),
-				reason: close_reason.map(|x| x.as_str().to_string()),
-			},
-		);
-
-		if let Err(err) = self
-			.shared_state
-			.send_message(request_id, close_message)
-			.await
+		// Send close frame to runner if not hibernating
+		if lifecycle_res
+			.as_ref()
+			.map_or_else(is_ws_hibernate, |_| false)
 		{
-			tracing::error!(?err, "error sending close message");
+			let (close_code, close_reason) = match &mut lifecycle_res {
+				// Taking here because it won't be used again
+				Ok(LifecycleResult::ClientClose(Some(close))) => {
+					(close.code, Some(std::mem::take(&mut close.reason)))
+				}
+				Ok(_) => (CloseCode::Normal.into(), None),
+				Err(_) => (CloseCode::Error.into(), Some("ws.downstream_closed".into())),
+			};
+			let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
+				protocol::ToClientWebSocketClose {
+					code: Some(close_code.into()),
+					reason: close_reason.map(|x| x.as_str().to_string()),
+				},
+			);
+
+			if let Err(err) = self
+				.shared_state
+				.send_message(request_id, close_message)
+				.await
+			{
+				tracing::error!(?err, "error sending close message");
+			}
 		}
 
 		// Send WebSocket close message to client

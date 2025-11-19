@@ -2537,7 +2537,7 @@ fn is_retryable_ws_error(err: &anyhow::Error) -> bool {
 	}
 }
 
-fn is_ws_hibernate(err: &anyhow::Error) -> bool {
+pub fn is_ws_hibernate(err: &anyhow::Error) -> bool {
 	if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
 		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_hibernate"
 	} else {
