@@ -531,7 +531,7 @@ enc
 			});
 
 			const disconnectError = new Error(
-				wasClean ? "Connection closed" : "Connection lost",
+				`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${closeEvent.reason})`,
 			);
 
 			for (const actionInfo of this.#actionsInFlight.values()) {
