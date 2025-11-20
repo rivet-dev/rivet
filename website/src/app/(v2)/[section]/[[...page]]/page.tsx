@@ -91,9 +91,7 @@ export async function generateMetadata({
 	};
 }
 
-export async function generateStaticParams(): Promise<
-	Array<{ section: string; page?: string[] }>
-> {
+export async function generateStaticParams() {
 	const staticParams: Array<{ section: string; page?: string[] }> = [];
 	const seenParams = new Set<string>();
 
