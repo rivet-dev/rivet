@@ -91,9 +91,9 @@ export async function generateMetadata({
 	};
 }
 
-export const generateStaticParams = async (): Promise<
+export async function generateStaticParams(): Promise<
 	Array<{ section: string; page?: string[] }>
-> => {
+> {
 	const staticParams: Array<{ section: string; page?: string[] }> = [];
 	const seenParams = new Set<string>();
 
@@ -142,7 +142,7 @@ export const generateStaticParams = async (): Promise<
 	}
 
 	return staticParams;
-};
+}
 
 export default async function CatchAllCorePage({
 	params: { section, page },
