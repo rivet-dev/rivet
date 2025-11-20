@@ -666,8 +666,8 @@ async fn handle_stopped(
 			}
 		);
 
-		match (input.crash_policy, failed) {
-			(CrashPolicy::Restart, true) => {
+		match input.crash_policy {
+			CrashPolicy::Restart => {
 				match runtime::reschedule_actor(ctx, &input, state, false).await? {
 					runtime::SpawnActorOutput::Allocated { .. } => {}
 					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
@@ -678,8 +678,12 @@ async fn handle_stopped(
 					}
 				}
 			}
-			(CrashPolicy::Sleep, true) => {
-				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
+			CrashPolicy::Sleep => {
+				if failed {
+					tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
+				} else {
+					tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to clean shutdown");
+				}
 
 				state.sleeping = true;
 
