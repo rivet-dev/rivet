@@ -612,19 +612,20 @@ impl ProxyState {
 			let cache_key = (actor_id, ip_addr);
 
 			// Get existing counter or create a new one
-			let counter_arc =
-				if let Some(existing_counter) = self.in_flight_counters.get(&cache_key).await {
-					existing_counter
-				} else {
-					let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
-						middleware_config.max_in_flight.amount,
-					)));
-					self.in_flight_counters
-						.insert(cache_key, new_counter.clone())
-						.await;
-					metrics::IN_FLIGHT_COUNTER_COUNT.record(self.in_flight_counters.entry_count(), &[]);
-					new_counter
-				};
+			let counter_arc = if let Some(existing_counter) =
+				self.in_flight_counters.get(&cache_key).await
+			{
+				existing_counter
+			} else {
+				let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
+					middleware_config.max_in_flight.amount,
+				)));
+				self.in_flight_counters
+					.insert(cache_key, new_counter.clone())
+					.await;
+				metrics::IN_FLIGHT_COUNTER_COUNT.record(self.in_flight_counters.entry_count(), &[]);
+				new_counter
+			};
 
 			// Try to acquire from the counter
 			let acquired = {
@@ -638,7 +639,7 @@ impl ProxyState {
 		}
 
 		// Generate unique request ID
-        let request_id = Some(self.generate_unique_request_id().await?);
+		let request_id = Some(self.generate_unique_request_id().await?);
 		Ok(request_id)
 	}
 

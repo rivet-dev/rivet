@@ -194,8 +194,8 @@ impl SharedState {
 
 			hs.pending_ws_msgs.push(pending_ws_msg);
 			tracing::debug!(
-				index=current_message_index,
-				new_count=hs.pending_ws_msgs.len(),
+				index = current_message_index,
+				new_count = hs.pending_ws_msgs.len(),
 				"pushed pending websocket message"
 			);
 		}
