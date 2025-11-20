@@ -1,7 +1,9 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type { PendingRequest } from "./tunnel";
 import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
-import { arraysEqual } from "./utils";
+import { arraysEqual, promiseWithResolvers } from "./utils";
+import { logger } from "./log";
+import * as tunnelId from "./tunnel-id";
 
 export interface ActorConfig {
 	name: string;
@@ -24,11 +26,28 @@ export class RunnerActor {
 		requestId: protocol.RequestId;
 		ws: WebSocketTunnelAdapter;
 	}> = [];
+	actorStartPromise: ReturnType<typeof promiseWithResolvers<void>>;
 
-	constructor(actorId: string, generation: number, config: ActorConfig) {
+	/**
+	 * If restoreHibernatingRequests has been called. This is used to assert
+	 * that the caller is implemented correctly.
+	 **/
+	hibernationRestored: boolean = false;
+
+	constructor(
+		actorId: string,
+		generation: number,
+		config: ActorConfig,
+		/**
+		 * List of hibernating requests provided by the gateway on actor start.
+		 * This represents the WebSocket connections that the gateway knows about.
+		 **/
+		public hibernatingRequests: readonly protocol.HibernatingRequest[],
+	) {
 		this.actorId = actorId;
 		this.generation = generation;
 		this.config = config;
+		this.actorStartPromise = promiseWithResolvers();
 	}
 
 	// Pending request methods
@@ -43,13 +62,78 @@ export class RunnerActor {
 		)?.request;
 	}
 
-	setPendingRequest(
+	createPendingRequest(
 		gatewayId: protocol.GatewayId,
 		requestId: protocol.RequestId,
-		request: PendingRequest,
+		clientMessageIndex: number,
 	) {
-		this.deletePendingRequest(gatewayId, requestId);
-		this.pendingRequests.push({ gatewayId, requestId, request });
+		const exists =
+			this.getPendingRequest(gatewayId, requestId) !== undefined;
+		if (exists) {
+			logger()?.warn({
+				msg: "attempting to set pending request twice, replacing existing",
+				gatewayId: tunnelId.gatewayIdToString(gatewayId),
+				requestId: tunnelId.requestIdToString(requestId),
+			});
+			// Delete existing pending request before adding the new one
+			this.deletePendingRequest(gatewayId, requestId);
+		}
+		this.pendingRequests.push({
+			gatewayId,
+			requestId,
+			request: {
+				resolve: () => {},
+				reject: () => {},
+				actorId: this.actorId,
+				gatewayId: gatewayId,
+				requestId: requestId,
+				clientMessageIndex,
+			},
+		});
+		logger()?.debug({
+			msg: "added pending request",
+			gatewayId: tunnelId.gatewayIdToString(gatewayId),
+			requestId: tunnelId.requestIdToString(requestId),
+			length: this.pendingRequests.length,
+		});
+	}
+
+	createPendingRequestWithStreamController(
+		gatewayId: protocol.GatewayId,
+		requestId: protocol.RequestId,
+		clientMessageIndex: number,
+		streamController: ReadableStreamDefaultController<Uint8Array>,
+	) {
+		const exists =
+			this.getPendingRequest(gatewayId, requestId) !== undefined;
+		if (exists) {
+			logger()?.warn({
+				msg: "attempting to set pending request twice, replacing existing",
+				gatewayId: tunnelId.gatewayIdToString(gatewayId),
+				requestId: tunnelId.requestIdToString(requestId),
+			});
+			// Delete existing pending request before adding the new one
+			this.deletePendingRequest(gatewayId, requestId);
+		}
+		this.pendingRequests.push({
+			gatewayId,
+			requestId,
+			request: {
+				resolve: () => {},
+				reject: () => {},
+				actorId: this.actorId,
+				gatewayId: gatewayId,
+				requestId: requestId,
+				clientMessageIndex,
+				streamController,
+			},
+		});
+		logger()?.debug({
+			msg: "added pending request with stream controller",
+			gatewayId: tunnelId.gatewayIdToString(gatewayId),
+			requestId: tunnelId.requestIdToString(requestId),
+			length: this.pendingRequests.length,
+		});
 	}
 
 	deletePendingRequest(
@@ -63,6 +147,12 @@ export class RunnerActor {
 		);
 		if (index !== -1) {
 			this.pendingRequests.splice(index, 1);
+			logger()?.debug({
+				msg: "removed pending request",
+				gatewayId: tunnelId.gatewayIdToString(gatewayId),
+				requestId: tunnelId.requestIdToString(requestId),
+				length: this.pendingRequests.length,
+			});
 		}
 	}
 
@@ -83,7 +173,11 @@ export class RunnerActor {
 		requestId: protocol.RequestId,
 		ws: WebSocketTunnelAdapter,
 	) {
-		this.deleteWebSocket(gatewayId, requestId);
+		const exists = this.getWebSocket(gatewayId, requestId) !== undefined;
+		if (exists) {
+			logger()?.warn({ msg: "attempting to set websocket twice" });
+			return;
+		}
 		this.webSockets.push({ gatewayId, requestId, ws });
 	}
 

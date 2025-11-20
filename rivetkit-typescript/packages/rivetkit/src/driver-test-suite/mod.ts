@@ -22,7 +22,7 @@ import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
-import { runActorHibernationTests } from "./tests/actor-hibernation";
+import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorInlineClientTests } from "./tests/actor-inline-client";
 import { runActorInspectorTests } from "./tests/actor-inspector";
 import { runActorMetadataTests } from "./tests/actor-metadata";
@@ -105,7 +105,7 @@ export function runDriverTests(
 
 					runActorConnStateTests(driverTestConfig);
 
-					runActorHibernationTests(driverTestConfig);
+					runActorConnHibernationTests(driverTestConfig);
 
 					runActorDestroyTests(driverTestConfig);
 

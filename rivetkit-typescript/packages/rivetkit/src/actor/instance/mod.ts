@@ -60,6 +60,7 @@ export type { SaveStateOptions };
 enum CanSleep {
 	Yes,
 	NotReady,
+	NotStarted,
 	ActiveConns,
 	ActiveHonoHttpRequests,
 }
@@ -108,7 +109,18 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#rLog!: Logger;
 
 	// MARK: - Lifecycle State
+	/**
+	 * If the core actor initiation has set up.
+	 *
+	 * Almost all actions on this actor will throw an error if false.
+	 **/
 	#ready = false;
+	/**
+	 * If the actor has fully started.
+	 *
+	 * The only purpose of this is to prevent sleeping until started.
+	 */
+	#started = false;
 	#sleepCalled = false;
 	#destroyCalled = false;
 	#stopCalled = false;
@@ -362,9 +374,22 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Mark as ready
 		this.#ready = true;
-		this.#rLog.info({ msg: "actor ready" });
 
-		// Start sleep timer
+		// Finish up any remaining initiation
+		//
+		// Do this after #ready = true since this can call any actor callbacks
+		// (which require #assertReady)
+		await this.driver.onBeforeActorStart?.(this);
+
+		// Mark as started
+		//
+		// We do this after onBeforeActorStart to prevent the actor from going
+		// to sleep before finishing setup
+		this.#started = true;
+		this.#rLog.info({ msg: "actor started" });
+
+		// Start sleep timer after setting #started since this affects the
+		// timer
 		this.resetSleepTimer();
 
 		// Trigger any pending alarms
@@ -390,7 +415,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 		this.#stopCalled = true;
 		this.#rLog.info({
-			msg: "[STOP] actor stopping - setting stopCalled=true",
+			msg: "setting stopCalled=true",
 			mode,
 		});
 
@@ -423,9 +448,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		);
 
 		// Clear timeouts and save state
-		this.#rLog.info({ msg: "[STOP] Clearing pending save timeouts" });
+		this.#rLog.info({ msg: "clearing pending save timeouts" });
 		this.stateManager.clearPendingSaveTimeout();
-		this.#rLog.info({ msg: "[STOP] Saving state immediately" });
+		this.#rLog.info({ msg: "saving state immediately" });
 		await this.stateManager.saveState({
 			immediate: true,
 			allowStoppingState: true,
@@ -563,7 +588,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		actionName: string,
 		args: unknown[],
 	): Promise<unknown> {
-		invariant(this.#ready, "executing action before ready");
+		this.assertReady();
 
 		if (!(actionName in this.#config.actions)) {
 			this.#rLog.warn({ msg: "action does not exist", actionName });
@@ -1052,11 +1077,15 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	#canSleep(): CanSleep {
 		if (!this.#ready) return CanSleep.NotReady;
+		if (!this.#started) return CanSleep.NotReady;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
 
 		for (const _conn of this.connectionManager.connections.values()) {
+			// TODO: Add back
+			// if (!_conn.isHibernatable) {
 			return CanSleep.ActiveConns;
+			// }
 		}
 
 		return CanSleep.Yes;

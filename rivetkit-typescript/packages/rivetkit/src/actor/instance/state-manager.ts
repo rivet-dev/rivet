@@ -437,8 +437,10 @@ export class StateManager<S, CP, CS, I> {
 							requestId: tunnelId.requestIdToString(
 								hibernatableDataRaw.requestId,
 							),
-							serverMessageIndex: hibernatableDataRaw.serverMessageIndex,
-							clientMessageIndex: hibernatableDataRaw.clientMessageIndex,
+							serverMessageIndex:
+								hibernatableDataRaw.serverMessageIndex,
+							clientMessageIndex:
+								hibernatableDataRaw.clientMessageIndex,
 							hasState: hibernatableDataRaw.state !== undefined,
 						});
 
@@ -481,69 +483,6 @@ export class StateManager<S, CP, CS, I> {
 					this.#actor.rLog.info({
 						msg: "kvBatchPut completed successfully",
 					});
-
-					// Test: Check if KV data is immediately available after write
-					try {
-						// Try kvListAll first
-						if (
-							"kvListAll" in this.#actorDriver &&
-							typeof this.#actorDriver.kvListAll === "function"
-						) {
-							const kvEntries = await (
-								this.#actorDriver as any
-							).kvListAll(this.#actor.id);
-							this.#actor.rLog.info({
-								msg: "KV verification with kvListAll immediately after write",
-								actorId: this.#actor.id,
-								entriesFound: kvEntries.length,
-								keys: kvEntries.map(
-									([k]: [Uint8Array, Uint8Array]) =>
-										new TextDecoder().decode(k),
-								),
-							});
-						} else if (
-							"kvListPrefix" in this.#actorDriver &&
-							typeof this.#actorDriver.kvListPrefix === "function"
-						) {
-							// Fallback to kvListPrefix if kvListAll doesn't exist
-							const kvEntries = await (
-								this.#actorDriver as any
-							).kvListPrefix(this.#actor.id, new Uint8Array());
-							this.#actor.rLog.info({
-								msg: "KV verification with kvListPrefix immediately after write",
-								actorId: this.#actor.id,
-								entriesFound: kvEntries.length,
-								keys: kvEntries.map(
-									([k]: [Uint8Array, Uint8Array]) =>
-										new TextDecoder().decode(k),
-								),
-							});
-						}
-					} catch (verifyError) {
-						this.#actor.rLog.warn({
-							msg: "Failed to verify KV after write",
-							error: stringifyError(verifyError),
-						});
-					}
-
-					// List KV to verify what was written
-					// TODO: Re-enable when kvList is implemented on ActorDriver
-					// try {
-					// 	const kvList = await this.#actorDriver.kvList(this.#actor.id);
-					// 	this.#actor.rLog.info({
-					// 		msg: "KV list after write",
-					// 		keys: kvList.map((k: Uint8Array) => {
-					// 			const keyStr = new TextDecoder().decode(k);
-					// 			return keyStr;
-					// 		}),
-					// 		keysCount: kvList.length,
-					// 	});
-					// } catch (listError) {
-					// 	this.#actor.rLog.warn({
-					// 		msg: "failed to list KV after write",
-					// 		error: stringifyError(listError),
-					// 	});
-					// }
 
 					// Notify driver after persisting connections
 					if (this.#actorDriver.onAfterPersistConn) {

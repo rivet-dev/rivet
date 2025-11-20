@@ -9,10 +9,7 @@ import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
 import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
-import {
-	type AnyConn,
-	CONN_STATE_MANAGER_SYMBOL,
-} from "@/actor/conn/mod";
+import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
 import { KEYS } from "@/actor/instance/kv";
 import { deserializeActorKey } from "@/actor/keys";
@@ -45,10 +42,7 @@ import {
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
-import type { RequestId } from "@/schemas/actor-persist/mod";
 import {
-	arrayBuffersEqual,
-	assertUnreachable,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
@@ -170,7 +164,6 @@ export class EngineActorDriver implements ActorDriver {
 			websocket: this.#runnerWebSocket.bind(this),
 			hibernatableWebSocket: {
 				canHibernate: this.#hwsCanHibernate.bind(this),
-				loadAll: this.#hwsLoadAll.bind(this),
 			},
 			onActorStart: this.#runnerOnActorStart.bind(this),
 			onActorStop: this.#runnerOnActorStop.bind(this),
@@ -472,10 +465,6 @@ export class EngineActorDriver implements ActorDriver {
 			key,
 			"unknown", // TODO: Add regions
 		);
-
-		// Resolve promise if waiting
-		handler.actorStartPromise?.resolve();
-		handler.actorStartPromise = undefined;
 
 		logger().debug({ msg: "runner actor started", actorId, name, key });
 	}
@@ -865,6 +854,18 @@ export class EngineActorDriver implements ActorDriver {
 			})
 			.filter((x) => x !== undefined)
 			.toArray();
+	}
+
+	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
+		// Resolve promise if waiting
+		const handler = this.#actors.get(actor.id);
+		invariant(handler, "missing actor handler in onBeforeActorReady");
+		handler.actorStartPromise?.resolve();
+		handler.actorStartPromise = undefined;
+
+		// Restore hibernating requests
+		const metaEntries = await this.#hwsLoadAll(actor.id);
+		await this.#runner.restoreHibernatingRequests(actor.id, metaEntries);
 	}
 
 	onCreateConn(conn: AnyConn) {
