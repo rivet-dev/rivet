@@ -167,6 +167,7 @@ impl CustomServeTrait for PegboardGateway {
 		let InFlightRequestHandle {
 			mut msg_rx,
 			mut drop_rx,
+			..
 		} = self
 			.shared_state
 			.start_in_flight_request(tunnel_subject, request_id)
@@ -212,7 +213,7 @@ impl CustomServeTrait for PegboardGateway {
 							}
 						} else {
 							tracing::warn!(
-								request_id=?tunnel_id::request_id_to_string(&request_id),
+								request_id=%tunnel_id::request_id_to_string(&request_id),
 								"received no message response during request init",
 							);
 							break;
@@ -267,14 +268,14 @@ impl CustomServeTrait for PegboardGateway {
 		Ok(response)
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id, request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	async fn handle_websocket(
 		&self,
 		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
-		unique_request_id: RequestId,
+		request_id: RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Use the actor ID from the gateway instance
@@ -298,14 +299,19 @@ impl CustomServeTrait for PegboardGateway {
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
 
 		// Start listening for WebSocket messages
-		let request_id = unique_request_id;
 		let InFlightRequestHandle {
 			mut msg_rx,
 			mut drop_rx,
+			new,
 		} = self
 			.shared_state
 			.start_in_flight_request(tunnel_subject.clone(), request_id)
 			.await;
+
+		ensure!(
+			!after_hibernation || !new,
+			"should not be creating a new in flight entry after hibernation"
+		);
 
 		// If we are reconnecting after hibernation, don't send an open message
 		let can_hibernate = if after_hibernation {
@@ -348,7 +354,7 @@ impl CustomServeTrait for PegboardGateway {
 								}
 							} else {
 								tracing::warn!(
-									request_id=?tunnel_id::request_id_to_string(&request_id),
+									request_id=%tunnel_id::request_id_to_string(&request_id),
 									"received no message response during ws init",
 								);
 								break;
@@ -416,16 +422,22 @@ impl CustomServeTrait for PegboardGateway {
 			request_id,
 			ping_abort_rx,
 		));
+		let keepalive = if can_hibernate {
+			Some(tokio::spawn(keepalive_task::task(
+				self.shared_state.clone(),
+				self.ctx.clone(),
+				self.actor_id,
+				self.shared_state.gateway_id(),
+				request_id,
+				keepalive_abort_rx,
+			)))
+		} else {
+			None
+		};
 
 		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
 		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
 		let ping_abort_tx2 = ping_abort_tx.clone();
-
-		// Clone variables needed for keepalive task
-		let ctx_clone = self.ctx.clone();
-		let actor_id_clone = self.actor_id;
-		let gateway_id_clone = self.shared_state.gateway_id();
-		let request_id_clone = request_id;
 
 		// Wait for all tasks to complete
 		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, keepalive_res) = tokio::join!(
@@ -478,17 +490,9 @@ impl CustomServeTrait for PegboardGateway {
 				res
 			},
 			async {
-				if !can_hibernate {
+				let Some(keepalive) = keepalive else {
 					return Ok(LifecycleResult::Aborted);
-				}
-
-				let keepalive = tokio::spawn(keepalive_task::task(
-					ctx_clone,
-					actor_id_clone,
-					gateway_id_clone,
-					request_id_clone,
-					keepalive_abort_rx,
-				));
+				};
 
 				let res = keepalive.await?;
 
@@ -568,14 +572,12 @@ impl CustomServeTrait for PegboardGateway {
 		}
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id))]
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	async fn handle_websocket_hibernation(
 		&self,
 		client_ws: WebSocketHandle,
-		unique_request_id: RequestId,
+		request_id: RequestId,
 	) -> Result<HibernationResult> {
-		let request_id = unique_request_id;
-
 		// Insert hibernating request entry before checking for pending messages
 		// This ensures the entry exists even if we immediately rewake the actor
 		self.ctx
@@ -592,10 +594,7 @@ impl CustomServeTrait for PegboardGateway {
 			.has_pending_websocket_messages(request_id)
 			.await?
 		{
-			tracing::debug!(
-				?unique_request_id,
-				"detected pending requests on websocket hibernation, rewaking actor"
-			);
+			tracing::debug!("exiting hibernating due to pending messages");
 
 			return Ok(HibernationResult::Continue);
 		}
@@ -603,10 +602,11 @@ impl CustomServeTrait for PegboardGateway {
 		// Start keepalive task
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
 		let keepalive_handle = tokio::spawn(keepalive_task::task(
+			self.shared_state.clone(),
 			self.ctx.clone(),
 			self.actor_id,
 			self.shared_state.gateway_id(),
-			unique_request_id,
+			request_id,
 			keepalive_abort_rx,
 		));
 
@@ -623,7 +623,7 @@ impl CustomServeTrait for PegboardGateway {
 					.op(pegboard::ops::actor::hibernating_request::delete::Input {
 						actor_id: self.actor_id,
 						gateway_id: self.shared_state.gateway_id(),
-						request_id: unique_request_id,
+						request_id,
 					})
 					.await?;
 			}
@@ -642,6 +642,21 @@ impl PegboardGateway {
 			.ctx
 			.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", self.actor_id))
 			.await?;
+
+		// Fetch actor info after sub to prevent race condition
+		if let Some(actor) = self
+			.ctx
+			.op(pegboard::ops::actor::get_for_gateway::Input {
+				actor_id: self.actor_id,
+			})
+			.await?
+		{
+			if actor.runner_id.is_some() {
+				tracing::debug!("actor became ready during hibernation");
+
+				return Ok(HibernationResult::Continue);
+			}
+		}
 
 		let res = tokio::select! {
 			_ = ready_sub.next() => {

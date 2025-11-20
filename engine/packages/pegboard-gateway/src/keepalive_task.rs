@@ -6,12 +6,15 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 use super::LifecycleResult;
+use crate::shared_state::SharedState;
 
 /// Periodically pings writes keepalive in UDB. This is used to restore hibernating request IDs on
 /// next actor start.
 ///
-///Only ran for hibernating requests.
+/// Only ran for hibernating requests.
+
 pub async fn task(
+	shared_state: SharedState,
 	ctx: StandaloneCtx,
 	actor_id: Id,
 	gateway_id: GatewayId,
@@ -43,11 +46,14 @@ pub async fn task(
 		let jitter = { rand::thread_rng().gen_range(0..128) };
 		tokio::time::sleep(Duration::from_millis(jitter)).await;
 
-		ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
-			actor_id,
-			gateway_id,
-			request_id,
-		})
-		.await?;
+		tokio::try_join!(
+			ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
+				actor_id,
+				gateway_id,
+				request_id,
+			}),
+			// Keep alive in flight req during hibernation
+			shared_state.keepalive_hws(request_id),
+		)?;
 	}
 }

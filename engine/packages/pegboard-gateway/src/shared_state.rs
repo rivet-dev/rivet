@@ -27,6 +27,7 @@ pub struct InFlightRequestHandle {
 	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
 	/// request after `msg_rx` has dropped.
 	pub drop_rx: watch::Receiver<()>,
+	pub new: bool,
 }
 
 struct InFlightRequest {
@@ -48,6 +49,8 @@ struct InFlightRequest {
 struct HibernationState {
 	total_pending_ws_msgs_size: u64,
 	pending_ws_msgs: Vec<PendingWebsocketMessage>,
+	// Used to keep hibernating websockets from being GC'd
+	last_ping: Instant,
 }
 
 pub struct PendingWebsocketMessage {
@@ -61,13 +64,14 @@ pub struct SharedStateInner {
 	gateway_id: GatewayId,
 	receiver_subject: String,
 	in_flight_requests: HashMap<RequestId, InFlightRequest>,
+	hibernation_timeout: i64,
 }
 
 #[derive(Clone)]
 pub struct SharedState(Arc<SharedStateInner>);
 
 impl SharedState {
-	pub fn new(ups: PubSub) -> Self {
+	pub fn new(config: &rivet_config::Config, ups: PubSub) -> Self {
 		let gateway_id = tunnel_id::generate_gateway_id();
 		let receiver_subject =
 			pegboard::pubsub_subjects::GatewayReceiverSubject::new(gateway_id).to_string();
@@ -77,6 +81,7 @@ impl SharedState {
 			gateway_id,
 			receiver_subject,
 			in_flight_requests: HashMap::new(),
+			hibernation_timeout: config.pegboard().hibernating_request_eligible_threshold(),
 		}))
 	}
 
@@ -97,7 +102,7 @@ impl SharedState {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all, fields(%receiver_subject, request_id=?tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(%receiver_subject, request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn start_in_flight_request(
 		&self,
 		receiver_subject: String,
@@ -106,7 +111,7 @@ impl SharedState {
 		let (msg_tx, msg_rx) = mpsc::channel(128);
 		let (drop_tx, drop_rx) = watch::channel(());
 
-		match self.in_flight_requests.entry_async(request_id).await {
+		let new = match self.in_flight_requests.entry_async(request_id).await {
 			Entry::Vacant(entry) => {
 				entry.insert_entry(InFlightRequest {
 					receiver_subject,
@@ -118,6 +123,8 @@ impl SharedState {
 					stopping: false,
 					last_pong: util::timestamp::now(),
 				});
+
+				true
 			}
 			Entry::Occupied(mut entry) => {
 				entry.receiver_subject = receiver_subject;
@@ -129,13 +136,19 @@ impl SharedState {
 					entry.hibernation_state = None;
 					entry.stopping = false;
 				}
-			}
-		}
 
-		InFlightRequestHandle { msg_rx, drop_rx }
+				false
+			}
+		};
+
+		InFlightRequestHandle {
+			msg_rx,
+			drop_rx,
+			new,
+		}
 	}
 
-	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn send_message(
 		&self,
 		request_id: RequestId,
@@ -171,6 +184,8 @@ impl SharedState {
 			message_id,
 			message_kind,
 		};
+
+		tracing::debug!(?message_id, ?payload, "shared state send message");
 
 		// Send message
 		let message = protocol::ToRunner::ToClientTunnelMessage(payload);
@@ -211,7 +226,7 @@ impl SharedState {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn send_and_check_ping(&self, request_id: RequestId) -> Result<()> {
 		let req = self
 			.in_flight_requests
@@ -247,6 +262,23 @@ impl SharedState {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id)))]
+	pub async fn keepalive_hws(&self, request_id: RequestId) -> Result<()> {
+		let mut req = self
+			.in_flight_requests
+			.get_async(&request_id)
+			.await
+			.context("request not in flight")?;
+
+		if let Some(hs) = &mut req.hibernation_state {
+			hs.last_ping = Instant::now();
+		} else {
+			tracing::warn!("should not call keepalive_hws for non-hibernating ws");
+		}
+
+		Ok(())
+	}
+
 	#[tracing::instrument(skip_all)]
 	async fn receiver(&self, mut sub: Subscriber) {
 		while let Ok(NextOutput::Message(msg)) = sub.next().await {
@@ -261,7 +293,7 @@ impl SharedState {
 						self.in_flight_requests.get_async(&pong.request_id).await
 					else {
 						tracing::debug!(
-							request_id=?tunnel_id::request_id_to_string(&pong.request_id),
+							request_id=%tunnel_id::request_id_to_string(&pong.request_id),
 							"in flight has already been disconnected, dropping ping"
 						);
 						continue;
@@ -287,8 +319,8 @@ impl SharedState {
 						self.in_flight_requests.get_async(&parts.request_id).await
 					else {
 						tracing::warn!(
-							gateway_id=?tunnel_id::gateway_id_to_string(&parts.gateway_id),
-							request_id=?tunnel_id::request_id_to_string(&parts.request_id),
+							gateway_id=%tunnel_id::gateway_id_to_string(&parts.gateway_id),
+							request_id=%tunnel_id::request_id_to_string(&parts.request_id),
 							message_index=parts.message_index,
 							"in flight has already been disconnected, dropping message"
 						);
@@ -297,8 +329,8 @@ impl SharedState {
 
 					// Send message to the request handler to emulate the real network action
 					tracing::debug!(
-						gateway_id=?tunnel_id::gateway_id_to_string(&parts.gateway_id),
-						request_id=?tunnel_id::request_id_to_string(&parts.request_id),
+						gateway_id=%tunnel_id::gateway_id_to_string(&parts.gateway_id),
+						request_id=%tunnel_id::request_id_to_string(&parts.request_id),
 						message_index=parts.message_index,
 						"forwarding message to request handler"
 					);
@@ -311,7 +343,7 @@ impl SharedState {
 		}
 	}
 
-	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id), %enable))]
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id), %enable))]
 	pub async fn toggle_hibernation(&self, request_id: RequestId, enable: bool) -> Result<()> {
 		let mut req = self
 			.in_flight_requests
@@ -326,6 +358,7 @@ impl SharedState {
 				req.hibernation_state = Some(HibernationState {
 					total_pending_ws_msgs_size: 0,
 					pending_ws_msgs: Vec::new(),
+					last_ping: Instant::now(),
 				});
 			}
 			(false, false) => {}
@@ -334,7 +367,7 @@ impl SharedState {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn resend_pending_websocket_messages(&self, request_id: RequestId) -> Result<()> {
 		let Some(mut req) = self.in_flight_requests.get_async(&request_id).await else {
 			bail!("request not in flight");
@@ -344,9 +377,11 @@ impl SharedState {
 
 		if let Some(hs) = &mut req.hibernation_state {
 			if !hs.pending_ws_msgs.is_empty() {
-				tracing::debug!(request_id=?tunnel_id::request_id_to_string(&request_id), len=?hs.pending_ws_msgs.len(), "resending pending messages");
+				tracing::debug!(len=?hs.pending_ws_msgs.len(), "resending pending messages");
 
 				for pending_msg in &hs.pending_ws_msgs {
+					tracing::info!(?pending_msg.payload, ?pending_msg.message_index, "------2---------");
+
 					self.ups
 						.publish(&receiver_subject, &pending_msg.payload, PublishOpts::one())
 						.await?;
@@ -357,7 +392,7 @@ impl SharedState {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn has_pending_websocket_messages(&self, request_id: RequestId) -> Result<bool> {
 		let Some(req) = self.in_flight_requests.get_async(&request_id).await else {
 			bail!("request not in flight");
@@ -370,7 +405,7 @@ impl SharedState {
 		}
 	}
 
-	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id), %ack_index))]
+	#[tracing::instrument(skip_all, fields(request_id=%tunnel_id::request_id_to_string(&request_id), %ack_index))]
 	pub async fn ack_pending_websocket_messages(
 		&self,
 		request_id: RequestId,
@@ -381,10 +416,7 @@ impl SharedState {
 		};
 
 		let Some(hs) = &mut req.hibernation_state else {
-			tracing::warn!(
-				request_id=?tunnel_id::request_id_to_string(&request_id),
-				"cannot ack ws messages, hibernation is not enabled"
-			);
+			tracing::warn!("cannot ack ws messages, hibernation is not enabled");
 			return Ok(());
 		};
 
@@ -395,7 +427,6 @@ impl SharedState {
 
 		let len_after = hs.pending_ws_msgs.len();
 		tracing::debug!(
-			ack_index,
 			removed_count = len_before - len_after,
 			remaining_count = len_after,
 			"acked pending websocket messages"
@@ -440,7 +471,7 @@ impl SharedState {
 	async fn gc_in_flight_requests(&self) {
 		#[derive(Debug)]
 		enum MsgGcReason {
-			/// Gateway channel is closed and there are no pending messages
+			/// Gateway channel is closed and is not hibernating
 			GatewayClosed,
 			/// WebSocket pending messages (ToServerWebSocketMessageAck)
 			WebSocketMessageNotAcked {
@@ -449,9 +480,14 @@ impl SharedState {
 				#[allow(dead_code)]
 				last_msg_index: u16,
 			},
+			/// The gateway has not kept alive the in flight request during hibernation for the given timeout
+			/// duration.
+			HibernationTimeout,
 		}
 
 		let now = Instant::now();
+		let hibernation_timeout =
+			Duration::from_millis(self.hibernation_timeout.try_into().unwrap_or(90_000));
 
 		// First, check if an in flight req is beyond the timeout for tunnel message ack and websocket
 		// message ack
@@ -464,29 +500,23 @@ impl SharedState {
 				}
 
 				let reason = 'reason: {
-					// If we have no pending messages of any kind and the channel is closed, remove the
-					// in flight req
-					if req.msg_tx.is_closed()
-						&& req
-							.hibernation_state
-							.as_ref()
-							.map(|hs| hs.pending_ws_msgs.is_empty())
-							.unwrap_or(true)
-					{
-						break 'reason Some(MsgGcReason::GatewayClosed);
-					}
-
-					if let Some(hs) = &req.hibernation_state
-						&& let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first()
-					{
-						if now.duration_since(earliest_pending_ws_msg.send_instant)
-							> HWS_MESSAGE_ACK_TIMEOUT
-						{
-							break 'reason Some(MsgGcReason::WebSocketMessageNotAcked {
-								first_msg_index: earliest_pending_ws_msg.message_index,
-								last_msg_index: req.message_index
-							});
+					if let Some(hs) = &req.hibernation_state {
+						if let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first() {
+							if now.duration_since(earliest_pending_ws_msg.send_instant)
+								> HWS_MESSAGE_ACK_TIMEOUT
+							{
+								break 'reason Some(MsgGcReason::WebSocketMessageNotAcked {
+									first_msg_index: earliest_pending_ws_msg.message_index,
+									last_msg_index: req.message_index
+								});
+							}
 						}
+
+						if hs.last_ping.elapsed() > hibernation_timeout {
+							break 'reason Some(MsgGcReason::HibernationTimeout);
+						}
+					} else if req.msg_tx.is_closed() {
+						break 'reason Some(MsgGcReason::GatewayClosed);
 					}
 
 					None
@@ -494,13 +524,13 @@ impl SharedState {
 
 				if let Some(reason) = &reason {
 					tracing::debug!(
-						request_id=?tunnel_id::request_id_to_string(request_id),
+						request_id=%tunnel_id::request_id_to_string(request_id),
 						?reason,
 						"gc stopping in flight request"
 					);
 
 					if req.drop_tx.send(()).is_err() {
-						tracing::debug!(request_id=?tunnel_id::request_id_to_string(request_id), "failed to send timeout msg to tunnel");
+						tracing::debug!(request_id=%tunnel_id::request_id_to_string(request_id), "failed to send timeout msg to tunnel");
 					}
 
 					// Mark req as stopping to skip this loop next time the gc is run
@@ -518,7 +548,7 @@ impl SharedState {
 				// When the websocket reconnects a new channel will be created
 				if req.stopping && req.drop_tx.is_closed() {
 					tracing::debug!(
-						request_id=?tunnel_id::request_id_to_string(request_id),
+						request_id=%tunnel_id::request_id_to_string(request_id),
 						"gc removing in flight request"
 					);
 
