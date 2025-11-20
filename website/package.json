@@ -65,6 +65,7 @@
 		"postcss-focus-visible": "^10.0.1",
 		"posthog-js": "^1.297.0",
 		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
 		"react-chartjs-2": "^5.3.1",
 		"react-github-btn": "^1.4.0",
 		"react-highlight-words": "^0.21.0",
