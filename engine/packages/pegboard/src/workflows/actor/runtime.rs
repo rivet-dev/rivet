@@ -36,9 +36,6 @@ pub struct LifecycleState {
 	/// If a wake was received in between an actor's intent to sleep and actor stop.
 	#[serde(default)]
 	pub will_wake: bool,
-	/// Whether or not the last wake was triggered by an alarm.
-	#[serde(default)]
-	pub wake_for_alarm: bool,
 	pub alarm_ts: Option<i64>,
 	/// Handles cleaning up the actor if it does not receive a certain state before the timeout (ex.
 	/// created -> running event, stop intent -> stop event). If the timeout is reached, the actor is
@@ -58,7 +55,6 @@ impl LifecycleState {
 			stopping: false,
 			going_away: false,
 			will_wake: false,
-			wake_for_alarm: false,
 			alarm_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + actor_start_threshold),
 			reschedule_state: RescheduleState::default(),
@@ -74,7 +70,6 @@ impl LifecycleState {
 			stopping: false,
 			going_away: false,
 			will_wake: false,
-			wake_for_alarm: false,
 			alarm_ts: None,
 			gc_timeout_ts: None,
 			reschedule_state: RescheduleState::default(),
@@ -117,7 +112,6 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 struct AllocateActorInput {
 	actor_id: Id,
 	generation: u32,
-	/// When set, forces actors with CrashPolicy::Sleep to pend instead of sleep.
 	force_allocate: bool,
 }
 
@@ -478,6 +472,15 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 	})
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AllocationOverride {
+	#[default]
+	None,
+	/// Forces actors with CrashPolicy::Sleep to pend instead of sleep.
+	DontSleep { pending_timeout: Option<i64> },
+}
+
 #[derive(Debug)]
 pub enum SpawnActorOutput {
 	Allocated {
@@ -493,14 +496,14 @@ pub async fn spawn_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	generation: u32,
-	force_allocate: bool,
+	allocation_override: AllocationOverride,
 ) -> Result<SpawnActorOutput> {
 	// Attempt allocation
 	let allocate_res = ctx
 		.activity(AllocateActorInput {
 			actor_id: input.actor_id,
 			generation,
-			force_allocate,
+			force_allocate: matches!(&allocation_override, AllocationOverride::DontSleep { .. }),
 		})
 		.await?;
 
@@ -552,10 +555,20 @@ pub async fn spawn_actor(
 				.send()
 				.await?;
 
+			let signal = if let AllocationOverride::DontSleep {
+				pending_timeout: Some(timeout),
+			} = allocation_override
+			{
+				ctx.listen_with_timeout::<PendingAllocation>(timeout)
+					.await?
+			} else {
+				Some(ctx.listen::<PendingAllocation>().await?)
+			};
+
 			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
 			// an `Allocate` signal
-			match ctx.listen::<PendingAllocation>().await? {
-				PendingAllocation::Allocate(sig) => {
+			match signal {
+				Some(PendingAllocation::Allocate(sig)) => {
 					ctx.activity(UpdateRunnerInput {
 						actor_id: input.actor_id,
 						runner_id: sig.runner_id,
@@ -591,7 +604,7 @@ pub async fn spawn_actor(
 						runner_workflow_id: sig.runner_workflow_id,
 					})
 				}
-				PendingAllocation::Destroy(_) => {
+				Some(PendingAllocation::Destroy(_)) => {
 					tracing::debug!(actor_id=?input.actor_id, "destroying before actor allocated");
 
 					let cleared = ctx
@@ -618,6 +631,63 @@ pub async fn spawn_actor(
 
 					Ok(SpawnActorOutput::Destroy)
 				}
+				None => {
+					tracing::debug!(actor_id=?input.actor_id, "timed out before actor allocated");
+
+					let cleared = ctx
+						.activity(ClearPendingAllocationInput {
+							actor_id: input.actor_id,
+							namespace_id: input.namespace_id,
+							runner_name_selector: input.runner_name_selector.clone(),
+							pending_allocation_ts,
+						})
+						.await?;
+
+					// If this actor was no longer present in the queue it means it was allocated. We must now
+					// wait for the allocated signal to prevent a race condition.
+					if !cleared {
+						let sig = ctx.listen::<Allocate>().await?;
+
+						ctx.activity(UpdateRunnerInput {
+							actor_id: input.actor_id,
+							runner_id: sig.runner_id,
+							runner_workflow_id: sig.runner_workflow_id,
+						})
+						.await?;
+
+						ctx.signal(crate::workflows::runner::Command {
+							inner: protocol::Command::CommandStartActor(
+								protocol::CommandStartActor {
+									actor_id: input.actor_id.to_string(),
+									generation,
+									config: protocol::ActorConfig {
+										name: input.name.clone(),
+										key: input.key.clone(),
+										create_ts: util::timestamp::now(),
+										input: input
+											.input
+											.as_ref()
+											.map(|x| BASE64_STANDARD.decode(x))
+											.transpose()?,
+									},
+									// Empty because request ids are ephemeral. This is intercepted by guard and
+									// populated before it reaches the runner
+									hibernating_requests: Vec::new(),
+								},
+							),
+						})
+						.to_workflow_id(sig.runner_workflow_id)
+						.send()
+						.await?;
+
+						Ok(SpawnActorOutput::Allocated {
+							runner_id: sig.runner_id,
+							runner_workflow_id: sig.runner_workflow_id,
+						})
+					} else {
+						Ok(SpawnActorOutput::Sleep)
+					}
+				}
 			}
 		}
 		AllocateActorOutput::Sleep => Ok(SpawnActorOutput::Sleep),
@@ -630,7 +700,7 @@ pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	state: &mut LifecycleState,
-	force_reschedule: bool,
+	allocation_override: AllocationOverride,
 ) -> Result<SpawnActorOutput> {
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
@@ -672,13 +742,7 @@ pub async fn reschedule_actor(
 	}
 
 	let next_generation = state.generation + 1;
-	let spawn_res = spawn_actor(
-		ctx,
-		&input,
-		next_generation,
-		force_reschedule || state.wake_for_alarm,
-	)
-	.await?;
+	let spawn_res = spawn_actor(ctx, &input, next_generation, allocation_override).await?;
 
 	if let SpawnActorOutput::Allocated {
 		runner_id,
