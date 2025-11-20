@@ -60,7 +60,7 @@ pub async fn route_request(
 
 		let protocols: Vec<&str> = protocols_header.split(',').map(|p| p.trim()).collect();
 
-		let actor_id = protocols
+		let actor_id_raw = protocols
 			.iter()
 			.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
 			.ok_or_else(|| {
@@ -69,6 +69,10 @@ pub async fn route_request(
 				}
 				.build()
 			})?;
+
+		let actor_id = urlencoding::decode(actor_id_raw)
+			.context("invalid url encoding in actor id")?
+			.to_string();
 
 		let token = protocols
 			.iter()
@@ -95,11 +99,11 @@ pub async fn route_request(
 			.transpose()
 			.context("invalid x-rivet-token header")?;
 
-		(actor_id, token)
+		(actor_id.to_string(), token)
 	};
 
 	// Find actor to route to
-	let actor_id = Id::parse(actor_id_str).context("invalid x-rivet-actor header")?;
+	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
 	route_request_inner(ctx, shared_state, actor_id, path, token).await
 }

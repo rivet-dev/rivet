@@ -12,6 +12,7 @@ import {
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
+	WS_PROTOCOL_STANDARD,
 	WS_PROTOCOL_TARGET,
 	WS_TEST_PROTOCOL_PATH,
 } from "@/common/actor-router-consts";
@@ -180,12 +181,11 @@ export function createTestInlineClientDriver(
 			const wsProtocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
 			const finalWsUrl = `${wsProtocol}//${wsUrl.host}${wsUrl.pathname}`;
 
-			logger().debug({ msg: "connecting to websocket", url: finalWsUrl });
-
 			// Build protocols for the connection
 			const protocols: string[] = [];
+			protocols.push(WS_PROTOCOL_STANDARD);
 			protocols.push(`${WS_PROTOCOL_TARGET}actor`);
-			protocols.push(`${WS_PROTOCOL_ACTOR}${actorId}`);
+			protocols.push(`${WS_PROTOCOL_ACTOR}${encodeURIComponent(actorId)}`);
 			protocols.push(`${WS_PROTOCOL_ENCODING}${encoding}`);
 			protocols.push(
 				`${WS_TEST_PROTOCOL_PATH}${encodeURIComponent(normalizedPath)}`,
@@ -195,6 +195,12 @@ export function createTestInlineClientDriver(
 					`${WS_PROTOCOL_CONN_PARAMS}${encodeURIComponent(JSON.stringify(params))}`,
 				);
 			}
+
+			logger().debug({
+				msg: "connecting to websocket",
+				url: finalWsUrl,
+				protocols,
+			});
 
 			// Create and return the WebSocket
 			// Node & browser WebSocket types are incompatible
