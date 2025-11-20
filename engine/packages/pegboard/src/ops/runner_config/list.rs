@@ -17,17 +17,17 @@ pub struct Input {
 
 // TODO: Needs to return default configs if they exist (currently no way to list from epoxy)
 #[operation]
-pub async fn namespace_runner_config_list(
+pub async fn pegboard_runner_config_list(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Vec<(String, RunnerConfig)>> {
 	let runner_configs = ctx
 		.udb()?
 		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+			let tx = tx.with_subspace(namespace::keys::subspace());
 
 			let (start, end) = if let Some(variant) = input.variant {
-				let (start, end) = keys::subspace()
+				let (start, end) = namespace::keys::subspace()
 					.subspace(&keys::runner_config::ByVariantKey::subspace_with_variant(
 						input.namespace_id,
 						variant,
@@ -46,7 +46,7 @@ pub async fn namespace_runner_config_list(
 
 				(start, end)
 			} else {
-				let (start, end) = keys::subspace()
+				let (start, end) = namespace::keys::subspace()
 					.subspace(&keys::runner_config::DataKey::subspace(input.namespace_id))
 					.range();
 

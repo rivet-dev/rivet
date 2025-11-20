@@ -29,23 +29,6 @@ pub async fn cache_purge(
 	Ok(CachePurgeResponse {})
 }
 
-#[derive(Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct BumpServerlessAutoscalerResponse {}
-
-pub async fn bump_serverless_autoscaler(
-	ctx: ApiCtx,
-	_path: (),
-	_query: (),
-	_body: (),
-) -> Result<BumpServerlessAutoscalerResponse> {
-	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
-		.send()
-		.await?;
-
-	Ok(BumpServerlessAutoscalerResponse {})
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SetTracingConfigRequest {
