@@ -91,6 +91,57 @@ export async function generateMetadata({
 	};
 }
 
+export async function generateStaticParams() {
+	const staticParams: Array<{ section: string; page?: string[] }> = [];
+	const seenParams = new Set<string>();
+
+	for (const section of VALID_SECTIONS) {
+		const dir = path.join(process.cwd(), "src", "content", section);
+
+		try {
+			// Always add base case first (section root with no page segments)
+			// For optional catch-all, omit page property when undefined
+			const baseKey = `${section}`;
+			if (!seenParams.has(baseKey)) {
+				seenParams.add(baseKey);
+				staticParams.push({ section });
+			}
+
+			// Read all MDX files recursively
+			const dirs = await fs.readdir(dir, { recursive: true });
+			const files = dirs.filter((file) => file.endsWith(".mdx"));
+
+			for (const file of files) {
+				const param = createParamsForFile(section, file);
+				
+				// For optional catch-all routes, omit page when undefined
+				const finalParam: { section: string; page?: string[] } = param.page === undefined 
+					? { section: param.section }
+					: { section: param.section, page: param.page };
+
+				// Create unique key for deduplication
+				const key = finalParam.page 
+					? `${finalParam.section}/${finalParam.page.join("/")}`
+					: finalParam.section;
+
+				if (!seenParams.has(key)) {
+					seenParams.add(key);
+					staticParams.push(finalParam);
+				}
+			}
+		} catch (error) {
+			// If directory doesn't exist, still add base case
+			const baseKey = `${section}`;
+			if (!seenParams.has(baseKey)) {
+				seenParams.add(baseKey);
+				staticParams.push({ section });
+			}
+		}
+	}
+
+	return staticParams;
+}
+
 export default async function CatchAllCorePage({
 	params: { section, page },
 }: {
@@ -179,55 +230,4 @@ export default async function CatchAllCorePage({
 			</div>
 		</>
 	);
-}
-
-export async function generateStaticParams() {
-	const staticParams: Array<{ section: string; page?: string[] }> = [];
-	const seenParams = new Set<string>();
-
-	for (const section of VALID_SECTIONS) {
-		const dir = path.join(process.cwd(), "src", "content", section);
-
-		try {
-			// Always add base case first (section root with no page segments)
-			// For optional catch-all, omit page property when undefined
-			const baseKey = `${section}`;
-			if (!seenParams.has(baseKey)) {
-				seenParams.add(baseKey);
-				staticParams.push({ section });
-			}
-
-			// Read all MDX files recursively
-			const dirs = await fs.readdir(dir, { recursive: true });
-			const files = dirs.filter((file) => file.endsWith(".mdx"));
-
-			for (const file of files) {
-				const param = createParamsForFile(section, file);
-				
-				// For optional catch-all routes, omit page when undefined
-				const finalParam: { section: string; page?: string[] } = param.page === undefined 
-					? { section: param.section }
-					: { section: param.section, page: param.page };
-
-				// Create unique key for deduplication
-				const key = finalParam.page 
-					? `${finalParam.section}/${finalParam.page.join("/")}`
-					: finalParam.section;
-
-				if (!seenParams.has(key)) {
-					seenParams.add(key);
-					staticParams.push(finalParam);
-				}
-			}
-		} catch (error) {
-			// If directory doesn't exist, still add base case
-			const baseKey = `${section}`;
-			if (!seenParams.has(baseKey)) {
-				seenParams.add(baseKey);
-				staticParams.push({ section });
-			}
-		}
-	}
-
-	return staticParams;
 }
