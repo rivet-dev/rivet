@@ -108,6 +108,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 				namespace: namespace.name.clone(),
 				name: Some(input.runner_name.clone()),
 				runner_ids: None,
+				runner_id: Vec::new(),
 				include_stopped: Some(false),
 				limit: Some(16),
 				cursor: None,
@@ -133,7 +134,8 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		runner_configs_list::ListQuery {
 			namespace: namespace.name.clone(),
 			variant: None,
-			runner_names: Some(input.runner_name.clone()),
+			runner_names: None,
+			runner_name: vec![input.runner_name.clone()],
 			limit: None,
 			cursor: None,
 		},

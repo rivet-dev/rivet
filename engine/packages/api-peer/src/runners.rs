@@ -22,11 +22,20 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	if let Some(runner_ids) = query.runner_ids {
-		let runner_ids = runner_ids
-			.split(',')
-			.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
-			.collect::<Vec<_>>();
+	let runner_ids = [
+		query.runner_id,
+		query
+			.runner_ids
+			.map(|x| {
+				x.split(',')
+					.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default(),
+	]
+	.concat();
+
+	if !runner_ids.is_empty() {
 		let runners = ctx
 			.op(pegboard::ops::runner::get::Input { runner_ids })
 			.await?

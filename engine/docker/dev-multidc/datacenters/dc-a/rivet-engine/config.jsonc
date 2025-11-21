@@ -17,21 +17,36 @@
 				"datacenter_label": 1,
 				"is_leader": true,
 				"peer_url": "http://rivet-engine-dc-a:6421",
-				"public_url": "http://rivet-engine-dc-a:6420"
+				"public_url": "http://rivet-engine-dc-a:6420",
+				"valid_hosts": [
+					"rivet-engine-dc-a",
+					"127.0.0.1",
+					"localhost"
+				]
 			},
 			{
 				"name": "dc-b",
 				"datacenter_label": 2,
 				"is_leader": false,
 				"peer_url": "http://rivet-engine-dc-b:6421",
-				"public_url": "http://rivet-engine-dc-b:6420"
+				"public_url": "http://rivet-engine-dc-b:6420",
+				"valid_hosts": [
+					"rivet-engine-dc-b",
+					"127.0.0.1",
+					"localhost"
+				]
 			},
 			{
 				"name": "dc-c",
 				"datacenter_label": 3,
 				"is_leader": false,
 				"peer_url": "http://rivet-engine-dc-c:6421",
-				"public_url": "http://rivet-engine-dc-c:6420"
+				"public_url": "http://rivet-engine-dc-c:6420",
+				"valid_hosts": [
+					"rivet-engine-dc-c",
+					"127.0.0.1",
+					"localhost"
+				]
 			}
 		]
 	},
