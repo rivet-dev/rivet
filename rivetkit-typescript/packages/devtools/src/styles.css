@@ -1,0 +1,81 @@
+:host {
+    all: initial;
+    position: fixed;
+    bottom: 12px;
+    right: 25px;
+    bottom: 25px;
+    z-index: 2147483647;
+    width: 48px;
+    height: 48px;
+}
+
+:host * {
+    box-sizing: border-box;
+}
+
+button {
+    all: unset;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    border-radius: 50%;
+    border: 1px solid #171717;
+    background-color: #09090b;
+    transition: background-color .3s ease;
+}
+
+button:hover {
+    background-color: #0e0e11;
+}
+
+button div {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid #292525;
+}
+
+img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.tooltip {
+    position: absolute;
+    right: 60px;
+    bottom: 50%;
+    transform: translateY(50%);
+    background-color: #09090b;
+    color: #fafafa;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .3s ease;
+    border: 1px solid #27272a;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+.tooltip::after {
+    content: "";
+    position: absolute;
+    right: -5px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 8px;
+    height: 8px;
+    background-color: #09090b;
+    border-right: 1px solid #27272a;
+    border-top: 1px solid #27272a;
+}
+
+.tooltip.visible {
+    opacity: 1;
+}
