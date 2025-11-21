@@ -197,6 +197,12 @@ export class ActorConnRaw {
 			resolve,
 			reject,
 		});
+		logger().debug({
+			msg: "added action to in-flight map",
+			actionId,
+			actionName: opts.name,
+			inFlightCount: this.#actionsInFlight.size,
+		});
 
 		this.#sendMessage({
 			body: {
@@ -460,9 +466,11 @@ enc
 		} else if (response.body.tag === "ActionResponse") {
 			// Action response OK
 			const { id: actionId } = response.body.val;
-			logger().trace({
+			logger().debug({
 				msg: "received action response",
-				actionId,
+				actionId: Number(actionId),
+				inFlightCount: this.#actionsInFlight.size,
+				inFlightIds: Array.from(this.#actionsInFlight.keys()),
 			});
 
 			const inFlight = this.#takeActionInFlight(Number(actionId));
@@ -561,9 +569,27 @@ enc
 	#takeActionInFlight(id: number): ActionInFlight {
 		const inFlight = this.#actionsInFlight.get(id);
 		if (!inFlight) {
+			logger().error({
+				msg: "action not found in in-flight map",
+				lookupId: id,
+				inFlightCount: this.#actionsInFlight.size,
+				inFlightIds: Array.from(this.#actionsInFlight.keys()),
+				inFlightActions: Array.from(
+					this.#actionsInFlight.entries(),
+				).map(([id, action]) => ({
+					id,
+					name: action.name,
+				})),
+			});
 			throw new errors.InternalError(`No in flight response for ${id}`);
 		}
 		this.#actionsInFlight.delete(id);
+		logger().debug({
+			msg: "removed action from in-flight map",
+			actionId: id,
+			actionName: inFlight.name,
+			inFlightCount: this.#actionsInFlight.size,
+		});
 		return inFlight;
 	}
 
