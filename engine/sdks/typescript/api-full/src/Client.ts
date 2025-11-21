@@ -523,6 +523,73 @@ export class RivetClient {
     }
 
     /**
+     * @param {Rivet.RivetId} actorId
+     * @param {string} key
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.actorsKvGet("actor_id", "key")
+     */
+    public async actorsKvGet(
+        actorId: Rivet.RivetId,
+        key: string,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.ActorsKvGetResponse> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `actors/${encodeURIComponent(serializers.RivetId.jsonOrThrow(actorId))}/kv/keys/${encodeURIComponent(key)}`,
+            ),
+            method: "GET",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.ActorsKvGetResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /actors/{actor_id}/kv/keys/{key}.",
+                );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
      * @param {Rivet.RunnerConfigsListRequest} request
      * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
      *

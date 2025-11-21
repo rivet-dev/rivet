@@ -12,15 +12,18 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct HealthFanoutResponse {
-    #[serde(rename = "datacenters")]
-    pub datacenters: Vec<models::DatacenterHealth>,
+pub struct ActorsKvGetResponse {
+    #[serde(rename = "update_ts")]
+    pub update_ts: i64,
+    #[serde(rename = "value")]
+    pub value: String,
 }
 
-impl HealthFanoutResponse {
-    pub fn new(datacenters: Vec<models::DatacenterHealth>) -> HealthFanoutResponse {
-        HealthFanoutResponse {
-            datacenters,
+impl ActorsKvGetResponse {
+    pub fn new(update_ts: i64, value: String) -> ActorsKvGetResponse {
+        ActorsKvGetResponse {
+            update_ts,
+            value,
         }
     }
 }

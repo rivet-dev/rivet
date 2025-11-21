@@ -114,6 +114,7 @@ impl From<&str> for ContentType {
 pub mod actors_create_api;
 pub mod actors_delete_api;
 pub mod actors_get_or_create_api;
+pub mod actors_kv_get_api;
 pub mod actors_list_api;
 pub mod actors_list_names_api;
 pub mod datacenters_api;
