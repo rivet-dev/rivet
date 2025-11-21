@@ -1,6 +1,10 @@
 import type { UniversalWebSocket } from "rivetkit";
 
-export function handleWebSocket(c: any, websocket: UniversalWebSocket) {
+export function handleWebSocket(
+	c: any,
+	websocket: UniversalWebSocket,
+	opts: any,
+) {
 	const connectionId = `conn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 	// Initialize WebSocket state if not exists
@@ -12,7 +16,7 @@ export function handleWebSocket(c: any, websocket: UniversalWebSocket) {
 	c.log.info("websocket connected", {
 		connectionCount: c.state.connectionCount,
 		connectionId,
-		url: c.request.url,
+		url: opts.request.url,
 	});
 
 	// Send welcome message
