@@ -195,7 +195,7 @@ export class Runner {
 	#actors: Map<string, RunnerActor> = new Map();
 
 	// WebSocket
-	#pegboardWebSocket?: WebSocket;
+	__pegboardWebSocket?: WebSocket;
 	runnerId?: string;
 	#lastCommandIdx: number = -1;
 	#pingLoop?: NodeJS.Timeout;
@@ -504,11 +504,8 @@ export class Runner {
 		this.#kvRequests.clear();
 
 		// Close WebSocket
-		if (
-			this.#pegboardWebSocket &&
-			this.#pegboardWebSocket.readyState === 1
-		) {
-			const pegboardWebSocket = this.#pegboardWebSocket;
+		if (this.__webSocketReady()) {
+			const pegboardWebSocket = this.__pegboardWebSocket;
 			if (immediate) {
 				// Stop immediately
 				pegboardWebSocket.close(1000, "pegboard.runner_shutdown");
@@ -569,7 +566,7 @@ export class Runner {
 			// the runner has already shut down
 			this.log?.debug({
 				msg: "no runner WebSocket to shutdown or already closed",
-				readyState: this.#pegboardWebSocket?.readyState,
+				readyState: this.__pegboardWebSocket?.readyState,
 			});
 		}
 
@@ -695,7 +692,7 @@ export class Runner {
 
 		const WS = await importWebSocket();
 		const ws = new WS(this.pegboardUrl, protocols) as any as WebSocket;
-		this.#pegboardWebSocket = ws;
+		this.__pegboardWebSocket = ws;
 
 		this.log?.info({
 			msg: "connecting",
@@ -760,9 +757,6 @@ export class Runner {
 				tag: "ToServerInit",
 				val: init,
 			});
-
-			// Process unsent KV requests
-			this.#processUnsentKvRequests();
 
 			// Start ping interval
 			const pingLoop = setInterval(() => {
@@ -836,8 +830,10 @@ export class Runner {
 					runnerLostThreshold: this.#runnerLostThreshold,
 				});
 
-				// Resend events that haven't been acknowledged
+				// Resend pending events
+				this.#processUnsentKvRequests();
 				this.#resendUnacknowledgedEvents(init.lastEventIdx);
+				this.#tunnel?.resendBufferedEvents();
 
 				this.#config.onConnected();
 			} else if (message.tag === "ToClientCommands") {
@@ -1531,9 +1527,6 @@ export class Runner {
 	): Promise<any> {
 		return new Promise((resolve, reject) => {
 			const requestId = this.#nextKvRequestId++;
-			const isConnected =
-				this.#pegboardWebSocket &&
-				this.#pegboardWebSocket.readyState === 1;
 
 			// Store the request
 			const requestEntry = {
@@ -1547,7 +1540,7 @@ export class Runner {
 
 			this.#kvRequests.set(requestId, requestEntry);
 
-			if (isConnected) {
+			if (this.__webSocketReady()) {
 				// Send immediately
 				this.#sendSingleKvRequest(requestId);
 			}
@@ -1580,10 +1573,7 @@ export class Runner {
 	}
 
 	#processUnsentKvRequests() {
-		if (
-			!this.#pegboardWebSocket ||
-			this.#pegboardWebSocket.readyState !== 1
-		) {
+		if (!this.__webSocketReady()) {
 			return;
 		}
 
@@ -1600,10 +1590,14 @@ export class Runner {
 		}
 	}
 
-	__webSocketReady(): boolean {
-		return this.#pegboardWebSocket
-			? this.#pegboardWebSocket.readyState === 1
-			: false;
+	/** Asserts WebSocket exists and is ready. */
+	__webSocketReady(): this is this & {
+		__pegboardWebSocket: NonNullable<Runner["__pegboardWebSocket"]>;
+	} {
+		return (
+			!!this.__pegboardWebSocket &&
+			this.__pegboardWebSocket.readyState === 1
+		);
 	}
 
 	__sendToServer(message: protocol.ToServer) {
@@ -1613,11 +1607,8 @@ export class Runner {
 		});
 
 		const encoded = protocol.encodeToServer(message);
-		if (
-			this.#pegboardWebSocket &&
-			this.#pegboardWebSocket.readyState === 1
-		) {
-			this.#pegboardWebSocket.send(encoded);
+		if (this.__webSocketReady()) {
+			this.__pegboardWebSocket.send(encoded);
 		} else {
 			this.log?.error({
 				msg: "WebSocket not available or not open for sending data",
@@ -1726,9 +1717,10 @@ export class Runner {
 
 		if (eventsToResend.length === 0) return;
 
-		//this.#log?.log(
-		//	`Resending ${eventsToResend.length} unacknowledged events from index ${Number(lastEventIdx) + 1}`,
-		//);
+		this.log?.info({
+			msg: "resending unacknowledged events",
+			fromIndex: lastEventIdx + 1n,
+		});
 
 		// Resend events in batches
 		this.__sendToServer({

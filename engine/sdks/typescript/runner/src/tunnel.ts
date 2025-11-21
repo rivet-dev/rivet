@@ -57,6 +57,13 @@ export class Tunnel {
 		actorId: string;
 	}> = [];
 
+	/** Buffer for messages when not connected */
+	#bufferedMessages: Array<{
+		gatewayId: GatewayId;
+		requestId: RequestId;
+		messageKind: protocol.ToServerTunnelMessageKind;
+	}> = [];
+
 	get log(): Logger | undefined {
 		return this.#runner.log;
 	}
@@ -67,6 +74,24 @@ export class Tunnel {
 
 	start(): void {
 		// No-op - kept for compatibility
+	}
+
+	resendBufferedEvents(): void {
+		if (this.#bufferedMessages.length === 0) {
+			return;
+		}
+
+		this.log?.info({
+			msg: "resending buffered tunnel messages",
+			count: this.#bufferedMessages.length,
+		});
+
+		const messages = this.#bufferedMessages;
+		this.#bufferedMessages = [];
+
+		for (const { gatewayId, requestId, messageKind } of messages) {
+			this.#sendMessage(gatewayId, requestId, messageKind);
+		}
 	}
 
 	shutdown() {
@@ -458,13 +483,14 @@ export class Tunnel {
 		requestId: RequestId,
 		messageKind: protocol.ToServerTunnelMessageKind,
 	) {
-		// TODO: Switch this with runner WS
+		// Buffer message if not connected
 		if (!this.#runner.__webSocketReady()) {
-			this.log?.warn({
-				msg: "cannot send tunnel message, socket not connected to engine. tunnel data dropped.",
+			this.log?.debug({
+				msg: "buffering tunnel message, socket not connected to engine",
 				requestId: idToStr(requestId),
 				message: stringifyToServerTunnelMessageKind(messageKind),
 			});
+			this.#bufferedMessages.push({ gatewayId, requestId, messageKind });
 			return;
 		}
 
