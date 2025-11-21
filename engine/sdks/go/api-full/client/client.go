@@ -281,6 +281,28 @@ func (c *Client) ActorsDelete(ctx context.Context, actorId sdk.RivetId, request 
 	return response, nil
 }
 
+func (c *Client) ActorsKvGet(ctx context.Context, actorId sdk.RivetId, key string) (*sdk.ActorsKvGetResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/kv/keys/%v", actorId, key)
+
+	var response *sdk.ActorsKvGetResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodGet,
+			Headers:  c.header,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (c *Client) RunnerConfigsList(ctx context.Context, request *sdk.RunnerConfigsListRequest) (*sdk.RunnerConfigsListResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {

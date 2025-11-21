@@ -15,30 +15,28 @@ use crate::{apis::ResponseContent, models};
 use super::{Error, configuration, ContentType};
 
 
-/// struct for typed errors of method [`runner_configs_serverless_health_check`]
+/// struct for typed errors of method [`actors_kv_get`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum RunnerConfigsServerlessHealthCheckError {
+pub enum ActorsKvGetError {
     UnknownValue(serde_json::Value),
 }
 
 
-pub async fn runner_configs_serverless_health_check(configuration: &configuration::Configuration, namespace: &str, runner_configs_serverless_health_check_request: models::RunnerConfigsServerlessHealthCheckRequest) -> Result<models::RunnerConfigsServerlessHealthCheckResponse, Error<RunnerConfigsServerlessHealthCheckError>> {
+pub async fn actors_kv_get(configuration: &configuration::Configuration, actor_id: &str, key: &str) -> Result<models::ActorsKvGetResponse, Error<ActorsKvGetError>> {
     // add a prefix to parameters to efficiently prevent name collisions
-    let p_namespace = namespace;
-    let p_runner_configs_serverless_health_check_request = runner_configs_serverless_health_check_request;
+    let p_actor_id = actor_id;
+    let p_key = key;
 
-    let uri_str = format!("{}/runner-configs/serverless-health-check", configuration.base_path);
-    let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
+    let uri_str = format!("{}/actors/{actor_id}/kv/keys/{key}", configuration.base_path, actor_id=crate::apis::urlencode(p_actor_id), key=crate::apis::urlencode(p_key));
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    req_builder = req_builder.query(&[("namespace", &p_namespace.to_string())]);
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
     };
-    req_builder = req_builder.json(&p_runner_configs_serverless_health_check_request);
 
     let req = req_builder.build()?;
     let resp = configuration.client.execute(req).await?;
@@ -55,12 +53,12 @@ pub async fn runner_configs_serverless_health_check(configuration: &configuratio
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::RunnerConfigsServerlessHealthCheckResponse`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::RunnerConfigsServerlessHealthCheckResponse`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::ActorsKvGetResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::ActorsKvGetResponse`")))),
         }
     } else {
         let content = resp.text().await?;
-        let entity: Option<RunnerConfigsServerlessHealthCheckError> = serde_json::from_str(&content).ok();
+        let entity: Option<ActorsKvGetError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent { status, content, entity }))
     }
 }
