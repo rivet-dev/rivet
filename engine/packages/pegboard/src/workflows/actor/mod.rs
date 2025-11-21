@@ -569,10 +569,10 @@ async fn handle_stopped(
 	tracing::debug!(?variant, "actor stopped");
 
 	let force_reschedule = match &variant {
-		// Reset retry count on successful exit
 		StoppedVariant::Normal {
 			code: protocol::StopCode::Ok,
 		} => {
+			// Reset retry count on successful exit
 			state.reschedule_state = Default::default();
 
 			false
@@ -583,7 +583,6 @@ async fn handle_stopped(
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
-	state.going_away = false;
 	state.stopping = false;
 	state.runner_id = None;
 	let old_runner_workflow_id = state.runner_workflow_id.take();
@@ -658,16 +657,16 @@ async fn handle_stopped(
 	}
 	// Handle rescheduling if not marked as sleeping
 	else if !state.sleeping {
-		// Anything besides a StopCode::Ok is considered a failure
-		let failed = !matches!(
-			variant,
-			StoppedVariant::Normal {
-				code: protocol::StopCode::Ok
-			}
-		);
+		let graceful_exit = !state.going_away
+			&& matches!(
+				variant,
+				StoppedVariant::Normal {
+					code: protocol::StopCode::Ok
+				}
+			);
 
-		match (input.crash_policy, failed) {
-			(CrashPolicy::Restart, true) => {
+		match (input.crash_policy, graceful_exit) {
+			(CrashPolicy::Restart, false) => {
 				match runtime::reschedule_actor(ctx, &input, state, false).await? {
 					runtime::SpawnActorOutput::Allocated { .. } => {}
 					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
@@ -678,7 +677,7 @@ async fn handle_stopped(
 					}
 				}
 			}
-			(CrashPolicy::Sleep, true) => {
+			(CrashPolicy::Sleep, false) => {
 				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
 
 				state.sleeping = true;
@@ -711,6 +710,7 @@ async fn handle_stopped(
 
 	state.wake_for_alarm = false;
 	state.will_wake = false;
+	state.going_away = false;
 
 	ctx.msg(Stopped {})
 		.tag("actor_id", input.actor_id)
