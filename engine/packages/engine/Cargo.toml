@@ -20,6 +20,7 @@ hex.workspace = true
 include_dir.workspace = true
 indoc.workspace = true
 lz4_flex.workspace = true
+once_cell.workspace = true
 pegboard-runner.workspace = true
 pegboard-serverless.workspace = true
 reqwest.workspace = true

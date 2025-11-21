@@ -2,10 +2,25 @@ use std::{path::PathBuf, sync::Arc};
 
 use anyhow::*;
 use clap::Parser;
+use once_cell::sync::Lazy;
 use rivet_engine::{SubCommand, run_config};
+use rivet_util::build_meta;
+
+static LONG_VERSION: Lazy<String> = Lazy::new(|| {
+	format!(
+		"{}\nGit SHA: {}\nBuild Timestamp: {}\nRustc Version: {}\nRustc Host: {}\nCargo Target: {}\nCargo Profile: {}",
+		build_meta::VERSION,
+		build_meta::GIT_SHA,
+		build_meta::BUILD_TIMESTAMP,
+		build_meta::RUSTC_VERSION,
+		build_meta::RUSTC_HOST,
+		build_meta::CARGO_TARGET,
+		build_meta::cargo_profile()
+	)
+});
 
 #[derive(Parser)]
-#[command(name = "Rivet", version, about)]
+#[command(name = "Rivet", version, long_version = LONG_VERSION.as_str(), about)]
 struct Cli {
 	#[command(subcommand)]
 	command: SubCommand,
