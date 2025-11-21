@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
-use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use pegboard::tunnel::id::RequestId;
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 
 use crate::WebSocketHandle;
 use crate::proxy_service::ResponseBody;

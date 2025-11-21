@@ -2,7 +2,7 @@ use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol::{self as protocol, versioned, PROTOCOL_VERSION};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use universaldb::{
 	options::{ConflictRangeType, StreamingMode},
 	utils::{FormalChunkedKey, IsolationLevel::*},
