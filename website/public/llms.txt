@@ -29,6 +29,7 @@ https://rivet.dev/blog/2025-10-20-how-we-built-websocket-servers-for-vercel-func
 https://rivet.dev/blog/2025-10-20-weekly-updates
 https://rivet.dev/blog/2025-10-24-weekly-updates
 https://rivet.dev/blog/2025-11-02-weekly-updates
+https://rivet.dev/blog/2025-11-09-weekly-updates
 https://rivet.dev/blog/godot-multiplayer-compared-to-unity
 https://rivet.dev/changelog
 https://rivet.dev/changelog.json
@@ -58,6 +59,7 @@ https://rivet.dev/changelog/2025-10-20-how-we-built-websocket-servers-for-vercel
 https://rivet.dev/changelog/2025-10-20-weekly-updates
 https://rivet.dev/changelog/2025-10-24-weekly-updates
 https://rivet.dev/changelog/2025-11-02-weekly-updates
+https://rivet.dev/changelog/2025-11-09-weekly-updates
 https://rivet.dev/changelog/godot-multiplayer-compared-to-unity
 https://rivet.dev/cloud
 https://rivet.dev/docs/actors
