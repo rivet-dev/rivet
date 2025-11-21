@@ -3,9 +3,9 @@ import { HIBERNATION_SLEEP_TIMEOUT } from "../../../fixtures/driver-test-suite/h
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
-export function runActorHibernationTests(driverTestConfig: DriverTestConfig) {
+export function runActorConnHibernationTests(driverTestConfig: DriverTestConfig) {
 	describe.skipIf(driverTestConfig.skip?.hibernation)(
-		"Actor Hibernation Tests",
+		"Connection Hibernation",
 		() => {
 			test("basic conn hibernation", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);

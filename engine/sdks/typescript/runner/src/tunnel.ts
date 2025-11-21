@@ -104,17 +104,26 @@ export class Tunnel {
 
 	async restoreHibernatingRequests(
 		actorId: string,
-		hibernatingRequests: readonly protocol.HibernatingRequest[],
+		metaEntries: HibernatingWebSocketMetadata[],
 	) {
+		const actor = this.#runner.getActor(actorId);
+		if (!actor) {
+			throw new Error(
+				`Actor ${actorId} not found for restoring hibernating requests`,
+			);
+		}
+
+		if (actor.hibernationRestored) {
+			throw new Error(
+				`Actor ${actorId} already restored hibernating requests`,
+			);
+		}
+
 		this.log?.debug({
 			msg: "restoring hibernating requests",
 			actorId,
-			requests: hibernatingRequests.length,
+			requests: actor.hibernatingRequests.length,
 		});
-
-		// Load all persisted metadata
-		const metaEntries =
-			await this.#runner.config.hibernatableWebSocket.loadAll(actorId);
 
 		// Track all background operations
 		const backgroundOperations: Promise<void>[] = [];
@@ -122,7 +131,7 @@ export class Tunnel {
 		// Process connected WebSockets
 		let connectedButNotLoadedCount = 0;
 		let restoredCount = 0;
-		for (const { gatewayId, requestId } of hibernatingRequests) {
+		for (const { gatewayId, requestId } of actor.hibernatingRequests) {
 			const requestIdStr = tunnelId.requestIdToString(requestId);
 			const meta = metaEntries.find(
 				(entry) =>
@@ -133,7 +142,7 @@ export class Tunnel {
 			if (!meta) {
 				// Connected but not loaded (not persisted) - close it
 				//
-				// This may happen if
+				// This may happen if the metadata was not successfully persisted
 				this.log?.warn({
 					msg: "closing websocket that is not persisted",
 					requestId: requestIdStr,
@@ -176,18 +185,11 @@ export class Tunnel {
 						// Create a PendingRequest entry to track the message index
 						const actor = this.#runner.getActor(actorId);
 						if (actor) {
-							actor.pendingRequests.push({
+							actor.createPendingRequest(
 								gatewayId,
 								requestId,
-								request: {
-									resolve: () => {},
-									reject: () => {},
-									actorId: actorId,
-									gatewayId: gatewayId,
-									requestId: requestId,
-									clientMessageIndex: meta.clientMessageIndex,
-								},
-							});
+								meta.clientMessageIndex,
+							);
 						}
 
 						this.log?.info({
@@ -223,7 +225,7 @@ export class Tunnel {
 		let loadedButNotConnectedCount = 0;
 		for (const meta of metaEntries) {
 			const requestIdStr = tunnelId.requestIdToString(meta.requestId);
-			const isConnected = hibernatingRequests.some(
+			const isConnected = actor.hibernatingRequests.some(
 				(req) =>
 					arraysEqual(req.gatewayId, meta.gatewayId) &&
 					arraysEqual(req.requestId, meta.requestId),
@@ -276,6 +278,9 @@ export class Tunnel {
 
 		// Wait for all background operations to complete before finishing
 		await Promise.allSettled(backgroundOperations);
+
+		// Mark restoration as complete
+		actor.hibernationRestored = true;
 
 		this.log?.info({
 			msg: "restored hibernatable websockets",
@@ -369,7 +374,7 @@ export class Tunnel {
 		}
 
 		actor.setWebSocket(gatewayId, requestId, adapter);
-		this.#addRequestToActor(gatewayId, requestId, actorId);
+		this.addRequestToActor(gatewayId, requestId, actorId);
 
 		// Call WebSocket handler. This handler will add event listeners
 		// for `open`, etc.
@@ -389,7 +394,7 @@ export class Tunnel {
 		return adapter;
 	}
 
-	#addRequestToActor(
+	addRequestToActor(
 		gatewayId: GatewayId,
 		requestId: RequestId,
 		actorId: string,
@@ -439,6 +444,16 @@ export class Tunnel {
 		return actor;
 	}
 
+	async getAndWaitForRequestActor(
+		gatewayId: GatewayId,
+		requestId: RequestId,
+	): Promise<RunnerActor | undefined> {
+		const actor = this.getRequestActor(gatewayId, requestId);
+		if (!actor) return;
+		await actor.actorStartPromise.promise;
+		return actor;
+	}
+
 	#sendMessage(
 		gatewayId: GatewayId,
 		requestId: RequestId,
@@ -455,11 +470,16 @@ export class Tunnel {
 		}
 
 		// Get or initialize message index for this request
+		//
+		// We don't have to wait for the actor to start since we're not calling
+		// any callbacks on the actor
+		const gatewayIdStr = tunnelId.gatewayIdToString(gatewayId);
 		const requestIdStr = tunnelId.requestIdToString(requestId);
 		const actor = this.getRequestActor(gatewayId, requestId);
 		if (!actor) {
 			this.log?.warn({
 				msg: "cannot send tunnel message, actor not found",
+				gatewayId: gatewayIdStr,
 				requestId: requestIdStr,
 			});
 			return;
@@ -475,6 +495,8 @@ export class Tunnel {
 			// No pending request
 			this.log?.warn({
 				msg: "missing pending request for send message, defaulting to message index 0",
+				gatewayId: gatewayIdStr,
+				requestId: requestIdStr,
 			});
 			clientMessageIndex = 0;
 		}
@@ -488,9 +510,11 @@ export class Tunnel {
 		const messageIdStr = tunnelId.messageIdToString(messageId);
 
 		this.log?.debug({
-			msg: "send tunnel msg",
-			requestId: requestIdStr,
+			msg: "sending tunnel msg",
 			messageId: messageIdStr,
+			gatewayId: gatewayIdStr,
+			requestId: requestIdStr,
+			messageIndex: clientMessageIndex,
 			message: stringifyToServerTunnelMessageKind(messageKind),
 		});
 
@@ -514,10 +538,7 @@ export class Tunnel {
 		for (const entry of actor.pendingRequests) {
 			entry.request.reject(new Error(`Actor ${actorId} stopped`));
 			if (entry.gatewayId && entry.requestId) {
-				this.#removeRequestToActor(
-					entry.gatewayId,
-					entry.requestId,
-				);
+				this.#removeRequestToActor(entry.gatewayId, entry.requestId);
 			}
 		}
 
@@ -576,12 +597,15 @@ export class Tunnel {
 		const gatewayId = messageIdParts.gatewayId;
 		const requestId = messageIdParts.requestId;
 
+		const gatewayIdStr = tunnelId.gatewayIdToString(gatewayId);
 		const requestIdStr = tunnelId.requestIdToString(requestId);
 		const messageIdStr = tunnelId.messageIdToString(message.messageId);
 		this.log?.debug({
 			msg: "receive tunnel msg",
-			requestId: requestIdStr,
 			messageId: messageIdStr,
+			gatewayId: gatewayIdStr,
+			requestId: requestIdStr,
+			messageIndex: messageIdParts.messageIndex,
 			message: stringifyToClientTunnelMessageKind(message.messageKind),
 		});
 
@@ -611,7 +635,7 @@ export class Tunnel {
 				);
 				break;
 			case "ToClientWebSocketMessage": {
-				this.#handleWebSocketMessage(
+				await this.#handleWebSocketMessage(
 					gatewayId,
 					requestId,
 					messageIdParts.messageIndex,
@@ -641,7 +665,7 @@ export class Tunnel {
 	) {
 		// Track this request for the actor
 		const requestIdStr = tunnelId.requestIdToString(requestId);
-		const actor = this.#runner.getActor(req.actorId);
+		const actor = await this.#runner.getAndWaitForActor(req.actorId);
 		if (!actor) {
 			this.log?.warn({
 				msg: "actor does not exist in handleRequestStart, request will leak",
@@ -652,7 +676,7 @@ export class Tunnel {
 		}
 
 		// Add to request-to-actor mapping
-		this.#addRequestToActor(gatewayId, requestId, req.actorId);
+		this.addRequestToActor(gatewayId, requestId, req.actorId);
 
 		try {
 			// Convert headers map to Headers object
@@ -674,23 +698,22 @@ export class Tunnel {
 				const stream = new ReadableStream<Uint8Array>({
 					start: (controller) => {
 						// Store controller for chunks
-						const existing =
-							actor.getPendingRequest(gatewayId, requestId);
+						const existing = actor.getPendingRequest(
+							gatewayId,
+							requestId,
+						);
 						if (existing) {
 							existing.streamController = controller;
 							existing.actorId = req.actorId;
 							existing.gatewayId = gatewayId;
 							existing.requestId = requestId;
 						} else {
-							actor.setPendingRequest(gatewayId, requestId, {
-								resolve: () => {},
-								reject: () => {},
-								streamController: controller,
-								actorId: req.actorId,
-								gatewayId: gatewayId,
-								requestId: requestId,
-								clientMessageIndex: 0,
-							});
+							actor.createPendingRequestWithStreamController(
+								gatewayId,
+								requestId,
+								0,
+								controller,
+							);
 						}
 					},
 				});
@@ -718,14 +741,7 @@ export class Tunnel {
 			} else {
 				// Non-streaming request
 				// Create a pending request entry to track messageIndex for the response
-				actor.setPendingRequest(gatewayId, requestId, {
-					resolve: () => {},
-					reject: () => {},
-					actorId: req.actorId,
-					gatewayId: gatewayId,
-					requestId: requestId,
-					clientMessageIndex: 0,
-				});
+				actor.createPendingRequest(gatewayId, requestId, 0);
 
 				const response = await this.#fetch(
 					req.actorId,
@@ -769,8 +785,10 @@ export class Tunnel {
 		requestId: RequestId,
 		chunk: protocol.ToClientRequestChunk,
 	) {
-		const requestIdStr = tunnelId.requestIdToString(requestId);
-		const actor = this.getRequestActor(gatewayId, requestId);
+		const actor = await this.getAndWaitForRequestActor(
+			gatewayId,
+			requestId,
+		);
 		if (actor) {
 			const pending = actor.getPendingRequest(gatewayId, requestId);
 			if (pending?.streamController) {
@@ -785,8 +803,10 @@ export class Tunnel {
 	}
 
 	async #handleRequestAbort(gatewayId: GatewayId, requestId: RequestId) {
-		const requestIdStr = tunnelId.requestIdToString(requestId);
-		const actor = this.getRequestActor(gatewayId, requestId);
+		const actor = await this.getAndWaitForRequestActor(
+			gatewayId,
+			requestId,
+		);
 		if (actor) {
 			const pending = actor.getPendingRequest(gatewayId, requestId);
 			if (pending?.streamController) {
@@ -892,7 +912,7 @@ export class Tunnel {
 		const requestIdStr = tunnelId.requestIdToString(requestId);
 
 		// Validate actor exists
-		const actor = this.#runner.getActor(open.actorId);
+		const actor = await this.#runner.getAndWaitForActor(open.actorId);
 		if (!actor) {
 			this.log?.warn({
 				msg: "ignoring websocket for unknown actor",
@@ -939,7 +959,7 @@ export class Tunnel {
 			const canHibernate =
 				this.#runner.config.hibernatableWebSocket.canHibernate(
 					actor.actorId,
-				gatewayId,
+					gatewayId,
 					requestId,
 					request,
 				);
@@ -963,14 +983,7 @@ export class Tunnel {
 			);
 
 			// Create a PendingRequest entry to track the message index
-			actor.setPendingRequest(gatewayId, requestId, {
-				resolve: () => {},
-				reject: () => {},
-				actorId: actor.actorId,
-				gatewayId: gatewayId,
-				requestId: requestId,
-				clientMessageIndex: 0,
-			});
+			actor.createPendingRequest(gatewayId, requestId, 0);
 
 			// Open the WebSocket after `config.socket` so (a) the event
 			// handlers can be added and (b) any errors in `config.websocket`
@@ -1006,17 +1019,16 @@ export class Tunnel {
 		}
 	}
 
-	#handleWebSocketMessage(
+	async #handleWebSocketMessage(
 		gatewayId: GatewayId,
 		requestId: RequestId,
 		serverMessageIndex: number,
 		msg: protocol.ToClientWebSocketMessage,
 	) {
-		// NOTE: This method cannot be async in order to ensure in-order
-		// message processing.
-
-		const requestIdStr = tunnelId.requestIdToString(requestId);
-		const actor = this.getRequestActor(gatewayId, requestId);
+		const actor = await this.getAndWaitForRequestActor(
+			gatewayId,
+			requestId,
+		);
 		if (actor) {
 			const adapter = actor.getWebSocket(gatewayId, requestId);
 			if (adapter) {
@@ -1058,6 +1070,9 @@ export class Tunnel {
 			throw new Error("invalid websocket ack index");
 
 		// Get the actor to find the gatewayId
+		//
+		// We don't have to wait for the actor to start since we're not calling
+		// any callbacks on the actor
 		const actor = this.getRequestActor(gatewayId, requestId);
 		if (!actor) {
 			this.log?.warn({
@@ -1091,8 +1106,10 @@ export class Tunnel {
 		requestId: RequestId,
 		close: protocol.ToClientWebSocketClose,
 	) {
-		const requestIdStr = tunnelId.requestIdToString(requestId);
-		const actor = this.getRequestActor(gatewayId, requestId);
+		const actor = await this.getAndWaitForRequestActor(
+			gatewayId,
+			requestId,
+		);
 		if (actor) {
 			const adapter = actor.getWebSocket(gatewayId, requestId);
 			if (adapter) {

@@ -79,6 +79,7 @@ export interface ActorDriver {
 	/** Extra properties to add to logs for each actor. */
 	getExtraActorLogParams?(): Record<string, string>;
 
+	onBeforeActorStart?(actor: AnyActorInstance): Promise<void>;
 	onCreateConn?(conn: AnyConn): void;
 	onDestroyConn?(conn: AnyConn): void;
 	onBeforePersistConn?(conn: AnyConn): void;
