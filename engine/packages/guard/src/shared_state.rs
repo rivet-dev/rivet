@@ -6,9 +6,9 @@ use universalpubsub::PubSub;
 pub struct SharedState(Arc<SharedStateInner>);
 
 impl SharedState {
-	pub fn new(pubsub: PubSub) -> SharedState {
+	pub fn new(config: &rivet_config::Config, pubsub: PubSub) -> SharedState {
 		SharedState(Arc::new(SharedStateInner {
-			pegboard_gateway: pegboard_gateway::shared_state::SharedState::new(pubsub),
+			pegboard_gateway: pegboard_gateway::shared_state::SharedState::new(config, pubsub),
 		}))
 	}
 

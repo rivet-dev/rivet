@@ -28,7 +28,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	}
 
 	// Share shared context
-	let shared_state = shared_state::SharedState::new(ctx.ups()?);
+	let shared_state = shared_state::SharedState::new(&config, ctx.ups()?);
 	shared_state.start().await?;
 
 	// Create handlers
