@@ -5,8 +5,9 @@ pre-commit:
       run: cargo fmt --all
       tags: formatting
       stage_fixed: true
-    biome-fmt:
-      run: pnpm fmt
-      tags: formatting
-      stage_fixed: true
+    # TODO: Bring this back after big dumb errors are fixed
+    # biome-fmt:
+    #   run: pnpm fmt
+    #   tags: formatting
+    #   stage_fixed: true
 

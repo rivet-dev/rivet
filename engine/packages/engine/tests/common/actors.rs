@@ -440,9 +440,12 @@ pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> 
 	// URL encode the actor ID since colons are not allowed in WebSocket protocol names
 	request.headers_mut().insert(
 		"Sec-WebSocket-Protocol",
-		format!("rivet, rivet_target.actor, rivet_actor.{}", urlencoding::encode(&actor_id))
-			.parse()
-			.unwrap(),
+		format!(
+			"rivet, rivet_target.actor, rivet_actor.{}",
+			urlencoding::encode(&actor_id)
+		)
+		.parse()
+		.unwrap(),
 	);
 
 	// Connect to WebSocket
