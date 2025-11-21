@@ -1,19 +1,19 @@
 import z from "zod";
 import { EncodingSchema } from "@/actor/protocol/serde";
-import { type GetUpgradeWebSocket } from "@/utils";
-import {
-	getRivetEngine,
-	getRivetEndpoint,
-	getRivetToken,
-	getRivetNamespace,
-	getRivetRunner,
-} from "@/utils/env-vars";
-import { RegistryConfig } from "@/registry/config";
+import type { RegistryConfig } from "@/registry/config";
+import type { GetUpgradeWebSocket } from "@/utils";
 import {
 	EndpointSchema,
 	type ParsedEndpoint,
 	zodCheckDuplicateCredentials,
 } from "@/utils/endpoint-parser";
+import {
+	getRivetEndpoint,
+	getRivetEngine,
+	getRivetNamespace,
+	getRivetRunner,
+	getRivetToken,
+} from "@/utils/env-vars";
 
 /**
  * Base client config schema without transforms so it can be merged in to other schemas.
@@ -46,6 +46,15 @@ export const ClientConfigSchemaBase = z.object({
 
 	/** Whether to automatically perform health checks when the client is created. */
 	disableMetadataLookup: z.boolean().optional().default(false),
+
+	/** Whether to enable RivetKit Devtools integration. */
+	devtools: z
+		.boolean()
+		.default(
+			() =>
+				typeof globalThis.window !== "undefined" &&
+				window?.location?.hostname === "localhost",
+		),
 });
 
 export const ClientConfigSchema = ClientConfigSchemaBase.transform(
@@ -127,5 +136,8 @@ export function convertRegistryConfigToClientConfig(
 		getUpgradeWebSocket: undefined,
 		// We don't need health checks for internal clients
 		disableMetadataLookup: true,
+		devtools:
+			typeof globalThis.window !== "undefined" &&
+			window?.location?.hostname === "localhost",
 	};
 }

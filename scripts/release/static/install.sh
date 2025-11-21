@@ -67,7 +67,7 @@ if [ ! -d "$BIN_DIR" ]; then
 fi
 
 # Download engine
-URL="https://releases.rivet.gg/engine/${RIVET_ENGINE_VERSION}/${FILE_NAME}"
+URL="https://releases.rivet.dev/rivet/${RIVET_ENGINE_VERSION}/${FILE_NAME}"
 echo
 echo "> Downloading $URL"
 curl -fsSL "$URL" -o rivet-engine
