@@ -1,10 +1,10 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
+use rivet_runner_protocol as protocol;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
 use crate::keys;
-use crate::tunnel::id::{GatewayId, RequestId};
 
 #[derive(Debug, Default)]
 pub struct Input {
@@ -13,8 +13,8 @@ pub struct Input {
 
 #[derive(Debug)]
 pub struct HibernatingRequestItem {
-	pub gateway_id: GatewayId,
-	pub request_id: RequestId,
+	pub gateway_id: protocol::GatewayId,
+	pub request_id: protocol::RequestId,
 }
 
 #[operation]

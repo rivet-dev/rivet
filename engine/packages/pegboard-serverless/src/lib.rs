@@ -511,10 +511,9 @@ async fn publish_to_client_stop(ctx: &StandaloneCtx, runner_id: Id) -> Result<()
 	let receiver_subject =
 		pegboard::pubsub_subjects::RunnerReceiverSubject::new(runner_id).to_string();
 
-	let message_serialized = rivet_runner_protocol::versioned::ToRunner::wrap_latest(
-		rivet_runner_protocol::ToRunner::ToClientClose,
-	)
-	.serialize_with_embedded_version(rivet_runner_protocol::PROTOCOL_VERSION)?;
+	let message_serialized =
+		protocol::versioned::ToRunner::wrap_latest(protocol::ToRunner::ToClientClose)
+			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)?;
 
 	ctx.ups()?
 		.publish(&receiver_subject, &message_serialized, PublishOpts::one())

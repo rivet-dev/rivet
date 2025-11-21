@@ -5,7 +5,6 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode};
-use pegboard::tunnel::id::{self as tunnel_id, RequestId};
 use rivet_error::*;
 use rivet_guard_core::{
 	custom_serve::{CustomServeTrait, HibernationResult},
@@ -86,7 +85,7 @@ impl CustomServeTrait for PegboardGateway {
 		&self,
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
-		request_id: RequestId,
+		request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
@@ -213,7 +212,7 @@ impl CustomServeTrait for PegboardGateway {
 							}
 						} else {
 							tracing::warn!(
-								request_id=%tunnel_id::request_id_to_string(&request_id),
+								request_id=%protocol::util::id_to_string(&request_id),
 								"received no message response during request init",
 							);
 							break;
@@ -268,14 +267,14 @@ impl CustomServeTrait for PegboardGateway {
 		Ok(response)
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id, request_id=%tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id, request_id=%protocol::util::id_to_string(&request_id)))]
 	async fn handle_websocket(
 		&self,
 		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
-		request_id: RequestId,
+		request_id: protocol::RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Use the actor ID from the gateway instance
@@ -354,7 +353,7 @@ impl CustomServeTrait for PegboardGateway {
 								}
 							} else {
 								tracing::warn!(
-									request_id=%tunnel_id::request_id_to_string(&request_id),
+									request_id=%protocol::util::id_to_string(&request_id),
 									"received no message response during ws init",
 								);
 								break;
@@ -572,11 +571,11 @@ impl CustomServeTrait for PegboardGateway {
 		}
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, request_id=%tunnel_id::request_id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, request_id=%protocol::util::id_to_string(&request_id)))]
 	async fn handle_websocket_hibernation(
 		&self,
 		client_ws: WebSocketHandle,
-		request_id: RequestId,
+		request_id: protocol::RequestId,
 	) -> Result<HibernationResult> {
 		// Immediately rewake if we have pending messages
 		if self

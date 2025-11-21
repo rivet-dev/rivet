@@ -12,7 +12,6 @@ pub mod websocket_handle;
 
 pub use cert_resolver::CertResolverFn;
 pub use custom_serve::CustomServeTrait;
-pub use pegboard::tunnel::id::{RequestId, generate_request_id};
 pub use proxy_service::{
 	CacheKeyFn, MiddlewareFn, ProxyService, ProxyState, RouteTarget, RoutingFn, RoutingOutput,
 };

@@ -14,7 +14,7 @@ use rivet_metrics::KeyValue;
 use rivet_util::Id;
 use serde_json;
 
-use pegboard::tunnel::id::{RequestId, generate_request_id};
+use rivet_runner_protocol as protocol;
 use std::{
 	borrow::Cow,
 	collections::{HashMap as StdHashMap, HashSet},
@@ -350,7 +350,7 @@ pub struct ProxyState {
 	route_cache: RouteCache,
 	rate_limiters: Cache<(Id, std::net::IpAddr), Arc<Mutex<RateLimiter>>>,
 	in_flight_counters: Cache<(Id, std::net::IpAddr), Arc<Mutex<InFlightCounter>>>,
-	inflight_requests: Arc<Mutex<HashSet<RequestId>>>,
+	in_flight_requests: Arc<Mutex<HashSet<protocol::RequestId>>>,
 	port_type: PortType,
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	tasks: Arc<TaskGroup>,
@@ -379,7 +379,7 @@ impl ProxyState {
 				.max_capacity(10_000)
 				.time_to_live(PROXY_STATE_CACHE_TTL)
 				.build(),
-			inflight_requests: Arc::new(Mutex::new(HashSet::new())),
+			in_flight_requests: Arc::new(Mutex::new(HashSet::new())),
 			port_type,
 			clickhouse_inserter,
 			tasks: TaskGroup::new(),
@@ -603,7 +603,7 @@ impl ProxyState {
 		ip_addr: std::net::IpAddr,
 		actor_id: &Option<Id>,
 		headers: &hyper::HeaderMap,
-	) -> Result<Option<RequestId>> {
+	) -> Result<Option<protocol::RequestId>> {
 		// Check in-flight limit if actor_id is present
 		if let Some(actor_id) = *actor_id {
 			// Get actor-specific middleware config
@@ -648,7 +648,7 @@ impl ProxyState {
 		&self,
 		ip_addr: std::net::IpAddr,
 		actor_id: &Option<Id>,
-		request_id: RequestId,
+		request_id: protocol::RequestId,
 	) {
 		// Release in-flight counter if actor_id is present
 		if let Some(actor_id) = *actor_id {
@@ -660,17 +660,17 @@ impl ProxyState {
 		}
 
 		// Release request ID
-		let mut requests = self.inflight_requests.lock().await;
+		let mut requests = self.in_flight_requests.lock().await;
 		requests.remove(&request_id);
 	}
 
 	/// Generate a unique request ID that is not currently in flight
-	async fn generate_unique_request_id(&self) -> anyhow::Result<RequestId> {
+	async fn generate_unique_request_id(&self) -> Result<protocol::RequestId> {
 		const MAX_TRIES: u32 = 100;
-		let mut requests = self.inflight_requests.lock().await;
+		let mut requests = self.in_flight_requests.lock().await;
 
 		for attempt in 0..MAX_TRIES {
-			let request_id = generate_request_id();
+			let request_id = protocol::util::generate_request_id();
 
 			// Check if this ID is already in use
 			if !requests.contains(&request_id) {
@@ -688,7 +688,7 @@ impl ProxyState {
 			);
 		}
 
-		anyhow::bail!(
+		bail!(
 			"failed to generate unique request id after {} attempts",
 			MAX_TRIES
 		);
@@ -2144,7 +2144,7 @@ impl ProxyService {
 							.release_in_flight(client_ip, &actor_id, request_id)
 							.await;
 
-						anyhow::Ok(())
+						Ok(())
 					}
 					.instrument(tracing::info_span!("handle_ws_task_custom_serve")),
 				);

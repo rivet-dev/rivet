@@ -25,17 +25,17 @@ hyper-util = { workspace = true, features = ["full"] }
 indoc.workspace = true
 lazy_static.workspace = true
 moka = { workspace = true, features = ["future"] }
-pegboard.workspace = true
 rand.workspace = true
 regex.workspace = true
 rivet-api-builder.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
+rivet-runner-protocol.workspace = true
 rivet-runtime.workspace = true
 rivet-util.workspace = true
-rustls.workspace = true
 rustls-pemfile.workspace = true
+rustls.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 tokio-rustls.workspace = true
