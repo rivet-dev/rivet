@@ -7,20 +7,20 @@ use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode};
 use rivet_error::*;
 use rivet_guard_core::{
+	WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
-	proxy_service::{is_ws_hibernate, ResponseBody},
+	proxy_service::{ResponseBody, is_ws_hibernate},
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
-	WebSocketHandle,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{Mutex, watch};
 use tokio_tungstenite::tungstenite::{
-	protocol::frame::{coding::CloseCode, CloseFrame},
 	Message,
+	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
 use crate::shared_state::{InFlightRequestHandle, SharedState};
