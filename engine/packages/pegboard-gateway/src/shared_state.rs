@@ -1,8 +1,8 @@
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::errors::WebSocketServiceTimeout;
-use rivet_runner_protocol::{self as protocol, versioned, PROTOCOL_VERSION};
-use scc::{hash_map::Entry, HashMap};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use scc::{HashMap, hash_map::Entry};
 use std::{
 	ops::Deref,
 	sync::Arc,
@@ -12,7 +12,7 @@ use tokio::sync::{mpsc, watch};
 use universalpubsub::{NextOutput, PubSub, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{metrics, WebsocketPendingLimitReached};
+use crate::{WebsocketPendingLimitReached, metrics};
 
 const GC_INTERVAL: Duration = Duration::from_secs(15);
 const TUNNEL_PING_TIMEOUT: i64 = util::duration::seconds(30);
