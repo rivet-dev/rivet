@@ -25,6 +25,7 @@ rivet-runner-protocol.workspace = true
 rivet-runtime.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_bare.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 tracing.workspace = true
