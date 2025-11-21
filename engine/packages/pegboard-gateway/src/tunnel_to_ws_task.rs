@@ -39,7 +39,7 @@ pub async fn task(
 						}
 						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
 							tracing::debug!(
-								request_id=?tunnel_id::request_id_to_string(&request_id),
+								request_id=%tunnel_id::request_id_to_string(&request_id),
 								ack_index=?ack.index,
 								"received WebSocketMessageAck from runner"
 							);
