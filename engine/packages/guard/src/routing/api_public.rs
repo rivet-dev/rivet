@@ -6,6 +6,7 @@ use bytes::Bytes;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response};
+use pegboard::tunnel::id::RequestId;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingOutput};
 use rivet_guard_core::{CustomServeTrait, request_context::RequestContext};
 use tower::Service;
@@ -20,6 +21,7 @@ impl CustomServeTrait for ApiPublicService {
 		&self,
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
+		_request_id: RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Clone the router to get a mutable service
 		let mut service = self.router.clone();

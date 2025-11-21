@@ -6,7 +6,7 @@ use rivet_runner_protocol as protocol;
 pub type GatewayId = [u8; 4];
 pub type RequestId = [u8; 4];
 pub type MessageIndex = u16;
-pub type MessageId = [u8; 12];
+pub type MessageId = [u8; 10];
 
 /// Generate a new 4-byte gateway ID from a random u32
 pub fn generate_gateway_id() -> GatewayId {
@@ -26,15 +26,15 @@ pub fn build_message_id(
 	};
 
 	// Serialize directly to a fixed-size buffer on the stack
-	let mut message_id = [0u8; 12];
+	let mut message_id = [0u8; 10];
 	let mut cursor = std::io::Cursor::new(&mut message_id[..]);
 	serde_bare::to_writer(&mut cursor, &parts).context("failed to serialize message id parts")?;
 
-	// Verify we wrote exactly 12 bytes
+	// Verify we wrote exactly 10 bytes
 	let written = cursor.position() as usize;
 	ensure!(
-		written == 12,
-		"message id serialization produced wrong size: expected 12 bytes, got {}",
+		written == 10,
+		"message id serialization produced wrong size: expected 10 bytes, got {}",
 		written
 	);
 

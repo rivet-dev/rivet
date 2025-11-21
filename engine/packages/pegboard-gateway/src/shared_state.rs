@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
 use pegboard::tunnel::id::{self as tunnel_id, GatewayId, RequestId};
+use rivet_guard_core::errors::WebSocketServiceTimeout;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use scc::{HashMap, hash_map::Entry};
 use std::{
@@ -12,9 +13,10 @@ use tokio::sync::{mpsc, watch};
 use universalpubsub::{NextOutput, PubSub, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::WebsocketPendingLimitReached;
+use crate::{WebsocketPendingLimitReached, metrics};
 
 const GC_INTERVAL: Duration = Duration::from_secs(15);
+const TUNNEL_PING_TIMEOUT: i64 = util::duration::seconds(30);
 const HWS_MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 const HWS_MAX_PENDING_MSGS_SIZE_PER_REQ: u64 = util::size::mebibytes(1);
 
@@ -40,6 +42,7 @@ struct InFlightRequest {
 	message_index: tunnel_id::MessageIndex,
 	hibernation_state: Option<HibernationState>,
 	stopping: bool,
+	last_pong: i64,
 }
 
 struct HibernationState {
@@ -81,6 +84,7 @@ impl SharedState {
 		self.gateway_id
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn start(&self) -> Result<()> {
 		let sub = self.ups.subscribe(&self.receiver_subject).await?;
 
@@ -93,6 +97,7 @@ impl SharedState {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(%receiver_subject, request_id=?tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn start_in_flight_request(
 		&self,
 		receiver_subject: String,
@@ -111,6 +116,7 @@ impl SharedState {
 					message_index: 0,
 					hibernation_state: None,
 					stopping: false,
+					last_pong: util::timestamp::now(),
 				});
 			}
 			Entry::Occupied(mut entry) => {
@@ -130,6 +136,7 @@ impl SharedState {
 		InFlightRequestHandle { msg_rx, drop_rx }
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn send_message(
 		&self,
 		request_id: RequestId,
@@ -200,6 +207,43 @@ impl SharedState {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
+	pub async fn send_and_check_ping(&self, request_id: RequestId) -> Result<()> {
+		let req = self
+			.in_flight_requests
+			.get_async(&request_id)
+			.await
+			.context("request not in flight")?;
+
+		let now = util::timestamp::now();
+
+		// Verify ping timeout
+		if now.saturating_sub(req.last_pong) > TUNNEL_PING_TIMEOUT {
+			tracing::warn!("tunnel timeout");
+			return Err(WebSocketServiceTimeout.build());
+		}
+
+		// Send message
+		let message = protocol::ToRunner::ToRunnerPing(protocol::ToRunnerPing {
+			gateway_id: self.gateway_id,
+			request_id,
+			ts: now,
+		});
+		let message_serialized = versioned::ToRunner::wrap_latest(message)
+			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+
+		self.ups
+			.publish(
+				&req.receiver_subject,
+				&message_serialized,
+				PublishOpts::one(),
+			)
+			.await?;
+
+		Ok(())
+	}
+
+	#[tracing::instrument(skip_all)]
 	async fn receiver(&self, mut sub: Subscriber) {
 		while let Ok(NextOutput::Message(msg)) = sub.next().await {
 			tracing::trace!(
@@ -208,8 +252,22 @@ impl SharedState {
 			);
 
 			match versioned::ToGateway::deserialize_with_embedded_version(&msg.payload) {
-				Ok(protocol::ToGateway::ToGatewayKeepAlive) => {
-					// No-op
+				Ok(protocol::ToGateway::ToGatewayPong(pong)) => {
+					let Some(mut in_flight) =
+						self.in_flight_requests.get_async(&pong.request_id).await
+					else {
+						tracing::debug!(
+							request_id=?tunnel_id::request_id_to_string(&pong.request_id),
+							"in flight has already been disconnected, dropping ping"
+						);
+						continue;
+					};
+
+					let now = util::timestamp::now();
+					in_flight.last_pong = now;
+
+					let rtt = now.saturating_sub(pong.ts);
+					metrics::TUNNEL_PING_DURATION.record(rtt as f64 * 0.001, &[]);
 				}
 				Ok(protocol::ToGateway::ToServerTunnelMessage(msg)) => {
 					// Parse message ID to extract components
@@ -249,6 +307,7 @@ impl SharedState {
 		}
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id), %enable))]
 	pub async fn toggle_hibernation(&self, request_id: RequestId, enable: bool) -> Result<()> {
 		let mut req = self
 			.in_flight_requests
@@ -271,6 +330,7 @@ impl SharedState {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn resend_pending_websocket_messages(&self, request_id: RequestId) -> Result<()> {
 		let Some(mut req) = self.in_flight_requests.get_async(&request_id).await else {
 			bail!("request not in flight");
@@ -293,6 +353,7 @@ impl SharedState {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id)))]
 	pub async fn has_pending_websocket_messages(&self, request_id: RequestId) -> Result<bool> {
 		let Some(req) = self.in_flight_requests.get_async(&request_id).await else {
 			bail!("request not in flight");
@@ -305,6 +366,7 @@ impl SharedState {
 		}
 	}
 
+	#[tracing::instrument(skip_all, fields(request_id=?tunnel_id::request_id_to_string(&request_id), %ack_index))]
 	pub async fn ack_pending_websocket_messages(
 		&self,
 		request_id: RequestId,
@@ -324,22 +386,22 @@ impl SharedState {
 
 		// Retain messages with index > ack_index (messages that haven't been acknowledged yet)
 		let len_before = hs.pending_ws_msgs.len();
-		hs.pending_ws_msgs.retain(|msg| {
-			wrapping_gt(msg.message_index, ack_index)
-		});
+		hs.pending_ws_msgs
+			.retain(|msg| wrapping_gt(msg.message_index, ack_index));
 
 		let len_after = hs.pending_ws_msgs.len();
 		tracing::debug!(
 			request_id=?tunnel_id::request_id_to_string(&request_id),
 			ack_index,
-			removed_count=len_before - len_after,
-			remaining_count=len_after,
+			removed_count = len_before - len_after,
+			remaining_count = len_after,
 			"acked pending websocket messages"
 		);
 
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn gc(&self) {
 		let mut interval = tokio::time::interval(GC_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -371,13 +433,19 @@ impl SharedState {
 	/// **Phase 2**
 	///
 	/// 2a. Remove all requests where it was flagged as stopping and `drop_rx` has been dropped
+	#[tracing::instrument(skip_all)]
 	async fn gc_in_flight_requests(&self) {
 		#[derive(Debug)]
 		enum MsgGcReason {
 			/// Gateway channel is closed and there are no pending messages
 			GatewayClosed,
 			/// WebSocket pending messages (ToServerWebSocketMessageAck)
-			WebSocketMessageNotAcked { message_index: u16 },
+			WebSocketMessageNotAcked {
+				#[allow(dead_code)]
+				first_msg_index: u16,
+				#[allow(dead_code)]
+				last_msg_index: u16,
+			},
 		}
 
 		let now = Instant::now();
@@ -411,7 +479,10 @@ impl SharedState {
 						if now.duration_since(earliest_pending_ws_msg.send_instant)
 							> HWS_MESSAGE_ACK_TIMEOUT
 						{
-							break 'reason Some(MsgGcReason::WebSocketMessageNotAcked{message_index: earliest_pending_ws_msg.message_index});
+							break 'reason Some(MsgGcReason::WebSocketMessageNotAcked {
+								first_msg_index: earliest_pending_ws_msg.message_index,
+								last_msg_index: req.message_index
+							});
 						}
 					}
 

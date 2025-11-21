@@ -212,7 +212,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			}
 		);
 
-		// Determine single result from both tasks
+		// Determine single result from all tasks
 		let lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) {
 			// Prefer error
 			(Err(err), _, _) => Err(err),

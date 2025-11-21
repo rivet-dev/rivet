@@ -9,34 +9,36 @@ use pegboard::tunnel::id::{self as tunnel_id, RequestId};
 use rand::Rng;
 use rivet_error::*;
 use rivet_guard_core::{
+	WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
-	errors::{
-		ServiceUnavailable, WebSocketServiceHibernate, WebSocketServiceTimeout,
-		WebSocketServiceUnavailable,
-	},
-	proxy_service::{is_ws_hibernate, ResponseBody},
+	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
+	proxy_service::{ResponseBody, is_ws_hibernate},
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
-	WebSocketHandle,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
 use tokio::{
-	sync::{watch, Mutex},
+	sync::{Mutex, watch},
 	task::JoinHandle,
 };
 use tokio_tungstenite::tungstenite::{
-	protocol::frame::{coding::CloseCode, CloseFrame},
 	Message,
+	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
 use crate::shared_state::{InFlightRequestHandle, SharedState};
 
+mod metrics;
+mod ping_task;
 pub mod shared_state;
+mod tunnel_to_ws_task;
+mod ws_to_tunnel_task;
 
 const WEBSOCKET_OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(5);
+const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
 
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
@@ -391,135 +393,38 @@ impl CustomServeTrait for PegboardGateway {
 
 		let ws_rx = client_ws.recv();
 
-		let (tunnel_to_ws_abort_tx, mut tunnel_to_ws_abort_rx) = watch::channel(());
-		let (ws_to_tunnel_abort_tx, mut ws_to_tunnel_abort_rx) = watch::channel(());
+		let (tunnel_to_ws_abort_tx, tunnel_to_ws_abort_rx) = watch::channel(());
+		let (ws_to_tunnel_abort_tx, ws_to_tunnel_abort_rx) = watch::channel(());
+		let (ping_abort_tx, ping_abort_rx) = watch::channel(());
 
-		// Spawn task to forward messages from tunnel to ws
-		let shared_state = self.shared_state.clone();
-		let tunnel_to_ws = tokio::spawn(
-			async move {
-				loop {
-					tokio::select! {
-						res = msg_rx.recv() => {
-							if let Some(msg) = res {
-								match msg {
-										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg) => {
-										let msg = if ws_msg.binary {
-											Message::Binary(ws_msg.data.into())
-										} else {
-											Message::Text(
-												String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
-											)
-										};
-										client_ws.send(msg).await?;
-									}
-										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
-										tracing::debug!(
-											request_id=?tunnel_id::request_id_to_string(&request_id),
-											ack_index=?ack.index,
-											"received WebSocketMessageAck from runner"
-										);
-										shared_state
-											.ack_pending_websocket_messages(request_id, ack.index)
-											.await?;
-									}
-										protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
-										tracing::debug!(?close, "server closed websocket");
+		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
+			self.shared_state.clone(),
+			client_ws,
+			request_id,
+			stopped_sub,
+			msg_rx,
+			drop_rx,
+			can_hibernate,
+			tunnel_to_ws_abort_rx,
+		));
+		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(
+			self.shared_state.clone(),
+			request_id,
+			ws_rx,
+			ws_to_tunnel_abort_rx,
+		));
+		let ping = tokio::spawn(ping_task::task(
+			self.shared_state.clone(),
+			request_id,
+			ping_abort_rx,
+		));
 
-										if can_hibernate && close.hibernate {
-											return Err(WebSocketServiceHibernate.build());
-										} else {
-											// Successful closure
-											return Ok(LifecycleResult::ServerClose(close));
-										}
-									}
-									_ => {}
-								}
-							} else {
-								tracing::debug!("tunnel sub closed");
-								return Err(WebSocketServiceHibernate.build());
-							}
-						}
-						_ = stopped_sub.next() => {
-							tracing::debug!("actor stopped during websocket handler loop");
-
-							if can_hibernate {
-								return Err(WebSocketServiceHibernate.build());
-							} else {
-								return Err(WebSocketServiceUnavailable.build());
-							}
-						}
-						_ = drop_rx.changed() => {
-							tracing::warn!("websocket message timeout");
-							return Err(WebSocketServiceTimeout.build());
-						}
-						_ = tunnel_to_ws_abort_rx.changed() => {
-							tracing::debug!("task aborted");
-							return Ok(LifecycleResult::Aborted);
-						}
-					}
-				}
-			}
-			.instrument(tracing::info_span!("tunnel_to_ws_task")),
-		);
-
-		// Spawn task to forward messages from ws to tunnel
-		let shared_state_clone = self.shared_state.clone();
-		let ws_to_tunnel = tokio::spawn(
-			async move {
-				let mut ws_rx = ws_rx.lock().await;
-
-				loop {
-					tokio::select! {
-						res = ws_rx.try_next() => {
-							if let Some(msg) = res? {
-								match msg {
-									Message::Binary(data) => {
-										let ws_message =
-											protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-												protocol::ToClientWebSocketMessage {
-													data: data.into(),
-													binary: true,
-												},
-											);
-										shared_state_clone
-											.send_message(request_id, ws_message)
-											.await?;
-									}
-									Message::Text(text) => {
-										let ws_message =
-											protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-												protocol::ToClientWebSocketMessage {
-													data: text.as_bytes().to_vec(),
-													binary: false,
-												},
-											);
-										shared_state_clone
-											.send_message(request_id, ws_message)
-											.await?;
-									}
-									Message::Close(close) => {
-										return Ok(LifecycleResult::ClientClose(close));
-									}
-									_ => {}
-								}
-							} else {
-								tracing::debug!("websocket stream closed");
-								return Ok(LifecycleResult::ClientClose(None));
-							}
-						}
-						_ = ws_to_tunnel_abort_rx.changed() => {
-							tracing::debug!("task aborted");
-							return Ok(LifecycleResult::Aborted);
-						}
-					};
-				}
-			}
-			.instrument(tracing::info_span!("ws_to_tunnel_task")),
-		);
+		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
+		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
+		let ping_abort_tx2 = ping_abort_tx.clone();
 
 		// Wait for both tasks to complete
-		let (tunnel_to_ws_res, ws_to_tunnel_res) = tokio::join!(
+		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) = tokio::join!(
 			async {
 				let res = tunnel_to_ws.await?;
 
@@ -527,7 +432,8 @@ impl CustomServeTrait for PegboardGateway {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "tunnel to ws task completed, aborting counterpart");
 
-					drop(ws_to_tunnel_abort_tx);
+					let _ = ping_abort_tx.send(());
+					let _ = ws_to_tunnel_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "tunnel to ws task completed");
 				}
@@ -541,25 +447,42 @@ impl CustomServeTrait for PegboardGateway {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "ws to tunnel task completed, aborting counterpart");
 
-					drop(tunnel_to_ws_abort_tx);
+					let _ = ping_abort_tx2.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "ws to tunnel task completed");
 				}
 
 				res
-			}
+			},
+			async {
+				let res = ping.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "ping task completed, aborting others");
+
+					let _ = ws_to_tunnel_abort_tx2.send(());
+					let _ = tunnel_to_ws_abort_tx2.send(());
+				} else {
+					tracing::debug!(?res, "ping task completed");
+				}
+
+				res
+			},
 		);
 
-		// Determine single result from both tasks
-		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res) {
+		// Determine single result from all tasks
+		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) {
 			// Prefer error
-			(Err(err), _) => Err(err),
-			(_, Err(err)) => Err(err),
+			(Err(err), _, _) => Err(err),
+			(_, Err(err), _) => Err(err),
+			(_, _, Err(err)) => Err(err),
 			// Prefer non aborted result if both succeed
-			(Ok(res), Ok(LifecycleResult::Aborted)) => Ok(res),
-			(Ok(LifecycleResult::Aborted), Ok(res)) => Ok(res),
-			// Prefer tunnel to ws if both succeed (unlikely case)
-			(res, _) => res,
+			(Ok(res), Ok(LifecycleResult::Aborted), _) => Ok(res),
+			(Ok(LifecycleResult::Aborted), Ok(res), _) => Ok(res),
+			// Unlikely case
+			(res, _, _) => res,
 		};
 
 		// Send close frame to runner if not hibernating
