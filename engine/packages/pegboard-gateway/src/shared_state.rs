@@ -72,6 +72,7 @@ pub struct SharedState(Arc<SharedStateInner>);
 impl SharedState {
 	pub fn new(config: &rivet_config::Config, ups: PubSub) -> Self {
 		let gateway_id = protocol::util::generate_gateway_id();
+		tracing::info!(gateway_id = %protocol::util::id_to_string(&gateway_id), "setting up shared state for gateway");
 		let receiver_subject =
 			pegboard::pubsub_subjects::GatewayReceiverSubject::new(gateway_id).to_string();
 

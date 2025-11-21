@@ -4744,6 +4744,7 @@ dependencies = [
  "serde",
  "serde_bare",
  "utoipa",
+ "uuid",
  "vbare",
  "vbare-compiler",
 ]

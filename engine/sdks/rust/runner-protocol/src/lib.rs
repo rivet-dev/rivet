@@ -1,6 +1,7 @@
 pub mod compat;
 pub mod generated;
 pub mod util;
+pub mod uuid_compat;
 pub mod versioned;
 
 // Re-export latest
