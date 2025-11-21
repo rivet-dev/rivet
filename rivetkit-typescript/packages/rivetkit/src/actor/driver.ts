@@ -3,6 +3,7 @@ import type { AnyClient } from "@/client/client";
 import type { ManagerDriver } from "@/manager/driver";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
+import { type AnyConn, Conn } from "./conn/mod";
 import type { AnyActorInstance } from "./instance/mod";
 
 export type ActorDriverBuilder = (
@@ -77,4 +78,9 @@ export interface ActorDriver {
 
 	/** Extra properties to add to logs for each actor. */
 	getExtraActorLogParams?(): Record<string, string>;
+
+	onCreateConn?(conn: AnyConn): void;
+	onDestroyConn?(conn: AnyConn): void;
+	onBeforePersistConn?(conn: AnyConn): void;
+	onAfterPersistConn?(conn: AnyConn): void;
 }

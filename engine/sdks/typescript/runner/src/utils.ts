@@ -64,3 +64,60 @@ export function parseWebSocketCloseReason(
 		rayId,
 	};
 }
+
+const U16_MAX = 65535;
+
+/**
+ * Wrapping greater than comparison for u16 values.
+ * Based on shared_state.rs wrapping_gt implementation.
+ */
+export function wrappingGtU16(a: number, b: number): boolean {
+	return a !== b && wrappingSub(a, b, U16_MAX) < U16_MAX / 2;
+}
+
+/**
+ * Wrapping less than comparison for u16 values.
+ * Based on shared_state.rs wrapping_lt implementation.
+ */
+export function wrappingLtU16(a: number, b: number): boolean {
+	return a !== b && wrappingSub(b, a, U16_MAX) < U16_MAX / 2;
+}
+
+/**
+ * Wrapping greater than or equal comparison for u16 values.
+ */
+export function wrappingGteU16(a: number, b: number): boolean {
+	return a === b || wrappingGtU16(a, b);
+}
+
+/**
+ * Wrapping less than or equal comparison for u16 values.
+ */
+export function wrappingLteU16(a: number, b: number): boolean {
+	return a === b || wrappingLtU16(a, b);
+}
+
+/**
+ * Performs wrapping addition for u16 values.
+ */
+export function wrappingAddU16(a: number, b: number): number {
+	return (a + b) % (U16_MAX + 1);
+}
+
+/**
+ * Performs wrapping subtraction for u16 values.
+ */
+export function wrappingSubU16(a: number, b: number): number {
+	return wrappingSub(a, b, U16_MAX);
+}
+
+/**
+ * Performs wrapping subtraction for unsigned integers.
+ */
+function wrappingSub(a: number, b: number, max: number): number {
+	const result = a - b;
+	if (result < 0) {
+		return result + max + 1;
+	}
+	return result;
+}

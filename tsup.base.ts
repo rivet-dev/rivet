@@ -22,4 +22,5 @@ export default {
 	splitting: true,
 	skipNodeModulesBundle: true,
 	publicDir: true,
+	external: [/^node:.*/],
 } satisfies Options;

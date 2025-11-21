@@ -371,7 +371,7 @@ async fn handle_tunnel_message(
 		if let Some(req) = active_requests.get(&request_id) {
 			req.gateway_reply_to.clone()
 		} else {
-			tracing::warn!("no active request for tunnel message, may have timed out");
+			tracing::warn!(request_id=?Uuid::from_bytes(msg.request_id), message_id=?Uuid::from_bytes(msg.message_id), "no active request for tunnel message, may have timed out");
 			return Ok(());
 		}
 	};

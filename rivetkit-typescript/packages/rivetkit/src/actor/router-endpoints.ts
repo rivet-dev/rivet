@@ -1,11 +1,9 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
-import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts/action";
 import * as errors from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
-import type { InputData } from "@/actor/protocol/serde";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import {
 	HEADER_ACTOR_QUERY,
@@ -14,10 +12,7 @@ import {
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
 } from "@/common/actor-router-consts";
-import type { UpgradeWebSocketArgs } from "@/common/inline-websocket-adapter2";
-import { deconstructError, stringifyError } from "@/common/utils";
-import type { UniversalWebSocket } from "@/common/websocket-interface";
-import { HonoWebSocketAdapter } from "@/manager/hono-websocket-adapter";
+import { stringifyError } from "@/common/utils";
 import type { RunnerConfig } from "@/registry/run-config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
@@ -35,32 +30,11 @@ import {
 	deserializeWithEncoding,
 	serializeWithEncoding,
 } from "@/serde";
-import {
-	arrayBuffersEqual,
-	bufferToArrayBuffer,
-	idToStr,
-	promiseWithResolvers,
-} from "@/utils";
-import { createHttpSocket } from "./conn/drivers/http";
-import { createRawRequestSocket } from "./conn/drivers/raw-request";
-import { createRawWebSocketSocket } from "./conn/drivers/raw-websocket";
-import { createWebSocketSocket } from "./conn/drivers/websocket";
+import { bufferToArrayBuffer } from "@/utils";
+import { createHttpDriver } from "./conn/drivers/http";
+import { createRawRequestDriver } from "./conn/drivers/raw-request";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
-import { parseMessage } from "./protocol/old";
-
-export interface ConnectWebSocketOpts {
-	req?: HonoRequest;
-	encoding: Encoding;
-	actorId: string;
-	params: unknown;
-}
-
-export interface ConnectWebSocketOutput {
-	onOpen: (ws: WSContext) => void;
-	onMessage: (message: protocol.ToServer) => void;
-	onClose: () => void;
-}
 
 export interface ActionOpts {
 	req?: HonoRequest;
@@ -84,181 +58,6 @@ export interface ConnsMessageOpts {
 export interface FetchOpts {
 	request: Request;
 	actorId: string;
-}
-
-export interface WebSocketOpts {
-	request: Request;
-	websocket: UniversalWebSocket;
-	actorId: string;
-}
-
-/**
- * Creates a WebSocket connection handler
- */
-export async function handleWebSocketConnect(
-	req: Request | undefined,
-	runConfig: RunnerConfig,
-	actorDriver: ActorDriver,
-	actorId: string,
-	encoding: Encoding,
-	parameters: unknown,
-	requestId: string,
-	requestIdBuf: ArrayBuffer | undefined,
-): Promise<UpgradeWebSocketArgs> {
-	const exposeInternalError = req
-		? getRequestExposeInternalError(req)
-		: false;
-
-	let createdConn: AnyConn | undefined;
-	try {
-		const actor = await actorDriver.loadActor(actorId);
-
-		// Promise used to wait for the websocket close in `disconnect`
-		const closePromiseResolvers = promiseWithResolvers<void>();
-
-		actor.rLog.debug({
-			msg: "new websocket connection",
-			actorId,
-		});
-
-		// Check if this is a hibernatable websocket
-		const isHibernatable =
-			!!requestIdBuf &&
-			actor.persist.hibernatableConns.findIndex((conn) =>
-				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-			) !== -1;
-
-		const { driver, setWebSocket } = createWebSocketSocket(
-			requestId,
-			requestIdBuf,
-			isHibernatable,
-			encoding,
-			closePromiseResolvers.promise,
-		);
-		const conn = await actor.connectionManager.prepareConn(
-			driver,
-			parameters,
-			req,
-		);
-		createdConn = conn;
-
-		return {
-			// NOTE: onOpen cannot be async since this messes up the open event listener order
-			onOpen: (_evt: any, ws: WSContext) => {
-				actor.rLog.debug("actor websocket open");
-
-				setWebSocket(ws);
-
-				actor.connectionManager.connectConn(conn);
-			},
-			onMessage: (evt: { data: any }, ws: WSContext) => {
-				// Handle message asynchronously
-				actor.rLog.debug({ msg: "received message" });
-
-				const value = evt.data.valueOf() as InputData;
-				parseMessage(value, {
-					encoding: encoding,
-					maxIncomingMessageSize: runConfig.maxIncomingMessageSize,
-				})
-					.then((message) => {
-						actor.processMessage(message, conn).catch((error) => {
-							const { code } = deconstructError(
-								error,
-								actor.rLog,
-								{
-									wsEvent: "message",
-								},
-								exposeInternalError,
-							);
-							ws.close(1011, code);
-						});
-					})
-					.catch((error) => {
-						const { code } = deconstructError(
-							error,
-							actor.rLog,
-							{
-								wsEvent: "message",
-							},
-							exposeInternalError,
-						);
-						ws.close(1011, code);
-					});
-			},
-			onClose: (
-				event: {
-					wasClean: boolean;
-					code: number;
-					reason: string;
-				},
-				ws: WSContext,
-			) => {
-				closePromiseResolvers.resolve();
-
-				if (event.wasClean) {
-					actor.rLog.info({
-						msg: "websocket closed",
-						code: event.code,
-						reason: event.reason,
-						wasClean: event.wasClean,
-					});
-				} else {
-					actor.rLog.warn({
-						msg: "websocket closed",
-						code: event.code,
-						reason: event.reason,
-						wasClean: event.wasClean,
-					});
-				}
-
-				// HACK: Close socket in order to fix bug with Cloudflare leaving WS in closing state
-				// https://github.com/cloudflare/workerd/issues/2569
-				ws.close(1000, "hack_force_close");
-
-				// Wait for actor.createConn to finish before removing the connection
-				if (createdConn) {
-					createdConn.disconnect(event?.reason);
-				}
-			},
-			onError: (_error: unknown) => {
-				try {
-					// Actors don't need to know about this, since it's abstracted away
-					actor.rLog.warn({ msg: "websocket error" });
-				} catch (error) {
-					deconstructError(
-						error,
-						actor.rLog,
-						{ wsEvent: "error" },
-						exposeInternalError,
-					);
-				}
-			},
-		};
-	} catch (error) {
-		const { group, code } = deconstructError(
-			error,
-			loggerWithoutContext(),
-			{},
-			exposeInternalError,
-		);
-
-		// Clean up connection
-		if (createdConn) {
-			createdConn.disconnect(`${group}.${code}`);
-		}
-
-		// Return handler that immediately closes with error
-		return {
-			onOpen: (_evt: any, ws: WSContext) => {
-				ws.close(1011, code);
-			},
-			onMessage: (_evt: { data: any }, ws: WSContext) => {
-				ws.close(1011, "Actor not loaded");
-			},
-			onClose: (_event: any, _ws: WSContext) => {},
-			onError: (_error: unknown) => {},
-		};
-	}
 }
 
 /**
@@ -300,9 +99,11 @@ export async function handleAction(
 
 		// Create conn
 		conn = await actor.connectionManager.prepareAndConnectConn(
-			createHttpSocket(),
+			createHttpDriver(),
 			parameters,
 			c.req.raw,
+			c.req.path,
+			c.req.header(),
 		);
 
 		// Call action
@@ -328,7 +129,7 @@ export async function handleAction(
 		}),
 	);
 
-	// TODO: Remvoe any, Hono is being a dumbass
+	// TODO: Remove any, Hono is being a dumbass
 	return c.body(serialized as Uint8Array as any, 200, {
 		"Content-Type": contentTypeForEncoding(encoding),
 	});
@@ -348,9 +149,11 @@ export async function handleRawRequest(
 
 	try {
 		const conn = await actor.connectionManager.prepareAndConnectConn(
-			createRawRequestSocket(),
+			createRawRequestDriver(),
 			parameters,
 			req,
+			c.req.path,
+			c.req.header(),
 		);
 
 		createdConn = conn;
@@ -361,145 +164,6 @@ export async function handleRawRequest(
 		if (createdConn) {
 			createdConn.disconnect();
 		}
-	}
-}
-
-export async function handleRawWebSocket(
-	req: Request | undefined,
-	path: string,
-	actorDriver: ActorDriver,
-	actorId: string,
-	requestIdBuf: ArrayBuffer | undefined,
-	connParams: unknown | undefined,
-): Promise<UpgradeWebSocketArgs> {
-	const exposeInternalError = req
-		? getRequestExposeInternalError(req)
-		: false;
-
-	let createdConn: AnyConn | undefined;
-	try {
-		const actor = await actorDriver.loadActor(actorId);
-
-		// Promise used to wait for the websocket close in `disconnect`
-		const closePromiseResolvers = promiseWithResolvers<void>();
-
-		// Extract rivetRequestId provided by engine runner
-		const isHibernatable =
-			!!requestIdBuf &&
-			actor.persist.hibernatableConns.findIndex((conn) =>
-				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-			) !== -1;
-
-		const newPath = truncateRawWebSocketPathPrefix(path);
-		let newRequest: Request;
-		if (req) {
-			newRequest = new Request(`http://actor${newPath}`, req);
-		} else {
-			newRequest = new Request(`http://actor${newPath}`, {
-				method: "GET",
-			});
-		}
-
-		actor.rLog.debug({
-			msg: "rewriting websocket url",
-			fromPath: path,
-			toUrl: newRequest.url,
-		});
-		// Create connection using actor.createConn - this handles deduplication for hibernatable connections
-		const requestIdStr = requestIdBuf
-			? idToStr(requestIdBuf)
-			: crypto.randomUUID();
-		const { driver, setWebSocket } = createRawWebSocketSocket(
-			requestIdStr,
-			requestIdBuf,
-			isHibernatable,
-			closePromiseResolvers.promise,
-		);
-		const conn = await actor.connectionManager.prepareAndConnectConn(
-			driver,
-			connParams ?? {},
-			newRequest,
-		);
-		createdConn = conn;
-
-		// Return WebSocket event handlers
-		return {
-			// NOTE: onOpen cannot be async since this will cause the client's open
-			// event to be called before this completes. Do all async work in
-			// handleRawWebSocket root.
-			onOpen: (_evt: any, ws: any) => {
-				// Wrap the Hono WebSocket in our adapter
-				const adapter = new HonoWebSocketAdapter(
-					ws,
-					requestIdBuf,
-					isHibernatable,
-				);
-
-				// Store adapter reference on the WebSocket for event handlers
-				(ws as any).__adapter = adapter;
-
-				setWebSocket(adapter);
-
-				// Call the actor's onWebSocket handler with the adapted WebSocket
-				//
-				// NOTE: onWebSocket is called inside this function. Make sure
-				// this is called synchronously within onOpen.
-				actor.handleRawWebSocket(conn, adapter, newRequest);
-			},
-			onMessage: (event: any, ws: any) => {
-				// Find the adapter for this WebSocket
-				const adapter = (ws as any).__adapter;
-				if (adapter) {
-					adapter._handleMessage(event);
-				}
-			},
-			onClose: (evt: any, ws: any) => {
-				// Find the adapter for this WebSocket
-				const adapter = (ws as any).__adapter;
-				if (adapter) {
-					adapter._handleClose(evt?.code || 1006, evt?.reason || "");
-				}
-
-				// Resolve the close promise
-				closePromiseResolvers.resolve();
-
-				// Clean up the connection
-				if (createdConn) {
-					createdConn.disconnect(evt?.reason);
-				}
-			},
-			onError: (error: any, ws: any) => {
-				// Find the adapter for this WebSocket
-				const adapter = (ws as any).__adapter;
-				if (adapter) {
-					adapter._handleError(error);
-				}
-			},
-		};
-	} catch (error) {
-		const { group, code } = deconstructError(
-			error,
-			loggerWithoutContext(),
-			{},
-			exposeInternalError,
-		);
-
-		// Clean up connection
-		if (createdConn) {
-			createdConn.disconnect(`${group}.${code}`);
-		}
-
-		// Return handler that immediately closes with error
-		return {
-			onOpen: (_evt: any, ws: WSContext) => {
-				ws.close(1011, code);
-			},
-			onMessage: (_evt: { data: any }, ws: WSContext) => {
-				ws.close(1011, "Actor not loaded");
-			},
-			onClose: (_event: any, _ws: WSContext) => {},
-			onError: (_error: unknown) => {},
-		};
 	}
 }
 
@@ -557,52 +221,4 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 			`Invalid params JSON: ${stringifyError(err)}`,
 		);
 	}
-}
-
-/**
- * Parse encoding and connection parameters from WebSocket Sec-WebSocket-Protocol header
- */
-export function parseWebSocketProtocols(protocols: string | null | undefined): {
-	encoding: Encoding;
-	connParams: unknown;
-} {
-	let encodingRaw: string | undefined;
-	let connParamsRaw: string | undefined;
-
-	if (protocols) {
-		const protocolList = protocols.split(",").map((p) => p.trim());
-		for (const protocol of protocolList) {
-			if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
-				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
-			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {
-				connParamsRaw = decodeURIComponent(
-					protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
-				);
-			}
-		}
-	}
-
-	const encoding = EncodingSchema.parse(encodingRaw);
-	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
-
-	return { encoding, connParams };
-}
-
-/**
- * Truncase the PATH_WEBSOCKET_PREFIX path prefix in order to pass a clean
- * path to the onWebSocket handler.
- *
- * Example:
- * - `/websocket/foo` -> `/foo`
- * - `/websocket` -> `/`
- */
-export function truncateRawWebSocketPathPrefix(path: string): string {
-	// Extract the path after prefix and preserve query parameters
-	// Use URL API for cleaner parsing
-	const url = new URL(path, "http://actor");
-	const pathname = url.pathname.replace(/^\/websocket\/?/, "") || "/";
-	const normalizedPath =
-		(pathname.startsWith("/") ? pathname : "/" + pathname) + url.search;
-
-	return normalizedPath;
 }

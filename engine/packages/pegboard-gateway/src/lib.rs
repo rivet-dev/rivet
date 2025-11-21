@@ -34,7 +34,8 @@ use crate::shared_state::{InFlightRequestHandle, SharedState};
 
 pub mod shared_state;
 
-const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(2);
+const WEBSOCKET_OPEN_TIMEOUT: Duration = Duration::from_secs(15);
+const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
@@ -230,7 +231,7 @@ impl CustomServeTrait for PegboardGateway {
 
 			Err(ServiceUnavailable.build())
 		};
-		let response_start = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
+		let response_start = tokio::time::timeout(WEBSOCKET_OPEN_TIMEOUT, fut)
 			.await
 			.map_err(|_| {
 				tracing::warn!("timed out waiting for tunnel ack");
@@ -412,6 +413,11 @@ impl CustomServeTrait for PegboardGateway {
 										client_ws.send(msg).await?;
 									}
 										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+										tracing::debug!(
+											request_id=?Uuid::from_bytes(request_id),
+											ack_index=?ack.index,
+											"received WebSocketMessageAck from runner"
+										);
 										shared_state
 											.ack_pending_websocket_messages(request_id, ack.index)
 											.await?;
@@ -617,6 +623,10 @@ impl CustomServeTrait for PegboardGateway {
 			.has_pending_websocket_messages(unique_request_id.into_bytes())
 			.await?
 		{
+			tracing::debug!(
+				?unique_request_id,
+				"detected pending requests on websocket hibernation, rewaking actor"
+			);
 			return Ok(HibernationResult::Continue);
 		}
 

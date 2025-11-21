@@ -2,7 +2,9 @@
 
 // MARK: Paths
 export const PATH_CONNECT = "/connect";
+export const PATH_WEBSOCKET_BASE = "/websocket";
 export const PATH_WEBSOCKET_PREFIX = "/websocket/";
+export const PATH_INSPECTOR_CONNECT = "/inspector/connect";
 
 // MARK: Headers
 export const HEADER_ACTOR_QUERY = "x-rivet-query";

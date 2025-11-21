@@ -239,23 +239,23 @@ export class ActorNotFound extends ActorError {
 	}
 }
 
-export class ActorAlreadyExists extends ActorError {
+export class ActorDuplicateKey extends ActorError {
 	constructor(name: string, key: string[]) {
 		super(
 			"actor",
-			"already_exists",
+			"duplicate_key",
 			`Actor already exists with name '${name}' and key '${JSON.stringify(key)}' (https://www.rivet.dev/docs/actors/clients/#actor-client)`,
 			{ public: true },
 		);
 	}
 }
 
-export class ActorDestroying extends ActorError {
+export class ActorStopping extends ActorError {
 	constructor(identifier?: string) {
 		super(
 			"actor",
-			"destroying",
-			identifier ? `Actor destroying: ${identifier}` : "Actor destroying",
+			"stopping",
+			identifier ? `Actor stopping: ${identifier}` : "Actor stopping",
 			{ public: true },
 		);
 	}

@@ -1,6 +1,5 @@
 import { serve as honoServe } from "@hono/node-server";
 import { createNodeWebSocket, type NodeWebSocket } from "@hono/node-ws";
-import { bundleRequire } from "bundle-require";
 import invariant from "invariant";
 import { describe } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
@@ -23,6 +22,7 @@ import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
+import { runActorHibernationTests } from "./tests/actor-hibernation";
 import { runActorInlineClientTests } from "./tests/actor-inline-client";
 import { runActorInspectorTests } from "./tests/actor-inspector";
 import { runActorMetadataTests } from "./tests/actor-metadata";
@@ -37,6 +37,7 @@ import { runRequestAccessTests } from "./tests/request-access";
 export interface SkipTests {
 	schedule?: boolean;
 	sleep?: boolean;
+	hibernation?: boolean;
 	inline?: boolean;
 }
 
@@ -104,6 +105,8 @@ export function runDriverTests(
 
 					runActorConnStateTests(driverTestConfig);
 
+					runActorHibernationTests(driverTestConfig);
+
 					runActorDestroyTests(driverTestConfig);
 
 					runRequestAccessTests(driverTestConfig);
@@ -159,11 +162,17 @@ export async function createTestRuntime(
 		cleanup?: () => Promise<void>;
 	}>,
 ): Promise<DriverDeployOutput> {
-	const {
-		mod: { registry },
-	} = await bundleRequire<{ registry: Registry<any> }>({
-		filepath: registryPath,
-	});
+	// Import using dynamic imports with vitest alias resolution
+	//
+	// Vitest is configured to resolve `import ... from "rivetkit"` to the
+	// appropriate source files
+	//
+	// We need to preserve the `import ... from "rivetkit"` in the fixtures so
+	// targets that run the server separately from the Vitest tests (such as
+	// Cloudflare Workers) still function.
+	const { registry } = (await import(registryPath)) as {
+		registry: Registry<any>;
+	};
 
 	// TODO: Find a cleaner way of flagging an registry as test mode (ideally not in the config itself)
 	// Force enable test

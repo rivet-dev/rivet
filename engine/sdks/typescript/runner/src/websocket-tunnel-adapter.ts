@@ -1,10 +1,15 @@
 // WebSocket-like adapter for tunneled connections
 // Implements a subset of the WebSocket interface for compatibility with runner code
 
+import type { Logger } from "pino";
 import { logger } from "./log";
+import type { Tunnel } from "./tunnel";
+import { wrappingAddU16, wrappingLteU16, wrappingSubU16 } from "./utils";
+
+export const HIBERNATABLE_SYMBOL = Symbol("hibernatable");
 
 export class WebSocketTunnelAdapter {
-	#webSocketId: string;
+	// MARK: - WebSocket Compat Variables
 	#readyState: number = 0; // CONNECTING
 	#eventListeners: Map<string, Set<(event: any) => void>> = new Map();
 	#onopen: ((this: any, ev: any) => any) | null = null;
@@ -16,36 +21,347 @@ export class WebSocketTunnelAdapter {
 	#extensions = "";
 	#protocol = "";
 	#url = "";
-	#sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void;
-	#closeCallback: (code?: number, reason?: string, retry?: boolean) => void;
-	#canHibernate: boolean = false;
 
-	// Event buffering for events fired before listeners are attached
-	#bufferedEvents: Array<{
-		type: string;
-		event: any;
-	}> = [];
+	// mARK: - Internal State
+	#tunnel: Tunnel;
+	#actorId: string;
+	#requestId: string;
+	#hibernatable: boolean;
+	#messageIndex: number;
+
+	get [HIBERNATABLE_SYMBOL](): boolean {
+		return this.#hibernatable;
+	}
+
+	/**
+	 * Called when sending a message from this WebSocket.
+	 *
+	 * Used to send a tunnel message from Tunnel.
+	 */
+	#sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void;
+
+	/**
+	 * Called when closing this WebSocket.
+	 *
+	 * Used to send a tunnel message from Tunnel
+	 */
+	#closeCallback: (
+		code?: number,
+		reason?: string,
+		hibernate?: boolean,
+	) => void;
+
+	get #log(): Logger | undefined {
+		return this.#tunnel.log;
+	}
 
 	constructor(
-		webSocketId: string,
+		tunnel: Tunnel,
+		actorId: string,
+		requestId: string,
+		hibernatable: boolean,
+		messageIndex: number,
+		isRestoringHibernatable: boolean,
+		/** @experimental */
+		public readonly request: Request,
 		sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void,
 		closeCallback: (
 			code?: number,
 			reason?: string,
-			retry?: boolean,
+			hibernate?: boolean,
 		) => void,
 	) {
-		this.#webSocketId = webSocketId;
+		this.#tunnel = tunnel;
+		this.#actorId = actorId;
+		this.#requestId = requestId;
+		this.#hibernatable = hibernatable;
+		this.#messageIndex = messageIndex;
 		this.#sendCallback = sendCallback;
 		this.#closeCallback = closeCallback;
+
+		// For restored WebSockets, immediately set to OPEN state
+		if (isRestoringHibernatable) {
+			this.#log?.debug({
+				msg: "setting WebSocket to OPEN state for restored connection",
+				actorId: this.#actorId,
+				requestId: this.#requestId,
+				hibernatable: this.#hibernatable,
+			});
+			this.#readyState = 1; // OPEN
+		}
 	}
 
-	get readyState(): number {
-		return this.#readyState;
-	}
-
+	// MARK: - Lifecycle
 	get bufferedAmount(): number {
 		return this.#bufferedAmount;
+	}
+
+	_handleOpen(requestId: ArrayBuffer): void {
+		if (this.#readyState !== 0) {
+			// CONNECTING
+			return;
+		}
+
+		this.#readyState = 1; // OPEN
+
+		const event = {
+			type: "open",
+			rivetRequestId: requestId,
+			target: this,
+		};
+
+		this.#fireEvent("open", event);
+	}
+
+	_handleMessage(
+		requestId: ArrayBuffer,
+		data: string | Uint8Array,
+		messageIndex: number,
+		isBinary: boolean,
+	): boolean {
+		if (this.#readyState !== 1) {
+			this.#log?.warn({
+				msg: "WebSocket message ignored - not in OPEN state",
+				requestId: this.#requestId,
+				actorId: this.#actorId,
+				currentReadyState: this.#readyState,
+				expectedReadyState: 1,
+				messageIndex,
+				hibernatable: this.#hibernatable,
+			});
+			return true;
+		}
+
+		// Validate message index
+		if (this.#hibernatable) {
+			const previousIndex = this.#messageIndex;
+
+			// Ignore duplicate old messages
+			//
+			// This should only happen if something goes wrong
+			// between persisting the previous index and acking the
+			// message index to the gateway. If the ack is never
+			// received by the gateway (due to a crash or network
+			// issue), the gateway will resend all messages from
+			// the last ack on reconnect.
+			if (wrappingLteU16(messageIndex, previousIndex)) {
+				this.#log?.info({
+					msg: "received duplicate hibernating websocket message, this indicates the actor failed to ack the message index before restarting",
+					requestId,
+					actorId: this.#actorId,
+					previousIndex,
+					expectedIndex: wrappingAddU16(previousIndex, 1),
+					receivedIndex: messageIndex,
+				});
+
+				return true;
+			}
+
+			// Close message if skipped message in sequence
+			//
+			// There is no scenario where this should ever happen
+			const expectedIndex = wrappingAddU16(previousIndex, 1);
+			if (messageIndex !== expectedIndex) {
+				const closeReason = "ws.message_index_skip";
+
+				this.#log?.warn({
+					msg: "hibernatable websocket message index out of sequence, closing connection",
+					requestId,
+					actorId: this.#actorId,
+					previousIndex,
+					expectedIndex,
+					receivedIndex: messageIndex,
+					closeReason,
+					gap: wrappingSubU16(
+						wrappingSubU16(messageIndex, previousIndex),
+						1,
+					),
+				});
+
+				// Close the WebSocket and skip processing
+				this.close(1008, closeReason);
+
+				return true;
+			}
+
+			// Update to the next index
+			this.#messageIndex = messageIndex;
+		}
+
+		// Dispatch event
+		let messageData: any;
+		if (isBinary) {
+			// Handle binary data based on binaryType
+			if (this.#binaryType === "nodebuffer") {
+				// Convert to Buffer for Node.js compatibility
+				messageData = Buffer.from(data as Uint8Array);
+			} else if (this.#binaryType === "arraybuffer") {
+				// Convert to ArrayBuffer
+				if (data instanceof Uint8Array) {
+					messageData = data.buffer.slice(
+						data.byteOffset,
+						data.byteOffset + data.byteLength,
+					);
+				} else {
+					messageData = data;
+				}
+			} else {
+				// Blob type - not commonly used in Node.js
+				throw new Error(
+					"Blob binaryType not supported in tunnel adapter",
+				);
+			}
+		} else {
+			messageData = data;
+		}
+
+		const event = {
+			type: "message",
+			data: messageData,
+			rivetRequestId: requestId,
+			rivetMessageIndex: messageIndex,
+			target: this,
+		};
+
+		this.#fireEvent("message", event);
+
+		return false;
+	}
+
+	_handleClose(
+		_requestId: ArrayBuffer,
+		code?: number,
+		reason?: string,
+	): void {
+		this.#closeInner(code, reason, false, true);
+	}
+
+	_handleError(error: Error): void {
+		const event = {
+			type: "error",
+			target: this,
+			error,
+		};
+
+		this.#fireEvent("error", event);
+	}
+
+	_closeWithHibernate(code?: number, reason?: string): void {
+		this.#closeInner(code, reason, true, true);
+	}
+
+	_closeWithoutCallback(code?: number, reason?: string): void {
+		this.#closeInner(code, reason, false, false);
+	}
+
+	#fireEvent(type: string, event: any): void {
+		// Call all registered event listeners
+		const listeners = this.#eventListeners.get(type);
+
+		if (listeners && listeners.size > 0) {
+			for (const listener of listeners) {
+				try {
+					listener.call(this, event);
+				} catch (error) {
+					logger()?.error({
+						msg: "error in websocket event listener",
+						error,
+						type,
+					});
+				}
+			}
+		}
+
+		// Call the onX property if set
+		switch (type) {
+			case "open":
+				if (this.#onopen) {
+					try {
+						this.#onopen.call(this, event);
+					} catch (error) {
+						logger()?.error({
+							msg: "error in onopen handler",
+							error,
+						});
+					}
+				}
+				break;
+			case "close":
+				if (this.#onclose) {
+					try {
+						this.#onclose.call(this, event);
+					} catch (error) {
+						logger()?.error({
+							msg: "error in onclose handler",
+							error,
+						});
+					}
+				}
+				break;
+			case "error":
+				if (this.#onerror) {
+					try {
+						this.#onerror.call(this, event);
+					} catch (error) {
+						logger()?.error({
+							msg: "error in onerror handler",
+							error,
+						});
+					}
+				}
+				break;
+			case "message":
+				if (this.#onmessage) {
+					try {
+						this.#onmessage.call(this, event);
+					} catch (error) {
+						logger()?.error({
+							msg: "error in onmessage handler",
+							error,
+						});
+					}
+				}
+				break;
+		}
+	}
+
+	#closeInner(
+		code: number | undefined,
+		reason: string | undefined,
+		hibernate: boolean,
+		callback: boolean,
+	): void {
+		if (
+			this.#readyState === 2 || // CLOSING
+			this.#readyState === 3 // CLOSED
+		) {
+			return;
+		}
+
+		this.#readyState = 2; // CLOSING
+
+		// Send close through tunnel
+		if (callback) {
+			this.#closeCallback(code, reason, hibernate);
+		}
+
+		// Update state and fire event
+		this.#readyState = 3; // CLOSED
+
+		const closeEvent = {
+			wasClean: true,
+			code: code || 1000,
+			reason: reason || "",
+			type: "close",
+			target: this,
+		};
+
+		this.#fireEvent("close", closeEvent);
+	}
+
+	// MARK: - WebSocket Compatible API
+	get readyState(): number {
+		return this.#readyState;
 	}
 
 	get binaryType(): string {
@@ -74,26 +390,12 @@ export class WebSocketTunnelAdapter {
 		return this.#url;
 	}
 
-	/** @experimental */
-	get canHibernate(): boolean {
-		return this.#canHibernate;
-	}
-
-	/** @experimental */
-	set canHibernate(value: boolean) {
-		this.#canHibernate = value;
-	}
-
 	get onopen(): ((this: any, ev: any) => any) | null {
 		return this.#onopen;
 	}
 
 	set onopen(value: ((this: any, ev: any) => any) | null) {
 		this.#onopen = value;
-		// Flush any buffered open events when onopen is set
-		if (value) {
-			this.#flushBufferedEvents("open");
-		}
 	}
 
 	get onclose(): ((this: any, ev: any) => any) | null {
@@ -102,10 +404,6 @@ export class WebSocketTunnelAdapter {
 
 	set onclose(value: ((this: any, ev: any) => any) | null) {
 		this.#onclose = value;
-		// Flush any buffered close events when onclose is set
-		if (value) {
-			this.#flushBufferedEvents("close");
-		}
 	}
 
 	get onerror(): ((this: any, ev: any) => any) | null {
@@ -114,10 +412,6 @@ export class WebSocketTunnelAdapter {
 
 	set onerror(value: ((this: any, ev: any) => any) | null) {
 		this.#onerror = value;
-		// Flush any buffered error events when onerror is set
-		if (value) {
-			this.#flushBufferedEvents("error");
-		}
 	}
 
 	get onmessage(): ((this: any, ev: any) => any) | null {
@@ -126,16 +420,21 @@ export class WebSocketTunnelAdapter {
 
 	set onmessage(value: ((this: any, ev: any) => any) | null) {
 		this.#onmessage = value;
-		// Flush any buffered message events when onmessage is set
-		if (value) {
-			this.#flushBufferedEvents("message");
-		}
 	}
 
 	send(data: string | ArrayBuffer | ArrayBufferView | Blob | Buffer): void {
-		if (this.#readyState !== 1) {
-			// OPEN
-			throw new Error("WebSocket is not open");
+		// Handle different ready states
+		if (this.#readyState === 0) {
+			// CONNECTING
+			throw new DOMException(
+				"WebSocket is still in CONNECTING state",
+				"InvalidStateError",
+			);
+		}
+
+		if (this.#readyState === 2 || this.#readyState === 3) {
+			// CLOSING or CLOSED - silently ignore
+			return;
 		}
 
 		let isBinary = false;
@@ -201,49 +500,7 @@ export class WebSocketTunnelAdapter {
 	}
 
 	close(code?: number, reason?: string): void {
-		this.closeInner(code, reason, false, true);
-	}
-
-	__closeWithHibernate(code?: number, reason?: string): void {
-		this.closeInner(code, reason, true, true);
-	}
-
-	__closeWithoutCallback(code?: number, reason?: string): void {
-		this.closeInner(code, reason, false, false);
-	}
-
-	closeInner(
-		code: number | undefined,
-		reason: string | undefined,
-		hibernate: boolean,
-		callback: boolean,
-	): void {
-		if (
-			this.#readyState === 2 || // CLOSING
-			this.#readyState === 3 // CLOSED
-		) {
-			return;
-		}
-
-		this.#readyState = 2; // CLOSING
-
-		// Send close through tunnel
-		if (callback) {
-			this.#closeCallback(code, reason, hibernate);
-		}
-
-		// Update state and fire event
-		this.#readyState = 3; // CLOSED
-
-		const closeEvent = {
-			wasClean: true,
-			code: code || 1000,
-			reason: reason || "",
-			type: "close",
-			target: this,
-		};
-
-		this.#fireEvent("close", closeEvent);
+		this.#closeInner(code, reason, false, true);
 	}
 
 	addEventListener(
@@ -258,9 +515,6 @@ export class WebSocketTunnelAdapter {
 				this.#eventListeners.set(type, listeners);
 			}
 			listeners.add(listener);
-
-			// Flush any buffered events for this type
-			this.#flushBufferedEvents(type);
 		}
 	}
 
@@ -278,278 +532,15 @@ export class WebSocketTunnelAdapter {
 	}
 
 	dispatchEvent(event: any): boolean {
-		// Simple implementation
+		// TODO:
 		return true;
 	}
 
-	#fireEvent(type: string, event: any): void {
-		// Call all registered event listeners
-		const listeners = this.#eventListeners.get(type);
-		let hasListeners = false;
-
-		if (listeners && listeners.size > 0) {
-			hasListeners = true;
-			for (const listener of listeners) {
-				try {
-					listener.call(this, event);
-				} catch (error) {
-					logger()?.error({
-						msg: "error in websocket event listener",
-						error,
-						type,
-					});
-				}
-			}
-		}
-
-		// Call the onX property if set
-		switch (type) {
-			case "open":
-				if (this.#onopen) {
-					hasListeners = true;
-					try {
-						this.#onopen.call(this, event);
-					} catch (error) {
-						logger()?.error({
-							msg: "error in onopen handler",
-							error,
-						});
-					}
-				}
-				break;
-			case "close":
-				if (this.#onclose) {
-					hasListeners = true;
-					try {
-						this.#onclose.call(this, event);
-					} catch (error) {
-						logger()?.error({
-							msg: "error in onclose handler",
-							error,
-						});
-					}
-				}
-				break;
-			case "error":
-				if (this.#onerror) {
-					hasListeners = true;
-					try {
-						this.#onerror.call(this, event);
-					} catch (error) {
-						logger()?.error({
-							msg: "error in onerror handler",
-							error,
-						});
-					}
-				}
-				break;
-			case "message":
-				if (this.#onmessage) {
-					hasListeners = true;
-					try {
-						this.#onmessage.call(this, event);
-					} catch (error) {
-						logger()?.error({
-							msg: "error in onmessage handler",
-							error,
-						});
-					}
-				}
-				break;
-		}
-
-		// Buffer the event if no listeners are registered
-		if (!hasListeners) {
-			this.#bufferedEvents.push({ type, event });
-		}
-	}
-
-	#flushBufferedEvents(type: string): void {
-		const eventsToFlush = this.#bufferedEvents.filter(
-			(buffered) => buffered.type === type,
-		);
-		this.#bufferedEvents = this.#bufferedEvents.filter(
-			(buffered) => buffered.type !== type,
-		);
-
-		for (const { event } of eventsToFlush) {
-			// Re-fire the event, which will now have listeners
-			const listeners = this.#eventListeners.get(type);
-			if (listeners) {
-				for (const listener of listeners) {
-					try {
-						listener.call(this, event);
-					} catch (error) {
-						logger()?.error({
-							msg: "error in websocket event listener",
-							error,
-							type,
-						});
-					}
-				}
-			}
-
-			// Also call the onX handler if it exists
-			switch (type) {
-				case "open":
-					if (this.#onopen) {
-						try {
-							this.#onopen.call(this, event);
-						} catch (error) {
-							logger()?.error({
-								msg: "error in onopen handler",
-								error,
-							});
-						}
-					}
-					break;
-				case "close":
-					if (this.#onclose) {
-						try {
-							this.#onclose.call(this, event);
-						} catch (error) {
-							logger()?.error({
-								msg: "error in onclose handler",
-								error,
-							});
-						}
-					}
-					break;
-				case "error":
-					if (this.#onerror) {
-						try {
-							this.#onerror.call(this, event);
-						} catch (error) {
-							logger()?.error({
-								msg: "error in onerror handler",
-								error,
-							});
-						}
-					}
-					break;
-				case "message":
-					if (this.#onmessage) {
-						try {
-							this.#onmessage.call(this, event);
-						} catch (error) {
-							logger()?.error({
-								msg: "error in onmessage handler",
-								error,
-							});
-						}
-					}
-					break;
-			}
-		}
-	}
-
-	// Internal methods called by the Tunnel class
-	_handleOpen(requestId: ArrayBuffer): void {
-		if (this.#readyState !== 0) {
-			// CONNECTING
-			return;
-		}
-
-		this.#readyState = 1; // OPEN
-
-		const event = {
-			type: "open",
-			rivetRequestId: requestId,
-			target: this,
-		};
-
-		this.#fireEvent("open", event);
-	}
-
-	/// Returns false if the message was sent off.
-	_handleMessage(
-		requestId: ArrayBuffer,
-		data: string | Uint8Array,
-		index: number,
-		isBinary: boolean,
-	): boolean {
-		if (this.#readyState !== 1) {
-			// OPEN
-			return true;
-		}
-
-		let messageData: any;
-
-		if (isBinary) {
-			// Handle binary data based on binaryType
-			if (this.#binaryType === "nodebuffer") {
-				// Convert to Buffer for Node.js compatibility
-				messageData = Buffer.from(data as Uint8Array);
-			} else if (this.#binaryType === "arraybuffer") {
-				// Convert to ArrayBuffer
-				if (data instanceof Uint8Array) {
-					messageData = data.buffer.slice(
-						data.byteOffset,
-						data.byteOffset + data.byteLength,
-					);
-				} else {
-					messageData = data;
-				}
-			} else {
-				// Blob type - not commonly used in Node.js
-				throw new Error(
-					"Blob binaryType not supported in tunnel adapter",
-				);
-			}
-		} else {
-			messageData = data;
-		}
-
-		const event = {
-			type: "message",
-			data: messageData,
-			rivetRequestId: requestId,
-			rivetMessageIndex: index,
-			target: this,
-		};
-
-		this.#fireEvent("message", event);
-
-		return false;
-	}
-
-	_handleClose(requestId: ArrayBuffer, code?: number, reason?: string): void {
-		if (this.#readyState === 3) {
-			// CLOSED
-			return;
-		}
-
-		this.#readyState = 3; // CLOSED
-
-		const event = {
-			type: "close",
-			wasClean: true,
-			code: code || 1000,
-			reason: reason || "",
-			rivetRequestId: requestId,
-			target: this,
-		};
-
-		this.#fireEvent("close", event);
-	}
-
-	_handleError(error: Error): void {
-		const event = {
-			type: "error",
-			target: this,
-			error,
-		};
-
-		this.#fireEvent("error", event);
-	}
-
-	// WebSocket constants for compatibility
 	static readonly CONNECTING = 0;
 	static readonly OPEN = 1;
 	static readonly CLOSING = 2;
 	static readonly CLOSED = 3;
 
-	// Instance constants
 	readonly CONNECTING = 0;
 	readonly OPEN = 1;
 	readonly CLOSING = 2;
@@ -566,6 +557,7 @@ export class WebSocketTunnelAdapter {
 		if (cb) cb(new Error("Pong not supported in tunnel adapter"));
 	}
 
+	/** @experimental */
 	terminate(): void {
 		// Immediate close without close frame
 		this.#readyState = 3; // CLOSED

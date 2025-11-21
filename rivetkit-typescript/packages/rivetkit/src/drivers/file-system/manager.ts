@@ -1,15 +1,12 @@
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { generateConnRequestId } from "@/actor/conn/mod";
-import { ActorDestroying } from "@/actor/errors";
+import { ActorStopping } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
-import {
-	handleRawWebSocket,
-	handleWebSocketConnect,
-} from "@/actor/router-endpoints";
+import { routeWebSocket } from "@/actor/router-websocket-endpoints";
 import { createClientWithDriver } from "@/client/client";
 import { ClientConfigSchema } from "@/client/config";
-import { InlineWebSocketAdapter2 } from "@/common/inline-websocket-adapter2";
+import { InlineWebSocketAdapter } from "@/common/inline-websocket-adapter";
 import { noopNext } from "@/common/utils";
 import type {
 	ActorDriver,
@@ -24,14 +21,12 @@ import type {
 import { ManagerInspector } from "@/inspector/manager";
 import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
-import {
-	type DriverConfig,
-	type Encoding,
-	PATH_CONNECT,
-	PATH_WEBSOCKET_PREFIX,
-	type RegistryConfig,
-	type RunConfig,
-	type UniversalWebSocket,
+import type {
+	DriverConfig,
+	Encoding,
+	RegistryConfig,
+	RunConfig,
+	UniversalWebSocket,
 } from "@/mod";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { FileSystemGlobalState } from "./global-state";
@@ -165,37 +160,22 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const normalizedPath = pathOnly.startsWith("/")
 			? pathOnly
 			: `/${pathOnly}`;
-		if (normalizedPath === PATH_CONNECT) {
-			// Handle standard connect
-			const wsHandler = await handleWebSocketConnect(
-				undefined,
-				this.#runConfig,
-				this.#actorDriver,
-				actorId,
-				encoding,
-				params,
-				generateConnRequestId(),
-				undefined,
-			);
-			return new InlineWebSocketAdapter2(wsHandler);
-		} else if (
-			normalizedPath.startsWith(PATH_WEBSOCKET_PREFIX) ||
-			normalizedPath === "/websocket"
-		) {
-			// Handle websocket proxy
-			// Use the full path with query parameters
-			const wsHandler = await handleRawWebSocket(
-				undefined,
-				path,
-				this.#actorDriver,
-				actorId,
-				undefined,
-				params,
-			);
-			return new InlineWebSocketAdapter2(wsHandler);
-		} else {
-			throw new Error(`Unreachable path: ${path}`);
-		}
+		const wsHandler = await routeWebSocket(
+			// TODO: Create fake request
+			undefined,
+			normalizedPath,
+			{},
+			this.#runConfig,
+			this.#actorDriver,
+			actorId,
+			encoding,
+			params,
+			generateConnRequestId(),
+			undefined,
+			false,
+			false,
+		);
+		return new InlineWebSocketAdapter(wsHandler);
 	}
 
 	async proxyRequest(
@@ -213,7 +193,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		path: string,
 		actorId: string,
 		encoding: Encoding,
-		connParams: unknown,
+		params: unknown,
 	): Promise<Response> {
 		const upgradeWebSocket = this.#runConfig.getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
@@ -223,37 +203,22 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const normalizedPath = pathOnly.startsWith("/")
 			? pathOnly
 			: `/${pathOnly}`;
-		if (normalizedPath === PATH_CONNECT) {
-			// Handle standard connect
-			const wsHandler = await handleWebSocketConnect(
-				c.req.raw,
-				this.#runConfig,
-				this.#actorDriver,
-				actorId,
-				encoding,
-				connParams,
-				generateConnRequestId(),
-				undefined,
-			);
-			return upgradeWebSocket(() => wsHandler)(c, noopNext());
-		} else if (
-			normalizedPath.startsWith(PATH_WEBSOCKET_PREFIX) ||
-			normalizedPath === "/websocket"
-		) {
-			// Handle websocket proxy
-			// Use the full path with query parameters
-			const wsHandler = await handleRawWebSocket(
-				c.req.raw,
-				path,
-				this.#actorDriver,
-				actorId,
-				undefined,
-				connParams,
-			);
-			return upgradeWebSocket(() => wsHandler)(c, noopNext());
-		} else {
-			throw new Error(`Unreachable path: ${path}`);
-		}
+		const wsHandler = await routeWebSocket(
+			// TODO: Create new request with new path
+			c.req.raw,
+			normalizedPath,
+			c.req.header(),
+			this.#runConfig,
+			this.#actorDriver,
+			actorId,
+			encoding,
+			params,
+			generateConnRequestId(),
+			undefined,
+			false,
+			false,
+		);
+		return upgradeWebSocket(() => wsHandler)(c, noopNext());
 	}
 
 	async getForId({
@@ -264,8 +229,8 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		if (!actor.state) {
 			return undefined;
 		}
-		if (actor.destroying) {
-			throw new ActorDestroying(actorId);
+		if (this.#state.isActorStopping(actorId)) {
+			throw new ActorStopping(actorId);
 		}
 
 		try {

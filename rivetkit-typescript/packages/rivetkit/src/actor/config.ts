@@ -77,7 +77,13 @@ export const ActorConfigSchema = z
 				connectionLivenessInterval: z.number().positive().default(5000),
 				noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
-				/** @experimental */
+				/**
+				 * Can hibernate WebSockets for onWebSocket.
+				 *
+				 * WebSockets using actions/events are hibernatable by default.
+				 *
+				 * @experimental
+				 **/
 				canHibernateWebSocket: z
 					.union([
 						z.boolean(),
