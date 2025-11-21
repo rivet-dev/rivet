@@ -34,3 +34,8 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 utoipa.workspace = true
+
+[build-dependencies]
+anyhow.workspace = true
+vergen.workspace = true
+vergen-gitcl.workspace = true

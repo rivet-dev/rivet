@@ -149,7 +149,7 @@ features = ["now"]
 
 [workspace.dependencies.clap]
 version = "4.3"
-features = ["derive"]
+features = ["derive", "cargo"]
 
 [workspace.dependencies.rivet-term]
 git = "https://github.com/rivet-dev/rivet-term"
