@@ -1,8 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
-use pegboard::tunnel::id as tunnel_id;
-use pegboard::tunnel::id::{GatewayId, RequestId};
 use rand::Rng;
+use rivet_runner_protocol as protocol;
 use std::time::Duration;
 use tokio::sync::watch;
 
@@ -17,8 +16,8 @@ pub async fn task(
 	shared_state: SharedState,
 	ctx: StandaloneCtx,
 	actor_id: Id,
-	gateway_id: GatewayId,
-	request_id: RequestId,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
 	mut keepalive_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
 	let mut ping_interval = tokio::time::interval(Duration::from_millis(
@@ -44,8 +43,8 @@ pub async fn task(
 
 		tracing::debug!(
 			%actor_id,
-			gateway_id=%tunnel_id::gateway_id_to_string(&gateway_id),
-			request_id=%tunnel_id::request_id_to_string(&request_id),
+			gateway_id=%protocol::util::id_to_string(&gateway_id),
+			request_id=%protocol::util::id_to_string(&request_id),
 			"updating hws keepalive"
 		);
 

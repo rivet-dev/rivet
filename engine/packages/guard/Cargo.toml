@@ -37,6 +37,7 @@ rivet-guard-core.workspace = true
 rivet-logs.workspace = true
 rivet-metrics.workspace = true
 rivet-pools.workspace = true
+rivet-runner-protocol.workspace = true
 rivet-runtime.workspace = true
 rustls-pemfile.workspace = true
 rustls.workspace = true

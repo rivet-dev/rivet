@@ -1,6 +1,5 @@
 use anyhow::Result;
 use gas::prelude::*;
-use pegboard::tunnel::id as tunnel_id;
 use rivet_guard_core::{
 	WebSocketHandle,
 	errors::{WebSocketServiceHibernate, WebSocketServiceTimeout, WebSocketServiceUnavailable},
@@ -39,7 +38,7 @@ pub async fn task(
 						}
 						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
 							tracing::debug!(
-								request_id=%tunnel_id::request_id_to_string(&request_id),
+								request_id=%protocol::util::id_to_string(&request_id),
 								ack_index=?ack.index,
 								"received WebSocketMessageAck from runner"
 							);
@@ -74,7 +73,7 @@ pub async fn task(
 				}
 			}
 			_ = drop_rx.changed() => {
-				tracing::warn!("websocket message timeout");
+				tracing::warn!("garbage collected");
 				return Err(WebSocketServiceTimeout.build());
 			}
 			_ = tunnel_to_ws_abort_rx.changed() => {

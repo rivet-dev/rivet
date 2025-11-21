@@ -5,11 +5,11 @@ use gas::prelude::*;
 use http_body_util::Full;
 use hyper::{Response, StatusCode};
 use pegboard::ops::runner::update_alloc_idx::Action;
-use pegboard::tunnel::id::RequestId;
 use rivet_guard_core::{
 	WebSocketHandle, custom_serve::CustomServeTrait, proxy_service::ResponseBody,
 	request_context::RequestContext,
 };
+use rivet_runner_protocol as protocol;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
@@ -48,7 +48,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		&self,
 		_req: hyper::Request<http_body_util::Full<hyper::body::Bytes>>,
 		_request_context: &mut RequestContext,
-		_request_id: RequestId,
+		_request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Pegboard runner ws doesn't handle regular HTTP requests
 		// Return a simple status response
@@ -68,7 +68,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		_headers: &hyper::HeaderMap,
 		path: &str,
 		_request_context: &mut RequestContext,
-		_unique_request_id: pegboard::tunnel::id::RequestId,
+		_unique_request_id: protocol::RequestId,
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Get UPS

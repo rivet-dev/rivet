@@ -5,7 +5,6 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
-use pegboard::tunnel::id as tunnel_id;
 use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
@@ -382,7 +381,7 @@ async fn handle_tunnel_message(
 	if protocol::compat::version_needs_tunnel_ack(conn.protocol_version) {
 		let ack_msg = versioned::ToClient::wrap_latest(protocol::ToClient::ToClientTunnelMessage(
 			protocol::ToClientTunnelMessage {
-				message_id: msg.message_id,
+				message_id: msg.message_id.clone(),
 				message_kind: protocol::ToClientTunnelMessageKind::DeprecatedTunnelAck,
 			},
 		));
@@ -399,12 +398,8 @@ async fn handle_tunnel_message(
 			.context("failed to send DeprecatedTunnelAck to runner")?;
 	}
 
-	// Parse message ID to extract gateway_id
-	let parts =
-		tunnel_id::parse_message_id(msg.message_id).context("failed to parse message id")?;
-
 	// Publish message to UPS
-	let gateway_reply_to = GatewayReceiverSubject::new(parts.gateway_id).to_string();
+	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToServerTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_VERSION)

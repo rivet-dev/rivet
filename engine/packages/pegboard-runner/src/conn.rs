@@ -1,3 +1,8 @@
+use std::{
+	sync::{Arc, atomic::AtomicU32},
+	time::Duration,
+};
+
 use anyhow::Context;
 use futures_util::StreamExt;
 use gas::prelude::Id;
@@ -5,12 +10,7 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
 use rivet_guard_core::WebSocketHandle;
-use rivet_runner_protocol as protocol;
-use rivet_runner_protocol::*;
-use std::{
-	sync::{Arc, atomic::AtomicU32},
-	time::Duration,
-};
+use rivet_runner_protocol::{self as protocol, versioned};
 use vbare::OwnedVersionedData;
 
 use crate::{errors::WsError, utils::UrlData};

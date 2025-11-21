@@ -1,16 +1,15 @@
 use anyhow::Result;
+use rivet_runner_protocol as protocol;
 use universaldb::prelude::*;
-
-use crate::tunnel::id::{GatewayId, RequestId};
 
 #[derive(Debug)]
 pub struct LastPingTsKey {
-	gateway_id: GatewayId,
-	request_id: RequestId,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
 }
 
 impl LastPingTsKey {
-	pub fn new(gateway_id: GatewayId, request_id: RequestId) -> Self {
+	pub fn new(gateway_id: protocol::GatewayId, request_id: protocol::RequestId) -> Self {
 		LastPingTsKey {
 			gateway_id,
 			request_id,
@@ -53,12 +52,12 @@ impl<'de> TupleUnpack<'de> for LastPingTsKey {
 		let (input, (_, _, gateway_id_bytes, request_id_bytes, _)) =
 			<(usize, usize, Vec<u8>, Vec<u8>, usize)>::unpack(input, tuple_depth)?;
 
-		let gateway_id: GatewayId = gateway_id_bytes
+		let gateway_id = gateway_id_bytes
 			.as_slice()
 			.try_into()
 			.expect("invalid gateway_id length");
 
-		let request_id: RequestId = request_id_bytes
+		let request_id = request_id_bytes
 			.as_slice()
 			.try_into()
 			.expect("invalid request_id length");
