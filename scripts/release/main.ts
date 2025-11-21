@@ -60,12 +60,64 @@ async function getCurrentVersion(): Promise<string> {
 	return packageJson.version;
 }
 
+async function getLatestGitVersion(): Promise<string | null> {
+	try {
+		// Fetch tags to ensure we have the latest
+		// Use --force to overwrite local tags that conflict with remote
+		await $`git fetch --tags --force --quiet`;
+
+		// Get all version tags
+		const result = await $`git tag -l "v*"`;
+		const tags = result.stdout.trim().split("\n").filter(Boolean);
+
+		if (tags.length === 0) {
+			return null;
+		}
+
+		// Parse and find the latest version (excluding prereleases)
+		const versions = tags
+			.map(tag => tag.replace(/^v/, ""))
+			.filter(v => semver.valid(v))
+			.sort((a, b) => semver.rcompare(a, b));
+
+		return versions[0] || null;
+	} catch (error) {
+		console.warn("Warning: Could not fetch git tags:", error);
+		return null;
+	}
+}
+
+async function shouldTagAsLatest(newVersion: string): Promise<boolean> {
+	// Check if version has prerelease identifier (e.g., 1.0.0-rc.1)
+	const parsedVersion = semver.parse(newVersion);
+	if (!parsedVersion) {
+		throw new Error(`Invalid semantic version: ${newVersion}`);
+	}
+
+	// If it has a prerelease identifier, it's not latest
+	if (parsedVersion.prerelease.length > 0) {
+		return false;
+	}
+
+	// Get the latest version from git tags
+	const latestGitVersion = await getLatestGitVersion();
+
+	// If no previous versions exist, this is the latest
+	if (!latestGitVersion) {
+		return true;
+	}
+
+	// Check if new version is greater than the latest git version
+	return semver.gt(newVersion, latestGitVersion);
+}
+
 async function validateReuseVersion(version: string): Promise<void> {
 	console.log(`Validating that version ${version} exists...`);
 
 	// Fetch tags to ensure we have the latest
+	// Use --force to overwrite local tags that conflict with remote
 	console.log(`Fetching tags...`);
-	await $({ stdio: "inherit" })`git fetch --tags`;
+	await $({ stdio: "inherit" })`git fetch --tags --force`;
 
 	// Get short commit from version tag
 	let shortCommit: string;
@@ -195,6 +247,7 @@ async function getVersionFromArgs(opts: {
 
 // Available steps
 const STEPS = [
+	"confirm-release",
 	"update-version",
 	"generate-fern",
 	"git-commit",
@@ -224,6 +277,7 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 	// These steps modify the source code, so they need to be ran & committed
 	// locally. CI cannot push commits.
 	"setup-local": [
+		"confirm-release",
 		"update-version",
 		"generate-fern",
 		"git-commit",
@@ -331,6 +385,18 @@ async function main() {
 		"version must be a valid semantic version",
 	);
 
+	// Automatically determine if this should be tagged as latest
+	// Can be overridden by --latest or --no-latest flags
+	let isLatest: boolean;
+	if (opts.latest !== undefined) {
+		// User explicitly set the flag
+		isLatest = opts.latest;
+	} else {
+		// Auto-determine based on version
+		isLatest = await shouldTagAsLatest(version);
+		console.log(`Auto-determined latest flag: ${isLatest} (version: ${version})`);
+	}
+
 	// Setup opts
 	let commit: string;
 	if (opts.overrideCommit) {
@@ -345,7 +411,7 @@ async function main() {
 	const releaseOpts: ReleaseOpts = {
 		root: ROOT_DIR,
 		version: version,
-		latest: opts.latest,
+		latest: isLatest,
 		commit,
 		reuseEngineVersion: opts.reuseEngineVersion,
 	};
@@ -359,6 +425,47 @@ async function main() {
 	if (opts.validateGit && !shouldRunStep("run-type-check")) {
 		// HACK: Skip setup-ci because for some reason there's changes in the setup step but only in GitHub Actions
 		await validateGit(releaseOpts);
+	}
+
+	if (shouldRunStep("confirm-release")) {
+		console.log("==> Release Confirmation");
+		console.log(`\nRelease Details:`);
+		console.log(`  Version: ${releaseOpts.version}`);
+		console.log(`  Latest: ${releaseOpts.latest}`);
+		console.log(`  Commit: ${releaseOpts.commit}`);
+		if (releaseOpts.reuseEngineVersion) {
+			console.log(`  Reusing engine version: ${releaseOpts.reuseEngineVersion}`);
+		}
+
+		// Get current branch
+		const branchResult = await $`git rev-parse --abbrev-ref HEAD`;
+		const branch = branchResult.stdout.trim();
+		console.log(`  Branch: ${branch}`);
+
+		// Get latest git version for context
+		const latestGitVersion = await getLatestGitVersion();
+		if (latestGitVersion) {
+			console.log(`  Current latest version: ${latestGitVersion}`);
+		}
+
+		// Prompt for confirmation
+		const readline = await import("node:readline");
+		const rl = readline.createInterface({
+			input: process.stdin,
+			output: process.stdout,
+		});
+
+		const answer = await new Promise<string>((resolve) => {
+			rl.question("\nProceed with release? (yes/no): ", resolve);
+		});
+		rl.close();
+
+		if (answer.toLowerCase() !== "yes" && answer.toLowerCase() !== "y") {
+			console.log("Release cancelled");
+			process.exit(0);
+		}
+
+		console.log("✅ Release confirmed");
 	}
 
 	if (shouldRunStep("update-version")) {
