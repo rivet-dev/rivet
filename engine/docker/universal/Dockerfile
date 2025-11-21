@@ -2,7 +2,7 @@
 
 # MARK: Builder
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
-FROM rust:1.88.0-bookworm AS builder
+FROM rust:1.91.0-trixie AS builder
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -75,7 +75,7 @@ RUN \
     cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
-FROM debian:12.9-slim AS engine-full-base
+FROM debian:13.1-slim AS engine-full-base
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -108,7 +108,7 @@ ENTRYPOINT ["/usr/bin/rivet-engine"]
 CMD ["start"]
 
 # MARK: Engine (Slim)
-FROM debian:12.9-slim AS engine-slim
+FROM debian:13.1-slim AS engine-slim
 
 LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
 
@@ -130,3 +130,4 @@ COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
 ENTRYPOINT ["/usr/bin/rivet-engine"]
 CMD ["start"]
+
