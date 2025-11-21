@@ -710,6 +710,16 @@ impl OwnedVersionedData for ToRunner {
 			ToRunner::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v3
+		vec![Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v3
+		vec![Ok, Ok]
+	}
 }
 
 pub enum ToGateway {
@@ -745,6 +755,16 @@ impl OwnedVersionedData for ToGateway {
 			ToGateway::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v3
+		vec![Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v3
+		vec![Ok, Ok]
+	}
 }
 
 pub enum ToServerlessServer {
@@ -779,6 +799,16 @@ impl OwnedVersionedData for ToServerlessServer {
 		match self {
 			ToServerlessServer::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v3
+		vec![Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v3
+		vec![Ok, Ok]
 	}
 }
 
