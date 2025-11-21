@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
-use pegboard::tunnel::id::RequestId;
+use rivet_runner_protocol as protocol;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 
 use crate::WebSocketHandle;
@@ -23,7 +23,7 @@ pub trait CustomServeTrait: Send + Sync {
 		&self,
 		req: Request<Full<Bytes>>,
 		request_context: &mut RequestContext,
-		request_id: RequestId,
+		request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>>;
 
 	/// Handle a WebSocket connection after upgrade. Supports connection retries.
@@ -34,7 +34,7 @@ pub trait CustomServeTrait: Send + Sync {
 		_path: &str,
 		_request_context: &mut RequestContext,
 		// Identifies the websocket across retries.
-		_unique_request_id: RequestId,
+		_unique_request_id: protocol::RequestId,
 		// True if this websocket is reconnecting after hibernation.
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
@@ -45,7 +45,7 @@ pub trait CustomServeTrait: Send + Sync {
 	async fn handle_websocket_hibernation(
 		&self,
 		_websocket: WebSocketHandle,
-		_unique_request_id: RequestId,
+		_unique_request_id: protocol::RequestId,
 	) -> Result<HibernationResult> {
 		bail!("service does not support websocket hibernation");
 	}

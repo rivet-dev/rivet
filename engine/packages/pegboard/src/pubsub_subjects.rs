@@ -1,6 +1,5 @@
 use gas::prelude::*;
-
-use crate::tunnel::id as tunnel_id;
+use rivet_runner_protocol as protocol;
 
 pub struct RunnerReceiverSubject {
 	runner_id: Id,
@@ -61,11 +60,11 @@ impl std::fmt::Display for RunnerEvictionByNameSubject {
 }
 
 pub struct GatewayReceiverSubject {
-	gateway_id: tunnel_id::GatewayId,
+	gateway_id: protocol::GatewayId,
 }
 
 impl GatewayReceiverSubject {
-	pub fn new(gateway_id: tunnel_id::GatewayId) -> Self {
+	pub fn new(gateway_id: protocol::GatewayId) -> Self {
 		Self { gateway_id }
 	}
 }
@@ -75,7 +74,7 @@ impl std::fmt::Display for GatewayReceiverSubject {
 		write!(
 			f,
 			"pegboard.gateway.{}",
-			tunnel_id::gateway_id_to_string(&self.gateway_id)
+			protocol::util::id_to_string(&self.gateway_id)
 		)
 	}
 }

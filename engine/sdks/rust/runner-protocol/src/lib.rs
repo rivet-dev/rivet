@@ -1,5 +1,6 @@
 pub mod compat;
 pub mod generated;
+pub mod util;
 pub mod versioned;
 
 // Re-export latest

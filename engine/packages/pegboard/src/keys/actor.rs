@@ -1,8 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
+use rivet_runner_protocol as protocol;
 use universaldb::prelude::*;
-
-use crate::tunnel::id::{GatewayId, RequestId};
 
 #[derive(Debug)]
 pub struct CreateTsKey {
@@ -318,16 +317,16 @@ impl<'de> TupleUnpack<'de> for NamespaceIdKey {
 pub struct HibernatingRequestKey {
 	actor_id: Id,
 	last_ping_ts: i64,
-	pub gateway_id: GatewayId,
-	pub request_id: RequestId,
+	pub gateway_id: protocol::GatewayId,
+	pub request_id: protocol::RequestId,
 }
 
 impl HibernatingRequestKey {
 	pub fn new(
 		actor_id: Id,
 		last_ping_ts: i64,
-		gateway_id: GatewayId,
-		request_id: RequestId,
+		gateway_id: protocol::GatewayId,
+		request_id: protocol::RequestId,
 	) -> Self {
 		HibernatingRequestKey {
 			actor_id,
@@ -381,12 +380,12 @@ impl<'de> TupleUnpack<'de> for HibernatingRequestKey {
 		let (input, (_, _, actor_id, last_ping_ts, gateway_id_bytes, request_id_bytes)) =
 			<(usize, usize, Id, i64, Vec<u8>, Vec<u8>)>::unpack(input, tuple_depth)?;
 
-		let gateway_id: GatewayId = gateway_id_bytes
+		let gateway_id = gateway_id_bytes
 			.as_slice()
 			.try_into()
 			.expect("invalid gateway_id length");
 
-		let request_id: RequestId = request_id_bytes
+		let request_id = request_id_bytes
 			.as_slice()
 			.try_into()
 			.expect("invalid request_id length");
