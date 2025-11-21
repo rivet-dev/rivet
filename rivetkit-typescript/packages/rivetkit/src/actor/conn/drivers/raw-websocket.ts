@@ -13,17 +13,13 @@ import { type ConnDriver, DriverReadyState } from "../driver";
  * actor's onWebSocket handler.
  */
 export function createRawWebSocketDriver(
-	requestId: string,
-	requestIdBuf: ArrayBuffer | undefined,
-	hibernatable: boolean,
+	hibernatable: ConnDriver['hibernatable'],
 	closePromise: Promise<void>,
 ): { driver: ConnDriver; setWebSocket(ws: UniversalWebSocket): void } {
 	let websocket: UniversalWebSocket | undefined;
 
 	const driver: ConnDriver = {
 		type: "raw-websocket",
-		requestId,
-		requestIdBuf,
 		hibernatable,
 
 		// No sendMessage implementation since this is a raw WebSocket that doesn't

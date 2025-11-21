@@ -3,7 +3,7 @@ import type { Logger } from "pino";
 import type WebSocket from "ws";
 import { logger, setLogger } from "./log.js";
 import { stringifyCommandWrapper, stringifyEvent } from "./stringify";
-import type { PendingRequest, PendingTunnelMessage } from "./tunnel";
+import type { PendingRequest } from "./tunnel";
 import { type HibernatingWebSocketMetadata, Tunnel } from "./tunnel";
 import {
 	calculateBackoff,
@@ -12,8 +12,11 @@ import {
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
 import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+import { RunnerActor, type ActorConfig } from "./actor";
 
 export type { HibernatingWebSocketMetadata };
+export * as tunnelId from "./tunnel-id";
+export { RunnerActor, type ActorConfig };
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 3;
@@ -22,22 +25,6 @@ const RUNNER_PING_INTERVAL = 3_000;
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
 const SIGNAL_HANDLERS: (() => void)[] = [];
-
-export interface RunnerActor {
-	actorId: string;
-	generation: number;
-	config: ActorConfig;
-	pendingRequests: Map<string, PendingRequest>;
-	webSockets: Map<string, WebSocketTunnelAdapter>;
-	pendingTunnelMessages: Map<string, PendingTunnelMessage>;
-}
-
-export interface ActorConfig {
-	name: string;
-	key: string | null;
-	createTs: bigint;
-	input: Uint8Array | null;
-}
 
 export interface RunnerConfig {
 	logger?: Logger;
@@ -60,6 +47,7 @@ export interface RunnerConfig {
 	fetch: (
 		runner: Runner,
 		actorId: string,
+		gatewayId: protocol.GatewayId,
 		requestId: protocol.RequestId,
 		request: Request,
 	) => Promise<Response>;
@@ -139,6 +127,7 @@ export interface RunnerConfig {
 		runner: Runner,
 		actorId: string,
 		ws: any,
+		gatewayId: protocol.GatewayId,
 		requestId: protocol.RequestId,
 		request: Request,
 		path: string,
@@ -154,6 +143,7 @@ export interface RunnerConfig {
 		 */
 		canHibernate: (
 			actorId: string,
+			gatewayId: ArrayBuffer,
 			requestId: ArrayBuffer,
 			request: Request,
 		) => boolean;
@@ -232,7 +222,7 @@ export class Runner {
 	#ackInterval?: NodeJS.Timeout;
 
 	// KV operations
-	#nextRequestId: number = 0;
+	#nextKvRequestId: number = 0;
 	#kvRequests: Map<number, KvRequestEntry> = new Map();
 	#kvCleanupInterval?: NodeJS.Timeout;
 
@@ -932,14 +922,7 @@ export class Runner {
 			input: config.input ? new Uint8Array(config.input) : null,
 		};
 
-		const instance: RunnerActor = {
-			actorId,
-			generation,
-			config: actorConfig,
-			pendingRequests: new Map(),
-			webSockets: new Map(),
-			pendingTunnelMessages: new Map(),
-		};
+		const instance = new RunnerActor(actorId, generation, actorConfig);
 
 		this.#actors.set(actorId, instance);
 
@@ -958,7 +941,7 @@ export class Runner {
 			// Restore hibernating requests
 			await this.#tunnel.restoreHibernatingRequests(
 				actorId,
-				startCommand.hibernatingRequestIds,
+				startCommand.hibernatingRequests,
 			);
 		} catch (err) {
 			this.log?.error({
@@ -1451,7 +1434,7 @@ export class Runner {
 				return;
 			}
 
-			const requestId = this.#nextRequestId++;
+			const requestId = this.#nextKvRequestId++;
 			const isConnected =
 				this.#pegboardWebSocket &&
 				this.#pegboardWebSocket.readyState === 1;
@@ -1548,10 +1531,18 @@ export class Runner {
 		}
 	}
 
-	sendHibernatableWebSocketMessageAck(requestId: ArrayBuffer, index: number) {
+	sendHibernatableWebSocketMessageAck(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		index: number,
+	) {
 		if (!this.#tunnel)
 			throw new Error("missing tunnel to send message ack");
-		this.#tunnel.sendHibernatableWebSocketMessageAck(requestId, index);
+		this.#tunnel.sendHibernatableWebSocketMessageAck(
+			gatewayId,
+			requestId,
+			index,
+		);
 	}
 
 	getServerlessInitPacket(): string | undefined {

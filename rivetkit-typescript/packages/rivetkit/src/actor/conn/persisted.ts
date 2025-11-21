@@ -8,6 +8,7 @@ import * as cbor from "cbor-x";
 import type * as persistSchema from "@/schemas/actor-persist/mod";
 import { bufferToArrayBuffer } from "@/utils";
 
+export type GatewayId = ArrayBuffer;
 export type RequestId = ArrayBuffer;
 
 export type Cbor = ArrayBuffer;
@@ -25,10 +26,10 @@ export interface PersistedConn<CP, CS> {
 	parameters: CP;
 	state: CS;
 	subscriptions: PersistedSubscription[];
-	/** Request ID of the hibernatable WebSocket */
-	hibernatableRequestId: RequestId;
-	/** Last seen message index for this WebSocket */
-	msgIndex: number;
+	gatewayId: GatewayId;
+	requestId: RequestId;
+	serverMessageIndex: number;
+	clientMessageIndex: number;
 	requestPath: string;
 	requestHeaders: Record<string, string>;
 }
@@ -47,8 +48,10 @@ export function convertConnToBarePersistedConn<CP, CS>(
 		subscriptions: persist.subscriptions.map((sub) => ({
 			eventName: sub.eventName,
 		})),
-		hibernatableRequestId: persist.hibernatableRequestId,
-		msgIndex: BigInt(persist.msgIndex),
+		gatewayId: persist.gatewayId,
+		requestId: persist.requestId,
+		serverMessageIndex: persist.serverMessageIndex,
+		clientMessageIndex: persist.clientMessageIndex,
 		requestPath: persist.requestPath,
 		requestHeaders: new Map(Object.entries(persist.requestHeaders)),
 	};
@@ -68,8 +71,10 @@ export function convertConnFromBarePersistedConn<CP, CS>(
 		subscriptions: bareData.subscriptions.map((sub) => ({
 			eventName: sub.eventName,
 		})),
-		hibernatableRequestId: bareData.hibernatableRequestId,
-		msgIndex: Number(bareData.msgIndex),
+		gatewayId: bareData.gatewayId,
+		requestId: bareData.requestId,
+		serverMessageIndex: bareData.serverMessageIndex,
+		clientMessageIndex: bareData.clientMessageIndex,
 		requestPath: bareData.requestPath,
 		requestHeaders: Object.fromEntries(bareData.requestHeaders),
 	};

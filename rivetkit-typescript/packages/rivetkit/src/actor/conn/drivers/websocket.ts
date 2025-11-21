@@ -8,15 +8,12 @@ import { type ConnDriver, DriverReadyState } from "../driver";
 export type ConnDriverWebSocketState = Record<never, never>;
 
 export function createWebSocketDriver(
-	requestId: string,
-	requestIdBuf: ArrayBuffer | undefined,
-	hibernatable: boolean,
+	hibernatable: ConnDriver['hibernatable'],
 	encoding: Encoding,
 	closePromise: Promise<void>,
 ): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
 	loggerWithoutContext().debug({
 		msg: "createWebSocketDriver creating driver",
-		requestId,
 		hibernatable,
 	});
 	// Wait for WS to open
@@ -24,8 +21,6 @@ export function createWebSocketDriver(
 
 	const driver: ConnDriver = {
 		type: "websocket",
-		requestId,
-		requestIdBuf,
 		hibernatable,
 		rivetKitProtocol: {
 			sendMessage: (

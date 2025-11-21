@@ -27,7 +27,7 @@ export class WebSocketTunnelAdapter {
 	#actorId: string;
 	#requestId: string;
 	#hibernatable: boolean;
-	#messageIndex: number;
+	#serverMessageIndex: number;
 
 	get [HIBERNATABLE_SYMBOL](): boolean {
 		return this.#hibernatable;
@@ -59,8 +59,8 @@ export class WebSocketTunnelAdapter {
 		tunnel: Tunnel,
 		actorId: string,
 		requestId: string,
+		serverMessageIndex: number,
 		hibernatable: boolean,
-		messageIndex: number,
 		isRestoringHibernatable: boolean,
 		/** @experimental */
 		public readonly request: Request,
@@ -71,7 +71,7 @@ export class WebSocketTunnelAdapter {
 		this.#actorId = actorId;
 		this.#requestId = requestId;
 		this.#hibernatable = hibernatable;
-		this.#messageIndex = messageIndex;
+		this.#serverMessageIndex = serverMessageIndex;
 		this.#sendCallback = sendCallback;
 		this.#closeCallback = closeCallback;
 
@@ -112,7 +112,7 @@ export class WebSocketTunnelAdapter {
 	_handleMessage(
 		requestId: ArrayBuffer,
 		data: string | Uint8Array,
-		messageIndex: number,
+		serverMessageIndex: number,
 		isBinary: boolean,
 	): boolean {
 		if (this.#readyState !== 1) {
@@ -122,7 +122,7 @@ export class WebSocketTunnelAdapter {
 				actorId: this.#actorId,
 				currentReadyState: this.#readyState,
 				expectedReadyState: 1,
-				messageIndex,
+				serverMessageIndex: serverMessageIndex,
 				hibernatable: this.#hibernatable,
 			});
 			return true;
@@ -130,7 +130,7 @@ export class WebSocketTunnelAdapter {
 
 		// Validate message index
 		if (this.#hibernatable) {
-			const previousIndex = this.#messageIndex;
+			const previousIndex = this.#serverMessageIndex;
 
 			// Ignore duplicate old messages
 			//
@@ -140,14 +140,14 @@ export class WebSocketTunnelAdapter {
 			// received by the gateway (due to a crash or network
 			// issue), the gateway will resend all messages from
 			// the last ack on reconnect.
-			if (wrappingLteU16(messageIndex, previousIndex)) {
+			if (wrappingLteU16(serverMessageIndex, previousIndex)) {
 				this.#log?.info({
 					msg: "received duplicate hibernating websocket message, this indicates the actor failed to ack the message index before restarting",
 					requestId,
 					actorId: this.#actorId,
 					previousIndex,
 					expectedIndex: wrappingAddU16(previousIndex, 1),
-					receivedIndex: messageIndex,
+					receivedIndex: serverMessageIndex,
 				});
 
 				return true;
@@ -157,7 +157,7 @@ export class WebSocketTunnelAdapter {
 			//
 			// There is no scenario where this should ever happen
 			const expectedIndex = wrappingAddU16(previousIndex, 1);
-			if (messageIndex !== expectedIndex) {
+			if (serverMessageIndex !== expectedIndex) {
 				const closeReason = "ws.message_index_skip";
 
 				this.#log?.warn({
@@ -166,10 +166,10 @@ export class WebSocketTunnelAdapter {
 					actorId: this.#actorId,
 					previousIndex,
 					expectedIndex,
-					receivedIndex: messageIndex,
+					receivedIndex: serverMessageIndex,
 					closeReason,
 					gap: wrappingSubU16(
-						wrappingSubU16(messageIndex, previousIndex),
+						wrappingSubU16(serverMessageIndex, previousIndex),
 						1,
 					),
 				});
@@ -181,7 +181,7 @@ export class WebSocketTunnelAdapter {
 			}
 
 			// Update to the next index
-			this.#messageIndex = messageIndex;
+			this.#serverMessageIndex = serverMessageIndex;
 		}
 
 		// Dispatch event
@@ -215,7 +215,7 @@ export class WebSocketTunnelAdapter {
 			type: "message",
 			data: messageData,
 			rivetRequestId: requestId,
-			rivetMessageIndex: messageIndex,
+			rivetMessageIndex: serverMessageIndex,
 			target: this,
 		};
 

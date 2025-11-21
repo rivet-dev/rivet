@@ -5,6 +5,7 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
+use pegboard::tunnel::id as tunnel_id;
 use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
@@ -334,7 +335,7 @@ async fn handle_message(
 			}
 		}
 		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, tunnel_msg)
+			handle_tunnel_message(&ctx, &conn, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -362,11 +363,44 @@ async fn handle_message(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
+	conn: &Arc<Conn>,
 	msg: protocol::ToServerTunnelMessage,
 ) -> Result<()> {
+	// Ignore DeprecatedTunnelAck messages (used only for backwards compatibility)
+	if matches!(
+		msg.message_kind,
+		protocol::ToServerTunnelMessageKind::DeprecatedTunnelAck
+	) {
+		return Ok(());
+	}
+
+	// Send DeprecatedTunnelAck back to runner for older protocol versions
+	if protocol::compat::version_needs_tunnel_ack(conn.protocol_version) {
+		let ack_msg = versioned::ToClient::wrap_latest(protocol::ToClient::ToClientTunnelMessage(
+			protocol::ToClientTunnelMessage {
+				message_id: msg.message_id,
+				message_kind: protocol::ToClientTunnelMessageKind::DeprecatedTunnelAck,
+			},
+		));
+
+		let ack_serialized = ack_msg
+			.serialize(conn.protocol_version)
+			.context("failed to serialize DeprecatedTunnelAck response")?;
+
+		conn.ws_handle
+			.send(hyper_tungstenite::tungstenite::Message::Binary(
+				ack_serialized.into(),
+			))
+			.await
+			.context("failed to send DeprecatedTunnelAck to runner")?;
+	}
+
+	// Parse message ID to extract gateway_id
+	let parts =
+		tunnel_id::parse_message_id(msg.message_id).context("failed to parse message id")?;
+
 	// Publish message to UPS
-	let gateway_reply_to =
-		GatewayReceiverSubject::new(Uuid::from_bytes(msg.gateway_id)).to_string();
+	let gateway_reply_to = GatewayReceiverSubject::new(parts.gateway_id).to_string();
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToServerTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_VERSION)

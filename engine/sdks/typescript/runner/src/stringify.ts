@@ -32,8 +32,8 @@ export function stringifyToServerTunnelMessageKind(
 	kind: protocol.ToServerTunnelMessageKind,
 ): string {
 	switch (kind.tag) {
-		case "TunnelAck":
-			return "TunnelAck";
+		case "DeprecatedTunnelAck":
+			return "DeprecatedTunnelAck";
 		case "ToServerResponseStart": {
 			const { status, headers, body, stream } = kind.val;
 			const bodyStr = body === null ? "null" : stringifyArrayBuffer(body);
@@ -74,8 +74,8 @@ export function stringifyToClientTunnelMessageKind(
 	kind: protocol.ToClientTunnelMessageKind,
 ): string {
 	switch (kind.tag) {
-		case "TunnelAck":
-			return "TunnelAck";
+		case "DeprecatedTunnelAck":
+			return "DeprecatedTunnelAck";
 		case "ToClientRequestStart": {
 			const { actorId, method, path, headers, body, stream } = kind.val;
 			const bodyStr = body === null ? "null" : stringifyArrayBuffer(body);
@@ -92,8 +92,8 @@ export function stringifyToClientTunnelMessageKind(
 			return `ToClientWebSocketOpen{actorId: "${actorId}", path: "${path}", headers: ${stringifyMap(headers)}}`;
 		}
 		case "ToClientWebSocketMessage": {
-			const { index, data, binary } = kind.val;
-			return `ToClientWebSocketMessage{index: ${index}, data: ${stringifyArrayBuffer(data)}, binary: ${binary}}`;
+			const { data, binary } = kind.val;
+			return `ToClientWebSocketMessage{data: ${stringifyArrayBuffer(data)}, binary: ${binary}}`;
 		}
 		case "ToClientWebSocketClose": {
 			const { code, reason } = kind.val;

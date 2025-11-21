@@ -149,7 +149,7 @@ impl ToClient {
 											create_ts: start.config.create_ts,
 											input: start.config.input,
 										},
-										hibernating_request_ids: Vec::new(),
+										hibernating_requests: Vec::new(),
 									})
 								}
 								v2::Command::CommandStopActor(stop) => {
@@ -174,14 +174,17 @@ impl ToClient {
 					})
 				}
 				v2::ToClient::ToClientTunnelMessage(msg) => {
+					// Extract v3 message_id from v2's message_id
+					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
+					// v2.message_id contains: entire v3 message_id (12 bytes) + padding (4 bytes)
+					let mut message_id = [0u8; 12];
+					message_id.copy_from_slice(&msg.message_id[..12]);
+
 					v3::ToClient::ToClientTunnelMessage(v3::ToClientTunnelMessage {
-						gateway_id: [0; 16],
-						request_id: msg.request_id,
-						message_id: msg.message_id,
+						message_id,
 						message_kind: convert_to_client_tunnel_message_kind_v2_to_v3(
 							msg.message_kind,
 						),
-						gateway_reply_to: msg.gateway_reply_to,
 					})
 				}
 			};
@@ -243,13 +246,23 @@ impl ToClient {
 					})
 				}
 				v3::ToClient::ToClientTunnelMessage(msg) => {
+					// Split v3 message_id into v2's request_id and message_id
+					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
+					// v2.request_id = gateway_id (4) + request_id (4) + padding (8 zeros)
+					// v2.message_id = entire v3 message_id (12 bytes) + padding (4 zeros)
+					let mut request_id = [0u8; 16];
+					let mut message_id = [0u8; 16];
+					request_id[..8].copy_from_slice(&msg.message_id[..8]); // gateway_id + request_id
+					message_id[..12].copy_from_slice(&msg.message_id); // entire v3 message_id
+
 					v2::ToClient::ToClientTunnelMessage(v2::ToClientTunnelMessage {
-						request_id: msg.request_id,
-						message_id: msg.message_id,
+						request_id,
+						message_id,
 						message_kind: convert_to_client_tunnel_message_kind_v3_to_v2(
 							msg.message_kind,
+							&msg.message_id,
 						)?,
-						gateway_reply_to: msg.gateway_reply_to,
+						gateway_reply_to: None,
 					})
 				}
 			};
@@ -489,10 +502,14 @@ impl ToServer {
 					})
 				}
 				v2::ToServer::ToServerTunnelMessage(msg) => {
+					// Extract v3 message_id from v2's message_id
+					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
+					// v2.message_id contains: entire v3 message_id (12 bytes) + padding (4 bytes)
+					let mut message_id = [0u8; 12];
+					message_id.copy_from_slice(&msg.message_id[..12]);
+
 					v3::ToServer::ToServerTunnelMessage(v3::ToServerTunnelMessage {
-						gateway_id: [0; 16],
-						request_id: msg.request_id,
-						message_id: msg.message_id,
+						message_id,
 						message_kind: convert_to_server_tunnel_message_kind_v2_to_v3(
 							msg.message_kind,
 						),
@@ -554,9 +571,18 @@ impl ToServer {
 					})
 				}
 				v3::ToServer::ToServerTunnelMessage(msg) => {
+					// Split v3 message_id into v2's request_id and message_id
+					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
+					// v2.request_id = gateway_id (4) + request_id (4) + padding (8 zeros)
+					// v2.message_id = entire v3 message_id (12 bytes) + padding (4 zeros)
+					let mut request_id = [0u8; 16];
+					let mut message_id = [0u8; 16];
+					request_id[..8].copy_from_slice(&msg.message_id[..8]); // gateway_id + request_id
+					message_id[..12].copy_from_slice(&msg.message_id); // entire v3 message_id
+
 					v2::ToServer::ToServerTunnelMessage(v2::ToServerTunnelMessage {
-						request_id: msg.request_id,
-						message_id: msg.message_id,
+						request_id,
+						message_id,
 						message_kind: convert_to_server_tunnel_message_kind_v3_to_v2(
 							msg.message_kind,
 						)?,
@@ -1217,7 +1243,6 @@ fn convert_to_client_tunnel_message_kind_v2_to_v3(
 		}
 		v2::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketMessage(v3::ToClientWebSocketMessage {
-				index: msg.index,
 				data: msg.data,
 				binary: msg.binary,
 			})
@@ -1228,18 +1253,16 @@ fn convert_to_client_tunnel_message_kind_v2_to_v3(
 				reason: close.reason,
 			})
 		}
-		// TunnelAck was removed in v3
+		// DeprecatedTunnelAck is kept for backwards compatibility
 		v2::ToClientTunnelMessageKind::TunnelAck => {
-			// TunnelAck is deprecated and should not be used
-			// For backwards compatibility, we skip it
-			// This shouldn't happen in practice as TunnelAck was removed
-			v3::ToClientTunnelMessageKind::ToClientRequestAbort
+			v3::ToClientTunnelMessageKind::DeprecatedTunnelAck
 		}
 	}
 }
 
 fn convert_to_client_tunnel_message_kind_v3_to_v2(
 	kind: v3::ToClientTunnelMessageKind,
+	message_id: &[u8; 12],
 ) -> Result<v2::ToClientTunnelMessageKind> {
 	Ok(match kind {
 		v3::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
@@ -1269,10 +1292,12 @@ fn convert_to_client_tunnel_message_kind_v3_to_v2(
 			})
 		}
 		v3::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
+			// Extract message index from message_id (bytes 8-9, u16 little-endian per BARE spec)
+			let index = u16::from_le_bytes([message_id[8], message_id[9]]);
 			v2::ToClientTunnelMessageKind::ToClientWebSocketMessage(v2::ToClientWebSocketMessage {
 				data: msg.data,
 				binary: msg.binary,
-				index: msg.index,
+				index,
 			})
 		}
 		v3::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
@@ -1280,6 +1305,9 @@ fn convert_to_client_tunnel_message_kind_v3_to_v2(
 				code: close.code,
 				reason: close.reason,
 			})
+		}
+		v3::ToClientTunnelMessageKind::DeprecatedTunnelAck => {
+			v2::ToClientTunnelMessageKind::TunnelAck
 		}
 	})
 }
@@ -1328,12 +1356,9 @@ fn convert_to_server_tunnel_message_kind_v2_to_v3(
 				hibernate: close.retry,
 			})
 		}
-		// TunnelAck was removed in v3
+		// DeprecatedTunnelAck is kept for backwards compatibility
 		v2::ToServerTunnelMessageKind::TunnelAck => {
-			// TunnelAck is deprecated and should not be used
-			// For backwards compatibility, we skip it
-			// This shouldn't happen in practice as TunnelAck was removed
-			v3::ToServerTunnelMessageKind::ToServerResponseAbort
+			v3::ToServerTunnelMessageKind::DeprecatedTunnelAck
 		}
 	}
 }
@@ -1382,6 +1407,9 @@ fn convert_to_server_tunnel_message_kind_v3_to_v2(
 				reason: close.reason,
 				retry: close.hibernate,
 			})
+		}
+		v3::ToServerTunnelMessageKind::DeprecatedTunnelAck => {
+			v2::ToServerTunnelMessageKind::TunnelAck
 		}
 	})
 }

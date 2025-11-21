@@ -13,9 +13,11 @@ use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_metrics::KeyValue;
 use rivet_util::Id;
 use serde_json;
+
+use pegboard::tunnel::id::{RequestId, generate_request_id};
 use std::{
 	borrow::Cow,
-	collections::HashMap as StdHashMap,
+	collections::{HashMap as StdHashMap, HashSet},
 	net::SocketAddr,
 	sync::Arc,
 	time::{Duration, Instant},
@@ -28,7 +30,6 @@ use tokio_tungstenite::tungstenite::{
 };
 use tracing::Instrument;
 use url::Url;
-use uuid::Uuid;
 
 use crate::{
 	WebSocketHandle,
@@ -349,6 +350,7 @@ pub struct ProxyState {
 	route_cache: RouteCache,
 	rate_limiters: Cache<(Id, std::net::IpAddr), Arc<Mutex<RateLimiter>>>,
 	in_flight_counters: Cache<(Id, std::net::IpAddr), Arc<Mutex<InFlightCounter>>>,
+	inflight_requests: Arc<Mutex<HashSet<RequestId>>>,
 	port_type: PortType,
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	tasks: Arc<TaskGroup>,
@@ -377,6 +379,7 @@ impl ProxyState {
 				.max_capacity(10_000)
 				.time_to_live(PROXY_STATE_CACHE_TTL)
 				.build(),
+			inflight_requests: Arc::new(Mutex::new(HashSet::new())),
 			port_type,
 			clickhouse_inserter,
 			tasks: TaskGroup::new(),
@@ -600,54 +603,94 @@ impl ProxyState {
 		ip_addr: std::net::IpAddr,
 		actor_id: &Option<Id>,
 		headers: &hyper::HeaderMap,
-	) -> Result<bool> {
-		let Some(actor_id) = *actor_id else {
-			// No in-flight limiting when actor_id is None
-			return Ok(true);
-		};
+	) -> Result<Option<RequestId>> {
+		// Check in-flight limit if actor_id is present
+		if let Some(actor_id) = *actor_id {
+			// Get actor-specific middleware config
+			let middleware_config = self.get_middleware_config(&actor_id, headers).await?;
 
-		// Get actor-specific middleware config
-		let middleware_config = self.get_middleware_config(&actor_id, headers).await?;
+			let cache_key = (actor_id, ip_addr);
 
-		let cache_key = (actor_id, ip_addr);
+			// Get existing counter or create a new one
+			let counter_arc =
+				if let Some(existing_counter) = self.in_flight_counters.get(&cache_key).await {
+					existing_counter
+				} else {
+					let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
+						middleware_config.max_in_flight.amount,
+					)));
+					self.in_flight_counters
+						.insert(cache_key, new_counter.clone())
+						.await;
+					metrics::IN_FLIGHT_COUNTER_COUNT.record(self.in_flight_counters.entry_count(), &[]);
+					new_counter
+				};
 
-		// Get existing counter or create a new one
-		let counter_arc =
-			if let Some(existing_counter) = self.in_flight_counters.get(&cache_key).await {
-				existing_counter
-			} else {
-				let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
-					middleware_config.max_in_flight.amount,
-				)));
-				self.in_flight_counters
-					.insert(cache_key, new_counter.clone())
-					.await;
-				metrics::IN_FLIGHT_COUNTER_COUNT.record(self.in_flight_counters.entry_count(), &[]);
-				new_counter
+			// Try to acquire from the counter
+			let acquired = {
+				let mut counter = counter_arc.lock().await;
+				counter.try_acquire()
 			};
 
-		// Try to acquire from the counter
-		let result = {
-			let mut counter = counter_arc.lock().await;
-			counter.try_acquire()
-		};
+			if !acquired {
+				return Ok(None); // Rate limited
+			}
+		}
 
-		Ok(result)
+		// Generate unique request ID
+        let request_id = Some(self.generate_unique_request_id().await?);
+		Ok(request_id)
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn release_in_flight(&self, ip_addr: std::net::IpAddr, actor_id: &Option<Id>) {
-		// Skip if actor_id is None (no in-flight tracking)
-		let actor_id = match actor_id {
-			Some(id) => *id,
-			None => return, // No in-flight tracking when actor_id is None
-		};
-
-		let cache_key = (actor_id, ip_addr);
-		if let Some(counter_arc) = self.in_flight_counters.get(&cache_key).await {
-			let mut counter = counter_arc.lock().await;
-			counter.release();
+	async fn release_in_flight(
+		&self,
+		ip_addr: std::net::IpAddr,
+		actor_id: &Option<Id>,
+		request_id: RequestId,
+	) {
+		// Release in-flight counter if actor_id is present
+		if let Some(actor_id) = *actor_id {
+			let cache_key = (actor_id, ip_addr);
+			if let Some(counter_arc) = self.in_flight_counters.get(&cache_key).await {
+				let mut counter = counter_arc.lock().await;
+				counter.release();
+			}
 		}
+
+		// Release request ID
+		let mut requests = self.inflight_requests.lock().await;
+		requests.remove(&request_id);
+	}
+
+	/// Generate a unique request ID that is not currently in flight
+	async fn generate_unique_request_id(&self) -> anyhow::Result<RequestId> {
+		const MAX_TRIES: u32 = 100;
+		let mut requests = self.inflight_requests.lock().await;
+
+		for attempt in 0..MAX_TRIES {
+			let request_id = generate_request_id();
+
+			// Check if this ID is already in use
+			if !requests.contains(&request_id) {
+				// Insert the ID and return it
+				requests.insert(request_id);
+				return Ok(request_id);
+			}
+
+			// Collision occurred (extremely rare with 4 bytes = 4 billion possibilities)
+			// Generate a new ID and try again
+			tracing::warn!(
+				?request_id,
+				attempt,
+				"request id collision, generating new id"
+			);
+		}
+
+		anyhow::bail!(
+			"failed to generate unique request id after {} attempts",
+			MAX_TRIES
+		);
 	}
 }
 
@@ -766,20 +809,23 @@ impl ProxyService {
 			.build());
 		}
 
-		// Check in-flight limit
-		if !self
+		// Acquire in-flight limit and generate request ID
+		let request_id = match self
 			.state
 			.acquire_in_flight(client_ip, &actor_id, req.headers())
 			.await?
 		{
-			return Err(errors::RateLimit {
-				actor_id,
-				method: req.method().to_string(),
-				path: path.clone(),
-				ip: client_ip.to_string(),
+			Some(id) => id,
+			None => {
+				return Err(errors::RateLimit {
+					actor_id,
+					method: req.method().to_string(),
+					path: path.clone(),
+					ip: client_ip.to_string(),
+				}
+				.build());
 			}
-			.build());
-		}
+		};
 
 		// Increment metrics
 		metrics::PROXY_REQUEST_PENDING.add(1, &[]);
@@ -791,10 +837,11 @@ impl ProxyService {
 		}
 
 		let res = if hyper_tungstenite::is_upgrade_request(&req) {
-			self.handle_websocket_upgrade(req, target, request_context)
+			self.handle_websocket_upgrade(req, target, request_context, client_ip, actor_id)
 				.await
 		} else {
-			self.handle_http_request(req, target, request_context).await
+			self.handle_http_request(req, target, request_context, client_ip, actor_id)
+				.await
 		};
 
 		let status = match &res {
@@ -809,11 +856,13 @@ impl ProxyService {
 
 		metrics::PROXY_REQUEST_PENDING.add(-1, &[]);
 
-		// Release in-flight counter when done
+		// Release in-flight counter and request ID when done
 		let state_clone = self.state.clone();
 		tokio::spawn(
 			async move {
-				state_clone.release_in_flight(client_ip, &actor_id).await;
+				state_clone
+					.release_in_flight(client_ip, &actor_id, request_id)
+					.await;
 			}
 			.instrument(tracing::info_span!("release_in_flight_task")),
 		);
@@ -827,6 +876,8 @@ impl ProxyService {
 		req: Request<BodyIncoming>,
 		resolved_route: ResolveRouteOutput,
 		request_context: &mut RequestContext,
+		client_ip: std::net::IpAddr,
+		actor_id: Option<Id>,
 	) -> Result<Response<ResponseBody>> {
 		// Get middleware config for this actor if it exists
 		let middleware_config = if let ResolveRouteOutput::Target(target) = &resolved_route
@@ -1043,6 +1094,25 @@ impl ProxyService {
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
 				let req_headers = req.headers().clone();
+				let req_method = req.method().clone();
+
+				// Acquire in-flight limit and generate request ID
+				let request_id = match self
+					.state
+					.acquire_in_flight(client_ip, &actor_id, &req_headers)
+					.await?
+				{
+					Some(id) => id,
+					None => {
+						return Err(errors::RateLimit {
+							actor_id,
+							method: req_method.to_string(),
+							path: path.clone(),
+							ip: client_ip.to_string(),
+						}
+						.build());
+					}
+				};
 
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
@@ -1064,7 +1134,7 @@ impl ProxyService {
 					attempts += 1;
 
 					let res = handler
-						.handle_request(req_collected.clone(), request_context)
+						.handle_request(req_collected.clone(), request_context, request_id)
 						.await;
 					if should_retry_request(&res) {
 						// Request connect error, might retry
@@ -1094,10 +1164,18 @@ impl ProxyService {
 						continue;
 					}
 
+					// Release in-flight counter and request ID before returning
+					self.state
+						.release_in_flight(client_ip, &actor_id, request_id)
+						.await;
 					return res;
 				}
 
 				// If we get here, all attempts failed
+				// Release in-flight counter and request ID before returning error
+				self.state
+					.release_in_flight(client_ip, &actor_id, request_id)
+					.await;
 				return Err(errors::RetryAttemptsExceeded {
 					attempts: max_attempts,
 				}
@@ -1156,13 +1234,9 @@ impl ProxyService {
 		req: Request<BodyIncoming>,
 		target: ResolveRouteOutput,
 		request_context: &mut RequestContext,
+		client_ip: std::net::IpAddr,
+		actor_id: Option<Id>,
 	) -> Result<Response<ResponseBody>> {
-		// Get actor and server IDs for metrics and middleware
-		let actor_id = match &target {
-			ResolveRouteOutput::Target(target) => target.actor_id,
-			_ => None,
-		};
-
 		// Parsed for retries later
 		let req_host = req
 			.headers()
@@ -1838,12 +1912,29 @@ impl ProxyService {
 				tracing::debug!(%req_path, "Spawning task to handle WebSocket communication");
 				let mut request_context = request_context.clone();
 				let req_headers = req_headers.clone();
+				let state = self.state.clone();
 				let req_path = req_path.clone();
 				let req_host = req_host.clone();
+				let req_method = req_method.clone();
 
 				self.state.tasks.spawn(
 					async move {
-						let request_id = Uuid::new_v4();
+						let request_id = match state
+							.acquire_in_flight(client_ip, &actor_id, &req_headers)
+							.await?
+						{
+							Some(id) => id,
+							None => {
+								return Err(errors::RateLimit {
+									actor_id,
+									method: req_method.to_string(),
+									path: req_path.clone(),
+									ip: client_ip.to_string(),
+								}
+								.build()
+								.into());
+							}
+						};
 						let mut ws_hibernation_close = false;
 						let mut after_hibernation = false;
 						let mut attempts = 0u32;
@@ -2046,6 +2137,11 @@ impl ProxyService {
 								}
 							}
 						}
+
+						// Release in-flight counter and request ID when task completes
+						state
+							.release_in_flight(client_ip, &actor_id, request_id)
+							.await;
 
 						anyhow::Ok(())
 					}

@@ -5,29 +5,30 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode};
+use pegboard::tunnel::id::{self as tunnel_id, RequestId};
 use rand::Rng;
 use rivet_error::*;
 use rivet_guard_core::{
-	WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{
 		ServiceUnavailable, WebSocketServiceHibernate, WebSocketServiceTimeout,
 		WebSocketServiceUnavailable,
 	},
-	proxy_service::{ResponseBody, is_ws_hibernate},
+	proxy_service::{is_ws_hibernate, ResponseBody},
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
+	WebSocketHandle,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
 use tokio::{
-	sync::{Mutex, watch},
+	sync::{watch, Mutex},
 	task::JoinHandle,
 };
 use tokio_tungstenite::tungstenite::{
+	protocol::frame::{coding::CloseCode, CloseFrame},
 	Message,
-	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
 use crate::shared_state::{InFlightRequestHandle, SharedState};
@@ -86,6 +87,7 @@ impl CustomServeTrait for PegboardGateway {
 		&self,
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
+		request_id: RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
@@ -163,7 +165,6 @@ impl CustomServeTrait for PegboardGateway {
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
 
 		// Start listening for request responses
-		let request_id = Uuid::new_v4().into_bytes();
 		let InFlightRequestHandle {
 			mut msg_rx,
 			mut drop_rx,
@@ -212,7 +213,7 @@ impl CustomServeTrait for PegboardGateway {
 							}
 						} else {
 							tracing::warn!(
-								request_id=?Uuid::from_bytes(request_id),
+								request_id=?tunnel_id::request_id_to_string(&request_id),
 								"received no message response during request init",
 							);
 							break;
@@ -274,7 +275,7 @@ impl CustomServeTrait for PegboardGateway {
 		headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
-		unique_request_id: Uuid,
+		unique_request_id: RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Use the actor ID from the gateway instance
@@ -298,7 +299,7 @@ impl CustomServeTrait for PegboardGateway {
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
 
 		// Start listening for WebSocket messages
-		let request_id = unique_request_id.into_bytes();
+		let request_id = unique_request_id;
 		let InFlightRequestHandle {
 			mut msg_rx,
 			mut drop_rx,
@@ -348,7 +349,7 @@ impl CustomServeTrait for PegboardGateway {
 								}
 							} else {
 								tracing::warn!(
-									request_id=?Uuid::from_bytes(request_id),
+									request_id=?tunnel_id::request_id_to_string(&request_id),
 									"received no message response during ws init",
 								);
 								break;
@@ -414,7 +415,7 @@ impl CustomServeTrait for PegboardGateway {
 									}
 										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
 										tracing::debug!(
-											request_id=?Uuid::from_bytes(request_id),
+											request_id=?tunnel_id::request_id_to_string(&request_id),
 											ack_index=?ack.index,
 											"received WebSocketMessageAck from runner"
 										);
@@ -477,8 +478,6 @@ impl CustomServeTrait for PegboardGateway {
 										let ws_message =
 											protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
 												protocol::ToClientWebSocketMessage {
-													// NOTE: This gets set in shared_state.ts
-													index: 0,
 													data: data.into(),
 													binary: true,
 												},
@@ -491,8 +490,6 @@ impl CustomServeTrait for PegboardGateway {
 										let ws_message =
 											protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
 												protocol::ToClientWebSocketMessage {
-													// NOTE: This gets set in shared_state.ts
-													index: 0,
 													data: text.as_bytes().to_vec(),
 													binary: false,
 												},
@@ -615,12 +612,14 @@ impl CustomServeTrait for PegboardGateway {
 	async fn handle_websocket_hibernation(
 		&self,
 		client_ws: WebSocketHandle,
-		unique_request_id: Uuid,
+		unique_request_id: RequestId,
 	) -> Result<HibernationResult> {
+		let request_id = unique_request_id;
+
 		// Immediately rewake if we have pending messages
 		if self
 			.shared_state
-			.has_pending_websocket_messages(unique_request_id.into_bytes())
+			.has_pending_websocket_messages(request_id)
 			.await?
 		{
 			tracing::debug!(
@@ -633,6 +632,8 @@ impl CustomServeTrait for PegboardGateway {
 		// Start keepalive task
 		let ctx = self.ctx.clone();
 		let actor_id = self.actor_id;
+		let gateway_id = self.shared_state.gateway_id();
+		let request_id = unique_request_id;
 		let keepalive_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
 			let mut ping_interval = tokio::time::interval(Duration::from_millis(
 				(ctx.config()
@@ -652,7 +653,8 @@ impl CustomServeTrait for PegboardGateway {
 
 				ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
 					actor_id,
-					request_id: unique_request_id,
+					gateway_id,
+					request_id,
 				})
 				.await?;
 			}
@@ -669,6 +671,7 @@ impl CustomServeTrait for PegboardGateway {
 				self.ctx
 					.op(pegboard::ops::actor::hibernating_request::delete::Input {
 						actor_id: self.actor_id,
+						gateway_id: self.shared_state.gateway_id(),
 						request_id: unique_request_id,
 					})
 					.await?;

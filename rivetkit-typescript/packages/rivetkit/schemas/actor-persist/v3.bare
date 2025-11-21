@@ -1,4 +1,7 @@
-type RequestId data
+type GatewayId data[4]
+type RequestId data[4]
+type MessageIndex u16
+
 type Cbor data
 
 # MARK: Connection
@@ -14,10 +17,10 @@ type Conn struct {
 	state: Cbor
 	subscriptions: list<Subscription>
 
-	# Request ID of the hibernatable WebSocket
-	hibernatableRequestId: RequestId
-	# Last seem message index for this WebSocket
-	msgIndex: i64
+	gatewayId: GatewayId
+	requestId: RequestId
+	serverMessageIndex: u16
+	clientMessageIndex: u16
 
 	requestPath: str
 	requestHeaders: map<str><str>

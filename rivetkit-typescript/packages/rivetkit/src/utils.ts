@@ -279,7 +279,3 @@ export const EXTRA_ERROR_LOG = {
 	support: "https://rivet.dev/discord",
 	version: VERSION,
 };
-
-export function idToStr(id: ArrayBuffer): string {
-	return uuidstringify(new Uint8Array(id));
-}

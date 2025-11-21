@@ -121,3 +121,13 @@ function wrappingSub(a: number, b: number, max: number): number {
 	}
 	return result;
 }
+
+export function arraysEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
+	const ua = new Uint8Array(a);
+	const ub = new Uint8Array(b);
+	if (ua.length !== ub.length) return false;
+	for (let i = 0; i < ua.length; i++) {
+		if (ua[i] !== ub[i]) return false;
+	}
+	return true;
+}
