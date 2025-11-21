@@ -65,6 +65,7 @@ pub async fn task(
 						continue;
 					}
 				};
+				tracing::debug!(?msg, "received runner message from client");
 
 				handle_message(&ctx, &conn, msg)
 					.await
