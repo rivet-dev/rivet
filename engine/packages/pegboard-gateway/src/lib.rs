@@ -669,7 +669,7 @@ impl PegboardGateway {
 
 				match &hibernation_res {
 					HibernationResult::Continue => {
-						tracing::debug!("received message during hibernation");
+						tracing::debug!("received websocket message during hibernation");
 					}
 					HibernationResult::Close => {
 						tracing::debug!("websocket stream closed during hibernation");
