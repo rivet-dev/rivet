@@ -1,8 +1,8 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type {
+	GatewayId,
 	MessageId,
 	RequestId,
-	GatewayId,
 } from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
 import {
@@ -15,8 +15,7 @@ import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import * as tunnelId from "./tunnel-id";
-import { arraysEqual, unreachable } from "./utils";
+import { arraysEqual, idToStr, unreachable } from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,
@@ -132,7 +131,7 @@ export class Tunnel {
 		let connectedButNotLoadedCount = 0;
 		let restoredCount = 0;
 		for (const { gatewayId, requestId } of actor.hibernatingRequests) {
-			const requestIdStr = tunnelId.requestIdToString(requestId);
+			const requestIdStr = idToStr(requestId);
 			const meta = metaEntries.find(
 				(entry) =>
 					arraysEqual(entry.gatewayId, gatewayId) &&
@@ -224,7 +223,7 @@ export class Tunnel {
 		// Process loaded but not connected (stale) - remove them
 		let loadedButNotConnectedCount = 0;
 		for (const meta of metaEntries) {
-			const requestIdStr = tunnelId.requestIdToString(meta.requestId);
+			const requestIdStr = idToStr(meta.requestId);
 			const isConnected = actor.hibernatingRequests.some(
 				(req) =>
 					arraysEqual(req.gatewayId, meta.gatewayId) &&
@@ -426,7 +425,7 @@ export class Tunnel {
 		if (!entry) {
 			this.log?.warn({
 				msg: "missing requestToActor entry",
-				requestId: tunnelId.requestIdToString(requestId),
+				requestId: idToStr(requestId),
 			});
 			return undefined;
 		}
@@ -435,7 +434,7 @@ export class Tunnel {
 		if (!actor) {
 			this.log?.warn({
 				msg: "missing actor for requestToActor lookup",
-				requestId: tunnelId.requestIdToString(requestId),
+				requestId: idToStr(requestId),
 				actorId: entry.actorId,
 			});
 			return undefined;
@@ -463,7 +462,7 @@ export class Tunnel {
 		if (!this.#runner.__webSocketReady()) {
 			this.log?.warn({
 				msg: "cannot send tunnel message, socket not connected to engine. tunnel data dropped.",
-				requestId: tunnelId.requestIdToString(requestId),
+				requestId: idToStr(requestId),
 				message: stringifyToServerTunnelMessageKind(messageKind),
 			});
 			return;
@@ -473,8 +472,8 @@ export class Tunnel {
 		//
 		// We don't have to wait for the actor to start since we're not calling
 		// any callbacks on the actor
-		const gatewayIdStr = tunnelId.gatewayIdToString(gatewayId);
-		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const gatewayIdStr = idToStr(gatewayId);
+		const requestIdStr = idToStr(requestId);
 		const actor = this.getRequestActor(gatewayId, requestId);
 		if (!actor) {
 			this.log?.warn({
@@ -502,12 +501,12 @@ export class Tunnel {
 		}
 
 		// Build message ID from gatewayId + requestId + messageIndex
-		const messageId = tunnelId.buildMessageId(
+		const messageId: protocol.MessageId = {
 			gatewayId,
 			requestId,
-			clientMessageIndex,
-		);
-		const messageIdStr = tunnelId.messageIdToString(messageId);
+			messageIndex: clientMessageIndex,
+		};
+		const messageIdStr = `${idToStr(messageId.gatewayId)}-${idToStr(messageId.requestId)}-${messageId.messageIndex}`;
 
 		this.log?.debug({
 			msg: "sending tunnel msg",
@@ -593,19 +592,15 @@ export class Tunnel {
 
 	async handleTunnelMessage(message: protocol.ToClientTunnelMessage) {
 		// Parse the gateway ID, request ID, and message index from the messageId
-		const messageIdParts = tunnelId.parseMessageId(message.messageId);
-		const gatewayId = messageIdParts.gatewayId;
-		const requestId = messageIdParts.requestId;
+		const { gatewayId, requestId, messageIndex } = message.messageId;
 
-		const gatewayIdStr = tunnelId.gatewayIdToString(gatewayId);
-		const requestIdStr = tunnelId.requestIdToString(requestId);
-		const messageIdStr = tunnelId.messageIdToString(message.messageId);
+		const gatewayIdStr = idToStr(gatewayId);
+		const requestIdStr = idToStr(requestId);
 		this.log?.debug({
 			msg: "receive tunnel msg",
-			messageId: messageIdStr,
 			gatewayId: gatewayIdStr,
 			requestId: requestIdStr,
-			messageIndex: messageIdParts.messageIndex,
+			messageIndex: message.messageId.messageIndex,
 			message: stringifyToClientTunnelMessageKind(message.messageKind),
 		});
 
@@ -638,7 +633,7 @@ export class Tunnel {
 				await this.#handleWebSocketMessage(
 					gatewayId,
 					requestId,
-					messageIdParts.messageIndex,
+					messageIndex,
 					message.messageKind.val,
 				);
 				break;
@@ -664,7 +659,7 @@ export class Tunnel {
 		req: protocol.ToClientRequestStart,
 	) {
 		// Track this request for the actor
-		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const requestIdStr = idToStr(requestId);
 		const actor = await this.#runner.getAndWaitForActor(req.actorId);
 		if (!actor) {
 			this.log?.warn({
@@ -909,7 +904,7 @@ export class Tunnel {
 		//
 		// Sending a ToServerWebSocketClose will terminate the WebSocket early.
 
-		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const requestIdStr = idToStr(requestId);
 
 		// Validate actor exists
 		const actor = await this.#runner.getAndWaitForActor(open.actorId);
@@ -1058,7 +1053,7 @@ export class Tunnel {
 		requestId: ArrayBuffer,
 		clientMessageIndex: number,
 	) {
-		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const requestIdStr = idToStr(requestId);
 
 		this.log?.debug({
 			msg: "ack ws msg",

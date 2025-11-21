@@ -150,3 +150,10 @@ export function promiseWithResolvers<T>(): {
 	});
 	return { promise, resolve, reject };
 }
+
+export function idToStr(id: ArrayBuffer): string {
+	const bytes = new Uint8Array(id);
+	return Array.from(bytes)
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("");
+}

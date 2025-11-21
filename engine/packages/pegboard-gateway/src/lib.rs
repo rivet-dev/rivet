@@ -8,20 +8,20 @@ use hyper::{Request, Response, StatusCode};
 use pegboard::tunnel::id::{self as tunnel_id, RequestId};
 use rivet_error::*;
 use rivet_guard_core::{
-	WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
-	proxy_service::{ResponseBody, is_ws_hibernate},
+	proxy_service::{is_ws_hibernate, ResponseBody},
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
+	WebSocketHandle,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 use tokio_tungstenite::tungstenite::{
+	protocol::frame::{coding::CloseCode, CloseFrame},
 	Message,
-	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
 use crate::shared_state::{InFlightRequestHandle, SharedState};
@@ -578,16 +578,6 @@ impl CustomServeTrait for PegboardGateway {
 		client_ws: WebSocketHandle,
 		request_id: RequestId,
 	) -> Result<HibernationResult> {
-		// Insert hibernating request entry before checking for pending messages
-		// This ensures the entry exists even if we immediately rewake the actor
-		self.ctx
-			.op(pegboard::ops::actor::hibernating_request::upsert::Input {
-				actor_id: self.actor_id,
-				gateway_id: self.shared_state.gateway_id(),
-				request_id,
-			})
-			.await?;
-
 		// Immediately rewake if we have pending messages
 		if self
 			.shared_state

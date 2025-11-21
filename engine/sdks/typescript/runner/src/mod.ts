@@ -13,8 +13,8 @@ import {
 import { importWebSocket } from "./websocket.js";
 
 export type { HibernatingWebSocketMetadata };
-export * as tunnelId from "./tunnel-id";
 export { RunnerActor, type ActorConfig };
+export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 3;
