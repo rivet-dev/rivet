@@ -1,6 +1,7 @@
 use axum::Json;
 use axum::response::IntoResponse;
 use rivet_api_builder::extract::Extension;
+use rivet_util::build_meta;
 use serde_json::json;
 
 use crate::ctx::ApiCtx;
@@ -11,13 +12,13 @@ pub async fn get_metadata(Extension(ctx): Extension<ApiCtx>) -> impl IntoRespons
 	ctx.skip_auth();
 
 	Json(json!({
-		"runtime": "engine",
-		"version": env!("CARGO_PKG_VERSION"),
-		"git_sha": env!("VERGEN_GIT_SHA"),
-		"build_timestamp": env!("VERGEN_BUILD_TIMESTAMP"),
-		"rustc_version": env!("VERGEN_RUSTC_SEMVER"),
-		"rustc_host": env!("VERGEN_RUSTC_HOST_TRIPLE"),
-		"cargo_target": env!("VERGEN_CARGO_TARGET_TRIPLE"),
-		"cargo_profile": if env!("VERGEN_CARGO_DEBUG") == "true" { "debug" } else { "release" }
+		"runtime": build_meta::RUNTIME,
+		"version": build_meta::VERSION,
+		"git_sha": build_meta::GIT_SHA,
+		"build_timestamp": build_meta::BUILD_TIMESTAMP,
+		"rustc_version": build_meta::RUSTC_VERSION,
+		"rustc_host": build_meta::RUSTC_HOST,
+		"cargo_target": build_meta::CARGO_TARGET,
+		"cargo_profile": build_meta::cargo_profile()
 	}))
 }

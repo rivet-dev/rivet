@@ -36,5 +36,3 @@ utoipa.workspace = true
 [build-dependencies]
 anyhow.workspace = true
 fs_extra.workspace = true
-vergen.workspace = true
-vergen-gitcl.workspace = true

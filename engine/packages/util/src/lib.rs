@@ -3,6 +3,7 @@ pub use rivet_util_id as id;
 
 pub mod backoff;
 pub mod billing;
+pub mod build_meta;
 pub mod check;
 pub mod duration;
 pub mod faker;

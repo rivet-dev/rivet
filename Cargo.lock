@@ -4337,8 +4337,6 @@ dependencies = [
  "tracing",
  "urlencoding",
  "utoipa",
- "vergen",
- "vergen-gitcl",
 ]
 
 [[package]]
@@ -4499,6 +4497,7 @@ dependencies = [
  "indoc",
  "lz4_flex",
  "namespace",
+ "once_cell",
  "pegboard",
  "pegboard-runner",
  "pegboard-serverless",
@@ -4935,6 +4934,8 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "vergen",
+ "vergen-gitcl",
 ]
 
 [[package]]
