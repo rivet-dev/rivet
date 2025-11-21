@@ -256,11 +256,10 @@ default-features = false
 features = ["ansi","fmt","json","env-filter"]
 
 [workspace.dependencies.vbare]
-git = "https://github.com/rivet-dev/vbare"
-rev = "3ae474a0234801bb96d70bec4eddd4f2d640971e"
+version = "0.0.4"
 
 [workspace.dependencies.vbare-compiler]
-version = "0.0.2"
+version = "0.0.4"
 
 [workspace.dependencies.pegboard-actor-kv]
 path = "engine/packages/actor-kv"
