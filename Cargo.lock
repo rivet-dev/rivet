@@ -3529,6 +3529,7 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-runtime",
  "serde",
+ "serde_bare",
  "serde_json",
  "tokio",
  "tokio-tungstenite",

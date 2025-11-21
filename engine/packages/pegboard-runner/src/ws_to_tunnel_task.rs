@@ -53,6 +53,16 @@ pub async fn task(
 					"received binary message from WebSocket"
 				);
 
+				// HACK: Decode v2 to handle tunnel ack
+				if rivet_runner_protocol::compat::version_needs_tunnel_ack(conn.protocol_version) {
+					match compat_ack_tunnel_message(&conn, &data[..]).await {
+						Ok(_) => {}
+						Err(err) => {
+							tracing::error!(?err, "failed to send compat ack tunnel message")
+						}
+					}
+				}
+
 				// Parse message
 				let msg = match versioned::ToServer::deserialize(&data, conn.protocol_version) {
 					Ok(x) => x,
@@ -339,7 +349,7 @@ async fn handle_message(
 			}
 		}
 		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, &conn, tunnel_msg)
+			handle_tunnel_message(&ctx, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -367,7 +377,6 @@ async fn handle_message(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	conn: &Arc<Conn>,
 	msg: protocol::ToServerTunnelMessage,
 ) -> Result<()> {
 	// Ignore DeprecatedTunnelAck messages (used only for backwards compatibility)
@@ -376,27 +385,6 @@ async fn handle_tunnel_message(
 		protocol::ToServerTunnelMessageKind::DeprecatedTunnelAck
 	) {
 		return Ok(());
-	}
-
-	// Send DeprecatedTunnelAck back to runner for older protocol versions
-	if protocol::compat::version_needs_tunnel_ack(conn.protocol_version) {
-		let ack_msg = versioned::ToClient::wrap_latest(protocol::ToClient::ToClientTunnelMessage(
-			protocol::ToClientTunnelMessage {
-				message_id: msg.message_id.clone(),
-				message_kind: protocol::ToClientTunnelMessageKind::DeprecatedTunnelAck,
-			},
-		));
-
-		let ack_serialized = ack_msg
-			.serialize(conn.protocol_version)
-			.context("failed to serialize DeprecatedTunnelAck response")?;
-
-		conn.ws_handle
-			.send(hyper_tungstenite::tungstenite::Message::Binary(
-				ack_serialized.into(),
-			))
-			.await
-			.context("failed to send DeprecatedTunnelAck to runner")?;
 	}
 
 	// Publish message to UPS
@@ -415,6 +403,41 @@ async fn handle_tunnel_message(
 				gateway_reply_to
 			)
 		})?;
+
+	Ok(())
+}
+
+/// Send ack message for deprecated tunnel versions.
+///
+/// We have to parse as specifically a v2 message since we need the exact request & message ID
+/// provided by the user and not available in v3.
+async fn compat_ack_tunnel_message(conn: &Arc<Conn>, payload: &[u8]) -> Result<()> {
+	use rivet_runner_protocol::generated::v2 as protocol_v2;
+
+	// Parse payload
+	let msg = serde_bare::from_slice::<protocol_v2::ToServer>(&payload)?;
+	let protocol_v2::ToServer::ToServerTunnelMessage(msg) = msg else {
+		return Ok(());
+	};
+
+	tracing::debug!(?msg.request_id, ?msg.message_id, "sending v2 compat tunnel ack");
+
+	// Serialize response
+	let ack_msg = serde_bare::to_vec(&protocol_v2::ToClient::ToClientTunnelMessage(
+		protocol_v2::ToClientTunnelMessage {
+			request_id: msg.request_id,
+			message_id: msg.message_id,
+			message_kind: protocol_v2::ToClientTunnelMessageKind::TunnelAck,
+			gateway_reply_to: None,
+		},
+	))?;
+
+	conn.ws_handle
+		.send(hyper_tungstenite::tungstenite::Message::Binary(
+			ack_msg.into(),
+		))
+		.await
+		.context("failed to send DeprecatedTunnelAck to runner")?;
 
 	Ok(())
 }
