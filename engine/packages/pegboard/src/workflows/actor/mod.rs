@@ -10,6 +10,8 @@ mod keys;
 mod runtime;
 mod setup;
 
+pub use runtime::AllocationOverride;
+
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
 	pub actor_id: Id,
@@ -211,38 +213,39 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		.send()
 		.await?;
 
-	let lifecycle_state = match runtime::spawn_actor(ctx, input, 0, false).await? {
-		runtime::SpawnActorOutput::Allocated {
-			runner_id,
-			runner_workflow_id,
-		} => runtime::LifecycleState::new(
-			runner_id,
-			runner_workflow_id,
-			ctx.config().pegboard().actor_start_threshold(),
-		),
-		runtime::SpawnActorOutput::Sleep => {
-			ctx.activity(runtime::SetSleepingInput {
-				actor_id: input.actor_id,
-			})
-			.await?;
+	let lifecycle_state =
+		match runtime::spawn_actor(ctx, input, 0, AllocationOverride::None).await? {
+			runtime::SpawnActorOutput::Allocated {
+				runner_id,
+				runner_workflow_id,
+			} => runtime::LifecycleState::new(
+				runner_id,
+				runner_workflow_id,
+				ctx.config().pegboard().actor_start_threshold(),
+			),
+			runtime::SpawnActorOutput::Sleep => {
+				ctx.activity(runtime::SetSleepingInput {
+					actor_id: input.actor_id,
+				})
+				.await?;
 
-			runtime::LifecycleState::new_sleeping()
-		}
-		runtime::SpawnActorOutput::Destroy => {
-			// Destroyed early
-			ctx.workflow(destroy::Input {
-				namespace_id: input.namespace_id,
-				actor_id: input.actor_id,
-				name: input.name.clone(),
-				key: input.key.clone(),
-				generation: 0,
-			})
-			.output()
-			.await?;
+				runtime::LifecycleState::new_sleeping()
+			}
+			runtime::SpawnActorOutput::Destroy => {
+				// Destroyed early
+				ctx.workflow(destroy::Input {
+					namespace_id: input.namespace_id,
+					actor_id: input.actor_id,
+					name: input.name.clone(),
+					key: input.key.clone(),
+					generation: 0,
+				})
+				.output()
+				.await?;
 
-			return Ok(());
-		}
-	};
+				return Ok(());
+			}
+		};
 
 	let lifecycle_res = ctx
 		.loope(
@@ -273,10 +276,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						} else {
 							tracing::debug!(actor_id=?input.actor_id, "actor wake");
 
-							state.wake_for_alarm = true;
-
 							// Fake signal
-							Main::Wake(Wake {})
+							Main::Wake(Wake { allocation_override: AllocationOverride::DontSleep { pending_timeout: None } })
 						}
 					} else {
 						// Listen for signal normally
@@ -404,14 +405,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								}
 							}
 						}
-						Main::Wake(_sig) => {
+						Main::Wake(sig) => {
 							if state.sleeping {
 								if state.runner_id.is_none() {
 									state.alarm_ts = None;
 									state.sleeping = false;
 									state.will_wake = false;
 
-									match runtime::reschedule_actor(ctx, &input, state, false)
+									match runtime::reschedule_actor(ctx, &input, state, sig.allocation_override)
 										.await?
 									{
 										runtime::SpawnActorOutput::Allocated { .. } => {}
@@ -425,8 +426,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											}));
 										}
 									}
-
-									state.wake_for_alarm = false;
 								} else if !state.will_wake {
 									state.will_wake = true;
 
@@ -440,8 +439,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									actor_id=?input.actor_id,
 									"cannot wake actor that is not sleeping",
 								);
-
-								state.wake_for_alarm = false;
 							}
 						}
 						Main::Lost(sig) => {
@@ -569,16 +566,15 @@ async fn handle_stopped(
 	tracing::debug!(?variant, "actor stopped");
 
 	let force_reschedule = match &variant {
-		StoppedVariant::Normal {
-			code: protocol::StopCode::Ok,
-		} => {
+		StoppedVariant::Normal { code } => {
 			// Reset retry count on successful exit
-			state.reschedule_state = Default::default();
+			if let protocol::StopCode::Ok = code {
+				state.reschedule_state = Default::default();
+			}
 
 			false
 		}
 		StoppedVariant::Lost { force_reschedule } => *force_reschedule,
-		_ => false,
 	};
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
@@ -640,7 +636,16 @@ async fn handle_stopped(
 
 	// Reschedule no matter what
 	if force_reschedule {
-		match runtime::reschedule_actor(ctx, &input, state, true).await? {
+		match runtime::reschedule_actor(
+			ctx,
+			&input,
+			state,
+			AllocationOverride::DontSleep {
+				pending_timeout: None,
+			},
+		)
+		.await?
+		{
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			// NOTE: This should be unreachable because force_reschedule is true
 			runtime::SpawnActorOutput::Sleep => {
@@ -667,7 +672,9 @@ async fn handle_stopped(
 
 		match (input.crash_policy, graceful_exit) {
 			(CrashPolicy::Restart, false) => {
-				match runtime::reschedule_actor(ctx, &input, state, false).await? {
+				match runtime::reschedule_actor(ctx, &input, state, AllocationOverride::None)
+					.await?
+				{
 					runtime::SpawnActorOutput::Allocated { .. } => {}
 					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
 					// policy is `Restart`.
@@ -698,7 +705,7 @@ async fn handle_stopped(
 	else if state.will_wake {
 		state.sleeping = false;
 
-		match runtime::reschedule_actor(ctx, &input, state, false).await? {
+		match runtime::reschedule_actor(ctx, &input, state, AllocationOverride::None).await? {
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;
@@ -708,7 +715,6 @@ async fn handle_stopped(
 		}
 	}
 
-	state.wake_for_alarm = false;
 	state.will_wake = false;
 	state.going_away = false;
 
@@ -749,7 +755,10 @@ pub struct Event {
 }
 
 #[signal("pegboard_actor_wake")]
-pub struct Wake {}
+pub struct Wake {
+	#[serde(default)]
+	pub allocation_override: AllocationOverride,
+}
 
 #[derive(Debug)]
 #[signal("pegboard_actor_lost")]
