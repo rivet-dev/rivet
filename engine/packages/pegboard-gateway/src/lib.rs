@@ -401,10 +401,10 @@ impl CustomServeTrait for PegboardGateway {
 										protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 										tracing::debug!(?close, "server closed websocket");
 
-										if can_hibernate && close.retry {
-											// Successful closure
+										if can_hibernate && close.hibernate {
 											return Err(WebSocketServiceHibernate.build());
 										} else {
+											// Successful closure
 											return Ok(LifecycleResult::ServerClose(close));
 										}
 									}

@@ -204,7 +204,7 @@ export class WebSocketTunnelAdapter {
 		this.closeInner(code, reason, false, true);
 	}
 
-	__closeWithRetry(code?: number, reason?: string): void {
+	__closeWithHibernate(code?: number, reason?: string): void {
 		this.closeInner(code, reason, true, true);
 	}
 
@@ -215,7 +215,7 @@ export class WebSocketTunnelAdapter {
 	closeInner(
 		code: number | undefined,
 		reason: string | undefined,
-		retry: boolean,
+		hibernate: boolean,
 		callback: boolean,
 	): void {
 		if (
@@ -229,7 +229,7 @@ export class WebSocketTunnelAdapter {
 
 		// Send close through tunnel
 		if (callback) {
-			this.#closeCallback(code, reason, retry);
+			this.#closeCallback(code, reason, hibernate);
 		}
 
 		// Update state and fire event
