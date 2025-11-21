@@ -4,7 +4,10 @@ use anyhow::Context;
 use futures_util::StreamExt;
 use rivet_test_deps_docker::TestDatabase;
 use rocksdb::{OptimisticTransactionDB, Options, WriteOptions};
-use universaldb::{Database, utils::IsolationLevel::*};
+use universaldb::{
+	Database,
+	utils::{IsolationLevel::*, calculate_tx_retry_backoff},
+};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -135,12 +138,4 @@ async fn rocksdb_udb() {
 			}
 		})
 		.await;
-}
-
-pub fn calculate_tx_retry_backoff(attempt: usize) -> u64 {
-	let base_backoff_ms = 2_u64.pow((attempt as u32).min(10)) * 10;
-
-	let jitter_ms = rand::random::<u64>() % 100;
-
-	base_backoff_ms + jitter_ms
 }

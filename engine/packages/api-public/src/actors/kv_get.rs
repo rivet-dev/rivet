@@ -65,7 +65,11 @@ async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath) -> Result<Response> {
 		request_remote_datacenter_raw(
 			&ctx,
 			path.actor_id.label(),
-			&format!("/actors/{}/kv/keys/{}", path.actor_id, urlencoding::encode(&path.key)),
+			&format!(
+				"/actors/{}/kv/keys/{}",
+				path.actor_id,
+				urlencoding::encode(&path.key)
+			),
 			axum::http::Method::GET,
 			Option::<&()>::None,
 			Option::<&()>::None,
