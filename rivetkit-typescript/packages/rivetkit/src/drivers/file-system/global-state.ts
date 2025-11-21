@@ -110,7 +110,7 @@ export class FileSystemGlobalState {
 
 	constructor(persist: boolean = true, customPath?: string) {
 		this.#persist = persist;
-		this.#storagePath = persist ? getStoragePath(customPath) : "/tmp";
+		this.#storagePath = persist ? (customPath ?? getStoragePath()) : "/tmp";
 		const path = getNodePath();
 		this.#stateDir = path.join(this.#storagePath, "state");
 		this.#dbsDir = path.join(this.#storagePath, "databases");
