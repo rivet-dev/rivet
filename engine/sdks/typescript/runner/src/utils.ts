@@ -131,3 +131,22 @@ export function arraysEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
 	}
 	return true;
 }
+
+/**
+ * Polyfill for Promise.withResolvers().
+ *
+ * This is specifically for Cloudflare Workers. Their implementation of Promise.withResolvers does not work correctly.
+ */
+export function promiseWithResolvers<T>(): {
+	promise: Promise<T>;
+	resolve: (value: T | PromiseLike<T>) => void;
+	reject: (reason?: any) => void;
+} {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: any) => void;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}

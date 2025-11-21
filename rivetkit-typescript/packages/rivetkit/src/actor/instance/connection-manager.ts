@@ -279,10 +279,6 @@ export class ConnectionManager<
 		// Remove from tracking
 		this.#connections.delete(conn.id);
 
-		if (conn.isHibernatable) {
-			this.markConnWithPersistChanged(conn);
-		}
-
 		this.#actor.rLog.debug({ msg: "removed conn", connId: conn.id });
 
 		// Notify driver about connection removal
@@ -321,19 +317,27 @@ export class ConnectionManager<
 			}
 		}
 
+		// Remove from connsWithPersistChanged after onDisconnect to handle any
+		// state changes made during the disconnect callback. Disconnected connections
+		// are removed from KV storage via kvBatchDelete below, not through the
+		// normal persist save flow, so they should not trigger persist saves.
+		this.#connsWithPersistChanged.delete(conn.id);
+
 		// Remove from KV storage
-		const key = makeConnKey(conn.id);
-		try {
-			await this.#actor.driver.kvBatchDelete(this.#actor.id, [key]);
-			this.#actor.rLog.debug({
-				msg: "removed connection from KV",
-				connId: conn.id,
-			});
-		} catch (err) {
-			this.#actor.rLog.error({
-				msg: "kvBatchDelete failed for conn",
-				err: stringifyError(err),
-			});
+		if (conn.isHibernatable) {
+			const key = makeConnKey(conn.id);
+			try {
+				await this.#actor.driver.kvBatchDelete(this.#actor.id, [key]);
+				this.#actor.rLog.debug({
+					msg: "removed connection from KV",
+					connId: conn.id,
+				});
+			} catch (err) {
+				this.#actor.rLog.error({
+					msg: "kvBatchDelete failed for conn",
+					err: stringifyError(err),
+				});
+			}
 		}
 	}
 

@@ -9,23 +9,23 @@ use pegboard::tunnel::id::{self as tunnel_id, RequestId};
 use rand::Rng;
 use rivet_error::*;
 use rivet_guard_core::{
-	WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
-	proxy_service::{ResponseBody, is_ws_hibernate},
+	proxy_service::{is_ws_hibernate, ResponseBody},
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
+	WebSocketHandle,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
 use tokio::{
-	sync::{Mutex, watch},
+	sync::{watch, Mutex},
 	task::JoinHandle,
 };
 use tokio_tungstenite::tungstenite::{
+	protocol::frame::{coding::CloseCode, CloseFrame},
 	Message,
-	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
 use crate::shared_state::{InFlightRequestHandle, SharedState};
@@ -486,7 +486,7 @@ impl CustomServeTrait for PegboardGateway {
 		};
 
 		// Send close frame to runner if not hibernating
-		if lifecycle_res
+		if !&lifecycle_res
 			.as_ref()
 			.map_or_else(is_ws_hibernate, |_| false)
 		{

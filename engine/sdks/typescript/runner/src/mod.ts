@@ -73,7 +73,7 @@ export interface RunnerConfig {
 	 * This is responsible for persisting hibernatable WebSockets immediately
 	 * (do not wait for open event). It is not time sensitive to flush the
 	 * connection state. If this fails to persist the HWS, the client's
-	 * WebSocket will be disconnected on next wake in
+	 * WebSocket will be disconnected on next wake in the call to
 	 * `Tunnel::restoreHibernatingRequests` since the connection entry will not
 	 * exist.
 	 *
@@ -109,12 +109,13 @@ export interface RunnerConfig {
 	 *
 	 * ### Restoring Connections
 	 *
-	 * `loadAll` will be called from `Tunnel::restoreHibernatingRequests` to
-	 * restore this connection on the next actor wake.
+	 * The user of this library is responsible for:
+	 * 1. Loading all persisted hibernatable WebSocket metadata for an actor
+	 * 2. Calling `Runner::restoreHibernatingRequests` with this metadata at
+	 *    the end of `onActorStart`
 	 *
-	 * `restoreHibernatingRequests` is responsible for both making sure that
-	 * new connections are registered with the actor and zombie connections are
-	 * appropriately cleaned up.
+	 * `restoreHibernatingRequests` will restore all connections and attach
+	 * the appropriate event listeners.
 	 *
 	 * ### No Open Event On Restoration
 	 *
@@ -145,25 +146,21 @@ export interface RunnerConfig {
 			requestId: ArrayBuffer,
 			request: Request,
 		) => boolean;
-
-		/**
-		 * Returns all hibernatable WebSockets that are stored for this actor.
-		 *
-		 * This is called on actor start.
-		 *
-		 * This list will be diffed with the list of hibernating requests in
-		 * the ActorStart message.
-		 *
-		 * This that are connected but not loaded (i.e. were not successfully
-		 * persisted to this actor) will be disconnected.
-		 *
-		 * This that are not connected but were loaded (i.e. disconnected but
-		 * this actor has not received the event yet) will also be
-		 * disconnected.
-		 */
-		loadAll(actorId: string): Promise<HibernatingWebSocketMetadata[]>;
 	};
 
+	/**
+	 * Called when an actor starts.
+	 *
+	 * This callback is responsible for:
+	 * 1. Initializing the actor instance
+	 * 2. Loading all persisted hibernatable WebSocket metadata for this actor
+	 * 3. Calling `Runner::restoreHibernatingRequests` with the loaded metadata
+	 *    to restore hibernatable WebSocket connections
+	 *
+	 * The actor should not be marked as "ready" until after
+	 * `restoreHibernatingRequests` completes to ensure all hibernatable
+	 * connections are fully restored before the actor processes new requests.
+	 */
 	onActorStart: (
 		actorId: string,
 		generation: number,
@@ -291,7 +288,7 @@ export class Runner {
 	}
 
 	async forceStopActor(actorId: string, generation?: number) {
-		const actor = this.#removeActor(actorId, generation);
+		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
 
 		// If onActorStop times out, Pegboard will handle this timeout with ACTOR_STOP_THRESHOLD_DURATION_MS
@@ -307,6 +304,11 @@ export class Runner {
 
 		// Close requests after onActorStop so you can send messages over the tunnel
 		this.#tunnel?.closeActiveRequests(actor);
+
+		// Remove actor after stopping in order to ensure that we can still
+		// call actions on the runner. Do this before sending stopped update in
+		// order to ensure we don't have duplicate actors.
+		this.#removeActor(actorId, generation);
 
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
 	}
@@ -325,14 +327,14 @@ export class Runner {
 	getActor(actorId: string, generation?: number): RunnerActor | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
-			this.log?.error({
+			this.log?.warn({
 				msg: "actor not found",
 				actorId,
 			});
 			return undefined;
 		}
 		if (generation !== undefined && actor.generation !== generation) {
-			this.log?.error({
+			this.log?.warn({
 				msg: "actor generation mismatch",
 				actorId,
 				generation,
@@ -340,6 +342,16 @@ export class Runner {
 			return undefined;
 		}
 
+		return actor;
+	}
+
+	async getAndWaitForActor(
+		actorId: string,
+		generation?: number,
+	): Promise<RunnerActor | undefined> {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+		await actor.actorStartPromise.promise;
 		return actor;
 	}
 
@@ -379,6 +391,12 @@ export class Runner {
 		}
 
 		this.#actors.delete(actorId);
+
+		this.log?.info({
+			msg: "removed actor",
+			actorId,
+			actors: this.#actors.size,
+		});
 
 		return actor;
 	}
@@ -729,7 +747,7 @@ export class Runner {
 				this.#config.onConnected();
 			} else if (message.tag === "ToClientCommands") {
 				const commands = message.val;
-				await this.#handleCommands(commands);
+				this.#handleCommands(commands);
 			} else if (message.tag === "ToClientAckEvents") {
 				this.#handleAckEvents(message.val);
 			} else if (message.tag === "ToClientKvResponse") {
@@ -834,7 +852,7 @@ export class Runner {
 		});
 	}
 
-	async #handleCommands(commands: protocol.ToClientCommands) {
+	#handleCommands(commands: protocol.ToClientCommands) {
 		this.log?.info({
 			msg: "received commands",
 			commandCount: commands.length,
@@ -845,7 +863,8 @@ export class Runner {
 				// Spawn background promise
 				this.#handleCommandStartActor(commandWrapper);
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
-				await this.#handleCommandStopActor(commandWrapper);
+				// Spawn background promise
+				this.#handleCommandStopActor(commandWrapper);
 			} else {
 				unreachable(commandWrapper.inner);
 			}
@@ -894,6 +913,10 @@ export class Runner {
 	}
 
 	async #handleCommandStartActor(commandWrapper: protocol.CommandWrapper) {
+		// IMPORTANT: Make sure no async code runs before inserting #actors and
+		// calling addRequestToActor in order to prevent race conditions with
+		// subsequence commands
+
 		if (!this.#tunnel) throw new Error("missing tunnel on actor start");
 
 		const startCommand = commandWrapper.inner
@@ -910,9 +933,43 @@ export class Runner {
 			input: config.input ? new Uint8Array(config.input) : null,
 		};
 
-		const instance = new RunnerActor(actorId, generation, actorConfig);
+		const instance = new RunnerActor(
+			actorId,
+			generation,
+			actorConfig,
+			startCommand.hibernatingRequests,
+		);
+
+		const existingActor = this.#actors.get(actorId);
+		if (existingActor) {
+			this.log?.warn({
+				msg: "replacing existing actor in actors map",
+				actorId,
+				existingGeneration: existingActor.generation,
+				newGeneration: generation,
+				existingPendingRequests: existingActor.pendingRequests.length,
+			});
+		}
 
 		this.#actors.set(actorId, instance);
+
+		// NOTE: We have to populate the requestToActor map BEFORE running any
+		// async code in order for incoming tunnel messages to wait for
+		// instance.actorStartPromise before processing messages
+		// TODO: Where is this GC'd if something fails?
+		for (const hr of startCommand.hibernatingRequests) {
+			this.#tunnel.addRequestToActor(hr.gatewayId, hr.requestId, actorId);
+		}
+
+		this.log?.info({
+			msg: "created actor",
+			actors: this.#actors.size,
+			actorId,
+			name: config.name,
+			key: config.key,
+			generation,
+			hibernatingRequests: startCommand.hibernatingRequests.length,
+		});
 
 		this.#sendActorStateUpdate(actorId, generation, "running");
 
@@ -926,17 +983,15 @@ export class Runner {
 			});
 			await this.#config.onActorStart(actorId, generation, actorConfig);
 
-			// Restore hibernating requests
-			await this.#tunnel.restoreHibernatingRequests(
-				actorId,
-				startCommand.hibernatingRequests,
-			);
+			instance.actorStartPromise.resolve();
 		} catch (err) {
 			this.log?.error({
-				msg: "error in onactorstart for actor",
+				msg: "error starting runner actor",
 				actorId,
 				err,
 			});
+
+			instance.actorStartPromise.reject(err);
 
 			// TODO: Mark as crashed
 			// Send stopped state update if start failed
@@ -1524,6 +1579,38 @@ export class Runner {
 			requestId,
 			index,
 		);
+	}
+
+	/**
+	 * Restores hibernatable WebSocket connections for an actor.
+	 *
+	 * This method should be called at the end of `onActorStart` after the
+	 * actor instance is fully initialized.
+	 *
+	 * This method will:
+	 * - Restore all provided hibernatable WebSocket connections
+	 * - Attach event listeners to the restored WebSockets
+	 * - Close any WebSocket connections that failed to restore
+	 *
+	 * The provided metadata list should include all hibernatable WebSockets
+	 * that were persisted for this actor. The gateway will automatically
+	 * close any connections that are not restored (i.e., not included in
+	 * this list).
+	 *
+	 * **Important:** This method must be called after `onActorStart` completes
+	 * and before marking the actor as "ready" to ensure all hibernatable
+	 * connections are fully restored.
+	 *
+	 * @param actorId - The ID of the actor to restore connections for
+	 * @param metaEntries - Array of hibernatable WebSocket metadata to restore
+	 */
+	async restoreHibernatingRequests(
+		actorId: string,
+		metaEntries: HibernatingWebSocketMetadata[],
+	) {
+		if (!this.#tunnel)
+			throw new Error("missing tunnel to restore hibernating requests");
+		await this.#tunnel.restoreHibernatingRequests(actorId, metaEntries);
 	}
 
 	getServerlessInitPacket(): string | undefined {

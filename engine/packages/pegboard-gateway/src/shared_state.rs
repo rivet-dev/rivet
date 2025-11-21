@@ -124,7 +124,6 @@ impl SharedState {
 				entry.msg_tx = msg_tx;
 				entry.drop_tx = drop_tx;
 				entry.opened = false;
-				entry.message_index = 0;
 
 				if entry.stopping {
 					entry.hibernation_state = None;
@@ -194,6 +193,11 @@ impl SharedState {
 			};
 
 			hs.pending_ws_msgs.push(pending_ws_msg);
+			tracing::debug!(
+				index=current_message_index,
+				new_count=hs.pending_ws_msgs.len(),
+				"pushed pending websocket message"
+			);
 		}
 
 		self.ups
@@ -391,7 +395,6 @@ impl SharedState {
 
 		let len_after = hs.pending_ws_msgs.len();
 		tracing::debug!(
-			request_id=?tunnel_id::request_id_to_string(&request_id),
 			ack_index,
 			removed_count = len_before - len_after,
 			remaining_count = len_after,
