@@ -9,12 +9,10 @@ use rivet_guard_core::{
 	WebSocketHandle, custom_serve::CustomServeTrait, proxy_service::ResponseBody,
 	request_context::RequestContext,
 };
-use rivet_runner_protocol as protocol;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
-use vbare::OwnedVersionedData;
 
 mod conn;
 mod errors;
@@ -241,41 +239,6 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 				?err,
 				"critical: failed to evict runner from allocation index during disconnect"
 			);
-		}
-
-		// Send close messages to all remaining active requests
-		let active_requests = conn.tunnel_active_requests.lock().await;
-		for (request_id, req) in &*active_requests {
-			// Websockets are not ephemeral like requests. If the runner ws closes they are not informed;
-			// instead they wait for the actor itself to stop.
-			if req.is_ws {
-				continue;
-			}
-
-			let close_message = protocol::ToServerTunnelMessage {
-				request_id: request_id.clone(),
-				message_id: Uuid::new_v4().into_bytes(),
-				message_kind: protocol::ToServerTunnelMessageKind::ToServerResponseAbort,
-			};
-
-			let msg_serialized = protocol::versioned::ToGateway::wrap_latest(protocol::ToGateway {
-				message: close_message.clone(),
-			})
-			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
-			.context("failed to serialize tunnel message for gateway")?;
-
-			// Publish message to UPS
-			let res = ups
-				.publish(&req.gateway_reply_to, &msg_serialized, PublishOpts::one())
-				.await;
-
-			if let Err(err) = res {
-				tracing::warn!(
-					?err,
-					%req.gateway_reply_to,
-					"error sending close message to remaining active requests"
-				);
-			}
 		}
 
 		// This will determine the close frame sent back to the runner websocket

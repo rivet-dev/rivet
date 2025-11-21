@@ -193,12 +193,9 @@ type CommandWrapper struct {
 
 # MARK: Tunnel
 
+type GatewayId data[16]  # UUIDv4
 type RequestId data[16]  # UUIDv4
 type MessageId data[16]  # UUIDv4
-
-
-# Ack
-type TunnelAck void
 
 # HTTP
 type ToClientRequestStart struct {
@@ -270,8 +267,6 @@ type ToServerWebSocketClose struct {
 
 # To Server
 type ToServerTunnelMessageKind union {
-	TunnelAck |
-
 	# HTTP
 	ToServerResponseStart |
 	ToServerResponseChunk |
@@ -285,6 +280,7 @@ type ToServerTunnelMessageKind union {
 }
 
 type ToServerTunnelMessage struct {
+	gatewayId: GatewayId
 	requestId: RequestId
 	messageId: MessageId
 	messageKind: ToServerTunnelMessageKind
@@ -292,8 +288,6 @@ type ToServerTunnelMessage struct {
 
 # To Client
 type ToClientTunnelMessageKind union {
-	TunnelAck |
-
 	# HTTP
 	ToClientRequestStart |
 	ToClientRequestChunk |
@@ -306,6 +300,7 @@ type ToClientTunnelMessageKind union {
 }
 
 type ToClientTunnelMessage struct {
+	gatewayId: GatewayId
 	requestId: RequestId
 	messageId: MessageId
 	messageKind: ToClientTunnelMessageKind
@@ -389,9 +384,29 @@ type ToClient union {
 	ToClientTunnelMessage
 }
 
+# MARK: To Runner
+type ToRunnerKeepAlive struct {
+	requestId: RequestId
+}
+
+# We have to re-declare the entire union since BARE will not generate the
+# ser/de for ToClient if it's not a top-level type
+type ToRunner union {
+	ToRunnerKeepAlive |
+	ToClientInit |
+	ToClientClose |
+	ToClientCommands |
+	ToClientAckEvents |
+	ToClientKvResponse |
+	ToClientTunnelMessage
+}
+
 # MARK: To Gateway
-type ToGateway struct {
-	message: ToServerTunnelMessage
+type ToGatewayKeepAlive void
+
+type ToGateway union {
+	ToGatewayKeepAlive |
+	ToServerTunnelMessage
 }
 
 # MARK: Serverless

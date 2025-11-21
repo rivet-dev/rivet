@@ -175,6 +175,7 @@ impl ToClient {
 				}
 				v2::ToClient::ToClientTunnelMessage(msg) => {
 					v3::ToClient::ToClientTunnelMessage(v3::ToClientTunnelMessage {
+						gateway_id: [0; 16],
 						request_id: msg.request_id,
 						message_id: msg.message_id,
 						message_kind: convert_to_client_tunnel_message_kind_v2_to_v3(
@@ -489,6 +490,7 @@ impl ToServer {
 				}
 				v2::ToServer::ToServerTunnelMessage(msg) => {
 					v3::ToServer::ToServerTunnelMessage(v3::ToServerTunnelMessage {
+						gateway_id: [0; 16],
 						request_id: msg.request_id,
 						message_id: msg.message_id,
 						message_kind: convert_to_server_tunnel_message_kind_v2_to_v3(
@@ -629,6 +631,41 @@ impl ToServer {
 			Ok(ToServer::V1(inner))
 		} else {
 			bail!("unexpected version");
+		}
+	}
+}
+
+pub enum ToRunner {
+	// Only in v3
+	V3(v3::ToRunner),
+}
+
+impl OwnedVersionedData for ToRunner {
+	type Latest = v3::ToRunner;
+
+	fn wrap_latest(latest: v3::ToRunner) -> Self {
+		ToRunner::V3(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let ToRunner::V3(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 | 2 | 3 => Ok(ToRunner::V3(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			ToRunner::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 }
@@ -1152,7 +1189,6 @@ fn convert_to_client_tunnel_message_kind_v2_to_v3(
 	kind: v2::ToClientTunnelMessageKind,
 ) -> v3::ToClientTunnelMessageKind {
 	match kind {
-		v2::ToClientTunnelMessageKind::TunnelAck => v3::ToClientTunnelMessageKind::TunnelAck,
 		v2::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
 			v3::ToClientTunnelMessageKind::ToClientRequestStart(v3::ToClientRequestStart {
 				actor_id: req.actor_id,
@@ -1181,8 +1217,7 @@ fn convert_to_client_tunnel_message_kind_v2_to_v3(
 		}
 		v2::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketMessage(v3::ToClientWebSocketMessage {
-				// Default to 0 for v2 messages (hibernation disabled by default)
-				index: 0,
+				index: msg.index,
 				data: msg.data,
 				binary: msg.binary,
 			})
@@ -1193,6 +1228,13 @@ fn convert_to_client_tunnel_message_kind_v2_to_v3(
 				reason: close.reason,
 			})
 		}
+		// TunnelAck was removed in v3
+		v2::ToClientTunnelMessageKind::TunnelAck => {
+			// TunnelAck is deprecated and should not be used
+			// For backwards compatibility, we skip it
+			// This shouldn't happen in practice as TunnelAck was removed
+			v3::ToClientTunnelMessageKind::ToClientRequestAbort
+		}
 	}
 }
 
@@ -1200,7 +1242,6 @@ fn convert_to_client_tunnel_message_kind_v3_to_v2(
 	kind: v3::ToClientTunnelMessageKind,
 ) -> Result<v2::ToClientTunnelMessageKind> {
 	Ok(match kind {
-		v3::ToClientTunnelMessageKind::TunnelAck => v2::ToClientTunnelMessageKind::TunnelAck,
 		v3::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
 			v2::ToClientTunnelMessageKind::ToClientRequestStart(v2::ToClientRequestStart {
 				actor_id: req.actor_id,
@@ -1247,7 +1288,6 @@ fn convert_to_server_tunnel_message_kind_v2_to_v3(
 	kind: v2::ToServerTunnelMessageKind,
 ) -> v3::ToServerTunnelMessageKind {
 	match kind {
-		v2::ToServerTunnelMessageKind::TunnelAck => v3::ToServerTunnelMessageKind::TunnelAck,
 		v2::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
 			v3::ToServerTunnelMessageKind::ToServerResponseStart(v3::ToServerResponseStart {
 				status: resp.status,
@@ -1288,6 +1328,13 @@ fn convert_to_server_tunnel_message_kind_v2_to_v3(
 				hibernate: close.retry,
 			})
 		}
+		// TunnelAck was removed in v3
+		v2::ToServerTunnelMessageKind::TunnelAck => {
+			// TunnelAck is deprecated and should not be used
+			// For backwards compatibility, we skip it
+			// This shouldn't happen in practice as TunnelAck was removed
+			v3::ToServerTunnelMessageKind::ToServerResponseAbort
+		}
 	}
 }
 
@@ -1295,7 +1342,6 @@ fn convert_to_server_tunnel_message_kind_v3_to_v2(
 	kind: v3::ToServerTunnelMessageKind,
 ) -> Result<v2::ToServerTunnelMessageKind> {
 	Ok(match kind {
-		v3::ToServerTunnelMessageKind::TunnelAck => v2::ToServerTunnelMessageKind::TunnelAck,
 		v3::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
 			v2::ToServerTunnelMessageKind::ToServerResponseStart(v2::ToServerResponseStart {
 				status: resp.status,

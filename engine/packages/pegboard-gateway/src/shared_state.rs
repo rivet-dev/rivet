@@ -59,6 +59,7 @@ pub struct PendingWebsocketMessage {
 
 pub struct SharedStateInner {
 	ups: PubSub,
+	gateway_id: Uuid,
 	receiver_subject: String,
 	in_flight_requests: HashMap<RequestId, InFlightRequest>,
 }
@@ -74,6 +75,7 @@ impl SharedState {
 
 		Self(Arc::new(SharedStateInner {
 			ups,
+			gateway_id,
 			receiver_subject,
 			in_flight_requests: HashMap::new(),
 		}))
@@ -160,6 +162,7 @@ impl SharedState {
 			};
 
 		let payload = protocol::ToClientTunnelMessage {
+			gateway_id: *self.gateway_id.as_bytes(),
 			request_id: request_id.clone(),
 			message_id,
 			// Only send reply to subject on the first message for this request. This reduces
@@ -179,8 +182,8 @@ impl SharedState {
 		});
 
 		// Send message
-		let message = protocol::ToClient::ToClientTunnelMessage(payload);
-		let message_serialized = versioned::ToClient::wrap_latest(message)
+		let message = protocol::ToRunner::ToClientTunnelMessage(payload);
+		let message_serialized = versioned::ToRunner::wrap_latest(message)
 			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 
 		if let (Some(hs), Some(ws_msg_index)) = (&mut req.hibernation_state, ws_msg_index) {
@@ -221,105 +224,48 @@ impl SharedState {
 			);
 
 			match versioned::ToGateway::deserialize_with_embedded_version(&msg.payload) {
-				Ok(protocol::ToGateway { message: msg }) => {
-					tracing::debug!(
-						request_id=?Uuid::from_bytes(msg.request_id),
-						message_id=?Uuid::from_bytes(msg.message_id),
-						"successfully deserialized message"
-					);
-
-					let Some(mut in_flight) =
-						self.in_flight_requests.get_async(&msg.request_id).await
+				Ok(protocol::ToGateway::ToGatewayKeepAlive) => {
+					// TODO:
+					// let prev_len = in_flight.pending_msgs.len();
+					//
+					// tracing::debug!(message_id=?Uuid::from_bytes(msg.message_id), "received tunnel ack");
+					//
+					// in_flight
+					// 	.pending_msgs
+					// 	.retain(|m| m.message_id != msg.message_id);
+					//
+					// if prev_len == in_flight.pending_msgs.len() {
+					// 	tracing::warn!(
+					// 		request_id=?Uuid::from_bytes(msg.request_id),
+					// 		message_id=?Uuid::from_bytes(msg.message_id),
+					// 		"pending message does not exist or ack received after message body"
+					// 	)
+					// } else {
+					// 	tracing::debug!(
+					// 		request_id=?Uuid::from_bytes(msg.request_id),
+					// 		message_id=?Uuid::from_bytes(msg.message_id),
+					// 		"received TunnelAck, removed from pending"
+					// 	);
+					// }
+				}
+				Ok(protocol::ToGateway::ToServerTunnelMessage(msg)) => {
+					let Some(in_flight) = self.in_flight_requests.get_async(&msg.request_id).await
 					else {
 						tracing::warn!(
 							request_id=?Uuid::from_bytes(msg.request_id),
 							message_id=?Uuid::from_bytes(msg.message_id),
-							"in flight has already been disconnected, cannot ack message"
+							"in flight has already been disconnected, dropping message"
 						);
 						continue;
 					};
 
-					if let protocol::ToServerTunnelMessageKind::TunnelAck = &msg.message_kind {
-						let prev_len = in_flight.pending_msgs.len();
-
-						tracing::debug!(message_id=?Uuid::from_bytes(msg.message_id), "received tunnel ack");
-
-						in_flight
-							.pending_msgs
-							.retain(|m| m.message_id != msg.message_id);
-
-						if prev_len == in_flight.pending_msgs.len() {
-							tracing::warn!(
-								request_id=?Uuid::from_bytes(msg.request_id),
-								message_id=?Uuid::from_bytes(msg.message_id),
-								"pending message does not exist or ack received after message body"
-							)
-						} else {
-							tracing::debug!(
-								request_id=?Uuid::from_bytes(msg.request_id),
-								message_id=?Uuid::from_bytes(msg.message_id),
-								"received TunnelAck, removed from pending"
-							);
-						}
-					} else {
-						// Send message to the request handler to emulate the real network action
-						tracing::debug!(
-							request_id=?Uuid::from_bytes(msg.request_id),
-							message_id=?Uuid::from_bytes(msg.message_id),
-							"forwarding message to request handler"
-						);
-						let _ = in_flight.msg_tx.send(msg.message_kind.clone()).await;
-
-						// Send ack back to runner
-						let ups_clone = self.ups.clone();
-						let receiver_subject = in_flight.receiver_subject.clone();
-						let request_id = msg.request_id;
-						let message_id = msg.message_id;
-						let ack_message = protocol::ToClient::ToClientTunnelMessage(
-							protocol::ToClientTunnelMessage {
-								request_id,
-								message_id,
-								gateway_reply_to: None,
-								message_kind: protocol::ToClientTunnelMessageKind::TunnelAck,
-							},
-						);
-						let ack_message_serialized =
-							match versioned::ToClient::wrap_latest(ack_message)
-								.serialize_with_embedded_version(PROTOCOL_VERSION)
-							{
-								Ok(x) => x,
-								Err(err) => {
-									tracing::error!(?err, "failed to serialize ack");
-									continue;
-								}
-							};
-						tokio::spawn(async move {
-							match ups_clone
-								.publish(
-									&receiver_subject,
-									&ack_message_serialized,
-									PublishOpts::one(),
-								)
-								.await
-							{
-								Ok(_) => {
-									tracing::debug!(
-										request_id=?Uuid::from_bytes(request_id),
-										message_id=?Uuid::from_bytes(message_id),
-										"sent TunnelAck to runner"
-									);
-								}
-								Err(err) => {
-									tracing::warn!(
-										?err,
-										request_id=?Uuid::from_bytes(request_id),
-										message_id=?Uuid::from_bytes(message_id),
-										"failed to send TunnelAck to runner"
-									);
-								}
-							}
-						});
-					}
+					// Send message to the request handler to emulate the real network action
+					tracing::debug!(
+						request_id=?Uuid::from_bytes(msg.request_id),
+						message_id=?Uuid::from_bytes(msg.message_id),
+						"forwarding message to request handler"
+					);
+					let _ = in_flight.msg_tx.send(msg.message_kind.clone()).await;
 				}
 				Err(err) => {
 					tracing::error!(?err, "failed to parse message");
