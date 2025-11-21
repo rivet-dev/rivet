@@ -245,6 +245,7 @@ export function deconstructError(
 				group,
 				code,
 				message,
+				stack: (error as Error)?.stack,
 				...EXTRA_ERROR_LOG,
 				...extraLog,
 			});
@@ -260,6 +261,7 @@ export function deconstructError(
 				group,
 				code,
 				message,
+				stack: (error as Error)?.stack,
 				...EXTRA_ERROR_LOG,
 				...extraLog,
 			});

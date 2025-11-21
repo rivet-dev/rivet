@@ -2,7 +2,7 @@ use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_runner_protocol::{self as protocol, versioned, PROTOCOL_VERSION};
 use universaldb::{
 	options::{ConflictRangeType, StreamingMode},
 	utils::{FormalChunkedKey, IsolationLevel::*},
@@ -97,7 +97,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							// Send init packet
 							ctx.activity(SendMessageToRunnerInput {
 								runner_id: input.runner_id,
-								message: protocol::ToClient::ToClientInit(protocol::ToClientInit {
+								message: protocol::ToRunner::ToClientInit(protocol::ToClientInit {
 									runner_id: input.runner_id.to_string(),
 									last_event_idx: init_data.last_event_idx,
 									metadata: protocol::ProtocolMetadata {
@@ -111,7 +111,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							if !init_data.missed_commands.is_empty() {
 								ctx.activity(SendMessageToRunnerInput {
 									runner_id: input.runner_id,
-									message: protocol::ToClient::ToClientCommands(
+									message: protocol::ToRunner::ToClientCommands(
 										init_data.missed_commands,
 									),
 								})
@@ -203,7 +203,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 
 									ctx.activity(SendMessageToRunnerInput {
 										runner_id: input.runner_id,
-										message: protocol::ToClient::ToClientAckEvents(
+										message: protocol::ToRunner::ToClientAckEvents(
 											protocol::ToClientAckEvents {
 												last_event_idx: state.last_event_ack_idx,
 											},
@@ -282,7 +282,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 						// Forward
 						ctx.activity(SendMessageToRunnerInput {
 							runner_id: input.runner_id,
-							message: protocol::ToClient::ToClientCommands(vec![
+							message: protocol::ToRunner::ToClientCommands(vec![
 								protocol::CommandWrapper {
 									index,
 									inner: command.inner,
@@ -376,7 +376,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	// Close websocket connection (its unlikely to be open)
 	ctx.activity(SendMessageToRunnerInput {
 		runner_id: input.runner_id,
-		message: protocol::ToClient::ToClientClose,
+		message: protocol::ToRunner::ToClientClose,
 	})
 	.await?;
 
@@ -1137,7 +1137,7 @@ pub(crate) async fn allocate_pending_actors(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct SendMessageToRunnerInput {
 	runner_id: Id,
-	message: protocol::ToClient,
+	message: protocol::ToRunner,
 }
 
 #[activity(SendMessageToRunner)]
@@ -1145,7 +1145,7 @@ async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerIn
 	let receiver_subject =
 		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
 
-	let message_serialized = versioned::ToClient::wrap_latest(input.message.clone())
+	let message_serialized = versioned::ToRunner::wrap_latest(input.message.clone())
 		.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 
 	ctx.ups()?

@@ -1018,11 +1018,11 @@ export function decodeMessageIdParts(bytes: Uint8Array): MessageIdParts {
 export type MessageId = ArrayBuffer
 
 export function readMessageId(bc: bare.ByteCursor): MessageId {
-    return bare.readFixedData(bc, 12)
+    return bare.readFixedData(bc, 10)
 }
 
 export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
-    assert(x.byteLength === 12)
+    assert(x.byteLength === 10)
     bare.writeFixedData(bc, x)
 }
 
@@ -1899,18 +1899,24 @@ export function decodeToClient(bytes: Uint8Array): ToClient {
 /**
  * MARK: To Runner
  */
-export type ToRunnerKeepAlive = {
+export type ToRunnerPing = {
+    readonly gatewayId: GatewayId
     readonly requestId: RequestId
+    readonly ts: i64
 }
 
-export function readToRunnerKeepAlive(bc: bare.ByteCursor): ToRunnerKeepAlive {
+export function readToRunnerPing(bc: bare.ByteCursor): ToRunnerPing {
     return {
+        gatewayId: readGatewayId(bc),
         requestId: readRequestId(bc),
+        ts: bare.readI64(bc),
     }
 }
 
-export function writeToRunnerKeepAlive(bc: bare.ByteCursor, x: ToRunnerKeepAlive): void {
+export function writeToRunnerPing(bc: bare.ByteCursor, x: ToRunnerPing): void {
+    writeGatewayId(bc, x.gatewayId)
     writeRequestId(bc, x.requestId)
+    bare.writeI64(bc, x.ts)
 }
 
 /**
@@ -1918,7 +1924,7 @@ export function writeToRunnerKeepAlive(bc: bare.ByteCursor, x: ToRunnerKeepAlive
  * ser/de for ToClient if it's not a top-level type
  */
 export type ToRunner =
-    | { readonly tag: "ToRunnerKeepAlive"; readonly val: ToRunnerKeepAlive }
+    | { readonly tag: "ToRunnerPing"; readonly val: ToRunnerPing }
     | { readonly tag: "ToClientInit"; readonly val: ToClientInit }
     | { readonly tag: "ToClientClose"; readonly val: ToClientClose }
     | { readonly tag: "ToClientCommands"; readonly val: ToClientCommands }
@@ -1931,7 +1937,7 @@ export function readToRunner(bc: bare.ByteCursor): ToRunner {
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToRunnerKeepAlive", val: readToRunnerKeepAlive(bc) }
+            return { tag: "ToRunnerPing", val: readToRunnerPing(bc) }
         case 1:
             return { tag: "ToClientInit", val: readToClientInit(bc) }
         case 2:
@@ -1953,9 +1959,9 @@ export function readToRunner(bc: bare.ByteCursor): ToRunner {
 
 export function writeToRunner(bc: bare.ByteCursor, x: ToRunner): void {
     switch (x.tag) {
-        case "ToRunnerKeepAlive": {
+        case "ToRunnerPing": {
             bare.writeU8(bc, 0)
-            writeToRunnerKeepAlive(bc, x.val)
+            writeToRunnerPing(bc, x.val)
             break
         }
         case "ToClientInit": {
@@ -2012,10 +2018,25 @@ export function decodeToRunner(bytes: Uint8Array): ToRunner {
 /**
  * MARK: To Gateway
  */
-export type ToGatewayKeepAlive = null
+export type ToGatewayPong = {
+    readonly requestId: RequestId
+    readonly ts: i64
+}
+
+export function readToGatewayPong(bc: bare.ByteCursor): ToGatewayPong {
+    return {
+        requestId: readRequestId(bc),
+        ts: bare.readI64(bc),
+    }
+}
+
+export function writeToGatewayPong(bc: bare.ByteCursor, x: ToGatewayPong): void {
+    writeRequestId(bc, x.requestId)
+    bare.writeI64(bc, x.ts)
+}
 
 export type ToGateway =
-    | { readonly tag: "ToGatewayKeepAlive"; readonly val: ToGatewayKeepAlive }
+    | { readonly tag: "ToGatewayPong"; readonly val: ToGatewayPong }
     | { readonly tag: "ToServerTunnelMessage"; readonly val: ToServerTunnelMessage }
 
 export function readToGateway(bc: bare.ByteCursor): ToGateway {
@@ -2023,7 +2044,7 @@ export function readToGateway(bc: bare.ByteCursor): ToGateway {
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToGatewayKeepAlive", val: null }
+            return { tag: "ToGatewayPong", val: readToGatewayPong(bc) }
         case 1:
             return { tag: "ToServerTunnelMessage", val: readToServerTunnelMessage(bc) }
         default: {
@@ -2035,8 +2056,9 @@ export function readToGateway(bc: bare.ByteCursor): ToGateway {
 
 export function writeToGateway(bc: bare.ByteCursor, x: ToGateway): void {
     switch (x.tag) {
-        case "ToGatewayKeepAlive": {
+        case "ToGatewayPong": {
             bare.writeU8(bc, 0)
+            writeToGatewayPong(bc, x.val)
             break
         }
         case "ToServerTunnelMessage": {

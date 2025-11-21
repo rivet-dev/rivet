@@ -213,7 +213,7 @@ type MessageIdParts struct {
 	messageIndex: MessageIndex
 }
 
-type MessageId data[12]
+type MessageId data[10]
 
 # Ack (deprecated, older protocols that have gc cycles to check for tunnel ack)
 
@@ -399,14 +399,16 @@ type ToClient union {
 }
 
 # MARK: To Runner
-type ToRunnerKeepAlive struct {
+type ToRunnerPing struct {
+	gatewayId: GatewayId
 	requestId: RequestId
+	ts: i64
 }
 
 # We have to re-declare the entire union since BARE will not generate the
 # ser/de for ToClient if it's not a top-level type
 type ToRunner union {
-	ToRunnerKeepAlive |
+	ToRunnerPing |
 	ToClientInit |
 	ToClientClose |
 	ToClientCommands |
@@ -416,10 +418,13 @@ type ToRunner union {
 }
 
 # MARK: To Gateway
-type ToGatewayKeepAlive void
+type ToGatewayPong struct {
+	requestId: RequestId
+	ts: i64
+}
 
 type ToGateway union {
-	ToGatewayKeepAlive |
+	ToGatewayPong |
 	ToServerTunnelMessage
 }
 

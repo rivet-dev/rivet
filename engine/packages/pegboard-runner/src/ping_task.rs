@@ -20,41 +20,47 @@ pub async fn task(
 			}
 		}
 
-		let Some(wf) = ctx
-			.workflow::<pegboard::workflows::runner::Input>(conn.workflow_id)
-			.get()
-			.await?
-		else {
-			tracing::error!(?conn.runner_id, "workflow does not exist");
-			continue;
-		};
+		update_runner_ping(&ctx, &conn).await?;
+	}
+}
 
-		// Check workflow is not dead
-		if !wf.has_wake_condition {
-			continue;
-		}
+async fn update_runner_ping(ctx: &StandaloneCtx, conn: &Conn) -> Result<()> {
+	let Some(wf) = ctx
+		.workflow::<pegboard::workflows::runner::Input>(conn.workflow_id)
+		.get()
+		.await?
+	else {
+		tracing::error!(?conn.runner_id, "workflow does not exist");
+		return Ok(());
+	};
 
-		// Update ping
-		let rtt = conn.last_rtt.load(Ordering::Relaxed);
-		let res = ctx
-			.op(pegboard::ops::runner::update_alloc_idx::Input {
-				runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
-					runner_id: conn.runner_id,
-					action: Action::UpdatePing { rtt },
-				}],
-			})
-			.await?;
+	// Check workflow is not dead
+	if !wf.has_wake_condition {
+		return Ok(());
+	}
 
-		// If runner became eligible again, then pull any pending actors
-		for notif in res.notifications {
-			if let RunnerEligibility::ReEligible = notif.eligibility {
-				tracing::debug!(runner_id=?notif.runner_id, "runner has become eligible again");
+	// Update ping
+	let rtt = conn.last_rtt.load(Ordering::Relaxed);
+	let res = ctx
+		.op(pegboard::ops::runner::update_alloc_idx::Input {
+			runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
+				runner_id: conn.runner_id,
+				action: Action::UpdatePing { rtt },
+			}],
+		})
+		.await?;
 
-				ctx.signal(pegboard::workflows::runner::CheckQueue {})
-					.to_workflow_id(notif.workflow_id)
-					.send()
-					.await?;
-			}
+	// If runner became eligible again, then pull any pending actors
+	for notif in res.notifications {
+		if let RunnerEligibility::ReEligible = notif.eligibility {
+			tracing::debug!(runner_id=?notif.runner_id, "runner has become eligible again");
+
+			ctx.signal(pegboard::workflows::runner::CheckQueue {})
+				.to_workflow_id(notif.workflow_id)
+				.send()
+				.await?;
 		}
 	}
+
+	Ok(())
 }

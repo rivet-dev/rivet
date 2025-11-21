@@ -4,12 +4,11 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+use pegboard::tunnel::id::RequestId;
 
 use crate::WebSocketHandle;
 use crate::proxy_service::ResponseBody;
 use crate::request_context::RequestContext;
-
-use pegboard::tunnel::id::RequestId;
 
 pub enum HibernationResult {
 	Continue,

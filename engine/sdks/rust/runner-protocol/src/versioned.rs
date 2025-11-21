@@ -175,10 +175,10 @@ impl ToClient {
 				}
 				v2::ToClient::ToClientTunnelMessage(msg) => {
 					// Extract v3 message_id from v2's message_id
-					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
-					// v2.message_id contains: entire v3 message_id (12 bytes) + padding (4 bytes)
-					let mut message_id = [0u8; 12];
-					message_id.copy_from_slice(&msg.message_id[..12]);
+					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
+					// v2.message_id contains: entire v3 message_id (10 bytes) + padding (6 bytes)
+					let mut message_id = [0u8; 10];
+					message_id.copy_from_slice(&msg.message_id[..10]);
 
 					v3::ToClient::ToClientTunnelMessage(v3::ToClientTunnelMessage {
 						message_id,
@@ -247,13 +247,13 @@ impl ToClient {
 				}
 				v3::ToClient::ToClientTunnelMessage(msg) => {
 					// Split v3 message_id into v2's request_id and message_id
-					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
+					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
 					// v2.request_id = gateway_id (4) + request_id (4) + padding (8 zeros)
-					// v2.message_id = entire v3 message_id (12 bytes) + padding (4 zeros)
+					// v2.message_id = entire v3 message_id (10 bytes) + padding (4 zeros)
 					let mut request_id = [0u8; 16];
 					let mut message_id = [0u8; 16];
 					request_id[..8].copy_from_slice(&msg.message_id[..8]); // gateway_id + request_id
-					message_id[..12].copy_from_slice(&msg.message_id); // entire v3 message_id
+					message_id[..10].copy_from_slice(&msg.message_id); // entire v3 message_id
 
 					v2::ToClient::ToClientTunnelMessage(v2::ToClientTunnelMessage {
 						request_id,
@@ -503,10 +503,10 @@ impl ToServer {
 				}
 				v2::ToServer::ToServerTunnelMessage(msg) => {
 					// Extract v3 message_id from v2's message_id
-					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
-					// v2.message_id contains: entire v3 message_id (12 bytes) + padding (4 bytes)
-					let mut message_id = [0u8; 12];
-					message_id.copy_from_slice(&msg.message_id[..12]);
+					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
+					// v2.message_id contains: entire v3 message_id (10 bytes) + padding (6 bytes)
+					let mut message_id = [0u8; 10];
+					message_id.copy_from_slice(&msg.message_id[..10]);
 
 					v3::ToServer::ToServerTunnelMessage(v3::ToServerTunnelMessage {
 						message_id,
@@ -572,13 +572,13 @@ impl ToServer {
 				}
 				v3::ToServer::ToServerTunnelMessage(msg) => {
 					// Split v3 message_id into v2's request_id and message_id
-					// v3: gateway_id (4) + request_id (4) + message_index (4) = 12 bytes
+					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
 					// v2.request_id = gateway_id (4) + request_id (4) + padding (8 zeros)
-					// v2.message_id = entire v3 message_id (12 bytes) + padding (4 zeros)
+					// v2.message_id = entire v3 message_id (10 bytes) + padding (4 zeros)
 					let mut request_id = [0u8; 16];
 					let mut message_id = [0u8; 16];
 					request_id[..8].copy_from_slice(&msg.message_id[..8]); // gateway_id + request_id
-					message_id[..12].copy_from_slice(&msg.message_id); // entire v3 message_id
+					message_id[..10].copy_from_slice(&msg.message_id); // entire v3 message_id
 
 					v2::ToServer::ToServerTunnelMessage(v2::ToServerTunnelMessage {
 						request_id,
@@ -1262,7 +1262,7 @@ fn convert_to_client_tunnel_message_kind_v2_to_v3(
 
 fn convert_to_client_tunnel_message_kind_v3_to_v2(
 	kind: v3::ToClientTunnelMessageKind,
-	message_id: &[u8; 12],
+	message_id: &[u8; 10],
 ) -> Result<v2::ToClientTunnelMessageKind> {
 	Ok(match kind {
 		v3::ToClientTunnelMessageKind::ToClientRequestStart(req) => {

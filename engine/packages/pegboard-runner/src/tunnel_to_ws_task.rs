@@ -1,10 +1,11 @@
 use anyhow::Result;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
+use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::Arc;
 use tokio::sync::watch;
-use universalpubsub::{NextOutput, Subscriber};
+use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
 use crate::{LifecycleResult, conn::Conn, errors};
@@ -53,8 +54,29 @@ pub async fn task(
 
 		// Convert to ToClient types
 		let to_client_msg = match msg {
-			protocol::ToRunner::ToRunnerKeepAlive(_) => {
-				// TODO:
+			protocol::ToRunner::ToRunnerPing(ping) => {
+				// Publish pong to UPS
+				let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
+				let msg_serialized = versioned::ToGateway::wrap_latest(
+					protocol::ToGateway::ToGatewayPong(protocol::ToGatewayPong {
+						request_id: ping.request_id,
+						ts: ping.ts,
+					}),
+				)
+				.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
+				.context("failed to serialize pong message for gateway")?;
+				ctx.ups()
+					.context("failed to get UPS instance for tunnel message")?
+					.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
+					.await
+					.with_context(|| {
+						format!(
+							"failed to publish tunnel message to gateway reply topic: {}",
+							gateway_reply_to
+						)
+					})?;
+
+				// Not sent to client
 				continue;
 			}
 			protocol::ToRunner::ToClientInit(x) => protocol::ToClient::ToClientInit(x),
