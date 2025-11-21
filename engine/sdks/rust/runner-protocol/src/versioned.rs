@@ -1285,7 +1285,7 @@ fn convert_to_server_tunnel_message_kind_v2_to_v3(
 			v3::ToServerTunnelMessageKind::ToServerWebSocketClose(v3::ToServerWebSocketClose {
 				code: close.code,
 				reason: close.reason,
-				retry: close.retry,
+				hibernate: close.retry,
 			})
 		}
 	}
@@ -1334,7 +1334,7 @@ fn convert_to_server_tunnel_message_kind_v3_to_v2(
 			v2::ToServerTunnelMessageKind::ToServerWebSocketClose(v2::ToServerWebSocketClose {
 				code: close.code,
 				reason: close.reason,
-				retry: close.retry,
+				retry: close.hibernate,
 			})
 		}
 	})
