@@ -33,7 +33,7 @@ mod tunnel_to_ws_task;
 mod ws_to_tunnel_task;
 
 const WEBSOCKET_OPEN_TIMEOUT: Duration = Duration::from_secs(15);
-const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(5);
+const RESPONSE_START_TIMEOUT: Duration = Duration::from_secs(15);
 const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
 
 #[derive(RivetError, Serialize, Deserialize)]
@@ -231,10 +231,10 @@ impl CustomServeTrait for PegboardGateway {
 
 			Err(ServiceUnavailable.build())
 		};
-		let response_start = tokio::time::timeout(WEBSOCKET_OPEN_TIMEOUT, fut)
+		let response_start = tokio::time::timeout(RESPONSE_START_TIMEOUT, fut)
 			.await
 			.map_err(|_| {
-				tracing::warn!("timed out waiting for tunnel ack");
+				tracing::warn!("timed out waiting for response start from runner");
 
 				ServiceUnavailable.build()
 			})??;
@@ -373,10 +373,10 @@ impl CustomServeTrait for PegboardGateway {
 				Err(WebSocketServiceUnavailable.build())
 			};
 
-			let open_msg = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
+			let open_msg = tokio::time::timeout(WEBSOCKET_OPEN_TIMEOUT, fut)
 				.await
 				.map_err(|_| {
-					tracing::warn!("timed out waiting for tunnel ack");
+					tracing::warn!("timed out waiting for websocket open from runner");
 
 					WebSocketServiceUnavailable.build()
 				})??;

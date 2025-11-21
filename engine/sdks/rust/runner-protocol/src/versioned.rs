@@ -2,6 +2,7 @@ use anyhow::{Ok, Result, bail};
 use vbare::OwnedVersionedData;
 
 use crate::generated::{v1, v2, v3};
+use crate::uuid_compat::{decode_bytes_from_uuid, encode_bytes_to_uuid};
 
 pub enum ToClient {
 	V1(v1::ToClient),
@@ -174,19 +175,21 @@ impl ToClient {
 					})
 				}
 				v2::ToClient::ToClientTunnelMessage(msg) => {
-					// Extract v3 message_id from v2's message_id
-					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
-					// v2.message_id contains: entire v3 message_id (10 bytes) + padding (6 bytes)
+					// Extract v3 message_id from v2's UUIDs
+					// v2.message_id (UUID) contains: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
+					let decoded = decode_bytes_from_uuid(&msg.request_id);
+
 					let mut gateway_id = [0u8; 4];
-					gateway_id.copy_from_slice(&msg.message_id[..4]);
+					gateway_id.copy_from_slice(&decoded[..4]);
 					let mut request_id = [0u8; 4];
-					request_id.copy_from_slice(&msg.request_id[..4]);
+					request_id.copy_from_slice(&decoded[4..8]);
+					let message_index = u16::from_le_bytes([decoded[8], decoded[9]]);
 
 					v3::ToClient::ToClientTunnelMessage(v3::ToClientTunnelMessage {
 						message_id: v3::MessageId {
 							gateway_id,
 							request_id,
-							message_index: 0,
+							message_index,
 						},
 						message_kind: convert_to_client_tunnel_message_kind_v2_to_v3(
 							msg.message_kind,
@@ -252,16 +255,20 @@ impl ToClient {
 					})
 				}
 				v3::ToClient::ToClientTunnelMessage(msg) => {
-					// Split v3 message_id into v2's request_id and message_id
+					// Encode v3 message_id into v2's UUIDs
 					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
-					// v2.request_id = gateway_id (4) + request_id (4) + padding (8 zeros)
-					// v2.message_id = entire v3 message_id (10 bytes) + padding (4 zeros)
-					let mut request_id = [0u8; 16];
-					let mut message_id = [0u8; 16];
-					request_id[..4].copy_from_slice(&msg.message_id.gateway_id);
-					request_id[4..8].copy_from_slice(&msg.message_id.request_id);
-					message_id[..8].copy_from_slice(&request_id[0..8]);
-					request_id[8..10].copy_from_slice(&msg.message_id.message_index.to_le_bytes());
+					let mut data = [0u8; 10];
+					data[..4].copy_from_slice(&msg.message_id.gateway_id);
+					data[4..8].copy_from_slice(&msg.message_id.request_id);
+					data[8..10].copy_from_slice(&msg.message_id.message_index.to_le_bytes());
+
+					let message_id = encode_bytes_to_uuid(&data);
+
+					// request_id contains gateway_id + request_id for backwards compatibility
+					let mut request_id_data = [0u8; 8];
+					request_id_data[..4].copy_from_slice(&msg.message_id.gateway_id);
+					request_id_data[4..8].copy_from_slice(&msg.message_id.request_id);
+					let request_id = encode_bytes_to_uuid(&request_id_data);
 
 					v2::ToClient::ToClientTunnelMessage(v2::ToClientTunnelMessage {
 						request_id,
@@ -510,19 +517,21 @@ impl ToServer {
 					})
 				}
 				v2::ToServer::ToServerTunnelMessage(msg) => {
-					// Extract v3 message_id from v2's message_id
-					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
-					// v2.message_id contains: entire v3 message_id (10 bytes) + padding (6 bytes)
+					// Extract v3 message_id from v2's UUIDs
+					// v2.message_id (UUID) contains: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
+					let decoded = decode_bytes_from_uuid(&msg.request_id);
+
 					let mut gateway_id = [0u8; 4];
-					gateway_id.copy_from_slice(&msg.message_id[..4]);
+					gateway_id.copy_from_slice(&decoded[..4]);
 					let mut request_id = [0u8; 4];
-					request_id.copy_from_slice(&msg.request_id[..4]);
+					request_id.copy_from_slice(&decoded[4..8]);
+					let message_index = u16::from_le_bytes([decoded[8], decoded[9]]);
 
 					v3::ToServer::ToServerTunnelMessage(v3::ToServerTunnelMessage {
 						message_id: v3::MessageId {
 							gateway_id,
 							request_id,
-							message_index: 0,
+							message_index,
 						},
 						message_kind: convert_to_server_tunnel_message_kind_v2_to_v3(
 							msg.message_kind,
@@ -585,16 +594,20 @@ impl ToServer {
 					})
 				}
 				v3::ToServer::ToServerTunnelMessage(msg) => {
-					// Split v3 message_id into v2's request_id and message_id
+					// Encode v3 message_id into v2's UUIDs
 					// v3: gateway_id (4) + request_id (4) + message_index (2) = 10 bytes
-					// v2.request_id = gateway_id (4) + request_id (4) + padding (8 zeros)
-					// v2.message_id = entire v3 message_id (10 bytes) + padding (4 zeros)
-					let mut request_id = [0u8; 16];
-					let mut message_id = [0u8; 16];
-					request_id[..4].copy_from_slice(&msg.message_id.gateway_id);
-					request_id[4..8].copy_from_slice(&msg.message_id.request_id);
-					message_id[..8].copy_from_slice(&request_id[0..8]);
-					request_id[8..10].copy_from_slice(&msg.message_id.message_index.to_le_bytes());
+					let mut data = [0u8; 10];
+					data[..4].copy_from_slice(&msg.message_id.gateway_id);
+					data[4..8].copy_from_slice(&msg.message_id.request_id);
+					data[8..10].copy_from_slice(&msg.message_id.message_index.to_le_bytes());
+
+					let message_id = encode_bytes_to_uuid(&data);
+
+					// request_id contains gateway_id + request_id for backwards compatibility
+					let mut request_id_data = [0u8; 8];
+					request_id_data[..4].copy_from_slice(&msg.message_id.gateway_id);
+					request_id_data[4..8].copy_from_slice(&msg.message_id.request_id);
+					let request_id = encode_bytes_to_uuid(&request_id_data);
 
 					v2::ToServer::ToServerTunnelMessage(v2::ToServerTunnelMessage {
 						request_id,
