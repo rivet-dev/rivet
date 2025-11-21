@@ -2,8 +2,8 @@ use anyhow::Result;
 use gas::prelude::*;
 use pegboard::tunnel::id::{self as tunnel_id, GatewayId, RequestId};
 use rivet_guard_core::errors::WebSocketServiceTimeout;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
-use scc::{HashMap, hash_map::Entry};
+use rivet_runner_protocol::{self as protocol, versioned, PROTOCOL_VERSION};
+use scc::{hash_map::Entry, HashMap};
 use std::{
 	ops::Deref,
 	sync::Arc,
@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, watch};
 use universalpubsub::{NextOutput, PubSub, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{WebsocketPendingLimitReached, metrics};
+use crate::{metrics, WebsocketPendingLimitReached};
 
 const GC_INTERVAL: Duration = Duration::from_secs(15);
 const TUNNEL_PING_TIMEOUT: i64 = util::duration::seconds(30);
@@ -512,7 +512,13 @@ impl SharedState {
 							}
 						}
 
-						if hs.last_ping.elapsed() > hibernation_timeout {
+						let hs_elapsed = hs.last_ping.elapsed();
+						tracing::debug!(
+							hs_elapsed=%hs_elapsed.as_secs_f64(),
+							timeout=%hibernation_timeout.as_secs_f64(),
+							"checking hibernating state elapsed time"
+						);
+						if hs_elapsed> hibernation_timeout {
 							break 'reason Some(MsgGcReason::HibernationTimeout);
 						}
 					} else if req.msg_tx.is_closed() {

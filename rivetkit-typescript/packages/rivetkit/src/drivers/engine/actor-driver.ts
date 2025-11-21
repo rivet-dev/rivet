@@ -3,7 +3,7 @@ import type {
 	RunnerConfig as EngineRunnerConfig,
 	HibernatingWebSocketMetadata,
 } from "@rivetkit/engine-runner";
-import { Runner, tunnelId } from "@rivetkit/engine-runner";
+import { idToStr, Runner } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -730,8 +730,8 @@ export class EngineActorDriver implements ActorDriver {
 				msg: "event listeners attached to restored websocket",
 				actorId,
 				connId: conn?.id,
-				gatewayId: tunnelId.gatewayIdToString(gatewayIdBuf),
-				requestId: tunnelId.requestIdToString(requestIdBuf),
+				gatewayId: idToStr(gatewayIdBuf),
+				requestId: idToStr(requestIdBuf),
 				websocketType: websocket?.constructor?.name,
 				hasMessageListener: !!websocket.addEventListener,
 			});
@@ -778,8 +778,8 @@ export class EngineActorDriver implements ActorDriver {
 		// Determine configuration for new WS
 		logger().debug({
 			msg: "no existing hibernatable websocket found",
-			gatewayId: tunnelId.gatewayIdToString(gatewayId),
-			requestId: tunnelId.requestIdToString(requestId),
+			gatewayId: idToStr(gatewayId),
+			requestId: idToStr(requestId),
 		});
 		if (path === PATH_CONNECT) {
 			return true;

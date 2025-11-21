@@ -1,4 +1,5 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
+import { idToStr } from "./utils";
 
 /**
  * Helper function to stringify ArrayBuffer for logging
@@ -22,6 +23,13 @@ function stringifyMap(map: ReadonlyMap<string, string>): string {
 		.map(([k, v]) => `"${k}": "${v}"`)
 		.join(", ");
 	return `Map(${map.size}){${entries}}`;
+}
+
+/**
+ * Helper function to stringify MessageId for logging
+ */
+function stringifyMessageId(messageId: protocol.MessageId): string {
+	return `MessageId{gatewayId: ${idToStr(messageId.gatewayId)}, requestId: ${idToStr(messageId.requestId)}, messageIndex: ${messageId.messageIndex}}`;
 }
 
 /**
@@ -111,15 +119,17 @@ export function stringifyToClientTunnelMessageKind(
 export function stringifyCommand(command: protocol.Command): string {
 	switch (command.tag) {
 		case "CommandStartActor": {
-			const { actorId, generation, config, hibernatingRequests } = command.val;
+			const { actorId, generation, config, hibernatingRequests } =
+				command.val;
 			const keyStr = config.key === null ? "null" : `"${config.key}"`;
 			const inputStr =
 				config.input === null
 					? "null"
 					: stringifyArrayBuffer(config.input);
-			const hibernatingRequestsStr = hibernatingRequests.length > 0
-				? `[${hibernatingRequests.map((hr) => `{gatewayId: ${stringifyArrayBuffer(hr.gatewayId)}, requestId: ${stringifyArrayBuffer(hr.requestId)}}`).join(", ")}]`
-				: "[]";
+			const hibernatingRequestsStr =
+				hibernatingRequests.length > 0
+					? `[${hibernatingRequests.map((hr) => `{gatewayId: ${idToStr(hr.gatewayId)}, requestId: ${idToStr(hr.requestId)}}`).join(", ")}]`
+					: "[]";
 			return `CommandStartActor{actorId: "${actorId}", generation: ${generation}, config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}}`;
 		}
 		case "CommandStopActor": {
@@ -193,8 +203,14 @@ export function stringifyEventWrapper(wrapper: protocol.EventWrapper): string {
 export function stringifyToServer(message: protocol.ToServer): string {
 	switch (message.tag) {
 		case "ToServerInit": {
-			const { name, version, totalSlots, lastCommandIdx, prepopulateActorNames, metadata } =
-				message.val;
+			const {
+				name,
+				version,
+				totalSlots,
+				lastCommandIdx,
+				prepopulateActorNames,
+				metadata,
+			} = message.val;
 			const lastCommandIdxStr =
 				lastCommandIdx === null
 					? "null"
@@ -227,8 +243,7 @@ export function stringifyToServer(message: protocol.ToServer): string {
 		}
 		case "ToServerTunnelMessage": {
 			const { messageId, messageKind } = message.val;
-			const messageIdStr = stringifyArrayBuffer(messageId);
-			return `ToServerTunnelMessage{messageId: ${messageIdStr}, messageKind: ${stringifyToServerTunnelMessageKind(messageKind)}}`;
+			return `ToServerTunnelMessage{messageId: ${stringifyMessageId(messageId)}, messageKind: ${stringifyToServerTunnelMessageKind(messageKind)}}`;
 		}
 	}
 }
@@ -261,8 +276,7 @@ export function stringifyToClient(message: protocol.ToClient): string {
 		}
 		case "ToClientTunnelMessage": {
 			const { messageId, messageKind } = message.val;
-			const messageIdStr = stringifyArrayBuffer(messageId);
-			return `ToClientTunnelMessage{messageId: ${messageIdStr}, messageKind: ${stringifyToClientTunnelMessageKind(messageKind)}}`;
+			return `ToClientTunnelMessage{messageId: ${stringifyMessageId(messageId)}, messageKind: ${stringifyToClientTunnelMessageKind(messageKind)}}`;
 		}
 	}
 }

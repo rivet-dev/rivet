@@ -204,7 +204,7 @@ type CommandWrapper struct {
 
 # Message ID
 
-type MessageIdParts struct {
+type MessageId struct {
 	# Globally unique ID
 	gatewayId: GatewayId
 	# Unique ID to the gateway
@@ -212,8 +212,6 @@ type MessageIdParts struct {
 	# Unique ID to the request
 	messageIndex: MessageIndex
 }
-
-type MessageId data[10]
 
 # Ack (deprecated, older protocols that have gc cycles to check for tunnel ack)
 
