@@ -8,6 +8,7 @@ use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, R
 use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN};
 use crate::{errors, shared_state::SharedState};
 
+const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 
@@ -169,10 +170,14 @@ async fn route_request_inner(
 	if actor.sleeping {
 		tracing::debug!(?actor_id, "actor sleeping, waking");
 
-		ctx.signal(pegboard::workflows::actor::Wake {})
-			.to_workflow_id(actor.workflow_id)
-			.send()
-			.await?;
+		ctx.signal(pegboard::workflows::actor::Wake {
+			allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
+				pending_timeout: Some(ACTOR_FORCE_WAKE_PENDING_TIMEOUT),
+			},
+		})
+		.to_workflow_id(actor.workflow_id)
+		.send()
+		.await?;
 	}
 
 	let runner_id = if let (Some(runner_id), true) = (actor.runner_id, actor.connectable) {
@@ -193,10 +198,14 @@ async fn route_request_inner(
 						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
 						wake_retries += 1;
 
-						let res = ctx.signal(pegboard::workflows::actor::Wake {})
-							.to_workflow_id(actor.workflow_id)
-							.send()
-							.await;
+						let res = ctx.signal(pegboard::workflows::actor::Wake {
+							allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
+								pending_timeout: Some(ACTOR_FORCE_WAKE_PENDING_TIMEOUT),
+							},
+						})
+						.to_workflow_id(actor.workflow_id)
+						.send()
+						.await;
 
 						if let Some(WorkflowError::WorkflowNotFound) = res
 							.as_ref()
