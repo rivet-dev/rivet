@@ -50,10 +50,9 @@ function createHashForPath(dirPath: string): string {
 /**
  * Get the storage path for the current working directory or a specified path
  */
-export function getStoragePath(customPath?: string): string {
+export function getStoragePath(): string {
 	const dataPath = getDataPath("rivetkit");
-	const pathToHash = customPath || process.cwd();
-	const dirHash = createHashForPath(pathToHash);
+	const dirHash = createHashForPath(process.cwd());
 	const path = getNodePath();
 	return path.join(dataPath, dirHash);
 }
