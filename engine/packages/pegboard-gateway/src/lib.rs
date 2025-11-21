@@ -539,6 +539,16 @@ impl CustomServeTrait for PegboardGateway {
 	) -> Result<HibernationResult> {
 		let request_id = unique_request_id;
 
+		// Insert hibernating request entry before checking for pending messages
+		// This ensures the entry exists even if we immediately rewake the actor
+		self.ctx
+			.op(pegboard::ops::actor::hibernating_request::upsert::Input {
+				actor_id: self.actor_id,
+				gateway_id: self.shared_state.gateway_id(),
+				request_id,
+			})
+			.await?;
+
 		// Immediately rewake if we have pending messages
 		if self
 			.shared_state
@@ -549,6 +559,7 @@ impl CustomServeTrait for PegboardGateway {
 				?unique_request_id,
 				"detected pending requests on websocket hibernation, rewaking actor"
 			);
+
 			return Ok(HibernationResult::Continue);
 		}
 
@@ -566,6 +577,10 @@ impl CustomServeTrait for PegboardGateway {
 				.try_into()?,
 			));
 			ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			// Discard the first tick since it fires immediately and we've already called this
+			// above
+			ping_interval.tick().await;
 
 			loop {
 				ping_interval.tick().await;
