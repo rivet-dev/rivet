@@ -118,6 +118,7 @@ pub async fn task(
 		};
 
 		// Forward raw message to WebSocket
+		tracing::debug!(?to_client_msg, "sending runner message to client");
 		let serialized_msg = match versioned::ToClient::wrap_latest(to_client_msg)
 			.serialize(conn.protocol_version)
 		{
