@@ -499,6 +499,31 @@ importers:
         specifier: ^4.22.0
         version: 4.44.0(@cloudflare/workers-types@4.20251014.0)
 
+  examples/cloudflare-workers-inline-client:
+    dependencies:
+      '@rivetkit/cloudflare-workers':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/cloudflare-workers
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250129.0
+        version: 4.20251014.0
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.1
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.22.0
+        version: 4.44.0(@cloudflare/workers-types@4.20251014.0)
+
   examples/counter:
     devDependencies:
       '@types/node':
@@ -17120,7 +17145,7 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
       '@types/yargs': 15.0.19
       chalk: 4.1.2
 
@@ -19436,7 +19461,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
 
   '@types/bun@1.3.0(@types/react@19.2.2)':
     dependencies:
@@ -19453,11 +19478,11 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
 
   '@types/cors@2.8.19':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 22.19.1
 
   '@types/d3-array@3.2.1': {}
 
@@ -19513,7 +19538,7 @@ snapshots:
 
   '@types/express-serve-static-core@4.19.7':
     dependencies:
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
       '@types/qs': 6.9.8
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.0
@@ -19604,6 +19629,7 @@ snapshots:
   '@types/node@24.10.1':
     dependencies:
       undici-types: 7.16.0
+    optional: true
 
   '@types/node@24.3.1':
     dependencies:
@@ -19651,16 +19677,16 @@ snapshots:
   '@types/send@0.17.5':
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
 
   '@types/send@1.2.0':
     dependencies:
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
 
   '@types/serve-static@1.15.9':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
       '@types/send': 0.17.5
 
   '@types/stack-utils@2.0.3': {}
@@ -20872,7 +20898,7 @@ snapshots:
 
   bun-types@1.3.0(@types/react@19.2.2):
     dependencies:
-      '@types/node': 22.18.1
+      '@types/node': 22.19.1
       '@types/react': 19.2.2
 
   bundle-require@5.1.0(esbuild@0.25.9):
@@ -21592,7 +21618,7 @@ snapshots:
   engine.io@6.6.4:
     dependencies:
       '@types/cors': 2.8.19
-      '@types/node': 24.10.1
+      '@types/node': 22.19.1
       accepts: 1.3.8
       base64id: 2.0.0
       cookie: 0.7.2
@@ -21936,7 +21962,7 @@ snapshots:
       eslint: 9.39.1(jiti@1.21.7)
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-react: 7.37.5(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-react-hooks: 7.0.1(eslint@9.39.1(jiti@1.21.7))
@@ -21969,7 +21995,7 @@ snapshots:
       tinyglobby: 0.2.15
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
     transitivePeerDependencies:
       - supports-color
 
@@ -21984,7 +22010,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -27559,7 +27585,8 @@ snapshots:
 
   undici-types@7.14.0: {}
 
-  undici-types@7.16.0: {}
+  undici-types@7.16.0:
+    optional: true
 
   undici@6.22.0: {}
 
