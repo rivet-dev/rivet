@@ -15,12 +15,21 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	if let Some(runner_names) = query.runner_names {
+	let runner_names = [
+		query.runner_name,
+		query
+			.runner_names
+			.map(|x| x.split(',').map(|x| x.to_string()).collect::<Vec<_>>())
+			.unwrap_or_default(),
+	]
+	.concat();
+
+	if !runner_names.is_empty() {
 		let runner_configs = ctx
 			.op(namespace::ops::runner_config::get::Input {
 				runners: runner_names
-					.split(',')
-					.map(|name| (namespace.namespace_id, name.to_string()))
+					.into_iter()
+					.map(|name| (namespace.namespace_id, name))
 					.collect(),
 				bypass_cache: false,
 			})

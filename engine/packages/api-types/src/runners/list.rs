@@ -1,3 +1,4 @@
+use gas::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -9,8 +10,11 @@ use crate::pagination::Pagination;
 pub struct ListQuery {
 	pub namespace: String,
 	pub name: Option<String>,
+	/// Deprecated.
 	#[serde(default)]
 	pub runner_ids: Option<String>,
+	#[serde(default)]
+	pub runner_id: Vec<Id>,
 	pub include_stopped: Option<bool>,
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,

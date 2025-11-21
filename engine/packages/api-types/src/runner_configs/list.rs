@@ -13,8 +13,11 @@ pub struct ListQuery {
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
 	pub variant: Option<rivet_types::keys::namespace::runner_config::RunnerConfigVariant>,
+	/// Deprecated.
 	#[serde(default)]
 	pub runner_names: Option<String>,
+	#[serde(default)]
+	pub runner_name: Vec<String>,
 }
 
 #[derive(Deserialize, Clone)]

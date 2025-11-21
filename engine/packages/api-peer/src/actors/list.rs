@@ -14,18 +14,25 @@ use rivet_api_types::{actors::list::*, pagination::Pagination};
 #[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
 	let key = query.key;
-	let actor_ids = query.actor_ids.as_ref().map(|x| {
-		x.split(',')
-			.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
-			.collect::<Vec<_>>()
-	});
+	let actor_ids = [
+		query.actor_id,
+		query
+			.actor_ids
+			.map(|x| {
+				x.split(',')
+					.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default(),
+	]
+	.concat();
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
 
 	// TODO: Update api-peer to require including the reservation ID in the query if querying with
 	// key in order to assert the request was sent to the correct datacenter
 
 	// If actor_ids are provided, fetch actors directly by ID
-	if let Some(actor_ids) = actor_ids {
+	if !actor_ids.is_empty() {
 		// Resolve namespace to verify actors belong to it
 		let namespace = ctx
 			.op(namespace::ops::resolve_for_name_global::Input {
@@ -36,9 +43,7 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 
 		// Fetch actors by their IDs
 		let get_res = ctx
-			.op(pegboard::ops::actor::get::Input {
-				actor_ids: actor_ids.clone(),
-			})
+			.op(pegboard::ops::actor::get::Input { actor_ids })
 			.await?;
 
 		// Filter actors by namespace
