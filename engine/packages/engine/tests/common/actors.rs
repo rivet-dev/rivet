@@ -437,9 +437,10 @@ pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> 
 		.expect("Failed to create WebSocket request");
 
 	// Add protocols for routing through guard to actor
+	// URL encode the actor ID since colons are not allowed in WebSocket protocol names
 	request.headers_mut().insert(
 		"Sec-WebSocket-Protocol",
-		format!("rivet, rivet_target.actor, rivet_actor.{}", actor_id)
+		format!("rivet, rivet_target.actor, rivet_actor.{}", urlencoding::encode(&actor_id))
 			.parse()
 			.unwrap(),
 	);

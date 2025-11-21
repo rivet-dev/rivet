@@ -565,7 +565,7 @@ function addManagerRoutes(
 
 				for (const protocol of protocols) {
 					if (protocol.startsWith(WS_PROTOCOL_ACTOR)) {
-						actorId = protocol.substring(WS_PROTOCOL_ACTOR.length);
+						actorId = decodeURIComponent(protocol.substring(WS_PROTOCOL_ACTOR.length));
 					} else if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
 						encoding = protocol.substring(
 							WS_PROTOCOL_ENCODING.length,
