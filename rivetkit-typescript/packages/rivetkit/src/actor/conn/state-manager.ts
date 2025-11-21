@@ -193,14 +193,4 @@ export class StateManager<CP, CS> {
 		}
 		return subIdx !== -1;
 	}
-
-	buildHwsMeta(): HibernatingWebSocketMetadata {
-		const hibernatable = this.hibernatableDataOrError();
-		return {
-			requestId: hibernatable.hibernatableRequestId,
-			path: hibernatable.requestPath,
-			headers: hibernatable.requestHeaders,
-			messageIndex: hibernatable.msgIndex,
-		};
-	}
 }

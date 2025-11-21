@@ -532,7 +532,7 @@ pub async fn spawn_actor(
 					},
 					// Empty because request ids are ephemeral. This is intercepted by guard and
 					// populated before it reaches the runner
-					hibernating_request_ids: Vec::new(),
+					hibernating_requests: Vec::new(),
 				}),
 			})
 			.to_workflow_id(runner_workflow_id)
@@ -579,7 +579,7 @@ pub async fn spawn_actor(
 							},
 							// Empty because request ids are ephemeral. This is intercepted by guard and
 							// populated before it reaches the runner
-							hibernating_request_ids: Vec::new(),
+							hibernating_requests: Vec::new(),
 						}),
 					})
 					.to_workflow_id(sig.runner_workflow_id)

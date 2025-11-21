@@ -1,5 +1,7 @@
 use gas::prelude::*;
 
+use crate::tunnel::id as tunnel_id;
+
 pub struct RunnerReceiverSubject {
 	runner_id: Id,
 }
@@ -59,17 +61,21 @@ impl std::fmt::Display for RunnerEvictionByNameSubject {
 }
 
 pub struct GatewayReceiverSubject {
-	gateway_id: Uuid,
+	gateway_id: tunnel_id::GatewayId,
 }
 
 impl GatewayReceiverSubject {
-	pub fn new(gateway_id: Uuid) -> Self {
+	pub fn new(gateway_id: tunnel_id::GatewayId) -> Self {
 		Self { gateway_id }
 	}
 }
 
 impl std::fmt::Display for GatewayReceiverSubject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "pegboard.gateway.{}", self.gateway_id)
+		write!(
+			f,
+			"pegboard.gateway.{}",
+			tunnel_id::gateway_id_to_string(&self.gateway_id)
+		)
 	}
 }

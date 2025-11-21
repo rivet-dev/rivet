@@ -11,9 +11,6 @@ import { DriverReadyState } from "../driver";
 export function createRawRequestDriver(): ConnDriver {
 	return {
 		type: "raw-request",
-		requestId: crypto.randomUUID(),
-		requestIdBuf: undefined,
-		hibernatable: false,
 
 		disconnect: async () => {
 			// Noop

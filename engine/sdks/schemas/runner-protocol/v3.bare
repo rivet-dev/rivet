@@ -5,6 +5,10 @@
 type Id str
 type Json str
 
+type GatewayId data[4]
+type RequestId data[4]
+type MessageIndex u16
+
 # MARK: KV
 
 # Basic types
@@ -168,12 +172,17 @@ type EventWrapper struct {
 }
 
 # MARK: Commands
-#
+
+type HibernatingRequest struct {
+	gatewayId: GatewayId
+	requestId: RequestId
+}
+
 type CommandStartActor struct {
 	actorId: Id
 	generation: u32
 	config: ActorConfig
-	hibernatingRequestIds: list<data>
+	hibernatingRequests: list<HibernatingRequest>
 }
 
 type CommandStopActor struct {
@@ -193,9 +202,22 @@ type CommandWrapper struct {
 
 # MARK: Tunnel
 
-type GatewayId data[16]  # UUIDv4
-type RequestId data[16]  # UUIDv4
-type MessageId data[16]  # UUIDv4
+# Message ID
+
+type MessageIdParts struct {
+	# Globally unique ID
+	gatewayId: GatewayId
+	# Unique ID to the gateway
+	requestId: RequestId
+	# Unique ID to the request
+	messageIndex: MessageIndex
+}
+
+type MessageId data[12]
+
+# Ack (deprecated, older protocols that have gc cycles to check for tunnel ack)
+
+type DeprecatedTunnelAck void
 
 # HTTP
 type ToClientRequestStart struct {
@@ -236,7 +258,6 @@ type ToClientWebSocketOpen struct {
 }
 
 type ToClientWebSocketMessage struct {
-	index: u16
 	data: data
 	binary: bool
 }
@@ -256,7 +277,7 @@ type ToServerWebSocketMessage struct {
 }
 
 type ToServerWebSocketMessageAck struct {
-	index: u16
+	index: MessageIndex
 }
 
 type ToServerWebSocketClose struct {
@@ -267,11 +288,13 @@ type ToServerWebSocketClose struct {
 
 # To Server
 type ToServerTunnelMessageKind union {
+	DeprecatedTunnelAck |
+
 	# HTTP
 	ToServerResponseStart |
 	ToServerResponseChunk |
 	ToServerResponseAbort |
-	
+
 	# WebSocket
 	ToServerWebSocketOpen |
 	ToServerWebSocketMessage |
@@ -280,19 +303,19 @@ type ToServerTunnelMessageKind union {
 }
 
 type ToServerTunnelMessage struct {
-	gatewayId: GatewayId
-	requestId: RequestId
 	messageId: MessageId
 	messageKind: ToServerTunnelMessageKind
 }
 
 # To Client
 type ToClientTunnelMessageKind union {
+	DeprecatedTunnelAck |
+
 	# HTTP
 	ToClientRequestStart |
 	ToClientRequestChunk |
 	ToClientRequestAbort |
-	
+
 	# WebSocket
 	ToClientWebSocketOpen |
 	ToClientWebSocketMessage |
@@ -300,17 +323,8 @@ type ToClientTunnelMessageKind union {
 }
 
 type ToClientTunnelMessage struct {
-	gatewayId: GatewayId
-	requestId: RequestId
 	messageId: MessageId
 	messageKind: ToClientTunnelMessageKind
-
-	# Subject to send replies to.
-	#
-	# Only sent when opening a new request from gateway -> pegboard-runner-ws.
-	#
-	# Should be stripped before sending to the runner.
-	gatewayReplyTo: optional<str>
 }
 
 # MARK: To Server

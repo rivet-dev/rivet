@@ -5,6 +5,7 @@ pub mod keys;
 mod metrics;
 pub mod ops;
 pub mod pubsub_subjects;
+pub mod tunnel;
 mod utils;
 pub mod workflows;
 

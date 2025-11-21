@@ -1,7 +1,8 @@
 use anyhow::Result;
 use gas::prelude::*;
 use universaldb::prelude::*;
-use uuid::Uuid;
+
+use crate::tunnel::id::{GatewayId, RequestId};
 
 #[derive(Debug)]
 pub struct CreateTsKey {
@@ -317,14 +318,21 @@ impl<'de> TupleUnpack<'de> for NamespaceIdKey {
 pub struct HibernatingRequestKey {
 	actor_id: Id,
 	last_ping_ts: i64,
-	pub request_id: Uuid,
+	pub gateway_id: GatewayId,
+	pub request_id: RequestId,
 }
 
 impl HibernatingRequestKey {
-	pub fn new(actor_id: Id, last_ping_ts: i64, request_id: Uuid) -> Self {
+	pub fn new(
+		actor_id: Id,
+		last_ping_ts: i64,
+		gateway_id: GatewayId,
+		request_id: RequestId,
+	) -> Self {
 		HibernatingRequestKey {
 			actor_id,
 			last_ping_ts,
+			gateway_id,
 			request_id,
 		}
 	}
@@ -361,7 +369,8 @@ impl TuplePack for HibernatingRequestKey {
 			HIBERNATING_REQUEST,
 			self.actor_id,
 			self.last_ping_ts,
-			self.request_id,
+			&self.gateway_id[..],
+			&self.request_id[..],
 		);
 		t.pack(w, tuple_depth)
 	}
@@ -369,12 +378,23 @@ impl TuplePack for HibernatingRequestKey {
 
 impl<'de> TupleUnpack<'de> for HibernatingRequestKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, actor_id, last_ping_ts, request_id)) =
-			<(usize, usize, Id, i64, Uuid)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, actor_id, last_ping_ts, gateway_id_bytes, request_id_bytes)) =
+			<(usize, usize, Id, i64, Vec<u8>, Vec<u8>)>::unpack(input, tuple_depth)?;
+
+		let gateway_id: GatewayId = gateway_id_bytes
+			.as_slice()
+			.try_into()
+			.expect("invalid gateway_id length");
+
+		let request_id: RequestId = request_id_bytes
+			.as_slice()
+			.try_into()
+			.expect("invalid request_id length");
 
 		let v = HibernatingRequestKey {
 			actor_id,
 			last_ping_ts,
+			gateway_id,
 			request_id,
 		};
 

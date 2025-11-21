@@ -62,8 +62,8 @@ export async function routeWebSocket(
 	actorId: string,
 	encoding: Encoding,
 	parameters: unknown,
-	requestId: string,
-	requestIdBuf: ArrayBuffer | undefined,
+	gatewayId: ArrayBuffer | undefined,
+	requestId: ArrayBuffer | undefined,
 	isHibernatable: boolean,
 	isRestoringHibernatable: boolean,
 ): Promise<UpgradeWebSocketArgs> {
@@ -90,9 +90,9 @@ export async function routeWebSocket(
 		let connDriver: ConnDriver;
 		if (requestPath === PATH_CONNECT) {
 			const { driver, setWebSocket } = createWebSocketDriver(
-				requestId,
-				requestIdBuf,
-				isHibernatable,
+				isHibernatable
+					? { gatewayId: gatewayId!, requestId: requestId! }
+					: undefined,
 				encoding,
 				closePromiseResolvers.promise,
 			);
@@ -103,9 +103,9 @@ export async function routeWebSocket(
 			requestPath.startsWith(PATH_WEBSOCKET_PREFIX)
 		) {
 			const { driver, setWebSocket } = createRawWebSocketDriver(
-				requestId,
-				requestIdBuf,
-				isHibernatable,
+				isHibernatable
+					? { gatewayId: gatewayId!, requestId: requestId! }
+					: undefined,
 				closePromiseResolvers.promise,
 			);
 			handler = handleRawWebSocket.bind(undefined, setWebSocket);

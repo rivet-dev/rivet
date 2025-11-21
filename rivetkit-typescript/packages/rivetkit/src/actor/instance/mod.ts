@@ -14,7 +14,7 @@ import {
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
-import { EXTRA_ERROR_LOG, idToStr } from "@/utils";
+import { EXTRA_ERROR_LOG } from "@/utils";
 import type { ActorConfig, InitContext } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
@@ -168,14 +168,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 							: undefined,
 						subscriptions: conn.subscriptions.size,
 						isHibernatable: conn.isHibernatable,
-						hibernatableRequestId: connStateManager
-							.hibernatableDataRaw?.hibernatableRequestId
-							? idToStr(
-									connStateManager.hibernatableDataRaw
-										.hibernatableRequestId,
-								)
-							: undefined,
-						// TODO: Include the underlying request for path & headers?
+						// TODO: Include underlying hibernatable metadata +
+						// path + headers
 					};
 				});
 			},

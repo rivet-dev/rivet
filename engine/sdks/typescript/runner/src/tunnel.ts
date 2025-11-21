@@ -1,5 +1,9 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
-import type { MessageId, RequestId } from "@rivetkit/engine-runner-protocol";
+import type {
+	MessageId,
+	RequestId,
+	GatewayId,
+} from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
 import {
 	parse as uuidparse,
@@ -11,32 +15,31 @@ import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import { unreachable } from "./utils";
+import * as tunnelId from "./tunnel-id";
+import { arraysEqual, unreachable } from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,
 } from "./websocket-tunnel-adapter";
-
-const GC_INTERVAL = 60000; // 60 seconds
-const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
 
 export interface PendingRequest {
 	resolve: (response: Response) => void;
 	reject: (error: Error) => void;
 	streamController?: ReadableStreamDefaultController<Uint8Array>;
 	actorId?: string;
+	gatewayId?: GatewayId;
+	requestId?: RequestId;
+	clientMessageIndex: number;
 }
 
 export interface HibernatingWebSocketMetadata {
+	gatewayId: GatewayId;
 	requestId: RequestId;
+	clientMessageIndex: number;
+	serverMessageIndex: number;
+
 	path: string;
 	headers: Record<string, string>;
-	messageIndex: number;
-}
-
-export interface PendingTunnelMessage {
-	sentAt: number;
-	requestIdStr: string;
 }
 
 class RunnerShutdownError extends Error {
@@ -49,9 +52,11 @@ export class Tunnel {
 	#runner: Runner;
 
 	/** Maps request IDs to actor IDs for lookup */
-	#requestToActor: Map<string, string> = new Map();
-
-	#gcInterval?: NodeJS.Timeout;
+	#requestToActor: Array<{
+		gatewayId: GatewayId;
+		requestId: RequestId;
+		actorId: string;
+	}> = [];
 
 	get log(): Logger | undefined {
 		return this.#runner.log;
@@ -62,70 +67,54 @@ export class Tunnel {
 	}
 
 	start(): void {
-		this.#startGarbageCollector();
+		// No-op - kept for compatibility
 	}
 
 	shutdown() {
 		// NOTE: Pegboard WS already closed at this point, cannot send
 		// anything. All teardown logic is handled by pegboard-runner.
 
-		if (this.#gcInterval) {
-			clearInterval(this.#gcInterval);
-			this.#gcInterval = undefined;
-		}
-
 		// Reject all pending requests and close all WebSockets for all actors
 		// RunnerShutdownError will be explicitly ignored
 		for (const [_actorId, actor] of this.#runner.actors) {
 			// Reject all pending requests for this actor
-			for (const [_, request] of actor.pendingRequests) {
-				request.reject(new RunnerShutdownError());
+			for (const entry of actor.pendingRequests) {
+				entry.request.reject(new RunnerShutdownError());
 			}
-			actor.pendingRequests.clear();
+			actor.pendingRequests = [];
 
 			// Close all WebSockets for this actor
 			// The WebSocket close event with retry is automatically sent when the
 			// runner WS closes, so we only need to notify the client that the WS
 			// closed:
 			// https://github.com/rivet-dev/rivet/blob/00d4f6a22da178a6f8115e5db50d96c6f8387c2e/engine/packages/pegboard-runner/src/lib.rs#L157
-			for (const [_, ws] of actor.webSockets) {
+			for (const entry of actor.webSockets) {
 				// Only close non-hibernatable websockets to prevent sending
 				// unnecessary close messages for websockets that will be hibernated
-				if (!ws[HIBERNATABLE_SYMBOL]) {
-					ws._closeWithoutCallback(1000, "ws.tunnel_shutdown");
+				if (!entry.ws[HIBERNATABLE_SYMBOL]) {
+					entry.ws._closeWithoutCallback(1000, "ws.tunnel_shutdown");
 				}
 			}
-			actor.webSockets.clear();
+			actor.webSockets = [];
 		}
 
 		// Clear the request-to-actor mapping
-		this.#requestToActor.clear();
+		this.#requestToActor = [];
 	}
 
 	async restoreHibernatingRequests(
 		actorId: string,
-		requestIds: readonly RequestId[],
+		hibernatingRequests: readonly protocol.HibernatingRequest[],
 	) {
 		this.log?.debug({
 			msg: "restoring hibernating requests",
 			actorId,
-			requests: requestIds.length,
+			requests: hibernatingRequests.length,
 		});
 
 		// Load all persisted metadata
 		const metaEntries =
 			await this.#runner.config.hibernatableWebSocket.loadAll(actorId);
-
-		// Create maps for efficient lookup
-		const requestIdMap = new Map<string, RequestId>();
-		for (const requestId of requestIds) {
-			requestIdMap.set(idToStr(requestId), requestId);
-		}
-
-		const metaMap = new Map<string, HibernatingWebSocketMetadata>();
-		for (const meta of metaEntries) {
-			metaMap.set(idToStr(meta.requestId), meta);
-		}
 
 		// Track all background operations
 		const backgroundOperations: Promise<void>[] = [];
@@ -133,8 +122,13 @@ export class Tunnel {
 		// Process connected WebSockets
 		let connectedButNotLoadedCount = 0;
 		let restoredCount = 0;
-		for (const [requestIdStr, requestId] of requestIdMap) {
-			const meta = metaMap.get(requestIdStr);
+		for (const { gatewayId, requestId } of hibernatingRequests) {
+			const requestIdStr = tunnelId.requestIdToString(requestId);
+			const meta = metaEntries.find(
+				(entry) =>
+					arraysEqual(entry.gatewayId, gatewayId) &&
+					arraysEqual(entry.requestId, requestId),
+			);
 
 			if (!meta) {
 				// Connected but not loaded (not persisted) - close it
@@ -145,7 +139,7 @@ export class Tunnel {
 					requestId: requestIdStr,
 				});
 
-				this.#sendMessage(requestId, {
+				this.#sendMessage(gatewayId, requestId, {
 					tag: "ToServerWebSocketClose",
 					val: {
 						code: 1000,
@@ -167,17 +161,35 @@ export class Tunnel {
 				// Track this operation to ensure it completes
 				const restoreOperation = this.#createWebSocket(
 					actorId,
+					gatewayId,
 					requestId,
 					requestIdStr,
+					meta.serverMessageIndex,
 					true,
 					true,
-					meta.messageIndex,
 					request,
 					meta.path,
 					meta.headers,
 					false,
 				)
 					.then(() => {
+						// Create a PendingRequest entry to track the message index
+						const actor = this.#runner.getActor(actorId);
+						if (actor) {
+							actor.pendingRequests.push({
+								gatewayId,
+								requestId,
+								request: {
+									resolve: () => {},
+									reject: () => {},
+									actorId: actorId,
+									gatewayId: gatewayId,
+									requestId: requestId,
+									clientMessageIndex: meta.clientMessageIndex,
+								},
+							});
+						}
+
 						this.log?.info({
 							msg: "connection successfully restored",
 							actorId,
@@ -192,7 +204,7 @@ export class Tunnel {
 						});
 
 						// Close the WebSocket on error
-						this.#sendMessage(requestId, {
+						this.#sendMessage(gatewayId, requestId, {
 							tag: "ToServerWebSocketClose",
 							val: {
 								code: 1011,
@@ -209,8 +221,14 @@ export class Tunnel {
 
 		// Process loaded but not connected (stale) - remove them
 		let loadedButNotConnectedCount = 0;
-		for (const [requestIdStr, meta] of metaMap) {
-			if (!requestIdMap.has(requestIdStr)) {
+		for (const meta of metaEntries) {
+			const requestIdStr = tunnelId.requestIdToString(meta.requestId);
+			const isConnected = hibernatingRequests.some(
+				(req) =>
+					arraysEqual(req.gatewayId, meta.gatewayId) &&
+					arraysEqual(req.requestId, meta.requestId),
+			);
+			if (!isConnected) {
 				this.log?.warn({
 					msg: "removing stale persisted websocket",
 					requestId: requestIdStr,
@@ -226,11 +244,12 @@ export class Tunnel {
 				// Track this operation to ensure it completes
 				const cleanupOperation = this.#createWebSocket(
 					actorId,
+					meta.gatewayId,
 					meta.requestId,
 					requestIdStr,
+					meta.serverMessageIndex,
 					true,
 					true,
-					meta.messageIndex,
 					request,
 					meta.path,
 					meta.headers,
@@ -276,11 +295,12 @@ export class Tunnel {
 	 */
 	async #createWebSocket(
 		actorId: string,
+		gatewayId: GatewayId,
 		requestId: RequestId,
 		requestIdStr: string,
+		serverMessageIndex: number,
 		isHibernatable: boolean,
 		isRestoringHibernatable: boolean,
-		messageIndex: number,
 		request: Request,
 		path: string,
 		headers: Record<string, string>,
@@ -298,8 +318,8 @@ export class Tunnel {
 			this,
 			actorId,
 			requestIdStr,
+			serverMessageIndex,
 			isHibernatable,
-			messageIndex,
 			isRestoringHibernatable,
 			request,
 			(data: ArrayBuffer | string, isBinary: boolean) => {
@@ -309,7 +329,7 @@ export class Tunnel {
 						? (new TextEncoder().encode(data).buffer as ArrayBuffer)
 						: data;
 
-				this.#sendMessage(requestId, {
+				this.#sendMessage(gatewayId, requestId, {
 					tag: "ToServerWebSocketMessage",
 					val: {
 						data: dataBuffer,
@@ -320,7 +340,7 @@ export class Tunnel {
 			(code?: number, reason?: string) => {
 				// Send close through tunnel if engine doesn't already know it's closed
 				if (!engineAlreadyClosed) {
-					this.#sendMessage(requestId, {
+					this.#sendMessage(gatewayId, requestId, {
 						tag: "ToServerWebSocketClose",
 						val: {
 							code: code || null,
@@ -333,11 +353,12 @@ export class Tunnel {
 				// Clean up actor tracking
 				const actor = this.#runner.getActor(actorId);
 				if (actor) {
-					actor.webSockets.delete(requestIdStr);
+					actor.deleteWebSocket(gatewayId, requestId);
+					actor.deletePendingRequest(gatewayId, requestId);
 				}
 
 				// Clean up request-to-actor mapping
-				this.#requestToActor.delete(requestIdStr);
+				this.#removeRequestToActor(gatewayId, requestId);
 			},
 		);
 
@@ -347,8 +368,8 @@ export class Tunnel {
 			throw new Error(`Actor ${actorId} not found`);
 		}
 
-		actor.webSockets.set(requestIdStr, adapter);
-		this.#requestToActor.set(requestIdStr, actorId);
+		actor.setWebSocket(gatewayId, requestId, adapter);
+		this.#addRequestToActor(gatewayId, requestId, actorId);
 
 		// Call WebSocket handler. This handler will add event listeners
 		// for `open`, etc.
@@ -356,6 +377,7 @@ export class Tunnel {
 			this.#runner,
 			actorId,
 			adapter,
+			gatewayId,
 			requestId,
 			request,
 			path,
@@ -367,22 +389,49 @@ export class Tunnel {
 		return adapter;
 	}
 
-	getRequestActor(requestIdStr: string): RunnerActor | undefined {
-		const actorId = this.#requestToActor.get(requestIdStr);
-		if (!actorId) {
+	#addRequestToActor(
+		gatewayId: GatewayId,
+		requestId: RequestId,
+		actorId: string,
+	) {
+		this.#requestToActor.push({ gatewayId, requestId, actorId });
+	}
+
+	#removeRequestToActor(gatewayId: GatewayId, requestId: RequestId) {
+		const index = this.#requestToActor.findIndex(
+			(entry) =>
+				arraysEqual(entry.gatewayId, gatewayId) &&
+				arraysEqual(entry.requestId, requestId),
+		);
+		if (index !== -1) {
+			this.#requestToActor.splice(index, 1);
+		}
+	}
+
+	getRequestActor(
+		gatewayId: GatewayId,
+		requestId: RequestId,
+	): RunnerActor | undefined {
+		const entry = this.#requestToActor.find(
+			(entry) =>
+				arraysEqual(entry.gatewayId, gatewayId) &&
+				arraysEqual(entry.requestId, requestId),
+		);
+
+		if (!entry) {
 			this.log?.warn({
 				msg: "missing requestToActor entry",
-				requestId: requestIdStr,
+				requestId: tunnelId.requestIdToString(requestId),
 			});
 			return undefined;
 		}
 
-		const actor = this.#runner.getActor(actorId);
+		const actor = this.#runner.getActor(entry.actorId);
 		if (!actor) {
 			this.log?.warn({
 				msg: "missing actor for requestToActor lookup",
-				requestId: requestIdStr,
-				actorId,
+				requestId: tunnelId.requestIdToString(requestId),
+				actorId: entry.actorId,
 			});
 			return undefined;
 		}
@@ -391,6 +440,7 @@ export class Tunnel {
 	}
 
 	#sendMessage(
+		gatewayId: GatewayId,
 		requestId: RequestId,
 		messageKind: protocol.ToServerTunnelMessageKind,
 	) {
@@ -398,26 +448,44 @@ export class Tunnel {
 		if (!this.#runner.__webSocketReady()) {
 			this.log?.warn({
 				msg: "cannot send tunnel message, socket not connected to engine. tunnel data dropped.",
-				requestId: idToStr(requestId),
+				requestId: tunnelId.requestIdToString(requestId),
 				message: stringifyToServerTunnelMessageKind(messageKind),
 			});
 			return;
 		}
 
-		// Build message
-		const messageId = generateUuidBuffer();
-
-		const requestIdStr = idToStr(requestId);
-		const messageIdStr = idToStr(messageId);
-
-		// Store the pending message in the actor's map
-		const actor = this.getRequestActor(requestIdStr);
-		if (actor) {
-			actor.pendingTunnelMessages.set(messageIdStr, {
-				sentAt: Date.now(),
-				requestIdStr,
+		// Get or initialize message index for this request
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const actor = this.getRequestActor(gatewayId, requestId);
+		if (!actor) {
+			this.log?.warn({
+				msg: "cannot send tunnel message, actor not found",
+				requestId: requestIdStr,
 			});
+			return;
 		}
+
+		// Get message index from pending request
+		let clientMessageIndex: number;
+		const pending = actor.getPendingRequest(gatewayId, requestId);
+		if (pending) {
+			clientMessageIndex = pending.clientMessageIndex;
+			pending.clientMessageIndex++;
+		} else {
+			// No pending request
+			this.log?.warn({
+				msg: "missing pending request for send message, defaulting to message index 0",
+			});
+			clientMessageIndex = 0;
+		}
+
+		// Build message ID from gatewayId + requestId + messageIndex
+		const messageId = tunnelId.buildMessageId(
+			gatewayId,
+			requestId,
+			clientMessageIndex,
+		);
+		const messageIdStr = tunnelId.messageIdToString(messageId);
 
 		this.log?.debug({
 			msg: "send tunnel msg",
@@ -430,92 +498,11 @@ export class Tunnel {
 		const message: protocol.ToServer = {
 			tag: "ToServerTunnelMessage",
 			val: {
-				requestId,
 				messageId,
 				messageKind,
 			},
 		};
 		this.#runner.__sendToServer(message);
-	}
-
-	#startGarbageCollector() {
-		if (this.#gcInterval) {
-			clearInterval(this.#gcInterval);
-		}
-
-		this.#gcInterval = setInterval(() => {
-			this.#gc();
-		}, GC_INTERVAL);
-	}
-
-	#gc() {
-		const now = Date.now();
-		let totalMessagesToDelete = 0;
-
-		// Iterate through all actors
-		for (const [_actorId, actor] of this.#runner.actors) {
-			const messagesToDelete: string[] = [];
-
-			for (const [
-				messageId,
-				pendingMessage,
-			] of actor.pendingTunnelMessages) {
-				// Check if message is older than timeout
-				if (now - pendingMessage.sentAt > MESSAGE_ACK_TIMEOUT) {
-					messagesToDelete.push(messageId);
-
-					const requestIdStr = pendingMessage.requestIdStr;
-
-					// Check if this is an HTTP request
-					const pendingRequest =
-						actor.pendingRequests.get(requestIdStr);
-					if (pendingRequest) {
-						// Reject the pending HTTP request
-						pendingRequest.reject(
-							new Error("Message acknowledgment timeout"),
-						);
-
-						// Close stream controller if it exists
-						if (pendingRequest.streamController) {
-							pendingRequest.streamController.error(
-								new Error("Message acknowledgment timeout"),
-							);
-						}
-
-						// Clean up from pendingRequests map
-						actor.pendingRequests.delete(requestIdStr);
-					}
-
-					// Check if this is a WebSocket
-					const webSocket = actor.webSockets.get(requestIdStr);
-					if (webSocket) {
-						// Close the WebSocket connection
-						webSocket.close(1000, "ws.ack_timeout");
-
-						// Clean up from webSockets map
-						actor.webSockets.delete(requestIdStr);
-					}
-
-					// Clean up request-to-actor mapping
-					this.#requestToActor.delete(requestIdStr);
-				}
-			}
-
-			// Remove timed out messages for this actor
-			for (const messageId of messagesToDelete) {
-				actor.pendingTunnelMessages.delete(messageId);
-			}
-
-			totalMessagesToDelete += messagesToDelete.length;
-		}
-
-		// Log if we purged any messages
-		if (totalMessagesToDelete > 0) {
-			this.log?.warn({
-				msg: "purging unacked tunnel messages, this indicates that the Rivet Engine is disconnected or not responding",
-				count: totalMessagesToDelete,
-			});
-		}
 	}
 
 	closeActiveRequests(actor: RunnerActor) {
@@ -524,24 +511,30 @@ export class Tunnel {
 		// Terminate all requests for this actor. This will no send a
 		// ToServerResponse* message since the actor will no longer be loaded.
 		// The gateway is responsible for closing the request.
-		for (const [requestIdStr, pending] of actor.pendingRequests) {
-			pending.reject(new Error(`Actor ${actorId} stopped`));
-			this.#requestToActor.delete(requestIdStr);
+		for (const entry of actor.pendingRequests) {
+			entry.request.reject(new Error(`Actor ${actorId} stopped`));
+			if (entry.gatewayId && entry.requestId) {
+				this.#removeRequestToActor(
+					entry.gatewayId,
+					entry.requestId,
+				);
+			}
 		}
 
 		// Close all WebSockets. Only send close event to non-HWS. The gateway is
 		// responsible for hibernating HWS and closing regular WS.
-		for (const [requestIdStr, ws] of actor.webSockets) {
-			const isHibernatable = ws[HIBERNATABLE_SYMBOL];
+		for (const entry of actor.webSockets) {
+			const isHibernatable = entry.ws[HIBERNATABLE_SYMBOL];
 			if (!isHibernatable) {
-				ws._closeWithoutCallback(1000, "actor.stopped");
+				entry.ws._closeWithoutCallback(1000, "actor.stopped");
 			}
-			this.#requestToActor.delete(requestIdStr);
+			// Note: request-to-actor mapping is cleaned up in the close callback
 		}
 	}
 
 	async #fetch(
 		actorId: string,
+		gatewayId: protocol.GatewayId,
 		requestId: protocol.RequestId,
 		request: Request,
 	): Promise<Response> {
@@ -565,6 +558,7 @@ export class Tunnel {
 		const fetchHandler = this.#runner.config.fetch(
 			this.#runner,
 			actorId,
+			gatewayId,
 			requestId,
 			request,
 		);
@@ -577,8 +571,13 @@ export class Tunnel {
 	}
 
 	async handleTunnelMessage(message: protocol.ToClientTunnelMessage) {
-		const requestIdStr = idToStr(message.requestId);
-		const messageIdStr = idToStr(message.messageId);
+		// Parse the gateway ID, request ID, and message index from the messageId
+		const messageIdParts = tunnelId.parseMessageId(message.messageId);
+		const gatewayId = messageIdParts.gatewayId;
+		const requestId = messageIdParts.requestId;
+
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const messageIdStr = tunnelId.messageIdToString(message.messageId);
 		this.log?.debug({
 			msg: "receive tunnel msg",
 			requestId: requestIdStr,
@@ -589,37 +588,46 @@ export class Tunnel {
 		switch (message.messageKind.tag) {
 			case "ToClientRequestStart":
 				await this.#handleRequestStart(
-					message.requestId,
+					gatewayId,
+					requestId,
 					message.messageKind.val,
 				);
 				break;
 			case "ToClientRequestChunk":
 				await this.#handleRequestChunk(
-					message.requestId,
+					gatewayId,
+					requestId,
 					message.messageKind.val,
 				);
 				break;
 			case "ToClientRequestAbort":
-				await this.#handleRequestAbort(message.requestId);
+				await this.#handleRequestAbort(gatewayId, requestId);
 				break;
 			case "ToClientWebSocketOpen":
 				await this.#handleWebSocketOpen(
-					message.requestId,
+					gatewayId,
+					requestId,
 					message.messageKind.val,
 				);
 				break;
 			case "ToClientWebSocketMessage": {
 				this.#handleWebSocketMessage(
-					message.requestId,
+					gatewayId,
+					requestId,
+					messageIdParts.messageIndex,
 					message.messageKind.val,
 				);
 				break;
 			}
 			case "ToClientWebSocketClose":
 				await this.#handleWebSocketClose(
-					message.requestId,
+					gatewayId,
+					requestId,
 					message.messageKind.val,
 				);
+				break;
+			case "DeprecatedTunnelAck":
+				// Ignore deprecated tunnel ack messages
 				break;
 			default:
 				unreachable(message.messageKind);
@@ -627,11 +635,12 @@ export class Tunnel {
 	}
 
 	async #handleRequestStart(
-		requestId: ArrayBuffer,
+		gatewayId: GatewayId,
+		requestId: RequestId,
 		req: protocol.ToClientRequestStart,
 	) {
 		// Track this request for the actor
-		const requestIdStr = idToStr(requestId);
+		const requestIdStr = tunnelId.requestIdToString(requestId);
 		const actor = this.#runner.getActor(req.actorId);
 		if (!actor) {
 			this.log?.warn({
@@ -643,7 +652,7 @@ export class Tunnel {
 		}
 
 		// Add to request-to-actor mapping
-		this.#requestToActor.set(requestIdStr, req.actorId);
+		this.#addRequestToActor(gatewayId, requestId, req.actorId);
 
 		try {
 			// Convert headers map to Headers object
@@ -666,16 +675,21 @@ export class Tunnel {
 					start: (controller) => {
 						// Store controller for chunks
 						const existing =
-							actor.pendingRequests.get(requestIdStr);
+							actor.getPendingRequest(gatewayId, requestId);
 						if (existing) {
 							existing.streamController = controller;
 							existing.actorId = req.actorId;
+							existing.gatewayId = gatewayId;
+							existing.requestId = requestId;
 						} else {
-							actor.pendingRequests.set(requestIdStr, {
+							actor.setPendingRequest(gatewayId, requestId, {
 								resolve: () => {},
 								reject: () => {},
 								streamController: controller,
 								actorId: req.actorId,
+								gatewayId: gatewayId,
+								requestId: requestId,
+								clientMessageIndex: 0,
 							});
 						}
 					},
@@ -690,25 +704,39 @@ export class Tunnel {
 				// Call fetch handler with validation
 				const response = await this.#fetch(
 					req.actorId,
+					gatewayId,
 					requestId,
 					streamingRequest,
 				);
 				await this.#sendResponse(
 					actor.actorId,
 					actor.generation,
+					gatewayId,
 					requestId,
 					response,
 				);
 			} else {
 				// Non-streaming request
+				// Create a pending request entry to track messageIndex for the response
+				actor.setPendingRequest(gatewayId, requestId, {
+					resolve: () => {},
+					reject: () => {},
+					actorId: req.actorId,
+					gatewayId: gatewayId,
+					requestId: requestId,
+					clientMessageIndex: 0,
+				});
+
 				const response = await this.#fetch(
 					req.actorId,
+					gatewayId,
 					requestId,
 					request,
 				);
 				await this.#sendResponse(
 					actor.actorId,
 					actor.generation,
+					gatewayId,
 					requestId,
 					response,
 				);
@@ -721,6 +749,7 @@ export class Tunnel {
 				this.#sendResponseError(
 					actor.actorId,
 					actor.generation,
+					gatewayId,
 					requestId,
 					500,
 					"Internal Server Error",
@@ -729,47 +758,49 @@ export class Tunnel {
 		} finally {
 			// Clean up request tracking
 			if (this.#runner.hasActor(req.actorId, actor.generation)) {
-				actor.pendingRequests.delete(requestIdStr);
-				this.#requestToActor.delete(requestIdStr);
+				actor.deletePendingRequest(gatewayId, requestId);
+				this.#removeRequestToActor(gatewayId, requestId);
 			}
 		}
 	}
 
 	async #handleRequestChunk(
-		requestId: ArrayBuffer,
+		gatewayId: GatewayId,
+		requestId: RequestId,
 		chunk: protocol.ToClientRequestChunk,
 	) {
-		const requestIdStr = idToStr(requestId);
-		const actor = this.getRequestActor(requestIdStr);
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const actor = this.getRequestActor(gatewayId, requestId);
 		if (actor) {
-			const pending = actor.pendingRequests.get(requestIdStr);
+			const pending = actor.getPendingRequest(gatewayId, requestId);
 			if (pending?.streamController) {
 				pending.streamController.enqueue(new Uint8Array(chunk.body));
 				if (chunk.finish) {
 					pending.streamController.close();
-					actor.pendingRequests.delete(requestIdStr);
-					this.#requestToActor.delete(requestIdStr);
+					actor.deletePendingRequest(gatewayId, requestId);
+					this.#removeRequestToActor(gatewayId, requestId);
 				}
 			}
 		}
 	}
 
-	async #handleRequestAbort(requestId: ArrayBuffer) {
-		const requestIdStr = idToStr(requestId);
-		const actor = this.getRequestActor(requestIdStr);
+	async #handleRequestAbort(gatewayId: GatewayId, requestId: RequestId) {
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const actor = this.getRequestActor(gatewayId, requestId);
 		if (actor) {
-			const pending = actor.pendingRequests.get(requestIdStr);
+			const pending = actor.getPendingRequest(gatewayId, requestId);
 			if (pending?.streamController) {
 				pending.streamController.error(new Error("Request aborted"));
 			}
-			actor.pendingRequests.delete(requestIdStr);
-			this.#requestToActor.delete(requestIdStr);
+			actor.deletePendingRequest(gatewayId, requestId);
+			this.#removeRequestToActor(gatewayId, requestId);
 		}
 	}
 
 	async #sendResponse(
 		actorId: string,
 		generation: number,
+		gatewayId: GatewayId,
 		requestId: ArrayBuffer,
 		response: Response,
 	) {
@@ -804,7 +835,7 @@ export class Tunnel {
 		}
 
 		// Send as non-streaming response if actor has not stopped
-		this.#sendMessage(requestId, {
+		this.#sendMessage(gatewayId, requestId, {
 			tag: "ToServerResponseStart",
 			val: {
 				status: response.status as protocol.u16,
@@ -818,6 +849,7 @@ export class Tunnel {
 	#sendResponseError(
 		actorId: string,
 		generation: number,
+		gatewayId: GatewayId,
 		requestId: ArrayBuffer,
 		status: number,
 		message: string,
@@ -835,7 +867,7 @@ export class Tunnel {
 		const headers = new Map<string, string>();
 		headers.set("content-type", "text/plain");
 
-		this.#sendMessage(requestId, {
+		this.#sendMessage(gatewayId, requestId, {
 			tag: "ToServerResponseStart",
 			val: {
 				status: status as protocol.u16,
@@ -847,16 +879,17 @@ export class Tunnel {
 	}
 
 	async #handleWebSocketOpen(
-		requestId: protocol.RequestId,
+		gatewayId: GatewayId,
+		requestId: RequestId,
 		open: protocol.ToClientWebSocketOpen,
 	) {
 		// NOTE: This method is safe to be async since we will not receive any
 		// further WebSocket events until we send a ToServerWebSocketOpen
 		// tunnel message. We can do any async logic we need to between thoes two events.
 		//
-		// Sedning a ToServerWebSocketClose will terminate the WebSocket early.
+		// Sending a ToServerWebSocketClose will terminate the WebSocket early.
 
-		const requestIdStr = idToStr(requestId);
+		const requestIdStr = tunnelId.requestIdToString(requestId);
 
 		// Validate actor exists
 		const actor = this.#runner.getActor(open.actorId);
@@ -871,7 +904,7 @@ export class Tunnel {
 			//
 			// See
 			// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/pegboard-gateway/src/lib.rs#L238
-			this.#sendMessage(requestId, {
+			this.#sendMessage(gatewayId, requestId, {
 				tag: "ToServerWebSocketClose",
 				val: {
 					code: 1011,
@@ -885,7 +918,7 @@ export class Tunnel {
 		// Close existing WebSocket if one already exists for this request ID.
 		// This should never happen, but prevents any potential duplicate
 		// WebSockets from retransmits.
-		const existingAdapter = actor.webSockets.get(requestIdStr);
+		const existingAdapter = actor.getWebSocket(gatewayId, requestId);
 		if (existingAdapter) {
 			this.log?.warn({
 				msg: "closing existing websocket for duplicate open event for the same request id",
@@ -906,6 +939,7 @@ export class Tunnel {
 			const canHibernate =
 				this.#runner.config.hibernatableWebSocket.canHibernate(
 					actor.actorId,
+				gatewayId,
 					requestId,
 					request,
 				);
@@ -916,21 +950,32 @@ export class Tunnel {
 			// open event.
 			const adapter = await this.#createWebSocket(
 				actor.actorId,
+				gatewayId,
 				requestId,
 				requestIdStr,
+				0,
 				canHibernate,
 				false,
-				0,
 				request,
 				open.path,
 				Object.fromEntries(open.headers),
 				false,
 			);
 
+			// Create a PendingRequest entry to track the message index
+			actor.setPendingRequest(gatewayId, requestId, {
+				resolve: () => {},
+				reject: () => {},
+				actorId: actor.actorId,
+				gatewayId: gatewayId,
+				requestId: requestId,
+				clientMessageIndex: 0,
+			});
+
 			// Open the WebSocket after `config.socket` so (a) the event
 			// handlers can be added and (b) any errors in `config.websocket`
 			// will cause the WebSocket to terminate before the open event.
-			this.#sendMessage(requestId, {
+			this.#sendMessage(gatewayId, requestId, {
 				tag: "ToServerWebSocketOpen",
 				val: {
 					canHibernate,
@@ -945,7 +990,7 @@ export class Tunnel {
 			// TODO: Call close event on adapter if needed
 
 			// Send close on error
-			this.#sendMessage(requestId, {
+			this.#sendMessage(gatewayId, requestId, {
 				tag: "ToServerWebSocketClose",
 				val: {
 					code: 1011,
@@ -955,28 +1000,36 @@ export class Tunnel {
 			});
 
 			// Clean up actor tracking
-			actor.webSockets.delete(requestIdStr);
-			this.#requestToActor.delete(requestIdStr);
+			actor.deleteWebSocket(gatewayId, requestId);
+			actor.deletePendingRequest(gatewayId, requestId);
+			this.#removeRequestToActor(gatewayId, requestId);
 		}
 	}
 
 	#handleWebSocketMessage(
-		requestId: ArrayBuffer,
+		gatewayId: GatewayId,
+		requestId: RequestId,
+		serverMessageIndex: number,
 		msg: protocol.ToClientWebSocketMessage,
 	) {
 		// NOTE: This method cannot be async in order to ensure in-order
 		// message processing.
 
-		const requestIdStr = idToStr(requestId);
-		const actor = this.getRequestActor(requestIdStr);
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const actor = this.getRequestActor(gatewayId, requestId);
 		if (actor) {
-			const adapter = actor.webSockets.get(requestIdStr);
+			const adapter = actor.getWebSocket(gatewayId, requestId);
 			if (adapter) {
 				const data = msg.binary
 					? new Uint8Array(msg.data)
 					: new TextDecoder().decode(new Uint8Array(msg.data));
 
-				adapter._handleMessage(requestId, data, msg.index, msg.binary);
+				adapter._handleMessage(
+					requestId,
+					data,
+					serverMessageIndex,
+					msg.binary,
+				);
 				return;
 			}
 		}
@@ -988,33 +1041,60 @@ export class Tunnel {
 		});
 	}
 
-	sendHibernatableWebSocketMessageAck(requestId: ArrayBuffer, index: number) {
+	sendHibernatableWebSocketMessageAck(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		clientMessageIndex: number,
+	) {
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+
 		this.log?.debug({
 			msg: "ack ws msg",
-			requestId: idToStr(requestId),
-			index,
+			requestId: requestIdStr,
+			index: clientMessageIndex,
 		});
 
-		if (index < 0 || index > 65535)
+		if (clientMessageIndex < 0 || clientMessageIndex > 65535)
 			throw new Error("invalid websocket ack index");
 
+		// Get the actor to find the gatewayId
+		const actor = this.getRequestActor(gatewayId, requestId);
+		if (!actor) {
+			this.log?.warn({
+				msg: "cannot send websocket ack, actor not found",
+				requestId: requestIdStr,
+			});
+			return;
+		}
+
+		// Get gatewayId from the pending request
+		const pending = actor.getPendingRequest(gatewayId, requestId);
+		if (!pending?.gatewayId) {
+			this.log?.warn({
+				msg: "cannot send websocket ack, gatewayId not found in pending request",
+				requestId: requestIdStr,
+			});
+			return;
+		}
+
 		// Send the ack message
-		this.#sendMessage(requestId, {
+		this.#sendMessage(pending.gatewayId, requestId, {
 			tag: "ToServerWebSocketMessageAck",
 			val: {
-				index,
+				index: clientMessageIndex,
 			},
 		});
 	}
 
 	async #handleWebSocketClose(
-		requestId: ArrayBuffer,
+		gatewayId: GatewayId,
+		requestId: RequestId,
 		close: protocol.ToClientWebSocketClose,
 	) {
-		const requestIdStr = idToStr(requestId);
-		const actor = this.getRequestActor(requestIdStr);
+		const requestIdStr = tunnelId.requestIdToString(requestId);
+		const actor = this.getRequestActor(gatewayId, requestId);
 		if (actor) {
-			const adapter = actor.webSockets.get(requestIdStr);
+			const adapter = actor.getWebSocket(gatewayId, requestId);
 			if (adapter) {
 				// We don't need to send a close response
 				adapter._handleClose(
@@ -1022,22 +1102,12 @@ export class Tunnel {
 					close.code || undefined,
 					close.reason || undefined,
 				);
-				actor.webSockets.delete(requestIdStr);
-				this.#requestToActor.delete(requestIdStr);
+				actor.deleteWebSocket(gatewayId, requestId);
+				actor.deletePendingRequest(gatewayId, requestId);
+				this.#removeRequestToActor(gatewayId, requestId);
 			}
 		}
 	}
-}
-
-/** Generates a UUID as bytes. */
-function generateUuidBuffer(): ArrayBuffer {
-	const buffer = new Uint8Array(16);
-	uuidv4(undefined, buffer);
-	return buffer.buffer;
-}
-
-function idToStr(id: ArrayBuffer): string {
-	return uuidstringify(new Uint8Array(id));
 }
 
 /**

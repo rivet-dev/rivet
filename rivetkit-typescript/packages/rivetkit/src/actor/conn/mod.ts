@@ -13,10 +13,6 @@ import { CachedSerializer } from "../protocol/serde";
 import type { ConnDriver } from "./driver";
 import { type ConnDataInput, StateManager } from "./state-manager";
 
-export function generateConnRequestId(): string {
-	return crypto.randomUUID();
-}
-
 export type ConnId = string;
 
 export type AnyConn = Conn<any, any, any, any, any, any>;
@@ -112,7 +108,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * If the underlying connection can hibernate.
 	 */
 	get isHibernatable(): boolean {
-		return this[CONN_DRIVER_SYMBOL]?.hibernatable ?? false;
+		return this[CONN_DRIVER_SYMBOL]?.hibernatable !== undefined;
 	}
 
 	/**

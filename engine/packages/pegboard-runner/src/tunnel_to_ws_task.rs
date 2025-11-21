@@ -64,7 +64,7 @@ pub async fn task(
 				for command_wrapper in &mut command_wrappers {
 					if let protocol::Command::CommandStartActor(protocol::CommandStartActor {
 						actor_id,
-						hibernating_request_ids,
+						hibernating_requests,
 						..
 					}) = &mut command_wrapper.inner
 					{
@@ -74,8 +74,13 @@ pub async fn task(
 							})
 							.await?;
 
-						*hibernating_request_ids =
-							ids.into_iter().map(|x| x.into_bytes().to_vec()).collect();
+						*hibernating_requests = ids
+							.into_iter()
+							.map(|x| protocol::HibernatingRequest {
+								gateway_id: x.gateway_id,
+								request_id: x.request_id,
+							})
+							.collect();
 					}
 				}
 
