@@ -1,17 +1,12 @@
-import * as cbor from "cbor-x";
+import { idToStr } from "@rivetkit/engine-runner";
 import onChange from "on-change";
 import { isCborSerializable, stringifyError } from "@/common/utils";
-import type * as persistSchema from "@/schemas/actor-persist/mod";
 import {
 	ACTOR_VERSIONED,
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
-import {
-	bufferToArrayBuffer,
-	promiseWithResolvers,
-	SinglePromiseQueue,
-} from "@/utils";
-import { type AnyConn, CONN_STATE_MANAGER_SYMBOL, Conn } from "../conn/mod";
+import { promiseWithResolvers, SinglePromiseQueue } from "@/utils";
+import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";
 import { convertConnToBarePersistedConn } from "../conn/persisted";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
@@ -19,7 +14,6 @@ import { isConnStatePath, isStatePath } from "../utils";
 import { KEYS, makeConnKey } from "./kv";
 import type { ActorInstance } from "./mod";
 import { convertActorToBarePersisted, type PersistedActor } from "./persisted";
-import { tunnelId } from "@rivetkit/engine-runner";
 
 export interface SaveStateOptions {
 	/**
@@ -431,12 +425,8 @@ export class StateManager<S, CP, CS, I> {
 						this.#actor.rLog.info({
 							msg: "persisting connection",
 							connId,
-							gatewayId: tunnelId.gatewayIdToString(
-								hibernatableDataRaw.requestId,
-							),
-							requestId: tunnelId.requestIdToString(
-								hibernatableDataRaw.requestId,
-							),
+							gatewayId: idToStr(hibernatableDataRaw.requestId),
+							requestId: idToStr(hibernatableDataRaw.requestId),
 							serverMessageIndex:
 								hibernatableDataRaw.serverMessageIndex,
 							clientMessageIndex:

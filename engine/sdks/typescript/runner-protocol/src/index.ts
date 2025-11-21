@@ -967,7 +967,7 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
-export type MessageIdParts = {
+export type MessageId = {
     /**
      * Globally unique ID
      */
@@ -982,7 +982,7 @@ export type MessageIdParts = {
     readonly messageIndex: MessageIndex
 }
 
-export function readMessageIdParts(bc: bare.ByteCursor): MessageIdParts {
+export function readMessageId(bc: bare.ByteCursor): MessageId {
     return {
         gatewayId: readGatewayId(bc),
         requestId: readRequestId(bc),
@@ -990,40 +990,10 @@ export function readMessageIdParts(bc: bare.ByteCursor): MessageIdParts {
     }
 }
 
-export function writeMessageIdParts(bc: bare.ByteCursor, x: MessageIdParts): void {
+export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
     writeGatewayId(bc, x.gatewayId)
     writeRequestId(bc, x.requestId)
     writeMessageIndex(bc, x.messageIndex)
-}
-
-export function encodeMessageIdParts(x: MessageIdParts, config?: Partial<bare.Config>): Uint8Array {
-    const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
-    const bc = new bare.ByteCursor(
-        new Uint8Array(fullConfig.initialBufferLength),
-        fullConfig,
-    )
-    writeMessageIdParts(bc, x)
-    return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
-}
-
-export function decodeMessageIdParts(bytes: Uint8Array): MessageIdParts {
-    const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
-    const result = readMessageIdParts(bc)
-    if (bc.offset < bc.view.byteLength) {
-        throw new bare.BareError(bc.offset, "remaining bytes")
-    }
-    return result
-}
-
-export type MessageId = ArrayBuffer
-
-export function readMessageId(bc: bare.ByteCursor): MessageId {
-    return bare.readFixedData(bc, 10)
-}
-
-export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
-    assert(x.byteLength === 10)
-    bare.writeFixedData(bc, x)
 }
 
 export type DeprecatedTunnelAck = null

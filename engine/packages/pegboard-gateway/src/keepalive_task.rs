@@ -1,5 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
+use pegboard::tunnel::id as tunnel_id;
 use pegboard::tunnel::id::{GatewayId, RequestId};
 use rand::Rng;
 use std::time::Duration;
@@ -12,7 +13,6 @@ use crate::shared_state::SharedState;
 /// next actor start.
 ///
 /// Only ran for hibernating requests.
-
 pub async fn task(
 	shared_state: SharedState,
 	ctx: StandaloneCtx,
@@ -30,10 +30,6 @@ pub async fn task(
 	));
 	ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-	// Discard the first tick since it fires immediately and we've already called this
-	// above
-	ping_interval.tick().await;
-
 	loop {
 		tokio::select! {
 			_ = ping_interval.tick() => {}
@@ -45,6 +41,13 @@ pub async fn task(
 		// Jitter sleep to prevent stampeding herds
 		let jitter = { rand::thread_rng().gen_range(0..128) };
 		tokio::time::sleep(Duration::from_millis(jitter)).await;
+
+		tracing::debug!(
+			%actor_id,
+			gateway_id=%tunnel_id::gateway_id_to_string(&gateway_id),
+			request_id=%tunnel_id::request_id_to_string(&request_id),
+			"updating hws keepalive"
+		);
 
 		tokio::try_join!(
 			ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {

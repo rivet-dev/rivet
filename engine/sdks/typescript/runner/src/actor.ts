@@ -1,9 +1,8 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
-import type { PendingRequest } from "./tunnel";
-import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
-import { arraysEqual, promiseWithResolvers } from "./utils";
 import { logger } from "./log";
-import * as tunnelId from "./tunnel-id";
+import type { PendingRequest } from "./tunnel";
+import { arraysEqual, idToStr, promiseWithResolvers } from "./utils";
+import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 export interface ActorConfig {
 	name: string;
@@ -72,8 +71,8 @@ export class RunnerActor {
 		if (exists) {
 			logger()?.warn({
 				msg: "attempting to set pending request twice, replacing existing",
-				gatewayId: tunnelId.gatewayIdToString(gatewayId),
-				requestId: tunnelId.requestIdToString(requestId),
+				gatewayId: idToStr(gatewayId),
+				requestId: idToStr(requestId),
 			});
 			// Delete existing pending request before adding the new one
 			this.deletePendingRequest(gatewayId, requestId);
@@ -92,8 +91,8 @@ export class RunnerActor {
 		});
 		logger()?.debug({
 			msg: "added pending request",
-			gatewayId: tunnelId.gatewayIdToString(gatewayId),
-			requestId: tunnelId.requestIdToString(requestId),
+			gatewayId: idToStr(gatewayId),
+			requestId: idToStr(requestId),
 			length: this.pendingRequests.length,
 		});
 	}
@@ -109,8 +108,8 @@ export class RunnerActor {
 		if (exists) {
 			logger()?.warn({
 				msg: "attempting to set pending request twice, replacing existing",
-				gatewayId: tunnelId.gatewayIdToString(gatewayId),
-				requestId: tunnelId.requestIdToString(requestId),
+				gatewayId: idToStr(gatewayId),
+				requestId: idToStr(requestId),
 			});
 			// Delete existing pending request before adding the new one
 			this.deletePendingRequest(gatewayId, requestId);
@@ -130,8 +129,8 @@ export class RunnerActor {
 		});
 		logger()?.debug({
 			msg: "added pending request with stream controller",
-			gatewayId: tunnelId.gatewayIdToString(gatewayId),
-			requestId: tunnelId.requestIdToString(requestId),
+			gatewayId: idToStr(gatewayId),
+			requestId: idToStr(requestId),
 			length: this.pendingRequests.length,
 		});
 	}
@@ -149,8 +148,8 @@ export class RunnerActor {
 			this.pendingRequests.splice(index, 1);
 			logger()?.debug({
 				msg: "removed pending request",
-				gatewayId: tunnelId.gatewayIdToString(gatewayId),
-				requestId: tunnelId.requestIdToString(requestId),
+				gatewayId: idToStr(gatewayId),
+				requestId: idToStr(requestId),
 				length: this.pendingRequests.length,
 			});
 		}
