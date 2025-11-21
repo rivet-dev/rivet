@@ -18,7 +18,7 @@
 		},
 		"build:schema": {
 			"dependsOn": ["^build"],
-			"inputs": ["schemas/**/*.bare"],
+			"inputs": ["schemas/**/*.bare", "scripts/compile-bare.ts"],
 			"outputs": ["dist/schemas/**/*.ts"]
 		},
 		"build": {
