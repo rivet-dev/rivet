@@ -50,9 +50,21 @@
           {
             "name": "actor_ids",
             "in": "query",
+            "description": "Deprecated.",
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "actor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RivetId"
+              }
             }
           },
           {
@@ -402,9 +414,21 @@
           {
             "name": "namespace_ids",
             "in": "query",
+            "description": "Deprecated.",
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "namespace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RivetId"
+              }
             }
           }
         ],
@@ -503,9 +527,21 @@
           {
             "name": "runner_names",
             "in": "query",
+            "description": "Deprecated.",
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "runner_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         ],
@@ -746,9 +782,21 @@
           {
             "name": "runner_ids",
             "in": "query",
+            "description": "Deprecated.",
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "runner_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RivetId"
+              }
             }
           },
           {
