@@ -30,7 +30,7 @@ interface MessageEventOpts {
 	maxIncomingMessageSize: number;
 }
 
-function getValueLength(value: InputData): number {
+export function getValueLength(value: InputData): number {
 	if (typeof value === "string") {
 		return value.length;
 	} else if (value instanceof Blob) {

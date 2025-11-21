@@ -3,17 +3,13 @@ import invariant from "invariant";
 import {
 	type ActionOpts,
 	type ActionOutput,
-	type ConnectWebSocketOpts,
-	type ConnectWebSocketOutput,
 	type ConnsMessageOpts,
 	handleAction,
 	handleRawRequest,
-	handleRawWebSocket,
-	handleWebSocketConnect,
-	parseWebSocketProtocols,
 } from "@/actor/router-endpoints";
 import {
 	PATH_CONNECT,
+	PATH_INSPECTOR_CONNECT,
 	PATH_WEBSOCKET_PREFIX,
 } from "@/common/actor-router-consts";
 import {
@@ -31,14 +27,12 @@ import type { RunnerConfig } from "@/registry/run-config";
 import { CONN_DRIVER_SYMBOL, generateConnRequestId } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
+import {
+	parseWebSocketProtocols,
+	routeWebSocket,
+} from "./router-websocket-endpoints";
 
-export type {
-	ConnectWebSocketOpts,
-	ConnectWebSocketOutput,
-	ActionOpts,
-	ActionOutput,
-	ConnsMessageOpts,
-};
+export type { ActionOpts, ActionOutput, ConnsMessageOpts };
 
 interface ActorRouterBindings {
 	actorId: string;
@@ -106,29 +100,45 @@ export function createActorRouter(
 		});
 	}
 
-	router.get(PATH_CONNECT, async (c) => {
-		const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
-		if (upgradeWebSocket) {
-			return upgradeWebSocket(async (c) => {
-				const protocols = c.req.header("sec-websocket-protocol");
-				const { encoding, connParams } =
-					parseWebSocketProtocols(protocols);
+	// Route all WebSocket paths using the same handler
+	//
+	// All WebSockets use a separate underlying router in routeWebSocket since
+	// WebSockets also need to be routed from ManagerDriver.proxyWebSocket and
+	// ManagerDriver.openWebSocket.
+	router.on(
+		"GET",
+		[PATH_CONNECT, `${PATH_WEBSOCKET_PREFIX}*`, PATH_INSPECTOR_CONNECT],
+		async (c) => {
+			const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
+			if (upgradeWebSocket) {
+				return upgradeWebSocket(async (c) => {
+					const protocols = c.req.header("sec-websocket-protocol");
+					const { encoding, connParams } =
+						parseWebSocketProtocols(protocols);
 
-				return await handleWebSocketConnect(
-					c.req.raw,
-					runConfig,
-					actorDriver,
-					c.env.actorId,
-					encoding,
-					connParams,
-					generateConnRequestId(),
-					undefined,
+					return await routeWebSocket(
+						c.req.raw,
+						c.req.path,
+						c.req.header(),
+						runConfig,
+						actorDriver,
+						c.env.actorId,
+						encoding,
+						connParams,
+						generateConnRequestId(),
+						undefined,
+						false,
+						false,
+					);
+				})(c, noopNext());
+			} else {
+				return c.text(
+					"WebSockets are not enabled for this driver.",
+					400,
 				);
-			})(c, noopNext());
-		} else {
-			return c.text("WebSockets are not enabled for this driver.", 400);
-		}
-	});
+			}
+		},
+	);
 
 	router.post("/action/:action", async (c) => {
 		const actionName = c.req.param("action");
@@ -169,39 +179,6 @@ export function createActorRouter(
 			actorDriver,
 			c.env.actorId,
 		);
-	});
-
-	router.get(`${PATH_WEBSOCKET_PREFIX}*`, async (c) => {
-		const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
-		if (upgradeWebSocket) {
-			return upgradeWebSocket(async (c) => {
-				const url = new URL(c.req.url);
-				const pathWithQuery = c.req.path + url.search;
-
-				const protocols = c.req.header("sec-websocket-protocol");
-				const { connParams } = parseWebSocketProtocols(protocols);
-
-				loggerWithoutContext().debug({
-					msg: "actor router raw websocket",
-					path: c.req.path,
-					url: c.req.url,
-					search: url.search,
-					pathWithQuery,
-					connParams,
-				});
-
-				return await handleRawWebSocket(
-					c.req.raw,
-					pathWithQuery,
-					actorDriver,
-					c.env.actorId,
-					undefined,
-					connParams,
-				);
-			})(c, noopNext());
-		} else {
-			return c.text("WebSockets are not enabled for this driver.", 400);
-		}
 	});
 
 	if (isInspectorEnabled(runConfig, "actor")) {

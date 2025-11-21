@@ -16,6 +16,8 @@ runDriverTests({
 	skip: {
 		// CF does not support sleeping
 		sleep: true,
+		// CF does not support sleeping so we cannot test hibernation
+		hibernation: true,
 	},
 	async start() {
 		// Setup project

@@ -15,7 +15,8 @@ use crate::WebsocketPendingLimitReached;
 
 const GC_INTERVAL: Duration = Duration::from_secs(15);
 const MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_PENDING_MSGS_SIZE_PER_REQ: u64 = util::size::mebibytes(1);
+const HWS_MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(30);
+const HWS_MAX_PENDING_MSGS_SIZE_PER_REQ: u64 = util::size::mebibytes(1);
 
 pub struct InFlightRequestHandle {
 	pub msg_rx: mpsc::Receiver<protocol::ToServerTunnelMessageKind>,
@@ -185,7 +186,7 @@ impl SharedState {
 		if let (Some(hs), Some(ws_msg_index)) = (&mut req.hibernation_state, ws_msg_index) {
 			hs.total_pending_ws_msgs_size += message_serialized.len() as u64;
 
-			if hs.total_pending_ws_msgs_size > MAX_PENDING_MSGS_SIZE_PER_REQ
+			if hs.total_pending_ws_msgs_size > HWS_MAX_PENDING_MSGS_SIZE_PER_REQ
 				|| hs.pending_ws_msgs.len() >= u16::MAX as usize
 			{
 				return Err(WebsocketPendingLimitReached {}.build());
@@ -230,9 +231,10 @@ impl SharedState {
 					let Some(mut in_flight) =
 						self.in_flight_requests.get_async(&msg.request_id).await
 					else {
-						tracing::debug!(
+						tracing::warn!(
 							request_id=?Uuid::from_bytes(msg.request_id),
-							"in flight has already been disconnected"
+							message_id=?Uuid::from_bytes(msg.message_id),
+							"in flight has already been disconnected, cannot ack message"
 						);
 						continue;
 					};
@@ -240,30 +242,43 @@ impl SharedState {
 					if let protocol::ToServerTunnelMessageKind::TunnelAck = &msg.message_kind {
 						let prev_len = in_flight.pending_msgs.len();
 
+						tracing::debug!(message_id=?Uuid::from_bytes(msg.message_id), "received tunnel ack");
+
 						in_flight
 							.pending_msgs
 							.retain(|m| m.message_id != msg.message_id);
 
 						if prev_len == in_flight.pending_msgs.len() {
 							tracing::warn!(
+								request_id=?Uuid::from_bytes(msg.request_id),
+								message_id=?Uuid::from_bytes(msg.message_id),
 								"pending message does not exist or ack received after message body"
 							)
+						} else {
+							tracing::debug!(
+								request_id=?Uuid::from_bytes(msg.request_id),
+								message_id=?Uuid::from_bytes(msg.message_id),
+								"received TunnelAck, removed from pending"
+							);
 						}
 					} else {
 						// Send message to the request handler to emulate the real network action
 						tracing::debug!(
 							request_id=?Uuid::from_bytes(msg.request_id),
+							message_id=?Uuid::from_bytes(msg.message_id),
 							"forwarding message to request handler"
 						);
-						let _ = in_flight.msg_tx.send(msg.message_kind).await;
+						let _ = in_flight.msg_tx.send(msg.message_kind.clone()).await;
 
 						// Send ack back to runner
 						let ups_clone = self.ups.clone();
 						let receiver_subject = in_flight.receiver_subject.clone();
+						let request_id = msg.request_id;
+						let message_id = msg.message_id;
 						let ack_message = protocol::ToClient::ToClientTunnelMessage(
 							protocol::ToClientTunnelMessage {
-								request_id: msg.request_id,
-								message_id: msg.message_id,
+								request_id,
+								message_id,
 								gateway_reply_to: None,
 								message_kind: protocol::ToClientTunnelMessageKind::TunnelAck,
 							},
@@ -279,7 +294,7 @@ impl SharedState {
 								}
 							};
 						tokio::spawn(async move {
-							if let Err(err) = ups_clone
+							match ups_clone
 								.publish(
 									&receiver_subject,
 									&ack_message_serialized,
@@ -287,7 +302,21 @@ impl SharedState {
 								)
 								.await
 							{
-								tracing::warn!(?err, "failed to ack message")
+								Ok(_) => {
+									tracing::debug!(
+										request_id=?Uuid::from_bytes(request_id),
+										message_id=?Uuid::from_bytes(message_id),
+										"sent TunnelAck to runner"
+									);
+								}
+								Err(err) => {
+									tracing::warn!(
+										?err,
+										request_id=?Uuid::from_bytes(request_id),
+										message_id=?Uuid::from_bytes(message_id),
+										"failed to send TunnelAck to runner"
+									);
+								}
 							}
 						});
 					}
@@ -366,11 +395,15 @@ impl SharedState {
 		};
 
 		let Some(hs) = &mut req.hibernation_state else {
-			tracing::warn!("cannot ack ws messages, hibernation is not enabled");
+			tracing::warn!(
+				request_id=?Uuid::from_bytes(request_id),
+				"cannot ack ws messages, hibernation is not enabled"
+			);
 			return Ok(());
 		};
 
-		let len = hs.pending_ws_msgs.len().try_into()?;
+		let len_before = hs.pending_ws_msgs.len();
+		let len = len_before.try_into()?;
 		let mut iter_index = 0u16;
 		hs.pending_ws_msgs.retain(|_| {
 			let msg_index = hs
@@ -384,6 +417,15 @@ impl SharedState {
 
 			keep
 		});
+
+		let len_after = hs.pending_ws_msgs.len();
+		tracing::debug!(
+			request_id=?Uuid::from_bytes(request_id),
+			ack_index,
+			removed_count=len_before - len_after,
+			remaining_count=len_after,
+			"acked pending websocket messages"
+		);
 
 		Ok(())
 	}
@@ -425,9 +467,9 @@ impl SharedState {
 			/// Gateway channel is closed and there are no pending messages
 			GatewayClosed,
 			/// Any tunnel message not acked (TunnelAck)
-			MessageNotAcked,
+			MessageNotAcked { message_id: Uuid },
 			/// WebSocket pending messages (ToServerWebSocketMessageAck)
-			WebSocketMessageNotAcked,
+			WebSocketMessageNotAcked { last_ws_msg_index: u16 },
 		}
 
 		let now = Instant::now();
@@ -460,7 +502,7 @@ impl SharedState {
 						if now.duration_since(earliest_pending_msg.send_instant)
 							<= MESSAGE_ACK_TIMEOUT
 						{
-							break 'reason Some(MsgGcReason::MessageNotAcked);
+							break 'reason Some(MsgGcReason::MessageNotAcked{message_id:Uuid::from_bytes(earliest_pending_msg.message_id)});
 						}
 					}
 
@@ -468,9 +510,9 @@ impl SharedState {
 						&& let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first()
 					{
 						if now.duration_since(earliest_pending_ws_msg.send_instant)
-							<= MESSAGE_ACK_TIMEOUT
+							<= HWS_MESSAGE_ACK_TIMEOUT
 						{
-							break 'reason Some(MsgGcReason::WebSocketMessageNotAcked);
+							break 'reason Some(MsgGcReason::WebSocketMessageNotAcked{last_ws_msg_index: hs.last_ws_msg_index});
 						}
 					}
 
