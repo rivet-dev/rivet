@@ -167,6 +167,7 @@ async function startRunner(): Promise<
 		fetch: async (
 			runner: Runner,
 			actorId: string,
+			_gatewayId: ArrayBuffer,
 			_requestId: ArrayBuffer,
 			request: Request,
 		) => {
@@ -215,6 +216,7 @@ async function startRunner(): Promise<
 			runner: Runner,
 			actorId: string,
 			ws: WebSocket,
+			_gatewayId: ArrayBuffer,
 			_requestId: ArrayBuffer,
 			_request: Request,
 		) => {
@@ -239,7 +241,8 @@ async function startRunner(): Promise<
 					websocketId,
 					(event as any).rivetMessageIndex,
 				);
-				runner.sendWebsocketMessageAck(
+				runner.sendHibernatableWebSocketMessageAck(
+					(event as any).rivetGatewayId,
 					(event as any).rivetRequestId,
 					(event as any).rivetMessageIndex,
 				);
@@ -256,13 +259,15 @@ async function startRunner(): Promise<
 				});
 			});
 		},
-		getActorHibernationConfig(actorId, requestId) {
-			const websocketId = Buffer.from(requestId).toString("base64");
-			return {
-				enabled: true,
-				lastMsgIndex: websocketLastMsgIndexes.get(websocketId),
-			};
-		},
+		// TODO:
+		hibernatableWebSocket: undefined as any,
+		// getActorHibernationConfig(actorId, gatewayId, requestId) {
+		// 	const websocketId = Buffer.from(requestId).toString("base64");
+		// 	return {
+		// 		enabled: true,
+		// 		lastMsgIndex: websocketLastMsgIndexes.get(websocketId),
+		// 	};
+		// },
 	};
 
 	const runner = new Runner(config);
