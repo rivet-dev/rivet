@@ -24,11 +24,14 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 		awsSecretAccessKey = result.stdout.trim();
 	}
 
+	assert(awsAccessKeyId, "AWS_ACCESS_KEY_ID is required");
+	assert(awsSecretAccessKey, "AWS_SECRET_ACCESS_KEY is required");
+
 	const endpointUrl =
 		"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
 
 	// Create AWS environment for commands
-	const awsEnv = {
+	const awsEnv: Record<string, string> = {
 		AWS_ACCESS_KEY_ID: awsAccessKeyId,
 		AWS_SECRET_ACCESS_KEY: awsSecretAccessKey,
 		AWS_DEFAULT_REGION: "auto",
@@ -70,6 +73,9 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 		await copyFiles(awsEnv, commitPrefix, "engine/latest/", endpointUrl);
 		await generateInstallScripts(awsEnv, opts, "latest", endpointUrl);
 	}
+
+	// Upload devtools artifacts
+	await uploadDevtoolsArtifacts(awsEnv, opts, endpointUrl);
 }
 
 async function copyFiles(
@@ -122,4 +128,49 @@ async function generateInstallScripts(
 			stdio: ["pipe", "inherit", "inherit"],
 		})`aws s3 cp - s3://rivet-releases/${uploadKey} --endpoint-url ${endpointUrl}`;
 	}
+}
+
+async function uploadDevtoolsArtifacts(
+	awsEnv: Record<string, string>,
+	opts: ReleaseOpts,
+	endpointUrl: string,
+) {
+	console.log(`==> Uploading DevTools Artifacts`);
+
+	const devtoolsDistPath = path.resolve(
+		opts.root,
+		"rivetkit-typescript/packages/devtools/dist",
+	);
+
+	// Check if devtools dist directory exists
+	try {
+		await fs.access(devtoolsDistPath);
+	} catch {
+		console.log(
+			`⚠️  DevTools dist directory not found at ${devtoolsDistPath}, skipping`,
+		);
+		return;
+	}
+
+	// Upload to version directory
+	const versionTarget = `devtools/${opts.version}/`;
+	console.log(`Uploading devtools to ${versionTarget}`);
+	await $({
+		env: awsEnv,
+		shell: true,
+		stdio: "inherit",
+	})`aws s3 sync ${devtoolsDistPath} s3://rivet-releases/${versionTarget} --endpoint-url ${endpointUrl}`;
+
+	// If this is the latest version, also upload to latest directory
+	if (opts.latest) {
+		const latestTarget = "devtools/latest/";
+		console.log(`Uploading devtools to ${latestTarget}`);
+		await $({
+			env: awsEnv,
+			shell: true,
+			stdio: "inherit",
+		})`aws s3 sync ${devtoolsDistPath} s3://rivet-releases/${latestTarget} --endpoint-url ${endpointUrl}`;
+	}
+
+	console.log(`✅ DevTools artifacts uploaded successfully`);
 }

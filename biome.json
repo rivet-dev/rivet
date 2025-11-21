@@ -12,6 +12,7 @@
 			"frontend/**/*.ts",
 			"!frontend/packages",
 			"!rivetkit-openapi/openapi.json",
+			"rivetkit-typescript/**/devtools/**/*.tsx",
 			"!scripts",
 			"!website",
 			"!site"
