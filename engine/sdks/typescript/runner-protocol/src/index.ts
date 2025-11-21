@@ -1,4 +1,4 @@
-
+import assert from "node:assert"
 import * as bare from "@bare-ts/lib"
 
 const DEFAULT_CONFIG = /* @__PURE__ */ bare.Config({})
@@ -53,6 +53,9 @@ export function writeKvValue(bc: bare.ByteCursor, x: KvValue): void {
 
 export type KvMetadata = {
     readonly version: ArrayBuffer
+    /**
+     * TODO: Rename to update_ts
+     */
     readonly createTs: i64
 }
 
@@ -1925,9 +1928,3 @@ export function decodeToServerlessServer(bytes: Uint8Array): ToServerlessServer 
     }
     return result
 }
-
-
-function assert(condition: boolean, message?: string): asserts condition {
-    if (!condition) throw new Error(message ?? "Assertion failed")
-}
-
