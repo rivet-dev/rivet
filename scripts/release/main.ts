@@ -60,31 +60,51 @@ async function getCurrentVersion(): Promise<string> {
 	return packageJson.version;
 }
 
-async function getLatestGitVersion(): Promise<string | null> {
+async function getAllGitVersions(): Promise<string[]> {
 	try {
 		// Fetch tags to ensure we have the latest
 		// Use --force to overwrite local tags that conflict with remote
-		await $`git fetch --tags --force --quiet`;
+		try {
+			await $`git fetch --tags --force --quiet`;
+		} catch (fetchError) {
+			console.warn("Warning: Could not fetch remote tags, using local tags only");
+		}
 
 		// Get all version tags
-		const result = await $`git tag -l "v*"`;
+		const result = await $`git tag -l v*`;
 		const tags = result.stdout.trim().split("\n").filter(Boolean);
 
 		if (tags.length === 0) {
-			return null;
+			return [];
 		}
 
-		// Parse and find the latest version (excluding prereleases)
+		// Parse and sort all versions (newest first)
 		const versions = tags
 			.map(tag => tag.replace(/^v/, ""))
 			.filter(v => semver.valid(v))
 			.sort((a, b) => semver.rcompare(a, b));
 
-		return versions[0] || null;
+		return versions;
 	} catch (error) {
-		console.warn("Warning: Could not fetch git tags:", error);
+		console.warn("Warning: Could not get git tags:", error);
+		return [];
+	}
+}
+
+async function getLatestGitVersion(): Promise<string | null> {
+	const versions = await getAllGitVersions();
+
+	if (versions.length === 0) {
 		return null;
 	}
+
+	// Find the latest version (excluding prereleases)
+	const stableVersions = versions.filter(v => {
+		const parsed = semver.parse(v);
+		return parsed && parsed.prerelease.length === 0;
+	});
+
+	return stableVersions[0] || null;
 }
 
 async function shouldTagAsLatest(newVersion: string): Promise<boolean> {
@@ -442,10 +462,24 @@ async function main() {
 		const branch = branchResult.stdout.trim();
 		console.log(`  Branch: ${branch}`);
 
-		// Get latest git version for context
-		const latestGitVersion = await getLatestGitVersion();
-		if (latestGitVersion) {
-			console.log(`  Current latest version: ${latestGitVersion}`);
+		// Get and display recent versions
+		const allVersions = await getAllGitVersions();
+
+		if (allVersions.length > 0) {
+			// Find the latest stable version (excluding prereleases)
+			const stableVersions = allVersions.filter(v => {
+				const parsed = semver.parse(v);
+				return parsed && parsed.prerelease.length === 0;
+			});
+			const latestStableVersion = stableVersions[0] || null;
+
+			console.log(`\nRecent versions:`);
+			const recentVersions = allVersions.slice(0, 10);
+			for (const version of recentVersions) {
+				const isLatest = version === latestStableVersion;
+				const marker = isLatest ? " (latest)" : "";
+				console.log(`  - ${version}${marker}`);
+			}
 		}
 
 		// Prompt for confirmation
