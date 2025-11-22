@@ -48,8 +48,8 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 			<div>
 				<p
 					className={clsx(
-						"mb-2 text-sm font-semibold flex items-center",
-						index > 0 ? "mt-4" : undefined,
+						"mb-3 text-[15px] font-semibold flex items-center",
+						index > 0 ? "mt-6" : undefined,
 					)}
 				>
 					{item.icon ? (
@@ -161,7 +161,7 @@ export function NavLink({
 			href={href}
 			target={external && "_blank"}
 			className={cn(
-				"group flex w-full items-center border-l-2 border-l-border py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 aria-current-page:text-foreground aria-current-page:border-l-orange-500",
+				"group flex w-full items-center border-l-2 border-l-border py-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 aria-current-page:text-foreground aria-current-page:border-l-orange-500",
 				getPaddingClass(level),
 				className,
 			)}
