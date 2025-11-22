@@ -17,7 +17,7 @@ import {
 	type SortingState,
 	useReactTable as useTable,
 } from "@tanstack/react-table";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import type { Column, Columns, ForeignKeys } from "rivetkit/inspector";
 import {
 	Badge,
@@ -89,7 +89,7 @@ export function DatabaseTable({
 		},
 	});
 
-	function calculateColumnSizes() {
+	const calculateColumnSizes = useCallback(() => {
 		const headers = table.getFlatHeaders();
 		const colSizes: { [key: string]: number } = {};
 		for (let i = 0; i < headers.length; i++) {
@@ -99,11 +99,11 @@ export function DatabaseTable({
 				header.column.getSize();
 		}
 		return colSizes;
-	}
+	}, [table]);
 
 	const columnSizeVars = useMemo(() => {
 		return calculateColumnSizes();
-	}, [table.getState().columnSizingInfo, table.getState().columnSizing]);
+	}, [calculateColumnSizes]);
 
 	return (
 		<Table

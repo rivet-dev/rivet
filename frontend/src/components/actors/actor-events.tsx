@@ -194,22 +194,26 @@ function useScrollToBottom(
 			e.currentTarget.clientHeight;
 	}, []);
 
-	useEffect(() => {
-		if (!shouldFollow()) {
-			return () => {};
-		}
-		// https://github.com/TanStack/virtual/issues/537
-		const rafId = requestAnimationFrame(() => {
-			ref.current?.scrollTo({
-				top: ref.current.scrollHeight,
-				behavior: "smooth",
+	useEffect(
+		() => {
+			if (!shouldFollow()) {
+				return () => {};
+			}
+			// https://github.com/TanStack/virtual/issues/537
+			const rafId = requestAnimationFrame(() => {
+				ref.current?.scrollTo({
+					top: ref.current.scrollHeight,
+					behavior: "smooth",
+				});
 			});
-		});
 
-		return () => {
-			cancelAnimationFrame(rafId);
-		};
-	}, deps);
+			return () => {
+				cancelAnimationFrame(rafId);
+			};
+		},
+		// biome-ignore lint/correctness/useExhaustiveDependencies: deps is passed from caller
+		deps,
+	);
 
 	return { onScroll };
 }

@@ -15,18 +15,22 @@ export function useAsyncMemo<T>(
 	initial?: T,
 ) {
 	const [val, setVal] = useState<T | undefined>(initial);
-	useEffect(() => {
-		let cancel = false;
-		const promise = factory();
-		if (promise === undefined || promise === null) return;
-		promise.then((val) => {
-			if (!cancel) {
-				setVal(val);
-			}
-		});
-		return () => {
-			cancel = true;
-		};
-	}, deps);
+	useEffect(
+		() => {
+			let cancel = false;
+			const promise = factory();
+			if (promise === undefined || promise === null) return;
+			promise.then((val) => {
+				if (!cancel) {
+					setVal(val);
+				}
+			});
+			return () => {
+				cancel = true;
+			};
+		},
+		// biome-ignore lint/correctness/useExhaustiveDependencies: deps is passed from caller
+		deps,
+	);
 	return val;
 }

@@ -436,17 +436,18 @@ function Runners() {
 }
 
 function usePublishableToken() {
+	const cloudProvider = useCloudNamespaceDataProvider();
+	const engineProvider = useEngineNamespaceDataProvider();
+	const cloudData = useSuspenseQuery(
+		cloudProvider.publishableTokenQueryOptions(),
+	);
+	const engineData = useSuspenseQuery(
+		engineProvider.engineAdminTokenQueryOptions(),
+	);
+
 	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			return useSuspenseQuery(
-				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
-			).data;
-		})
-		.with("engine", () => {
-			return useSuspenseQuery(
-				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
-			).data;
-		})
+		.with("cloud", () => cloudData.data)
+		.with("engine", () => engineData.data)
 		.otherwise(() => {
 			throw new Error("Not in a valid context");
 		});

@@ -243,12 +243,7 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 			},
 			engineToken,
 		});
-	}, [
-		actorId,
-		actor?.runner,
-		provider.runnerByNameQueryOptions,
-		engineToken,
-	]);
+	}, [actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
 
 	return { actorContext, actor, runner, isLoading };
 }

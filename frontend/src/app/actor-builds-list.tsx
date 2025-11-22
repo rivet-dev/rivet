@@ -75,6 +75,7 @@ export function ActorBuildsList() {
 					? Array(RECORDS_PER_PAGE)
 							.fill(null)
 							.map((_, i) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
 								<Fragment key={i}>
 									<Skeleton className="w-full h-6 my-1" />
 								</Fragment>
@@ -93,6 +94,7 @@ export function ActorBuildsListSkeleton() {
 				{Array(RECORDS_PER_PAGE)
 					.fill(null)
 					.map((_, i) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
 						<Fragment key={i}>
 							<Skeleton className="w-full h-6 my-1" />
 						</Fragment>

@@ -39,7 +39,7 @@ export function CommunitySection() {
 	return (
 		<div className="text-center mx-auto max-w-6xl">
 			<div className="mb-16">
-				<h2 className="text-4xl sm:text-5xl font-700 text-white mb-6">
+				<h2 className="text-2xl sm:text-3xl font-700 text-white mb-6">
 					Join the Community
 				</h2>
 				<p className="text-lg font-500 text-white/40 max-w-2xl mx-auto">

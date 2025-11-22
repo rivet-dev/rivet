@@ -207,6 +207,7 @@ export function ListSkeleton() {
 			{Array(RECORDS_PER_PAGE)
 				.fill(null)
 				.map((_, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
 					<ActorsListRowSkeleton key={i} />
 				))}
 		</div>
@@ -379,7 +380,7 @@ function useFiltersChangeCallback(): OnFiltersChange {
 				setLs(fnOrValue || {});
 			}
 		},
-		[navigate, pick],
+		[navigate, pick, remove, setLs, value],
 	);
 }
 
