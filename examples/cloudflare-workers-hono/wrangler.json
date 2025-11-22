@@ -6,7 +6,7 @@
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_sqlite_classes": ["ActorHandler"]
+			"new_classes": ["ActorHandler"]
 		}
 	],
 	"durable_objects": {

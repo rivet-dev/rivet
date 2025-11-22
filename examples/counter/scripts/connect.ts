@@ -8,12 +8,15 @@ async function main() {
 
 	counter.on("newCount", (count: number) => console.log("Event:", count));
 
-	while (true) {
-		const out = await counter.increment(1);
+	for (let i = 0; i < 5; i++) {
+		const out = await counter.increment(5);
 		console.log("RPC:", out);
 
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 	}
+
+	await new Promise((resolve) => setTimeout(resolve, 10000));
+	await counter.dispose();
 }
 
 main();

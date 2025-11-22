@@ -24,6 +24,7 @@ export default function ConnectionsTab({ state, actorHandle }: TabProps) {
       setCurrentConnectionInfo({
         isConnected: true,
         connectionId: actorHandle.connectionId || "N/A",
+        transport: state.transport,
         encoding: state.encoding,
         actorName: state.actorName,
         actorKey: state.actorKey,
@@ -85,6 +86,9 @@ export default function ConnectionsTab({ state, actorHandle }: TabProps) {
               <code>
                 {currentConnectionInfo.connectionId}
               </code>
+
+              <strong>Transport:</strong>
+              <span>{currentConnectionInfo.transport.toUpperCase()}</span>
 
               <strong>Encoding:</strong>
               <span>{currentConnectionInfo.encoding.toUpperCase()}</span>

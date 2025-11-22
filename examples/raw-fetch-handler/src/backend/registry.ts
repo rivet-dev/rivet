@@ -9,7 +9,7 @@ export const counter = actor({
 		// Setup router
 		return { router: createCounterRouter() };
 	},
-	onRequest: (c, request) => {
+	onFetch: (c, request) => {
 		return c.vars.router.fetch(request, { actor: c });
 	},
 	actions: {

@@ -101,7 +101,7 @@ export default function InteractionScreen({
               <div className="connection-meta">
                 <span className="actor-name">{state.actorName}</span>
                 {state.actorKey && <span className="actor-key">#{state.actorKey}</span>}
-                <span className="transport-info">{state.encoding.toUpperCase()}</span>
+                <span className="transport-info">{state.transport.toUpperCase()}/{state.encoding.toUpperCase()}</span>
                 <span className={`mode-info ${state.connectionMode}`}>
                   {state.connectionMode === "connection" ? "🔗 Connected" : "🔧 Handle"}
                 </span>
