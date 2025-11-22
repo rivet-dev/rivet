@@ -20,6 +20,7 @@ export function generateDatacenterRivetEngine(
 			is_leader: dc.id === 1,
 			peer_url: `http://${serviceHost}:${API_PEER_PORT}`,
 			public_url: `http://${serviceHost}:${GUARD_PORT}`,
+			valid_hosts: [`${serviceHost}`, `127.0.0.1`, `localhost`],
 		});
 	}
 

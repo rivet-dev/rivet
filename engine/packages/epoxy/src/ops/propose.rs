@@ -135,7 +135,7 @@ pub async fn commit(
 ) -> Result<ProposalResult> {
 	// Commit locally
 	//
-	// Receives command error aftoer committing to KV. Proposals are still committed even if there
+	// Receives command error after committing to KV. Proposals are still committed even if there
 	// is a command error since command errors are purely feedback to the client that the command
 	// was not applied.
 	let cmd_err = {

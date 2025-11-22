@@ -8,6 +8,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::Full;
 use hyper::{Method, Request, Response, StatusCode};
+use rivet_runner_protocol as protocol;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use common::{create_test_config, init_tracing, start_guard};
@@ -17,7 +18,6 @@ use rivet_guard_core::errors::WebSocketServiceHibernate;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingFn, RoutingOutput};
 use rivet_guard_core::request_context::RequestContext;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
-use uuid::Uuid;
 
 const HIBERNATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -40,6 +40,7 @@ impl CustomServeTrait for TestCustomServe {
 		&self,
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
+		_unique_request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Track this HTTP call
 		let path = req.uri().path().to_string();
@@ -71,7 +72,7 @@ impl CustomServeTrait for TestCustomServe {
 		_headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
-		_unique_request_id: Uuid,
+		_unique_request_id: protocol::RequestId,
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Track this WebSocket call
@@ -116,7 +117,7 @@ impl CustomServeTrait for TestCustomServe {
 	async fn handle_websocket_hibernation(
 		&self,
 		_websocket: WebSocketHandle,
-		_unique_request_id: Uuid,
+		_unique_request_id: protocol::RequestId,
 	) -> Result<HibernationResult> {
 		// Track this WebSocket call
 		self.tracker
