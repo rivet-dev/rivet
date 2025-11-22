@@ -1642,7 +1642,7 @@ pub mod insert {
 			tx,
 			workflow_id,
 			location,
-			EventType::Signal,
+			EventType::Signals,
 			version,
 			create_ts,
 		)

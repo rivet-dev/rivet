@@ -475,6 +475,15 @@ impl Cursor {
 		}
 	}
 
+	// Helper function for signal functionality
+	pub fn is_removed(&self) -> bool {
+		let Some(event) = self.current_event() else {
+			return false;
+		};
+
+		matches!(&event.data, EventData::Removed(_))
+	}
+
 	/// Returns `true` if the current event is being replayed.
 	pub fn compare_removed<T: Removed>(&self) -> WorkflowResult<bool> {
 		let Some(event) = self.current_event() else {
