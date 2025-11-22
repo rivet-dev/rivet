@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quickstart: Raw WebSockets</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: rgba(26, 26, 26, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            color: #4a9eff;
+        }
+        .info {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+        .connection-status, .user-info {
+            color: #a0a0a0;
+        }
+        .connection-status .connected {
+            color: #06A77D;
+            font-weight: 500;
+        }
+        .connection-status .disconnected {
+            color: #E63946;
+            font-weight: 500;
+        }
+        .canvas {
+            position: relative;
+            flex: 1;
+            background: #1a1a1a;
+            cursor: none;
+            overflow: hidden;
+        }
+        .cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .cursor-svg {
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        .cursor-label {
+            position: absolute;
+            top: 20px;
+            left: 18px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
+            white-space: nowrap;
+            border: 1px solid;
+        }
+        .loading-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 18px;
+            color: #808080;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+</body>
+</html>
