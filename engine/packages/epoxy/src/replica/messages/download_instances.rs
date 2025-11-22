@@ -39,7 +39,7 @@ pub async fn download_instances(
 	let range = RangeOption {
 		begin: begin_key,
 		end: end_key,
-		mode: StreamingMode::WantAll,
+		mode: StreamingMode::Exact,
 		limit: Some(req.count as usize),
 		..Default::default()
 	};
