@@ -154,7 +154,7 @@ pub async fn init_conn(
 			};
 
 		// Forward to runner wf
-		ctx.signal(pegboard::workflows::runner::Forward { inner: packet })
+		ctx.signal(pegboard::workflows::runner2::Forward { inner: packet })
 			.to_workflow_id(workflow_id)
 			.send()
 			.await
