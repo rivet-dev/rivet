@@ -1,81 +1,34 @@
 import { integrationGroups } from "@/data/integrations/shared";
-import { deployOptions } from "@/data/deploy-options";
+import { deployOptions } from "@/data/deploy/shared";
 import { useCases } from "@/data/use-cases";
 import {
   faActorsBorderless,
+  faNodeJs,
+  faReact,
+  faNextjs,
+  faCloudflare
 } from "@rivet-gg/icons";
 
 # Overview
 
 Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
 
-## Libraries
+# Quickstart
+
+Get started with Rivet in minutes. Choose your preferred framework or runtime to begin building with actors.
 
 <CardGroup cols={2}>
-<Card title="Actors" href="/docs/actors" icon={faActorsBorderless}>
-  Long-lived processes with durable state, realtime, and hibernation
-</Card>
-{/*<Card title="Workflows" href="/docs/workflows" icon={faNodeJs}>
+<Card title="Node.js & Bun Quickstart" href="/docs/actors/quickstart/backend" icon={faNodeJs}>
   Set up actors with Node.js, Bun, and web frameworks
 </Card>
-<Card title="Agents" href="/docs/agents" icon={faNodeJs}>
-  Set up actors with Node.js, Bun, and web frameworks
-</Card>*/}
-</CardGroup>
-
-## Use Cases
-
-<CardGroup cols={2}>
-{useCases.map((useCase) => (
-  <Card
-    key={useCase.href}
-    title={useCase.title}
-    href={useCase.href}
-    icon={useCase.icon}
-  >
-    {useCase.description}
-  </Card>
-))}
-</CardGroup>
-
-## Deploy Options
-
-<CardGroup>
-{deployOptions.map((option) => (
-  <Card
-    key={option.href}
-    title={option.title}
-    href={option.href}
-    icon={option.icon}
-    badge={option.badge}
-  />
-))}
-</CardGroup>
-
-## Integrations
-
-{integrationGroups.map((group) => (
-  <section key={group.title}>
-    <h3>{group.title}</h3>
-    <CardGroup>
-      {group.items.map((integration) => (
-        <Card
-          key={integration.href}
-          title={integration.title}
-          href={integration.href}
-        />
-      ))}
-    </CardGroup>
-  </section>
-))}
-
-## Support
-
-<CardGroup cols={2}>
-<Card title="Discord" href="https://rivet.dev/discord">
-  Chat with the community and get realtime help from Rivet engineers
+<Card title="React Quickstart" href="/docs/actors/quickstart/react" icon={faReact}>
+  Build real-time React applications with actors
 </Card>
-<Card title="GitHub Issues" href="https://github.com/rivet-dev/engine">
-  File bugs or request features directly in our tracker
+<Card title="Next.js Quickstart" href="/docs/actors/quickstart/next-js" icon={faNextjs}>
+  Build server-rendered Next.js experiences backed by actors
+</Card>
+<Card title="Cloudflare Workers Quickstart" href="/docs/actors/quickstart/cloudflare-workers" icon={faCloudflare}>
+  Deploy actors on Cloudflare Workers with zero infrastructure
 </Card>
 </CardGroup>
+

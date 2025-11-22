@@ -1,5 +1,5 @@
 import { CardGroup, Card } from "@/components/Card";
-import { deployOptions } from "@/data/deploy-options";
+import { deployOptions } from "@/data/deploy/shared";
 
 export function Hosting() {
 	const hostingProviders = deployOptions;

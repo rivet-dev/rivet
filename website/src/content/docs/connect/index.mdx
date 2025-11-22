@@ -1,0 +1,23 @@
+import { deployGroups } from "@/data/deploy/shared";
+
+# Deploy
+
+Rivet supports deployment to a wide range of platforms, from serverless functions to self-hosted infrastructure.
+
+{deployGroups.map((group) => (
+  <section key={group.title}>
+    <h2>{group.title}</h2>
+    <CardGroup>
+      {group.items.map((option) => (
+        <Card
+          key={option.href}
+          title={option.title}
+          href={option.href}
+          icon={option.icon}
+        >
+          {option.description}
+        </Card>
+      ))}
+    </CardGroup>
+  </section>
+))}

@@ -3657,11 +3657,6 @@ The `setupTest` function automatically calls `vi.useFakeTimers()`, allowing you 
 4. **Use realistic data**: Test with data that resembles production scenarios.
 
 Rivet's testing framework automatically handles server setup and teardown, so you can focus on writing effective tests for your business logic.
-## API Reference
-
-# API Reference
-
-This is where the technical API docs live.
 ## Node.js & Bun
 
 # Node.js & Bun
@@ -5089,25 +5084,17 @@ TODO
 
 Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
 
-## Libraries
+# Quickstart
 
-  Long-lived processes with durable state, realtime, and hibernation
+Get started with Rivet in minutes. Choose your preferred framework or runtime to begin building with actors.
 
-## Use Cases
+  Set up actors with Node.js, Bun, and web frameworks
 
-))}
+  Build real-time React applications with actors
 
-## Deploy Options
+  Build server-rendered Next.js experiences backed by actors
 
-## Integrations
-
-))}
-
-## Support
-
-  Chat with the community and get realtime help from Rivet engineers
-
-  File bugs or request features directly in our tracker
+  Deploy actors on Cloudflare Workers with zero infrastructure
 ## Better Auth
 
 # Better Auth
@@ -6139,6 +6126,8 @@ docker run -d \
 # Self-Hosting Overview
 
 Rivet consists of several core components that work together to provide a complete actor orchestration platform. The Rivet Engine is the core of self-hosting and is used for orchestrating actors at scale:
+
+	Self-hosting is not required to deploy Rivet applciations in your own cloud. Please see the [deploy documentation](/docs/deploy) if trying to deploy a Rivet application.
 
 ## Core Components
 
