@@ -2,22 +2,14 @@
 
 Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
 
-## Libraries
+# Quickstart
 
-  Long-lived processes with durable state, realtime, and hibernation
+Get started with Rivet in minutes. Choose your preferred framework or runtime to begin building with actors.
 
-## Use Cases
+  Set up actors with Node.js, Bun, and web frameworks
 
-))}
+  Build real-time React applications with actors
 
-## Deploy Options
+  Build server-rendered Next.js experiences backed by actors
 
-## Integrations
-
-))}
-
-## Support
-
-  Chat with the community and get realtime help from Rivet engineers
-
-  File bugs or request features directly in our tracker
+  Deploy actors on Cloudflare Workers with zero infrastructure
