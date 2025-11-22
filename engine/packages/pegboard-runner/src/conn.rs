@@ -64,7 +64,7 @@ pub async fn init_conn(
 			}
 		};
 
-		let packet = versioned::ToServer::deserialize(&buf, protocol_version)
+		let init_packet = versioned::ToServer::deserialize(&buf, protocol_version)
 			.map_err(|err| WsError::InvalidPacket(err.to_string()).build())
 			.context("failed to deserialize initial packet from client")?;
 
@@ -74,7 +74,7 @@ pub async fn init_conn(
 				version,
 				total_slots,
 				..
-			}) = &packet
+			}) = &init_packet
 			{
 				// Look up existing runner by key
 				let existing_runner = ctx
@@ -127,8 +127,28 @@ pub async fn init_conn(
 				};
 
 				// Spawn a new runner workflow if one doesn't already exist
-				let workflow_id = ctx
-					.workflow(pegboard::workflows::runner2::Input {
+				let workflow_id = if protocol::is_new(protocol_version) {
+					ctx.workflow(pegboard::workflows::runner2::Input {
+						runner_id,
+						namespace_id: namespace.namespace_id,
+						name: name.clone(),
+						key: runner_key.clone(),
+						version: version.clone(),
+						total_slots: *total_slots,
+						protocol_version,
+					})
+					.tag("runner_id", runner_id)
+					.unique()
+					.dispatch()
+					.await
+					.with_context(|| {
+						format!(
+							"failed to dispatch runner workflow for runner: {}",
+							runner_id
+						)
+					})?
+				} else {
+					ctx.workflow(pegboard::workflows::runner::Input {
 						runner_id,
 						namespace_id: namespace.namespace_id,
 						name: name.clone(),
@@ -145,25 +165,30 @@ pub async fn init_conn(
 							"failed to dispatch runner workflow for runner: {}",
 							runner_id
 						)
-					})?;
+					})?
+				};
 
 				(name.clone(), runner_id, workflow_id)
 			} else {
-				tracing::debug!(?packet, "invalid initial packet");
+				tracing::debug!(?init_packet, "invalid initial packet");
 				return Err(WsError::InvalidInitialPacket("must be `ToServer::Init`").build());
 			};
 
-		// Forward to runner wf
-		ctx.signal(pegboard::workflows::runner2::Forward { inner: packet })
-			.to_workflow_id(workflow_id)
-			.send()
-			.await
-			.with_context(|| {
-				format!(
-					"failed to forward initial packet to workflow: {}",
-					workflow_id
-				)
-			})?;
+		if protocol::is_new(protocol_version) {
+			ctx.signal(Init);
+		} else {
+			// Forward to runner wf
+			ctx.signal(pegboard::workflows::runner::Forward { inner: init_packet })
+				.to_workflow_id(workflow_id)
+				.send()
+				.await
+				.with_context(|| {
+					format!(
+						"failed to forward initial packet to workflow: {}",
+						workflow_id
+					)
+				})?;
+		}
 
 		(runner_name, runner_id, workflow_id)
 	} else {

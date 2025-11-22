@@ -201,12 +201,14 @@ pub(crate) async fn clear_slot(
 		runner_remaining_slots,
 		runner_total_slots,
 		runner_last_ping_ts,
+		runner_protocol_version,
 	) = tokio::try_join!(
 		tx.read(&runner_workflow_id_key, Serializable),
 		tx.read(&runner_version_key, Serializable),
 		tx.read(&runner_remaining_slots_key, Serializable),
 		tx.read(&runner_total_slots_key, Serializable),
 		tx.read(&runner_last_ping_ts_key, Serializable),
+		tx.read_opt(&runner_protocol_version_key, Serializable),
 	)?;
 
 	let old_runner_remaining_millislots = (runner_remaining_slots * 1000) / runner_total_slots;
@@ -245,6 +247,8 @@ pub(crate) async fn clear_slot(
 				workflow_id: runner_workflow_id,
 				remaining_slots: new_runner_remaining_slots,
 				total_slots: runner_total_slots,
+				// We default here because its not important for mk1 protocol runners
+				protocol_version: runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION),
 			},
 		)?;
 	}

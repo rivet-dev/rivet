@@ -619,6 +619,8 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 					workflow_id: ctx.workflow_id(),
 					remaining_slots,
 					total_slots: input.total_slots,
+					// We default here because its not important for mk1 protocol runners
+					protocol_version: PROTOCOL_MK1_VERSION,
 				},
 			)?;
 
@@ -1064,6 +1066,7 @@ pub(crate) async fn allocate_pending_actors(
 							workflow_id: old_runner_alloc_key_data.workflow_id,
 							remaining_slots: new_remaining_slots,
 							total_slots: old_runner_alloc_key_data.total_slots,
+							protocol_version: old_runner_alloc_key_data.protocol_version,
 						},
 					)?;
 
