@@ -5,7 +5,7 @@ use entry::{EntryBaseKey, EntryBuilder, EntryMetadataKey, EntryValueChunkKey};
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use key::{KeyWrapper, ListKeyWrapper};
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 use universaldb::prelude::*;
 use universaldb::tuple::Subspace;
 use utils::{validate_entries, validate_keys};
