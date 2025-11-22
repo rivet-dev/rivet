@@ -1,10 +1,13 @@
 use anyhow::Result;
 use gas::prelude::*;
-use hyper_tungstenite::tungstenite::Message as WsMessage;
+use hyper_tungstenite::tungstenite::Message;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
-use rivet_runner_protocol::{self as protocol, versioned};
+use rivet_runner_protocol::{
+	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
+};
 use std::sync::Arc;
 use tokio::sync::watch;
+use universalpubsub as ups;
 use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
@@ -16,40 +19,33 @@ pub async fn task(
 	conn: Arc<Conn>,
 	mut tunnel_sub: Subscriber,
 	mut eviction_sub: Subscriber,
-	mut init_rx: watch::Receiver<()>,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
-	if protocol::is_mk2(conn.protocol) {
-		// Must first receive init from adjacent task before processing messages
-		tokio::select! {
-			_ = init_rx.changed() => {}
-			_ = eviction_sub.next() => {
-				tracing::debug!("runner evicted");
-				return Err(errors::WsError::Eviction.build());
+	loop {
+		match recv_msg(
+			&mut tunnel_sub,
+			&mut eviction_sub,
+			&mut tunnel_to_ws_abort_rx,
+		)
+		.await?
+		{
+			Ok(msg) => {
+				if protocol::is_mk2(conn.protocol_version) {
+					handle_message_mk2(&ctx, &conn, msg).await?;
+				} else {
+					handle_message_mk1(&ctx, &conn, msg).await?;
+				}
 			}
-			_ = tunnel_to_ws_abort_rx.changed() => {
-				tracing::debug!("task aborted");
-				return Ok(LifecycleResult::Aborted);
-			}
-		};
-
-		loop {
-			match recv_msg().await? {
-				Ok(msg) => handle_message_mk2(msg).await?,
-				Err(lifecycle_res) => return Ok(lifecycle_res),
-			}
-		}
-	} else {
-		loop {
-			match recv_msg().await? {
-				Ok(msg) => handle_message_mk1(msg).await?,
-				Err(lifecycle_res) => return Ok(lifecycle_res),
-			}
+			Err(lifecycle_res) => return Ok(lifecycle_res),
 		}
 	}
 }
 
-async fn recv_msg() -> Result<std::result::Result<(), LifecycleResult>> {
+async fn recv_msg(
+	tunnel_sub: &mut Subscriber,
+	eviction_sub: &mut Subscriber,
+	tunnel_to_ws_abort_rx: &mut watch::Receiver<()>,
+) -> Result<std::result::Result<ups::Message, LifecycleResult>> {
 	let tunnel_msg = tokio::select! {
 		res = tunnel_sub.next() => {
 			if let NextOutput::Message(tunnel_msg) = res.context("pubsub_to_client_task sub failed")? {
@@ -77,9 +73,13 @@ async fn recv_msg() -> Result<std::result::Result<(), LifecycleResult>> {
 	Ok(Ok(tunnel_msg))
 }
 
-async fn handle_message_mk2() -> Result<()> {
+async fn handle_message_mk2(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	tunnel_msg: ups::Message,
+) -> Result<()> {
 	// Parse message
-	let msg = match versioned::ToRunner2::deserialize_with_embedded_version(&tunnel_msg.payload) {
+	let msg = match versioned::ToRunnerMk2::deserialize_with_embedded_version(&tunnel_msg.payload) {
 		Result::Ok(x) => x,
 		Err(err) => {
 			tracing::error!(?err, "failed to parse tunnel message");
@@ -93,12 +93,12 @@ async fn handle_message_mk2() -> Result<()> {
 			// Publish pong to UPS
 			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
 			let msg_serialized = versioned::ToGateway::wrap_latest(
-				protocol::ToGateway::ToGatewayPong(protocol::ToGatewayPong {
+				protocol::mk2::ToGateway::ToGatewayPong(protocol::mk2::ToGatewayPong {
 					request_id: ping.request_id,
 					ts: ping.ts,
 				}),
 			)
-			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
+			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
 			.context("failed to serialize pong message for gateway")?;
 			ctx.ups()
 				.context("failed to get UPS instance for tunnel message")?
@@ -119,7 +119,6 @@ async fn handle_message_mk2() -> Result<()> {
 			for command_wrapper in &mut command_wrappers {
 				if let protocol::mk2::Command::CommandStartActor(
 					protocol::mk2::CommandStartActor {
-						actor_id,
 						hibernating_requests,
 						..
 					},
@@ -127,7 +126,7 @@ async fn handle_message_mk2() -> Result<()> {
 				{
 					let ids = ctx
 						.op(pegboard::ops::actor::hibernating_request::list::Input {
-							actor_id: Id::parse(actor_id)?,
+							actor_id: Id::parse(&command_wrapper.checkpoint.actor_id)?,
 						})
 						.await?;
 
@@ -146,6 +145,9 @@ async fn handle_message_mk2() -> Result<()> {
 			// ToRunner data
 			protocol::mk2::ToClient::ToClientCommands(command_wrappers)
 		}
+		protocol::mk2::ToRunner::ToClientAckEvents(x) => {
+			protocol::mk2::ToClient::ToClientAckEvents(x)
+		}
 		protocol::mk2::ToRunner::ToClientTunnelMessage(x) => {
 			protocol::mk2::ToClient::ToClientTunnelMessage(x)
 		}
@@ -154,7 +156,7 @@ async fn handle_message_mk2() -> Result<()> {
 	// Forward raw message to WebSocket
 	let serialized_msg =
 		versioned::ToClientMk2::wrap_latest(to_client_msg).serialize(conn.protocol_version)?;
-	let ws_msg = WsMessage::Binary(serialized_msg.into());
+	let ws_msg = Message::Binary(serialized_msg.into());
 	conn.ws_handle
 		.send(ws_msg)
 		.await
@@ -163,7 +165,11 @@ async fn handle_message_mk2() -> Result<()> {
 	Ok(())
 }
 
-async fn handle_message_mk1() -> Result<()> {
+async fn handle_message_mk1(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	tunnel_msg: ups::Message,
+) -> Result<()> {
 	// Parse message
 	let msg = match versioned::ToRunner::deserialize_with_embedded_version(&tunnel_msg.payload) {
 		Result::Ok(x) => x,
@@ -179,13 +185,14 @@ async fn handle_message_mk1() -> Result<()> {
 			// Publish pong to UPS
 			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
 			let msg_serialized = versioned::ToGateway::wrap_latest(
-				protocol::ToGateway::ToGatewayPong(protocol::ToGatewayPong {
+				protocol::mk2::ToGateway::ToGatewayPong(protocol::mk2::ToGatewayPong {
 					request_id: ping.request_id,
 					ts: ping.ts,
 				}),
 			)
-			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
+			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
 			.context("failed to serialize pong message for gateway")?;
+
 			ctx.ups()
 				.context("failed to get UPS instance for tunnel message")?
 				.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
@@ -198,7 +205,7 @@ async fn handle_message_mk1() -> Result<()> {
 				})?;
 
 			// Not sent to client
-			continue;
+			return Ok(());
 		}
 		protocol::ToRunner::ToClientInit(x) => protocol::ToClient::ToClientInit(x),
 		protocol::ToRunner::ToClientClose => return Err(errors::WsError::Eviction.build()),
@@ -242,7 +249,7 @@ async fn handle_message_mk1() -> Result<()> {
 	tracing::debug!(?to_client_msg, "sending runner message to client");
 	let serialized_msg =
 		versioned::ToClient::wrap_latest(to_client_msg).serialize(conn.protocol_version)?;
-	let ws_msg = WsMessage::Binary(serialized_msg.into());
+	let ws_msg = Message::Binary(serialized_msg.into());
 	conn.ws_handle
 		.send(ws_msg)
 		.await
