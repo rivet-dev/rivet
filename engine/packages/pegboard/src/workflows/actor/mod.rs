@@ -218,9 +218,11 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			runtime::SpawnActorOutput::Allocated {
 				runner_id,
 				runner_workflow_id,
+				runner_protocol_version,
 			} => runtime::LifecycleState::new(
 				runner_id,
 				runner_workflow_id,
+				runner_protocol_version,
 				ctx.config().pegboard().actor_start_threshold(),
 			),
 			runtime::SpawnActorOutput::Sleep => {
@@ -291,8 +293,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								return Ok(Loop::Continue);
 							}
 
-							let (Some(runner_id), Some(runner_workflow_id)) =
-								(state.runner_id, state.runner_workflow_id)
+							let (Some(runner_id), Some(runner_workflow_id), Some(runner_protocol_version)) =
+								(state.runner_id, state.runner_workflow_id, state.runner_protocol_version)
 							else {
 								tracing::warn!("actor not allocated, ignoring event");
 								return Ok(Loop::Continue);
@@ -319,19 +321,22 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											// TODO: Send message to tunnel
-											// // Send signal to stop actor now that we know it will be sleeping
-											// ctx.signal(crate::workflows::runner::Command {
-											// 	inner: protocol::Command::CommandStopActor(
-											// 		protocol::CommandStopActor {
-											// 			actor_id: input.actor_id.to_string(),
-											// 			generation: state.generation,
-											// 		},
-											// 	),
-											// })
-											// .to_workflow_id(runner_workflow_id)
-											// .send()
-											// .await?;
+											if protocol::is_mk2(runner_protocol_version) {
+												// TODO: Send message to tunnel
+											} else {
+												// Send signal to stop actor now that we know it will be sleeping
+												ctx.signal(crate::workflows::runner::Command {
+													inner: protocol::Command::CommandStopActor(
+														protocol::CommandStopActor {
+															actor_id: input.actor_id.to_string(),
+															generation: state.generation,
+														},
+													),
+												})
+												.to_workflow_id(runner_workflow_id)
+												.send()
+												.await?;
+											}
 										}
 									}
 									protocol::ActorIntent::ActorIntentStop => {
@@ -350,18 +355,21 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											// TODO: Send message to tunnel
-											// ctx.signal(crate::workflows::runner::Command {
-											// 	inner: protocol::Command::CommandStopActor(
-											// 		protocol::CommandStopActor {
-											// 			actor_id: input.actor_id.to_string(),
-											// 			generation: state.generation,
-											// 		},
-											// 	),
-											// })
-											// .to_workflow_id(runner_workflow_id)
-											// .send()
-											// .await?;
+											if protocol::is_mk2(runner_protocol_version) {
+												// TODO: Send message to tunnel
+											} else {
+												ctx.signal(crate::workflows::runner::Command {
+													inner: protocol::Command::CommandStopActor(
+														protocol::CommandStopActor {
+															actor_id: input.actor_id.to_string(),
+															generation: state.generation,
+														},
+													),
+												})
+												.to_workflow_id(runner_workflow_id)
+												.send()
+												.await?;
+											}
 										}
 									}
 								},
@@ -479,7 +487,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}
 
 							if !state.going_away {
-								let Some(runner_workflow_id) = state.runner_workflow_id else {
+								let (Some(runner_workflow_id), Some(runner_protocol_version)) = (state.runner_workflow_id, state.runner_protocol_version) else {
 									return Ok(Loop::Continue);
 								};
 
@@ -494,31 +502,37 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								})
 								.await?;
 
-								// TODO: Send message to tunnel
-								// ctx.signal(crate::workflows::runner::Command {
-								// 	inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-								// 		actor_id: input.actor_id.to_string(),
-								// 		generation: state.generation,
-								// 	}),
-								// })
-								// .to_workflow_id(runner_workflow_id)
-								// .send()
-								// .await?;
+								if protocol::is_mk2(runner_protocol_version) {
+									// TODO: Send message to tunnel
+								} else {
+									ctx.signal(crate::workflows::runner::Command {
+										inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+											actor_id: input.actor_id.to_string(),
+											generation: state.generation,
+										}),
+									})
+									.to_workflow_id(runner_workflow_id)
+									.send()
+									.await?;
+								}
 							}
 						}
 						Main::Destroy(_) => {
 							// If allocated, send stop actor command
-							if let Some(runner_workflow_id) = state.runner_workflow_id {
-								// TODO: Send message to tunnel
-								// ctx.signal(crate::workflows::runner::Command {
-								// 	inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-								// 		actor_id: input.actor_id.to_string(),
-								// 		generation: state.generation,
-								// 	}),
-								// })
-								// .to_workflow_id(runner_workflow_id)
-								// .send()
-								// .await?;
+							if let (Some(runner_workflow_id), Some(runner_protocol_version)) = (state.runner_workflow_id, state.runner_protocol_version) {
+								if protocol::is_mk2(runner_protocol_version) {
+									// TODO: Send message to tunnel
+								} else {
+									ctx.signal(crate::workflows::runner::Command {
+										inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+											actor_id: input.actor_id.to_string(),
+											generation: state.generation,
+										}),
+									})
+									.to_workflow_id(runner_workflow_id)
+									.send()
+									.await?;
+								}
 							}
 
 							return Ok(Loop::Break(runtime::LifecycleResult {
@@ -586,6 +600,7 @@ async fn handle_stopped(
 	state.stopping = false;
 	state.runner_id = None;
 	let old_runner_workflow_id = state.runner_workflow_id.take();
+	let old_runner_protocol_version = state.runner_protocol_version.take();
 
 	let deallocate_res = ctx
 		.activity(runtime::DeallocateInput {
@@ -624,19 +639,28 @@ async fn handle_stopped(
 
 	// We don't know the state of the previous generation of this actor actor if it becomes lost, send stop
 	// command in case it ended up allocating
-	if let (StoppedVariant::Lost { .. }, Some(old_runner_workflow_id)) =
-		(&variant, old_runner_workflow_id)
-	{
-		// TODO: Send message to tunnel
-		// ctx.signal(crate::workflows::runner::Command {
-		// 	inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-		// 		actor_id: input.actor_id.to_string(),
-		// 		generation: state.generation,
-		// 	}),
-		// })
-		// .to_workflow_id(old_runner_workflow_id)
-		// .send()
-		// .await?;
+	if let (
+		StoppedVariant::Lost { .. },
+		Some(old_runner_workflow_id),
+		Some(old_runner_protocol_version),
+	) = (
+		&variant,
+		old_runner_workflow_id,
+		old_runner_protocol_version,
+	) {
+		if protocol::is_mk2(old_runner_protocol_version) {
+			// TODO: Send message to tunnel
+		} else {
+			ctx.signal(crate::workflows::runner::Command {
+				inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+					actor_id: input.actor_id.to_string(),
+					generation: state.generation,
+				}),
+			})
+			.to_workflow_id(old_runner_workflow_id)
+			.send()
+			.await?;
+		}
 	}
 
 	// Reschedule no matter what
@@ -752,6 +776,8 @@ pub struct Stopped {}
 pub struct Allocate {
 	pub runner_id: Id,
 	pub runner_workflow_id: Id,
+	#[serde(default)]
+	pub runner_protocol_version: Option<u16>,
 }
 
 #[signal("pegboard_actor_event")]

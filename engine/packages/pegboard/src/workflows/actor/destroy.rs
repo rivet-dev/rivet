@@ -1,5 +1,6 @@
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
+use rivet_runner_protocol::PROTOCOL_MK1_VERSION;
 use universaldb::options::MutationType;
 use universaldb::utils::IsolationLevel::*;
 
@@ -194,6 +195,7 @@ pub(crate) async fn clear_slot(
 	let runner_remaining_slots_key = keys::runner::RemainingSlotsKey::new(runner_id);
 	let runner_total_slots_key = keys::runner::TotalSlotsKey::new(runner_id);
 	let runner_last_ping_ts_key = keys::runner::LastPingTsKey::new(runner_id);
+	let runner_protocol_version_key = keys::runner::ProtocolVersionKey::new(runner_id);
 
 	let (
 		runner_workflow_id,

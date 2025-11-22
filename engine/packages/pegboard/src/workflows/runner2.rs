@@ -1,19 +1,16 @@
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
-use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
+use rivet_data::converted::RunnerByKeyKeyData;
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use universaldb::{
 	options::{ConflictRangeType, StreamingMode},
-	utils::{FormalChunkedKey, IsolationLevel::*},
+	utils::IsolationLevel::*,
 };
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{keys, metrics, workflows::actor::Allocate};
-
-/// Batch size of how many events to ack.
-const EVENT_ACK_BATCH_SIZE: i64 = 500;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -39,13 +36,6 @@ impl State {
 			create_ts,
 		}
 	}
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct CommandRow {
-	index: i64,
-	command: protocol::Command,
-	create_ts: i64,
 }
 
 #[workflow]
@@ -78,6 +68,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 							key: input.key.clone(),
 							version: input.version,
 							total_slots: input.total_slots,
+							protocol_version: input.protocol_version,
 							create_ts: ctx.create_ts(),
 						})
 						.await?;
@@ -182,7 +173,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 	// Close websocket connection (its unlikely to be open)
 	ctx.activity(SendMessagesToRunnerInput {
 		runner_id: input.runner_id,
-		messages: vec![protocol::ToRunner::ToRunnerClose],
+		messages: vec![protocol::mk2::ToRunner::ToRunnerClose],
 	})
 	.await?;
 
@@ -253,7 +244,7 @@ struct InitInput {
 	create_ts: i64,
 }
 
-#[activity(Init)]
+#[activity(InitActivity)]
 async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
 	let mut state = ctx.state::<Option<State>>()?;
 
@@ -751,6 +742,9 @@ pub(crate) async fn allocate_pending_actors(
 						signal: Allocate {
 							runner_id: old_runner_alloc_key.runner_id,
 							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
+							runner_protocol_version: Some(
+								old_runner_alloc_key_data.protocol_version,
+							),
 						},
 					});
 
@@ -778,7 +772,7 @@ pub(crate) async fn allocate_pending_actors(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct SendMessagesToRunnerInput {
 	runner_id: Id,
-	messages: Vec<protocol::ToRunner>,
+	messages: Vec<protocol::mk2::ToRunner>,
 }
 
 #[activity(SendMessagesToRunner)]
@@ -790,8 +784,8 @@ async fn send_messages_to_runner(
 		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
 
 	for message in &input.messages {
-		let message_serialized = versioned::ToRunner::wrap_latest(message.clone())
-			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+		let message_serialized = versioned::ToRunnerMk2::wrap_latest(message.clone())
+			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)?;
 
 		ctx.ups()?
 			.publish(&receiver_subject, &message_serialized, PublishOpts::one())
@@ -801,6 +795,9 @@ async fn send_messages_to_runner(
 	Ok(())
 }
 
+#[signal("pegboard_runner_init")]
+pub struct Init {}
+
 #[signal("pegboard_runner_check_queue")]
 pub struct CheckQueue {}
 
@@ -809,14 +806,8 @@ pub struct Stop {
 	pub reset_actor_rescheduling: bool,
 }
 
-#[signal("pegboard_runner_forward")]
-pub struct Forward {
-	pub inner: protocol::ToServer,
-}
-
 join_signal!(Main {
-	// Forwarded from the ws to this workflow
-	Forward(Forward),
+	Init,
 	CheckQueue,
 	Stop,
 });

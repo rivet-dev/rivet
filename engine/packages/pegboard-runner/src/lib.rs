@@ -137,14 +137,12 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		let (tunnel_to_ws_abort_tx, tunnel_to_ws_abort_rx) = watch::channel(());
 		let (ws_to_tunnel_abort_tx, ws_to_tunnel_abort_rx) = watch::channel(());
 		let (ping_abort_tx, ping_abort_rx) = watch::channel(());
-		let (init_tx, init_rx) = watch::channel(());
 
 		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
 			self.ctx.clone(),
 			conn.clone(),
 			sub,
 			eviction_sub,
-			init_rx,
 			tunnel_to_ws_abort_rx,
 		));
 
@@ -153,7 +151,6 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			conn.clone(),
 			ws_handle.recv(),
 			eviction_sub2,
-			init_tx,
 			ws_to_tunnel_abort_rx,
 		));
 
