@@ -19,7 +19,6 @@ src/
   mdx/            "
   pages/          MDX & JSX content to serve as pages
   styles/         Static stylesheets (seldom used)
-_redirects        https://developers.cloudflare.com/pages/platform/redirects/
 ```
 
 ## Developing
