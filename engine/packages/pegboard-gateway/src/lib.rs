@@ -22,6 +22,7 @@ use tokio_tungstenite::tungstenite::{
 	Message,
 	protocol::frame::{CloseFrame, coding::CloseCode},
 };
+use universaldb::utils::IsolationLevel::*;
 
 use crate::shared_state::{InFlightRequestHandle, SharedState};
 
@@ -46,7 +47,7 @@ pub struct WebsocketPendingLimitReached;
 
 #[derive(Debug)]
 enum LifecycleResult {
-	ServerClose(protocol::ToServerWebSocketClose),
+	ServerClose(protocol::mk2::ToServerWebSocketClose),
 	ClientClose(Option<CloseFrame>),
 	Aborted,
 }
@@ -153,10 +154,22 @@ impl CustomServeTrait for PegboardGateway {
 			.context("failed to read body")?
 			.to_bytes();
 
-		let mut stopped_sub = self
-			.ctx
-			.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id))
-			.await?;
+		let udb = self.ctx.udb()?;
+		let runner_id = self.runner_id;
+		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
+			self.ctx
+				.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
+			// Read runner protocol version
+			udb.run(|tx| async move {
+				tx.with_subspace(pegboard::keys::subspace());
+
+				tx.read(
+					&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
+					Serializable,
+				)
+				.await
+			})
+		)?;
 
 		// Build subject to publish to
 		let tunnel_subject =
@@ -169,12 +182,12 @@ impl CustomServeTrait for PegboardGateway {
 			..
 		} = self
 			.shared_state
-			.start_in_flight_request(tunnel_subject, request_id)
+			.start_in_flight_request(tunnel_subject, runner_protocol_version, request_id)
 			.await;
 
 		// Start request
-		let message = protocol::ToClientTunnelMessageKind::ToClientRequestStart(
-			protocol::ToClientRequestStart {
+		let message = protocol::mk2::ToClientTunnelMessageKind::ToClientRequestStart(
+			protocol::mk2::ToClientRequestStart {
 				actor_id: actor_id.clone(),
 				method,
 				path: self.path.clone(),
@@ -197,12 +210,12 @@ impl CustomServeTrait for PegboardGateway {
 					res = msg_rx.recv() => {
 						if let Some(msg) = res {
 							match msg {
-								protocol::ToServerTunnelMessageKind::ToServerResponseStart(
+								protocol::mk2::ToServerTunnelMessageKind::ToServerResponseStart(
 									response_start,
 								) => {
 									return anyhow::Ok(response_start);
 								}
-								protocol::ToServerTunnelMessageKind::ToServerResponseAbort => {
+								protocol::mk2::ToServerTunnelMessageKind::ToServerResponseAbort => {
 									tracing::warn!("request aborted");
 									return Err(ServiceUnavailable.build());
 								}
@@ -277,9 +290,6 @@ impl CustomServeTrait for PegboardGateway {
 		request_id: protocol::RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
-		// Use the actor ID from the gateway instance
-		let actor_id = self.actor_id.to_string();
-
 		// Extract headers
 		let mut request_headers = HashableMap::new();
 		for (name, value) in headers {
@@ -288,10 +298,22 @@ impl CustomServeTrait for PegboardGateway {
 			}
 		}
 
-		let mut stopped_sub = self
-			.ctx
-			.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id))
-			.await?;
+		let udb = self.ctx.udb()?;
+		let runner_id = self.runner_id;
+		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
+			self.ctx
+				.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
+			// Read runner protocol version
+			udb.run(|tx| async move {
+				tx.with_subspace(pegboard::keys::subspace());
+
+				tx.read(
+					&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
+					Serializable,
+				)
+				.await
+			})
+		)?;
 
 		// Build subject to publish to
 		let tunnel_subject =
@@ -304,7 +326,7 @@ impl CustomServeTrait for PegboardGateway {
 			new,
 		} = self
 			.shared_state
-			.start_in_flight_request(tunnel_subject.clone(), request_id)
+			.start_in_flight_request(tunnel_subject.clone(), runner_protocol_version, request_id)
 			.await;
 
 		ensure!(
@@ -317,9 +339,9 @@ impl CustomServeTrait for PegboardGateway {
 			true
 		} else {
 			// Send WebSocket open message
-			let open_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketOpen(
-				protocol::ToClientWebSocketOpen {
-					actor_id: actor_id.clone(),
+			let open_message = protocol::mk2::ToClientTunnelMessageKind::ToClientWebSocketOpen(
+				protocol::mk2::ToClientWebSocketOpen {
+					actor_id: self.actor_id.to_string(),
 					path: self.path.clone(),
 					headers: request_headers,
 				},
@@ -338,10 +360,10 @@ impl CustomServeTrait for PegboardGateway {
 						res = msg_rx.recv() => {
 							if let Some(msg) = res {
 								match msg {
-									protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg) => {
+									protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg) => {
 										return anyhow::Ok(msg);
 									}
-									protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+									protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 										tracing::warn!(?close, "websocket closed before opening");
 										return Err(WebSocketServiceUnavailable.build());
 									}
@@ -538,8 +560,8 @@ impl CustomServeTrait for PegboardGateway {
 				Ok(_) => (CloseCode::Normal.into(), None),
 				Err(_) => (CloseCode::Error.into(), Some("ws.downstream_closed".into())),
 			};
-			let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
-				protocol::ToClientWebSocketClose {
+			let close_message = protocol::mk2::ToClientTunnelMessageKind::ToClientWebSocketClose(
+				protocol::mk2::ToClientWebSocketClose {
 					code: Some(close_code.into()),
 					reason: close_reason.map(|x| x.as_str().to_string()),
 				},

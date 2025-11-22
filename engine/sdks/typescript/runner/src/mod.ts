@@ -17,7 +17,7 @@ export { RunnerActor, type ActorConfig };
 export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 3;
+const PROTOCOL_VERSION: number = 4;
 const RUNNER_PING_INTERVAL = 3_000;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */

@@ -11,7 +11,7 @@ const GC_INTERVAL: Duration = Duration::from_secs(30);
 const MAX_LAST_SEEN: Duration = Duration::from_secs(30);
 
 struct Channel {
-	tx: mpsc::UnboundedSender<protocol::Event>,
+	tx: mpsc::UnboundedSender<protocol::mk2::Event>,
 	handle: JoinHandle<()>,
 	last_seen: Instant,
 }
@@ -33,7 +33,7 @@ impl ActorEventDemuxer {
 
 	/// Process an event by routing it to the appropriate actor's queue
 	#[tracing::instrument(skip_all)]
-	pub fn ingest(&mut self, actor_id: Id, event: protocol::Event) {
+	pub fn ingest(&mut self, actor_id: Id, event: protocol::mk2::Event) {
 		if let Some(channel) = self.channels.get(&actor_id) {
 			let _ = channel.tx.send(event);
 		} else {
@@ -107,7 +107,7 @@ impl ActorEventDemuxer {
 async fn dispatch_events(
 	ctx: &StandaloneCtx,
 	actor_id: Id,
-	events: Vec<protocol::Event>,
+	events: Vec<protocol::mk2::Event>,
 ) -> Result<()> {
 	let res = ctx
 		.signal(pegboard::workflows::actor::Events { inner: events })

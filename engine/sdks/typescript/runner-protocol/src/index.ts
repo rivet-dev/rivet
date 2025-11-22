@@ -1007,8 +1007,6 @@ export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
     writeMessageIndex(bc, x.messageIndex)
 }
 
-export type DeprecatedTunnelAck = null
-
 function read9(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, string>()
@@ -1448,6 +1446,20 @@ export function writeToClientTunnelMessage(bc: bare.ByteCursor, x: ToClientTunne
     writeToClientTunnelMessageKind(bc, x.messageKind)
 }
 
+export type ToClientPing = {
+    readonly ts: i64
+}
+
+export function readToClientPing(bc: bare.ByteCursor): ToClientPing {
+    return {
+        ts: bare.readI64(bc),
+    }
+}
+
+export function writeToClientPing(bc: bare.ByteCursor, x: ToClientPing): void {
+    bare.writeI64(bc, x.ts)
+}
+
 function read11(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
@@ -1581,17 +1593,17 @@ export function writeToServerAckCommands(bc: bare.ByteCursor, x: ToServerAckComm
 
 export type ToServerStopping = null
 
-export type ToServerPing = {
+export type ToServerPong = {
     readonly ts: i64
 }
 
-export function readToServerPing(bc: bare.ByteCursor): ToServerPing {
+export function readToServerPong(bc: bare.ByteCursor): ToServerPong {
     return {
         ts: bare.readI64(bc),
     }
 }
 
-export function writeToServerPing(bc: bare.ByteCursor, x: ToServerPing): void {
+export function writeToServerPong(bc: bare.ByteCursor, x: ToServerPong): void {
     bare.writeI64(bc, x.ts)
 }
 
@@ -1620,7 +1632,7 @@ export type ToServer =
     | { readonly tag: "ToServerEvents"; readonly val: ToServerEvents }
     | { readonly tag: "ToServerAckCommands"; readonly val: ToServerAckCommands }
     | { readonly tag: "ToServerStopping"; readonly val: ToServerStopping }
-    | { readonly tag: "ToServerPing"; readonly val: ToServerPing }
+    | { readonly tag: "ToServerPong"; readonly val: ToServerPong }
     | { readonly tag: "ToServerKvRequest"; readonly val: ToServerKvRequest }
     | { readonly tag: "ToServerTunnelMessage"; readonly val: ToServerTunnelMessage }
 
@@ -1637,7 +1649,7 @@ export function readToServer(bc: bare.ByteCursor): ToServer {
         case 3:
             return { tag: "ToServerStopping", val: null }
         case 4:
-            return { tag: "ToServerPing", val: readToServerPing(bc) }
+            return { tag: "ToServerPong", val: readToServerPong(bc) }
         case 5:
             return { tag: "ToServerKvRequest", val: readToServerKvRequest(bc) }
         case 6:
@@ -1670,9 +1682,9 @@ export function writeToServer(bc: bare.ByteCursor, x: ToServer): void {
             bare.writeU8(bc, 3)
             break
         }
-        case "ToServerPing": {
+        case "ToServerPong": {
             bare.writeU8(bc, 4)
-            writeToServerPing(bc, x.val)
+            writeToServerPong(bc, x.val)
             break
         }
         case "ToServerKvRequest": {
@@ -1802,6 +1814,7 @@ export type ToClient =
     | { readonly tag: "ToClientAckEvents"; readonly val: ToClientAckEvents }
     | { readonly tag: "ToClientKvResponse"; readonly val: ToClientKvResponse }
     | { readonly tag: "ToClientTunnelMessage"; readonly val: ToClientTunnelMessage }
+    | { readonly tag: "ToClientPing"; readonly val: ToClientPing }
 
 export function readToClient(bc: bare.ByteCursor): ToClient {
     const offset = bc.offset
@@ -1817,6 +1830,8 @@ export function readToClient(bc: bare.ByteCursor): ToClient {
             return { tag: "ToClientKvResponse", val: readToClientKvResponse(bc) }
         case 4:
             return { tag: "ToClientTunnelMessage", val: readToClientTunnelMessage(bc) }
+        case 5:
+            return { tag: "ToClientPing", val: readToClientPing(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -1849,6 +1864,11 @@ export function writeToClient(bc: bare.ByteCursor, x: ToClient): void {
         case "ToClientTunnelMessage": {
             bare.writeU8(bc, 4)
             writeToClientTunnelMessage(bc, x.val)
+            break
+        }
+        case "ToClientPing": {
+            bare.writeU8(bc, 5)
+            writeToClientPing(bc, x.val)
             break
         }
     }
@@ -2056,16 +2076,19 @@ export function decodeToGateway(bytes: Uint8Array): ToGateway {
  */
 export type ToServerlessServerInit = {
     readonly runnerId: Id
+    readonly runnerProtocolVersion: u16
 }
 
 export function readToServerlessServerInit(bc: bare.ByteCursor): ToServerlessServerInit {
     return {
         runnerId: readId(bc),
+        runnerProtocolVersion: bare.readU16(bc),
     }
 }
 
 export function writeToServerlessServerInit(bc: bare.ByteCursor, x: ToServerlessServerInit): void {
     writeId(bc, x.runnerId)
+    bare.writeU16(bc, x.runnerProtocolVersion)
 }
 
 export type ToServerlessServer =

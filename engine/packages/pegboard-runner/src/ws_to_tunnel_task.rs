@@ -1,4 +1,5 @@
 use anyhow::Context;
+use bytes::Bytes;
 use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use gas::prelude::*;
@@ -8,9 +9,11 @@ use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use pegboard::utils::event_actor_id;
 use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_runner_protocol::{
+	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
+};
 use std::sync::{Arc, atomic::Ordering};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, MutexGuard, watch};
 use universalpubsub::PublishOpts;
 use universalpubsub::Subscriber;
 use vbare::OwnedVersionedData;
@@ -23,7 +26,6 @@ pub async fn task(
 	conn: Arc<Conn>,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
 	eviction_sub2: Subscriber,
-	init_tx: watch::Sender<()>,
 	ws_to_tunnel_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
 	let mut event_demuxer = ActorEventDemuxer::new(ctx.clone());
@@ -33,7 +35,6 @@ pub async fn task(
 		conn,
 		ws_rx,
 		eviction_sub2,
-		init_tx,
 		ws_to_tunnel_abort_rx,
 		&mut event_demuxer,
 	)
@@ -51,32 +52,31 @@ pub async fn task_inner(
 	conn: Arc<Conn>,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
 	mut eviction_sub2: Subscriber,
-	init_tx: watch::Sender<()>,
 	mut ws_to_tunnel_abort_rx: watch::Receiver<()>,
 	event_demuxer: &mut ActorEventDemuxer,
 ) -> Result<LifecycleResult> {
 	let mut ws_rx = ws_rx.lock().await;
 
-	if protocol::is_mk2(conn.protocol_version) {
-		loop {
-			match recv_msg().await? {
-				Ok(Some(msg)) => handle_message_mk2(msg).await?,
-				Ok(None) => {}
-				Err(lifecycle_res) => return Ok(lifecycle_res),
+	loop {
+		match recv_msg(&mut ws_rx, &mut eviction_sub2, &mut ws_to_tunnel_abort_rx).await? {
+			Ok(Some(msg)) => {
+				if protocol::is_mk2(conn.protocol_version) {
+					handle_message_mk2(&ctx, &conn, event_demuxer, msg).await?;
+				} else {
+					handle_message_mk1(&ctx, &conn, msg).await?;
+				}
 			}
-		}
-	} else {
-		loop {
-			match recv_msg().await? {
-				Ok(Some(msg)) => handle_message_mk1(msg).await?,
-				Ok(None) => {}
-				Err(lifecycle_res) => return Ok(lifecycle_res),
-			}
+			Ok(None) => {}
+			Err(lifecycle_res) => return Ok(lifecycle_res),
 		}
 	}
 }
 
-async fn recv_msg() -> Result<std::result::Result<Option<()>, LifecycleResult>> {
+async fn recv_msg(
+	ws_rx: &mut MutexGuard<'_, WebSocketReceiver>,
+	eviction_sub2: &mut Subscriber,
+	ws_to_tunnel_abort_rx: &mut watch::Receiver<()>,
+) -> Result<std::result::Result<Option<Bytes>, LifecycleResult>> {
 	let msg = tokio::select! {
 		res = ws_rx.try_next() => {
 			if let Some(msg) = res? {
@@ -103,7 +103,7 @@ async fn recv_msg() -> Result<std::result::Result<Option<()>, LifecycleResult>> 
 				"received binary message from WebSocket"
 			);
 
-			Ok(Some(data))
+			Ok(Ok(Some(data)))
 		}
 		WsMessage::Close(_) => {
 			tracing::debug!("websocket closed");
@@ -111,7 +111,7 @@ async fn recv_msg() -> Result<std::result::Result<Option<()>, LifecycleResult>> 
 		}
 		_ => {
 			// Ignore other message types
-			Ok(None)
+			Ok(Ok(None))
 		}
 	}
 }
@@ -119,22 +119,21 @@ async fn recv_msg() -> Result<std::result::Result<Option<()>, LifecycleResult>> 
 #[tracing::instrument(skip_all)]
 async fn handle_message_mk2(
 	ctx: &StandaloneCtx,
-	conn: &Arc<Conn>,
-	init_tx: &watch::Sender<()>,
+	conn: &Conn,
 	event_demuxer: &mut ActorEventDemuxer,
-	msg: (),
+	msg: Bytes,
 ) -> Result<()> {
 	// Parse message
-	let msg = match versioned::ToServerMk2::deserialize(&data, conn.protocol_version) {
+	let msg = match versioned::ToServerMk2::deserialize(&msg, conn.protocol_version) {
 		Ok(x) => x,
 		Err(err) => {
-			tracing::warn!(?err, data_len = data.len(), "failed to deserialize message");
+			tracing::warn!(?err, msg_len = msg.len(), "failed to deserialize message");
 			return Ok(());
 		}
 	};
 
 	match msg {
-		protocol::ToServer::ToServerPong(pong) => {
+		protocol::mk2::ToServer::ToServerPong(pong) => {
 			let now = util::timestamp::now();
 			let rtt = now.saturating_sub(pong.ts);
 
@@ -148,19 +147,21 @@ async fn handle_message_mk2(
 			conn.last_rtt.store(rtt, Ordering::Relaxed);
 		}
 		// Process KV request
-		protocol::ToServer::ToServerKvRequest(req) => {
+		protocol::mk2::ToServer::ToServerKvRequest(req) => {
 			let actor_id = match Id::parse(&req.actor_id) {
 				Ok(actor_id) => actor_id,
 				Err(err) => {
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: protocol::KvResponseData::KvErrorResponse(
-								protocol::KvErrorResponse {
-									message: err.to_string(),
-								},
-							),
-						}),
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: protocol::mk2::KvResponseData::KvErrorResponse(
+									protocol::mk2::KvErrorResponse {
+										message: err.to_string(),
+									},
+								),
+							},
+						),
 					);
 
 					let res_msg_serialized = res_msg
@@ -189,15 +190,17 @@ async fn handle_message_mk2(
 
 			// Verify actor belongs to this runner
 			if !actor_belongs {
-				let res_msg = versioned::ToClient::wrap_latest(
-					protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-						request_id: req.request_id,
-						data: protocol::KvResponseData::KvErrorResponse(
-							protocol::KvErrorResponse {
-								message: "given actor does not belong to runner".to_string(),
-							},
-						),
-					}),
+				let res_msg = versioned::ToClientMk2::wrap_latest(
+					protocol::mk2::ToClient::ToClientKvResponse(
+						protocol::mk2::ToClientKvResponse {
+							request_id: req.request_id,
+							data: protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									message: "given actor does not belong to runner".to_string(),
+								},
+							),
+						},
+					),
 				);
 
 				let res_msg_serialized = res_msg
@@ -214,30 +217,32 @@ async fn handle_message_mk2(
 			// TODO: Add queue and bg thread for processing kv ops
 			// Run kv operation
 			match req.data {
-				protocol::KvRequestData::KvGetRequest(body) => {
+				protocol::mk2::KvRequestData::KvGetRequest(body) => {
 					let res = kv::get(&*ctx.udb()?, actor_id, body.keys).await;
 
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok((keys, values, metadata)) => {
-									protocol::KvResponseData::KvGetResponse(
-										protocol::KvGetResponse {
-											keys,
-											values,
-											metadata,
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: match res {
+									Ok((keys, values, metadata)) => {
+										protocol::mk2::KvResponseData::KvGetResponse(
+											protocol::mk2::KvGetResponse {
+												keys,
+												values,
+												metadata,
+											},
+										)
+									}
+									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+										protocol::mk2::KvErrorResponse {
+											// TODO: Don't return actual error?
+											message: err.to_string(),
 										},
-									)
-								}
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
+									),
+								},
 							},
-						}),
+						),
 					);
 
 					let res_msg_serialized = res_msg
@@ -248,7 +253,7 @@ async fn handle_message_mk2(
 						.await
 						.context("failed to send KV get response to client")?;
 				}
-				protocol::KvRequestData::KvListRequest(body) => {
+				protocol::mk2::KvRequestData::KvListRequest(body) => {
 					let res = kv::list(
 						&*ctx.udb()?,
 						actor_id,
@@ -261,27 +266,29 @@ async fn handle_message_mk2(
 					)
 					.await;
 
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok((keys, values, metadata)) => {
-									protocol::KvResponseData::KvListResponse(
-										protocol::KvListResponse {
-											keys,
-											values,
-											metadata,
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: match res {
+									Ok((keys, values, metadata)) => {
+										protocol::mk2::KvResponseData::KvListResponse(
+											protocol::mk2::KvListResponse {
+												keys,
+												values,
+												metadata,
+											},
+										)
+									}
+									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+										protocol::mk2::KvErrorResponse {
+											// TODO: Don't return actual error?
+											message: err.to_string(),
 										},
-									)
-								}
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
+									),
+								},
 							},
-						}),
+						),
 					);
 
 					let res_msg_serialized = res_msg
@@ -292,24 +299,26 @@ async fn handle_message_mk2(
 						.await
 						.context("failed to send KV list response to client")?;
 				}
-				protocol::KvRequestData::KvPutRequest(body) => {
+				protocol::mk2::KvRequestData::KvPutRequest(body) => {
 					let res = kv::put(&*ctx.udb()?, actor_id, body.keys, body.values).await;
 
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvPutResponse,
-								Err(err) => {
-									protocol::KvResponseData::KvErrorResponse(
-										protocol::KvErrorResponse {
-											// TODO: Don't return actual error?
-											message: err.to_string(),
-										},
-									)
-								}
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: match res {
+									Ok(()) => protocol::mk2::KvResponseData::KvPutResponse,
+									Err(err) => {
+										protocol::mk2::KvResponseData::KvErrorResponse(
+											protocol::mk2::KvErrorResponse {
+												// TODO: Don't return actual error?
+												message: err.to_string(),
+											},
+										)
+									}
+								},
 							},
-						}),
+						),
 					);
 
 					let res_msg_serialized = res_msg
@@ -320,22 +329,24 @@ async fn handle_message_mk2(
 						.await
 						.context("failed to send KV put response to client")?;
 				}
-				protocol::KvRequestData::KvDeleteRequest(body) => {
+				protocol::mk2::KvRequestData::KvDeleteRequest(body) => {
 					let res = kv::delete(&*ctx.udb()?, actor_id, body.keys).await;
 
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDeleteResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: match res {
+									Ok(()) => protocol::mk2::KvResponseData::KvDeleteResponse,
+									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+										protocol::mk2::KvErrorResponse {
+											// TODO: Don't return actual error?
+											message: err.to_string(),
+										},
+									),
+								},
 							},
-						}),
+						),
 					);
 
 					let res_msg_serialized = res_msg
@@ -346,22 +357,24 @@ async fn handle_message_mk2(
 						.await
 						.context("failed to send KV delete response to client")?;
 				}
-				protocol::KvRequestData::KvDropRequest => {
+				protocol::mk2::KvRequestData::KvDropRequest => {
 					let res = kv::delete_all(&*ctx.udb()?, actor_id).await;
 
-					let res_msg = versioned::ToClient::wrap_latest(
-						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDropResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										// TODO: Don't return actual error?
-										message: err.to_string(),
-									},
-								),
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: match res {
+									Ok(()) => protocol::mk2::KvResponseData::KvDropResponse,
+									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+										protocol::mk2::KvErrorResponse {
+											// TODO: Don't return actual error?
+											message: err.to_string(),
+										},
+									),
+								},
 							},
-						}),
+						),
 					);
 
 					let res_msg_serialized = res_msg
@@ -374,12 +387,12 @@ async fn handle_message_mk2(
 				}
 			}
 		}
-		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, &conn, tunnel_msg)
+		protocol::mk2::ToServer::ToServerTunnelMessage(tunnel_msg) => {
+			handle_tunnel_message_mk2(&ctx, &conn, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
-		protocol::ToServer::ToServerInit(_) => {
+		protocol::mk2::ToServer::ToServerInit(init) => {
 			// We send the signal first because we don't want to continue if this fails
 			ctx.signal(pegboard::workflows::runner2::Init {})
 				.to_workflow_id(conn.workflow_id)
@@ -394,60 +407,50 @@ async fn handle_message_mk2(
 
 			let init_data = ctx
 				.activity(ProcessInitInput {
-					runner_id: input.runner_id,
-					namespace_id: input.namespace_id,
-					last_command_idx: last_command_idx.unwrap_or(-1),
-					prepopulate_actor_names,
-					metadata,
+					runner_id: conn.runner_id,
+					namespace_id: conn.namespace_id,
+					last_command_idx: init.last_command_idx.unwrap_or(-1),
+					prepopulate_actor_names: init.prepopulate_actor_names,
+					metadata: init.metadata,
 				})
 				.await?;
 
 			// Send init packet
-			let msg = versioned::ToClient::wrap_latest(protocol::ToRunner::ToClientInit(
-				protocol::ToClientInit {
-					runner_id: input.runner_id.to_string(),
+			let init_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientInit(protocol::mk2::ToClientInit {
+					runner_id: conn.runner_id.to_string(),
 					last_event_idx: init_data.last_event_idx,
-					metadata: protocol::ProtocolMetadata {
-						runner_lost_threshold: runner_lost_threshold,
+					metadata: protocol::mk2::ProtocolMetadata {
+						runner_lost_threshold: ctx.config().pegboard().runner_lost_threshold(),
 					},
-				},
-			));
-			let msg_serialized = res_msg
-				.serialize(conn.protocol_version)
-				.context("failed to serialize KV delete response")?;
+				}),
+			);
+			let init_msg_serialized = init_msg.serialize(conn.protocol_version)?;
 			conn.ws_handle
-				.send(Message::Binary(res_msg_serialized.into()))
-				.await
-				.context("failed to send KV delete response to client")?;
+				.send(Message::Binary(init_msg_serialized.into()))
+				.await?;
 
 			// Send missed commands
 			if !init_data.missed_commands.is_empty() {
-				let msg = versioned::ToClient::wrap_latest(protocol::ToRunner::ToClientCommands(
-					init_data.missed_commands,
-				));
-				let msg_serialized = res_msg
-					.serialize(conn.protocol_version)
-					.context("failed to serialize KV delete response")?;
+				let msg = versioned::ToClientMk2::wrap_latest(
+					protocol::mk2::ToClient::ToClientCommands(init_data.missed_commands),
+				);
+				let msg_serialized = msg.serialize(conn.protocol_version)?;
 				conn.ws_handle
-					.send(Message::Binary(res_msg_serialized.into()))
-					.await
-					.context("failed to send KV delete response to client")?;
+					.send(Message::Binary(msg_serialized.into()))
+					.await?;
 			}
-
-			// Inform adjacent task that we have processed and sent the init packet. This will allow it to
-			// start accepting commands
-			let _ = init_tx.send(());
 		}
 		// Forward to actor wf
-		protocol::ToServer::ToServerEvents(events) => {
+		protocol::mk2::ToServer::ToServerEvents(events) => {
 			for event in events {
 				event_demuxer.ingest(Id::parse(event_actor_id(&event.inner))?, event.inner);
 			}
 		}
-		protocol::ToServer::ToServerAckCommands(_) => {
+		protocol::mk2::ToServer::ToServerAckCommands(_) => {
 			ack_commands(&ctx).await?;
 		}
-		protocol::ToServer::ToServerStopping => {
+		protocol::mk2::ToServer::ToServerStopping => {
 			ctx.signal(pegboard::workflows::runner2::Stop {
 				reset_actor_rescheduling: false,
 			})
@@ -464,10 +467,10 @@ async fn handle_message_mk2(
 }
 
 #[tracing::instrument(skip_all)]
-async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> Result<()> {
+async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Result<()> {
 	// HACK: Decode v2 to handle tunnel ack
 	if rivet_runner_protocol::compat::version_needs_tunnel_ack(conn.protocol_version) {
-		match compat_ack_tunnel_message(&conn, &data[..]).await {
+		match compat_ack_tunnel_message(&conn, &msg[..]).await {
 			Ok(_) => {}
 			Err(err) => {
 				tracing::error!(?err, "failed to send compat ack tunnel message")
@@ -476,10 +479,10 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> R
 	}
 
 	// Parse message
-	let msg = match versioned::ToServer::deserialize(&data, conn.protocol_version) {
+	let msg = match versioned::ToServer::deserialize(&msg, conn.protocol_version) {
 		Ok(x) => x,
 		Err(err) => {
-			tracing::warn!(?err, data_len = data.len(), "failed to deserialize message");
+			tracing::warn!(?err, msg_len = msg.len(), "failed to deserialize message");
 			return Ok(());
 		}
 	};
@@ -586,7 +589,13 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> R
 										protocol::KvGetResponse {
 											keys,
 											values,
-											metadata,
+											metadata: metadata
+												.into_iter()
+												.map(|x| protocol::KvMetadata {
+													version: x.version,
+													create_ts: x.create_ts,
+												})
+												.collect(),
 										},
 									)
 								}
@@ -612,7 +621,25 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> R
 					let res = kv::list(
 						&*ctx.udb()?,
 						actor_id,
-						body.query,
+						match body.query {
+							protocol::KvListQuery::KvListAllQuery => {
+								protocol::mk2::KvListQuery::KvListAllQuery
+							}
+							protocol::KvListQuery::KvListRangeQuery(q) => {
+								protocol::mk2::KvListQuery::KvListRangeQuery(
+									protocol::mk2::KvListRangeQuery {
+										start: q.start,
+										end: q.end,
+										exclusive: q.exclusive,
+									},
+								)
+							}
+							protocol::KvListQuery::KvListPrefixQuery(q) => {
+								protocol::mk2::KvListQuery::KvListPrefixQuery(
+									protocol::mk2::KvListPrefixQuery { key: q.key },
+								)
+							}
+						},
 						body.reverse.unwrap_or_default(),
 						body.limit
 							.map(TryInto::try_into)
@@ -630,7 +657,13 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> R
 										protocol::KvListResponse {
 											keys,
 											values,
-											metadata,
+											metadata: metadata
+												.into_iter()
+												.map(|x| protocol::KvMetadata {
+													version: x.version,
+													create_ts: x.create_ts,
+												})
+												.collect(),
 										},
 									)
 								}
@@ -735,7 +768,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> R
 			}
 		}
 		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, tunnel_msg)
+			handle_tunnel_message_mk1(&ctx, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -756,6 +789,8 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Arc<Conn>, msg: ()) -> R
 			})?;
 		}
 	}
+
+	Ok(())
 }
 
 async fn ack_commands(ctx: &StandaloneCtx) -> Result<()> {
@@ -765,52 +800,21 @@ async fn ack_commands(ctx: &StandaloneCtx) -> Result<()> {
 	// 		limit:
 	// 	});
 	// }).await?;
+
+	todo!();
 }
 
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message_mk2(
 	ctx: &StandaloneCtx,
-	conn: &Arc<Conn>,
+	conn: &Conn,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
-	// Ignore DeprecatedTunnelAck messages (used only for backwards compatibility)
-	if matches!(
-		msg.message_kind,
-		protocol::mk2::ToServerTunnelMessageKind::DeprecatedTunnelAck
-	) {
-		return Ok(());
-	}
-
-	// Send DeprecatedTunnelAck back to runner for older protocol versions
-	if protocol::mk2::compat::version_needs_tunnel_ack(conn.protocol_version) {
-		let ack_msg = versioned::ToClientMk2::wrap_latest(
-			protocol::mk2::ToClient::ToClientTunnelMessage(protocol::mk2::ToClientTunnelMessage {
-				message_id: msg.message_id,
-				message_kind: protocol::mk2::ToClientTunnelMessageKind::DeprecatedTunnelAck,
-			}),
-		);
-
-		let ack_serialized = ack_msg
-			.serialize(conn.protocol_version)
-			.context("failed to serialize DeprecatedTunnelAck response")?;
-
-		conn.ws_handle
-			.send(hyper_tungstenite::tungstenite::Message::Binary(
-				ack_serialized.into(),
-			))
-			.await
-			.context("failed to send DeprecatedTunnelAck to runner")?;
-	}
-
-	// Parse message ID to extract gateway_id
-	let parts =
-		tunnel_id::parse_message_id(msg.message_id).context("failed to parse message id")?;
-
 	// Publish message to UPS
-	let gateway_reply_to = GatewayReceiverSubject::new(parts.gateway_id).to_string();
+	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::mk2::ToGateway::ToServerTunnelMessage(msg))
-			.serialize_with_embedded_version(PROTOCOL_VERSION)
+			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
 			.context("failed to serialize tunnel message for gateway")?;
 	ctx.ups()
 		.context("failed to get UPS instance for tunnel message")?
@@ -841,10 +845,11 @@ async fn handle_tunnel_message_mk1(
 
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
-	let msg_serialized =
-		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToServerTunnelMessage(msg))
-			.serialize_with_embedded_version(PROTOCOL_VERSION)
-			.context("failed to serialize tunnel message for gateway")?;
+	let msg_serialized = versioned::ToGateway::v3_to_v4(versioned::ToGateway::V3(
+		protocol::ToGateway::ToServerTunnelMessage(msg),
+	))?
+	.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
+	.context("failed to serialize tunnel message for gateway")?;
 	ctx.ups()
 		.context("failed to get UPS instance for tunnel message")?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
@@ -863,7 +868,7 @@ async fn handle_tunnel_message_mk1(
 ///
 /// We have to parse as specifically a v2 message since we need the exact request & message ID
 /// provided by the user and not available in v3.
-async fn compat_ack_tunnel_message(conn: &Arc<Conn>, payload: &[u8]) -> Result<()> {
+async fn compat_ack_tunnel_message(conn: &Conn, payload: &[u8]) -> Result<()> {
 	use rivet_runner_protocol::generated::v2 as protocol_v2;
 
 	// Parse payload

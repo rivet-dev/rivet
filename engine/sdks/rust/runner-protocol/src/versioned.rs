@@ -1,6 +1,7 @@
 use anyhow::{Ok, Result, bail};
 use vbare::OwnedVersionedData;
 
+use crate::PROTOCOL_MK1_VERSION;
 use crate::generated::{v1, v2, v3, v4};
 use crate::uuid_compat::{decode_bytes_from_uuid, encode_bytes_to_uuid};
 
@@ -155,73 +156,70 @@ impl OwnedVersionedData for ToClient {
 
 impl ToClient {
 	fn v1_to_v2(self) -> Result<Self> {
-		match self {
-			ToClient::V1(x) => {
-				let inner = match x {
-					v1::ToClient::ToClientInit(init) => {
-						v2::ToClient::ToClientInit(v2::ToClientInit {
-							runner_id: init.runner_id,
-							last_event_idx: init.last_event_idx,
-							metadata: v2::ProtocolMetadata {
-								runner_lost_threshold: init.metadata.runner_lost_threshold,
+		if let ToClient::V1(x) = self {
+			let inner = match x {
+				v1::ToClient::ToClientInit(init) => v2::ToClient::ToClientInit(v2::ToClientInit {
+					runner_id: init.runner_id,
+					last_event_idx: init.last_event_idx,
+					metadata: v2::ProtocolMetadata {
+						runner_lost_threshold: init.metadata.runner_lost_threshold,
+					},
+				}),
+				v1::ToClient::ToClientClose => v2::ToClient::ToClientClose,
+				v1::ToClient::ToClientCommands(commands) => v2::ToClient::ToClientCommands(
+					commands
+						.into_iter()
+						.map(|cmd| v2::CommandWrapper {
+							index: cmd.index,
+							inner: match cmd.inner {
+								v1::Command::CommandStartActor(start) => {
+									v2::Command::CommandStartActor(v2::CommandStartActor {
+										actor_id: start.actor_id,
+										generation: start.generation,
+										config: v2::ActorConfig {
+											name: start.config.name,
+											key: start.config.key,
+											create_ts: start.config.create_ts,
+											input: start.config.input,
+										},
+									})
+								}
+								v1::Command::CommandStopActor(stop) => {
+									v2::Command::CommandStopActor(v2::CommandStopActor {
+										actor_id: stop.actor_id,
+										generation: stop.generation,
+									})
+								}
 							},
 						})
-					}
-					v1::ToClient::ToClientClose => v2::ToClient::ToClientClose,
-					v1::ToClient::ToClientCommands(commands) => v2::ToClient::ToClientCommands(
-						commands
-							.into_iter()
-							.map(|cmd| v2::CommandWrapper {
-								index: cmd.index,
-								inner: match cmd.inner {
-									v1::Command::CommandStartActor(start) => {
-										v2::Command::CommandStartActor(v2::CommandStartActor {
-											actor_id: start.actor_id,
-											generation: start.generation,
-											config: v2::ActorConfig {
-												name: start.config.name,
-												key: start.config.key,
-												create_ts: start.config.create_ts,
-												input: start.config.input,
-											},
-										})
-									}
-									v1::Command::CommandStopActor(stop) => {
-										v2::Command::CommandStopActor(v2::CommandStopActor {
-											actor_id: stop.actor_id,
-											generation: stop.generation,
-										})
-									}
-								},
-							})
-							.collect(),
-					),
-					v1::ToClient::ToClientAckEvents(ack) => {
-						v2::ToClient::ToClientAckEvents(v2::ToClientAckEvents {
-							last_event_idx: ack.last_event_idx,
-						})
-					}
-					v1::ToClient::ToClientKvResponse(resp) => {
-						v2::ToClient::ToClientKvResponse(v2::ToClientKvResponse {
-							request_id: resp.request_id,
-							data: convert_kv_response_data_v1_to_v2(resp.data),
-						})
-					}
-					v1::ToClient::ToClientTunnelMessage(msg) => {
-						v2::ToClient::ToClientTunnelMessage(v2::ToClientTunnelMessage {
-							request_id: msg.request_id,
-							message_id: msg.message_id,
-							message_kind: convert_to_client_tunnel_message_kind_v1_to_v2(
-								msg.message_kind,
-							),
-							gateway_reply_to: msg.gateway_reply_to,
-						})
-					}
-				};
+						.collect(),
+				),
+				v1::ToClient::ToClientAckEvents(ack) => {
+					v2::ToClient::ToClientAckEvents(v2::ToClientAckEvents {
+						last_event_idx: ack.last_event_idx,
+					})
+				}
+				v1::ToClient::ToClientKvResponse(resp) => {
+					v2::ToClient::ToClientKvResponse(v2::ToClientKvResponse {
+						request_id: resp.request_id,
+						data: convert_kv_response_data_v1_to_v2(resp.data),
+					})
+				}
+				v1::ToClient::ToClientTunnelMessage(msg) => {
+					v2::ToClient::ToClientTunnelMessage(v2::ToClientTunnelMessage {
+						request_id: msg.request_id,
+						message_id: msg.message_id,
+						message_kind: convert_to_client_tunnel_message_kind_v1_to_v2(
+							msg.message_kind,
+						),
+						gateway_reply_to: msg.gateway_reply_to,
+					})
+				}
+			};
 
-				Ok(ToClient::V2(inner))
-			}
-			_ => bail!("unexpected version"),
+			Ok(ToClient::V2(inner))
+		} else {
+			bail!("unexpected version");
 		}
 	}
 
@@ -827,18 +825,18 @@ impl OwnedVersionedData for ToRunner {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v3
-		vec![Ok, Ok]
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v3
-		vec![Ok, Ok]
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
 	}
 }
 
 pub enum ToGateway {
-	// No change between v1 and v4
+	V3(v3::ToGateway),
 	V4(v4::ToGateway),
 }
 
@@ -860,30 +858,92 @@ impl OwnedVersionedData for ToGateway {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
-			1 | 2 | 4 => Ok(ToGateway::V4(serde_bare::from_slice(payload)?)),
+			1 | 2 | 3 => Ok(ToGateway::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(ToGateway::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
+			ToGateway::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToGateway::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v3
-		vec![Ok, Ok]
+		// No changes between v1 and v4 but we need a converter to bridge mk1 to mk2
+		vec![Ok, Ok, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v3
-		vec![Ok, Ok]
+		// No changes between v1 and v4 but we need a converter to bridge mk2 to mk1
+		vec![Self::v4_to_v3, Ok, Ok]
+	}
+}
+
+impl ToGateway {
+	pub fn v3_to_v4(self) -> Result<Self> {
+		if let ToGateway::V3(x) = self {
+			let inner = match x {
+				v3::ToGateway::ToGatewayPong(pong) => {
+					v4::ToGateway::ToGatewayPong(v4::ToGatewayPong {
+						request_id: pong.request_id,
+						ts: pong.ts,
+					})
+				}
+				v3::ToGateway::ToServerTunnelMessage(msg) => {
+					v4::ToGateway::ToServerTunnelMessage(v4::ToServerTunnelMessage {
+						message_id: v4::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_server_tunnel_message_kind_v3_to_v4(
+							msg.message_kind,
+						),
+					})
+				}
+			};
+
+			Ok(ToGateway::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v4_to_v3(self) -> Result<Self> {
+		if let ToGateway::V4(x) = self {
+			let inner = match x {
+				v4::ToGateway::ToGatewayPong(pong) => {
+					v3::ToGateway::ToGatewayPong(v3::ToGatewayPong {
+						request_id: pong.request_id,
+						ts: pong.ts,
+					})
+				}
+				v4::ToGateway::ToServerTunnelMessage(msg) => {
+					v3::ToGateway::ToServerTunnelMessage(v3::ToServerTunnelMessage {
+						message_id: v3::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_server_tunnel_message_kind_v4_to_v3(
+							msg.message_kind,
+						)?,
+					})
+				}
+			};
+
+			Ok(ToGateway::V3(inner))
+		} else {
+			bail!("unexpected version");
+		}
 	}
 }
 
 pub enum ToServerlessServer {
-	// No change between v1 and v4
+	V3(v3::ToServerlessServer),
 	V4(v4::ToServerlessServer),
 }
 
@@ -905,25 +965,62 @@ impl OwnedVersionedData for ToServerlessServer {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
-			1 | 2 | 3 | 4 => Ok(ToServerlessServer::V4(serde_bare::from_slice(payload)?)),
+			1 | 2 | 3 => Ok(ToServerlessServer::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(ToServerlessServer::V4(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
+			ToServerlessServer::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToServerlessServer::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v3
-		vec![Ok, Ok]
+		vec![Ok, Ok, Ok, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v3
-		vec![Ok, Ok]
+		vec![Self::v4_to_v3, Ok, Ok, Ok]
+	}
+}
+
+impl ToServerlessServer {
+	fn v3_to_v4(self) -> Result<Self> {
+		if let ToServerlessServer::V3(x) = self {
+			let inner = match x {
+				v3::ToServerlessServer::ToServerlessServerInit(init) => {
+					v4::ToServerlessServer::ToServerlessServerInit(v4::ToServerlessServerInit {
+						runner_id: init.runner_id,
+						runner_protocol_version: PROTOCOL_MK1_VERSION,
+					})
+				}
+			};
+
+			Ok(ToServerlessServer::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v4_to_v3(self) -> Result<Self> {
+		if let ToServerlessServer::V4(x) = self {
+			let inner = match x {
+				v4::ToServerlessServer::ToServerlessServerInit(init) => {
+					v3::ToServerlessServer::ToServerlessServerInit(v3::ToServerlessServerInit {
+						runner_id: init.runner_id,
+					})
+				}
+			};
+
+			Ok(ToServerlessServer::V3(inner))
+		} else {
+			bail!("unexpected version");
+		}
 	}
 }
 
@@ -1832,5 +1929,162 @@ fn convert_kv_metadata_v3_to_v2(metadata: v3::KvMetadata) -> v2::KvMetadata {
 	v2::KvMetadata {
 		version: metadata.version,
 		create_ts: metadata.create_ts,
+	}
+}
+
+fn convert_to_server_tunnel_message_kind_v3_to_v4(
+	kind: v3::ToServerTunnelMessageKind,
+) -> v4::ToServerTunnelMessageKind {
+	match kind {
+		v3::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			v4::ToServerTunnelMessageKind::ToServerResponseStart(v4::ToServerResponseStart {
+				status: resp.status,
+				headers: resp.headers,
+				body: resp.body,
+				stream: resp.stream,
+			})
+		}
+		v3::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
+			v4::ToServerTunnelMessageKind::ToServerResponseChunk(v4::ToServerResponseChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v3::ToServerTunnelMessageKind::ToServerResponseAbort => {
+			v4::ToServerTunnelMessageKind::ToServerResponseAbort
+		}
+		v3::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketOpen(v4::ToServerWebSocketOpen {
+				can_hibernate: open.can_hibernate,
+			})
+		}
+		v3::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketMessage(v4::ToServerWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v3::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
+				v4::ToServerWebSocketMessageAck { index: ack.index },
+			)
+		}
+		v3::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketClose(v4::ToServerWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+				hibernate: close.hibernate,
+			})
+		}
+		v3::ToServerTunnelMessageKind::DeprecatedTunnelAck => {
+			// v4 removed DeprecatedTunnelAck, this should not occur in practice
+			// but if it does, we'll convert it to a response abort as a safe fallback
+			v4::ToServerTunnelMessageKind::ToServerResponseAbort
+		}
+	}
+}
+
+fn convert_to_server_tunnel_message_kind_v4_to_v3(
+	kind: v4::ToServerTunnelMessageKind,
+) -> Result<v3::ToServerTunnelMessageKind> {
+	Ok(match kind {
+		v4::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			v3::ToServerTunnelMessageKind::ToServerResponseStart(v3::ToServerResponseStart {
+				status: resp.status,
+				headers: resp.headers,
+				body: resp.body,
+				stream: resp.stream,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
+			v3::ToServerTunnelMessageKind::ToServerResponseChunk(v3::ToServerResponseChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerResponseAbort => {
+			v3::ToServerTunnelMessageKind::ToServerResponseAbort
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
+			v3::ToServerTunnelMessageKind::ToServerWebSocketOpen(v3::ToServerWebSocketOpen {
+				can_hibernate: open.can_hibernate,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
+			v3::ToServerTunnelMessageKind::ToServerWebSocketMessage(v3::ToServerWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+			v3::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
+				v3::ToServerWebSocketMessageAck { index: ack.index },
+			)
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+			v3::ToServerTunnelMessageKind::ToServerWebSocketClose(v3::ToServerWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+				hibernate: close.hibernate,
+			})
+		}
+	})
+}
+
+pub fn to_client_tunnel_message_v4_to_v3(
+	msg: v4::ToClientTunnelMessage,
+) -> v3::ToClientTunnelMessage {
+	v3::ToClientTunnelMessage {
+		message_id: v3::MessageId {
+			gateway_id: msg.message_id.gateway_id,
+			request_id: msg.message_id.request_id,
+			message_index: msg.message_id.message_index,
+		},
+		message_kind: convert_to_client_tunnel_message_kind_v4_to_v3(msg.message_kind),
+	}
+}
+
+fn convert_to_client_tunnel_message_kind_v4_to_v3(
+	kind: v4::ToClientTunnelMessageKind,
+) -> v3::ToClientTunnelMessageKind {
+	match kind {
+		v4::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
+			v3::ToClientTunnelMessageKind::ToClientRequestStart(v3::ToClientRequestStart {
+				actor_id: req.actor_id,
+				method: req.method,
+				path: req.path,
+				headers: req.headers,
+				body: req.body,
+				stream: req.stream,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
+			v3::ToClientTunnelMessageKind::ToClientRequestChunk(v3::ToClientRequestChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientRequestAbort => {
+			v3::ToClientTunnelMessageKind::ToClientRequestAbort
+		}
+		v4::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
+			v3::ToClientTunnelMessageKind::ToClientWebSocketOpen(v3::ToClientWebSocketOpen {
+				actor_id: ws.actor_id,
+				path: ws.path,
+				headers: ws.headers,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
+			v3::ToClientTunnelMessageKind::ToClientWebSocketMessage(v3::ToClientWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
+			v3::ToClientTunnelMessageKind::ToClientWebSocketClose(v3::ToClientWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+			})
+		}
 	}
 }

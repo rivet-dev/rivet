@@ -1,7 +1,10 @@
 use gas::prelude::*;
+use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
+use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::watch;
+use vbare::OwnedVersionedData;
 
 use crate::{LifecycleResult, UPDATE_PING_INTERVAL, conn::Conn};
 
@@ -23,15 +26,17 @@ pub async fn task(
 		update_runner_ping(&ctx, &conn).await?;
 
 		// Send ping to runner
-		let ping_msg = versioned::ToClient::wrap_latest(protocol::ToClient::ToClientPing(
-			protocol::ToClientPing {
-				ts: util::timestamp::now(),
-			},
-		));
-		let ping_msg_serialized = ping_msg.serialize(conn.protocol_version)?;
-		conn.ws_handle
-			.send(Message::Binary(ping_msg_serialized.into()))
-			.await?;
+		if protocol::is_mk2(conn.protocol_version) {
+			let ping_msg = versioned::ToClientMk2::wrap_latest(
+				protocol::mk2::ToClient::ToClientPing(protocol::mk2::ToClientPing {
+					ts: util::timestamp::now(),
+				}),
+			);
+			let ping_msg_serialized = ping_msg.serialize(conn.protocol_version)?;
+			conn.ws_handle
+				.send(Message::Binary(ping_msg_serialized.into()))
+				.await?;
+		}
 	}
 }
 

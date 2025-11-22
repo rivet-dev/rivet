@@ -16,7 +16,7 @@ pub async fn task(
 	client_ws: WebSocketHandle,
 	request_id: protocol::RequestId,
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor::Stopped>,
-	mut msg_rx: mpsc::Receiver<protocol::ToServerTunnelMessageKind>,
+	mut msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<()>,
 	can_hibernate: bool,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
@@ -26,7 +26,7 @@ pub async fn task(
 			res = msg_rx.recv() => {
 				if let Some(msg) = res {
 					match msg {
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg) => {
+						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg) => {
 							let msg = if ws_msg.binary {
 								Message::Binary(ws_msg.data.into())
 							} else {
@@ -36,7 +36,7 @@ pub async fn task(
 							};
 							client_ws.send(msg).await?;
 						}
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
 							tracing::debug!(
 								request_id=%protocol::util::id_to_string(&request_id),
 								ack_index=?ack.index,
@@ -46,7 +46,7 @@ pub async fn task(
 								.ack_pending_websocket_messages(request_id, ack.index)
 								.await?;
 						}
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 							tracing::debug!(?close, "server closed websocket");
 
 							if can_hibernate && close.hibernate {

@@ -7,6 +7,7 @@ pub struct RunnerAllocIdxKeyData {
 	pub workflow_id: Id,
 	pub remaining_slots: u32,
 	pub total_slots: u32,
+	pub protocol_version: u16,
 }
 
 impl TryFrom<pegboard_namespace_runner_alloc_idx_v2::Data> for RunnerAllocIdxKeyData {

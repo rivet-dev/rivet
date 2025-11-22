@@ -4,7 +4,7 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol as protocol;
+use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
 use rivet_types::{
 	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
 	runner_configs::RunnerConfigKind,
@@ -26,6 +26,7 @@ pub struct LifecycleState {
 	// Set when currently running (not rescheduling or sleeping)
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
+	pub runner_protocol_version: Option<u16>,
 
 	pub sleeping: bool,
 	#[serde(default)]
@@ -46,11 +47,17 @@ pub struct LifecycleState {
 }
 
 impl LifecycleState {
-	pub fn new(runner_id: Id, runner_workflow_id: Id, actor_start_threshold: i64) -> Self {
+	pub fn new(
+		runner_id: Id,
+		runner_workflow_id: Id,
+		runner_protocol_version: u16,
+		actor_start_threshold: i64,
+	) -> Self {
 		LifecycleState {
 			generation: 0,
 			runner_id: Some(runner_id),
 			runner_workflow_id: Some(runner_workflow_id),
+			runner_protocol_version: Some(runner_protocol_version),
 			sleeping: false,
 			stopping: false,
 			going_away: false,
@@ -66,6 +73,7 @@ impl LifecycleState {
 			generation: 0,
 			runner_id: None,
 			runner_workflow_id: None,
+			runner_protocol_version: None,
 			sleeping: true,
 			stopping: false,
 			going_away: false,
@@ -121,6 +129,7 @@ pub enum AllocateActorOutput {
 	Allocated {
 		runner_id: Id,
 		runner_workflow_id: Id,
+		#[serde(default)]
 		runner_protocol_version: Option<u16>,
 	},
 	Pending {
@@ -319,8 +328,9 @@ async fn allocate_actor(
 						AllocateActorOutput::Allocated {
 							runner_id: old_runner_alloc_key.runner_id,
 							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
-							runner_protocol_version: old_runner_alloc_key_data
-								.runner_protocol_version,
+							runner_protocol_version: Some(
+								old_runner_alloc_key_data.protocol_version,
+							),
 						},
 					));
 				}
@@ -491,6 +501,7 @@ pub enum SpawnActorOutput {
 	Allocated {
 		runner_id: Id,
 		runner_workflow_id: Id,
+		runner_protocol_version: u16,
 	},
 	Sleep,
 	Destroy,
@@ -518,12 +529,14 @@ pub async fn spawn_actor(
 			runner_workflow_id,
 			runner_protocol_version,
 		} => {
+			let runner_protocol_version = runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION);
+
 			// Bump the autoscaler so it can scale up
 			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
 				.send()
 				.await?;
 
-			if protocol::is_new(runner_protocol_version) {
+			if protocol::is_mk2(runner_protocol_version) {
 				// TODO: Send message to tunnel
 			} else {
 				ctx.signal(crate::workflows::runner::Command {
@@ -580,6 +593,9 @@ pub async fn spawn_actor(
 			// an `Allocate` signal
 			match signal {
 				Some(PendingAllocation::Allocate(sig)) => {
+					let runner_protocol_version =
+						sig.runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION);
+
 					ctx.activity(UpdateRunnerInput {
 						actor_id: input.actor_id,
 						runner_id: sig.runner_id,
@@ -587,7 +603,7 @@ pub async fn spawn_actor(
 					})
 					.await?;
 
-					if protocol::is_new(sig.runner_protocol_version) {
+					if protocol::is_mk2(runner_protocol_version) {
 						// TODO: Send message to tunnel
 					} else {
 						ctx.signal(crate::workflows::runner::Command {
@@ -619,7 +635,7 @@ pub async fn spawn_actor(
 					Ok(SpawnActorOutput::Allocated {
 						runner_id: sig.runner_id,
 						runner_workflow_id: sig.runner_workflow_id,
-						runner_protocol_version: sig.runner_protocol_version,
+						runner_protocol_version,
 					})
 				}
 				Some(PendingAllocation::Destroy(_)) => {
@@ -665,6 +681,8 @@ pub async fn spawn_actor(
 					// wait for the allocated signal to prevent a race condition.
 					if !cleared {
 						let sig = ctx.listen::<Allocate>().await?;
+						let runner_protocol_version =
+							sig.runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION);
 
 						ctx.activity(UpdateRunnerInput {
 							actor_id: input.actor_id,
@@ -673,34 +691,39 @@ pub async fn spawn_actor(
 						})
 						.await?;
 
-						ctx.signal(crate::workflows::runner::Command {
-							inner: protocol::Command::CommandStartActor(
-								protocol::CommandStartActor {
-									actor_id: input.actor_id.to_string(),
-									generation,
-									config: protocol::ActorConfig {
-										name: input.name.clone(),
-										key: input.key.clone(),
-										create_ts: util::timestamp::now(),
-										input: input
-											.input
-											.as_ref()
-											.map(|x| BASE64_STANDARD.decode(x))
-											.transpose()?,
+						if protocol::is_mk2(runner_protocol_version) {
+							// TODO: Send message to tunnel
+						} else {
+							ctx.signal(crate::workflows::runner::Command {
+								inner: protocol::Command::CommandStartActor(
+									protocol::CommandStartActor {
+										actor_id: input.actor_id.to_string(),
+										generation,
+										config: protocol::ActorConfig {
+											name: input.name.clone(),
+											key: input.key.clone(),
+											create_ts: util::timestamp::now(),
+											input: input
+												.input
+												.as_ref()
+												.map(|x| BASE64_STANDARD.decode(x))
+												.transpose()?,
+										},
+										// Empty because request ids are ephemeral. This is intercepted by guard and
+										// populated before it reaches the runner
+										hibernating_requests: Vec::new(),
 									},
-									// Empty because request ids are ephemeral. This is intercepted by guard and
-									// populated before it reaches the runner
-									hibernating_requests: Vec::new(),
-								},
-							),
-						})
-						.to_workflow_id(sig.runner_workflow_id)
-						.send()
-						.await?;
+								),
+							})
+							.to_workflow_id(sig.runner_workflow_id)
+							.send()
+							.await?;
+						}
 
 						Ok(SpawnActorOutput::Allocated {
 							runner_id: sig.runner_id,
 							runner_workflow_id: sig.runner_workflow_id,
+							runner_protocol_version,
 						})
 					} else {
 						Ok(SpawnActorOutput::Sleep)
@@ -771,7 +794,7 @@ pub async fn reschedule_actor(
 		state.generation = next_generation;
 		state.runner_id = Some(*runner_id);
 		state.runner_workflow_id = Some(*runner_workflow_id);
-		state.runner_protocol_version = runner_protocol_version;
+		state.runner_protocol_version = Some(*runner_protocol_version);
 
 		// Reset gc timeout once allocated
 		state.gc_timeout_ts =
