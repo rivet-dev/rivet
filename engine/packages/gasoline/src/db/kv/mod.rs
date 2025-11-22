@@ -8,7 +8,7 @@ use std::{
 	time::Instant,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use futures_util::{StreamExt, TryStreamExt, stream::BoxStream};
 use rivet_util::Id;
 use rivet_util::future::CustomInstrumentExt;
@@ -31,7 +31,7 @@ use crate::{
 	history::{
 		event::{
 			ActivityEvent, Event, EventData, EventType, LoopEvent, MessageSendEvent, RemovedEvent,
-			SignalEvent, SignalSendEvent, SleepEvent, SleepState, SubWorkflowEvent,
+			SignalSendEvent, SignalsEvent, SleepEvent, SleepState, SubWorkflowEvent,
 		},
 		location::Location,
 	},
@@ -1474,6 +1474,35 @@ impl Database for DatabaseKv {
 
 												current_event.inner_event_type =
 													Some(inner_event_type);
+											} else if let Ok(key) = self
+												.subspace
+												.unpack::<keys::history::IndexedNameKey>(
+												entry.key(),
+											) {
+												ensure!(
+													current_event.indexed_names.len() == key.index,
+													"corrupt history, index doesn't exist yet or is out of order"
+												);
+
+												let name = key.deserialize(entry.value())?;
+												current_event.indexed_names.insert(key.index, name);
+											} else if let Ok(key) =
+												self.subspace
+													.unpack::<keys::history::IndexedInputChunkKey>(
+														entry.key(),
+													) {
+												ensure!(
+													current_event.indexed_input_chunks.len()
+														== key.index,
+													"corrupt history, index doesn't exist yet or is out of order"
+												);
+
+												if let Some(input_chunks) = current_event
+													.indexed_input_chunks
+													.get_mut(key.index)
+												{
+													input_chunks.push(entry);
+												}
 											}
 
 											// We ignore keys we don't need (like tags)
@@ -1880,7 +1909,7 @@ impl Database for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn pull_next_signal(
+	async fn pull_next_signals(
 		&self,
 		workflow_id: Id,
 		_workflow_name: &str,
@@ -1888,176 +1917,178 @@ impl Database for DatabaseKv {
 		location: &Location,
 		version: usize,
 		_loop_location: Option<&Location>,
-		last_try: bool,
-	) -> WorkflowResult<Option<SignalData>> {
+		limit: usize,
+		last_attempt: bool,
+	) -> WorkflowResult<Vec<SignalData>> {
 		let owned_filter = filter
 			.into_iter()
 			.map(|x| x.to_string())
 			.collect::<Vec<_>>();
 
-		// Fetch signal from UDB
-		let signal =
-			self.pools
-				.udb()
-				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx| {
-					let owned_filter = owned_filter.clone();
+		// Fetch signals from UDB
+		let signals = self
+			.pools
+			.udb()
+			.map_err(WorkflowError::PoolsGeneric)?
+			.run(|tx| {
+				let owned_filter = owned_filter.clone();
 
-					async move {
-						let signal = {
-							// Create a stream for each signal name subspace
-							let streams = owned_filter
-								.iter()
-								.map(|signal_name| {
-									let pending_signal_subspace = self.subspace.subspace(
-										&keys::workflow::PendingSignalKey::subspace(
-											workflow_id,
-											signal_name.to_string(),
-										),
-									);
-
-									tx.get_ranges_keyvalues(
-										universaldb::RangeOption {
-											mode: StreamingMode::WantAll,
-											limit: Some(1),
-											..(&pending_signal_subspace).into()
-										},
-										// NOTE: This is Serializable because any insert into this subspace
-										// should cause a conflict and retry of this txn
-										Serializable,
-									)
-								})
-								.collect::<Vec<_>>();
-
-							// Fetch the next entry from all streams at the same time
-							let mut results = futures_util::future::try_join_all(
-								streams.into_iter().map(|mut stream| async move {
-									if let Some(entry) = stream.try_next().await? {
-										Result::<_>::Ok(Some((
-											entry.key().to_vec(),
-											self.subspace
-												.unpack::<keys::workflow::PendingSignalKey>(
-													&entry.key(),
-												)?,
-										)))
-									} else {
-										Ok(None)
-									}
-								}),
-							)
-							.instrument(tracing::trace_span!("map_signals"))
-							.await?;
-
-							// Sort by ts
-							results.sort_by_key(|res| res.as_ref().map(|(_, key)| key.ts));
-
-							results.into_iter().flatten().next().map(
-								|(raw_key, pending_signal_key)| {
-									(
-										raw_key,
-										pending_signal_key.signal_name,
-										pending_signal_key.ts,
-										pending_signal_key.signal_id,
-									)
-								},
-							)
-						};
-
-						// Signal found
-						if let Some((raw_key, signal_name, ts, signal_id)) = signal {
-							let ack_ts_key = keys::signal::AckTsKey::new(signal_id);
-
-							// Ack signal
-							tx.add_conflict_range(
-								&raw_key,
-								&end_of_key_range(&raw_key),
-								ConflictRangeType::Read,
-							)?;
-							tx.set(
-								&self.subspace.pack(&ack_ts_key),
-								&ack_ts_key.serialize(rivet_util::timestamp::now())?,
-							);
-
-							update_metric(
-								&tx.with_subspace(self.subspace.clone()),
-								Some(keys::metric::GaugeMetric::SignalPending(
+				async move {
+					// Fetch signals from all streams at the same time
+					let signals = futures_util::stream::iter(owned_filter.clone())
+						.map(|signal_name| {
+							let pending_signal_subspace = self.subspace.subspace(
+								&keys::workflow::PendingSignalKey::subspace(
+									workflow_id,
 									signal_name.to_string(),
-								)),
-								None,
+								),
 							);
 
-							// TODO: Split txn into two after acking here?
+							tx.get_ranges_keyvalues(
+								universaldb::RangeOption {
+									mode: StreamingMode::Exact,
+									limit: Some(limit),
+									..(&pending_signal_subspace).into()
+								},
+								// NOTE: This is Serializable because any insert into this subspace
+								// should cause a conflict and retry of this txn
+								Serializable,
+							)
+						})
+						.flatten()
+						.map(|res| {
+							let entry = res?;
 
-							// Clear pending signal key
-							tx.clear(&raw_key);
+							anyhow::Ok(
+								self.subspace
+									.unpack::<keys::workflow::PendingSignalKey>(&entry.key())?,
+							)
+						})
+						.try_collect::<Vec<_>>()
+						.instrument(tracing::trace_span!("map_signals"))
+						.await?;
 
-							// Read signal body
-							let body_key = keys::signal::BodyKey::new(signal_id);
-							let body_subspace = self.subspace.subspace(&body_key);
+					if !signals.is_empty() {
+						let now = rivet_util::timestamp::now();
 
-							let chunks = tx
-								.get_ranges_keyvalues(
-									universaldb::RangeOption {
-										mode: StreamingMode::WantAll,
-										..(&body_subspace).into()
-									},
-									Serializable,
-								)
+						// Insert history event
+						keys::history::insert::signals_event(
+							&self.subspace,
+							&tx,
+							workflow_id,
+							&location,
+							version,
+							now,
+						)?;
+
+						let mut signals =
+							futures_util::stream::iter(signals.into_iter().enumerate())
+								.map(|(index, key)| {
+									let tx = tx.clone();
+									async move {
+										let ack_ts_key = keys::signal::AckTsKey::new(key.signal_id);
+										let packed_key = tx.pack(&key);
+
+										// Ack signal
+										tx.add_conflict_range(
+											&packed_key,
+											&end_of_key_range(&packed_key),
+											ConflictRangeType::Read,
+										)?;
+										tx.set(
+											&self.subspace.pack(&ack_ts_key),
+											&ack_ts_key.serialize(rivet_util::timestamp::now())?,
+										);
+
+										update_metric(
+											&tx.with_subspace(self.subspace.clone()),
+											Some(keys::metric::GaugeMetric::SignalPending(
+												key.signal_name.to_string(),
+											)),
+											None,
+										);
+
+										// TODO: Split txn into two after acking here?
+
+										// Clear pending signal key
+										tx.clear(&packed_key);
+
+										// Read signal body
+										let body_key = keys::signal::BodyKey::new(key.signal_id);
+										let body_subspace = self.subspace.subspace(&body_key);
+
+										let chunks = tx
+											.get_ranges_keyvalues(
+												universaldb::RangeOption {
+													mode: StreamingMode::WantAll,
+													..(&body_subspace).into()
+												},
+												Serializable,
+											)
+											.try_collect::<Vec<_>>()
+											.await?;
+
+										let body = body_key.combine(chunks)?;
+
+										keys::history::insert::signals_event_signal(
+											&self.subspace,
+											&tx,
+											workflow_id,
+											&location,
+											index,
+											key.signal_id,
+											&key.signal_name,
+											&body,
+										)?;
+
+										anyhow::Ok(SignalData {
+											signal_id: key.signal_id,
+											signal_name: key.signal_name,
+											create_ts: key.ts,
+											body,
+										})
+									}
+								})
+								.buffer_unordered(1024)
 								.try_collect::<Vec<_>>()
 								.await?;
 
-							let body = body_key.combine(chunks)?;
+						// Sort by ts
+						signals.sort_by_key(|key| key.create_ts);
 
-							// Insert history event
-							keys::history::insert::signal_event(
-								&self.subspace,
-								&tx,
-								workflow_id,
-								&location,
-								version,
-								rivet_util::timestamp::now(),
-								signal_id,
-								&signal_name,
-								&body,
-							)?;
-
-							Ok(Some(SignalData {
-								signal_id,
-								signal_name,
-								create_ts: ts,
-								body,
-							}))
-						}
-						// No signal found
-						else {
-							// Write signal wake index if no signal was received. Normally this is done in
-							// `commit_workflow` but without this code there would be a race condition if the
-							// signal is published between after this transaction and before `commit_workflow`.
-							// There is a possibility of `commit_workflow` NOT writing a signal secondary index
-							// after this in which case there might be an unnecessary wake condition inserted
-							// causing the workflow to wake up again, but this is not as big of an issue because
-							// workflow wakes should be idempotent if no events happen.
-							// It is important that this is only written on the last try to pull workflows
-							// (the workflow engine internally retries a few times) because it should only
-							// write signal wake indexes before going to sleep (with err `NoSignalFound`) and
-							// not during a retry.
-							if last_try {
-								self.write_signal_wake_idxs(
-									workflow_id,
-									&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-									&tx,
-								)?;
-							}
-
-							Ok(None)
-						}
+						// Apply limit
+						Ok(signals.into_iter().take(limit).collect())
 					}
-				})
-				.custom_instrument(tracing::info_span!("pull_next_signal_tx"))
-				.await
-				.map_err(WorkflowError::Udb)?;
+					// No signals found
+					else {
+						// Write signal wake index if no signal was received. Normally this is done in
+						// `commit_workflow` but without this code there would be a race condition if the
+						// signal is published between after this transaction and before `commit_workflow`.
+						// There is a possibility of `commit_workflow` NOT writing a signal secondary index
+						// after this in which case there might be an unnecessary wake condition inserted
+						// causing the workflow to wake up again, but this is not as big of an issue because
+						// workflow wakes should be idempotent if no events happen.
+						// It is important that this is only written on the last try to pull workflows
+						// (the workflow engine internally retries a few times) because it should only
+						// write signal wake indexes before going to sleep (with err `NoSignalFound`) and
+						// not during a retry.
+						if last_attempt {
+							self.write_signal_wake_idxs(
+								workflow_id,
+								&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+								&tx,
+							)?;
+						}
 
-		Ok(signal)
+						Ok(Vec::new())
+					}
+				}
+			})
+			.custom_instrument(tracing::info_span!("pull_next_signals_tx"))
+			.await
+			.map_err(WorkflowError::Udb)?;
+
+		Ok(signals)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -2815,6 +2846,9 @@ struct WorkflowHistoryEventBuilder {
 	deadline_ts: Option<i64>,
 	sleep_state: Option<SleepState>,
 	inner_event_type: Option<EventType>,
+
+	indexed_names: Vec<String>,
+	indexed_input_chunks: Vec<Vec<Value>>,
 }
 
 impl WorkflowHistoryEventBuilder {
@@ -2834,6 +2868,9 @@ impl WorkflowHistoryEventBuilder {
 			deadline_ts: None,
 			sleep_state: None,
 			inner_event_type: None,
+
+			indexed_names: Vec::new(),
+			indexed_input_chunks: Vec::new(),
 		}
 	}
 }
@@ -2857,7 +2894,21 @@ impl TryFrom<WorkflowHistoryEventBuilder> for Event {
 				.ok_or(WorkflowError::MissingEventData("version"))?,
 			data: match event_type {
 				EventType::Activity => EventData::Activity(value.try_into()?),
-				EventType::Signal => EventData::Signal(value.try_into()?),
+				// Deprecated, manually convert to newer type
+				EventType::Signal => {
+					EventData::Signals(SignalsEvent {
+						names: vec![value.name.ok_or(WorkflowError::MissingEventData("name"))?],
+						bodies: vec![if value.input_chunks.is_empty() {
+							return Err(WorkflowError::MissingEventData("input"));
+						} else {
+							// workflow_id not needed
+							let input_key = keys::history::InputKey::new(Id::nil(), value.location);
+							input_key
+								.combine(value.input_chunks)
+								.map_err(WorkflowError::DeserializeEventData)?
+						}],
+					})
+				}
 				EventType::SignalSend => EventData::SignalSend(value.try_into()?),
 				EventType::MessageSend => EventData::MessageSend(value.try_into()?),
 				EventType::SubWorkflow => EventData::SubWorkflow(value.try_into()?),
@@ -2866,6 +2917,7 @@ impl TryFrom<WorkflowHistoryEventBuilder> for Event {
 				EventType::Branch => EventData::Branch,
 				EventType::Removed => EventData::Removed(value.try_into()?),
 				EventType::VersionCheck => EventData::VersionCheck,
+				EventType::Signals => EventData::Signals(value.try_into()?),
 			},
 		})
 	}
@@ -2894,27 +2946,6 @@ impl TryFrom<WorkflowHistoryEventBuilder> for ActivityEvent {
 				}
 			},
 			error_count: value.error_count,
-		})
-	}
-}
-
-impl TryFrom<WorkflowHistoryEventBuilder> for SignalEvent {
-	type Error = WorkflowError;
-
-	fn try_from(value: WorkflowHistoryEventBuilder) -> WorkflowResult<Self> {
-		Ok(SignalEvent {
-			name: value.name.ok_or(WorkflowError::MissingEventData("name"))?,
-			body: {
-				if value.input_chunks.is_empty() {
-					return Err(WorkflowError::MissingEventData("input"));
-				} else {
-					// workflow_id not needed
-					let input_key = keys::history::InputKey::new(Id::nil(), value.location);
-					input_key
-						.combine(value.input_chunks)
-						.map_err(WorkflowError::DeserializeEventData)?
-				}
-			},
 		})
 	}
 }
@@ -3017,6 +3048,36 @@ impl TryFrom<WorkflowHistoryEventBuilder> for RemovedEvent {
 			event_type: value
 				.inner_event_type
 				.ok_or(WorkflowError::MissingEventData("inner_event_type"))?,
+		})
+	}
+}
+
+impl TryFrom<WorkflowHistoryEventBuilder> for SignalsEvent {
+	type Error = WorkflowError;
+
+	fn try_from(value: WorkflowHistoryEventBuilder) -> WorkflowResult<Self> {
+		Ok(SignalsEvent {
+			names: if value.indexed_names.is_empty() {
+				return Err(WorkflowError::MissingEventData("name"));
+			} else {
+				value.indexed_names
+			},
+			bodies: if value.indexed_input_chunks.is_empty() {
+				return Err(WorkflowError::MissingEventData("input"));
+			} else {
+				value
+					.indexed_input_chunks
+					.into_iter()
+					.map(|input_chunks| {
+						// workflow_id not needed
+						let input_key =
+							keys::history::InputKey::new(Id::nil(), value.location.clone());
+						input_key
+							.combine(input_chunks)
+							.map_err(WorkflowError::DeserializeEventData)
+					})
+					.collect::<std::result::Result<_, _>>()?
+			},
 		})
 	}
 }

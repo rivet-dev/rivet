@@ -4,7 +4,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use opentelemetry::trace::SpanContext;
 use rivet_util::Id;
@@ -29,7 +29,7 @@ use crate::{
 		location::{Coordinate, Location},
 		removed::Removed,
 	},
-	listen::{CustomListener, Listen},
+	listen::Listen,
 	message::Message,
 	metrics,
 	registry::RegistryHandle,
@@ -700,91 +700,40 @@ impl WorkflowCtx {
 	/// received, the workflow will be woken up and continue.
 	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn listen<T: Listen>(&mut self) -> Result<T> {
-		self.check_stop()?;
+		let signals = self.listen_n::<T>(1).in_current_span().await?;
 
-		let history_res = self.cursor.compare_signal(self.version)?;
-		let location = self.cursor.current_location_for(&history_res);
-
-		// Signal received before
-		let signal = if let HistoryResult::Event(signal) = history_res {
-			tracing::debug!(
-				signal_name=%signal.name,
-				"replaying signal"
-			);
-
-			T::parse(&signal.name, &signal.body)?
-		}
-		// Listen for new signal
-		else {
-			tracing::debug!("listening for signal");
-
-			let mut bump_sub = self
-				.db
-				.bump_sub(BumpSubSubject::SignalPublish {
-					to_workflow_id: self.workflow_id,
-				})
-				.await?;
-			let mut retries = self.db.max_signal_poll_retries();
-			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
-			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-			// Skip first tick, we wait after the db call instead of before
-			interval.tick().await;
-
-			let mut ctx = ListenCtx::new(self, &location);
-
-			loop {
-				ctx.reset(retries == 0);
-
-				match T::listen(&mut ctx).in_current_span().await {
-					Ok(res) => break res,
-					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
-						if retries == 0 {
-							return Err(err.into());
-						}
-						retries -= 1;
-					}
-					Err(err) => return Err(err.into()),
-				}
-
-				// Poll and wait for a wake at the same time
-				tokio::select! {
-					_ = bump_sub.next() => {},
-					_ = interval.tick() => {},
-					res = self.wait_stop() => res?,
-				}
-			}
-		};
-
-		// Move to next event
-		self.cursor.update(&location);
-
-		Ok(signal)
+		signals
+			.into_iter()
+			.next()
+			.context("must return at least 1 signal")
 	}
 
-	/// Execute a custom listener.
+	/// Listens for a N signals for a short time before setting the workflow to sleep. Once signals are
+	/// received, the workflow will be woken up and continue. Never returns an empty vec.
 	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
-	pub async fn custom_listener<T: CustomListener>(
-		&mut self,
-		listener: &T,
-	) -> Result<<T as CustomListener>::Output> {
+	pub async fn listen_n<T: Listen>(&mut self, limit: usize) -> Result<Vec<T>> {
 		self.check_stop()?;
 
-		let history_res = self.cursor.compare_signal(self.version)?;
+		let history_res = self.cursor.compare_signals(self.version)?;
 		let location = self.cursor.current_location_for(&history_res);
 
-		// Signal received before
-		let signal = if let HistoryResult::Event(signal) = history_res {
+		// Signals received before
+		let signals = if let HistoryResult::Event(signals) = history_res {
 			tracing::debug!(
-				signal_name=%signal.name,
-				"replaying signal",
+				count=%signals.names.len(),
+				"replaying signals"
 			);
 
-			T::parse(&signal.name, &signal.body)?
+			signals
+				.names
+				.iter()
+				.zip(&signals.bodies)
+				.map(|(name, body)| T::parse(name, &body))
+				.collect::<std::result::Result<Vec<_>, _>>()?
 		}
-		// Listen for new signal
+		// Listen for new signals
 		else {
-			tracing::debug!("listening for signal");
+			tracing::debug!("listening for signals");
 
 			let mut bump_sub = self
 				.db
@@ -804,7 +753,7 @@ impl WorkflowCtx {
 			loop {
 				ctx.reset(retries == 0);
 
-				match listener.listen(&mut ctx).in_current_span().await {
+				match T::listen(&mut ctx, limit).in_current_span().await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries == 0 {
@@ -827,7 +776,7 @@ impl WorkflowCtx {
 		// Move to next event
 		self.cursor.update(&location);
 
-		Ok(signal)
+		Ok(signals)
 	}
 
 	/// Creates a message builder.
@@ -1135,19 +1084,47 @@ impl WorkflowCtx {
 		&mut self,
 		duration: impl DurationToMillis,
 	) -> Result<Option<T>> {
+		let signals = self.listen_n_with_timeout(duration, 1).await?;
+
+		Ok(signals.into_iter().next())
+	}
+
+	/// Listens for signals with a timeout. Returns an empty vec if the timeout is reached.
+	///
+	/// Internally this is a sleep event and a signals event.
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
+	pub async fn listen_n_with_timeout<T: Listen>(
+		&mut self,
+		duration: impl DurationToMillis,
+		limit: usize,
+	) -> Result<Vec<T>> {
 		let time = (rivet_util::timestamp::now() as u64 + duration.to_millis()?) as i64;
 
-		self.listen_until(time).await
+		self.listen_n_until(time, limit).await
+	}
+
+	/// Listens for a signal until the given timestamp. Returns `None` if the timestamp is reached.
+	///
+	/// Internally this is a sleep event and a signals event.
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>(), duration))]
+	pub async fn listen_until<T: Listen>(&mut self, time: impl TsToMillis) -> Result<Option<T>> {
+		let signals = self.listen_n_until(time, 1).await?;
+
+		Ok(signals.into_iter().next())
 	}
 
 	// TODO: Potential bad transaction: if the signal gets pulled and saved in history but an error occurs
 	// before the sleep event state is set to "interrupted", the next time this workflow is run it will error
 	// because it tries to pull a signal again
-	/// Listens for a signal until the given timestamp. Returns `None` if the timestamp is reached.
+	/// Listens for signals until the given timestamp. Returns an empty vec if the timestamp is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
 	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>(), duration))]
-	pub async fn listen_until<T: Listen>(&mut self, time: impl TsToMillis) -> Result<Option<T>> {
+	pub async fn listen_n_until<T: Listen>(
+		&mut self,
+		time: impl TsToMillis,
+		limit: usize,
+	) -> Result<Vec<T>> {
 		self.check_stop()?;
 
 		let history_res = self.cursor.compare_sleep(self.version)?;
@@ -1180,51 +1157,56 @@ impl WorkflowCtx {
 		// Move to next event
 		self.cursor.update(&sleep_location);
 
-		// Signal received before
+		// Signals received before
 		if matches!(state, SleepState::Interrupted) {
-			let history_res = self.cursor.compare_signal(self.version)?;
-			let signal_location = self.cursor.current_location_for(&history_res);
+			let history_res = self.cursor.compare_signals(self.version)?;
+			let signals_location = self.cursor.current_location_for(&history_res);
 
-			if let HistoryResult::Event(signal) = history_res {
+			if let HistoryResult::Event(signals) = history_res {
 				tracing::debug!(
-					signal_name=%signal.name,
-					"replaying signal",
+					count=?signals.names.len(),
+					"replaying signals",
 				);
 
-				let signal = T::parse(&signal.name, &signal.body)?;
+				let signals = signals
+					.names
+					.iter()
+					.zip(&signals.bodies)
+					.map(|(name, body)| T::parse(name, &body))
+					.collect::<std::result::Result<Vec<_>, _>>()?;
 
 				// Move to next event
-				self.cursor.update(&signal_location);
+				self.cursor.update(&signals_location);
 
 				// Short circuit
-				return Ok(Some(signal));
+				return Ok(signals);
 			} else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected signal at {}, found nothing",
-					signal_location,
+					"expected signals at {}, found nothing",
+					signals_location,
 				))
 				.into());
 			}
 		}
 
-		// Location of the signal event (comes after the sleep event)
-		let signal_location = self.cursor.current_location_for(&history_res2);
+		// Location of the signals event (comes after the sleep event)
+		let signals_location = self.cursor.current_location_for(&history_res2);
 		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
 		tracing::Span::current().record("duration", &duration);
 
 		// Duration is now 0, timeout is over
-		let signal = if duration <= 0 {
-			// After timeout is over, check once for signal
+		let signals = if duration <= 0 {
+			// After timeout is over, check once for signals
 			if matches!(state, SleepState::Normal) {
-				let mut ctx = ListenCtx::new(self, &signal_location);
+				let mut ctx = ListenCtx::new(self, &signals_location);
 
-				match T::listen(&mut ctx).in_current_span().await {
-					Ok(x) => Some(x),
-					Err(WorkflowError::NoSignalFound(_)) => None,
+				match T::listen(&mut ctx, limit).in_current_span().await {
+					Ok(x) => x,
+					Err(WorkflowError::NoSignalFound(_)) => Vec::new(),
 					Err(err) => return Err(err.into()),
 				}
 			} else {
-				None
+				Vec::new()
 			}
 		}
 		// Sleep in memory if duration is shorter than the worker tick
@@ -1234,7 +1216,7 @@ impl WorkflowCtx {
 			let res = tokio::time::timeout(
 				Duration::from_millis(duration.try_into()?),
 				(async {
-					tracing::debug!("listening for signal with timeout");
+					tracing::debug!("listening for signals with timeout");
 
 					let mut bump_sub = self
 						.db
@@ -1248,12 +1230,12 @@ impl WorkflowCtx {
 					// Skip first tick, we wait after the db call instead of before
 					interval.tick().await;
 
-					let mut ctx = ListenCtx::new(self, &signal_location);
+					let mut ctx = ListenCtx::new(self, &signals_location);
 
 					loop {
 						ctx.reset(false);
 
-						match T::listen(&mut ctx).in_current_span().await {
+						match T::listen(&mut ctx, limit).in_current_span().await {
 							// Retry
 							Err(WorkflowError::NoSignalFound(_)) => {}
 							x => return x,
@@ -1272,17 +1254,17 @@ impl WorkflowCtx {
 			.await;
 
 			match res {
-				Ok(res) => Some(res?),
+				Ok(res) => res?,
 				Err(_) => {
-					tracing::debug!("timed out listening for signal");
+					tracing::debug!("timed out listening for signals");
 
-					None
+					Vec::new()
 				}
 			}
 		}
 		// Workflow sleep for long durations
 		else {
-			tracing::debug!("listening for signal with timeout");
+			tracing::debug!("listening for signals with timeout");
 
 			let mut bump_sub = self
 				.db
@@ -1297,13 +1279,13 @@ impl WorkflowCtx {
 			// Skip first tick, we wait after the db call instead of before
 			interval.tick().await;
 
-			let mut ctx = ListenCtx::new(self, &signal_location);
+			let mut ctx = ListenCtx::new(self, &signals_location);
 
 			loop {
 				ctx.reset(retries == 0);
 
-				match T::listen(&mut ctx).in_current_span().await {
-					Ok(res) => break Some(res),
+				match T::listen(&mut ctx, limit).in_current_span().await {
+					Ok(res) => break res,
 					Err(WorkflowError::NoSignalFound(signals)) => {
 						if retries == 0 {
 							return Err(
@@ -1325,7 +1307,7 @@ impl WorkflowCtx {
 		};
 
 		// Update sleep state
-		if signal.is_some() {
+		if !signals.is_empty() {
 			self.db
 				.update_workflow_sleep_event_state(
 					self.workflow_id,
@@ -1335,7 +1317,7 @@ impl WorkflowCtx {
 				.await?;
 
 			// Move to next event
-			self.cursor.update(&signal_location);
+			self.cursor.update(&signals_location);
 		} else if matches!(state, SleepState::Normal) {
 			self.db
 				.update_workflow_sleep_event_state(
@@ -1346,7 +1328,7 @@ impl WorkflowCtx {
 				.await?;
 		}
 
-		Ok(signal)
+		Ok(signals)
 	}
 
 	/// Represents a removed workflow step.
