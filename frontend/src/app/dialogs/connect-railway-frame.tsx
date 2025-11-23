@@ -259,7 +259,7 @@ function RivetRunnerEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="NEXT_PUBLIC_RIVET_RUNNER"
+				value="RIVET_RUNNER"
 				show
 			/>
 			<DiscreteInput
@@ -279,7 +279,7 @@ function RivetTokenEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="NEXT_PUBLIC_RIVET_TOKEN"
+				value="RIVET_TOKEN"
 				show
 			/>
 			{isLoading ? (
@@ -301,7 +301,7 @@ function RivetEndpointEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="NEXT_PUBLIC_RIVET_ENDPOINT"
+				value="RIVET_ENDPOINT"
 				show
 			/>
 			<DiscreteInput
@@ -319,7 +319,7 @@ function RivetNamespaceEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="NEXT_PUBLIC_RIVET_NAMESPACE"
+				value="RIVET_NAMESPACE"
 				show
 			/>
 			<DiscreteInput
