@@ -287,37 +287,6 @@ export class InvalidParams extends ActorError {
 	}
 }
 
-export class Unauthorized extends ActorError {
-	constructor(message?: string) {
-		super(
-			"auth",
-			"unauthorized",
-			message ??
-				"Unauthorized. Access denied. (https://www.rivet.dev/docs/actors/authentication/)",
-			{
-				public: true,
-			},
-		);
-		this.statusCode = 401;
-	}
-}
-
-export class Forbidden extends ActorError {
-	constructor(message?: string, opts?: { metadata?: unknown }) {
-		super(
-			"auth",
-			"forbidden",
-			message ??
-				"Forbidden. Access denied. (https://www.rivet.dev/docs/actors/authentication/)",
-			{
-				public: true,
-				metadata: opts?.metadata,
-			},
-		);
-		this.statusCode = 403;
-	}
-}
-
 export class DatabaseNotEnabled extends ActorError {
 	constructor() {
 		super(

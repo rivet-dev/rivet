@@ -44,6 +44,15 @@ Choose your preferred web framework:
 
 <CodeGroup>
 
+```ts {{"title":"Default"}}
+import { createHandler } from "@rivetkit/cloudflare-workers";
+import { registry } from "./registry";
+
+// The `/rivet` endpoint is automatically exposed here for external clients
+const { handler, ActorHandler } = createHandler(registry);
+export { handler as default, ActorHandler };
+```
+
 ```ts {{"title":"Hono"}}
 import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
@@ -62,6 +71,7 @@ app.post("/increment/:name", async (c) => {
 	return c.json({ count: newCount });
 });
 
+// The `/rivet` endpoint is automatically exposed here for external clients
 const { handler, ActorHandler } = createHandler(registry, { fetch: app.fetch });
 export { handler as default, ActorHandler };
 ```
@@ -70,6 +80,7 @@ export { handler as default, ActorHandler };
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
+// The `/rivet` endpoint is automatically mounted on this router for external clients
 const { handler, ActorHandler } = createHandler(registry, {
 	fetch: async (request, env, ctx) => {
 		const url = new URL(request.url);
@@ -93,11 +104,48 @@ const { handler, ActorHandler } = createHandler(registry, {
 export { handler as default, ActorHandler };
 ```
 
-</CodeGroup>
+```ts {{"title":"Advanced"}}
+import { createInlineClient } from "@rivetkit/cloudflare-workers";
+import { registry } from "./registry";
 
-<Info>
-The `/rivet` endpoint is automatically mounted by Rivet and is required for client communication. The Cloudflare Workers driver handles this automatically. This can be configured with `managerPath`.
-</Info>
+const {
+	client,
+	fetch: rivetFetch,
+	ActorHandler,
+} = createInlineClient(registry);
+
+// IMPORTANT: Your Durable Object must be exported here
+export { ActorHandler };
+
+export default {
+	fetch: async (request, env, ctx) => {
+		const url = new URL(request.url);
+
+		// Custom request handler
+		if (request.method === "POST" && url.pathname.startsWith("/increment/")) {
+			const name = url.pathname.slice("/increment/".length);
+
+			const counter = client.counter.getOrCreate(name);
+			const newCount = await counter.increment(1);
+
+			return new Response(JSON.stringify({ count: newCount }), {
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		// Optional: Mount /rivet path to access actors from external clients
+		if (url.pathname.startsWith("/rivet")) {
+			const strippedPath = url.pathname.substring("/rivet".length);
+			url.pathname = strippedPath;
+			const modifiedRequest = new Request(url.toString(), request);
+			return rivetFetch(modifiedRequest, env, ctx);
+		}
+
+		return new Response("Not Found", { status: 404 });
+	},
+} satisfies ExportedHandler;
+```
+</CodeGroup>
 
 </Step>
 
@@ -179,7 +227,7 @@ wrangler deploy
 
 Your actors will now run on Cloudflare's edge with persistent state backed by Durable Objects.
 
-See the [Cloudflare Workers deployment guide](/docs/deploy/cloudflare-workers) for detailed deployment instructions and configuration options.
+See the [Cloudflare Workers deployment guide](/docs/connect/cloudflare-workers) for detailed deployment instructions and configuration options.
 
 </Step>
 

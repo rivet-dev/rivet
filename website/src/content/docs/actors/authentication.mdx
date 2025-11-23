@@ -1,392 +1,482 @@
 # Authentication
 
-Secure your actors with authentication and authorization
+Secure your actors with authentication and authorization.
 
-Rivet provides multiple authentication methods to secure your actors. Use `onAuth` for server-side validation or `onBeforeConnect` for actor-level authentication.
+## Do You Need Authentication?
 
-## Authentication Methods
+<Tabs>
+<Tab title="Rivet Cloud">
+	Actors are private by default on Rivet Cloud. Only requests with the publishable token can interact with actors.
 
-### onAuth Hook (Recommended)
+	- **Backend-only actors**: If your publishable token is only included in your backend, then authentication is not necessary.
+	- **Frontend-accessible actors**: If your publishable token is included in your frontend, then implementing authentication is recommended.
+</Tab>
+<Tab title="Self-Hosted">
+	Actors are public by default on self-hosted Rivet. Anyone can access them without a token.
 
-The `onAuth` hook runs on the HTTP server before clients can access actors. This is the preferred method for most authentication scenarios.
+	- **Only accessible within private network**: If Rivet is only accessible within your private network, then authentication is not necessary.
+	- **Rivet exposed to the public internet**: If Rivet is configured to accept traffic from the public internet, then implementing authentication is recommended.
+</Tab>
+</Tabs>
+
+## Authentication Connections
+
+Authentication is configured through either:
+
+- `onBeforeConnect` for simple pass/fail validation
+- `createConnState` when you need to access user data in your actions via `c.conn.state`
+
+### `onBeforeConnect`
+
+The `onBeforeConnect` hook validates credentials before allowing a connection. Throw an error to reject the connection.
 
 ```typescript
 import { actor, UserError } from "rivetkit";
 
+interface ConnParams {
+  authToken: string;
+}
+
 const chatRoom = actor({
-  onAuth: async (params: { authToken?: string }, { request, intents }) => {
-    
-    // Extract token from params or headers
-    const token = params.authToken || request.headers.get("Authorization");
-    
-    if (!token) {
-      throw new UserError("Authentication required");
-    }
-    
-    // Validate token and return user data
-    const user = await validateJWT(token);
-    return { 
-      userId: user.id, 
-      role: user.role,
-      permissions: user.permissions 
-    };
-  },
-  
   state: { messages: [] },
-  
+
+  onBeforeConnect: async (c, params: ConnParams) => {
+    const roomName = c.key;
+    const isValid = await validateToken(params.authToken, roomName);
+    if (!isValid) {
+      throw new UserError("Forbidden", { code: "forbidden" });
+    }
+  },
+
   actions: {
     sendMessage: (c, text: string) => {
-      // Access auth data via c.conn.auth
-      const { userId, role } = c.conn.auth;
-      
-      if (role !== "member") {
-        throw new UserError("Insufficient permissions");
-      }
-      
-      const message = {
-        id: crypto.randomUUID(),
-        userId,
-        text,
-        timestamp: Date.now(),
-      };
-      
-      c.state.messages.push(message);
-      c.broadcast("newMessage", message);
-      return message;
-    }
-  }
+      c.state.messages.push({ text, timestamp: Date.now() });
+    },
+  },
 });
 ```
 
-### `onBeforeConnect` Hook
+### `createConnState`
 
-Use `onBeforeConnect` when you need access to actor state for authentication:
+Use `createConnState` to extract user data from credentials and store it in connection state. This data is accessible in actions via `c.conn.state`. Like `onBeforeConnect`, throwing an error will reject the connection. See [connections](/docs/actors/connections) for more details.
 
 ```typescript
-const userProfileActor = actor({
-  // Empty onAuth allows all requests to reach the actor
-  onAuth: () => ({}),
-  
-  state: { 
-    ownerId: null as string | null,
-    isPrivate: false 
-  },
-  
-  onBeforeConnect: async (c, opts) => {
-    const { params } = opts;
-    const userId = await validateUser(params.token);
-    
-    // Check if user can access this profile
-    if (c.state.isPrivate && c.state.ownerId !== userId) {
-      throw new UserError("Access denied to private profile");
+import { actor, UserError } from "rivetkit";
+
+interface ConnParams {
+  authToken: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+}
+
+const chatRoom = actor({
+  state: { messages: [] },
+
+  createConnState: async (c, params: ConnParams): Promise<ConnState> => {
+    const roomName = c.key;
+    const payload = await validateToken(params.authToken, roomName);
+    if (!payload) {
+      throw new UserError("Forbidden", { code: "forbidden" });
     }
+    return {
+      userId: payload.sub,
+      role: payload.role,
+    };
   },
-  
-  createConnState: (c, opts, params: { userId: string }) => {
-    return { userId: params.userId };
-  },
-  
+
   actions: {
-    updateProfile: (c, data) => {
-      // Check ownership
-      if (c.state.ownerId !== c.conn.state.userId) {
-        throw new UserError("Only owner can update profile");
+    sendMessage: (c, text: string) => {
+      // Access user data via c.conn.state
+      const { userId, role } = c.conn.state;
+
+      if (role !== "member") {
+        throw new UserError("Insufficient permissions", { code: "insufficient_permissions" });
       }
-      
-      // Update profile...
-    }
-  }
+
+      c.state.messages.push({ userId, text, timestamp: Date.now() });
+      c.broadcast("newMessage", { userId, text });
+    },
+  },
 });
 ```
 
-<Warning>
-Prefer `onAuth` over `onBeforeConnect` when possible, as `onAuth` runs on the HTTP server and uses fewer actor resources.
-</Warning>
+## Available Auth Data
 
-## Connection Parameters
+Authentication hooks have access to several properties:
+
+| Property | Description |
+|----------|-------------|
+| `params` | Custom data passed by the client when connecting (see [connection params](/docs/actors/connections#extracting-data-from-connection-params)) |
+| `c.request` | The underlying HTTP request object |
+| `c.request.headers` | Request headers for tokens, API keys (does not work for `.connect()`) |
+| `c.state` | Actor state for authorization decisions (see [state](/docs/actors/state)) |
+| `c.key` | The actor's key (see [keys](/docs/actors/keys)) |
+
+It's recommended to use `params` instead of `c.request.headers` whenever possible since it works for both HTTP & WebSocket connections.
+
+## Client Usage
+
+### Passing Credentials
 
 Pass authentication data when connecting:
 
-```typescript
-// Client side
+<CodeGroup>
+```typescript {{"title":"Connection"}}
+import { createClient } from "rivetkit/client";
+
+const client = createClient();
+const chat = client.chatRoom.getOrCreate(["general"], {
+  params: { authToken: "jwt-token-here" },
+});
+
+// Authentication will happen on connect by reading connection parameters
+const connection = chat.connect();
+```
+
+```typescript {{"title":"Stateless Action"}}
+import { createClient } from "rivetkit/client";
+
+const client = createClient();
+const chat = client.chatRoom.getOrCreate(["general"], {
+  params: { authToken: "jwt-token-here" },
+});
+
+// Authentication will happen when calling the action by reading input
+// parameters
+await chat.sendMessage("Hello, world!");
+```
+
+```typescript {{"title":"HTTP Headers"}}
+import { createClient } from "rivetkit/client";
+
+// This only works for stateless actions, not WebSockets
+const client = createClient({
+  headers: {
+    Authorization: "Bearer my-token",
+  },
+});
+
 const chat = client.chatRoom.getOrCreate(["general"]);
-const connection = chat.connect({
-  authToken: "jwt-token-here",
-  userId: "user-123"
-});
 
-// Or with action calls
-const counter = client.counter.getOrCreate(["user-counter"], {
-  authToken: "jwt-token-here"
-});
+// Authentication will happen when calling the action by reading headers
+await chat.sendMessage("Hello, world!");
 ```
+</CodeGroup>
 
-## Intent-Based Authentication (Experimental)
+### Handling Errors
 
-The `onAuth` hook receives an `intents` parameter indicating what the client wants to do:
+Authentication errors use the same system as regular errors. See [errors](/docs/actors/errors) for more details.
 
-```typescript
-const secureActor = actor({
-  onAuth: async (params: { token: string }, { intents }) => {
-    // Different validation based on intent
-    if (intents.has("action")) {
-      // Requires higher privileges for actions
-      return await validateAdminToken(params.token);
-    } else if (intents.has("connect")) {
-      // Lower privileges for connections/events
-      return await validateUserToken(params.token);
-    }
-    
-    throw new UserError("Unknown intent");
-  },
-  
-  actions: {
-    adminAction: (c) => {
-      // Only accessible with admin token
-      return "Admin action performed";
-    }
-  }
-});
-```
+<CodeGroup>
+```typescript {{"title":"Connection"}}
+import { ActorError } from "rivetkit/client";
 
-## Error Handling
-
-### Authentication Errors
-
-Use specific error types for different authentication failures:
-
-```typescript
-import { UserError, Unauthorized, Forbidden } from "rivetkit/errors";
-
-const protectedActor = actor({
-  onAuth: async (params: { authToken?: string }) => {
-    const token = params.authToken;
-    
-    if (!token) {
-      throw new Unauthorized("Authentication token required");
-    }
-    
-    try {
-      const user = await validateToken(token);
-      return user;
-    } catch (error) {
-      if (error.name === "TokenExpired") {
-        throw new Unauthorized("Token has expired");
-      }
-      throw new Unauthorized("Invalid authentication token");
-    }
-  },
-  
-  actions: {
-    adminOnly: (c) => {
-      if (c.conn.auth.role !== "admin") {
-        throw new Forbidden("Admin access required");
-      }
-      return "Admin content";
-    }
-  }
-});
-```
-
-### Client Error Handling
-
-Handle authentication errors on the client:
-
-```typescript
-try {
-  const result = await protectedActor.adminOnly();
-} catch (error) {
-  if (error.code === "UNAUTHORIZED") {
-    // Redirect to login
+const conn = actor.connect();
+conn.onError((error: ActorError) => {
+  if (error.code === "forbidden") {
     window.location.href = "/login";
-  } else if (error.code === "FORBIDDEN") {
-    // Show permission denied message
+  } else if (error.code === "insufficient_permissions") {
+    showError("You don't have permission for this action");
+  }
+});
+```
+
+```typescript {{"title":"Stateless Action"}}
+import { ActorError } from "rivetkit/client";
+
+try {
+  const result = await actor.protectedAction();
+} catch (error) {
+  if (error instanceof ActorError && error.code === "forbidden") {
+    window.location.href = "/login";
+  } else if (error instanceof ActorError && error.code === "insufficient_permissions") {
     showError("You don't have permission for this action");
   }
 }
 ```
+</CodeGroup>
 
-## Integration with Auth Providers
+## Examples
 
-### Better Auth Integration
+### JWT
 
-<CardGroup>
-<Card title="Better Auth" href="/docs/integrations/better-auth" icon="lock">
-  Complete integration guide for Better Auth
-</Card>
-</CardGroup>
-
-### JWT Authentication
+Validate JSON Web Tokens and extract user claims:
 
 ```typescript
 import { actor, UserError } from "rivetkit";
 import jwt from "jsonwebtoken";
 
+interface ConnParams {
+  token: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+  permissions: string[];
+}
+
 const jwtActor = actor({
-  onAuth: async (params: { jwt?: string }, { request }) => {
-    const token = params.jwt || 
-                  request.headers.get("Authorization")?.replace("Bearer ", "");
-    
-    if (!token) {
-      throw new UserError("JWT token required");
-    }
-    
+  state: {},
+
+  createConnState: (c, params: ConnParams): ConnState => {
     try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET!);
+      const payload = jwt.verify(params.token, process.env.JWT_SECRET!) as any;
       return {
         userId: payload.sub,
         role: payload.role,
-        permissions: payload.permissions || []
+        permissions: payload.permissions || [],
       };
-    } catch (error) {
-      throw new UserError("Invalid or expired JWT token");
+    } catch {
+      throw new UserError("Invalid or expired token", { code: "invalid_token" });
     }
   },
-  
+
   actions: {
-    protectedAction: (c, data) => {
-      const { permissions } = c.conn.auth;
-      
-      if (!permissions.includes("write")) {
-        throw new UserError("Write permission required");
+    protectedAction: (c) => {
+      if (!c.conn.state.permissions.includes("write")) {
+        throw new UserError("Write permission required", { code: "forbidden" });
       }
-      
-      // Perform action...
       return { success: true };
-    }
-  }
+    },
+  },
 });
 ```
 
-### API Key Authentication
+### External Auth Provider
+
+Validate credentials against an external authentication service:
 
 ```typescript
+import { actor, UserError } from "rivetkit";
+
+interface ConnParams {
+  apiKey: string;
+}
+
+interface ConnState {
+  userId: string;
+  tier: string;
+}
+
 const apiActor = actor({
-  onAuth: async (params: { apiKey?: string }, { request }) => {
-    const apiKey = params.apiKey || 
-                   request.headers.get("X-API-Key");
-    
-    if (!apiKey) {
-      throw new UserError("API key required");
-    }
-    
-    // Validate with your API service
-    const response = await fetch(`${process.env.AUTH_SERVICE}/validate`, {
+  state: {},
+
+  createConnState: async (c, params: ConnParams): Promise<ConnState> => {
+    const response = await fetch(`https://api.my-auth-provider.com/validate`, {
       method: "POST",
-      headers: { "X-API-Key": apiKey }
+      headers: { "X-API-Key": params.apiKey },
     });
-    
+
     if (!response.ok) {
-      throw new UserError("Invalid API key");
+      throw new UserError("Invalid API key", { code: "invalid_api_key" });
     }
-    
-    const user = await response.json();
-    return {
-      userId: user.id,
-      tier: user.tier,
-      rateLimit: user.rateLimit
-    };
+
+    const data = await response.json();
+    return { userId: data.id, tier: data.tier };
   },
-  
+
   actions: {
     premiumAction: (c) => {
-      if (c.conn.auth.tier !== "premium") {
-        throw new UserError("Premium subscription required");
+      if (c.conn.state.tier !== "premium") {
+        throw new UserError("Premium subscription required", { code: "forbidden" });
       }
-      
       return "Premium content";
-    }
-  }
+    },
+  },
 });
 ```
 
-## Role-Based Access Control
+### Using `c.state` In Authorization
 
-Implement RBAC with helper functions:
+Access actor state via `c.state` and the actor's key via `c.key` to make authorization decisions:
 
 ```typescript
-// auth-helpers.ts
-export function requireRole(requiredRole: string) {
-  return (c: any) => {
-    const userRole = c.conn.auth.role;
-    const roleHierarchy = { "user": 1, "moderator": 2, "admin": 3 };
-    
-    if (roleHierarchy[userRole] < roleHierarchy[requiredRole]) {
-      throw new UserError(`${requiredRole} role required`);
-    }
-  };
+import { actor, UserError } from "rivetkit";
+
+interface ConnParams {
+  userId?: string;
 }
 
-export function requirePermission(permission: string) {
-  return (c: any) => {
-    const permissions = c.conn.auth.permissions || [];
-    if (!permissions.includes(permission)) {
-      throw new UserError(`Permission '${permission}' required`);
-    }
-  };
-}
-
-// usage in actor
-const forumActor = actor({
-  onAuth: async (params: { token: string }) => {
-    // ... authenticate and return user with role/permissions
+const userProfile = actor({
+  state: {
+    ownerId: "user-123",
+    isPrivate: true,
   },
-  
+
+  onBeforeConnect: (c, params: ConnParams) => {
+    // Use actor state to check access permissions
+    if (c.state.isPrivate && params.userId !== c.state.ownerId) {
+      throw new UserError("Access denied to private profile", { code: "forbidden" });
+    }
+  },
+
+  actions: {
+    getProfile: (c) => ({ ownerId: c.state.ownerId }),
+  },
+});
+```
+
+### Role-Based Access Control
+
+Create helper functions for common authorization patterns:
+
+```typescript
+import { actor, UserError } from "rivetkit";
+
+const ROLE_HIERARCHY = { user: 1, moderator: 2, admin: 3 };
+
+interface ConnState {
+  role: keyof typeof ROLE_HIERARCHY;
+  permissions: string[];
+}
+
+function requireRole(requiredRole: keyof typeof ROLE_HIERARCHY) {
+  return (c: { conn: { state: ConnState } }) => {
+    const userRole = c.conn.state.role;
+    if (ROLE_HIERARCHY[userRole] < ROLE_HIERARCHY[requiredRole]) {
+      throw new UserError(`${requiredRole} role required`, { code: "forbidden" });
+    }
+  };
+}
+
+function requirePermission(permission: string) {
+  return (c: { conn: { state: ConnState } }) => {
+    if (!c.conn.state.permissions?.includes(permission)) {
+      throw new UserError(`Permission '${permission}' required`, { code: "forbidden" });
+    }
+  };
+}
+
+const forumActor = actor({
+  state: {},
+
+  createConnState: async (c, params: { token: string }): Promise<ConnState> => {
+    const user = await validateToken(params.token);
+    return { role: user.role, permissions: user.permissions };
+  },
+
   actions: {
     deletePost: (c, postId: string) => {
       requireRole("moderator")(c);
-      // Delete post logic...
+      // Delete post...
     },
-    
+
     editPost: (c, postId: string, content: string) => {
       requirePermission("edit_posts")(c);
-      // Edit post logic...
-    }
-  }
+      // Edit post...
+    },
+  },
 });
 ```
 
-## Testing Authentication
+### Rate Limiting
 
-Mock authentication for testing:
+Use `c.vars` to track connection attempts and rate limit by user:
 
 ```typescript
-// test helpers
-export function createMockAuth(userData: any) {
-  return {
-    onAuth: async () => userData
+import { actor, UserError } from "rivetkit";
+
+interface ConnParams {
+  authToken: string;
+}
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitedActor = actor({
+  state: {},
+  vars: { rateLimits: {} as Record<string, RateLimitEntry> },
+
+  onBeforeConnect: async (c, params: ConnParams) => {
+    // Extract user ID
+    const { userId } = await validateToken(params.authToken);
+
+    // Check rate limit
+    const now = Date.now();
+    const limit = c.vars.rateLimits[userId];
+
+    if (limit && limit.resetAt > now && limit.count >= 10) {
+      throw new UserError("Too many requests, try again later", { code: "rate_limited" });
+    }
+
+    // Update rate limit
+    if (!limit || limit.resetAt <= now) {
+      c.vars.rateLimits[userId] = { count: 1, resetAt: now + 60_000 };
+    } else {
+      limit.count++;
+    }
+  },
+
+  actions: {
+    getData: (c) => ({ success: true }),
+  },
+});
+```
+
+The limits in this example are [ephemeral](/docs/actors/state#ephemeral-variables-vars). If you wish to persist rate limits, you can optionally replace `vars` with `state`.
+
+### Caching Tokens
+
+Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/docs/actors/state#ephemeral-variables-vars) for more details.
+
+```typescript
+import { actor, UserError } from "rivetkit";
+
+interface ConnParams {
+  authToken: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+}
+
+interface TokenCache {
+  [token: string]: {
+    userId: string;
+    role: string;
+    expiresAt: number;
   };
 }
 
-// in tests
-describe("Protected Actor", () => {
-  it("allows admin actions", async () => {
-    const mockActor = {
-      ...protectedActor,
-      ...createMockAuth({ role: "admin", userId: "123" })
+const cachedAuthActor = actor({
+  state: {},
+  vars: { tokenCache: {} as TokenCache },
+
+  createConnState: async (c, params: ConnParams): Promise<ConnState> => {
+    const token = params.authToken;
+
+    // Check cache first
+    const cached = c.vars.tokenCache[token];
+    if (cached && cached.expiresAt > Date.now()) {
+      return { userId: cached.userId, role: cached.role };
+    }
+
+    // Validate token (expensive operation)
+    const payload = await validateToken(token);
+    if (!payload) {
+      throw new UserError("Invalid token", { code: "invalid_token" });
+    }
+
+    // Cache the result
+    c.vars.tokenCache[token] = {
+      userId: payload.sub,
+      role: payload.role,
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
     };
-    
-    const result = await mockActor.adminOnly();
-    expect(result).toBe("Admin content");
-  });
-  
-  it("denies non-admin actions", async () => {
-    const mockActor = {
-      ...protectedActor,
-      ...createMockAuth({ role: "user", userId: "123" })
-    };
-    
-    await expect(mockActor.adminOnly()).rejects.toThrow("Admin access required");
-  });
+
+    return { userId: payload.sub, role: payload.role };
+  },
+
+  actions: {
+    getData: (c) => ({ userId: c.conn.state.userId }),
+  },
 });
 ```
 
-## Best Practices
-
-1. **Use onAuth**: Prefer `onAuth` over `onBeforeConnect` for most authentication
-2. **Validate Early**: Authenticate at the HTTP server level when possible
-3. **Specific Errors**: Use appropriate error types (Unauthorized, Forbidden)
-4. **Rate Limiting**: Consider rate limiting in your authentication logic
-5. **Token Refresh**: Handle token expiration gracefully on the client
-6. **Audit Logging**: Log authentication events for security monitoring
-7. **Least Privilege**: Only grant the minimum permissions needed

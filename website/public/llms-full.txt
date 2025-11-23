@@ -150,13 +150,7 @@ const counter = actor(,
 });
 ```
 
-## Authentication
-
-By default, actors' actions are only accessible from your server-side client.
-
-In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/actors/authentication). Read more about the [types of clients](/docs/actors/clients)
-
-## Streaming Return Data
+## Streaming Data
 
 Actions have a single return value. To stream realtime data in response to an action, use [events](/docs/actors/events).
 
@@ -187,686 +181,580 @@ For comprehensive API documentation, please refer to the [TypeDoc generated docu
 
 # Authentication
 
-Secure your actors with authentication and authorization
+Secure your actors with authentication and authorization.
 
-Rivet provides multiple authentication methods to secure your actors. Use `onAuth` for server-side validation or `onBeforeConnect` for actor-level authentication.
+## Do You Need Authentication?
 
-## Authentication Methods
+	Actors are private by default on Rivet Cloud. Only requests with the publishable token can interact with actors.
 
-### onAuth Hook (Recommended)
+	- **Backend-only actors**: If your publishable token is only included in your backend, then authentication is not necessary.
+	- **Frontend-accessible actors**: If your publishable token is included in your frontend, then implementing authentication is recommended.
 
-The `onAuth` hook runs on the HTTP server before clients can access actors. This is the preferred method for most authentication scenarios.
+	Actors are public by default on self-hosted Rivet. Anyone can access them without a token.
+
+	- **Only accessible within private network**: If Rivet is only accessible within your private network, then authentication is not necessary.
+	- **Rivet exposed to the public internet**: If Rivet is configured to accept traffic from the public internet, then implementing authentication is recommended.
+
+## Authentication Connections
+
+Authentication is configured through either:
+
+- `onBeforeConnect` for simple pass/fail validation
+- `createConnState` when you need to access user data in your actions via `c.conn.state`
+
+### `onBeforeConnect`
+
+The `onBeforeConnect` hook validates credentials before allowing a connection. Throw an error to reject the connection.
 
 ```typescript
-const chatRoom = actor(, ) => 
-    
-    // Validate token and return user data
-    const user = await validateJWT(token);
+interface ConnParams 
+
+const chatRoom = actor(,
+
+  onBeforeConnect: async (c, params: ConnParams) => );
+    }
+  },
+
+  actions: );
+    },
+  },
+});
+```
+
+### `createConnState`
+
+Use `createConnState` to extract user data from credentials and store it in connection state. This data is accessible in actions via `c.conn.state`. Like `onBeforeConnect`, throwing an error will reject the connection. See [connections](/docs/actors/connections) for more details.
+
+```typescript
+interface ConnParams 
+
+interface ConnState 
+
+const chatRoom = actor(,
+
+  createConnState: async (c, params: ConnParams): Promise => );
+    }
     return ;
   },
-  
-  state: ,
-  
-  actions:  = c.conn.auth;
-      
-      if (role !== "member") 
-      
-      const message = ;
-      
-      c.state.messages.push(message);
-      c.broadcast("newMessage", message);
-      return message;
-    }
-  }
+
+  actions:  = c.conn.state;
+
+      if (role !== "member") );
+      }
+
+      c.state.messages.push();
+      c.broadcast("newMessage", );
+    },
+  },
 });
 ```
 
-### `onBeforeConnect` Hook
+## Available Auth Data
 
-Use `onBeforeConnect` when you need access to actor state for authentication:
+Authentication hooks have access to several properties:
 
-```typescript
-const userProfileActor = actor(),
-  
-  state: ,
-  
-  onBeforeConnect: async (c, opts) =>  = opts;
-    const userId = await validateUser(params.token);
-    
-    // Check if user can access this profile
-    if (c.state.isPrivate && c.state.ownerId !== userId) 
-  },
-  
-  createConnState: (c, opts, params: ) => ;
-  },
-  
-  actions: 
-      
-      // Update profile...
-    }
-  }
-});
-```
+| Property | Description |
+|----------|-------------|
+| `params` | Custom data passed by the client when connecting (see [connection params](/docs/actors/connections#extracting-data-from-connection-params)) |
+| `c.request` | The underlying HTTP request object |
+| `c.request.headers` | Request headers for tokens, API keys (does not work for `.connect()`) |
+| `c.state` | Actor state for authorization decisions (see [state](/docs/actors/state)) |
+| `c.key` | The actor's key (see [keys](/docs/actors/keys)) |
 
-Prefer `onAuth` over `onBeforeConnect` when possible, as `onAuth` runs on the HTTP server and uses fewer actor resources.
+It's recommended to use `params` instead of `c.request.headers` whenever possible since it works for both HTTP & WebSocket connections.
 
-## Connection Parameters
+## Client Usage
+
+### Passing Credentials
 
 Pass authentication data when connecting:
 
-```typescript
-// Client side
-const chat = client.chatRoom.getOrCreate(["general"]);
+```typescript }
+const client = createClient();
+const chat = client.chatRoom.getOrCreate(["general"], ,
+});
+
+// Authentication will happen on connect by reading connection parameters
 const connection = chat.connect();
-
-// Or with action calls
-const counter = client.counter.getOrCreate(["user-counter"], );
 ```
 
-## Intent-Based Authentication (Experimental)
+```typescript }
+const client = createClient();
+const chat = client.chatRoom.getOrCreate(["general"], ,
+});
 
-The `onAuth` hook receives an `intents` parameter indicating what the client wants to do:
+// Authentication will happen when calling the action by reading input
+// parameters
+await chat.sendMessage("Hello, world!");
+```
 
-```typescript
-const secureActor = actor(, ) =>  else if (intents.has("connect")) 
-    
-    throw new UserError("Unknown intent");
-  },
-  
-  actions: 
-  }
+```typescript }
+// This only works for stateless actions, not WebSockets
+const client = createClient(,
+});
+
+const chat = client.chatRoom.getOrCreate(["general"]);
+
+// Authentication will happen when calling the action by reading headers
+await chat.sendMessage("Hello, world!");
+```
+
+### Handling Errors
+
+Authentication errors use the same system as regular errors. See [errors](/docs/actors/errors) for more details.
+
+```typescript }
+const conn = actor.connect();
+conn.onError((error: ActorError) =>  else if (error.code === "insufficient_permissions") 
 });
 ```
 
-## Error Handling
-
-### Authentication Errors
-
-Use specific error types for different authentication failures:
-
-```typescript
-const protectedActor = actor() => 
-    
-    try  catch (error) 
-      throw new Unauthorized("Invalid authentication token");
-    }
-  },
-  
-  actions: 
-      return "Admin content";
-    }
-  }
-});
-```
-
-### Client Error Handling
-
-Handle authentication errors on the client:
-
-```typescript
-try  catch (error)  else if (error.code === "FORBIDDEN") 
+```typescript }
+try  catch (error)  else if (error instanceof ActorError && error.code === "insufficient_permissions") 
 }
 ```
 
-## Integration with Auth Providers
+## Examples
 
-### Better Auth Integration
+### JWT
 
-  Complete integration guide for Better Auth
-
-### JWT Authentication
+Validate JSON Web Tokens and extract user claims:
 
 ```typescript
-const jwtActor = actor(, ) => 
-    
-    try ;
-    } catch (error) 
-  },
-  
-  actions:  = c.conn.auth;
-      
-      if (!permissions.includes("write")) 
-      
-      // Perform action...
-      return ;
+interface ConnParams 
+
+interface ConnState 
+
+const jwtActor = actor(,
+
+  createConnState: (c, params: ConnParams): ConnState => ;
+    } catch );
     }
-  }
+  },
+
+  actions: );
+      }
+      return ;
+    },
+  },
 });
 ```
 
-### API Key Authentication
+### External Auth Provider
+
+Validate credentials against an external authentication service:
 
 ```typescript
-const apiActor = actor(, ) => 
-    
-    // Validate with your API service
-    const response = await fetch(`$/validate`, 
+interface ConnParams 
+
+interface ConnState 
+
+const apiActor = actor(,
+
+  createConnState: async (c, params: ConnParams): Promise => ,
     });
-    
-    if (!response.ok) 
-    
-    const user = await response.json();
+
+    if (!response.ok) );
+    }
+
+    const data = await response.json();
     return ;
   },
-  
-  actions: 
-      
+
+  actions: );
+      }
       return "Premium content";
-    }
-  }
+    },
+  },
 });
 ```
 
-## Role-Based Access Control
+### Using `c.state` In Authorization
 
-Implement RBAC with helper functions:
+Access actor state via `c.state` and the actor's key via `c.key` to make authorization decisions:
 
 ```typescript
-// auth-helpers.ts
-function requireRole(requiredRole: string) ;
-    
-    if (roleHierarchy[userRole]  ' required`);
+interface ConnParams 
+
+const userProfile = actor(,
+
+  onBeforeConnect: (c, params: ConnParams) => );
+    }
+  },
+
+  actions: ),
+  },
+});
+```
+
+### Role-Based Access Control
+
+Create helper functions for common authorization patterns:
+
+```typescript
+const ROLE_HIERARCHY = ;
+
+interface ConnState 
+
+function requireRole(requiredRole: keyof typeof ROLE_HIERARCHY)  }) => ' required`, );
     }
   };
 }
 
-// usage in actor
-const forumActor = actor() => ,
-  
+const forumActor = actor(,
+
+  createConnState: async (c, params: ): Promise => ;
+  },
+
   actions: ,
-    
-    editPost: (c, postId: string, content: string) => 
-  }
+
+    editPost: (c, postId: string, content: string) => ,
+  },
 });
 ```
 
-## Testing Authentication
+### Rate Limiting
 
-Mock authentication for testing:
+Use `c.vars` to track connection attempts and rate limit by user:
 
 ```typescript
-// test helpers
-function createMockAuth(userData: any) ;
-}
+interface ConnParams 
 
-// in tests
-describe("Protected Actor", () => )
-    };
-    
-    const result = await mockActor.adminOnly();
-    expect(result).toBe("Admin content");
-  });
-  
-  it("denies non-admin actions", async () => )
-    };
-    
-    await expect(mockActor.adminOnly()).rejects.toThrow("Admin access required");
-  });
+interface RateLimitEntry 
+
+const rateLimitedActor = actor(,
+  vars:  as Record },
+
+  onBeforeConnect: async (c, params: ConnParams) =>  = await validateToken(params.authToken);
+
+    // Check rate limit
+    const now = Date.now();
+    const limit = c.vars.rateLimits[userId];
+
+    if (limit && limit.resetAt > now && limit.count >= 10) );
+    }
+
+    // Update rate limit
+    if (!limit || limit.resetAt  (),
+  },
 });
 ```
 
-## Best Practices
+The limits in this example are [ephemeral](/docs/actors/state#ephemeral-variables-vars). If you wish to persist rate limits, you can optionally replace `vars` with `state`.
 
-1. **Use onAuth**: Prefer `onAuth` over `onBeforeConnect` for most authentication
-2. **Validate Early**: Authenticate at the HTTP server level when possible
-3. **Specific Errors**: Use appropriate error types (Unauthorized, Forbidden)
-4. **Rate Limiting**: Consider rate limiting in your authentication logic
-5. **Token Refresh**: Handle token expiration gracefully on the client
-6. **Audit Logging**: Log authentication events for security monitoring
-7. **Least Privilege**: Only grant the minimum permissions needed
-## Actor Clients
+### Caching Tokens
 
-# Actor Clients
+Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/docs/actors/state#ephemeral-variables-vars) for more details.
 
-Learn how to call actions and connect to actors from client applications using Rivet's TypeScript client library.
+```typescript
+interface ConnParams 
 
-Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
+interface ConnState 
 
-Using the RivetKit client is completely optional. If you prefer to write your own networking logic, you can either:
+interface TokenCache ;
+}
 
-- Write your own HTTP endpoints and use the client returned from `registry.start` (see below)
-- Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
+const cachedAuthActor = actor(,
+  vars:  as TokenCache },
 
-## Client Setup
+  createConnState: async (c, params: ConnParams): Promise => ;
+    }
 
-There are several ways to create a client for communicating with actors:
+    // Validate token (expensive operation)
+    const payload = await validateToken(token);
+    if (!payload) );
+    }
+
+    // Cache the result
+    c.vars.tokenCache[token] = ;
+
+    return ;
+  },
+
+  actions: ),
+  },
+});
+```
+## Clients
+
+# Clients
+
+Clients are used to get and communicate with actors from your application. Clients can be created from either your frontend or backend.
+
+## Creating a Client
+
+		For frontend applications or external services:
+
+		```typescript }
+		// Must use `type`
+
+		const client = createClient();
+		```
+
+		```tsx }
+		// Must use `type`
+
+		const  = createRivetKit();
+		```
+
+			Clients include the following options:
+
+			```typescript
+			const client = createClient(
+			});
+			```
 
 		From your backend server that hosts the registry:
 
-		```typescript }
+		```typescript
 		const  = registry.start();
-
-		const app = new Hono();
-
-		app.post("/foo", () => );
-
-		serve(app);
-		```
-
-		This client doesn't [require authentication](/docs/actors/authentication).
-
-		For frontend applications or external services connecting to your Rivet backend:
-
-		```typescript }
-		// IMPORTANT: Must use `type`
-
-		const client = createClient("http://localhost:8080");
-
-		const response = await client.otherActor.getOrCreate().foo();
-		```
-
-		Configure the client with additional options:
-
-		```typescript }
-		const client = createClient("http://localhost:8080", );
-		```
-
-		This client [requires authentication](/docs/actors/authentication).
-
-		**Important**: Use `import type` when importing the registry type in order to
-		avoid accidentally bundling your backend code.
-
-		```typescript }
-		// ✅ Do this
-		// 🚫 Not this
 		```
 
 		From within an actor to communicate with other actors:
 
-		```typescript }
+		```typescript
 		const myActor = actor(
 			}
 		});
 		```
 
-		This client doesn't [require authentication](/docs/actors/authentication).
-
 		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
 
-## `ActorClient`
+## Getting an Actor
 
-The `ActorClient` provides methods for finding and creating actors. All methods return an `ActorHandle` that you can use to call actions or establish connections.
+### `getOrCreate`
 
-### `get(key?, opts?)` - Find Existing Actor
-
-Returns a handle to an existing actor or `null` if it doesn't exist:
-
-```typescript
-// Get existing actor by key
-const handle = client.myActor.get(["actor-id"]);
-
-if (handle)  else 
-```
-
-### `getOrCreate(key?, opts?)` - Find or Create Actor
-
-Returns a handle to an existing actor or creates a new one if it doesn't exist:
-
-```typescript
-// Get or create actor (synchronous)
-const counter = client.counter.getOrCreate(["my-counter"]);
-
-// With initialization input
-const game = client.game.getOrCreate(["game-123"], 
-});
-
-// Call actions immediately
-const count = await counter.increment(5);
-```
-
-`get()` and `getOrCreate()` are synchronous and return immediately. The actor is created lazily when you first call an action.
-
-### `create(key?, opts?)` - Create New Actor
-
-Explicitly creates a new actor instance, failing if one already exists:
-
-```typescript
-// Create new actor (async)
-const newGame = await client.game.create(["game-456"], 
-});
-
-// Actor is guaranteed to be newly created
-await newGame.initialize();
-```
-
-### `getForId(id, opts?)` - Find by Internal ID
-
-Connect to an actor using its internal system ID:
-
-```typescript
-// Connect by internal ID
-const actorId = "55425f42-82f8-451f-82c1-6227c83c9372";
-const actor = client.myActor.getForId(actorId);
-
-await actor.performAction();
-```
-
-Prefer using keys over internal IDs for actor discovery. IDs are primarily for debugging and advanced use cases.
-
-## `ActorHandle`
-
-An `ActorHandle` represents a reference to an actor instance and provides methods for calling actions and establishing connections. You get an `ActorHandle` from the `ActorClient` methods like `get()`, `getOrCreate()`, and `create()`.
-
-### Calling Actions
-
-You can call actions directly on an `ActorHandle`:
-
-```typescript
-const counter = client.counter.getOrCreate(["my-counter"]);
-
-// Call actions directly
-const count = await counter.increment(5);
-const currentValue = await counter.getCount();
-await counter.reset();
-```
-
-Actions called on an `ActorHandle` are stateless - each call is independent and doesn't maintain a persistent connection to the actor.
-
-### `fetch(input, init?)` - Raw HTTP Requests
-
-Make direct HTTP requests to the actor's `onFetch` handler:
-
-```typescript
-const actor = client.myActor.getOrCreate(["key"]);
-
-// GET request
-const response = await actor.fetch("/api/hello", );
-const data = await response.json();
-
-// POST request with body
-const postResponse = await actor.fetch("/api/echo", ,
-  body: JSON.stringify()
-});
-
-// Can also pass a Request object
-const request = new Request("/api/data", );
-const requestResponse = await actor.fetch(request);
-```
-
-See [Fetch & WebSocket Handler](/docs/actors/fetch-and-websocket-handler) documentation for more information.
-
-For most use cases, actions provide a higher-level API that's easier to work with than raw HTTP handlers.
-
-### `websocket(path?, protocols?)` - Raw WebSocket Connections
-
-Create direct WebSocket connections to the actor's `onWebSocket` handler:
-
-```typescript
-const actor = client.myActor.getOrCreate(["key"]);
-
-// Basic WebSocket connection
-const ws = await actor.websocket();
-ws.addEventListener("message", (event) => );
-ws.send("Hello WebSocket!");
-
-// WebSocket with custom path
-const streamWs = await actor.websocket("/stream");
-
-// WebSocket with protocols
-const protocolWs = await actor.websocket("/", ["chat", "v1"]);
-```
-
-See [Fetch & WebSocket Handler](/docs/actors/fetch-and-websocket-handler) documentation for more information.
-
-For most use cases, actions & events provide a higher-level API that's easier to work with than raw HTTP handlers.
-
-### `connect(params?)` - Establish Stateful Connection
-
-To open a stateful connection using `ActorConn`, call `.connect()`:
-
-```typescript
-const counter = client.counter.getOrCreate(["live-counter"]);
-const connection = counter.connect();
-
-// Listen for events
-connection.on("countChanged", (newCount: number) => );
-
-// Call actions through the connection
-const result = await connection.increment(1);
-
-// Clean up when done
-await connection.dispose();
-```
-
-## `ActorConn`
-
-Real-time connections enable bidirectional communication between clients and actors through persistent connections. Rivet automatically negotiates between WebSocket (preferred for full duplex) and Server-Sent Events (SSE) as a fallback for restrictive environments.
-
-For more information on connections, see the [connections documentation](/docs/actors/connections). For more information on handling events, see the [events documentation](/docs/actors/events).
-
-### Calling Actions
-
-You can also call actions through an `ActorConn`, just like with an `ActorHandle`:
-
-```typescript
-const connection = counter.connect();
-
-// Call actions through the connection
-const count = await connection.increment(5);
-const currentValue = await connection.getCount();
-```
-
-### Reconnections
-
-Connections automatically handle network failures with built-in reconnection logic:
-
-- **Exponential backoff**: Retry delays increase progressively to avoid overwhelming the server
-- **Action queuing**: Actions called while disconnected are queued and sent once reconnected
-- **Event resubscription**: Event listeners are automatically restored on reconnection
-
-### `on(eventName, callback)` - Listen for Events
-
-Listen for events from the actor:
-
-```typescript
-// Listen for chat messages
-connection.on("messageReceived", (message) => : $`);
-});
-
-// Listen for game state updates
-connection.on("gameStateChanged", (gameState) => );
-
-// Listen for player events
-connection.on("playerJoined", (player) =>  joined the game`);
-});
-```
-
-### `once(eventName, callback)` - Listen Once
-
-Listen for an event only once:
-
-```typescript
-// Wait for game to start
-connection.once("gameStarted", () => );
-```
-
-### `dispose()` - Clean Up Connection
-
-Always dispose of connections when finished to free up resources:
-
-```typescript
-const connection = actor.connect();
-
-try  finally 
-
-// Or with automatic cleanup in React/frameworks
-useEffect(() => ;
-}, []);
-```
-
-**Important:** Disposing a connection:
-- Closes the underlying WebSocket or SSE connection
-- Removes all event listeners
-- Cancels any pending reconnection attempts
-- Prevents memory leaks in long-running applications
-
-## Authentication
-
-### Connection Parameters
-
-Pass authentication data when connecting to actors:
-
-```typescript
-// With connection parameters
-const chat = client.chatRoom.getOrCreate(["general"], 
-});
-
-const connection = chat.connect();
-
-// Or for action calls
-const result = await chat.sendMessage("Hello world!");
-```
-
-### onAuth Hook Validation
-
-Actors can validate authentication using the `onAuth` hook:
-
-```typescript
-const protectedActor = actor( = opts;
-    
-    // Extract token from params or headers
-    const token = params.authToken || req.headers.get("Authorization");
-    
-    if (!token) );
-    }
-    
-    // Validate and return user data
-    const user = await validateJWT(token);
-    
-    // Check permissions based on what the client is trying to do
-    if (intents.has("create") && user.role !== "admin") );
-    }
-    
-    return ;
-  },
-  
-  actions:  = c.conn.auth;
-      
-      if (role !== "admin") );
-      }
-      
-      return `Hello admin $`;
-    }
-  }
-});
-```
-
-Learn more about [authentication patterns](/docs/actors/authentication).
-
-## Type Safety
-
-Rivet provides end-to-end type safety between clients and actors:
-
-### Action Type Safety
-
-TypeScript validates action signatures and return types:
-
-```typescript
-// TypeScript knows the action signatures
-const counter = client.counter.getOrCreate(["my-counter"]);
-
-const count: number = await counter.increment(5);   // ✓ Correct
-const invalid = await counter.increment("5");       // ✗ Type error
-
-// IDE autocomplete shows available actions
-counter./*  */
-```
-
-### Client Type Safety
-
-Import types from your registry for full type safety:
-
-```typescript
-// Client is fully typed
-const client = createClient("http://localhost:8080");
-
-// IDE provides autocomplete for all actors
-client./*  */
-```
-
-## Best Practices
-
-### `ActorHandle` (Stateless) vs `ActorConn` (Stateful) Clients
-
-**Use `ActorHandle` (Stateless) For:**
-- Simple request-response operations
-- One-off operations  
-- Server-side integration
-
-```typescript
-// Good for simple operations
-const result = await counter.increment(1);
-const status = await server.getStatus();
-```
-
-**Use `ActorConn` (Stateful) Connections For:**
-- Real-time updates needed
-- Event-driven interactions
-- Long-lived client sessions
-
-```typescript
-// Good for real-time features
-const connection = chatRoom.connect();
-connection.on("messageReceived", updateUI);
-await connection.sendMessage("Hello!");
-```
-
-### Resource Management
-
-Always clean up connections when finished:
-
-```typescript
-// Manual cleanup
-const connection = actor.connect();
-try  finally 
-```
-
-### Error Handling
-
-Handle connection errors using the `.onError()` method:
+Returns a handle to an existing actor or creates one if it doesn't exist:
 
 ```typescript }
-const connection = actor.connect();
+const counter = client.counter.getOrCreate("my-counter");
+const count = await counter.increment(5);
+```
 
-connection.onError((error) =>  else if (error.code === 'ACTOR_NOT_FOUND') 
+```tsx }
+const counter = useActor();
+
+// Call actions through the connection
+await counter.connection?.increment(5);
+```
+
+Pass initialization data when creating:
+
+```typescript }
+const game = client.game.getOrCreate("game-123", 
 });
 ```
 
 ```tsx }
-function ConnectionErrorHandler() );
+const game = useActor(,
+});
+```
 
-  useEffect(() => , 5000);
-    });
+### `get`
 
-    // Clean up error handler when component unmounts
-    return unsubscribe;
-  }, [actor.connection]);
+Returns a handle to an existing actor or `null` if it doesn't exist:
 
-  // ...rest of component...
+```typescript
+const handle = client.myActor.get("actor-id");
+
+if (handle) 
+```
+
+### `create`
+
+Creates a new actor, failing if one already exists with that key:
+
+```typescript
+const newGame = await client.game.create("game-456", 
+});
+```
+
+### `getForId`
+
+Connect to an actor using its internal ID:
+
+```typescript
+const actor = client.myActor.getForId("lrysjam017rhxofttna2x5nzjml610");
+```
+
+Prefer using keys over internal IDs for simplicity.
+
+## Calling Actions
+
+```typescript }
+const counter = client.counter.getOrCreate("my-counter");
+
+const count = await counter.increment(5);
+const value = await counter.getCount();
+await counter.reset();
+```
+
+```tsx }
+const counter = useActor();
+
+// Call actions through the connection
+const count = await counter.connection?.increment(5);
+const value = await counter.connection?.getCount();
+await counter.connection?.reset();
+```
+
+In JavaScript, actions called without `connect()` are stateless. Each call is independent without a persistent connection. In React, `useActor` automatically manages a persistent connection.
+
+## Connecting to an Actor
+
+For real-time use cases, establish a persistent connection to the actor:
+
+```typescript }
+const counter = client.counter.getOrCreate("live-counter");
+const conn = counter.connect();
+
+// Listen for events
+conn.on("countChanged", (newCount: number) => );
+
+// Call actions through the connection
+await conn.increment(1);
+```
+
+```tsx }
+const [count, setCount] = useState(0);
+
+const counter = useActor();
+
+// Listen for events
+counter.useEvent("countChanged", (newCount: number) => );
+
+// Call actions through the connection
+await counter.connection?.increment(1);
+```
+
+## Subscribing to Events
+
+Listen for events from connected actors:
+
+```typescript }
+const conn = client.chatRoom.getOrCreate("general").connect();
+
+// Listen for events
+conn.on("messageReceived", (message) => : $`);
+});
+
+// Listen once
+conn.once("gameStarted", () => );
+```
+
+```tsx }
+const [messages, setMessages] = useState([]);
+
+const chatRoom = useActor();
+
+// Listen for events (automatically cleaned up on unmount)
+chatRoom.useEvent("messageReceived", (message) => );
+```
+
+## Full-Stack Type Safety
+
+Import types from your registry for end-to-end type safety:
+
+```typescript }
+const client = createClient();
+
+// IDE autocomplete shows available actors and actions
+const counter = client.counter.getOrCreate("my-counter");
+const count = await counter.increment(5);
+```
+
+```tsx }
+const  = createRivetKit();
+
+// IDE autocomplete shows available actors and actions
+const counter = useActor();
+const count = await counter.connection?.increment(5);
+```
+
+Use `import type` to avoid accidentally bundling backend code in your frontend.
+
+## Advanced
+
+### Disposing Clients & Connections
+
+Dispose clients to close all connections:
+
+```typescript
+await client.dispose();
+```
+
+Dispose individual connections when finished:
+
+```typescript
+const conn = actor.connect();
+
+try  finally 
+```
+
+### Connection Parameters
+
+Pass custom data to the actor when connecting:
+
+```typescript }
+const chat = client.chatRoom.getOrCreate("general", 
+});
+```
+
+```tsx }
+const chat = useActor(,
+});
+```
+
+### Authentication
+
+Pass authentication tokens when connecting:
+
+```typescript }
+const chat = client.chatRoom.getOrCreate("general", 
+});
+```
+
+```tsx }
+const chat = useActor(,
+});
+```
+
+See [authentication](/docs/actors/authentication) for more details.
+
+### Error Handling
+
+```typescript }
+const conn = actor.connect();
+conn.onError((error: ActorError) => 
+});
+```
+
+```typescript }
+try  catch (error) 
 }
 ```
 
-### Execute Actions in Parallel
+```tsx }
+const actor = useActor();
 
-You can execute batch requests in parallel:
-
-```typescript
-// Batch multiple operations through a connection
-const connection = actor.connect();
-await Promise.all([
-  connection.operation1(),
-  connection.operation2(),
-  connection.operation3(),
-]);
-
-// Use getOrCreate for actors you expect to exist
-const existing = client.counter.getOrCreate(["known-counter"]);
-
-// Use create only when you need a fresh instance
-const fresh = await client.counter.create(["new-counter"]);
+const handleAction = async () =>  catch (error) 
+  }
+};
 ```
 
-However, it's recommended to move this logic to run within the actor instead of the client if executing multiple actions is a common pattern.
+See [errors](/docs/actors/errors) for more details.
+
+### Actor Resolution
+
+`get` and `getOrCreate` return immediately without making a network request. The actor is resolved lazily when you call an action or `connect()`.
+
+To explicitly resolve an actor and get its ID, use `resolve()`:
+
+```typescript
+const handle = client.counter.getOrCreate("my-counter");
+const actorId = await handle.resolve();
+console.log(actorId); // "lrysjam017rhxofttna2x5nzjml610"
+```
 ## Communicating Between Actors
 
 # Communicating Between Actors
@@ -1097,10 +985,77 @@ function ConnectionErrorHandler() );
   // ...rest of component...
 }
 ```
+## Destroying Actors
 
-## Offline & Auto-Reconnection
+# Destroying Actors
 
-See [client documentation](/docs/actors/communicating-between-actors) for details on reconnection behavior.
+Actors can be permanently destroyed. Common use cases include:
+
+- User account deletion
+- Ending a user session
+- Closing a room or game
+- Cleaning up temporary resources
+- GDPR/compliance data removal
+
+Actors sleep when idle, so destruction is only needed to permanently remove data — not to save compute.
+
+## Destroying An Actor
+
+### Destroy via Action
+
+To destroy an actor, use `c.destroy()` like this:
+
+```typescript
+interface UserInput 
+
+const userActor = actor(),
+  actions: ,
+  },
+});
+```
+
+### Destroy via HTTP
+
+Send a DELETE request to destroy an actor. This requires an admin token for authentication.
+
+```typescript
+await fetch(`https://api.rivet.dev/actors/$?namespace=$`, `,
+  },
+});
+```
+
+```bash
+curl -X DELETE "https://api.rivet.dev/actors/?namespace=" \
+  -H "Authorization: Bearer "
+```
+
+	Creating admin tokens is currently not supported on Rivet Cloud. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3530).
+
+### Destroy via Dashboard
+
+To destroy an actor via the dashboard, navigate to the actor and press the red "X" in the top right.
+
+## Lifecycle Hook
+
+Once destroyed, the `onDestroy` hook will be called. This can be used to clean up resources related to the actor. For example:
+
+```typescript
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+interface UserInput 
+
+const userActor = actor(),
+  onDestroy: async (c) => , your account has been deleted.`,
+    });
+  },
+  actions: ,
+  },
+});
+```
+
+## Accessing Actor After Destroy
+
+Once an actor is destroyed, any subsequent requests to it will return an `actor_not_found` error. The actor's state is permanently deleted.
 ## Ephemeral Variables
 
 # Ephemeral Variables
@@ -1199,6 +1154,11 @@ const myActor = actor(,
 ```
 
 Consult the documentation for each driver to learn more about their respective `DriverContext` types.
+## Errors
+
+# Errors
+
+TODO
 ## Events
 
 # Events
@@ -1400,7 +1360,7 @@ const pool = new Pool();
 const userActor = actor(),
   
   // Insert user into database when actor starts
-  onStart: async (c, opts) => ,
+  onWake: async (c, opts) => ,
   
   actions: ;
     },
@@ -1453,7 +1413,7 @@ const db = drizzle(pool);
 const userActor = actor(),
   
   // Insert user into database when actor starts
-  onStart: async (c, opts) => );
+  onWake: async (c, opts) => );
   },
   
   actions: )
@@ -1493,342 +1453,7 @@ const bobData = await bob.getUser();
 
 # Fetch and WebSocket Handler
 
-Actors can handle HTTP requests and WebSocket connections through the `onFetch` and `onWebSocket` handlers.
-
-For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/events) provide high-level connection handling that's easier to work with. However, raw handlers are required when implementing custom use cases or integrating external libraries that need direct access to the underlying HTTP `Request`/`Response` objects or WebSocket connections.
-
-## Defining Handlers
-
-### `onFetch(c, request, )`
-
-The `onFetch` handler processes HTTP requests sent to your actor. It receives the actor context and a standard `Request` object.
-
-WebSocket upgrades are not currently supported in `onFetch`. Use `onWebSocket` instead.
-
-```typescript
-const httpActor = actor(,
-    actions: ,
-    onFetch(ctx, request) ), ,
-            });
-        }
-
-        if (url.pathname === "/api/echo" && request.method === "POST") );
-        }
-
-        // Return 404 for unhandled paths
-        return new Response("Not Found", );
-    },
-});
-```
-
-```typescript
-function buildRouter(ctx: ActorContext) );
-    });
-
-    app.post("/api/echo", async (c) => );
-
-    app.get("/api/stats", (c) => );
-    });
-
-    return app;
-}
-
-const honoActor = actor(,
-    createVars(ctx) ;
-    },
-    actions: ,
-    async onFetch(ctx, request) ,
-});
-```
-
-Also see the [raw fetch handler example project](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-fetch-handler).
-
-	`onFetch` can be used to expose Server-Sent Events from Rivet Actors.
-
-### `onWebSocket(c, websocket, )`
-
-The `onWebSocket` handler manages WebSocket connections. It receives the actor context, a `WebSocket` object, and the initial `Request`.
-
-```typescript
-const websocketActor = actor(,
-    actions: ,
-    onWebSocket(ctx, websocket) ));
-
-        websocket.addEventListener("message", (event) => );
-    },
-});
-```
-
-Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
-
-	Connection lifecycle hooks like `onConnect` and `onDisconnect` do not get called when opening WebSockets for `onWebSocket`. This is because `onWebSocket` provides a low-level connection. Use `ws.addEventListener("open")` and `ws.addEventListener("close")` instead.
-
-## Accessing Your Handlers
-
-There are three ways to access your actor's fetch and WebSocket handlers:
-
-### Option A: From Backend via RivetKit Client
-
-You can use the RivetKit client's built-in methods for raw HTTP and WebSocket access:
-
-```typescript
-const client = createClient("http://localhost:8080");
-
-// HTTP requests using .fetch() method
-const actor = client.myActor.getOrCreate(["key"]);
-const response = await actor.fetch("/api/hello", );
-const data = await response.json();
-
-// POST request with JSON body
-const postResponse = await actor.fetch("/api/echo", ,
-    body: JSON.stringify(),
-});
-```
-
-```typescript
-const client = createClient("http://localhost:8080");
-
-// WebSocket connections using .websocket() method
-const actor = client.myActor.getOrCreate(["key"]);
-const ws = await actor.websocket("/custom/path");
-
-// Listen for messages
-ws.addEventListener("message", (event) =>  else if (message.type === "echo")  else if (message.type === "pong") 
-});
-
-// Send messages
-ws.send(JSON.stringify());
-
-// Send ping
-ws.send(JSON.stringify());
-```
-
-For more advanced use cases, you can forward requests to actor handlers from your server:
-
-```typescript
-const  = registry.start();
-
-const app = new Hono();
-
-// Forward requests to actor's fetch handler
-app.all("/forward/:name/*", async (c) => `, "");
-    const url = new URL(truncatedPath, c.req.url);
-    const newRequest = new Request(url, c.req.raw);
-    
-    // Forward to actor's fetch handler
-    const actor = client.counter.getOrCreate(name);
-    const response = await actor.fetch(truncatedPath, newRequest);
-    
-    return response;
-});
-
-serve(app);
-```
-
-```typescript
-const  = registry.start();
-
-const app = new Hono();
-
-// Forward WebSocket connections to actor's WebSocket handler
-app.get("/ws/:name", upgradeWebSocket(async (c) => );
-
-            actorWs.addEventListener("close", () => );
-        },
-        onMessage: (evt, ws) => ,
-        onClose: (evt, ws) => ,
-    };
-}));
-
-serve(app);
-```
-
-### Option B: From Frontend with RivetKit Client
-
-Use the RivetKit client to make direct HTTP requests or WebSocket connections:
-
-```typescript
-const client = createClient("http://localhost:8080");
-
-// HTTP requests
-const actor = client.myActor.getOrCreate(["key"]);
-const response = await actor.fetch("/api/hello", );
-const data = await response.json();
-console.log(data); // 
-
-// POST request with data
-const postResponse = await actor.fetch("/api/echo", ,
-    body: JSON.stringify(),
-});
-
-// Handle response
-if (postResponse.ok)  else 
-```
-
-```typescript
-const client = createClient("http://localhost:8080");
-
-// WebSocket connections
-const actor = client.myActor.getOrCreate(["key"]);
-const ws = await actor.websocket("/");
-
-// Listen for messages
-ws.addEventListener("message", (event) => );
-            break;
-            
-        case "echo":
-            console.log("Echo received:", message.data);
-            displayMessage(message.data);
-            break;
-            
-        case "pong":
-            console.log("Pong received, latency:", Date.now() - message.timestamp);
-            break;
-            
-        case "error":
-            console.error("Error:", message.message);
-            break;
-    }
-});
-
-// Send messages
-function sendMessage(text) ));
-}
-
-// Ping for latency testing
-function ping() ));
-}
-
-// Handle connection errors
-ws.addEventListener("error", (event) => );
-
-ws.addEventListener("close", () => );
-```
-
-	The `.websocket()` method returns a barebones WebSocket. Unlike [actor connections](/docs/actors/connections), it does not provide automatic reconnection logic. You must implement reconnection logic yourself if needed.
-
-### Option C: From Frontend via Direct RivetKit Router Access
-
-You can access your actor handlers directly through the mounted RivetKit router. The router automatically handles the required headers for authentication and routing.
-
-For HTTP requests, the router expects these headers:
-- `X-RivetKit-Actor-Query`: JSON-encoded actor query
-- `X-RivetKit-Encoding`: Encoding type (usually "json")
-- `X-RivetKit-Conn-Params`: JSON-encoded connection parameters (optional)
-
-```typescript
-// Direct HTTP request to actor
-const response = await fetch("http://localhost:8080/registry/actors/myActor/request/api/hello", 
-        }),
-        "X-RivetKit-Encoding": "json",
-        "X-RivetKit-Conn-Params": JSON.stringify()
-    }
-});
-
-const data = await response.json();
-console.log(data); // 
-
-// POST request with data
-const postResponse = await fetch("http://localhost:8080/registry/actors/myActor/request/api/echo", 
-        }),
-        "X-RivetKit-Encoding": "json",
-        "X-RivetKit-Conn-Params": JSON.stringify(),
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify()
-});
-
-// Handle response
-if (postResponse.ok)  else 
-```
-
-For WebSocket connections, authentication data is passed via WebSocket subprotocols:
-
-```typescript
-// Direct WebSocket connection to actor
-const protocols = [
-    `query.$
-    }))}`,
-    `encoding.json`,
-    `conn_params.$))}`
-];
-
-const ws = new WebSocket("ws://localhost:8080/registry/actors/myActor/ws/", protocols);
-
-// Listen for messages
-ws.addEventListener("message", (event) => );
-            
-            // Send initial message
-            ws.send(JSON.stringify());
-            break;
-            
-        case "echo":
-            console.log("Echo received:", message.data);
-            break;
-            
-        case "pong":
-            console.log("Pong received, latency:", Date.now() - message.timestamp);
-            break;
-            
-        case "error":
-            console.error("WebSocket error:", message.message);
-            break;
-    }
-});
-
-// Send ping for latency testing
-function sendPing() ));
-}
-
-// Handle connection events
-ws.addEventListener("open", () => );
-
-ws.addEventListener("error", (event) => );
-
-ws.addEventListener("close", (event) => );
-```
-
-	For Cloudflare Workers, you must include `"rivetkit"` as a protocol when using raw WebSockets:
-	
-	```typescript
-	const protocols = [
-	    "rivetkit", // Required for Cloudflare Workers
-	    `query.$
-	    }))}`,
-	    `encoding.json`
-	];
-	```
-
-## Authentication
-
-If you are using the external client, authentication is handled through the `onAuth` handler. The `onAuth` handler is executed on the server before the request is sent to the actor, reducing resource load on the actor by filtering out unauthorized requests early.
-
-If you are using the server-side client, then authentication is skipped by default.
-
-See the [authentication documentation](/docs/actors/authentication) for detailed information on implementing authentication patterns.
-
-## State Saves
-
-State changes in `onFetch` and `onWebSocket` handlers are automatically saved after the handler finishes executing.
-
-For `onWebSocket` handlers specifically, you'll need to manually save state using `c.saveState()` while the WebSocket connection is open if you want state changes to be persisted immediately. This is because WebSocket connections can remain open for extended periods, and state changes made during event handlers (like `message` events) won't be automatically saved until the connection closes.
-
-```typescript
-const websocketActor = actor(,
-    actions: ,
-    onWebSocket(ctx, websocket) ));
-        });
-    },
-});
-```
-
-For more details on state management, see [State](/docs/actors/state).
-
-## W3C Compliance
-
-It's not possible to use the global `fetch` method or global WebSocket class to connect to an actor. This is because actors do not have traditional network interfaces to communicate with.
-
-However, the `Request`, `Response`, and `WebSocket` types used with `.fetch()` and `.websocket()` comply with the W3C specification and will work wherever you pass them.
+These docs have moved to [Low-Level WebSocket Handler](/docs/actors/websocket-handler) and [Low-Level Request Handler](/docs/actors/request-handler).
 ## Helper Types
 
 # Helper Types
@@ -1867,41 +1492,24 @@ const counterWithProcessing = actor(,
 
 function processCounterAction(context: ActionContextOf) 
 ```
+## Vanilla HTTP API
+
+# Vanilla HTTP API
+
+TODO
 ## Overview
 
 # Overview
 
 Actors for long-lived processes with durable state, realtime, and hibernate when not in use.
 
-## Quickstart
-
-  Set up Rivet with Node.js, Bun, and web frameworks
-
-  Set up Rivet with React
-
-  Set up Rivet with Next.js
-
-  Set up Rivet with Cloudflare Workers
-
 ## Features
 
 - **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts.
 - **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes.
-- **Realtime**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
+- **Realtime**: Update state and broadcast changes in realtime with WebSockets. No external pub/sub systems, no polling – just built-in low-latency events.
 - **Infinitely Scalable**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
 - **Fault Tolerant**: Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations.
-
-## Use Cases
-
-Actors are perfect for applications that need persistent state and real-time updates:
-
-- **AI agents**: Stateful AI assistants with conversation history
-- **Collaborative documents**: Multiple users editing documents simultaneously (Yjs integration)
-- **Local-first sync**: Offline-first applications with server synchronization
-- **Per-tenant databases**: Isolated data stores for each user or tenant
-- **Background job**: Background & time-based task execution with persistent state
-- **Rate limiting**: Distributed rate limiting with persistent counters
-- **Stream processing**: Real-time data processing with persistent state
 
 ## Core Concepts
 
@@ -1950,7 +1558,7 @@ Learn more about [actions](/docs/actors/actions) and [communicating with actors]
 
 ### Real-time Communication & Events
 
-Actors support real-time bidirectional communication through WebSocket and SSE connections. Clients can establish persistent connections to receive live updates.
+Actors support real-time bidirectional communication through WebSocket connections. Clients can establish persistent connections to receive live updates.
 
 For example, to send events to all connected clients:
 
@@ -2020,24 +1628,6 @@ const user = await manager.createUser("Alice");
 const foundUser = await manager.getUser(user.userId);
 // Type:  | undefined
 ```
-
-## Frequently Asked Questions
-
-        Some software makes sense to separate – e.g., for data lakes or highly relational data. But at the end of the day, data has to be partitioned somewhere at some point.
-
-        Usually "faster" databases like Cassandra, DynamoDB, or Vitess make consistency tradeoffs to get better performance. Stateful serverless forces you to think about how your data is sharded for better performance, better scalability, and less consistency footguns.
-
-        See [Sharing and Joining State](/docs/actors/sharing-and-joining-state) for detailed strategies on combining data from multiple actors.
-
-        OLAP, data lakes, graph databases, and highly relational data are currently not ideal use cases for the actor model.
-
-        Yes, but only in the same way that storing data in a single database row creates a bottleneck.
-
-		Just like a single database row can cause contention when multiple clients try to read and write the same data, a single actor can become a bottleneck if too many requests target it.
-
-		The solution is the same: shard your data across multiple actors to distribute the load and scale seamlessly.
-
-		However, actors handle much higher throughput than traditional database rows because they keep data in memory, making read and write operations significantly faster.
 ## Input Parameters
 
 # Input Parameters
@@ -2277,69 +1867,86 @@ Actors follow a well-defined lifecycle with hooks at each stage. Understanding t
 
 Actor lifecycle hooks are defined as functions in the actor configuration.
 
-### `createState` and `state`
+### `state`
 
-The `createState` function or `state` constant defines the initial state of the actor (see [state documentation](/docs/actors/state)). The `createState` function is called only once when the actor is first created.
-
-### `createVars` and `vars`
-
-The `createVars` function or `vars` constant defines ephemeral variables for the actor (see [state documentation](/docs/actors/state)). These variables are not persisted and are useful for storing runtime-only objects or temporary data.
-
-The `createVars` function can also receive driver-specific context as its second parameter, allowing access to driver capabilities like Rivet KV or Cloudflare Durable Object storage.
+The `state` constant defines the initial state of the actor. See [state documentation](/docs/actors/state) for more information.
 
 ```typescript
-// In this example, assume we're using Redis
-// Using vars constant
-const counter1 = actor(,
+const counter = actor(,
+  actions: 
+});
+```
+
+### `createState`
+
+`createState(c: ActorContext, input: TInput): TState | Promise`
+
+The `createState` function dynamically initializes state based on input. Called only once when the actor is first created. Can be async. See [state documentation](/docs/actors/state) for more information.
+
+```typescript
+const counter = actor() => (),
+  actions: 
+});
+```
+
+### `vars`
+
+The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables-vars) for more information.
+
+```typescript
+const counter = actor(,
   vars: ,
   actions: 
 });
+```
 
-// Using createVars function
-const counter2 = actor(,
-  createVars: () => ;
-  },
-  actions: 
-});
+### `createVars`
 
-// Access driver-specific context
-const exampleActor = actor(,
-  // Access driver context in createVars
-  createVars: (c: ActorInitContext, driverCtx: DriverContext) => (),
+`createVars(c: InitContext, driverCtx: any): TVars | Promise`
+
+The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. The `driverCtx` parameter provides driver-specific context. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables-vars) for more information.
+
+```typescript
+interface CounterVars 
+
+const counter = actor(,
+  createVars: (c, driverCtx): CounterVars => (),
   actions: 
-  }
 });
 ```
 
 ### `onCreate`
 
-The `onCreate` hook is called at the same time as `createState`, but unlike `createState`, it doesn't return any value. Use this hook for initialization logic that doesn't affect the initial state.
+`onCreate(c: ActorContext, input: TInput): void | Promise`
+
+The `onCreate` hook is called when the actor is first created. Can be async. Use this hook for initialization logic that doesn't affect the initial state.
 
 ```typescript
-// Using state constant
-const counter1 = actor(,
-  actions: 
-});
+const counter = actor(,
 
-// Using createState function
-const counter2 = actor(;
-  },
-  actions: 
-});
+  onCreate: (c, input: ) => ,
 
-// Using onCreate
-const counter3 = actor(,
-  
-  // Run initialization logic (logging, external service setup, etc.)
-  onCreate: (c, opts, input: ) => ,
-  
   actions: 
 });
 ```
 
-### `onStart`
+### `onDestroy`
 
-This hook is called any time the actor is started (e.g. after restarting, upgrading code, or crashing).
+`onDestroy(c: ActorContext): void | Promise`
+
+The `onDestroy` hook is called when the actor is being permanently destroyed. Can be async. Use this for final cleanup operations like closing external connections, releasing resources, or performing any last-minute state persistence.
+
+```typescript
+const gameSession = actor(,
+  actions: 
+});
+```
+
+### `onWake`
+
+`onWake(c: ActorContext): void | Promise`
+
+This hook is called any time the actor is started (e.g. after restarting, upgrading code, or crashing). Can be async.
 
 This is called after the actor has been initialized but before any connections are accepted.
 
@@ -2348,26 +1955,53 @@ Use this hook to set up any resources or start any background tasks, such as `se
 ```typescript
 const counter = actor(,
   vars: ,
-  
-  onStart: (c) => , 10000);
-    
+
+  onWake: (c) => , 10000);
+
     // Store interval ID in vars to clean up later if needed
     c.vars.intervalId = intervalId;
   },
-  
+
   actions: 
     }
   }
 });
 ```
 
-### `onStateChange`
+### `onSleep`
 
-Called whenever the actor's state changes. This is often used to broadcast state updates.
+`onSleep(c: ActorContext): void | Promise`
+
+This hook is called when the actor is going to sleep. Can be async. Use this to clean up resources, close connections, or perform any shutdown operations.
+
+Not supported on all platforms.
 
 ```typescript
 const counter = actor(,
-  
+  vars: ,
+
+  onWake: (c) => , 10000);
+  },
+
+  onSleep: (c) => 
+
+    // Perform any other cleanup
+    console.log('Final count:', c.state.count);
+  },
+
+  actions: 
+});
+```
+
+### `onStateChange`
+
+`onStateChange(c: ActorContext, newState: TState): void`
+
+Called whenever the actor's state changes. Cannot be async. This is often used to broadcast state updates.
+
+```typescript
+const counter = actor(,
+
   onStateChange: (c, newState) => );
   },
   
@@ -2378,33 +2012,37 @@ const counter = actor(,
 
 ### `createConnState` and `connState`
 
+`createConnState(c: CreateConnStateContext, params: TConnParams): TConnState | Promise`
+
 There are two ways to define the initial state for connections:
 1. `connState`: Define a constant object that will be used as the initial state for all connections
-2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters
+2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
 
 ### `onBeforeConnect`
 
-The `onBeforeConnect` hook is called whenever a new client connects to the actor. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
+`onBeforeConnect(c: OnBeforeConnectContext, params: TConnParams): void | Promise`
+
+The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
 The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
 
 ```typescript
 const chatRoom = actor(,
-  
+
   // Method 1: Use a static default connection state
   connState: ,
-  
+
   // Method 2: Dynamically create connection state
-  createConnState: (c, opts, params: ) => ;
+  createConnState: (c, params: ) => ;
   },
-  
+
   // Validate connections before accepting them
-  onBeforeConnect: (c, opts, params: ) => 
-    
+  onBeforeConnect: (c, params: ) => 
+
     // Authentication is valid, connection will proceed
     // The actual connection state will come from connState or createConnState
   },
-  
+
   actions: 
 });
 ```
@@ -2413,19 +2051,21 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-Executed after the client has successfully connected.
+`onConnect(c: OnConnectContext, conn: Conn): void | Promise`
+
+Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
 
 ```typescript
 const chatRoom = actor(, messages: [] },
-  
-  onConnect: (c) => ;
-    
+
+  onConnect: (c, conn) => ;
+
     // Broadcast that a user joined
     c.broadcast("userJoined", );
-    
+
     console.log(`User $ connected`);
   },
-  
+
   actions: 
 });
 ```
@@ -2434,50 +2074,60 @@ Messages will not be processed for this actor until this hook succeeds. Errors t
 
 ### `onDisconnect`
 
-Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
+`onDisconnect(c: ActorContext, conn: Conn): void | Promise`
+
+Called when a client disconnects from the actor. Can be async. Receives the connection object as a second parameter. Use this to clean up any connection-specific resources.
 
 ```typescript
 const chatRoom = actor(, messages: [] },
-  
-  onDisconnect: (c) => 
-    
+
+  onDisconnect: (c, conn) => 
+
     // Broadcast that a user left
     c.broadcast("userLeft", );
-    
+
     console.log(`User $ disconnected`);
   },
-  
+
   actions: 
 });
 ```
 
-### `onFetch`
+### `onRequest`
 
-The `onFetch` hook handles HTTP requests sent to your actor. It receives the actor context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
+`onRequest(c: RequestContext, request: Request): Response | Promise`
+
+The `onRequest` hook handles HTTP requests sent to your actor at `/actors//http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
+
+See [Request Handler](/docs/actors/request-handler) for more details.
 
 ```typescript
 const apiActor = actor(,
-  
-  onFetch: (c, request) => ), 
+
+  onRequest: (c, request) => ), 
       });
     }
-    
+
     // Return void to continue to default routing
     return;
   },
-  
+
   actions: 
 });
 ```
 
 ### `onWebSocket`
 
-The `onWebSocket` hook handles WebSocket connections to your actor. It receives the actor context, a `WebSocket` object, and the initial `Request`. Use this to set up WebSocket event listeners and handle real-time communication.
+`onWebSocket(c: ActorContext, websocket: WebSocket): void | Promise`
+
+The `onWebSocket` hook handles WebSocket connections to your actor. Can be async. It receives the actor context and a `WebSocket` object. Use this to set up WebSocket event listeners and handle real-time communication.
+
+See [WebSocket Handler](/docs/actors/websocket-handler) for more details.
 
 ```typescript
 const realtimeActor = actor(,
-  
-  onWebSocket: (c, websocket, request) => ));
+
+  onWebSocket: (c, websocket) => ));
     
     // Handle incoming messages
     websocket.addEventListener("message", (event) => ));
@@ -2492,47 +2142,15 @@ const realtimeActor = actor(,
 });
 ```
 
-### `onAuth`
-
-The `onAuth` hook is called on the HTTP server before clients can interact with the actor. This hook is required for any public HTTP endpoint access and is used to validate client credentials and return authentication data that will be available on connections.
-
-This hook runs on the HTTP server (not the actor) to reduce load and prevent denial of service attacks against individual actors. Only called for public endpoints - calls to actors from within the backend do not trigger this handler.
-
-```typescript
-const secureActor = actor() => 
-    
-    const token = authHeader.slice(7);
-    
-    // Validate token with your auth service
-    const user = await validateAuthToken(token);
-    if (!user) 
-    
-    // Return auth data (must be serializable)
-    return ;
-  },
-  
-  state:  },
-  
-  onConnect: (c) =>  with role $ connected`);
-    
-    c.state.activeUsers[userId] = ;
-  },
-  
-  actions: 
-      
-      return ;
-    }
-  }
-});
-```
-
 ### `onBeforeActionResponse`
 
-The `onBeforeActionResponse` hook is called before sending an action response to the client. Use this hook to modify or transform the output of an action before it's sent to the client. This is useful for formatting responses, adding metadata, or applying transformations to the output.
+`onBeforeActionResponse(c: ActorContext, name: string, args: unknown[], output: TOutput): TOutput | Promise`
+
+The `onBeforeActionResponse` hook is called before sending an action response to the client. Can be async. Use this hook to modify or transform the output of an action before it's sent to the client. This is useful for formatting responses, adding metadata, or applying transformations to the output.
 
 ```typescript
 const loggingActor = actor(,
-  
+
   onBeforeActionResponse: (c, actionName, args, output) =>  called with args:`, args);
     console.log(`Action $ returned:`, output);
     
@@ -2552,9 +2170,34 @@ const loggingActor = actor(,
 });
 ```
 
-## Destroying Actors
+## Options
 
-_Destroying actors is not available yet._
+The `options` object allows you to configure various timeouts and behaviors for your actor.
+
+```typescript
+const myActor = actor(,
+
+  options: ,
+
+  actions: 
+});
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `createVarsTimeout` | 5000ms | Timeout for `createVars` function |
+| `createConnStateTimeout` | 5000ms | Timeout for `createConnState` function |
+| `onConnectTimeout` | 5000ms | Timeout for `onConnect` hook |
+| `onSleepTimeout` | 5000ms | Timeout for `onSleep` hook |
+| `onDestroyTimeout` | 5000ms | Timeout for `onDestroy` hook |
+| `stateSaveInterval` | 10000ms | Interval for persisting state |
+| `actionTimeout` | 60000ms | Timeout for action execution |
+| `waitUntilTimeout` | 15000ms | Max time to wait for background promises during shutdown |
+| `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
+| `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
+| `noSleep` | false | Prevent actor from sleeping |
+| `sleepTimeout` | 30000ms | Time before actor sleeps due to inactivity |
+| `canHibernateWebSocket` | false | Whether WebSockets can hibernate (experimental) |
 
 ## Advanced
 
@@ -2591,7 +2234,7 @@ When extracting logic from lifecycle hooks or actions into external functions, y
 const myActor = actor(,
   
   // Use external function in lifecycle hook
-  onStart: (c) => logActorStarted(c)
+  onWake: (c) => logActorStarted(c)
 });
 
 // Simple external function with typed context
@@ -2606,59 +2249,48 @@ See [Helper Types](/docs/actors/helper-types) for more details on using `ActorCo
 ```typescript
 interface CounterInput 
 
-const counter = actor(
-    
-    const token = authHeader.slice(7);
-    const user = await validateAuthToken(token);
-    if (!user) 
-    
-    return ;
-  },
-  
-  // Initialize state with input
-  createState: (c: ActorInitContext, input: CounterInput) => (),
-  
+interface CounterState 
+
+interface ConnParams 
+
+interface ConnState 
+
+const counter = actor(),
+
   // Initialize actor (run setup that doesn't affect initial state)
-  onCreate: (c, opts, input: ) => " initialized`);
+  onCreate: (c, input: CounterInput) => " initialized`);
     // Set up external resources, logging, etc.
   },
-  
-  // Define default connection state
-  connState: ,
-  
-  createConnState: (c, opts) => ;
+
+  // Dynamically create connection state from params
+  createConnState: (c, params: ConnParams): ConnState => ;
   },
-  
+
   // Lifecycle hooks
-  onStart: (c) => " started with count:`, c.state.count);
+  onWake: (c) => " started with count:`, c.state.count);
   },
-  
+
   onStateChange: (c, newState) => );
   },
-  
-  onBeforeConnect: (c, ) =>  attempting to connect`);
+
+  onBeforeConnect: (c, params: ConnParams) => 
+    console.log(`User $ attempting to connect`);
   },
-  
-  onConnect: (c) =>  connected to "$"`);
+
+  onConnect: (c, conn) =>  connected to "$"`);
   },
-  
-  onDisconnect: (c) =>  disconnected from "$"`);
+
+  onDisconnect: (c, conn) =>  disconnected from "$"`);
   },
-  
+
   // Transform all action responses
   onBeforeActionResponse: (c, actionName, args, output) => 
     };
   },
-  
+
   // Define actions
   actions: ,
-    
-    reset: (c) => 
-      
-      c.state.count = 0;
-      return c.state.count;
-    },
-    
+
     getInfo: (c) => (),
   }
 });
@@ -2856,7 +2488,7 @@ await connection.increment(1);
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 ```tsx }
-const  = createRivetKit("http://localhost:8080");
+const  = createRivetKit();
 
 function Counter() );
 
@@ -2917,16 +2549,24 @@ const registry = setup(,
 Choose your preferred web framework:
 
 ```ts }
+// The `/rivet` endpoint is automatically exposed here for external clients
+const  = createHandler(registry);
+;
+```
+
+```ts }
 const app = new Hono } }>();
 
 app.post("/increment/:name", async (c) => );
 });
 
+// The `/rivet` endpoint is automatically exposed here for external clients
 const  = createHandler(registry, );
 ;
 ```
 
 ```ts }
+// The `/rivet` endpoint is automatically mounted on this router for external clients
 const  = createHandler(registry, ), ,
 			});
 		}
@@ -2938,7 +2578,23 @@ const  = createHandler(registry, ), ,
 ;
 ```
 
-The `/rivet` endpoint is automatically mounted by Rivet and is required for client communication. The Cloudflare Workers driver handles this automatically. This can be configured with `managerPath`.
+```ts }
+const  = createInlineClient(registry);
+
+// IMPORTANT: Your Durable Object must be exported here
+;
+
+default ), ,
+			});
+		}
+
+		// Optional: Mount /rivet path to access actors from external clients
+		if (url.pathname.startsWith("/rivet")) 
+
+		return new Response("Not Found", );
+	},
+} satisfies ExportedHandler;
+```
 
 Configure your `wrangler.json` for Cloudflare Workers:
 
@@ -2985,7 +2641,7 @@ wrangler deploy
 
 Your actors will now run on Cloudflare's edge with persistent state backed by Durable Objects.
 
-See the [Cloudflare Workers deployment guide](/docs/deploy/cloudflare-workers) for detailed deployment instructions and configuration options.
+See the [Cloudflare Workers deployment guide](/docs/connect/cloudflare-workers) for detailed deployment instructions and configuration options.
 
 ## Configuration Options
 
@@ -3127,7 +2783,7 @@ Import the `Counter` component in your page or layout to use it.
 
 For more examples on connecting to your actors using React, check the [React documentation for RivetKit](/docs/clients/react).
 
-See the [Vercel deployment guide](/docs/deploy/vercel) for detailed instructions on deploying your RivetKit app to Vercel.
+See the [Vercel deployment guide](/docs/connect/vercel) for detailed instructions on deploying your RivetKit app to Vercel.
 
 ## API Reference
 
@@ -3164,8 +2820,7 @@ registry.start();
 Set up your React application:
 
 ```tsx }
-const client = createClient();
-const  = createRivetKit(client);
+const  = createRivetKit();
 
 function App() );
 
@@ -3228,6 +2883,127 @@ See [backend quickstart](/docs/actors/quickstart/backend) for more information.
 ## API Reference
 
 For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
+## Low-Level HTTP Request Handler
+
+# Low-Level HTTP Request Handler
+
+Actors can handle HTTP requests through the `onRequest` handler.
+
+For most use cases, [actions](/docs/actors/actions) provide high-level API powered by HTTP that's easier to work with than low-level HTTP. However, low-level handlers are required when implementing custom use cases or integrating external libraries that need direct access to the underlying HTTP `Request`/`Response` objects or WebSocket connections.
+
+## Handling HTTP Requests
+
+The `onRequest` handler processes HTTP requests sent to your actor. It receives the actor context and a standard `Request` object and returns a `Response` object.
+
+```typescript
+const counterActor = actor(,
+    // WinterTC compliant - accepts standard Request and returns standard Response
+    onRequest: (c, request) );
+        }
+
+        if (request.method === "POST" && url.pathname === "/increment") );
+        }
+
+        return new Response("Not Found", );
+    },
+});
+```
+
+```typescript
+function buildRouter(c: ActorContext) );
+    });
+
+    app.post("/increment", (c) => );
+    });
+
+    return app;
+}
+
+const counterActor = actor(,
+    createVars: (c) => ;
+    },
+    async onRequest: (c, request) ,
+});
+```
+
+See also the [raw fetch handler example](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-fetch-handler).
+
+## Sending Requests To Actors
+
+### Via RivetKit Client
+
+Use the `.fetch()` method on an actor handle to send HTTP requests to the actor's `onRequest` handler. This can be executed from either your frontend or backend.
+
+```typescript
+const client = createClient();
+
+const actor = client.counter.getOrCreate("my-counter");
+
+// .fetch() is WinterTC compliant, it accepts standard Request and returns standard Response
+const response = await actor.fetch("/increment", );
+const data = await response.json();
+console.log(data); // 
+```
+
+### Via HTTP API
+
+This handler can be accessed with raw HTTP using `https://api.rivet.dev/gateway//request/`.
+
+For example, to call `POST /increment` on the counter actor above:
+
+```typescript
+const response = await fetch(
+  `https://api.rivet.dev/gateway/$/request/increment`,
+  `,
+    },
+  }
+);
+const data = await response.json();
+console.log(data); // 
+```
+
+```bash
+curl -X POST "https://api.rivet.dev/gateway//request/increment" \
+  -H "Authorization: Bearer "
+```
+
+The request is routed to the actor's `onRequest` handler where:
+
+- `request.method` is `"POST"`
+- `request.url` ends with `/increment` (the path after `/request/`)
+- Headers, body, and other request properties are passed through unchanged
+
+See the [HTTP API reference](/docs/actors/http-api) for more information on HTTP routing and authentication.
+
+### Via Proxying Requests
+
+You can proxy HTTP requests from your own server to actor handlers using the RivetKit client. This is useful when you need to add custom authentication, rate limiting, or request transformation before forwarding to actors.
+
+```typescript
+const client = createClient();
+
+const app = new Hono();
+
+// Proxy requests to actor's onRequest handler
+app.all("/actors/:id/:path", async (c) => );
+
+serve(app);
+```
+
+## Connection & Lifecycle Hooks
+
+`onRequest` will trigger the `onBeforeConnect`, `onConnect`, and `onDisconnect` hooks. Read more about [lifecycle hooks](/docs/actors/lifecycle).
+
+Requests in flight will be listed in `c.conns`. Read more about [connections](/docs/actors/connections).
+
+## WinterTC Compliance
+
+The `onRequest` handler is WinterTC compliant and will work with existing libraries using the standard `Request` and `Response` types.
+
+## Limitations
+
+- Does not support streaming responses & server-sent events at the moment. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3529). 
+- `OPTIONS` requests currently are handled by Rivet and are not passed to `onRequest`
 ## Scaling & Concurrency
 
 # Scaling & Concurrency
@@ -3657,6 +3433,155 @@ The `setupTest` function automatically calls `vi.useFakeTimers()`, allowing you 
 4. **Use realistic data**: Test with data that resembles production scenarios.
 
 Rivet's testing framework automatically handles server setup and teardown, so you can focus on writing effective tests for your business logic.
+## Low-Level WebSocket Handler
+
+# Low-Level WebSocket Handler
+
+Actors can handle WebSocket connections through the `onWebSocket` handler.
+
+For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/events) provide high-level connection handling powered by WebSockets that's easier to work with than low-level WebSockets. However, low-level handlers are required when implementing custom use cases.
+
+## Handling WebSocket Connections
+
+The `onWebSocket` handler manages low-level WebSocket connections. It receives the actor context and a `WebSocket` object.
+
+```typescript
+const chatActor = actor(,
+    onWebSocket: (c, websocket) ));
+        });
+
+        websocket.addEventListener("message", (event) => );
+    },
+});
+```
+
+See also the [raw WebSocket handler example](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler).
+
+## Connecting To Actors
+
+### Via RivetKit Client
+
+Use the `.websocket()` method on an actor handle to open a WebSocket connection to the actor's `onWebSocket` handler. This can be executed from either your frontend or backend.
+
+```typescript
+const client = createClient();
+
+const actor = client.chat.getOrCreate("my-chat");
+
+// Open WebSocket connection
+const ws = await actor.websocket("/");
+
+// Listen for messages
+ws.addEventListener("message", (event) => );
+
+// Send messages
+ws.send(JSON.stringify());
+```
+
+The `.websocket()` method returns a standard WebSocket.
+
+### Via HTTP API
+
+This handler can be accessed with raw WebSockets using `wss://api.rivet.dev/gateway/@/websocket/`.
+
+For example, to connect to the chat actor above:
+
+```typescript
+const ws = new WebSocket(
+    `wss://api.rivet.dev/gateway/$@$/websocket/`
+);
+
+ws.addEventListener("message", (event) => );
+
+ws.addEventListener("open", () => ));
+});
+```
+
+```bash
+wscat -c "wss://api.rivet.dev/gateway/@/websocket/"
+```
+
+The path after `/websocket/` is passed to your `onWebSocket` handler and can be used to route to different functionality within your actor. For example, to connect with a custom path `/admin`:
+
+```typescript
+const ws = new WebSocket(
+    `wss://api.rivet.dev/gateway/$@$/websocket/admin`
+);
+```
+
+```bash
+wscat -c "wss://api.rivet.dev/gateway/@/websocket/admin"
+```
+
+See the [HTTP API reference](/docs/actors/http-api) for more information on WebSocket routing and authentication.
+
+### Via Proxying Connections
+
+You can proxy WebSocket connections from your own server to actor handlers using the RivetKit client. This is useful when you need to add custom authentication or connection management before forwarding to actors.
+
+```typescript
+const client = createClient();
+
+const app = new Hono();
+
+// Proxy WebSocket connections to actor's onWebSocket handler
+app.get("/ws/:id", upgradeWebSocket(async (c) => );
+            actorWs.addEventListener("close", () => );
+        },
+        onMessage: (evt, ws) => ,
+        onClose: () => ,
+    };
+}));
+
+default app;
+```
+
+See also the [raw WebSocket handler with proxy example](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
+
+## Connection & Lifecycle Hooks
+
+`onWebSocket` will trigger the `onBeforeConnect`, `onConnect`, and `onDisconnect` hooks. Read more about [lifecycle hooks](/docs/actors/lifecycle).
+
+Open WebSockets will be listed in `c.conns`. `conn.send` and `c.broadcast` have no effect on low-level WebSocket connections. Read more about [connections](/docs/actors/connections).
+
+## WinterTC Compliance
+
+The `onWebSocket` handler uses standard WebSocket APIs and will work with existing libraries expecting WinterTC-compliant WebSocket objects.
+
+## Advanced
+
+## WebSocket Hibernation
+
+WebSocket hibernation allows actors to go to sleep while keeping WebSocket connections alive. Actors automatically wake up when a message is received or the connection closes.
+
+Enable hibernation by setting `canHibernateWebSocket: true`. You can also pass a function `(request) => boolean` for conditional control.
+
+```typescript
+const myActor = actor(,
+});
+```
+
+Since `open` only fires once when the client first connects, use `c.conn.state` to store per-connection data that persists across sleep cycles. See [connections](/docs/actors/connections) for more details.
+
+### Accessing the Request
+
+The underlying HTTP request is available via `c.request`. This is useful for accessing the path or query parameters.
+
+```typescript
+onWebSocket: (c, websocket) 
+```
+
+### Async Handlers
+
+The `onWebSocket` handler can be async, allowing you to perform async code before setting up event listeners:
+
+```typescript
+onWebSocket: async (c, websocket) => ));
+    });
+
+    websocket.addEventListener("message", (event) => );
+}
+```
 ## Node.js & Bun
 
 # Node.js & Bun
@@ -3706,18 +3631,17 @@ See the [React quickstart guide](/docs/actors/quickstart/react) for getting star
 
 ## API Reference
 
-### `createRivetKit(client, options?)`
+### `createRivetKit(endpoint?, options?)`
 
 Creates the Rivet hooks for React integration.
 
 ```tsx
-const client = createClient();
-const  = createRivetKit(client);
+const  = createRivetKit();
 ```
 
 #### Parameters
 
-- `client`: The Rivet client created with `createClient`
+- `endpoint`: Optional endpoint URL (defaults to `http://localhost:6420` or `process.env.RIVET_ENDPOINT`)
 - `options`: Optional configuration object
 
 #### Returns
@@ -4011,7 +3935,11 @@ _AWS Lambda is coming soon_
 
 Deploy your Cloudflare Workers + RivetKit app to [Cloudflare Workers](https://workers.cloudflare.com/).
 
-Complete example Cloudflare Workers + RivetKit app.
+Minimal Cloudflare Workers + RivetKit example.
+
+Cloudflare Workers with Hono router.
+
+Advanced setup using createInlineClient.
 
 ## Guide
 
@@ -4240,7 +4168,16 @@ Your runner should appear as connected on the Rivet dashboard once the service r
 
 # Deploying to Hetzner
 
-Please see the [VM & Bare Metal](/docs/deploy/vm-and-bare-metal) guide.
+Please see the [VM & Bare Metal](/docs/connect/vm-and-bare-metal) guide.
+## Deploy
+
+# Deploy
+
+Rivet supports deployment to a wide range of platforms, from serverless functions to self-hosted infrastructure.
+
+      ))}
+
+))}
 ## Deploying to Kubernetes
 
 # Deploying to Kubernetes
@@ -4522,7 +4459,6 @@ The File System driver is ideal for development and single-node deployments. For
 | --- | --- |
 | Horizontal scaling | No |
 | WebSockets | Yes |
-| SSE | Yes |
 | Edge | No |
 | Scheduling | Yes |
 
@@ -4581,7 +4517,6 @@ The Memory driver does not persist data between server restarts. For production 
 | --- | --- |
 | Horizontal scaling | No |
 | WebSockets | Yes |
-| SSE | Yes |
 | Edge | No |
 | Scheduling | Yes |
 
@@ -4668,50 +4603,6 @@ This code block doesn't use autofill:
 const greeting = "Hello, World!";
 console.log(greeting);
 ```
-## Architecture
-
-# Architecture
-
-Rivet supports three topologies that define how actors are distributed and scale.
-
-	Each platform configures a default topology appropriate for that environment. In most cases, you can rely on these defaults unless you have specific distribution needs.
-
-## Configuration
-
-```typescript
-const config = ;
-```
-
-## Types of Topologies
-
-### Standalone
-
-- **How it works**: Runs all actors in a single process
-- **When to use**: Development, testing, simple apps with low traffic
-- **Limitations**: No horizontal scaling, single point of failure
-- **Default on**: Node.js, Bun
-
-### Partition
-
-- **How it works**: Each actor has its own isolated process. Clients connect directly to the actor for optimal performance.
-- **When to use**: Production environments needing horizontal scaling
-- **Limitations**: Minimal - balanced performance and availability for most use cases
-- **Default on**: Rivet, Cloudflare Workers
-
-### Coordinate
-
-- **How it works**: Creates a peer-to-peer network between multiple servers with leader election with multiple actors running on each server. Clients connect to any server and data is transmitted to the leader over a pubsub server.
-- **When to use**: High-availability scenarios needing redundancy and failover
-- **Limitations**: Added complexity, performance overhead, requires external data source
-- **Default on**: _None_
-
-## Choosing a Topology
-
-In most cases, use your platform's default:
-
-1. **Standalone**: Simple, great for development
-2. **Partition**: Best scaling & cost for production
-3. **Coordinate**: Good for specialized deployment scenarios
 ## Cross-Origin Resource Sharing
 
 # Cross-Origin Resource Sharing
@@ -5062,22 +4953,6 @@ Take full control of your Rivet deployment with flexible hosting options and sto
   Run Rivet actors on Cloudflare's edge computing platform
 
   Managed Rivet hosting with enterprise features and support
-## System Architecture
-
-# System Architecture
-
-	This document is for advanced users seeking to understand the internal architecture of RivetKit. Most users do not need to read this document.
-
-## Request Lifecycle
-
-### Base Architecture
-
-### Coordinated Architecture
-## Webhooks
-
-# Webhooks
-
-TODO
 ## Overview
 
 # Overview
@@ -5339,7 +5214,6 @@ Deploy Rivet Actors to Cloudflare Workers with Durable Objects for global edge c
 | --- | --- |
 | Horizontal scaling | Yes |
 | WebSockets | Yes |
-| SSE | Yes |
 | Edge | Yes |
 | Scheduling | Yes |
 

@@ -1,0 +1,108 @@
+# Destroying Actors
+
+Actors can be permanently destroyed. Common use cases include:
+
+- User account deletion
+- Ending a user session
+- Closing a room or game
+- Cleaning up temporary resources
+- GDPR/compliance data removal
+
+Actors sleep when idle, so destruction is only needed to permanently remove data — not to save compute.
+
+## Destroying An Actor
+
+### Destroy via Action
+
+To destroy an actor, use `c.destroy()` like this:
+
+```typescript
+import { actor } from "rivetkit";
+
+interface UserInput {
+  email: string;
+  name: string;
+}
+
+const userActor = actor({
+  createState: (c, input: UserInput) => ({
+    email: input.email,
+    name: input.name,
+  }),
+  actions: {
+    deleteAccount: (c) => {
+      c.destroy();
+    },
+  },
+});
+```
+
+### Destroy via HTTP
+
+Send a DELETE request to destroy an actor. This requires an admin token for authentication.
+
+<CodeGroup>
+
+```typescript
+await fetch(`https://api.rivet.dev/actors/${actorId}?namespace=${namespace}`, {
+  method: "DELETE",
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
+```
+
+```bash
+curl -X DELETE "https://api.rivet.dev/actors/{actorId}?namespace={namespace}" \
+  -H "Authorization: Bearer {token}"
+```
+</CodeGroup>
+
+<Note>
+	Creating admin tokens is currently not supported on Rivet Cloud. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3530).
+</Note>
+
+### Destroy via Dashboard
+
+To destroy an actor via the dashboard, navigate to the actor and press the red "X" in the top right.
+
+## Lifecycle Hook
+
+Once destroyed, the `onDestroy` hook will be called. This can be used to clean up resources related to the actor. For example:
+
+```typescript
+import { actor } from "rivetkit";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+interface UserInput {
+  email: string;
+  name: string;
+}
+
+const userActor = actor({
+  createState: (c, input: UserInput) => ({
+    email: input.email,
+    name: input.name,
+  }),
+  onDestroy: async (c) => {
+    await resend.emails.send({
+      from: "noreply@example.com",
+      to: c.state.email,
+      subject: "Account Deleted",
+      text: `Goodbye ${c.state.name}, your account has been deleted.`,
+    });
+  },
+  actions: {
+    deleteAccount: (c) => {
+      c.destroy();
+    },
+  },
+});
+```
+
+## Accessing Actor After Destroy
+
+Once an actor is destroyed, any subsequent requests to it will return an `actor_not_found` error. The actor's state is permanently deleted.
+

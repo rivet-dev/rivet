@@ -30,7 +30,7 @@ export const deployGroups: DeployGroup[] = [
 		items: [
 			{
 				title: "Vercel",
-				href: "/docs/deploy/vercel",
+				href: "/docs/connect/vercel",
 				description:
 					"Deploy Next.js + RivetKit apps to Vercel's edge network",
 				icon: faVercel,
@@ -39,7 +39,7 @@ export const deployGroups: DeployGroup[] = [
 			},
 			{
 				title: "Cloudflare Workers",
-				href: "/docs/deploy/cloudflare-workers",
+				href: "/docs/connect/cloudflare-workers",
 				description:
 					"Run your app on Cloudflare's global edge network with Durable Objects",
 				icon: faCloudflare,
@@ -52,7 +52,7 @@ export const deployGroups: DeployGroup[] = [
 		items: [
 			{
 				title: "Railway",
-				href: "/docs/deploy/railway",
+				href: "/docs/connect/railway",
 				description:
 					"Deploy containers to Railway's managed infrastructure",
 				icon: faRailway,
@@ -60,21 +60,21 @@ export const deployGroups: DeployGroup[] = [
 			},
 			{
 				title: "Kubernetes",
-				href: "/docs/deploy/kubernetes",
+				href: "/docs/connect/kubernetes",
 				description:
 					"Deploy to any Kubernetes cluster with container images",
 				icon: faKubernetes,
 			},
 			{
 				title: "AWS ECS",
-				href: "/docs/deploy/aws-ecs",
+				href: "/docs/connect/aws-ecs",
 				description:
 					"Run containerized workloads on Amazon Elastic Container Service",
 				icon: faAws,
 			},
 			{
 				title: "Google Cloud Run",
-				href: "/docs/deploy/gcp-cloud-run",
+				href: "/docs/connect/gcp-cloud-run",
 				description:
 					"Deploy containers to Google Cloud Run for auto-scaling",
 				icon: faGoogleCloud,
@@ -82,18 +82,18 @@ export const deployGroups: DeployGroup[] = [
 		],
 	},
 	{
-		title: "Self-Hosted",
+		title: "Virtual Machines",
 		items: [
 			{
 				title: "Hetzner",
-				href: "/docs/deploy/hetzner",
+				href: "/docs/connect/hetzner",
 				description:
 					"Deploy to Hetzner's cost-effective cloud infrastructure",
 				icon: faHetzner,
 			},
 			{
 				title: "VM & Bare Metal",
-				href: "/docs/deploy/vm-and-bare-metal",
+				href: "/docs/connect/vm-and-bare-metal",
 				description:
 					"Run on virtual machines or bare metal servers with full control",
 				icon: faServer,

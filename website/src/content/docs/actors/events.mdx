@@ -2,7 +2,7 @@
 
 Events enable real-time communication from actors to clients. While clients use actions to send data to actors, events allow actors to push updates to connected clients instantly.
 
-Events work through persistent connections such as WebSocket or SSE.
+Events can be sent to clients connected using `.connect()`. They have no effect on [low-level WebSocket connections](/docs/actors/websocket-handler).
 
 ## Publishing Events from Actors
 
