@@ -17,7 +17,7 @@ import { createClient } from "rivetkit/client";
 import type { registry } from "./src/index";
 
 const client = createClient<typeof registry>("http://localhost:8080");
-const gameRoom = await client.gameRoom.get({
+const gameRoom = client.gameRoom.getOrCreate("room-123", {
   params: { authToken: "supersekure" }
 });
 ```
@@ -38,7 +38,7 @@ const gameRoom = actor({
   state: {},
 
   // Handle connection setup
-  createConnState: (c, opts, params: ConnParams): ConnState => {
+  createConnState: (c, params: ConnParams): ConnState => {
     // Validate authentication token
     const authToken = params.authToken;
 
@@ -49,7 +49,7 @@ const gameRoom = actor({
     // Create connection state
     return { userId: getUserIdFromToken(authToken), role: "player" };
   },
-  
+
   actions: {
     // ...
   }
@@ -133,16 +133,136 @@ There are two ways to define an actor's connection state:
 	</Tab>
 </Tabs>
 
-## Connection Lifecycle Hooks
+## Connection Lifecycle
 
-The connection lifecycle has several hooks:
+Each client connection goes through a series of lifecycle hooks that allow you to validate, initialize, and clean up connection-specific resources.
 
-- `onBeforeConnect`: Called before a client connects, returns the connection state
-- `onConnect`: Called when a client successfully connects
-- `createState`: Called when creating a connection state
-- `onDisconnect`: Called when a client disconnects
+**On Connect** (per client)
 
-See the documentation on [Actor Lifecycle](/docs/actors/lifecycle) for more details.
+- `onBeforeConnect`
+- `createConnState`
+- `onConnect`
+
+**On Disconnect** (per client)
+
+- `onDisconnect`
+
+### `createConnState` and `connState`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.CreateConnStateContext.html)
+
+There are two ways to define the initial state for connections:
+1. `connState`: Define a constant object that will be used as the initial state for all connections
+2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
+
+### `onBeforeConnect`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
+
+The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
+
+The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
+
+```typescript
+import { actor } from "rivetkit";
+
+const chatRoom = actor({
+  state: { messages: [] },
+
+  // Method 1: Use a static default connection state
+  connState: {
+    role: "guest",
+    joinTime: 0,
+  },
+
+  // Method 2: Dynamically create connection state
+  createConnState: (c, params: { userId?: string, role?: string }) => {
+    return {
+      userId: params.userId || "anonymous",
+      role: params.role || "guest",
+      joinTime: Date.now()
+    };
+  },
+
+  // Validate connections before accepting them
+  onBeforeConnect: (c, params: { authToken?: string }) => {
+    // Validate authentication
+    const authToken = params.authToken;
+    if (!authToken || !validateToken(authToken)) {
+      throw new Error("Invalid authentication");
+    }
+
+    // Authentication is valid, connection will proceed
+    // The actual connection state will come from connState or createConnState
+  },
+
+  actions: { /* ... */ }
+});
+```
+
+Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication, see [Authentication](/docs/actors/authentication) for details.
+
+### `onConnect`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
+
+Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
+
+```typescript
+import { actor } from "rivetkit";
+
+const chatRoom = actor({
+  state: { users: {}, messages: [] },
+
+  onConnect: (c, conn) => {
+    // Add user to the room's user list using connection state
+    const userId = conn.state.userId;
+    c.state.users[userId] = {
+      online: true,
+      lastSeen: Date.now()
+    };
+
+    // Broadcast that a user joined
+    c.broadcast("userJoined", { userId, timestamp: Date.now() });
+
+    console.log(`User ${userId} connected`);
+  },
+
+  actions: { /* ... */ }
+});
+```
+
+Messages will not be processed for this actor until this hook succeeds. Errors thrown from this hook will cause the client to disconnect.
+
+### `onDisconnect`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
+
+Called when a client disconnects from the actor. Can be async. Receives the connection object as a second parameter. Use this to clean up any connection-specific resources.
+
+```typescript
+import { actor } from "rivetkit";
+
+const chatRoom = actor({
+  state: { users: {}, messages: [] },
+
+  onDisconnect: (c, conn) => {
+    // Update user status when they disconnect
+    const userId = conn.state.userId;
+    if (c.state.users[userId]) {
+      c.state.users[userId].online = false;
+      c.state.users[userId].lastSeen = Date.now();
+    }
+
+    // Broadcast that a user left
+    c.broadcast("userLeft", { userId, timestamp: Date.now() });
+
+    console.log(`User ${userId} disconnected`);
+  },
+
+  actions: { /* ... */ }
+});
+```
 
 ## Connection List
 
@@ -210,3 +330,12 @@ await c.conn.disconnect("Too many requests");
 ```
 
 This ensures the underlying network connections close cleanly before continuing.
+
+## API Reference
+
+- [`Conn`](/typedoc/interfaces/rivetkit.mod.Conn.html) - Connection interface
+- [`ConnInitContext`](/typedoc/interfaces/rivetkit.mod.ConnInitContext.html) - Connection initialization context
+- [`CreateConnStateContext`](/typedoc/interfaces/rivetkit.mod.CreateConnStateContext.html) - Context for creating connection state
+- [`OnBeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html) - Pre-connection lifecycle hook context
+- [`OnConnectContext`](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html) - Post-connection lifecycle hook context
+- [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Typed connection from client side

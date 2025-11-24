@@ -163,33 +163,38 @@ For example:
 import { actor, UserError } from "rivetkit";
 
 const user = actor({
-  state: { users: [] },
+  state: { username: "" },
   actions: {
-    registerUser: (c, username) => {
+    updateUsername: (c, username: string) => {
       // Validate username
       if (username.length > 32) {
         // Throw a simple error with a message
-        throw new UserError("Invalid username", {
-          code: "invalid_username",
-          meta: {
+        throw new UserError("Username is too long", {
+          code: "username_too_long",
+          metadata: {
             maxLength: 32
           }
         });
       }
-      
-      // Rest of the user registration logic...
+
+      // Update username
+      c.state.username = username;
     }
   }
 });
 ```
 
 ```typescript {{"title":"client.ts"}}
+import { ActorError } from "rivetkit/client";
+
 try {
-  await userActor.registerUser("extremely_long_username_that_exceeds_limit");
+  await userActor.updateUsername("extremely_long_username_that_exceeds_limit");
 } catch (error) {
-  console.log("Message", error.message); // "Invalid username"
-  console.log("Code", error.code); // "invalid_username"
-  console.log("Metadata", error.metadata); // { maxLength; 32 }
+  if (error instanceof ActorError) {
+    console.log("Message", error.message); // "Username is too long"
+    console.log("Code", error.code); // "username_too_long"
+    console.log("Metadata", error.metadata); // { maxLength: 32 }
+  }
 }
 ```
 
@@ -267,3 +272,10 @@ function incrementCount(c: ActionContextOf<typeof counter>) {
 
 See [helper types](/docs/actors/helper-types) for more details on using `ActionContextOf` and other utility types.
 
+## API Reference
+
+- [`Actions`](/typedoc/interfaces/rivetkit.mod.Actions.html) - Interface for defining actions
+- [`ActionContext`](/typedoc/interfaces/rivetkit.mod.ActionContext.html) - Context available in action handlers
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining actors with actions
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for calling actions from client
+- [`ActorActionFunction`](/typedoc/types/rivetkit.client_mod.ActorActionFunction.html) - Type for action functions
