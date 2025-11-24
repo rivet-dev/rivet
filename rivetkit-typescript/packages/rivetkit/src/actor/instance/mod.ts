@@ -674,7 +674,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.assertReady();
 
 		if (!this.#config.onRequest) {
-			throw new errors.RequestHandlerNotDfeined();
+			throw new errors.RequestHandlerNotDefined();
 		}
 
 		try {

@@ -171,6 +171,11 @@ The `onRequest` handler is WinterTC compliant and will work with existing librar
 
 ## Limitations
 
-- Does not support streaming responses & server-sent events at the moment. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3529). 
+- Does not support streaming responses & server-sent events at the moment. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3529).
 - `OPTIONS` requests currently are handled by Rivet and are not passed to `onRequest`
+
+## API Reference
+
+- [`RequestContext`](/typedoc/interfaces/rivetkit.mod.RequestContext.html) - Context for HTTP request handlers
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining request handlers
 

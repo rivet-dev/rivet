@@ -1,233 +1,66 @@
 # Cross-Origin Resource Sharing
 
-Cross-Origin Resource Sharing (CORS) is a security mechanism that allows a web application running at one origin to access resources from a different origin. Without CORS, browsers block cross-origin HTTP requests by default as a security measure.
+Cross-Origin Resource Sharing (CORS) controls which origins (domains) can access your actors. When actors are exposed to the public internet, proper origin validation is critical to prevent security breaches and denial of service attacks.
 
-You'll need to configure CORS when:
+Unlike stateless HTTP APIs that use CORS headers, Rivet Actors are stateful and support persistent WebSocket connections. Since WebSockets don't natively support CORS, we validate origins manually in the `onBeforeConnect` hook before connections may open.
 
-- **Local Development**: You're developing locally and your client runs on a different port than your actor service
-- **Different Domain**: Your frontend application is hosted on a different domain than your actor service
+## Implementing Origin Restrictions
 
-## Registry-Level CORS
-
-Configure CORS directly in your registry setup for applications that do not require configuring CORS on their own endpoints.
+To implement origin restrictions on Rivet Actors, use the `onBeforeConnect` hook to verify the request.
 
 ```typescript {{"title":"server.ts"}}
-import { registry } from "./registry";
+import { actor, UserError } from "rivetkit";
 
-const { client } = registry.start({
-	cors: {
-		origin: "https://yourdomain.com",
-	}
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://myapp.com",
+  "https://www.myapp.com"
+];
+
+const myActor = actor({
+  state: { count: 0 },
+
+  onBeforeConnect: (c, params) => {
+    // Check if origin is allowed
+	//
+	// This works for both HTTP & WebSocket requests
+    const origin = c.request?.headers.get("origin");
+    if (!ALLOWED_ORIGINS.includes(origin)) {
+      throw new UserError("Origin not allowed", { code: "origin_not_allowed" });
+    }
+  },
+
+  actions: {
+    increment: (c) => {
+      c.state.count++;
+      return c.state.count;
+    }
+  }
 });
 ```
 
-### Configuration Options
+To catch the error on the client, use the following code:
 
-#### `origin`
+```typescript {{"title":"client.ts"}}
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./registry";
 
-`string | string[] | (origin: string) => boolean | string`
+const client = createClient<typeof registry>();
 
-Specifies which domains can access your resources:
+try {
+  const actor = client.myActor.getOrCreate("my-actor");
+  const conn = actor.connect();
 
-```typescript {{"title":"server.ts"}}
-// Single domain
-origin: "https://example.com"
-
-// Multiple domains
-origin: ["https://app.com", "https://admin.com"]
-
-// Dynamic validation
-origin: (origin) => {
-  return origin?.endsWith('.example.com') ? origin : false;
+  // Connection will be established or error will be thrown
+  await conn.increment();
+} catch (error) {
+  if (error instanceof ActorError && error.code === "origin_not_allowed") {
+    console.error("Connection rejected: Origin not allowed");
+  }
 }
-
-// All domains (not recommended for production)
-origin: "*"
 ```
 
-#### `allowMethods`
-
-`string[]`
-
-HTTP methods clients are allowed to use:
-
-```typescript
-allowMethods: ["GET", "POST", "OPTIONS"]  // Common for Rivet
-```
-
-#### `allowHeaders`
-
-`string[]`
-
-Headers that clients can send in requests:
-
-```typescript
-allowHeaders: [
-  "Authorization",           // Your auth headers
-  "Content-Type",           // Standard content type
-  "X-API-Key",              // Custom API key header
-  ...ALLOWED_PUBLIC_HEADERS // Required Rivet headers
-]
-```
-
-#### `credentials`
-
-`boolean`
-
-Whether to allow credentials (cookies, auth headers):
-
-```typescript
-credentials: true  // Required for authentication
-```
-
-<Warning>
-When `credentials: true`, you cannot use `origin: "*"`. Specify exact origins instead.
-</Warning>
-
-#### `maxAge`
-
-`number`
-
-How long browsers cache CORS preflight responses (in seconds):
-
-```typescript
-maxAge: 600  // Cache for 10 minutes
-```
-
-#### `exposeHeaders`
-
-`string[]`
-
-Server headers that browsers can access:
-
-```typescript
-exposeHeaders: ["Content-Length", "X-Request-Id"]
-```
-
-## Router-Level CORS
-
-For applications that need to expose their own routes, configure CORS at the router level:
-
-<CodeGroup>
-
-```typescript {{"title":"Hono"}}
-import { registry } from "./registry";
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { serve } from "@hono/node-server";
-import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
-
-registry.start();
-
-const app = new Hono();
-
-app.use("*", cors({
-  origin: ["http://localhost:3000", "https://myapp.com"],
-  allowHeaders: [
-    "Authorization", 
-    "Content-Type",
-    ...ALLOWED_PUBLIC_HEADERS
-  ],
-}));
-
-serve(app);
-```
-
-```typescript {{"title":"Express"}}
-import express from "express";
-import cors from "cors";
-import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
-import { registry } from "./registry";
-
-registry.start();
-
-const app = express();
-
-app.use(cors({
-  origin: ["http://localhost:3000", "https://myapp.com"],
-  allowedHeaders: [
-    "Authorization",
-    "Content-Type", 
-    ...ALLOWED_PUBLIC_HEADERS
-  ],
-  credentials: true,
-}));
-
-app.use("/registry", handler);
-app.listen(8080);
-```
-
-</CodeGroup>
-
-### Required Headers for Rivet
-
-Rivet requires specific headers for communication. Always include `ALLOWED_PUBLIC_HEADERS`:
-
-```typescript {{"title":"server.ts"}}
-import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
-
-const corsConfig = {
-  allowHeaders: [
-    "X-Foo-Bar",               // Whatever headers you need to configure
-    ...ALLOWED_PUBLIC_HEADERS  // Required Rivet headers
-  ]
-};
-```
-
-These are automatically configured if using `registry.start({ cors })`.
-
-<Warning>
-Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
-</Warning>
-
-## Development vs Production
-
-### Development Setup
-
-For local development, allow localhost origins:
-
-```typescript
-const isDev = process.env.NODE_ENV !== "production";
-
-const corsConfig = {
-  origin: isDev 
-    ? ["http://localhost:3000", "http://localhost:5173"] 
-    : ["https://myapp.com"],
-  allowHeaders: ["Authorization", ...ALLOWED_PUBLIC_HEADERS],
-  credentials: true,
-};
-```
-
-### Production Setup
-
-For production, be restrictive with origins:
-
-```typescript
-const corsConfig = {
-  origin: [
-    "https://myapp.com",
-    "https://www.myapp.com",
-    "https://admin.myapp.com"
-  ],
-  allowHeaders: ["Authorization", ...ALLOWED_PUBLIC_HEADERS],
-  credentials: true,
-  maxAge: 3600, // Cache for 1 hour
-};
-```
-
-## Troubleshooting
-
-### Common CORS Errors
-
-**"Access to fetch blocked by CORS policy"**
-- Add your frontend's origin to the `origin` list
-- Ensure `ALLOWED_PUBLIC_HEADERS` are included in `allowHeaders`
-
-**"Request header not allowed"**
-- Add the missing header to `allowHeaders` 
-- Include `ALLOWED_PUBLIC_HEADERS` in your configuration
-
-**"Credentials mode mismatch"**
-- Set `credentials: true` in CORS config
-- Cannot use `origin: "*"` with credentials
+<Note>
+	See tracking issue for [configuring CORS per-actor on the gateway](https://github.com/rivet-dev/rivet/issues/3539) that will remove the need to implement origin restrictions in `onBforeRequest`.
+</Note>
 

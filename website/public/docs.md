@@ -1,9 +1,5 @@
 # Overview
 
-Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
-
-# Quickstart
-
 Get started with Rivet in minutes. Choose your preferred framework or runtime to begin building with actors.
 
   Set up actors with Node.js, Bun, and web frameworks

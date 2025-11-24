@@ -1,4 +1,336 @@
 # Errors
 
-TODO
+Rivet provides robust error handling with security built in by default. Errors are handled differently based on whether they should be exposed to clients or kept private.
+
+There are two types of errors:
+
+- **UserError**: Thrown from actors and safely returned to clients with full details
+- **Internal errors**: All other errors that are converted to a generic error message for security
+
+## Throwing and Catching Errors
+
+`UserError` lets you throw custom errors that will be safely returned to the client.
+
+Throw a `UserError` with just a message:
+
+<Tabs>
+<Tab title="Actor">
+
+```typescript
+import { actor, UserError } from "rivetkit";
+
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => {
+      // Validate username
+      if (username.length > 32) {
+        throw new UserError("Username is too long");
+      }
+
+      // Update username
+      c.state.username = username;
+    }
+  }
+});
+```
+
+</Tab>
+<Tab title="Client (Connection)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const conn = client.user.getOrCreate().connect();
+
+try {
+  await conn.updateUsername("extremely_long_username_that_exceeds_the_limit");
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.message); // "Username is too long"
+  }
+}
+```
+
+</Tab>
+<Tab title="Client (Stateless)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const userActor = client.user.getOrCreate();
+
+try {
+  await userActor.updateUsername("extremely_long_username_that_exceeds_the_limit");
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.message); // "Username is too long"
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+## Error Codes
+
+Use error codes for explicit error matching in try-catch blocks:
+
+<Tabs>
+<Tab title="Actor">
+
+```typescript
+import { actor, UserError } from "rivetkit";
+
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => {
+      if (username.length < 3) {
+        throw new UserError("Username is too short", {
+          code: "username_too_short"
+        });
+      }
+
+      if (username.length > 32) {
+        throw new UserError("Username is too long", {
+          code: "username_too_long"
+        });
+      }
+
+      // Update username
+      c.state.username = username;
+    }
+  }
+});
+```
+
+</Tab>
+<Tab title="Client (Connection)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const conn = client.user.getOrCreate().connect();
+
+try {
+  await conn.updateUsername("ab");
+} catch (error) {
+  if (error instanceof ActorError) {
+    if (error.code === "username_too_short") {
+      console.log("Please choose a longer username");
+    } else if (error.code === "username_too_long") {
+      console.log("Please choose a shorter username");
+    }
+  }
+}
+```
+
+</Tab>
+<Tab title="Client (Stateless)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const userActor = client.user.getOrCreate();
+
+try {
+  await userActor.updateUsername("ab");
+} catch (error) {
+  if (error instanceof ActorError) {
+    if (error.code === "username_too_short") {
+      console.log("Please choose a longer username");
+    } else if (error.code === "username_too_long") {
+      console.log("Please choose a shorter username");
+    }
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+## Errors With Metadata
+
+Include metadata to provide additional context for rich error handling:
+
+<Tabs>
+<Tab title="Actor">
+
+```typescript
+import { actor, UserError } from "rivetkit";
+
+const api = actor({
+  state: { requestCount: 0, lastReset: Date.now() },
+  actions: {
+    makeRequest: (c) => {
+      c.state.requestCount++;
+
+      const limit = 100;
+      if (c.state.requestCount > limit) {
+        const resetAt = c.state.lastReset + 60_000; // Reset after 1 minute
+
+        throw new UserError("Rate limit exceeded", {
+          code: "rate_limited",
+          metadata: {
+            limit: limit,
+            resetAt: resetAt,
+            retryAfter: Math.ceil((resetAt - Date.now()) / 1000)
+          }
+        });
+      }
+
+      // Rest of request logic...
+    }
+  }
+});
+```
+
+</Tab>
+<Tab title="Client (Connection)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const conn = client.api.getOrCreate().connect();
+
+try {
+  await conn.makeRequest();
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.message); // "Rate limit exceeded"
+    console.log(error.code); // "rate_limited"
+    console.log(error.metadata); // { limit: 100, resetAt: 1234567890, retryAfter: 45 }
+
+    if (error.code === "rate_limited") {
+      console.log(`Rate limit hit. Try again in ${error.metadata.retryAfter} seconds`);
+    }
+  }
+}
+```
+
+</Tab>
+<Tab title="Client (Stateless)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const apiActor = client.api.getOrCreate();
+
+try {
+  await apiActor.makeRequest();
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.message); // "Rate limit exceeded"
+    console.log(error.code); // "rate_limited"
+    console.log(error.metadata); // { limit: 100, resetAt: 1234567890, retryAfter: 45 }
+
+    if (error.code === "rate_limited") {
+      console.log(`Rate limit hit. Try again in ${error.metadata.retryAfter} seconds`);
+    }
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+## Internal Errors
+
+All errors that are not UserError instances are automatically converted to a generic "internal error" response. This prevents accidentally leaking sensitive information like stack traces, database details, or internal system information.
+
+<Tabs>
+<Tab title="Actor">
+
+```typescript
+import { actor } from "rivetkit";
+
+const payment = actor({
+  state: { transactions: [] },
+  actions: {
+    processPayment: async (c, amount: number) => {
+      // This will throw a regular Error (not UserError)
+      const result = await fetch("https://payment-api.example.com/charge", {
+        method: "POST",
+        body: JSON.stringify({ amount })
+      });
+
+      if (!result.ok) {
+        // This internal error will be hidden from the client
+        throw new Error(`Payment API returned ${result.status}: ${await result.text()}`);
+      }
+
+      // Rest of payment logic...
+    }
+  }
+});
+```
+
+</Tab>
+<Tab title="Client (Connection)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const conn = client.payment.getOrCreate().connect();
+
+try {
+  await conn.processPayment(100);
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.code); // "internal_error"
+    console.log(error.message); // "Internal error. Read the server logs for more details."
+
+    // Original error details are NOT exposed to the client
+    // Check your server logs to see the actual error message
+  }
+}
+```
+
+</Tab>
+<Tab title="Client (Stateless)">
+
+```typescript
+import { createClient, ActorError } from "rivetkit/client";
+import type { registry } from "./src/index";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const paymentActor = client.payment.getOrCreate();
+
+try {
+  await paymentActor.processPayment(100);
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.code); // "internal_error"
+    console.log(error.message); // "Internal error. Read the server logs for more details."
+
+    // Original error details are NOT exposed to the client
+    // Check your server logs to see the actual error message
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+The original error message and stack trace are logged server-side for debugging. Check your server logs to see the full error details.
+
+## API Reference
+
+- [`UserError`](/typedoc/classes/rivetkit.actor_errors.UserError.html) - User-facing error class
+- [`ActorError`](/typedoc/classes/rivetkit.client_mod.ActorError.html) - Errors received by the client
 

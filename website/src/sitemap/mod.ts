@@ -68,7 +68,6 @@ import {
 import type { DeployOption } from "@/data/deploy/shared";
 import { deployGroups, deployOptions } from "@/data/deploy/shared";
 import { integrationGroups } from "@/data/integrations/shared";
-import { useCases } from "@/data/use-cases";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
@@ -183,38 +182,6 @@ export const sitemap = [
 						icon: faClock,
 					},
 					{
-						title: "Lifecycle & Config",
-						icon: faSlidersHSquare,
-						collapsible: true,
-						pages: [
-							{
-								title: "Lifecycle",
-								href: "/docs/actors/lifecycle",
-								//icon: faRotate,
-							},
-							{
-								title: "Input Parameters",
-								href: "/docs/actors/input",
-								//icon: faFileImport,
-							},
-							{
-								title: "Keys",
-								href: "/docs/actors/keys",
-								//icon: faKey,
-							},
-							{
-								title: "Metadata",
-								href: "/docs/actors/metadata",
-								//icon: faTag,
-							},
-							{
-								title: "Destroying",
-								href: "/docs/actors/destroy",
-								//icon: faTag,
-							},
-						],
-					},
-					{
 						title: "Communication",
 						icon: faArrowRightArrowLeft,
 						collapsible: true,
@@ -249,6 +216,38 @@ export const sitemap = [
 						],
 					},
 					{
+						title: "Lifecycle & Config",
+						icon: faSlidersHSquare,
+						collapsible: true,
+						pages: [
+							{
+								title: "Lifecycle",
+								href: "/docs/actors/lifecycle",
+								//icon: faRotate,
+							},
+							{
+								title: "Input Parameters",
+								href: "/docs/actors/input",
+								//icon: faFileImport,
+							},
+							{
+								title: "Keys",
+								href: "/docs/actors/keys",
+								//icon: faKey,
+							},
+							{
+								title: "Metadata",
+								href: "/docs/actors/metadata",
+								//icon: faTag,
+							},
+							{
+								title: "Destroying",
+								href: "/docs/actors/destroy",
+								//icon: faTag,
+							},
+						],
+					},
+					{
 						title: "Design Patterns",
 						icon: faLayerGroup,
 						href: "/docs/actors/design-patterns",
@@ -269,6 +268,11 @@ export const sitemap = [
 								//icon: faDatabase,
 							},
 							{
+								title: "Logging",
+								href: "/docs/general/logging",
+								// icon: faListUl,
+							},
+							{
 								title: "Errors",
 								href: "/docs/actors/errors"
 							},
@@ -286,11 +290,6 @@ export const sitemap = [
 								title: "CORS",
 								href: "/docs/general/cors",
 								// icon: faShareNodes,
-							},
-							{
-								title: "Logging",
-								href: "/docs/general/logging",
-								// icon: faListUl,
 							},
 						],
 					},
@@ -419,17 +418,6 @@ export const sitemap = [
 			...deploySidebarSections,
 		],
 	},
-	// {
-	// 	title: "Rivet Cloud",
-	// 	href: "/docs/cloud",
-	// 	sidebar: [
-	// 		{
-	// 			title: "Overview",
-	// 			href: "/docs/cloud",
-	// 			// icon: faSquareInfo,
-	// 		},
-	// 	],
-	// },
 	{
 		title: "Self-Hosting",
 		href: "/docs/self-hosting",
@@ -470,6 +458,10 @@ export const sitemap = [
 				collapsible: true,
 				pages: [
 					{
+						title: "Railway",
+						href: "/docs/self-hosting/railway",
+					},
+					{
 						title: "Docker Container",
 						href: "/docs/self-hosting/docker-container",
 					},
@@ -478,8 +470,8 @@ export const sitemap = [
 						href: "/docs/self-hosting/docker-compose",
 					},
 					{
-						title: "Railway",
-						href: "/docs/self-hosting/railway",
+						title: "Kubernetes",
+						href: "/docs/self-hosting/kubernetes",
 					},
 				],
 			},
