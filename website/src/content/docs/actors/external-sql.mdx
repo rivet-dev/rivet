@@ -63,7 +63,7 @@ export const userActor = actor({
   }),
   
   // Insert user into database when actor starts
-  onStart: async (c, opts) => {
+  onWake: async (c, opts) => {
     const result = await pool.query(
       "INSERT INTO users (username, email, created_at) VALUES ($1, $2, $3)",
       [c.state.username, c.state.email, c.state.lastActive]
@@ -177,7 +177,7 @@ export const userActor = actor({
   }),
   
   // Insert user into database when actor starts
-  onStart: async (c, opts) => {
+  onWake: async (c, opts) => {
     const result = await db.insert(users).values({
       username: c.state.username,
       email: c.state.email,

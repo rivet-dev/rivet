@@ -2,6 +2,8 @@
 
 Connections represent client connections to your actor. They provide a way to handle client authentication, manage connection-specific data, and control the connection lifecycle.
 
+For documentation on connecting to actors from clients, see the [Clients documentation](/docs/actors/clients).
+
 ## Parameters
 
 When clients connect to an actor, they can pass connection parameters that are handled during the connection process.
@@ -10,7 +12,7 @@ For example:
 
 <CodeGroup>
 
-```typescript {{"title":"client.ts"}}
+```typescript {{"title":"Client"}}
 import { createClient } from "rivetkit/client";
 import type { registry } from "./src/index";
 
@@ -20,21 +22,30 @@ const gameRoom = await client.gameRoom.get({
 });
 ```
 
-```typescript {{"title":"actor.ts"}}
+```typescript {{"title":"Actor"}}
 import { actor } from "rivetkit";
+
+interface ConnParams {
+  authToken: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+}
 
 const gameRoom = actor({
   state: {},
-  
+
   // Handle connection setup
-  createConnState: (c, opts, params: { authToken: string }) => {
+  createConnState: (c, opts, params: ConnParams): ConnState => {
     // Validate authentication token
     const authToken = params.authToken;
-    
+
     if (!authToken || !validateToken(authToken)) {
       throw new Error("Invalid auth token");
     }
-    
+
     // Create connection state
     return { userId: getUserIdFromToken(authToken), role: "player" };
   },
@@ -53,7 +64,7 @@ const gameRoom = actor({
 There are two ways to define an actor's connection state:
 
 <Tabs>
-	<Tab title="connState constant">
+	<Tab title="connState">
 		Define connection state as a constant value:
 
 		```typescript
@@ -61,18 +72,18 @@ There are two ways to define an actor's connection state:
 
 		const chatRoom = actor({
 		  state: { messages: [] },
-		  
+
 		  // Define default connection state as a constant
 		  connState: {
 		    role: "guest",
 		    joinedAt: 0
 		  },
-		  
+
 		  onConnect: (c) => {
 		    // Update join timestamp when a client connects
 		    c.conn.state.joinedAt = Date.now();
 		  },
-		  
+
 		  actions: {
 		    // ...
 		  }
@@ -82,28 +93,34 @@ There are two ways to define an actor's connection state:
 		This value will be cloned for every new connection using `structuredClone`.
 	</Tab>
 
-	<Tab title="createConnState function">
+	<Tab title="createConnState">
 		Create connection state dynamically with a function called for each connection:
 
 		```typescript
 		import { actor } from "rivetkit";
 
+		interface ConnState {
+		  userId: string;
+		  role: string;
+		  joinedAt: number;
+		}
+
 		const chatRoom = actor({
 		  state: { messages: [] },
-		  
+
 		  // Create connection state dynamically
-		  createConnState: (c) => {
+		  createConnState: (c): ConnState => {
 		    // Validate any connection parameters
 		    // ...
-		    
+
 		    // Return the connection state
-		    return { 
+		    return {
 		      userId: generateUserId(),
 		      role: "guest",
 		      joinedAt: Date.now()
 		    };
 		  },
-		  
+
 		  actions: {
 		    sendMessage: (c, message) => {
 		      const username = c.conn.state.userId;
@@ -122,6 +139,7 @@ The connection lifecycle has several hooks:
 
 - `onBeforeConnect`: Called before a client connects, returns the connection state
 - `onConnect`: Called when a client successfully connects
+- `createState`: Called when creating a connection state
 - `onDisconnect`: Called when a client disconnects
 
 See the documentation on [Actor Lifecycle](/docs/actors/lifecycle) for more details.
@@ -130,7 +148,7 @@ See the documentation on [Actor Lifecycle](/docs/actors/lifecycle) for more deta
 
 All active connections can be accessed through the context object's `conns` property. This is an array of all current connections.
 
-This is frequently used with `conn.send(name, event)` to send messages directly to clients.
+This is frequently used with `conn.send(name, event)` to send messages directly to clients. To send an event to all connections at once, use `c.broadcast()` instead. See [Events](/docs/actors/events) for more details on broadcasting.
 
 For example:
 
@@ -147,7 +165,7 @@ const chatRoom = actor({
       
       if (recipientConn) {
         // Send a private message to just that client
-        recipientConn.send('directMessage', {
+        recipientConn.send("directMessage", {
           from: c.conn.state.userId,
           message: message
         });
@@ -156,6 +174,10 @@ const chatRoom = actor({
   }
 });
 ```
+
+<Note>
+`conn.send()` has no effect on [low-level WebSocket connections](/docs/actors/websocket-handler). For low-level WebSockets, use the WebSocket API directly (e.g., `websocket.send()`).
+</Note>
 
 ## Disconnecting clients
 
@@ -184,71 +206,7 @@ const secureRoom = actor({
 If you need to wait for the disconnection to complete, you can use `await`:
 
 ```typescript
-await c.conn.disconnect('Too many requests');
+await c.conn.disconnect("Too many requests");
 ```
 
 This ensures the underlying network connections close cleanly before continuing.
-
-## Connection Error Handling
-
-Handle connection errors using the `.onError()` method:
-
-<CodeGroup>
-
-```typescript {{"title":"TypeScript"}}
-const connection = actor.connect();
-
-connection.onError((error) => {
-  console.error('Connection error:', error);
-  showErrorMessage(error.message);
-  
-  // Handle specific error types
-  if (error.code === 'UNAUTHORIZED') {
-    redirectToLogin();
-  } else if (error.code === 'ACTOR_NOT_FOUND') {
-    showActorNotFoundError();
-  }
-});
-```
-
-```tsx {{"title":"React"}}
-import { useState, useEffect } from "react";
-import { useActor } from "./rivetkit";
-
-function ConnectionErrorHandler() {
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-
-  const actor = useActor({
-    name: "chatRoom",
-    key: ["general"]
-  });
-
-  useEffect(() => {
-    if (!actor.connection) return;
-
-    const unsubscribe = actor.connection.onError((error) => {
-      console.error('Connection error:', error);
-      setConnectionError(error.message);
-      setErrorCode(error.code);
-      
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        setConnectionError(null);
-        setErrorCode(null);
-      }, 5000);
-    });
-
-    // Clean up error handler when component unmounts
-    return unsubscribe;
-  }, [actor.connection]);
-
-  // ...rest of component...
-}
-```
-
-</CodeGroup>
-
-## Offline & Auto-Reconnection
-
-See [client documentation](/docs/actors/communicating-between-actors) for details on reconnection behavior.

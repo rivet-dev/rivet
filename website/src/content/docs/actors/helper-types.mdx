@@ -17,7 +17,7 @@ import { actor, ActorContextOf } from "rivetkit";
 const chatRoom = actor({
   state: { messages: [] },
   actions: {
-  onStart: (c, message) => {
+  onWake: (c, message) => {
     // Can ActorContext be used in lifecycle hooks
     exampleFunction(c, "Actor started");
   },

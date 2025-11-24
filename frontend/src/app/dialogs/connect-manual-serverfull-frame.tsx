@@ -238,7 +238,7 @@ function Step2({ provider }: { provider: string }) {
 				.with("aws", () => (
 					<p>
 						<a
-							href="https://www.rivet.dev/docs/deploy/aws-ecs/"
+							href="https://www.rivet.dev/docs/connect/aws-ecs/"
 							className="underline"
 							target="_blank"
 							rel="noopener"
@@ -252,7 +252,7 @@ function Step2({ provider }: { provider: string }) {
 				.with("hetzner", () => (
 					<p>
 						<a
-							href="https://www.rivet.dev/docs/deploy/hetzner/"
+							href="https://www.rivet.dev/docs/connect/hetzner/"
 							className="underline"
 							target="_blank"
 							rel="noopener"
@@ -266,7 +266,7 @@ function Step2({ provider }: { provider: string }) {
 				.with("gcp", () => (
 					<p>
 						<a
-							href="https://www.rivet.dev/docs/deploy/gcp-cloud-run/"
+							href="https://www.rivet.dev/docs/connect/gcp-cloud-run/"
 							className="underline"
 							target="_blank"
 							rel="noopener"

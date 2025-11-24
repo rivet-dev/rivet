@@ -23,11 +23,11 @@ const orderProcessor = actor({
       const client = c.client<typeof registry>();
       
       // Reserve the stock
-      const inventory = client.inventory.getOrCreate(["main"]);
+      const inventory = client.inventory.getOrCreate("main");
       await inventory.reserveStock(order.quantity);
-      
+
       // Process payment through payment actor
-      const payment = client.payment.getOrCreate([order.customerId]);
+      const payment = client.payment.getOrCreate(order.customerId);
       const result = await payment.processPayment(order.amount);
       
       // Update order state
@@ -56,15 +56,15 @@ const workflowActor = actor({
       const client = c.client<typeof registry>();
       
       // Step 1: Initialize data
-      const dataProcessor = client.dataProcessor.getOrCreate(["main"]);
+      const dataProcessor = client.dataProcessor.getOrCreate("main");
       const data = await dataProcessor.initialize(workflowId);
-      
+
       // Step 2: Process through multiple actors
-      const validator = client.validator.getOrCreate(["main"]);
+      const validator = client.validator.getOrCreate("main");
       const validationResult = await validator.validate(data);
-      
+
       // Step 3: Finalize
-      const finalizer = client.finalizer.getOrCreate(["main"]);
+      const finalizer = client.finalizer.getOrCreate("main");
       const result = await finalizer.finalize(validationResult);
       
       c.state.workflows.push({ workflowId, result, completedAt: Date.now() });
@@ -89,9 +89,9 @@ const analyticsActor = actor({
       const client = c.client<typeof registry>();
       
       // Collect data from multiple sources
-      const userMetrics = client.userMetrics.getOrCreate(["main"]);
-      const orderMetrics = client.orderMetrics.getOrCreate(["main"]);
-      const systemMetrics = client.systemMetrics.getOrCreate(["main"]);
+      const userMetrics = client.userMetrics.getOrCreate("main");
+      const orderMetrics = client.orderMetrics.getOrCreate("main");
+      const systemMetrics = client.systemMetrics.getOrCreate("main");
       
       const [users, orders, system] = await Promise.all([
         userMetrics.getStats(),
@@ -128,8 +128,8 @@ const auditLogActor = actor({
       const client = c.client<typeof registry>();
       
       // Connect to multiple actors to listen for events
-      const userActor = client.userActor.getOrCreate(["main"]).connect();
-      const orderActor = client.orderActor.getOrCreate(["main"]).connect();
+      const userActor = client.userActor.getOrCreate("main").connect();
+      const orderActor = client.orderActor.getOrCreate("main").connect();
       
       // Listen for user events
       userActor.on("userCreated", (user) => {
@@ -162,7 +162,7 @@ Process multiple items in parallel:
 ```typescript
 // Process items in parallel
 const results = await Promise.all(
-  items.map(item => client.processor.getOrCreate([item.type]).process(item))
+  items.map(item => client.processor.getOrCreate(item.type).process(item))
 );
 ```
 

@@ -10,21 +10,20 @@ See the [React quickstart guide](/docs/actors/quickstart/react) for getting star
 
 ## API Reference
 
-### `createRivetKit(client, options?)`
+### `createRivetKit(endpoint?, options?)`
 
 Creates the Rivet hooks for React integration.
 
 ```tsx
-import { createClient, createRivetKit } from "@rivetkit/react";
+import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./backend/registry";
 
-const client = createClient<typeof registry>();
-const { useActor } = createRivetKit(client);
+const { useActor } = createRivetKit<typeof registry>();
 ```
 
 #### Parameters
 
-- `client`: The Rivet client created with `createClient`
+- `endpoint`: Optional endpoint URL (defaults to `http://localhost:6420` or `process.env.RIVET_ENDPOINT`)
 - `options`: Optional configuration object
 
 #### Returns

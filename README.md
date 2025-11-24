@@ -119,17 +119,17 @@ Deploy Rivet Actors anywhere - from serverless platforms to your own infrastruct
 - [Node.js](https://www.rivet.dev/docs/actors/quickstart/backend)
 - [Bun](https://www.rivet.dev/docs/actors/quickstart/backend)
 - [Deno](https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno)
-- [Vercel](https://www.rivet.dev/docs/deploy/vercel) *(1-Click Deploy)*
+- [Vercel](https://www.rivet.dev/docs/connect/vercel) *(1-Click Deploy)*
 - [Railway](https://railway.com/deploy/rivet) *(1-Click Deploy)*
 - [Durable Objects](https://www.rivet.dev/docs/actors/quickstart/backend)
-- [Kubernetes](https://www.rivet.dev/docs/deploy/kubernetes)
-- [AWS ECS](https://www.rivet.dev/docs/deploy/aws-ecs)
-- [Google Cloud Run](https://www.rivet.dev/docs/deploy/gcp-cloud-run)
-- [Hetzner](https://www.rivet.dev/docs/deploy/hetzner)
-- [VM & Bare Metal](https://www.rivet.dev/docs/deploy/vm-and-bare-metal)
-- [AWS Lambda](https://www.rivet.dev/docs/deploy/aws-lambda) *(On The Roadmap)*
-- [Supabase](https://www.rivet.dev/docs/deploy/supabase) *(On The Roadmap)*
-- [Freestyle](https://www.rivet.dev/docs/deploy/freestyle) *(On The Roadmap)*
+- [Kubernetes](https://www.rivet.dev/docs/connect/kubernetes)
+- [AWS ECS](https://www.rivet.dev/docs/connect/aws-ecs)
+- [Google Cloud Run](https://www.rivet.dev/docs/connect/gcp-cloud-run)
+- [Hetzner](https://www.rivet.dev/docs/connect/hetzner)
+- [VM & Bare Metal](https://www.rivet.dev/docs/connect/vm-and-bare-metal)
+- [AWS Lambda](https://www.rivet.dev/docs/connect/aws-lambda) *(On The Roadmap)*
+- [Supabase](https://www.rivet.dev/docs/connect/supabase) *(On The Roadmap)*
+- [Freestyle](https://www.rivet.dev/docs/connect/freestyle) *(On The Roadmap)*
 
 ## Works With Your Tools
 
