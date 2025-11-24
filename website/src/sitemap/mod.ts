@@ -364,11 +364,11 @@ export const sitemap = [
 							},
 						]
 					},
-					{
-						title: "Architecture",
-						href: "/docs/general/architecture",
-						// icon: faSquareBinary,
-					},
+					// {
+					// 	title: "Architecture",
+					// 	href: "/docs/general/architecture",
+					// 	// icon: faSquareBinary,
+					// },
 					{
 						title: "Docs for LLMs",
 						href: "/docs/general/docs-for-llms",
