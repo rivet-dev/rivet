@@ -43,17 +43,17 @@ export const integrationGroups: IntegrationGroup[] = [
 			},
 		],
 	},
-	{
-		title: "Auth",
-		items: [
-			{
-				title: "Better Auth",
-				href: "/docs/integrations/better-auth",
-				description:
-					"Modern authentication library with TypeScript support",
-			},
-		],
-	},
+	// {
+	// 	title: "Auth",
+	// 	items: [
+	// 		{
+	// 			title: "Better Auth",
+	// 			href: "/docs/integrations/better-auth",
+	// 			description:
+	// 				"Modern authentication library with TypeScript support",
+	// 		},
+	// 	],
+	// },
 	{
 		title: "Misc",
 		items: [

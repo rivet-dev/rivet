@@ -244,7 +244,7 @@ export function TechSection() {
 								alt="Deno"
 							/>
 							<TechLink
-								href="/docs/deploy/vercel"
+								href="/docs/connect/vercel"
 								name="Vercel"
 								icon={vercelLogo}
 								alt="Vercel"
@@ -265,51 +265,51 @@ export function TechSection() {
 								alt="Cloudflare Durable Objects"
 							/>
 							<TechLink
-								href="/docs/deploy/kubernetes"
+								href="/docs/connect/kubernetes"
 								name="Kubernetes"
 								icon={kubernetesLogo}
 								alt="Kubernetes"
 							/>
 							<TechLink
-								href="/docs/deploy/aws-ecs"
+								href="/docs/connect/aws-ecs"
 								name="AWS ECS"
 								icon={awsLogo}
 								alt="AWS ECS"
 							/>
 							<TechLink
-								href="/docs/deploy/gcp-cloud-run"
+								href="/docs/connect/gcp-cloud-run"
 								name="Google Cloud Run"
 								icon={gcpLogo}
 								alt="Google Cloud Run"
 							/>
 							<TechLink
-								href="/docs/deploy/hetzner"
+								href="/docs/connect/hetzner"
 								name="Hetzner"
 								icon={hetznerLogo}
 								alt="Hetzner"
 							/>
 							<TechLink
-								href="/docs/deploy/vm-and-bare-metal"
+								href="/docs/connect/vm-and-bare-metal"
 								name="VM & Bare Metal"
 								icon={vmBareMetalLogo}
 								alt="VM & Bare Metal"
 							/>
 							<TechLink
-								href="/docs/deploy/aws-lambda"
+								href="/docs/connect/aws-lambda"
 								name="AWS Lambda"
 								icon={awsLambdaLogo}
 								alt="AWS Lambda"
 								status="coming-soon"
 							/>
 							<TechLink
-								href="/docs/deploy/supabase"
+								href="/docs/connect/supabase"
 								name="Supabase"
 								icon={supabaseLogo}
 								alt="Supabase"
 								status="coming-soon"
 							/>
 							<TechLink
-								href="/docs/deploy/freestyle"
+								href="/docs/connect/freestyle"
 								name="Freestyle"
 								icon={freestyleLogo}
 								alt="Freestyle"

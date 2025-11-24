@@ -56,12 +56,11 @@ registry.start();
 Set up your React application:
 
 ```tsx {{"title":"frontend/App.tsx"}}
-import { createClient, createRivetKit } from "@rivetkit/react";
+import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
 import type { registry } from "../backend/registry";
 
-const client = createClient<typeof registry>();
-const { useActor } = createRivetKit(client);
+const { useActor } = createRivetKit<typeof registry>();
 
 function App() {
 	const [count, setCount] = useState(0);

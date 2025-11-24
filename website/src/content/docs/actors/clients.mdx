@@ -1,596 +1,466 @@
-import imgActorActorClient from "./images/actor-actor-client.png";
-import imgExtrnalClient from "./images/external-client.png";
-import imgServerSideClient from "./images/server-side-client.png";
+# Clients
 
-# Actor Clients
+Clients are used to get and communicate with actors from your application. Clients can be created from either your frontend or backend.
 
-Learn how to call actions and connect to actors from client applications using Rivet's TypeScript client library.
-
-Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
-
-Using the RivetKit client is completely optional. If you prefer to write your own networking logic, you can either:
-
-- Write your own HTTP endpoints and use the client returned from `registry.start` (see below)
-- Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
-
-## Client Setup
-
-There are several ways to create a client for communicating with actors:
+## Creating a Client
 
 <Tabs>
-	<Tab title="Server-Side Client">
-		<Image src={imgServerSideClient} alt="Server-side client diagram" />
+	<Tab title="Frontend Client">
+		For frontend applications or external services:
 
+		<CodeGroup>
+		```typescript {{"title":"JavaScript"}}
+		import { createClient } from "rivetkit/client";
+		import type { registry } from "./registry";  // Must use `type`
+
+		const client = createClient<typeof registry>();
+		```
+
+		```tsx {{"title":"React"}}
+		import { createRivetKit } from "@rivetkit/react";
+		import type { registry } from "./registry";  // Must use `type`
+
+		const { useActor } = createRivetKit<typeof registry>();
+		```
+		</CodeGroup>
+
+		<Accordion title="Advanced Options">
+			Clients include the following options:
+
+			```typescript
+			const client = createClient<typeof registry>({
+				endpoint: "https://api.rivet.dev",
+				namespace: "default",
+				token: "my-token",
+				encoding: "json",  // "json", "cbor", or "bare"
+				headers: { "X-Custom-Header": "value" }
+			});
+			```
+		</Accordion>
+	</Tab>
+
+	<Tab title="Backend Client">
 		From your backend server that hosts the registry:
 
-		```typescript {{"title":"server.ts"}}
+		```typescript
 		import { registry } from "./registry";
-		import { Hono } from "hono";
-		import { serve } from "@hono/node-server";
 
 		const { client } = registry.start();
-
-		const app = new Hono();
-
-		app.post("/foo", () => {
-			const response = await client.myActor.getOrCreate("my-id").bar();
-			return c.json(response);
-		});
-
-		serve(app);
-		```
-
-		This client doesn't [require authentication](/docs/actors/authentication).
-	</Tab>
-
-	<Tab title="External Client">
-		<Image src={imgExtrnalClient} alt="External client diagram" />
-
-		For frontend applications or external services connecting to your Rivet backend:
-
-		```typescript {{"title":"client.ts"}}
-		import { createClient } from "rivetkit/client";
-		import type { registry } from "./registry";  // IMPORTANT: Must use `type`
-
-		const client = createClient<typeof registry>("http://localhost:8080");
-
-		const response = await client.otherActor.getOrCreate().foo();
-		```
-
-		Configure the client with additional options:
-
-		```typescript {{"tilte":"client.ts"}}
-		const client = createClient<typeof registry>("http://localhost:8080", {
-		  // Data serialization format
-		  encoding: "cbor", // or "json"
-		  
-		  // Network transport
-		  transport: "websocket",  // or "sse"
-		});
-		```
-
-		This client [requires authentication](/docs/actors/authentication).
-
-		**Important**: Use `import type` when importing the registry type in order to
-		avoid accidentally bundling your backend code.
-
-		```typescript {{"title":"client.ts"}}
-		// ✅ Do this
-		import type { registry } from "./registry"
-
-		// 🚫 Not this
-		import { registry } from "./registry"
 		```
 	</Tab>
 
-	<Tab title="Actor-to-Actor Client">
-		<Image src={imgActorActorClient} alt="Actor-to-actor client diagram" />
-
+	<Tab title="Actor-to-Actor">
 		From within an actor to communicate with other actors:
 
-		```typescript {{"title":"actor.ts"}}
+		```typescript
 		const myActor = actor({
 			actions: {
 				callOtherActor: (c) => {
 					const client = c.client<typeof registry>();
-					return await client.otherActor.getOrCreate("my-id").foo();
+					// ...
 				}
 			}
 		});
 		```
 
-		This client doesn't [require authentication](/docs/actors/authentication).
-
 		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
 	</Tab>
 </Tabs>
 
-## `ActorClient`
+## Getting an Actor
 
-The `ActorClient` provides methods for finding and creating actors. All methods return an `ActorHandle` that you can use to call actions or establish connections.
+### `getOrCreate`
 
-### `get(key?, opts?)` - Find Existing Actor
+Returns a handle to an existing actor or creates one if it doesn't exist:
+
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const counter = client.counter.getOrCreate("my-counter");
+const count = await counter.increment(5);
+```
+
+```tsx {{"title":"React"}}
+const counter = useActor({
+  name: "counter",
+  key: ["my-counter"],
+});
+
+// Call actions through the connection
+await counter.connection?.increment(5);
+```
+</CodeGroup>
+
+Pass initialization data when creating:
+
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const game = client.game.getOrCreate("game-123", {
+  createWithInput: { gameMode: "tournament", maxPlayers: 8 }
+});
+```
+
+```tsx {{"title":"React"}}
+const game = useActor({
+  name: "game",
+  key: ["game-123"],
+  createWithInput: { gameMode: "tournament", maxPlayers: 8 },
+});
+```
+</CodeGroup>
+
+### `get`
 
 Returns a handle to an existing actor or `null` if it doesn't exist:
 
-```typescript
-// Get existing actor by key
-const handle = client.myActor.get(["actor-id"]);
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const handle = client.myActor.get("actor-id");
 
 if (handle) {
-  const result = await handle.someAction();
-} else {
-  console.log("Actor doesn't exist");
+  await handle.someAction();
 }
 ```
 
-### `getOrCreate(key?, opts?)` - Find or Create Actor
+```tsx {{"title":"React"}}
+import { createClient } from "rivetkit/client";
+import { useMemo } from "react";
+import type { registry } from "./registry";
 
-Returns a handle to an existing actor or creates a new one if it doesn't exist:
+// `get` is not currently supported with useActor.
+// Use createClient with useMemo instead:
 
-```typescript
-// Get or create actor (synchronous)
-const counter = client.counter.getOrCreate(["my-counter"]);
+function MyComponent() {
+  const client = useMemo(() => createClient<typeof registry>(), []);
+  const handle = useMemo(() => client.myActor.get("actor-id"), [client]);
 
-// With initialization input
-const game = client.game.getOrCreate(["game-123"], {
-  createWithInput: {
-    gameMode: "tournament",
-    maxPlayers: 8,
-  }
+  // Use handle to call actions
+}
+```
+</CodeGroup>
+
+### `create`
+
+Creates a new actor, failing if one already exists with that key:
+
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const newGame = await client.game.create("game-456", {
+  input: { gameMode: "classic" }
 });
+```
 
-// Call actions immediately
+```tsx {{"title":"React"}}
+import { createClient } from "rivetkit/client";
+import { useMemo, useEffect, useState } from "react";
+import type { registry } from "./registry";
+
+// `create` is not currently supported with useActor.
+// Use createClient with useMemo instead:
+
+function MyComponent() {
+  const client = useMemo(() => createClient<typeof registry>(), []);
+  const [handle, setHandle] = useState(null);
+
+  useEffect(() => {
+    client.game.create("game-456", {
+      input: { gameMode: "classic" }
+    }).then(setHandle);
+  }, [client]);
+
+  // Use handle to call actions
+}
+```
+</CodeGroup>
+
+### `getForId`
+
+Connect to an actor using its internal ID:
+
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const actor = client.myActor.getForId("lrysjam017rhxofttna2x5nzjml610");
+```
+
+```tsx {{"title":"React"}}
+import { createClient } from "rivetkit/client";
+import { useMemo } from "react";
+import type { registry } from "./registry";
+
+// `getForId` is not currently supported with useActor.
+// Use createClient with useMemo instead:
+
+function MyComponent({ actorId }: { actorId: string }) {
+  const client = useMemo(() => createClient<typeof registry>(), []);
+  const handle = useMemo(() => client.myActor.getForId(actorId), [client, actorId]);
+
+  // Use handle to call actions
+}
+```
+</CodeGroup>
+
+Prefer using keys over internal IDs for simplicity.
+
+## Calling Actions
+
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const counter = client.counter.getOrCreate("my-counter");
+
 const count = await counter.increment(5);
-```
-
-<Note>
-`get()` and `getOrCreate()` are synchronous and return immediately. The actor is created lazily when you first call an action.
-</Note>
-
-### `create(key?, opts?)` - Create New Actor
-
-Explicitly creates a new actor instance, failing if one already exists:
-
-```typescript
-// Create new actor (async)
-const newGame = await client.game.create(["game-456"], {
-  input: {
-    gameMode: "classic",
-    maxPlayers: 4,
-  }
-});
-
-// Actor is guaranteed to be newly created
-await newGame.initialize();
-```
-
-### `getForId(id, opts?)` - Find by Internal ID
-
-Connect to an actor using its internal system ID:
-
-```typescript
-// Connect by internal ID
-const actorId = "55425f42-82f8-451f-82c1-6227c83c9372";
-const actor = client.myActor.getForId(actorId);
-
-await actor.performAction();
-```
-
-<Warning>
-Prefer using keys over internal IDs for actor discovery. IDs are primarily for debugging and advanced use cases.
-</Warning>
-
-## `ActorHandle`
-
-An `ActorHandle` represents a reference to an actor instance and provides methods for calling actions and establishing connections. You get an `ActorHandle` from the `ActorClient` methods like `get()`, `getOrCreate()`, and `create()`.
-
-### Calling Actions
-
-You can call actions directly on an `ActorHandle`:
-
-```typescript
-const counter = client.counter.getOrCreate(["my-counter"]);
-
-// Call actions directly
-const count = await counter.increment(5);
-const currentValue = await counter.getCount();
+const value = await counter.getCount();
 await counter.reset();
 ```
 
-Actions called on an `ActorHandle` are stateless - each call is independent and doesn't maintain a persistent connection to the actor.
-
-### `fetch(input, init?)` - Raw HTTP Requests
-
-Make direct HTTP requests to the actor's `onFetch` handler:
-
-```typescript
-const actor = client.myActor.getOrCreate(["key"]);
-
-// GET request
-const response = await actor.fetch("/api/hello", {
-  method: "GET"
-});
-const data = await response.json();
-
-// POST request with body
-const postResponse = await actor.fetch("/api/echo", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ message: "Hello world" })
+```tsx {{"title":"React"}}
+const counter = useActor({
+  name: "counter",
+  key: ["my-counter"],
 });
 
-// Can also pass a Request object
-const request = new Request("/api/data", { method: "GET" });
-const requestResponse = await actor.fetch(request);
+// Call actions through the connection
+const count = await counter.connection?.increment(5);
+const value = await counter.connection?.getCount();
+await counter.connection?.reset();
 ```
+</CodeGroup>
 
-See [Fetch & WebSocket Handler](/docs/actors/fetch-and-websocket-handler) documentation for more information.
+In JavaScript, actions called without `connect()` are stateless. Each call is independent without a persistent connection. In React, `useActor` automatically manages a persistent connection.
 
-<Note>
-For most use cases, actions provide a higher-level API that's easier to work with than raw HTTP handlers.
-</Note>
+## Connecting to an Actor
 
-### `websocket(path?, protocols?)` - Raw WebSocket Connections
+For real-time use cases, establish a persistent connection to the actor:
 
-Create direct WebSocket connections to the actor's `onWebSocket` handler:
-
-```typescript
-const actor = client.myActor.getOrCreate(["key"]);
-
-// Basic WebSocket connection
-const ws = await actor.websocket();
-ws.addEventListener("message", (event) => {
-  console.log("Message:", event.data);
-});
-ws.send("Hello WebSocket!");
-
-// WebSocket with custom path
-const streamWs = await actor.websocket("/stream");
-
-// WebSocket with protocols
-const protocolWs = await actor.websocket("/", ["chat", "v1"]);
-```
-
-See [Fetch & WebSocket Handler](/docs/actors/fetch-and-websocket-handler) documentation for more information.
-
-<Note>
-For most use cases, actions & events provide a higher-level API that's easier to work with than raw HTTP handlers.
-</Note>
-
-### `connect(params?)` - Establish Stateful Connection
-
-To open a stateful connection using `ActorConn`, call `.connect()`:
-
-```typescript
-const counter = client.counter.getOrCreate(["live-counter"]);
-const connection = counter.connect();
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const counter = client.counter.getOrCreate("live-counter");
+const conn = counter.connect();
 
 // Listen for events
-connection.on("countChanged", (newCount: number) => {
+conn.on("countChanged", (newCount: number) => {
   console.log("Count updated:", newCount);
 });
 
 // Call actions through the connection
-const result = await connection.increment(1);
-
-// Clean up when done
-await connection.dispose();
+await conn.increment(1);
 ```
 
-## `ActorConn`
+```tsx {{"title":"React"}}
+const [count, setCount] = useState(0);
 
-Real-time connections enable bidirectional communication between clients and actors through persistent connections. Rivet automatically negotiates between WebSocket (preferred for full duplex) and Server-Sent Events (SSE) as a fallback for restrictive environments.
+const counter = useActor({
+  name: "counter",
+  key: ["live-counter"],
+});
 
-For more information on connections, see the [connections documentation](/docs/actors/connections). For more information on handling events, see the [events documentation](/docs/actors/events).
-
-### Calling Actions
-
-You can also call actions through an `ActorConn`, just like with an `ActorHandle`:
-
-```typescript
-const connection = counter.connect();
+// Listen for events
+counter.useEvent("countChanged", (newCount: number) => {
+  setCount(newCount);
+});
 
 // Call actions through the connection
-const count = await connection.increment(5);
-const currentValue = await connection.getCount();
+await counter.connection?.increment(1);
 ```
+</CodeGroup>
 
-### Reconnections
+## Subscribing to Events
 
-Connections automatically handle network failures with built-in reconnection logic:
+Listen for events from connected actors:
 
-- **Exponential backoff**: Retry delays increase progressively to avoid overwhelming the server
-- **Action queuing**: Actions called while disconnected are queued and sent once reconnected
-- **Event resubscription**: Event listeners are automatically restored on reconnection
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const conn = client.chatRoom.getOrCreate("general").connect();
 
-### `on(eventName, callback)` - Listen for Events
-
-Listen for events from the actor:
-
-```typescript
-// Listen for chat messages
-connection.on("messageReceived", (message) => {
+// Listen for events
+conn.on("messageReceived", (message) => {
   console.log(`${message.from}: ${message.text}`);
 });
 
-// Listen for game state updates
-connection.on("gameStateChanged", (gameState) => {
-  updateUI(gameState);
-});
-
-// Listen for player events
-connection.on("playerJoined", (player) => {
-  console.log(`${player.name} joined the game`);
-});
-```
-
-### `once(eventName, callback)` - Listen Once
-
-Listen for an event only once:
-
-```typescript
-// Wait for game to start
-connection.once("gameStarted", () => {
+// Listen once
+conn.once("gameStarted", () => {
   console.log("Game has started!");
 });
 ```
 
-### `dispose()` - Clean Up Connection
+```tsx {{"title":"React"}}
+const [messages, setMessages] = useState<Message[]>([]);
 
-Always dispose of connections when finished to free up resources:
+const chatRoom = useActor({
+  name: "chatRoom",
+  key: ["general"],
+});
 
-```typescript
-const connection = actor.connect();
+// Listen for events (automatically cleaned up on unmount)
+chatRoom.useEvent("messageReceived", (message) => {
+  setMessages((prev) => [...prev, message]);
+});
+```
+</CodeGroup>
 
-try {
-  // Use the connection
-  connection.on("event", handler);
-  await connection.someAction();
-} finally {
-  // Clean up the connection
-  await connection.dispose();
-}
+## Full-Stack Type Safety
 
-// Or with automatic cleanup in React/frameworks
-useEffect(() => {
-  const connection = actor.connect();
-  
-  return () => {
-    connection.dispose();
-  };
-}, []);
+Import types from your registry for end-to-end type safety:
+
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+
+// IDE autocomplete shows available actors and actions
+const counter = client.counter.getOrCreate("my-counter");
+const count = await counter.increment(5);
 ```
 
-**Important:** Disposing a connection:
-- Closes the underlying WebSocket or SSE connection
-- Removes all event listeners
-- Cancels any pending reconnection attempts
-- Prevents memory leaks in long-running applications
+```tsx {{"title":"React"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
 
-## Authentication
+const { useActor } = createRivetKit<typeof registry>();
+
+// IDE autocomplete shows available actors and actions
+const counter = useActor({ name: "counter", key: ["my-counter"] });
+const count = await counter.connection?.increment(5);
+```
+</CodeGroup>
+
+<Warning>
+Use `import type` to avoid accidentally bundling backend code in your frontend.
+</Warning>
+
+## Advanced
+
+### Disposing Clients & Connections
+
+Dispose clients to close all connections:
+
+```typescript
+await client.dispose();
+```
+
+Dispose individual connections when finished:
+
+```typescript
+const conn = actor.connect();
+
+try {
+  conn.on("event", handler);
+  await conn.action();
+} finally {
+  await conn.dispose();
+}
+```
+
+<Note>
+When using `useActor` in React, connections are automatically disposed when the component unmounts. No manual cleanup is required.
+</Note>
 
 ### Connection Parameters
 
-Pass authentication data when connecting to actors:
-
-```typescript
-// With connection parameters
-const chat = client.chatRoom.getOrCreate(["general"], {
-  params: {
-    authToken: "jwt-token-here",
-    userId: "user-123",
-    displayName: "Alice"
-  }
-});
-
-const connection = chat.connect();
-
-// Or for action calls
-const result = await chat.sendMessage("Hello world!");
-```
-
-### onAuth Hook Validation
-
-Actors can validate authentication using the `onAuth` hook:
-
-```typescript
-import { actor, UserError } from "rivetkit";
-
-const protectedActor = actor({
-  onAuth: async (opts) => {
-    const { req, params, intents } = opts;
-    
-    // Extract token from params or headers
-    const token = params.authToken || req.headers.get("Authorization");
-    
-    if (!token) {
-      throw new UserError("Authentication required", { code: "missing_auth" });
-    }
-    
-    // Validate and return user data
-    const user = await validateJWT(token);
-    
-    // Check permissions based on what the client is trying to do
-    if (intents.has("create") && user.role !== "admin") {
-      throw new UserError("Admin access required", { code: "insufficient_permissions" });
-    }
-    
-    return { userId: user.id, role: user.role };
-  },
-  
-  actions: {
-    protectedAction: (c, data: string) => {
-      // Access auth data via c.conn.auth
-      const { userId, role } = c.conn.auth;
-      
-      if (role !== "admin") {
-        throw new UserError("Admin access required", { code: "insufficient_permissions" });
-      }
-      
-      return `Hello admin ${userId}`;
-    }
-  }
-});
-```
-
-Learn more about [authentication patterns](/docs/actors/authentication).
-
-## Type Safety
-
-Rivet provides end-to-end type safety between clients and actors:
-
-### Action Type Safety
-
-TypeScript validates action signatures and return types:
-
-```typescript
-// TypeScript knows the action signatures
-const counter = client.counter.getOrCreate(["my-counter"]);
-
-const count: number = await counter.increment(5);   // ✓ Correct
-const invalid = await counter.increment("5");       // ✗ Type error
-
-// IDE autocomplete shows available actions
-counter./* <IDE shows: increment, decrement, getCount, reset> */
-```
-
-### Client Type Safety
-
-Import types from your registry for full type safety:
-
-```typescript
-import type { registry } from "./registry";
-
-// Client is fully typed
-const client = createClient<typeof registry>("http://localhost:8080");
-
-// IDE provides autocomplete for all actors
-client./* <shows: counter, chatRoom, gameRoom, etc.> */
-```
-
-## Best Practices
-
-### `ActorHandle` (Stateless) vs `ActorConn` (Stateful) Clients
-
-**Use `ActorHandle` (Stateless) For:**
-- Simple request-response operations
-- One-off operations  
-- Server-side integration
-
-```typescript
-// Good for simple operations
-const result = await counter.increment(1);
-const status = await server.getStatus();
-```
-
-**Use `ActorConn` (Stateful) Connections For:**
-- Real-time updates needed
-- Event-driven interactions
-- Long-lived client sessions
-
-```typescript
-// Good for real-time features
-const connection = chatRoom.connect();
-connection.on("messageReceived", updateUI);
-await connection.sendMessage("Hello!");
-```
-
-### Resource Management
-
-Always clean up connections when finished:
-
-```typescript
-// Manual cleanup
-const connection = actor.connect();
-try {
-  // Use connection
-  connection.on("event", handler);
-  await connection.action();
-} finally {
-  await connection.dispose();
-}
-```
-
-### Error Handling
-
-Handle connection errors using the `.onError()` method:
+Pass custom data to the actor when connecting:
 
 <CodeGroup>
-
-```typescript {{"title":"TypeScript"}}
-const connection = actor.connect();
-
-connection.onError((error) => {
-  console.error('Connection error:', error);
-  showErrorMessage(error.message);
-  
-  // Handle specific error types
-  if (error.code === 'UNAUTHORIZED') {
-    redirectToLogin();
-  } else if (error.code === 'ACTOR_NOT_FOUND') {
-    showActorNotFoundError();
+```typescript {{"title":"JavaScript"}}
+const chat = client.chatRoom.getOrCreate("general", {
+  params: {
+    userId: "user-123",
+    displayName: "Alice"
   }
 });
 ```
 
 ```tsx {{"title":"React"}}
-import { useState, useEffect } from "react";
-import { useActor } from "./rivetkit";
+const chat = useActor({
+  name: "chatRoom",
+  key: ["general"],
+  params: {
+    userId: "user-123",
+    displayName: "Alice"
+  },
+});
+```
+</CodeGroup>
 
-function ConnectionErrorHandler() {
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
+### Authentication
 
-  const actor = useActor({
-    name: "chatRoom",
-    key: ["general"]
-  });
+Pass authentication tokens when connecting:
 
-  useEffect(() => {
-    if (!actor.connection) return;
+<CodeGroup>
+```typescript {{"title":"JavaScript"}}
+const chat = client.chatRoom.getOrCreate("general", {
+  params: {
+    authToken: "jwt-token-here"
+  }
+});
+```
 
-    const unsubscribe = actor.connection.onError((error) => {
-      console.error('Connection error:', error);
-      setConnectionError(error.message);
-      setErrorCode(error.code);
-      
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        setConnectionError(null);
-        setErrorCode(null);
-      }, 5000);
-    });
+```tsx {{"title":"React"}}
+const chat = useActor({
+  name: "chatRoom",
+  key: ["general"],
+  params: {
+    authToken: "jwt-token-here"
+  },
+});
+```
+</CodeGroup>
 
-    // Clean up error handler when component unmounts
-    return unsubscribe;
-  }, [actor.connection]);
+See [authentication](/docs/actors/authentication) for more details.
 
-  // ...rest of component...
+### Error Handling
+
+<CodeGroup>
+```typescript {{"title":"JavaScript (Connection)"}}
+import { ActorError } from "rivetkit/client";
+
+const conn = actor.connect();
+conn.onError((error: ActorError) => {
+  if (error.code === "forbidden") {
+    window.location.href = "/login";
+  }
+});
+```
+
+```typescript {{"title":"JavaScript (Stateless)"}}
+import { ActorError } from "rivetkit/client";
+
+try {
+  const result = await actor.protectedAction();
+} catch (error) {
+  if (error instanceof ActorError && error.code === "forbidden") {
+    window.location.href = "/login";
+  }
 }
 ```
 
+```tsx {{"title":"React"}}
+import { ActorError } from "rivetkit/client";
+
+const actor = useActor({ name: "myActor", key: ["id"] });
+
+const handleAction = async () => {
+  try {
+    await actor.connection?.protectedAction();
+  } catch (error) {
+    if (error instanceof ActorError && error.code === "forbidden") {
+      window.location.href = "/login";
+    }
+  }
+};
+```
 </CodeGroup>
 
-### Execute Actions in Parallel
+See [errors](/docs/actors/errors) for more details.
 
-You can execute batch requests in parallel:
+### Actor Resolution
+
+`get` and `getOrCreate` return immediately without making a network request. The actor is resolved lazily when you call an action or `connect()`.
+
+To explicitly resolve an actor and get its ID, use `resolve()`:
 
 ```typescript
-// Batch multiple operations through a connection
-const connection = actor.connect();
-await Promise.all([
-  connection.operation1(),
-  connection.operation2(),
-  connection.operation3(),
-]);
-
-// Use getOrCreate for actors you expect to exist
-const existing = client.counter.getOrCreate(["known-counter"]);
-
-// Use create only when you need a fresh instance
-const fresh = await client.counter.create(["new-counter"]);
+const handle = client.counter.getOrCreate("my-counter");
+const actorId = await handle.resolve();
+console.log(actorId); // "lrysjam017rhxofttna2x5nzjml610"
 ```
-
-However, it's recommended to move this logic to run within the actor instead of the client if executing multiple actions is a common pattern.
 

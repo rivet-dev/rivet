@@ -4,42 +4,13 @@ import { faCloudflare, faNodeJs, faReact, faNextjs } from "@rivet-gg/icons";
 
 Actors for long-lived processes with durable state, realtime, and hibernate when not in use.
 
-## Quickstart
-
-<CardGroup cols={2}>
-<Card title="Node.js & Bun Quickstart" href="/docs/actors/quickstart/backend" icon={faNodeJs}>
-  Set up Rivet with Node.js, Bun, and web frameworks
-</Card>
-<Card title="React Quickstart" href="/docs/actors/quickstart/react" icon={faReact}>
-  Set up Rivet with React
-</Card>
-<Card title="Next.js Quickstart" href="/docs/actors/quickstart/next-js" icon={faNextjs}>
-  Set up Rivet with Next.js
-</Card>
-<Card title="Cloudflare Workers Quickstart" href="/docs/actors/quickstart/cloudflare-workers" icon={faCloudflare}>
-  Set up Rivet with Cloudflare Workers
-</Card>
-</CardGroup>
-
 ## Features
 
 - **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts.
 - **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes.
-- **Realtime**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
+- **Realtime**: Update state and broadcast changes in realtime with WebSockets. No external pub/sub systems, no polling – just built-in low-latency events.
 - **Infinitely Scalable**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
 - **Fault Tolerant**: Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations.
-
-## Use Cases
-
-Actors are perfect for applications that need persistent state and real-time updates:
-
-- **AI agents**: Stateful AI assistants with conversation history
-- **Collaborative documents**: Multiple users editing documents simultaneously (Yjs integration)
-- **Local-first sync**: Offline-first applications with server synchronization
-- **Per-tenant databases**: Isolated data stores for each user or tenant
-- **Background job**: Background & time-based task execution with persistent state
-- **Rate limiting**: Distributed rate limiting with persistent counters
-- **Stream processing**: Real-time data processing with persistent state
 
 ## Core Concepts
 
@@ -100,7 +71,7 @@ Learn more about [actions](/docs/actors/actions) and [communicating with actors]
 
 ### Real-time Communication & Events
 
-Actors support real-time bidirectional communication through WebSocket and SSE connections. Clients can establish persistent connections to receive live updates.
+Actors support real-time bidirectional communication through WebSocket connections. Clients can establish persistent connections to receive live updates.
 
 For example, to send events to all connected clients:
 
@@ -194,30 +165,3 @@ const foundUser = await manager.getUser(user.userId);
 
 </CodeGroup>
 
-## Frequently Asked Questions
-
-<AccordionGroup>
-    <Accordion title="Isn't well-designed software supposed to separate compute and storage?">
-        Some software makes sense to separate – e.g., for data lakes or highly relational data. But at the end of the day, data has to be partitioned somewhere at some point.
-
-        Usually "faster" databases like Cassandra, DynamoDB, or Vitess make consistency tradeoffs to get better performance. Stateful serverless forces you to think about how your data is sharded for better performance, better scalability, and less consistency footguns.
-    </Accordion>
-
-    <Accordion title="How do I join data across multiple actors?">
-        See [Sharing and Joining State](/docs/actors/sharing-and-joining-state) for detailed strategies on combining data from multiple actors.
-    </Accordion>
-
-    <Accordion title="What is stateful serverless not good for?">
-        OLAP, data lakes, graph databases, and highly relational data are currently not ideal use cases for the actor model.
-    </Accordion>
-
-    <Accordion title="Can this create a single bottleneck?">
-        Yes, but only in the same way that storing data in a single database row creates a bottleneck.
-
-		Just like a single database row can cause contention when multiple clients try to read and write the same data, a single actor can become a bottleneck if too many requests target it.
-
-		The solution is the same: shard your data across multiple actors to distribute the load and scale seamlessly.
-
-		However, actors handle much higher throughput than traditional database rows because they keep data in memory, making read and write operations significantly faster.
-    </Accordion>
-</AccordionGroup>

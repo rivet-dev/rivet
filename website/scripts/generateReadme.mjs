@@ -22,7 +22,7 @@ Rivet Actors are a primitive of RivetKit provide everything you need to build fa
 
 - **Long-Lived, Stateful Compute**: Like AWS Lambda but with memory and no timeouts
 - **Blazing-Fast Reads & Writes**: State stored on same machine as compute  
-- **Realtime, Made Simple**: Built-in WebSockets and SSE support
+- **Realtime, Made Simple**: Built-in WebSockets support
 - **Store Data Near Your Users**: Deploy to the edge for low-latency access
 - **Infinitely Scalable**: Auto-scale from zero to millions without configuration
 - **Fault Tolerant**: Automatic error handling and recovery built-in
@@ -40,7 +40,7 @@ RivetKit provides everything you need to build fast, scalable, and real-time app
 
 - **Long-Lived, Stateful Compute**: Like AWS Lambda but with memory and no timeouts
 - **Blazing-Fast Reads & Writes**: State stored on same machine as compute  
-- **Realtime, Made Simple**: Built-in WebSockets and SSE support
+- **Realtime, Made Simple**: Built-in WebSockets support
 - **Store Data Near Your Users**: Deploy to the edge for low-latency access
 - **Infinitely Scalable**: Auto-scale from zero to millions without configuration
 - **Fault Tolerant**: Automatic error handling and recovery built-in`;

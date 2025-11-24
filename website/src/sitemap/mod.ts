@@ -41,6 +41,7 @@ import {
 	faNodeJs,
 	faPaintbrush,
 	faPalette,
+    faPuzzlePiece,
     faRailway,
 	faReact,
 	faRecycle,
@@ -70,17 +71,6 @@ import { integrationGroups } from "@/data/integrations/shared";
 import { useCases } from "@/data/use-cases";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
-
-// Goals:
-// - Siebar links should advertise the product, collapse any advanced pages away
-// - The sidebar should be 1 screen height when collapsed
-
-// Profiles:
-// - What does Rivet do?
-//	- Does it work for my use cases -> Use Cases
-//	- Curious about the technology -> Build with Rivet
-// - Just want to jump in
-// - People who want to run Open Source
 
 const deploySidebarSections: SidebarItem[] = deployGroups.map(
 	({ title: groupTitle, items }) => ({
@@ -218,9 +208,9 @@ export const sitemap = [
 								//icon: faTag,
 							},
 							{
-								title: "Helper Types",
-								href: "/docs/actors/helper-types",
-								//icon: faCode,
+								title: "Destroying",
+								href: "/docs/actors/destroy",
+								//icon: faTag,
 							},
 						],
 					},
@@ -245,15 +235,27 @@ export const sitemap = [
 								//icon: faArrowsTurnToDots,
 							},
 							{
-								title: "Fetch & WebSocket Handler",
-								href: "/docs/actors/fetch-and-websocket-handler",
-								//icon: faLink,
+								title: "Low-Level WebSocket Handler",
+								href: "/docs/actors/websocket-handler"
+							},
+							{
+								title: "Low-Level HTTP Handler",
+								href: "/docs/actors/request-handler"
+							},
+							{
+								title: "Vanilla HTTP API",
+								href: "/docs/actors/http-api"
 							},
 						],
 					},
 					{
-						title: "Data Management",
-						icon: faDatabase,
+						title: "Design Patterns",
+						icon: faLayerGroup,
+						href: "/docs/actors/design-patterns",
+					},
+					{
+						title: "More",
+						icon: faSitemap,
 						collapsible: true,
 						pages: [
 							{
@@ -262,41 +264,33 @@ export const sitemap = [
 								//icon: faMemory,
 							},
 							{
-								title: "Sharing & Joining State",
-								href: "/docs/actors/sharing-and-joining-state",
-								//icon: faMerge,
-							},
-							{
 								title: "External SQL",
 								href: "/docs/actors/external-sql",
 								//icon: faDatabase,
 							},
-						],
-					},
-					{
-						title: "More",
-						icon: faSitemap,
-						collapsible: true,
-						pages: [
+							{
+								title: "Errors",
+								href: "/docs/actors/errors"
+							},
 							{
 								title: "Testing",
 								href: "/docs/actors/testing",
-								icon: faVialCircleCheck,
+								// icon: faVialCircleCheck,
+							},
+							{
+								title: "Helper Types",
+								href: "/docs/actors/helper-types",
+								//icon: faCode,
 							},
 							{
 								title: "CORS",
 								href: "/docs/general/cors",
-								icon: faShareNodes,
+								// icon: faShareNodes,
 							},
 							{
 								title: "Logging",
 								href: "/docs/general/logging",
-								icon: faListUl,
-							},
-							{
-								title: "Scaling & Concurrency",
-								href: "/docs/actors/scaling",
-								//icon: faMaximize,
+								// icon: faListUl,
 							},
 						],
 					},
@@ -329,16 +323,11 @@ export const sitemap = [
 								href: "/docs/clients/next-js",
 								icon: faNextjs,
 							},
-							{
-								title: "Rust",
-								href: "/docs/clients/rust",
-								icon: faRust,
-							},
-							{
-								title: "OpenAPI",
-								href: "/docs/clients/openapi",
-								icon: faFileImport,
-							},
+							// {
+							// 	title: "Rust",
+							// 	href: "/docs/clients/rust",
+							// 	icon: faRust,
+							// },
 						]
 					}
 				],
@@ -351,6 +340,35 @@ export const sitemap = [
 					// 	href: "/docs/general/studio",
 					// 	icon: faPalette,
 					// },
+					{
+						title: "API Reference",
+						collapsible: true,
+						pages: [
+							{
+								title: "TypeScript API",
+								href: "/typedoc",
+								external: true
+								// icon: faSquareBinary,
+							},
+							{
+								title: "OpenAPI",
+								href: "https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi",
+								external: true
+								// icon: faSquareBinary,
+							},
+							{
+								title: "AsyncAPI",
+								href: "https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi",
+								external: true
+								// icon: faSquareBinary,
+							},
+						]
+					},
+					{
+						title: "Architecture",
+						href: "/docs/general/architecture",
+						// icon: faSquareBinary,
+					},
 					{
 						title: "Docs for LLMs",
 						href: "/docs/general/docs-for-llms",

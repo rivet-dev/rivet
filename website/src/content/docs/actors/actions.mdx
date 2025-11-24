@@ -236,16 +236,9 @@ const counter = actor({
 });
 ```
 
-## Authentication
-
-By default, actors' actions are only accessible from your server-side client.
-
-In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/actors/authentication). Read more about the [types of clients](/docs/actors/clients)
-
-## Streaming Return Data
+## Streaming Data
 
 Actions have a single return value. To stream realtime data in response to an action, use [events](/docs/actors/events).
-
 
 ## Using `ActionContext` Externally
 
