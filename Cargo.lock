@@ -4506,6 +4506,7 @@ dependencies = [
  "reqwest",
  "rivet-api-peer",
  "rivet-api-public",
+ "rivet-api-types",
  "rivet-bootstrap",
  "rivet-cache",
  "rivet-cache-purge",
@@ -4520,6 +4521,7 @@ dependencies = [
  "rivet-term",
  "rivet-test-deps",
  "rivet-tracing-reconfigure",
+ "rivet-types",
  "rivet-util",
  "rivet-workflow-worker",
  "rstest",
@@ -4538,6 +4540,7 @@ dependencies = [
  "tracing-subscriber",
  "universaldb",
  "url",
+ "urlencoding",
  "uuid",
  "vbare",
 ]

@@ -3,6 +3,8 @@ use std::{path::Path, time::Duration};
 use rivet_util::Id;
 use tokio::process::{Child, Command};
 
+pub const TEST_RUNNER_NAME: &'static str = "test-runner";
+
 pub struct TestRunner {
 	pub runner_id: Id,
 	internal_port: u16,
@@ -17,6 +19,7 @@ impl TestRunner {
 		key: &str,
 		version: u32,
 		total_slots: u32,
+		runner_name: Option<String>,
 	) -> Self {
 		let internal_server_port = portpicker::pick_unused_port().expect("runner http server port");
 		let http_server_port = portpicker::pick_unused_port().expect("runner http server port");
@@ -25,7 +28,7 @@ impl TestRunner {
 
 		let manifest_dir = env!("CARGO_MANIFEST_DIR");
 		let runner_script_path =
-			Path::new(manifest_dir).join("../../../sdks/typescript/test-runner/dist/index.js");
+			Path::new(manifest_dir).join("../../sdks/typescript/test-runner/dist/index.js");
 
 		if !runner_script_path.exists() {
 			panic!(
@@ -34,6 +37,8 @@ impl TestRunner {
 			);
 		}
 
+		tracing::info!(?runner_script_path, "spawning runner process");
+
 		let handle = Command::new("node")
 			.arg(runner_script_path)
 			.env("INTERNAL_SERVER_PORT", internal_server_port.to_string())
@@ -41,13 +46,20 @@ impl TestRunner {
 			.env("RIVET_RUNNER_KEY", key.to_string())
 			.env("RIVET_RUNNER_VERSION", version.to_string())
 			.env("RIVET_RUNNER_TOTAL_SLOTS", total_slots.to_string())
+			.env(
+				"RIVET_RUNNER_NAME",
+				runner_name.unwrap_or(TEST_RUNNER_NAME.to_string()),
+			)
 			.env("RIVET_ENDPOINT", format!("http://127.0.0.1:{port}"))
+			// Uncomment for runner logs
+			// .env("LOG_LEVEL", "DEBUG")
+			// .stdout(std::process::Stdio::inherit())
 			.kill_on_drop(true)
 			.spawn()
 			.expect("Failed to execute runner js file, node not installed");
 
 		let runner_id = Self::wait_ready(internal_server_port).await;
-
+		tokio::time::sleep(Duration::from_millis(500)).await;
 		TestRunner {
 			runner_id,
 			internal_port: internal_server_port,

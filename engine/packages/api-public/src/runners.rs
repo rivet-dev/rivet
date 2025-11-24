@@ -4,10 +4,8 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
-use rivet_api_types::{pagination::Pagination, runners::list::*};
+use rivet_api_types::{pagination::Pagination, runners::list::*, runners::list_names::*};
 use rivet_api_util::fanout_to_datacenters;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 
 use crate::ctx::ApiCtx;
 
@@ -58,23 +56,6 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	})
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct ListNamesQuery {
-	pub namespace: String,
-	pub limit: Option<usize>,
-	pub cursor: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = RunnersListNamesResponse)]
-pub struct ListNamesResponse {
-	pub names: Vec<String>,
-	pub pagination: Pagination,
-}
-
 /// ## Datacenter Round Trips
 ///
 /// 2 round trips:
@@ -106,24 +87,13 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 	ctx.auth().await?;
 
 	// Prepare peer query for local handler
-	let peer_query = rivet_api_peer::runners::ListNamesQuery {
-		namespace: query.namespace.clone(),
-		limit: query.limit,
-		cursor: query.cursor.clone(),
-	};
+	let limit = query.limit.unwrap_or(100);
 
 	// Fanout to all datacenters
-	let mut all_names = fanout_to_datacenters::<
-		rivet_api_peer::runners::ListNamesResponse,
-		_,
-		_,
-		_,
-		_,
-		Vec<String>,
-	>(
+	let mut all_names = fanout_to_datacenters::<ListNamesResponse, _, _, _, _, Vec<String>>(
 		ctx.into(),
 		"/runners/names",
-		peer_query,
+		query,
 		|ctx, query| async move { rivet_api_peer::runners::list_names(ctx, (), query).await },
 		|_, res, agg| agg.extend(res.names),
 	)
@@ -133,7 +103,7 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 	all_names.sort();
 
 	// Truncate to the requested limit
-	all_names.truncate(query.limit.unwrap_or(100));
+	all_names.truncate(limit);
 
 	let cursor = all_names.last().map(|x: &String| x.to_string());
 

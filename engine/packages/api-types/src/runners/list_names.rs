@@ -3,23 +3,19 @@ use utoipa::{IntoParams, ToSchema};
 
 use crate::pagination::Pagination;
 
-#[derive(Debug, Serialize, Deserialize, Clone, IntoParams, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
-pub struct ListQuery {
+pub struct ListNamesQuery {
 	pub namespace: String,
-	pub name: Option<String>,
-	pub key: Option<String>,
-	pub actor_ids: Option<String>,
-	pub include_destroyed: Option<bool>,
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-#[schema(as = ActorsListResponse)]
-pub struct ListResponse {
-	pub actors: Vec<rivet_types::actors::Actor>,
+#[schema(as = RunnersListNamesResponse)]
+pub struct ListNamesResponse {
+	pub names: Vec<String>,
 	pub pagination: Pagination,
 }

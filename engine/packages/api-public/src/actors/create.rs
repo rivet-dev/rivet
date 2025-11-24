@@ -4,19 +4,10 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
-use rivet_api_types::actors::create::{CreateRequest, CreateResponse};
+use rivet_api_types::actors::create::*;
 use rivet_api_util::request_remote_datacenter;
-use serde::{Deserialize, Serialize};
-use utoipa::IntoParams;
 
 use crate::ctx::ApiCtx;
-
-#[derive(Debug, Serialize, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct CreateQuery {
-	pub namespace: String,
-}
 
 /// ## Datacenter Round Trips
 ///
