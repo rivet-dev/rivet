@@ -394,6 +394,31 @@ importers:
         specifier: ^4.22.0
         version: 4.44.0(@cloudflare/workers-types@4.20251014.0)
 
+  examples/cloudflare-workers-inline-client:
+    dependencies:
+      '@rivetkit/cloudflare-workers':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/cloudflare-workers
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250129.0
+        version: 4.20251014.0
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.1
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.22.0
+        version: 4.44.0(@cloudflare/workers-types@4.20251014.0)
+
   examples/counter:
     devDependencies:
       '@types/node':
@@ -411,6 +436,40 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
+
+  examples/counter-next-js:
+    dependencies:
+      '@rivetkit/next-js':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/next-js
+      next:
+        specifier: 15.4.5
+        version: 15.4.5(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.13
+      '@types/react':
+        specifier: ^19
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.2(@types/react@19.2.2)
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   examples/counter-serverless:
     devDependencies:
