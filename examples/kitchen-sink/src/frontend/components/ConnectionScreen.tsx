@@ -14,7 +14,6 @@ export default function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
   const [actorId, setActorId] = useState("");
   const [actorRegion, setActorRegion] = useState("");
   const [createInput, setCreateInput] = useState("");
-  const [transport, setTransport] = useState<"websocket" | "sse">("websocket");
   const [encoding, setEncoding] = useState<"json" | "cbor" | "bare">("bare");
   const [connectionMode, setConnectionMode] = useState<"connection" | "handle">("handle");
   const [isConnecting, setIsConnecting] = useState(false);
@@ -29,7 +28,6 @@ export default function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
       actorId,
       actorRegion,
       createInput,
-      transport,
       encoding,
       connectionMode,
       isConnected: true,
@@ -161,26 +159,6 @@ export default function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
                 </button>
               </div>
             </div>
-
-            {connectionMode === "connection" && (
-              <div className="form-group">
-                <label>Transport</label>
-                <div className="toggle-group">
-                  <button
-                    className={`toggle-button ${transport === "websocket" ? "active" : ""}`}
-                    onClick={() => setTransport("websocket")}
-                  >
-                    WebSocket
-                  </button>
-                  <button
-                    className={`toggle-button ${transport === "sse" ? "active" : ""}`}
-                    onClick={() => setTransport("sse")}
-                  >
-                    SSE
-                  </button>
-                </div>
-              </div>
-            )}
 
             <div className="form-group">
               <label>Encoding</label>
