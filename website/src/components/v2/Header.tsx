@@ -142,10 +142,11 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 }
 
 interface HeaderProps {
-	active?: "product" | "docs" | "blog" | "cloud" | "pricing" | "solutions";
+	active?: "product" | "docs" | "blog" | "cloud" | "pricing" | "solutions" | "learn";
 	subnav?: ReactNode;
 	mobileSidebar?: ReactNode;
 	variant?: "floating" | "full-width";
+	learnMode?: boolean;
 }
 
 export function Header({
@@ -153,6 +154,7 @@ export function Header({
 	subnav,
 	mobileSidebar,
 	variant = "full-width",
+	learnMode = false,
 }: HeaderProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
 
@@ -280,9 +282,12 @@ export function Header({
 	return (
 		<RivetHeader
 			className={cn(
+				"sticky top-0 z-50",
 				"[&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
 				// 0 padding on bottom for larger screens when subnav is showing
 				subnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
+				// Learn mode styling
+				learnMode && "bg-[#1c1917] border-b border-[#44403c]",
 			)}
 			logo={
 				<div className="hidden md:block">

@@ -165,10 +165,12 @@ interface DocsTableOfContentsProps {
 	// biome-ignore lint/suspicious/noExplicitAny: FIXME
 	tableOfContents: any;
 	className?: string;
+	showNewsletter?: boolean;
 }
 export function DocsTableOfContents({
 	tableOfContents: providedToc,
 	className,
+	showNewsletter = true,
 }: DocsTableOfContentsProps) {
 	const tableOfContents = providedToc;
 
@@ -200,7 +202,7 @@ export function DocsTableOfContents({
 			<div className="relative">
 				<div className="relative">
 					<Tree sections={tableOfContents} isActive={isActive} />
-					<Newsletter />
+					{showNewsletter && <Newsletter />}
 				</div>
 			</div>
 		</div>
