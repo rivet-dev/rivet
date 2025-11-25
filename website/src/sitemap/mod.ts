@@ -84,7 +84,32 @@ const deploySidebarSections: SidebarItem[] = deployGroups.map(
 );
 
 export const sitemap = [
-
+	{
+		title: "Learn",
+		href: "/learn",
+		sidebar: [
+			{
+				title: "General",
+				pages: [
+					{
+						title: "Overview",
+						href: "/learn",
+						icon: faLightbulb,
+					},
+				]
+			},
+			{
+				title: "The Actor Model",
+				pages: [
+					{
+						title: "How Actors Scale",
+						href: "/learn/actors/how-actors-scale",
+						icon: faMaximize,
+					},
+				],
+			},
+		],
+	},
 	{
 		title: "Overview",
 		href: "/docs",
