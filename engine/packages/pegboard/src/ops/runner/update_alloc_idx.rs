@@ -1,4 +1,5 @@
 use gas::prelude::*;
+use rivet_runner_protocol::PROTOCOL_MK1_VERSION;
 use universaldb::options::ConflictRangeType;
 use universaldb::utils::IsolationLevel::*;
 
@@ -99,7 +100,6 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						Some(version),
 						Some(remaining_slots),
 						Some(total_slots),
-						Some(protocol_version),
 						Some(old_last_ping_ts),
 					) = (
 						workflow_id_entry,
@@ -108,13 +108,14 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						version_entry,
 						remaining_slots_entry,
 						total_slots_entry,
-						protocol_version_entry,
 						last_ping_ts_entry,
 					)
 					else {
 						tracing::debug!(runner_id=?runner.runner_id, "runner has not initiated yet");
 						continue;
 					};
+
+					let protocol_version = protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION);
 
 					// Runner is expired, AddIdx is invalid and UpdatePing will do nothing
 					if expired_ts_entry.is_some() {

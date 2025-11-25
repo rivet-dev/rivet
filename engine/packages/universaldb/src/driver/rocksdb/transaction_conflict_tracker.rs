@@ -65,11 +65,11 @@ impl TransactionConflictTracker {
 						// Check conflict ranges overlap
 						if cr1_start < cr2_end && cr2_start < cr1_end && cr1_type != cr2_type {
 							tracing::debug!(
-								?cr1_start,
-								?cr1_end,
+								cr1_start=%hex::encode(cr1_start),
+								cr1_end=%hex::encode(cr1_end),
 								?cr1_type,
-								?cr2_start,
-								?cr2_end,
+								cr2_start=%hex::encode(cr2_start),
+								cr2_end=%hex::encode(cr2_end),
 								?cr2_type,
 								txn1_start_version,
 								txn1_commit_version,

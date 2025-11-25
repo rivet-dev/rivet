@@ -18,7 +18,7 @@ const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 	: 1;
 const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
 	? Number(process.env.RIVET_RUNNER_TOTAL_SLOTS)
-	: 100;
+	: 10000;
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
 const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER === undefined;
@@ -160,7 +160,7 @@ async function startRunner(): Promise<
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => {},
+		onDisconnected: () => { },
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
@@ -259,15 +259,11 @@ async function startRunner(): Promise<
 				});
 			});
 		},
-		// TODO:
-		hibernatableWebSocket: undefined as any,
-		// getActorHibernationConfig(actorId, gatewayId, requestId) {
-		// 	const websocketId = Buffer.from(requestId).toString("base64");
-		// 	return {
-		// 		enabled: true,
-		// 		lastMsgIndex: websocketLastMsgIndexes.get(websocketId),
-		// 	};
-		// },
+		hibernatableWebSocket: {
+			canHibernate() {
+				return true;
+			}
+		},
 	};
 
 	const runner = new Runner(config);

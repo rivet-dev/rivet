@@ -14,7 +14,7 @@ use rivet_guard_core::{
 	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
 };
-use rivet_runner_protocol as protocol;
+use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{Mutex, watch};
@@ -161,13 +161,16 @@ impl CustomServeTrait for PegboardGateway {
 				.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			// Read runner protocol version
 			udb.run(|tx| async move {
-				tx.with_subspace(pegboard::keys::subspace());
+				let tx = tx.with_subspace(pegboard::keys::subspace());
 
-				tx.read(
-					&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
-					Serializable,
-				)
-				.await
+				let protocol_version_entry = tx
+					.read_opt(
+						&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
+						Serializable,
+					)
+					.await?;
+
+				Ok(protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION))
 			})
 		)?;
 
@@ -305,13 +308,16 @@ impl CustomServeTrait for PegboardGateway {
 				.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			// Read runner protocol version
 			udb.run(|tx| async move {
-				tx.with_subspace(pegboard::keys::subspace());
+				let tx = tx.with_subspace(pegboard::keys::subspace());
 
-				tx.read(
-					&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
-					Serializable,
-				)
-				.await
+				let protocol_version_entry = tx
+					.read_opt(
+						&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
+						Serializable,
+					)
+					.await?;
+
+				Ok(protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION))
 			})
 		)?;
 

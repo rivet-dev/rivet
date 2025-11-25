@@ -2,7 +2,7 @@ use anyhow::*;
 use futures_util::{SinkExt, StreamExt, stream::Peekable};
 use hyper::upgrade::Upgraded;
 use hyper_tungstenite::HyperWebsocket;
-use hyper_tungstenite::tungstenite::Message as WsMessage;
+use hyper_tungstenite::tungstenite::Message;
 use hyper_util::rt::TokioIo;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -12,7 +12,7 @@ pub type WebSocketReceiver =
 	Peekable<futures_util::stream::SplitStream<WebSocketStream<TokioIo<Upgraded>>>>;
 
 pub type WebSocketSender =
-	futures_util::stream::SplitSink<WebSocketStream<TokioIo<Upgraded>>, WsMessage>;
+	futures_util::stream::SplitSink<WebSocketStream<TokioIo<Upgraded>>, Message>;
 
 #[derive(Clone)]
 pub struct WebSocketHandle {
@@ -31,7 +31,7 @@ impl WebSocketHandle {
 		})
 	}
 
-	pub async fn send(&self, message: WsMessage) -> Result<()> {
+	pub async fn send(&self, message: Message) -> Result<()> {
 		self.ws_tx.lock().await.send(message).await?;
 		Ok(())
 	}

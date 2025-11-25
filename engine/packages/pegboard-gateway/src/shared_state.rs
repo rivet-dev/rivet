@@ -527,12 +527,10 @@ impl SharedState {
 				let reason = 'reason: {
 					if let Some(hs) = &req.hibernation_state {
 						if let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first() {
-							if now.duration_since(earliest_pending_ws_msg.send_instant)
-								> HWS_MESSAGE_ACK_TIMEOUT
-							{
+							if now.duration_since(earliest_pending_ws_msg.send_instant) > HWS_MESSAGE_ACK_TIMEOUT {
 								break 'reason Some(MsgGcReason::WebSocketMessageNotAcked {
 									first_msg_index: earliest_pending_ws_msg.message_index,
-									last_msg_index: req.message_index
+									last_msg_index: req.message_index,
 								});
 							}
 						}
@@ -543,7 +541,7 @@ impl SharedState {
 							timeout=%hibernation_timeout.as_secs_f64(),
 							"checking hibernating state elapsed time"
 						);
-						if hs_elapsed> hibernation_timeout {
+						if hs_elapsed > hibernation_timeout {
 							break 'reason Some(MsgGcReason::HibernationTimeout);
 						}
 					} else if req.msg_tx.is_closed() {

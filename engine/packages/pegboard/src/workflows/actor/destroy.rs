@@ -72,30 +72,37 @@ async fn update_state_and_db(
 
 	ctx.udb()?
 		.run(|tx| {
-			let state = (*state).clone();
+			let runner_id = state.runner_id.clone();
+			let namespace_id = state.namespace_id.clone();
+			let runner_name_selector = state.runner_name_selector.clone();
+			let for_serverless = state.for_serverless.clone();
+			let allocated_serverless_slot = state.allocated_serverless_slot.clone();
+			let name = state.name.clone();
+			let create_ts = state.create_ts.clone();
+			let key = state.key.clone();
 
 			async move {
 				let tx = tx.with_subspace(keys::subspace());
 
 				tx.write(&keys::actor::DestroyTsKey::new(input.actor_id), destroy_ts)?;
 
-				if let Some(runner_id) = state.runner_id {
+				if let Some(runner_id) = runner_id {
 					clear_slot(
 						input.actor_id,
-						state.namespace_id,
-						&state.runner_name_selector,
+						namespace_id,
+						&runner_name_selector,
 						runner_id,
-						state.for_serverless,
+						for_serverless,
 						&tx,
 					)
 					.await?;
-				} else if state.allocated_serverless_slot {
+				} else if allocated_serverless_slot {
 					// Clear the serverless slot even if we do not have a runner id. This happens when the
 					// actor is destroyed while pending allocation
 					tx.atomic_op(
 						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
-							state.namespace_id,
-							state.runner_name_selector.clone(),
+							namespace_id,
+							runner_name_selector.clone(),
 						),
 						&(-1i64).to_le_bytes(),
 						MutationType::Add,
@@ -104,19 +111,19 @@ async fn update_state_and_db(
 
 				// Update namespace indexes
 				tx.delete(&keys::ns::ActiveActorKey::new(
-					state.namespace_id,
-					state.name.clone(),
-					state.create_ts,
+					namespace_id,
+					name.clone(),
+					create_ts,
 					input.actor_id,
 				));
 
-				if let Some(k) = &state.key {
+				if let Some(k) = &key {
 					tx.write(
 						&keys::ns::ActorByKeyKey::new(
-							state.namespace_id,
-							state.name.clone(),
+							namespace_id,
+							name.clone(),
 							k.clone(),
-							state.create_ts,
+							create_ts,
 							input.actor_id,
 						),
 						ActorByKeyKeyData {

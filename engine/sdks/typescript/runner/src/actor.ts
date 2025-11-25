@@ -27,6 +27,10 @@ export class RunnerActor {
 	}> = [];
 	actorStartPromise: ReturnType<typeof promiseWithResolvers<void>>;
 
+	lastCommandIdx: bigint = -1n;
+	nextEventIdx: bigint = 0n;
+	eventHistory: protocol.EventWrapper[] = [];
+
 	/**
 	 * If restoreHibernatingRequests has been called. This is used to assert
 	 * that the caller is implemented correctly.
@@ -81,8 +85,8 @@ export class RunnerActor {
 			gatewayId,
 			requestId,
 			request: {
-				resolve: () => {},
-				reject: () => {},
+				resolve: () => { },
+				reject: () => { },
 				actorId: this.actorId,
 				gatewayId: gatewayId,
 				requestId: requestId,
@@ -118,8 +122,8 @@ export class RunnerActor {
 			gatewayId,
 			requestId,
 			request: {
-				resolve: () => {},
-				reject: () => {},
+				resolve: () => { },
+				reject: () => { },
 				actorId: this.actorId,
 				gatewayId: gatewayId,
 				requestId: requestId,
@@ -192,5 +196,15 @@ export class RunnerActor {
 		if (index !== -1) {
 			this.webSockets.splice(index, 1);
 		}
+	}
+
+	handleAckEvents(lastEventIdx: bigint) {
+		this.eventHistory = this.eventHistory.filter(
+			(event) => event.checkpoint.index > lastEventIdx,
+		);
+	}
+
+	recordEvent(eventWrapper: protocol.EventWrapper) {
+		this.eventHistory.push(eventWrapper);
 	}
 }

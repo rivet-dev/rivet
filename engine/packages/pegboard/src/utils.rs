@@ -30,7 +30,24 @@ pub fn event_actor_id_mk1(event: &protocol::Event) -> &str {
 	}
 }
 
-pub fn event_generation(event: &protocol::Event) -> u32 {
+pub fn event_generation(event: &protocol::mk2::Event) -> u32 {
+	match event {
+		protocol::mk2::Event::EventActorIntent(protocol::mk2::EventActorIntent {
+			generation,
+			..
+		}) => *generation,
+		protocol::mk2::Event::EventActorStateUpdate(protocol::mk2::EventActorStateUpdate {
+			generation,
+			..
+		}) => *generation,
+		protocol::mk2::Event::EventActorSetAlarm(protocol::mk2::EventActorSetAlarm {
+			generation,
+			..
+		}) => *generation,
+	}
+}
+
+pub fn event_generation_mk1(event: &protocol::Event) -> u32 {
 	match event {
 		protocol::Event::EventActorIntent(protocol::EventActorIntent { generation, .. }) => {
 			*generation

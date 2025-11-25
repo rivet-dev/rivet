@@ -132,4 +132,6 @@ define_keys! {
 	// 104 - RESERVED BY EE
 	// 105 - RESERVED BY EE
 	(106, PROTOCOL_VERSION, "protocol_version"),
+	(107, LAST_COMMAND_IDX, "last_command_idx"),
+	(108, COMMAND, "command"),
 }
