@@ -67,7 +67,6 @@ import {
 } from "@rivet-gg/icons";
 import type { DeployOption } from "@/data/deploy/shared";
 import { deployGroups, deployOptions } from "@/data/deploy/shared";
-import { integrationGroups } from "@/data/integrations/shared";
 import { useCases } from "@/data/use-cases";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
@@ -80,16 +79,6 @@ const deploySidebarSections: SidebarItem[] = deployGroups.map(
 			href,
 			icon,
 			badge,
-		})),
-	}),
-);
-
-const integrationSidebarSections: SidebarItem[] = integrationGroups.map(
-	({ title: groupTitle, items }) => ({
-		title: groupTitle,
-		pages: items.map(({ title, href }) => ({
-			title,
-			href,
 		})),
 	}),
 );
