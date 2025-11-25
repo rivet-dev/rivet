@@ -370,7 +370,7 @@ function PricingTiers() {
 								<a
 									href={tier.href}
 									aria-label={`Start a free trial on the ${tier.name} plan`}
-									className="inline-flex items-center justify-center px-3.5 py-2 text-base font-medium rounded-xl transition-all duration-200 active:scale-[0.97] bg-[#FF5C00]/90 hover:bg-[#FF5C00] hover:brightness-110 text-white"
+									className="font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black subpixel-antialiased shadow-sm transition-colors hover:bg-zinc-200"
 								>
 									{tier.name === "Enterprise"
 										? "Contact"
@@ -489,11 +489,11 @@ export default function PricingPageClient() {
 	];
 
 	return (
-		<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8">
+		<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-48">
 					<div className="mx-auto max-w-[1200px] px-6 lg:px-8">
 						<div className="text-center">
-							<h1 className="font-heading text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter" style={{ color: '#FAFAFA' }}>
+							<h1 className="text-5xl font-medium leading-[1.1] tracking-tighter md:text-7xl" style={{ color: '#FAFAFA' }}>
 								Rivet {activeTab === "cloud" ? "Cloud Pricing" : "Self-Host"}
 							</h1>
 							<p className="mt-6 max-w-2xl mx-auto text-lg md:text-xl leading-[1.2]" style={{ color: '#A0A0A0' }}>
@@ -558,7 +558,7 @@ export default function PricingPageClient() {
 								<div className="mt-auto">
 									<a
 										href="/docs/self-hosting"
-										className="inline-flex items-center justify-center w-full px-6 py-3 border border-white/20 text-white font-medium rounded-lg hover:bg-white/10 transition-colors"
+										className="font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white subpixel-antialiased shadow-sm transition-colors hover:border-white/20 w-full"
 									>
 										Get Started
 									</a>
@@ -587,7 +587,7 @@ export default function PricingPageClient() {
 								<div className="mt-auto">
 									<a
 										href="/sales"
-										className="inline-flex items-center justify-center w-full px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-white/90 transition-colors"
+										className="font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black subpixel-antialiased shadow-sm transition-colors hover:bg-zinc-200 w-full"
 									>
 										Contact Sales
 									</a>
