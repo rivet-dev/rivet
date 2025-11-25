@@ -309,9 +309,11 @@ export function Header({
 			support={null}
 			links={
 				<div className="flex flex-row items-center">
-					<div className="mr-4">
-						<HeaderSearch />
-					</div>
+					{!learnMode && (
+						<div className="mr-4">
+							<HeaderSearch />
+						</div>
+					)}
 					<RivetHeader.NavItem asChild className="p-2 mr-4">
 						<Link href="https://rivet.dev/discord" className="text-white/90">
 							<Icon icon={faDiscord} className="drop-shadow-md" />

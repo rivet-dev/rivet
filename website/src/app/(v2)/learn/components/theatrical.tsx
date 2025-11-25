@@ -18,7 +18,7 @@ export function Separator() {
  */
 export function Narrative({ children }: { children: ReactNode }) {
 	return (
-		<p className="text-lg md:text-xl leading-relaxed text-[#d6d3d1] mb-8 first-letter:!text-5xl first-letter:!font-display first-letter:!mr-2 first-letter:!float-left first-letter:!text-[#d4b483] first-letter:leading-none">
+		<p className="not-prose narrative-drop-cap text-lg md:text-xl leading-relaxed text-[#d6d3d1] mb-8 font-serif">
 			{children}
 		</p>
 	);

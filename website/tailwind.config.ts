@@ -13,6 +13,7 @@ const config = {
 		'font-display',
 		'font-serif',
 		'font-mono',
+		'narrative-drop-cap',
 	],
 	theme: {
 		extend: {

@@ -310,6 +310,36 @@
 		font-family: "Courier Prime", monospace;
 	}
 
+	/* Drop cap for narrative text */
+	.narrative-drop-cap::first-letter {
+		font-size: 3rem !important;
+		font-family: "Cinzel", serif !important;
+		margin-right: 0.5rem !important;
+		float: left !important;
+		color: #d4b483 !important;
+		line-height: 0.8 !important;
+		font-weight: 400 !important;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		/* Firefox-specific fixes */
+		display: block;
+		padding-top: 0.1rem;
+	}
+
+	/* Firefox-specific fallback */
+	@-moz-document url-prefix() {
+		.narrative-drop-cap::first-letter {
+			font-size: 3rem !important;
+			line-height: 0.75 !important;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.narrative-drop-cap::first-letter {
+			font-size: 3rem !important;
+		}
+	}
+
 	/* Subtle noise texture overlay */
 	.texture-overlay {
 		position: fixed;
