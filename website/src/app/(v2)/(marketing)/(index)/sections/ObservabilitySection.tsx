@@ -47,8 +47,8 @@ export const ObservabilitySection = () => {
             <div
               className='relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50 shadow-2xl backdrop-blur-xl'
               style={{
-                maskImage: 'radial-gradient(ellipse 300% 100% at 50% 90%, transparent 0%, black 25%)',
-                WebkitMaskImage: 'radial-gradient(ellipse 300% 100% at 50% 90%, transparent 0%, black 25%)'
+                maskImage: 'radial-gradient(ellipse 300% 100% at 50% 90%, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 15%, rgba(0,0,0,0.9) 25%, black 35%, black 50%)',
+                WebkitMaskImage: 'radial-gradient(ellipse 300% 100% at 50% 90%, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 15%, rgba(0,0,0,0.9) 25%, black 35%, black 50%)'
               }}
             >
               {/* Top Shine Highlight */}
@@ -72,12 +72,14 @@ export const ObservabilitySection = () => {
                   priority
                   quality={90}
                 />
+                {/* Linear gradient overlay - darker on bottom */}
+                <div className='hidden md:block absolute inset-0 bg-gradient-to-b from-transparent via-black/50 to-black/100' />
               </div>
             </div>
           </motion.div>
 
           {/* Text content overlapping bottom */}
-          <div className='relative -mt-32 px-6'>
+          <div className='relative mt-8 px-6 md:-mt-32'>
             <div className='mx-auto max-w-4xl'>
               <motion.h2
                 initial={{ opacity: 0, y: 20 }}

@@ -136,14 +136,14 @@ export default async function BlogPage() {
 	return (
 		<>
 			<StyleInjector />
-			<div className="relative min-h-screen w-full overflow-hidden">
+			<div className="relative min-h-screen w-full overflow-hidden font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
 				{/* Background Grid */}
 				<div className="changelog-background" aria-hidden="true"></div>
 				<div className="changelog-background-overlay" aria-hidden="true"></div>
 				
 				<div className="relative z-10">
 					<div className="mt-8 flex w-full items-center justify-center">
-						<h1 className="font-heading text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter" style={{ color: '#FAFAFA' }}>
+						<h1 className="text-5xl font-medium leading-[1.1] tracking-tighter md:text-7xl" style={{ color: '#FAFAFA' }}>
 							Changelog
 						</h1>
 					</div>
