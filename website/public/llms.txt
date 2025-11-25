@@ -30,6 +30,7 @@ https://rivet.dev/blog/2025-10-20-weekly-updates
 https://rivet.dev/blog/2025-10-24-weekly-updates
 https://rivet.dev/blog/2025-11-02-weekly-updates
 https://rivet.dev/blog/2025-11-09-weekly-updates
+https://rivet.dev/blog/2025-11-24-introducing-live-websocket-migration-hibernation
 https://rivet.dev/blog/godot-multiplayer-compared-to-unity
 https://rivet.dev/changelog
 https://rivet.dev/changelog.json
@@ -60,15 +61,16 @@ https://rivet.dev/changelog/2025-10-20-weekly-updates
 https://rivet.dev/changelog/2025-10-24-weekly-updates
 https://rivet.dev/changelog/2025-11-02-weekly-updates
 https://rivet.dev/changelog/2025-11-09-weekly-updates
+https://rivet.dev/changelog/2025-11-24-introducing-live-websocket-migration-hibernation
 https://rivet.dev/changelog/godot-multiplayer-compared-to-unity
 https://rivet.dev/cloud
 https://rivet.dev/docs/actors
 https://rivet.dev/docs/actors/actions
-https://rivet.dev/docs/actors/api-reference
 https://rivet.dev/docs/actors/authentication
 https://rivet.dev/docs/actors/clients
 https://rivet.dev/docs/actors/communicating-between-actors
 https://rivet.dev/docs/actors/connections
+https://rivet.dev/docs/actors/design-patterns
 https://rivet.dev/docs/actors/destroy
 https://rivet.dev/docs/actors/ephemeral-variables
 https://rivet.dev/docs/actors/errors
@@ -95,7 +97,6 @@ https://rivet.dev/docs/actors/testing
 https://rivet.dev/docs/actors/websocket-handler
 https://rivet.dev/docs/clients/javascript
 https://rivet.dev/docs/clients/next-js
-https://rivet.dev/docs/clients/openapi
 https://rivet.dev/docs/clients/react
 https://rivet.dev/docs/clients/rust
 https://rivet.dev/docs/connect
@@ -114,6 +115,7 @@ https://rivet.dev/docs/drivers/build-your-own
 https://rivet.dev/docs/drivers/file-system
 https://rivet.dev/docs/drivers/memory
 https://rivet.dev/docs/examples/autofill-example
+https://rivet.dev/docs/general/architecture
 https://rivet.dev/docs/general/cors
 https://rivet.dev/docs/general/docs-for-llms
 https://rivet.dev/docs/general/edge
@@ -121,7 +123,6 @@ https://rivet.dev/docs/general/logging
 https://rivet.dev/docs/general/self-hosting
 https://rivet.dev/docs/index
 https://rivet.dev/docs/integrations
-https://rivet.dev/docs/integrations/better-auth
 https://rivet.dev/docs/integrations/cloudflare-workers
 https://rivet.dev/docs/integrations/elysia
 https://rivet.dev/docs/integrations/express
@@ -130,6 +131,7 @@ https://rivet.dev/docs/integrations/next-js
 https://rivet.dev/docs/integrations/pino
 https://rivet.dev/docs/integrations/trpc
 https://rivet.dev/docs/integrations/vitest
+https://rivet.dev/docs/quickstart
 https://rivet.dev/docs/self-hosting
 https://rivet.dev/docs/self-hosting/configuration
 https://rivet.dev/docs/self-hosting/connect-backend

@@ -41,6 +41,7 @@ import {
 	faNodeJs,
 	faPaintbrush,
 	faPalette,
+    faPuzzlePiece,
     faRailway,
 	faReact,
 	faRecycle,
@@ -64,32 +65,20 @@ import {
 	faVercel,
 	faVialCircleCheck,
 } from "@rivet-gg/icons";
-import type { DeployOption } from "@/data/deploy-options";
-import { deployOptions } from "@/data/deploy-options";
-import { integrationGroups } from "@/data/integrations/shared";
+import type { DeployOption } from "@/data/deploy/shared";
+import { deployGroups, deployOptions } from "@/data/deploy/shared";
 import { useCases } from "@/data/use-cases";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
-// Goals:
-// - Siebar links should advertise the product, collapse any advanced pages away
-// - The sidebar should be 1 screen height when collapsed
-
-// Profiles:
-// - What does Rivet do?
-//	- Does it work for my use cases -> Use Cases
-//	- Curious about the technology -> Build with Rivet
-// - Just want to jump in
-// - People who want to run Open Source
-
-const deployHosts: DeployOption[] = deployOptions;
-
-const integrationSidebarSections: SidebarItem[] = integrationGroups.map(
+const deploySidebarSections: SidebarItem[] = deployGroups.map(
 	({ title: groupTitle, items }) => ({
 		title: groupTitle,
-		pages: items.map(({ title, href }) => ({
+		pages: items.map(({ title, href, icon, badge }) => ({
 			title,
 			href,
+			icon,
+			badge,
 		})),
 	}),
 );
@@ -111,24 +100,49 @@ export const sitemap = [
 				]
 			},
 			{
-				title: "Use Cases",
+				title: "Quickstart",
 				pages: [
-					...useCases.slice(0, 3).map(({ title, href, icon }) => ({
-						title,
-						href,
-						icon,
-					})),
 					{
-						title: "More",
-						collapsible: true,
-						pages: useCases.slice(3).map(({ title, href, icon }) => ({
-							title,
-							href,
-							icon,
-						})),
+						title: "Node.js & Bun",
+						href: "/docs/actors/quickstart/backend",
+						icon: faNodeJs,
+					},
+					{
+						title: "React",
+						href: "/docs/actors/quickstart/react",
+						icon: faReact,
+					},
+					{
+						title: "Next.js",
+						href: "/docs/actors/quickstart/next-js",
+						icon: faNextjs,
+					},
+					{
+						title: "Cloudflare Workers",
+						href: "/docs/actors/quickstart/cloudflare-workers",
+						icon: faCloudflare,
 					},
 				],
 			},
+			// {
+			// 	title: "Use Cases",
+			// 	pages: [
+			// 		...useCases.slice(0, 3).map(({ title, href, icon }) => ({
+			// 			title,
+			// 			href,
+			// 			icon,
+			// 		})),
+			// 		{
+			// 			title: "More",
+			// 			collapsible: true,
+			// 			pages: useCases.slice(3).map(({ title, href, icon }) => ({
+			// 				title,
+			// 				href,
+			// 				icon,
+			// 			})),
+			// 		},
+			// 	],
+			// },
 			{
 				title: "Concepts",
 				pages: [
@@ -183,9 +197,9 @@ export const sitemap = [
 								//icon: faTag,
 							},
 							{
-								title: "Helper Types",
-								href: "/docs/actors/helper-types",
-								//icon: faCode,
+								title: "Destroying",
+								href: "/docs/actors/destroy",
+								//icon: faTag,
 							},
 						],
 					},
@@ -210,15 +224,27 @@ export const sitemap = [
 								//icon: faArrowsTurnToDots,
 							},
 							{
-								title: "Fetch & WebSocket Handler",
-								href: "/docs/actors/fetch-and-websocket-handler",
-								//icon: faLink,
+								title: "Low-Level WebSocket Handler",
+								href: "/docs/actors/websocket-handler"
+							},
+							{
+								title: "Low-Level HTTP Handler",
+								href: "/docs/actors/request-handler"
+							},
+							{
+								title: "Vanilla HTTP API",
+								href: "/docs/actors/http-api"
 							},
 						],
 					},
 					{
-						title: "Data Management",
-						icon: faDatabase,
+						title: "Design Patterns",
+						icon: faLayerGroup,
+						href: "/docs/actors/design-patterns",
+					},
+					{
+						title: "More",
+						icon: faSitemap,
 						collapsible: true,
 						pages: [
 							{
@@ -227,41 +253,33 @@ export const sitemap = [
 								//icon: faMemory,
 							},
 							{
-								title: "Sharing & Joining State",
-								href: "/docs/actors/sharing-and-joining-state",
-								//icon: faMerge,
-							},
-							{
 								title: "External SQL",
 								href: "/docs/actors/external-sql",
 								//icon: faDatabase,
 							},
-						],
-					},
-					{
-						title: "More",
-						icon: faSitemap,
-						collapsible: true,
-						pages: [
+							{
+								title: "Errors",
+								href: "/docs/actors/errors"
+							},
 							{
 								title: "Testing",
 								href: "/docs/actors/testing",
-								icon: faVialCircleCheck,
+								// icon: faVialCircleCheck,
+							},
+							{
+								title: "Helper Types",
+								href: "/docs/actors/helper-types",
+								//icon: faCode,
 							},
 							{
 								title: "CORS",
 								href: "/docs/general/cors",
-								icon: faShareNodes,
+								// icon: faShareNodes,
 							},
 							{
 								title: "Logging",
 								href: "/docs/general/logging",
-								icon: faListUl,
-							},
-							{
-								title: "Scaling & Concurrency",
-								href: "/docs/actors/scaling",
-								//icon: faMaximize,
+								// icon: faListUl,
 							},
 						],
 					},
@@ -294,16 +312,11 @@ export const sitemap = [
 								href: "/docs/clients/next-js",
 								icon: faNextjs,
 							},
-							{
-								title: "Rust",
-								href: "/docs/clients/rust",
-								icon: faRust,
-							},
-							{
-								title: "OpenAPI",
-								href: "/docs/clients/openapi",
-								icon: faFileImport,
-							},
+							// {
+							// 	title: "Rust",
+							// 	href: "/docs/clients/rust",
+							// 	icon: faRust,
+							// },
 						]
 					}
 				],
@@ -315,6 +328,35 @@ export const sitemap = [
 					// 	title: "Rivet Inspector",
 					// 	href: "/docs/general/studio",
 					// 	icon: faPalette,
+					// },
+					{
+						title: "API Reference",
+						collapsible: true,
+						pages: [
+							{
+								title: "TypeScript API",
+								href: "/typedoc",
+								external: true
+								// icon: faSquareBinary,
+							},
+							{
+								title: "OpenAPI",
+								href: "https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi",
+								external: true
+								// icon: faSquareBinary,
+							},
+							{
+								title: "AsyncAPI",
+								href: "https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi",
+								external: true
+								// icon: faSquareBinary,
+							},
+						]
+					},
+					// {
+					// 	title: "Architecture",
+					// 	href: "/docs/general/architecture",
+					// 	// icon: faSquareBinary,
 					// },
 					{
 						title: "Docs for LLMs",
@@ -330,87 +372,53 @@ export const sitemap = [
 			},
 		],
 	},
+	// {
+	// 	title: "Integrations",
+	// 	href: "/docs/integrations",
+	// 	// IMPORTANT: Also update integrations/index.mdx
+	// 	sidebar: [
+	// 		{
+	// 			title: "General",
+	// 			pages: [
+	// 				{
+	// 					title: "Overview",
+	// 					href: "/docs/integrations",
+	// 					icon: faSquareInfo,
+	// 				},
+	// 			]
+	// 		},
+	// 		...integrationSidebarSections,
+	// 	],
+	// },
+
 	{
-		title: "Quickstart",
-		href: "/docs/quickstart",
+		title: "Connect",
+		href: "/docs/connect",
 		sidebar: [
 			{
 				title: "General",
 				pages: [
 					{
 						title: "Overview",
-						href: "/docs/quickstart",
-						icon: faForward,
-					},
-				],
-			},
-			{
-				title: "Guides",
-				pages: [
-					{
-						title: "Node.js & Bun",
-						href: "/docs/actors/quickstart/backend",
-						icon: faNodeJs,
-					},
-					{
-						title: "React",
-						href: "/docs/actors/quickstart/react",
-						icon: faReact,
-					},
-					{
-						title: "Next.js",
-						href: "/docs/actors/quickstart/next-js",
-						icon: faNextjs,
-					},
-					{
-						title: "Cloudflare Workers",
-						href: "/docs/actors/quickstart/cloudflare-workers",
-						icon: faCloudflare,
-					},
-				],
-			},
-		],
-	},
-	{
-		title: "Integrations",
-		href: "/docs/integrations",
-		// IMPORTANT: Also update integrations/index.mdx
-		sidebar: [
-			{
-				title: "General",
-				pages: [
-					{
-						title: "Overview",
-						href: "/docs/integrations",
+						href: "/docs/connect",
 						icon: faSquareInfo,
 					},
 				]
 			},
-			...integrationSidebarSections,
+			...deploySidebarSections,
 		],
 	},
-
-	{
-		title: "Deploy",
-		href: "/docs/deploy",
-		sidebar: deployHosts.map(({ title, href, icon, badge }) => ({
-			title,
-			href,
-			icon,
-			badge,
-		})),
-	},
-	{
-		title: "Rivet Cloud",
-		href: "/docs/cloud",
-		sidebar: [
-			{
-				title: "Overview",
-				href: "/docs/cloud",
-				// icon: faSquareInfo,
-			},
-		],
-	},
+	// {
+	// 	title: "Rivet Cloud",
+	// 	href: "/docs/cloud",
+	// 	sidebar: [
+	// 		{
+	// 			title: "Overview",
+	// 			href: "/docs/cloud",
+	// 			// icon: faSquareInfo,
+	// 		},
+	// 	],
+	// },
 	{
 		title: "Self-Hosting",
 		href: "/docs/self-hosting",
