@@ -11,6 +11,7 @@ import {
 
 export interface DeployOption {
 	title: string;
+	shortTitle?: string;
 	href: string;
 	description: string;
 	icon?: any;
@@ -39,6 +40,7 @@ export const deployGroups: DeployGroup[] = [
 			},
 			{
 				title: "Cloudflare Workers",
+				shortTitle: "Cloudflare",
 				href: "/docs/connect/cloudflare-workers",
 				description:
 					"Run your app on Cloudflare's global edge network with Durable Objects",
@@ -67,6 +69,7 @@ export const deployGroups: DeployGroup[] = [
 			},
 			{
 				title: "AWS ECS",
+				shortTitle: "AWS",
 				href: "/docs/connect/aws-ecs",
 				description:
 					"Run containerized workloads on Amazon Elastic Container Service",
@@ -74,6 +77,7 @@ export const deployGroups: DeployGroup[] = [
 			},
 			{
 				title: "Google Cloud Run",
+				shortTitle: "GCP",
 				href: "/docs/connect/gcp-cloud-run",
 				description:
 					"Deploy containers to Google Cloud Run for auto-scaling",
@@ -93,6 +97,7 @@ export const deployGroups: DeployGroup[] = [
 			},
 			{
 				title: "VM & Bare Metal",
+				shortTitle: "VM",
 				href: "/docs/connect/vm-and-bare-metal",
 				description:
 					"Run on virtual machines or bare metal servers with full control",

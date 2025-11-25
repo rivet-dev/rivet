@@ -243,7 +243,7 @@ export function Header({
 						}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
-								<SolutionsDropdown active={active === "solutions"} />
+								{/* <SolutionsDropdown active={active === "solutions"} /> */}
 								<TextNavItem
 									href="/docs"
 									ariaCurrent={
@@ -324,7 +324,7 @@ export function Header({
 			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
-					<SolutionsDropdown active={active === "solutions"} />
+					{/* <SolutionsDropdown active={active === "solutions"} /> */}
 					<TextNavItem
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}

@@ -1,187 +1,252 @@
-"use client";
+'use client';
 
-import { Terminal, ArrowRight } from "lucide-react";
-import { motion } from "framer-motion";
+import { Terminal, ArrowRight, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { useState } from 'react';
 
-const CodeBlock = ({ code, fileName = "actor.ts" }) => {
-	return (
-		<div className="relative group rounded-xl overflow-hidden border border-white/10 bg-zinc-900/50 backdrop-blur-xl shadow-2xl">
-			<div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
-				<div className="flex items-center gap-2">
-					<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
-					<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
-					<div className="w-3 h-3 rounded-full bg-zinc-500/20 border border-zinc-500/50" />
-				</div>
-				<div className="text-xs text-zinc-500 font-mono">{fileName}</div>
-			</div>
-			<div className="p-4 overflow-x-auto scrollbar-hide">
-				<pre className="text-sm font-mono leading-relaxed text-zinc-300">
-					<code>
-						{code.split("\n").map((line, i) => (
-							<div key={i} className="table-row">
-								<span className="table-cell select-none text-right pr-4 text-zinc-700 w-8">
-									{i + 1}
-								</span>
-								<span className="table-cell">
-									{(() => {
-										// Simple custom tokenizer for this snippet
-										const tokens = [];
-										let current = line;
-										
-										// Handle comments first (consume rest of line)
-										const commentIndex = current.indexOf("//");
-										let comment = "";
-										if (commentIndex !== -1) {
-											comment = current.slice(commentIndex);
-											current = current.slice(0, commentIndex);
-										}
+const CopyInstallButton = () => {
+  const [copied, setCopied] = useState(false);
 
-										// Split remaining code by delimiters but keep them
-										// Note: this is still basic but better than before
-										const parts = current.split(/([a-zA-Z0-9_$]+|"[^"]*"|'[^']*'|\s+|[(){},.;:[\]])/g).filter(Boolean);
-										
-										parts.forEach((part, j) => {
-											const trimmed = part.trim();
-											
-											// Keywords
-											if (["import", "from", "export", "const", "return", "async", "await", "function"].includes(trimmed)) {
-												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
-											}
-											// Functions & Special Rivet Terms
-											else if (["actor", "broadcast"].includes(trimmed)) {
-												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
-											}
-											// Object Keys / Properties / Methods
-											else if (["state", "actions", "increment", "count", "push", "now", "Date"].includes(trimmed)) {
-												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
-											}
-											// Strings
-											else if (part.startsWith('"') || part.startsWith("'")) {
-												tokens.push(<span key={j} className="text-[#FF4500]">{part}</span>);
-											}
-											// Numbers
-											else if (!isNaN(Number(trimmed)) && trimmed !== "") {
-												tokens.push(<span key={j} className="text-emerald-400">{part}</span>);
-											}
-											// Default (punctuation, variables like 'c', etc)
-											else {
-												tokens.push(<span key={j} className="text-zinc-300">{part}</span>);
-											}
-										});
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText('npm install rivetkit');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
-										if (comment) {
-											tokens.push(<span key="comment" className="text-zinc-500">{comment}</span>);
-										}
-
-										return tokens;
-									})()}
-								</span>
-							</div>
-						))}
-					</code>
-				</pre>
-			</div>
-		</div>
-	);
+  return (
+    <button
+      onClick={handleCopy}
+      className='font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white subpixel-antialiased shadow-sm transition-colors hover:border-white/20'
+    >
+      {copied ? <Check className='h-4 w-4' /> : <Terminal className='h-4 w-4' />}
+      npm install rivetkit
+    </button>
+  );
 };
 
-export const RedesignedHero = () => (
-	<section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
-		<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-white/[0.02] blur-[100px] rounded-full pointer-events-none" />
+const CodeBlock = ({ code, fileName = 'actor.ts' }) => {
+  return (
+    <div className='group relative overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50 shadow-2xl backdrop-blur-xl'>
+      <div className='flex items-center justify-between border-b border-white/5 bg-white/5 px-4 py-3'>
+        <div className='flex items-center gap-2'>
+          <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
+          <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
+          <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
+        </div>
+        <div className='font-mono text-xs text-zinc-500'>{fileName}</div>
+      </div>
+      <div className='scrollbar-hide overflow-x-auto p-4'>
+        <pre className='font-mono text-sm leading-relaxed text-zinc-300'>
+          <code>
+            {code.split('\n').map((line, i) => (
+              <div key={i} className='table-row'>
+                <span className='table-cell w-8 select-none pr-4 text-right text-zinc-700'>{i + 1}</span>
+                <span className='table-cell'>
+                  {(() => {
+                    // Simple custom tokenizer for this snippet
+                    const tokens = [];
+                    let current = line;
 
-		<div className="max-w-7xl mx-auto px-6 relative z-10">
-			<div className="flex flex-col lg:flex-row gap-16 items-center">
-				<div className="flex-1 max-w-2xl">
-					<motion.div
-						initial={{ opacity: 0, y: 20 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.5 }}
-						className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-zinc-400 mb-8 hover:border-white/20 transition-colors cursor-default"
-					>
-						<span className="w-2 h-2 rounded-full bg-[#FF4500] animate-pulse" />
-						Rivet 2.0 is now available
-						<ArrowRight className="w-3 h-3 ml-1" />
-					</motion.div>
+                    // Handle comments first (consume rest of line)
+                    const commentIndex = current.indexOf('//');
+                    let comment = '';
+                    if (commentIndex !== -1) {
+                      comment = current.slice(commentIndex);
+                      current = current.slice(0, commentIndex);
+                    }
 
-					<motion.h1
-						initial={{ opacity: 0, y: 20 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-5xl md:text-7xl font-medium text-white tracking-tighter leading-[1.1] mb-6"
-					>
-						Stateful Backends. <br />
-						<span className="text-transparent bg-clip-text bg-gradient-to-b from-zinc-200 to-zinc-500">
-							Finally Solved.
-						</span>
-					</motion.h1>
+                    // Split remaining code by delimiters but keep them
+                    // Note: this is still basic but better than before
+                    const parts = current
+                      .split(/([a-zA-Z0-9_$]+|"[^"]*"|'[^']*'|\s+|[(){},.;:[\]])/g)
+                      .filter(Boolean);
 
-					<motion.p
-						initial={{ opacity: 0, y: 20 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.5, delay: 0.2 }}
-						className="text-lg md:text-xl text-zinc-400 leading-relaxed mb-8 max-w-lg"
-					>
-						Stop faking state with databases and message queues. Rivet turns your TypeScript code into
-						durable, distributed actors. No complex infrastructure, no database queries—just state that
-						persists.
-					</motion.p>
+                    parts.forEach((part, j) => {
+                      const trimmed = part.trim();
 
-					<motion.div
-						initial={{ opacity: 0, y: 20 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.5, delay: 0.3 }}
-						className="flex flex-col sm:flex-row items-center gap-4"
-					>
-						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
-							Start Building
-							<ArrowRight className="w-4 h-4" />
-						</button>
-						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
-							<Terminal className="w-4 h-4" />
-							npm install rivetkit
-						</button>
-					</motion.div>
-				</div>
+                      // Keywords
+                      if (
+                        [
+                          'import',
+                          'from',
+                          'export',
+                          'const',
+                          'return',
+                          'async',
+                          'await',
+                          'function'
+                        ].includes(trimmed)
+                      ) {
+                        tokens.push(
+                          <span key={j} className='text-purple-400'>
+                            {part}
+                          </span>
+                        );
+                      }
+                      // Functions & Special Rivet Terms
+                      else if (['actor', 'broadcast'].includes(trimmed)) {
+                        tokens.push(
+                          <span key={j} className='text-blue-400'>
+                            {part}
+                          </span>
+                        );
+                      }
+                      // Object Keys / Properties / Methods
+                      else if (
+                        ['state', 'actions', 'sendMessage', 'user', 'text', 'messages', 'push'].includes(trimmed)
+                      ) {
+                        tokens.push(
+                          <span key={j} className='text-blue-300'>
+                            {part}
+                          </span>
+                        );
+                      }
+                      // Strings
+                      else if (part.startsWith('"') || part.startsWith("'")) {
+                        tokens.push(
+                          <span key={j} className='text-[#FF4500]'>
+                            {part}
+                          </span>
+                        );
+                      }
+                      // Numbers
+                      else if (!isNaN(Number(trimmed)) && trimmed !== '') {
+                        tokens.push(
+                          <span key={j} className='text-emerald-400'>
+                            {part}
+                          </span>
+                        );
+                      }
+                      // Default (punctuation, variables like 'c', etc)
+                      else {
+                        tokens.push(
+                          <span key={j} className='text-zinc-300'>
+                            {part}
+                          </span>
+                        );
+                      }
+                    });
 
-				<div className="flex-1 w-full max-w-xl">
-					<motion.div
-						initial={{ opacity: 0, scale: 0.95 }}
-						animate={{ opacity: 1, scale: 1 }}
-						transition={{ duration: 0.7, delay: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
-						className="relative"
-					>
-						<div className="absolute -inset-1 bg-gradient-to-r from-zinc-700 to-zinc-800 rounded-xl blur opacity-20" />
-						<CodeBlock
-							code={`import { actor } from "rivetkit";
+                    if (comment) {
+                      tokens.push(
+                        <span key='comment' className='text-zinc-500'>
+                          {comment}
+                        </span>
+                      );
+                    }
 
-// Define a robust, stateful actor in seconds
+                    return tokens;
+                  })()}
+                </span>
+              </div>
+            ))}
+          </code>
+        </pre>
+      </div>
+    </div>
+  );
+};
 
-export const counter = actor({
-  // State is type-safe and persistent
-  state: { count: 0 },
+interface RedesignedHeroProps {
+  latestChangelogTitle: string;
+}
 
+export const RedesignedHero = ({ latestChangelogTitle }: RedesignedHeroProps) => (
+  <section className='relative overflow-hidden pb-20 pt-32 md:pb-32 md:pt-48'>
+    <div className='pointer-events-none absolute left-1/2 top-0 h-[500px] w-[1000px] -translate-x-1/2 rounded-full bg-white/[0.02] blur-[100px]' />
+
+    <div className='relative z-10 mx-auto max-w-7xl px-6'>
+      <div className='flex flex-col items-center gap-16 lg:flex-row'>
+        <div className='max-w-2xl flex-1'>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Link
+              href='/changelog'
+              className='mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-400 transition-colors hover:border-white/20'
+            >
+              <span className='h-2 w-2 animate-pulse rounded-full bg-[#FF4500]' />
+              {latestChangelogTitle}
+              <ArrowRight className='ml-1 h-3 w-3' />
+            </Link>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className='mb-6 text-5xl font-medium leading-[1.1] tracking-tighter text-white md:text-7xl'
+          >
+            Stateful Backends. <br />
+            <span className='bg-gradient-to-b from-zinc-200 to-zinc-500 bg-clip-text text-transparent'>
+              Finally Solved.
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className='mb-8 max-w-lg text-lg leading-relaxed text-zinc-400 md:text-xl'
+          >
+            Rivet is open-source infrastructure for long-lived, in-memory processes called Actors. It's what
+            you reach for when you hit the limitations of HTTP, databases, or queues.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className='flex flex-col items-center gap-4 sm:flex-row'
+          >
+            <Link
+              href='/docs'
+              className='font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black subpixel-antialiased shadow-sm transition-colors hover:bg-zinc-200'
+            >
+              Start Building
+              <ArrowRight className='h-4 w-4' />
+            </Link>
+            <CopyInstallButton />
+          </motion.div>
+        </div>
+
+        <div className='w-full max-w-xl flex-1'>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.7, delay: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
+            className='relative'
+          >
+            <div className='absolute -inset-1 rounded-xl bg-gradient-to-r from-zinc-700 to-zinc-800 opacity-20 blur' />
+            <CodeBlock
+              code={`import { actor } from "rivetkit";
+
+export const chatRoom = actor({
+  // In-memory, persisted state
+  state: { messages: [] },
+
+  // Type-safe RPC
   actions: {
-    increment: (c) => {
-      c.state.count++;
-      
-      // Realtime by default
-      c.broadcast("updated", c.state);
-      
-      return c.state.count;
-    }
-  }
+    sendMessage: (c, user, text) => {
+      // High performance writes
+      c.state.messages.push({ user, text });
+
+      // Realtime built-in
+      c.broadcast("newMessage", { user, text });
+    },
+  },
 });`}
-						/>
-					</motion.div>
-				</div>
-			</div>
-		</div>
-	</section>
+            />
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  </section>
 );
-
-
-
-
-
-
-
