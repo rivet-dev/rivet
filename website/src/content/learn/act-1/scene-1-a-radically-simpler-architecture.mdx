@@ -18,64 +18,63 @@ import messagePassing from "./scene-1/message-passing.png";
 import locationTransparency from "./scene-1/location-transparency.png";
 import horizontalScaling from "./scene-1/horizontal-scaling.png";
 
-## How Backends Become Complex
-
 <Narrative>
 The typical backend architecture follows a familiar pattern. A web server connects to a database. Traffic grows, so you add Redis for caching. You need async processing, so you add Kafka. You need coordination, so you add distributed locks.
 </Narrative>
 
-Each layer solves a specific problem but introduces new ones. Cache invalidation bugs appear in production. Messages get lost in queues. Deadlocks take down the entire system. This results in coordinating transactions across services, debugging race conditions, and managing data consistency across multiple systems.
-
-<Image src={oldArch} alt="Traditional backend architecture with separate layers for web server, cache, database, and message queue" />
-
 ## Every Solution Creates A Problem
 
-As you add compnents to your architecutre to solve these problems, in turn you create new problems for yourself:
+As you add components to your architecture to solve problems as you scale, in turn you create new problems for yourself:
 
 - **Caching**: brings cache invalidation bugs, stale data, and thundering herd problems.
 - **Message queues**: bring message ordering issues, exactly-once delivery problems, and dead letter queue monitoring.
+- **Pub/sub systems**: bring subscription management complexity, message replay challenges, and coordination overhead.
 - **Distributed locks**: bring deadlocks, lock timeouts, and split-brain scenarios.
 - **Multiple services**: bring distributed transactions, eventual consistency, and network partition handling.
 
-These problems compound. A cache invalidation bug combined with a race condition can cause data corruption that's nearly impossible to reproduce or debug.
+Worse, these are bugs you can't unit test for. They're emergent behaviors that only appear under load when it matters most.
 
-New features touch caching logic, queue handlers, database schemas, and service boundaries. Complexity grows exponentially with each addition.
+Yet it's accepted as _the way things must be_. Nobody got fired for adding Kafka, Redis, and RabbitMQ to the stack. The fact that each one brings its own failure modes is assumed to be the growing pains of any successful business.
 
-Worse, these aren't bugs you can unit test for. They're emergent behaviors that only appear under load when it matters most.
+<Image src={oldArch} alt="Traditional backend architecture with separate layers for web server, cache, database, and message queue" />
 
 <Separator />
 
 ## How We Got Here
 
-The way you've designed your app is through an **age-old practice of "separating state and compute."** This solidified in the 1980s when client-server architecture emerged and everyone started running databases on dedicated machines.
+Looking back at the very first thing you did when starting your application: setting up a web server and a database. The way you've designed your app is through an **age-old practice of "separating state and compute."**
 
-This came from the fact that computers were slow and had limited resources. Running application code and database operations on the same machine meant they'd fight over CPU and memory, making both perform poorly. Separating them protected databases from compute overhead. This tradeoff made sense when CPU and memory were severly limited.
+We've been doing it this way since the 1980s, when client-server architecture put databases on their own machines.
+
+This came from the fact that computers were slow and had limited resources. Running application code and database operations on the same machine meant they'd fight over CPU and memory, making both perform poorly. Separating them protected databases from compute overhead.
+
+This tradeoff made sense when CPU and memory were severely limited, but the pattern outlived its purpose. As traffic grew, we added caching layers, message queues, and distributed locks — each solving a problem from the last without questioning the original assumption of how we got here.
 
 ## 40 Years Later
 
-Those constraints from fourty years ago no longer apply to today's servers. Modern CPUs are orders of magnitude faster, and memory is abundant and cheap. **Application bottlenecks has shifted from local compute to network latency and locks.**
+Those constraints from forty years ago no longer apply to today's servers. Modern CPUs are orders of magnitude faster, and memory is abundant and cheap. **Application bottlenecks have shifted from local compute to network latency and locks.**
 
-A Postgres query over the network takes 1-10ms minimum. The same query on a local SQLite database (running in the same process as your application) takes 0.01-0.1ms. The network round trip and related locks is now the expensive part, not running the application and database on the same machine.
+This is best demonstrated with a simple comparison between a real-world Postgres query over the network versus a SQLite query on the same machine: A Postgres query over the network takes 1-10ms over LAN. The same query on a local SQLite database running in the same process as your application takes 0.01-0.1ms, **roughly 100x faster**. (These benchmarks are heavily dependent on the workload, this is a conservative performance number for SQLite.)
 
-**Combining compute and storage eliminates the biggest source of latency for modern applications**: network trips to the database and locsk.
-
-Additionally, **it also eliminates entire categories of bugs**. No network means no network partitions. No shared state means no race conditions. No locks means no deadlocks.
+That 100x difference is not about switching to a marginally different database, it's about rethinking your architecture for modern computers by eliminating the centralized database completely in favor of databases colocated with your compute. **Combining compute and state removes the biggest sources of latency in modern applications.**
 
 <Separator />
 
-## The Actor Model: Combining Compute & Storage
+## The Actor Model: Combining Compute and State
 
-Actors are the opposite of "separating compute and storage." **They put compute and storage in the same place** and load state into memory when awoken.
+Actors take the completely opposite approach to "separating compute and state:" they **merge state and compute together**.
 
-Each actor's **state is isolated to itself** and cannot be read by any other programs. Instead, you communicate with actors over the network via actions.
+Each actor's **state is isolated to itself** and cannot be read by any other actors. Instead, you communicate with actors over the network via actions.
 
-They're like mini-servers: they can accept and respond to network requests and even send requests themselves without being prompted. They remain running as a long-lived process with in-memory state until they decide to go to sleep.
+They're like mini-servers: they can accept and respond to network requests and even send network requests themselves. They remain running as a long-lived process with in-memory state until they decide to go to sleep.
 
-<Image src={actorArch} alt="Actor architecture showing compute and storage combined in isolated actors" className="max-h-[500px]" />
+In addition to performance and complexity benefits, this architecture **eliminates entire categories of bugs by design.** No network to the database means no network partitions. No shared state means no race conditions. No locks means no deadlocks.
+
+<Image src={actorArch} alt="Actor architecture showing compute and state combined in isolated actors" className="max-h-[500px]" />
 
 ## The 4 Properties That Eliminate Complexity
 
-By combining compute and storage, actors present a few key properties that eliminate entire categories of problems.
+By combining compute and state, actors present a few key properties that eliminate entire categories of problems. These properties are the core of the design patterns that we'll discuss in further articles.
 
 ### Isolated State
 
@@ -85,7 +84,7 @@ This eliminates race conditions (can't happen when only one process touches the 
 
 Debugging becomes straightforward: the actor's state is the single source of truth. There's no need to reconstruct state from multiple systems or reason about eventual consistency across caches, databases, and message queues.
 
-As your app grows, new features affect a limited number of actors which have a limited scope. Changes don't ripple through shared state or risk breaking unrelated parts of your system.
+As your app grows, new features affect a limited number of actors which have a limited scope. Changes don't ripple through shared state across services or risk breaking unrelated parts of your system.
 
 <Image src={isolatedState} alt="Diagram showing actors with isolated state that cannot be accessed by other processes" className="max-h-[500px]" />
 
@@ -93,7 +92,9 @@ As your app grows, new features affect a limited number of actors which have a l
 
 Actors **talk through actions and events**, not direct state access. This makes it easier to scale actors since they can scale horizontally across multiple machines and still communicate efficiently.
 
-**Actors frequently talk to each other** to build larger systems that scale well. We'll be talking a lot about patterns like this in this course.
+Messages sent to actors are **automatically queued and processed sequentially**. This almost always eliminates the need for external message queues since backpressure, ordering, and delivery are handled by the actor runtime itself.
+
+Crucially, **actors frequently talk to each other** to build larger systems that scale well. We'll be talking a lot about patterns like this in this course.
 
 <Image src={messagePassing} alt="Diagram showing actors communicating through messages and events" className="max-h-[500px]" />
 
@@ -117,13 +118,47 @@ Load spreads naturally since actors are small, lightweight units. No complex sha
 
 ## Putting It All Together: A Radically Simpler Architecture
 
-When you switch to actors, your architecture no longer needs:
+When you build your backend with actors, the four properties listed remove the need for:
 
-- **Redis/Memcached**: Caching is built-in (state lives with compute).
-- **Kafka/RabbitMQ/SQS**: Events and async messaging are built-in.
-- **Consul/etcd/ZooKeeper**: No distributed coordination needed.
+- **Redis/Memcached**: Caching is built-in (state already lives in-memory with compute).
+- **Kafka/RabbitMQ/SQS**: Message queueing, events, and async messaging are built-in to the actor runtime.
+- **NATS/Redis Streams**: Pub/sub is built-in to actors through message passing and events.
+- **Consul/etcd/ZooKeeper**: No distributed coordination needed, actors encapsulate their own state and the runtime handles discovery and routing automatically.
 - **Istio/Linkerd**: Actors handle routing and discovery automatically.
 - **Database sharding**: Actors distribute themselves automatically. No shard keys, no rebalancing logic, no cross-shard queries.
 
-New features are new actors or modifications to individual actors, not changes that cascade through your entire system.
+## If Actors Are So Great, Why Aren't They Everywhere?
+
+If you've reached this point and are unfamiliar with the actor model, you're probably asking this exact question. It all sounds a little _too_ rosy.
+
+The truth is that actors _are_ used widely — just not visibly. Large enterprises with engineers who've spent years wrestling with traditional architectures have long since adopted them. The pattern has proven itself at massive scale:
+
+- WhatsApp (notoriously acquired for $19B running Erlang/OTP with only 35 engineers)
+- Discord
+- LinkedIn
+- X
+- Pinterest
+- PayPal
+- FoundationDB (powering Apple, Snowflake, DataDog)
+
+So why hasn't the actor model spread to smaller teams and mainstream development?
+
+This mirrors TypeScript's trajectory. It started as a niche tool for large codebases — most developers dismissed it as unnecessary overhead with poor tooling. But as more developers felt the pain of loose typing at scale, adoption grew. Today, TypeScript is a non-negotiable for many teams because of that collective suffering.
+
+Actors are on the same trajectory. The pain of distributed systems complexity is becoming impossible to ignore.
+
+Other ecosystems have had mature actor frameworks for years — Erlang has OTP, Java has Akka, C# has Microsoft Orleans. But TypeScript has been the missing piece until recently with:
+
+- **Rivet Actors**: Open-source actor infrastructure for TypeScript
+- **Cloudflare Durable Objects**: Leverages Cloudflare's existing network & JavaScript runtime
+
+<Separator />
+
+## What To Expect From Act I
+
+This act will cover common design patterns based on the 4 principles listed above for building modern applications with actors.
+
+We'll also discuss common anti-patterns when designing with actors and situations where actors may not make sense.
+
+See the [table of contents](/learn) for a full list of content.
 
