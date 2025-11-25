@@ -263,11 +263,13 @@ function DocsMobileNavigation({ tree }) {
 		if (pathname.startsWith("/docs/actors")) return "actors";
 		if (pathname.startsWith("/docs/integrations")) return "integrations";
 		if (pathname.startsWith("/docs/api")) return "api";
+		if (pathname.startsWith("/docs/quickstart")) return "quickstart";
 		return "overview";
 	};
 
 	const sections = [
 		{ id: "overview", label: "Overview", href: "/docs" },
+		{ id: "quickstart", label: "Quickstart", href: "/docs/quickstart" },
 		{ id: "actors", label: "Actors", href: "/docs/actors" },
 		{ id: "integrations", label: "Integrations", href: "/docs/integrations" },
 		{ id: "api", label: "API Reference", href: "/docs/api" },

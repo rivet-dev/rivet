@@ -27,29 +27,31 @@ export const useActorWorker = () => {
 };
 
 const useInspectorToken = (runnerName: string) => {
+	const inspectorCreds = useInspectorCredentials();
+	const provider = useEngineCompatDataProvider();
+	const { data } = useQuery(
+		provider.runnerByNameQueryOptions({
+			runnerName,
+		}),
+	);
+
 	return match(__APP_TYPE__)
 		.with("inspector", () => {
-			return useInspectorCredentials().credentials?.token;
+			return inspectorCreds.credentials?.token;
 		})
 		.otherwise(() => {
-			const provider = useEngineCompatDataProvider();
-			const { data } = useQuery(
-				provider.runnerByNameQueryOptions({
-					runnerName,
-				}),
-			);
-
 			return (data?.metadata?.inspectorToken as string) || "";
 		});
 };
 
 const useConnectionDetails = () => {
+	const provider = useEngineCompatDataProvider();
+
 	return match(__APP_TYPE__)
 		.with("inspector", () => {
 			return { namespace: "", engineToken: "" };
 		})
 		.otherwise(() => {
-			const provider = useEngineCompatDataProvider();
 			return {
 				namespace: provider.engineNamespace,
 				engineToken: provider.engineToken,
