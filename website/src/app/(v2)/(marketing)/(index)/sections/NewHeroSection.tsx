@@ -404,7 +404,7 @@ export function NewHeroSection() {
 							</h1>
 
 							<p className="text-lg md:text-xl max-w-lg opacity-0 animate-hero-p" style={{ color: '#A0A0A0' }}>
-								Stop faking state with databases and message queues. Rivet is the open-source library for long-lived compute—we call them Actors. It's what you reach for when Lambda runs out of road.
+								Rivet is open-source infrastructure for long-lived, in-memory processes called Actors. It's what you reach for when you hit the limits of Lambda.
 							</p>
 
 							<div className="flex flex-col sm:flex-row gap-4 opacity-0 animate-hero-cta">

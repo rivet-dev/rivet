@@ -2,6 +2,7 @@
 
 import { Terminal, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 const CodeBlock = ({ code, fileName = "actor.ts" }) => {
 	return (
@@ -85,7 +86,11 @@ const CodeBlock = ({ code, fileName = "actor.ts" }) => {
 	);
 };
 
-export const RedesignedHero = () => (
+interface RedesignedHeroProps {
+	latestChangelogTitle?: string;
+}
+
+export const RedesignedHero = ({ latestChangelogTitle }: RedesignedHeroProps) => (
 	<section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
 		<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-white/[0.02] blur-[100px] rounded-full pointer-events-none" />
 
@@ -96,11 +101,15 @@ export const RedesignedHero = () => (
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5 }}
-						className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-zinc-400 mb-8 hover:border-white/20 transition-colors cursor-default"
 					>
-						<span className="w-2 h-2 rounded-full bg-[#FF4500] animate-pulse" />
-						Rivet 2.0 is now available
-						<ArrowRight className="w-3 h-3 ml-1" />
+						<Link
+							href="/changelog"
+							className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-zinc-400 mb-8 hover:border-white/20 transition-colors"
+						>
+							<span className="w-2 h-2 rounded-full bg-[#FF4500] animate-pulse" />
+							{latestChangelogTitle || "Rivet 2.0 is now available"}
+							<ArrowRight className="w-3 h-3 ml-1" />
+						</Link>
 					</motion.div>
 
 					<motion.h1
@@ -121,9 +130,7 @@ export const RedesignedHero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="text-lg md:text-xl text-zinc-400 leading-relaxed mb-8 max-w-lg"
 					>
-						Stop faking state with databases and message queues. Rivet turns your TypeScript code into
-						durable, distributed actors. No complex infrastructure, no database queries—just state that
-						persists.
+						Rivet is open-source infrastructure for long-lived, in-memory processes called Actors. It's what you reach for when you hit the limitations of HTTP, databases, or queues.
 					</motion.p>
 
 					<motion.div
