@@ -1,42 +1,40 @@
 # Lifecycle
 
-Understand actor lifecycle hooks and initialization patterns
-
 Actors follow a well-defined lifecycle with hooks at each stage. Understanding these hooks is essential for proper initialization, state management, and cleanup.
 
 ## Lifecycle
 
 Actors transition through several states during their lifetime. Each transition triggers specific hooks that let you initialize resources, manage connections, and clean up state.
 
-**On Create** (first time only)
+**On Create** (runs once per actor)
 
-- `createState`
-- `onCreate`
-- `createVars`
-- `onWake`
-
-**On Wake** (after sleep, restart, or crash)
-
-- `createVars`
-- `onWake`
-
-**On Sleep**
-
-- `onSleep`
+1. `createState`
+2. `onCreate`
+3. `createVars`
+4. `onWake`
 
 **On Destroy**
 
-- `onDestroy`
+1. `onDestroy`
+
+**On Wake** (after sleep, restart, or crash)
+
+1. `createVars`
+2. `onWake`
+
+**On Sleep** (after idle period)
+
+1. `onSleep`
 
 **On Connect** (per client)
 
-- `onBeforeConnect`
-- `createConnState`
-- `onConnect`
+1. `onBeforeConnect`
+2. `createConnState`
+3. `onConnect`
 
 **On Disconnect** (per client)
 
-- `onDisconnect`
+1. `onDisconnect`
 
 ## Lifecycle Hooks
 
@@ -57,7 +55,7 @@ const counter = actor({
 
 ### `createState`
 
-`createState(c: ActorContext, input: TInput): TState | Promise<TState>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `createState` function dynamically initializes state based on input. Called only once when the actor is first created. Can be async. See [state documentation](/docs/actors/state) for more information.
 
@@ -88,7 +86,7 @@ const counter = actor({
 
 ### `createVars`
 
-`createVars(c: InitContext, driverCtx: any): TVars | Promise<TVars>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. The `driverCtx` parameter provides driver-specific context. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables-vars) for more information.
 
@@ -112,7 +110,7 @@ const counter = actor({
 
 ### `onCreate`
 
-`onCreate(c: ActorContext, input: TInput): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `onCreate` hook is called when the actor is first created. Can be async. Use this hook for initialization logic that doesn't affect the initial state.
 
@@ -132,7 +130,7 @@ const counter = actor({
 
 ### `onDestroy`
 
-`onDestroy(c: ActorContext): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `onDestroy` hook is called when the actor is being permanently destroyed. Can be async. Use this for final cleanup operations like closing external connections, releasing resources, or performing any last-minute state persistence.
 
@@ -149,7 +147,7 @@ const gameSession = actor({
 
 ### `onWake`
 
-`onWake(c: ActorContext): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 This hook is called any time the actor is started (e.g. after restarting, upgrading code, or crashing). Can be async.
 
@@ -191,11 +189,13 @@ const counter = actor({
 
 ### `onSleep`
 
-`onSleep(c: ActorContext): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 This hook is called when the actor is going to sleep. Can be async. Use this to clean up resources, close connections, or perform any shutdown operations.
 
-Not supported on all platforms.
+This hook may not always be called in situations like crashes or forced terminations. Don't rely on it for critical cleanup operations.
+
+Not supported on Cloudflare Workers.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -231,7 +231,7 @@ const counter = actor({
 
 ### `onStateChange`
 
-`onStateChange(c: ActorContext, newState: TState): void`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 Called whenever the actor's state changes. Cannot be async. This is often used to broadcast state updates.
 
@@ -259,7 +259,7 @@ const counter = actor({
 
 ### `createConnState` and `connState`
 
-`createConnState(c: CreateConnStateContext, params: TConnParams): TConnState | Promise<TConnState>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 There are two ways to define the initial state for connections:
 1. `connState`: Define a constant object that will be used as the initial state for all connections
@@ -267,7 +267,7 @@ There are two ways to define the initial state for connections:
 
 ### `onBeforeConnect`
 
-`onBeforeConnect(c: OnBeforeConnectContext, params: TConnParams): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
@@ -314,7 +314,7 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-`onConnect(c: OnConnectContext, conn: Conn): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
 
 Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
 
@@ -346,7 +346,7 @@ Messages will not be processed for this actor until this hook succeeds. Errors t
 
 ### `onDisconnect`
 
-`onDisconnect(c: ActorContext, conn: Conn): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 Called when a client disconnects from the actor. Can be async. Receives the connection object as a second parameter. Use this to clean up any connection-specific resources.
 
@@ -376,7 +376,7 @@ const chatRoom = actor({
 
 ### `onRequest`
 
-`onRequest(c: RequestContext, request: Request): Response | Promise<Response>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.RequestContext.html)
 
 The `onRequest` hook handles HTTP requests sent to your actor at `/actors/{actorName}/http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
 
@@ -411,7 +411,7 @@ const apiActor = actor({
 
 ### `onWebSocket`
 
-`onWebSocket(c: ActorContext, websocket: WebSocket): void | Promise<void>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.WebSocketContext.html)
 
 The `onWebSocket` hook handles WebSocket connections to your actor. Can be async. It receives the actor context and a `WebSocket` object. Use this to set up WebSocket event listeners and handle real-time communication.
 
@@ -456,7 +456,7 @@ const realtimeActor = actor({
 
 ### `onBeforeActionResponse`
 
-`onBeforeActionResponse(c: ActorContext, name: string, args: unknown[], output: TOutput): TOutput | Promise<TOutput>`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `onBeforeActionResponse` hook is called before sending an action response to the client. Can be async. Use this hook to modify or transform the output of an action before it's sent to the client. This is useful for formatting responses, adding metadata, or applying transformations to the output.
 
@@ -470,7 +470,7 @@ const loggingActor = actor({
     // Log action calls
     console.log(`Action ${actionName} called with args:`, args);
     console.log(`Action ${actionName} returned:`, output);
-    
+
     // Add metadata to all responses
     return {
       data: output,
@@ -478,7 +478,7 @@ const loggingActor = actor({
         actionName,
         timestamp: Date.now(),
         requestId: crypto.randomUUID(),
-        userId: c.conn.auth?.userId
+        userId: c.conn.state?.userId
       }
     };
   },

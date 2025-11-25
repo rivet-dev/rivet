@@ -179,3 +179,8 @@ Data structures often include:
 ## Optimizations
 
 - Never build a new reqwest client from scratch. Use `rivet_pools::reqwest::client().await?` to access an existing reqwest client instance.
+
+## Documentation
+
+- When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun
+
