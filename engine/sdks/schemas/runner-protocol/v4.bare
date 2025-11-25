@@ -203,6 +203,12 @@ type CommandWrapper struct {
 	inner: Command
 }
 
+# We redeclare this so its top level
+type ActorCommandKeyData union {
+	CommandStartActor |
+	CommandStopActor
+}
+
 # MARK: Tunnel
 
 # Message ID
@@ -330,7 +336,6 @@ type ToServerInit struct {
 	name: str
 	version: u32
 	totalSlots: u32
-	lastCommandCheckpoints: list<ActorCheckpoint>
 	prepopulateActorNames: optional<map<str><ActorName>>
 	metadata: optional<Json>
 }
@@ -338,7 +343,7 @@ type ToServerInit struct {
 type ToServerEvents list<EventWrapper>
 
 type ToServerAckCommands struct {
-	lastCommandIdx: i64
+	lastCommandCheckpoints: list<ActorCheckpoint>
 }
 
 type ToServerStopping void
@@ -370,7 +375,6 @@ type ProtocolMetadata struct {
 
 type ToClientInit struct {
 	runnerId: Id
-	lastEventCheckpoints: list<ActorCheckpoint>
 	metadata: ProtocolMetadata
 }
 

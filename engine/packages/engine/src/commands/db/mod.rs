@@ -22,10 +22,6 @@ pub enum SubCommand {
 pub enum DatabaseType {
 	#[clap(alias = "ch")]
 	Clickhouse,
-	#[clap(alias = "wfd")]
-	WorkflowData,
-	#[clap(alias = "wfi")]
-	WorkflowInternal,
 }
 
 impl SubCommand {
@@ -47,12 +43,6 @@ impl SubCommand {
 				match db_type {
 					DatabaseType::Clickhouse => {
 						crate::util::db::clickhouse_shell(config, shell_ctx).await?
-					}
-					DatabaseType::WorkflowData => {
-						crate::util::db::wf_sqlite_shell(config, shell_ctx, false).await?
-					}
-					DatabaseType::WorkflowInternal => {
-						crate::util::db::wf_sqlite_shell(config, shell_ctx, true).await?
 					}
 				}
 

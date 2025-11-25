@@ -51,10 +51,14 @@ pub async fn create_namespace(
 	if !status.is_client_error() && !status.is_server_error() {
 		let content = resp.text().await?;
 		match content_type {
-            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::NamespacesCreateResponse`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::NamespacesCreateResponse`")))),
-        }
+			ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+			ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::NamespacesCreateResponse`"))),
+			ContentType::Unsupported(unknown_type) => {
+				return Err(Error::from(serde_json::Error::custom(format!(
+					"Received `{unknown_type}` content type response that cannot be converted to `models::NamespacesCreateResponse`"
+				))))
+			}
+		}
 	} else {
 		let content = resp.text().await?;
 		let entity: Option<CreateNamespaceError> = serde_json::from_str(&content).ok();

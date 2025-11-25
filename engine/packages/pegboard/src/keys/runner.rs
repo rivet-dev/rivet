@@ -860,3 +860,215 @@ impl<'de> TupleUnpack<'de> for MetadataChunkKey {
 		Ok((input, v))
 	}
 }
+
+#[derive(Debug)]
+pub struct ActorLastCommandIdxKey {
+	runner_id: Id,
+	actor_id: Id,
+}
+
+impl ActorLastCommandIdxKey {
+	pub fn new(runner_id: Id, actor_id: Id) -> Self {
+		ActorLastCommandIdxKey {
+			runner_id,
+			actor_id,
+		}
+	}
+}
+
+impl FormalKey for ActorLastCommandIdxKey {
+	// Timestamp.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for ActorLastCommandIdxKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			RUNNER,
+			DATA,
+			self.runner_id,
+			ACTOR,
+			LAST_COMMAND_IDX,
+			self.actor_id,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActorLastCommandIdxKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, runner_id, _, _, actor_id)) =
+			<(usize, usize, Id, usize, usize, Id)>::unpack(input, tuple_depth)?;
+		let v = ActorLastCommandIdxKey {
+			runner_id,
+			actor_id,
+		};
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct ActorCommandKey {
+	pub runner_id: Id,
+	pub actor_id: Id,
+	pub index: i64,
+}
+
+impl ActorCommandKey {
+	pub fn new(runner_id: Id, actor_id: Id, index: i64) -> Self {
+		ActorCommandKey {
+			runner_id,
+			actor_id,
+			index,
+		}
+	}
+
+	pub fn subspace(runner_id: Id) -> ActorCommandSubspaceKey {
+		ActorCommandSubspaceKey::new(runner_id)
+	}
+
+	pub fn subspace_with_actor(runner_id: Id, actor_id: Id) -> ActorCommandSubspaceKey {
+		ActorCommandSubspaceKey::new_with_actor(runner_id, actor_id)
+	}
+
+	pub fn subspace_with_index(runner_id: Id, actor_id: Id, index: i64) -> ActorCommandSubspaceKey {
+		ActorCommandSubspaceKey::new_with_index(runner_id, actor_id, index)
+	}
+}
+
+impl FormalKey for ActorCommandKey {
+	type Value = rivet_runner_protocol::mk2::ActorCommandKeyData;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		rivet_runner_protocol::versioned::ActorCommandKeyData::deserialize_with_embedded_version(
+			raw,
+		)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		rivet_runner_protocol::versioned::ActorCommandKeyData::wrap_latest(value)
+			.serialize_with_embedded_version(rivet_runner_protocol::PROTOCOL_MK2_VERSION)
+	}
+}
+
+impl TuplePack for ActorCommandKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			RUNNER,
+			DATA,
+			self.runner_id,
+			ACTOR,
+			COMMAND,
+			self.actor_id,
+			self.index,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ActorCommandKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, runner_id, _, _, actor_id, index)) =
+			<(usize, usize, Id, usize, usize, Id, i64)>::unpack(input, tuple_depth)?;
+		let v = ActorCommandKey {
+			runner_id,
+			actor_id,
+			index,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct ActorCommandSubspaceKey {
+	runner_id: Id,
+	actor_id: Option<Id>,
+	index: Option<i64>,
+}
+
+impl ActorCommandSubspaceKey {
+	pub fn new(runner_id: Id) -> Self {
+		ActorCommandSubspaceKey {
+			runner_id,
+			actor_id: None,
+			index: None,
+		}
+	}
+
+	pub fn new_with_actor(runner_id: Id, actor_id: Id) -> Self {
+		ActorCommandSubspaceKey {
+			runner_id,
+			actor_id: Some(actor_id),
+			index: None,
+		}
+	}
+
+	pub fn new_with_index(runner_id: Id, actor_id: Id, index: i64) -> Self {
+		ActorCommandSubspaceKey {
+			runner_id,
+			actor_id: Some(actor_id),
+			index: Some(index),
+		}
+	}
+}
+
+impl TuplePack for ActorCommandSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (RUNNER, DATA, self.runner_id, ACTOR, COMMAND);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(actor_id) = &self.actor_id {
+			offset += actor_id.pack(w, tuple_depth)?;
+
+			if let Some(index) = &self.index {
+				offset += index.pack(w, tuple_depth)?;
+			}
+		}
+
+		Ok(offset)
+	}
+}
+
+pub struct ActorDataSubspaceKey {
+	runner_id: Id,
+}
+
+impl ActorDataSubspaceKey {
+	pub fn new(runner_id: Id) -> Self {
+		ActorDataSubspaceKey { runner_id }
+	}
+}
+
+impl TuplePack for ActorDataSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (RUNNER, DATA, self.runner_id, ACTOR);
+		t.pack(w, tuple_depth)
+	}
+}

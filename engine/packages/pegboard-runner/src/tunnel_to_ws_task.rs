@@ -2,9 +2,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
-use rivet_runner_protocol::{
-	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
-};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::Arc;
 use tokio::sync::watch;
 use universalpubsub as ups;
@@ -48,7 +46,7 @@ async fn recv_msg(
 ) -> Result<std::result::Result<ups::Message, LifecycleResult>> {
 	let tunnel_msg = tokio::select! {
 		res = tunnel_sub.next() => {
-			if let NextOutput::Message(tunnel_msg) = res.context("pubsub_to_client_task sub failed")? {
+			if let NextOutput::Message(tunnel_msg) = res? {
 				tunnel_msg
 			} else {
 				tracing::debug!("tunnel sub closed");

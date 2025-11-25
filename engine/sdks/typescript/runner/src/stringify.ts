@@ -40,8 +40,6 @@ export function stringifyToServerTunnelMessageKind(
 	kind: protocol.ToServerTunnelMessageKind,
 ): string {
 	switch (kind.tag) {
-		case "DeprecatedTunnelAck":
-			return "DeprecatedTunnelAck";
 		case "ToServerResponseStart": {
 			const { status, headers, body, stream } = kind.val;
 			const bodyStr = body === null ? "null" : stringifyArrayBuffer(body);
@@ -82,8 +80,6 @@ export function stringifyToClientTunnelMessageKind(
 	kind: protocol.ToClientTunnelMessageKind,
 ): string {
 	switch (kind.tag) {
-		case "DeprecatedTunnelAck":
-			return "DeprecatedTunnelAck";
 		case "ToClientRequestStart": {
 			const { actorId, method, path, headers, body, stream } = kind.val;
 			const bodyStr = body === null ? "null" : stringifyArrayBuffer(body);
@@ -119,7 +115,7 @@ export function stringifyToClientTunnelMessageKind(
 export function stringifyCommand(command: protocol.Command): string {
 	switch (command.tag) {
 		case "CommandStartActor": {
-			const { actorId, generation, config, hibernatingRequests } =
+			const { generation, config, hibernatingRequests } =
 				command.val;
 			const keyStr = config.key === null ? "null" : `"${config.key}"`;
 			const inputStr =
@@ -130,11 +126,11 @@ export function stringifyCommand(command: protocol.Command): string {
 				hibernatingRequests.length > 0
 					? `[${hibernatingRequests.map((hr) => `{gatewayId: ${idToStr(hr.gatewayId)}, requestId: ${idToStr(hr.requestId)}}`).join(", ")}]`
 					: "[]";
-			return `CommandStartActor{actorId: "${actorId}", generation: ${generation}, config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}}`;
+			return `CommandStartActor{generation: ${generation}, config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}}`;
 		}
 		case "CommandStopActor": {
-			const { actorId, generation } = command.val;
-			return `CommandStopActor{actorId: "${actorId}", generation: ${generation}}`;
+			const { generation } = command.val;
+			return `CommandStopActor{generation: ${generation}}`;
 		}
 	}
 }
@@ -146,7 +142,7 @@ export function stringifyCommand(command: protocol.Command): string {
 export function stringifyCommandWrapper(
 	wrapper: protocol.CommandWrapper,
 ): string {
-	return `CommandWrapper{index: ${stringifyBigInt(wrapper.index)}, inner: ${stringifyCommand(wrapper.inner)}}`;
+	return `CommandWrapper{actorId: "${wrapper.checkpoint.actorId}", index: ${stringifyBigInt(wrapper.checkpoint.index)}, inner: ${stringifyCommand(wrapper.inner)}}`;
 }
 
 /**
@@ -193,7 +189,7 @@ export function stringifyEvent(event: protocol.Event): string {
  * Handles ArrayBuffers, BigInts, and Maps that can't be JSON.stringified
  */
 export function stringifyEventWrapper(wrapper: protocol.EventWrapper): string {
-	return `EventWrapper{index: ${stringifyBigInt(wrapper.index)}, inner: ${stringifyEvent(wrapper.inner)}}`;
+	return `EventWrapper{actorId: ${wrapper.checkpoint.actorId}, index: ${stringifyBigInt(wrapper.checkpoint.index)}, inner: ${stringifyEvent(wrapper.inner)}}`;
 }
 
 /**
@@ -207,34 +203,33 @@ export function stringifyToServer(message: protocol.ToServer): string {
 				name,
 				version,
 				totalSlots,
-				lastCommandIdx,
 				prepopulateActorNames,
 				metadata,
 			} = message.val;
-			const lastCommandIdxStr =
-				lastCommandIdx === null
-					? "null"
-					: stringifyBigInt(lastCommandIdx);
 			const prepopulateActorNamesStr =
 				prepopulateActorNames === null
 					? "null"
 					: `Map(${prepopulateActorNames.size})`;
 			const metadataStr = metadata === null ? "null" : `"${metadata}"`;
-			return `ToServerInit{name: "${name}", version: ${version}, totalSlots: ${totalSlots}, lastCommandIdx: ${lastCommandIdxStr}, prepopulateActorNames: ${prepopulateActorNamesStr}, metadata: ${metadataStr}}`;
+			return `ToServerInit{name: "${name}", version: ${version}, totalSlots: ${totalSlots}, prepopulateActorNames: ${prepopulateActorNamesStr}, metadata: ${metadataStr}}`;
 		}
 		case "ToServerEvents": {
 			const events = message.val;
 			return `ToServerEvents{count: ${events.length}, events: [${events.map((e) => stringifyEventWrapper(e)).join(", ")}]}`;
 		}
 		case "ToServerAckCommands": {
-			const { lastCommandIdx } = message.val;
-			return `ToServerAckCommands{lastCommandIdx: ${stringifyBigInt(lastCommandIdx)}}`;
+			const { lastCommandCheckpoints } = message.val;
+			const checkpointsStr =
+				lastCommandCheckpoints.length > 0
+					? `[${lastCommandCheckpoints.map((cp) => `{actorId: "${cp.actorId}", index: ${stringifyBigInt(cp.index)}}`).join(", ")}]`
+					: "[]";
+			return `ToServerAckCommands{lastCommandCheckpoints: ${checkpointsStr}}`;
 		}
 		case "ToServerStopping":
 			return "ToServerStopping";
-		case "ToServerPing": {
+		case "ToServerPong": {
 			const { ts } = message.val;
-			return `ToServerPing{ts: ${stringifyBigInt(ts)}}`;
+			return `ToServerPong{ts: ${stringifyBigInt(ts)}}`;
 		}
 		case "ToServerKvRequest": {
 			const { actorId, requestId, data } = message.val;
@@ -255,19 +250,24 @@ export function stringifyToServer(message: protocol.ToServer): string {
 export function stringifyToClient(message: protocol.ToClient): string {
 	switch (message.tag) {
 		case "ToClientInit": {
-			const { runnerId, lastEventIdx, metadata } = message.val;
+			const { runnerId, metadata } = message.val;
 			const metadataStr = `{runnerLostThreshold: ${stringifyBigInt(metadata.runnerLostThreshold)}}`;
-			return `ToClientInit{runnerId: "${runnerId}", lastEventIdx: ${stringifyBigInt(lastEventIdx)}, metadata: ${metadataStr}}`;
+			return `ToClientInit{runnerId: "${runnerId}", metadata: ${metadataStr}}`;
 		}
-		case "ToClientClose":
-			return "ToClientClose";
+		case "ToClientPing":
+			const { ts } = message.val;
+			return `ToClientPing{ts: ${stringifyBigInt(ts)}}`;
 		case "ToClientCommands": {
 			const commands = message.val;
 			return `ToClientCommands{count: ${commands.length}, commands: [${commands.map((c) => stringifyCommandWrapper(c)).join(", ")}]}`;
 		}
 		case "ToClientAckEvents": {
-			const { lastEventIdx } = message.val;
-			return `ToClientAckEvents{lastEventIdx: ${stringifyBigInt(lastEventIdx)}}`;
+			const { lastEventCheckpoints } = message.val;
+			const checkpointsStr =
+				lastEventCheckpoints.length > 0
+					? `[${lastEventCheckpoints.map((cp) => `{actorId: "${cp.actorId}", index: ${stringifyBigInt(cp.index)}}`).join(", ")}]`
+					: "[]";
+			return `ToClientAckEvents{lastEventCheckpoints: ${checkpointsStr}}`;
 		}
 		case "ToClientKvResponse": {
 			const { requestId, data } = message.val;
