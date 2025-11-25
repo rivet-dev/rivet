@@ -27,6 +27,9 @@ interface Param {
 	page?: string[];
 }
 
+// Ensure Next.js knows this is a dynamic route
+export const dynamicParams = false;
+
 function createParamsForFile(section, file): Param {
 	const step1 = file.replace("index.mdx", "");
 	const step2 = step1.replace(".mdx", "");
@@ -66,8 +69,11 @@ async function loadContent(path: string[]) {
 }
 
 export async function generateMetadata({
-	params: { section, page },
+	params,
+}: {
+	params: { section: string; page?: string[] };
 }): Promise<Metadata> {
+	const { section, page } = params;
 	const path = buildPathComponents(section, page);
 	const {
 		component: { title, description },
@@ -85,7 +91,11 @@ export async function generateMetadata({
 	};
 }
 
-export default async function CatchAllCorePage({ params: { section, page } }) {
+export default async function CatchAllCorePage({
+	params: { section, page },
+}: {
+	params: { section: string; page?: string[] };
+}) {
 	if (!VALID_SECTIONS.includes(section)) {
 		return notFound();
 	}
