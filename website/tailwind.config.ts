@@ -7,6 +7,13 @@ const config = {
 		"./src/**/*.{ts,tsx,jsx,js,mdx,md}",
 		"./node_modules/@rivet-gg/components/src/**/*.{ts,tsx}",
 	],
+	safelist: [
+		'learn-container',
+		'texture-overlay',
+		'font-display',
+		'font-serif',
+		'font-mono',
+	],
 	theme: {
 		extend: {
 			colors: {
