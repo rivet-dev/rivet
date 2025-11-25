@@ -1,4 +1,4 @@
-export const VALID_SECTIONS = ["docs", "guides"];
+export const VALID_SECTIONS = ["docs", "guides", "learn"];
 
 export function buildPathComponents(
 	section: string,
