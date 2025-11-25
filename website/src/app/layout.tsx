@@ -13,7 +13,7 @@ else if (process.env.CF_PAGES_URL)
 
 export const metadata: Metadata = {
 	metadataBase,
-	title: "Rivet - Build and scale stateful workloads",
+	title: "Rivet - Stateful Backends. Finally Solved.",
 	description:
 		"Rivet is a library for long-lived processes with durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
 	twitter: {

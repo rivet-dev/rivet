@@ -306,7 +306,7 @@ export function Header({
 				</div>
 			}
 			subnav={subnav}
-			support={null}
+			support={<></>}
 			links={
 				<div className="flex flex-row items-center">
 					{!learnMode && (
@@ -379,10 +379,11 @@ function DocsMobileNavigation({ tree }) {
 	];
 
 	const mainLinks = [
-		{ href: "/solutions", label: "Solutions", isDropdown: true },
+		{ href: "/", label: "Home" },
 		{ href: "/docs", label: "Documentation" },
 		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },
+		{ href: "https://dashboard.rivet.dev/", label: "Dashboard" },
 	];
 
 	const solutions = [

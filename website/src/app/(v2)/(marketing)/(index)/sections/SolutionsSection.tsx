@@ -73,7 +73,7 @@ export const SolutionsSection = () => {
   ];
 
   return (
-    <section id='solutions' className='relative border-t border-white/10 bg-black py-32'>
+    <section id='solutions' className='hidden md:block relative border-t border-white/10 bg-black py-32'>
       <div className='mx-auto max-w-7xl px-6'>
         <div className='mb-20 text-center'>
           <motion.h2
