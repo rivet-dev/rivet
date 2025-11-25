@@ -9,8 +9,11 @@ export function CTASection() {
 			<div className="h-8" />
 
 			<div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
-				<MarketingButton href="/docs/actors" primary>
-					Quickstart — 5 minutes
+				<MarketingButton 
+					href="/docs/quickstart/"
+					primary
+				>
+					Get Started
 				</MarketingButton>
 				<MarketingButton href="/talk-to-an-engineer">
 					Talk to an engineer

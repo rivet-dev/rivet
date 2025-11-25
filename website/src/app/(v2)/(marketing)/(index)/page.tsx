@@ -1,54 +1,43 @@
-import { HeroBackground } from "./components/HeroBackground";
-import { HeroSection } from "./sections/HeroSection";
-import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
-import { FeaturesSection } from "./sections/FeaturesSection";
-import { TechSection } from "./sections/TechSection";
-import { StudioSection } from "./sections/StudioSection";
-import { CommunitySection } from "./sections/CommunitySection";
-import { CTASection } from "./sections/CTASection";
-import { PlatformIcons } from "./components/PlatformIcons";
+"use client";
+
+// Import new sections
+import { NewHeroSection } from "./sections/NewHeroSection";
+import { SocialProofSection } from "./sections/SocialProofSection";
+import { ProblemSection } from "./sections/ProblemSection";
+import { SolutionSection } from "./sections/SolutionSection";
+import { NewFeaturesBento } from "./sections/NewFeaturesBento";
+import { NewUseCases } from "./sections/NewUseCases";
+import { NewCTASection } from "./sections/NewCTASection";
+import { ScrollObserver } from "@/components/ScrollObserver";
 
 export default function IndexPage() {
 	return (
-		<>
-			<div />
+		<ScrollObserver>
+			<div className="min-h-screen pt-20" style={{ backgroundColor: '#0A0A0A', color: '#FAFAFA' }}>
+				{/* Main container */}
+				<div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+					{/* Hero Section */}
+					<NewHeroSection />
 
-			{/*<HeroBackground />*/}
+					{/* Social Proof */}
+					<SocialProofSection />
 
-			{/* Content */}
-			<main className="min-h-screen w-full max-w-[1500px] mx-auto px-4 md:px-8">
-				<HeroSection />
+					{/* The Problem */}
+					<ProblemSection />
 
-				<div className="pb-24 sm:pb-32">
-					<CodeSnippetsSection />
+					{/* The Solution */}
+					<SolutionSection />
+
+					{/* Features Bento */}
+					<NewFeaturesBento />
+
+					{/* Use Cases */}
+					<NewUseCases />
+
+					{/* Final CTA */}
+					<NewCTASection />
 				</div>
-
-				<div className="py-24 sm:py-32">
-					<FeaturesSection />
-				</div>
-
-				<div className="py-24 sm:py-32">
-					<TechSection />
-				</div>
-
-				<div className="py-40 sm:py-48">
-					<StudioSection />
-				</div>
-
-				{/*<div className="py-16 sm:py-20">
-				  <QuotesSection />
-				</div>*/}
-
-				<div className="py-52 sm:py-60">
-					<CommunitySection />
-				</div>
-
-				<div className="h-[1px] bg-white/20" />
-
-				<div className="py-52 sm:py-60">
-					<CTASection />
-				</div>
-			</main>
-		</>
+			</div>
+		</ScrollObserver>
 	);
 }

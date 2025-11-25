@@ -51,7 +51,7 @@ function PlanCard({
 				<p>Includes:</p>
 				<ul className="text-muted-foreground mt-2 space-y-1">
 					{features?.map((feature, index) => (
-						<li key={index}>
+						<li key={`${feature.label}-${index}`}>
 							<Icon icon={feature.icon} /> {feature.label}
 						</li>
 					))}
@@ -62,15 +62,14 @@ function PlanCard({
 					<Button
 						variant="secondary"
 						className="w-full mt-4"
-						children="Current Plan"
 						{...buttonProps}
-					></Button>
+					>
+						Current Plan
+					</Button>
 				) : (
-					<Button
-						className="w-full mt-4"
-						children={<>{custom ? "Contact Us" : "Upgrade"}</>}
-						{...buttonProps}
-					/>
+					<Button className="w-full mt-4" {...buttonProps}>
+						{custom ? "Contact Us" : "Upgrade"}
+					</Button>
 				)
 			) : null}
 		</div>
