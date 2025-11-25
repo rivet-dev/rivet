@@ -10,6 +10,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
+import { Bot, Gamepad2, FileText, Workflow, Database } from "lucide-react";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
 import { LogoContextMenu } from "./LogoContextMenu";
@@ -43,6 +44,99 @@ function TextNavItem({
 					{children}
 				</Link>
 			</RivetHeader.NavItem>
+		</div>
+	);
+}
+
+function SolutionsDropdown({ active }: { active?: boolean }) {
+	const [isOpen, setIsOpen] = useState(false);
+
+	const solutions = [
+		{ 
+			label: "Agents", 
+			href: "/solutions/agents",
+			icon: Bot,
+			description: "Build durable AI assistants"
+		},
+		{ 
+			label: "Game Servers", 
+			href: "/solutions/game-servers",
+			icon: Gamepad2,
+			description: "Authoritative multiplayer servers"
+		},
+		{ 
+			label: "Collaborative State", 
+			href: "/solutions/collaborative-state",
+			icon: FileText,
+			description: "Real-time collaboration"
+		},
+		{ 
+			label: "Workflows", 
+			href: "/solutions/workflows",
+			icon: Workflow,
+			description: "Durable multi-step processes"
+		},
+		{ 
+			label: "User-Session Store", 
+			href: "/solutions/user-session-store",
+			icon: Database,
+			description: "Isolated user data stores"
+		},
+	];
+
+	return (
+		<div 
+			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-opacity duration-200"
+			onMouseEnter={() => setIsOpen(true)}
+			onMouseLeave={() => setIsOpen(false)}
+		>
+			<DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
+				<DropdownMenuTrigger asChild>
+					<RivetHeader.NavItem
+						className={cn(
+							"text-white cursor-pointer flex items-center gap-1",
+							active && "opacity-100",
+						)}
+					>
+						Solutions
+						<Icon icon={faChevronDown} className="h-3 w-3 ml-0.5" />
+					</RivetHeader.NavItem>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent 
+					align="start" 
+					className="min-w-[600px] p-6 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
+					onMouseEnter={() => setIsOpen(true)}
+					onMouseLeave={() => setIsOpen(false)}
+					sideOffset={8}
+					alignOffset={0}
+					side="bottom"
+				>
+					<div className="grid grid-cols-2 gap-x-8 gap-y-5">
+						{solutions.map((solution) => {
+							const IconComponent = solution.icon;
+							return (
+								<Link
+									key={solution.href}
+									href={solution.href}
+									className="group flex items-start gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer -m-3"
+								>
+									<div className="flex-shrink-0 w-10 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center group-hover:border-white/20 group-hover:bg-white/10 transition-colors">
+										<IconComponent className="w-5 h-5 text-white" />
+									</div>
+									<div className="flex-1 min-w-0 pt-0.5">
+										<div className="font-medium text-white mb-1.5 text-sm group-hover:text-white transition-colors">
+											{solution.label}
+										</div>
+										<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
+											{solution.description}
+										</div>
+									</div>
+								</Link>
+							);
+						})}
+					</div>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</div>
 	);
 }
@@ -149,6 +243,7 @@ export function Header({
 						}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
+								<SolutionsDropdown active={active === "solutions"} />
 								<TextNavItem
 									href="/docs"
 									ariaCurrent={
@@ -229,6 +324,7 @@ export function Header({
 			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
+					<SolutionsDropdown active={active === "solutions"} />
 					<TextNavItem
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}
@@ -276,9 +372,18 @@ function DocsMobileNavigation({ tree }) {
 	];
 
 	const mainLinks = [
+		{ href: "/solutions", label: "Solutions", isDropdown: true },
 		{ href: "/docs", label: "Documentation" },
 		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },
+	];
+
+	const solutions = [
+		{ label: "Agents", href: "/solutions/agents" },
+		{ label: "Game Servers", href: "/solutions/game-servers" },
+		{ label: "Collaborative State", href: "/solutions/collaborative-state" },
+		{ label: "Workflows", href: "/solutions/workflows" },
+		{ label: "User-Session Store", href: "/solutions/user-session-store" },
 	];
 
 	const currentSection = sections.find(s => s.id === getCurrentSection());
@@ -286,11 +391,37 @@ function DocsMobileNavigation({ tree }) {
 	return (
 		<div className="flex flex-col gap-1 font-v2 subpixel-antialiased text-sm">
 			{/* Main navigation links */}
-			{mainLinks.map(({ href, label }) => (
-				<Link key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
-					{label}
-				</Link>
-			))}
+			{mainLinks.map(({ href, label, isDropdown }) => {
+				if (isDropdown) {
+					return (
+						<div key={href} className="flex flex-col">
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button variant="outline" className="w-full justify-between h-9 text-sm">
+										{label}
+										<Icon icon={faChevronDown} className="h-3.5 w-3.5 ml-2" />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent className="w-[calc(100vw-3rem)]">
+									{solutions.map((solution) => (
+										<DropdownMenuItem
+											key={solution.href}
+											onClick={() => router.push(solution.href)}
+										>
+											{solution.label}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+					);
+				}
+				return (
+					<Link key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
+						{label}
+					</Link>
+				);
+			})}
 
 			{/* Separator and docs content */}
 			{isDocsPage && (
