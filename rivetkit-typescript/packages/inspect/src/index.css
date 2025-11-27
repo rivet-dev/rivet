@@ -1,0 +1,17 @@
+@import "./components/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.bg-stripes {
+	background: repeating-linear-gradient(
+		45deg,
+		/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+		theme("colors.primary.DEFAULT" / 5%),
+		/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+		theme("colors.primary.DEFAULT" / 5%) 20px,
+		transparent 20px,
+		transparent 40px
+	);
+}
