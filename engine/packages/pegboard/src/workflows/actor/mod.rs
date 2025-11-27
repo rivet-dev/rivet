@@ -320,7 +320,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											.await?;
 
 											// Send signal to stop actor now that we know it will be sleeping
-											ctx.signal(crate::workflows::runner::Command {
+											ctx.signal(crate::workflows::runner2::Command {
 												inner: protocol::Command::CommandStopActor(
 													protocol::CommandStopActor {
 														actor_id: input.actor_id.to_string(),
@@ -349,7 +349,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											ctx.signal(crate::workflows::runner::Command {
+											ctx.signal(crate::workflows::runner2::Command {
 												inner: protocol::Command::CommandStopActor(
 													protocol::CommandStopActor {
 														actor_id: input.actor_id.to_string(),
@@ -492,7 +492,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								})
 								.await?;
 
-								ctx.signal(crate::workflows::runner::Command {
+								ctx.signal(crate::workflows::runner2::Command {
 									inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
 										actor_id: input.actor_id.to_string(),
 										generation: state.generation,
@@ -506,7 +506,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						Main::Destroy(_) => {
 							// If allocated, send stop actor command
 							if let Some(runner_workflow_id) = state.runner_workflow_id {
-								ctx.signal(crate::workflows::runner::Command {
+								ctx.signal(crate::workflows::runner2::Command {
 									inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
 										actor_id: input.actor_id.to_string(),
 										generation: state.generation,
@@ -623,7 +623,7 @@ async fn handle_stopped(
 	if let (StoppedVariant::Lost { .. }, Some(old_runner_workflow_id)) =
 		(&variant, old_runner_workflow_id)
 	{
-		ctx.signal(crate::workflows::runner::Command {
+		ctx.signal(crate::workflows::runner2::Command {
 			inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
 				actor_id: input.actor_id.to_string(),
 				generation: state.generation,

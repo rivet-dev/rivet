@@ -358,7 +358,7 @@ async fn handle_message(
 		| protocol::ToServer::ToServerEvents(_)
 		| protocol::ToServer::ToServerAckCommands(_)
 		| protocol::ToServer::ToServerStopping => {
-			ctx.signal(pegboard::workflows::runner::Forward {
+			ctx.signal(pegboard::workflows::runner2::Forward {
 				inner: protocol::ToServer::try_from(msg)
 					.context("failed to convert message for workflow forwarding")?,
 			})

@@ -55,7 +55,7 @@ async fn update_runner_ping(ctx: &StandaloneCtx, conn: &Conn) -> Result<()> {
 		if let RunnerEligibility::ReEligible = notif.eligibility {
 			tracing::debug!(runner_id=?notif.runner_id, "runner has become eligible again");
 
-			ctx.signal(pegboard::workflows::runner::CheckQueue {})
+			ctx.signal(pegboard::workflows::runner2::CheckQueue {})
 				.to_workflow_id(notif.workflow_id)
 				.send()
 				.await?;
