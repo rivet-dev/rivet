@@ -1,7 +1,6 @@
-use std::{path::Path, result::Result::Ok, str::FromStr};
+use std::{path::Path, result::Result::Ok};
 
 use anyhow::*;
-use rivet_util::Id;
 use serde_json::json;
 
 pub struct ShellQuery {
@@ -70,29 +69,6 @@ pub async fn clickhouse_shell(
 		}
 
 		cmd.status()?;
-	}
-
-	Ok(())
-}
-
-pub async fn wf_sqlite_shell(
-	config: rivet_config::Config,
-	shell_ctx: ShellContext<'_>,
-	_internal: bool,
-) -> Result<()> {
-	let ShellContext { queries, .. } = shell_ctx;
-
-	let _pools = rivet_pools::Pools::new(config.clone()).await?;
-
-	// Combine all queries into one command
-	for ShellQuery {
-		svc: workflow_id,
-		query: _query,
-	} in queries
-	{
-		let _workflow_id = Id::from_str(workflow_id).context("could not parse input as Id")?;
-
-		todo!();
 	}
 
 	Ok(())

@@ -42,12 +42,32 @@ impl State {
 pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.activity(InitInput {
 		runner_id: input.runner_id,
+		namespace_id: input.namespace_id,
 		name: input.name.clone(),
 		key: input.key.clone(),
-		namespace_id: input.namespace_id,
+		version: input.version,
+		total_slots: input.total_slots,
+		protocol_version: input.protocol_version,
 		create_ts: ctx.create_ts(),
 	})
 	.await?;
+
+	// Check for pending actors
+	let res = ctx
+		.activity(AllocatePendingActorsInput {
+			namespace_id: input.namespace_id,
+			name: input.name.clone(),
+		})
+		.await?;
+
+	// Dispatch pending allocs
+	for alloc in res.allocations {
+		ctx.signal(alloc.signal)
+			.to_workflow::<crate::workflows::actor::Workflow>()
+			.tag("actor_id", alloc.actor_id)
+			.send()
+			.await?;
+	}
 
 	ctx.loope(LifecycleState::new(), |ctx, state| {
 		let input = input.clone();
@@ -61,34 +81,10 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 			{
 				Some(Main::Init(_)) => {
 					if !state.draining {
-						ctx.activity(InsertDbInput {
+						ctx.activity(MarkEligibleInput {
 							runner_id: input.runner_id,
-							namespace_id: input.namespace_id,
-							name: input.name.clone(),
-							key: input.key.clone(),
-							version: input.version,
-							total_slots: input.total_slots,
-							protocol_version: input.protocol_version,
-							create_ts: ctx.create_ts(),
 						})
 						.await?;
-
-						// Check for pending actors
-						let res = ctx
-							.activity(AllocatePendingActorsInput {
-								namespace_id: input.namespace_id,
-								name: input.name.clone(),
-							})
-							.await?;
-
-						// Dispatch pending allocs
-						for alloc in res.allocations {
-							ctx.signal(alloc.signal)
-								.to_workflow::<crate::workflows::actor::Workflow>()
-								.tag("actor_id", alloc.actor_id)
-								.send()
-								.await?;
-						}
 					}
 				}
 				Some(Main::CheckQueue(_)) => {
@@ -118,8 +114,6 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 							runner_id: input.runner_id,
 						})
 						.await?;
-
-					// TODO: Periodically ack events
 
 					if state.draining || expired {
 						return Ok(Loop::Break(()));
@@ -238,48 +232,6 @@ impl LifecycleState {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct InitInput {
 	runner_id: Id,
-	name: String,
-	key: String,
-	namespace_id: Id,
-	create_ts: i64,
-}
-
-#[activity(InitActivity)]
-async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
-	let mut state = ctx.state::<Option<State>>()?;
-
-	*state = Some(State::new(input.namespace_id, input.create_ts));
-
-	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
-
-			let runner_by_key_key = keys::ns::RunnerByKeyKey::new(
-				input.namespace_id,
-				input.name.clone(),
-				input.key.clone(),
-			);
-
-			// Allocate self
-			tx.write(
-				&runner_by_key_key,
-				RunnerByKeyKeyData {
-					runner_id: input.runner_id,
-					workflow_id: ctx.workflow_id(),
-				},
-			)?;
-
-			Ok(())
-		})
-		.custom_instrument(tracing::info_span!("runner_init_tx"))
-		.await?;
-
-	Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct InsertDbInput {
-	runner_id: Id,
 	namespace_id: Id,
 	name: String,
 	key: String,
@@ -289,8 +241,12 @@ struct InsertDbInput {
 	create_ts: i64,
 }
 
-#[activity(InsertDb)]
-async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
+#[activity(InitActivity)]
+async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
+	let mut state = ctx.state::<Option<State>>()?;
+
+	*state = Some(State::new(input.namespace_id, input.create_ts));
+
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
@@ -305,6 +261,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 			)?;
 			let now = util::timestamp::now();
 
+			// TODO: Do we still need to check if it already exists? this txn is only run once
 			// See if key already exists
 			let existing = if let (Some(remaining_slots), Some(last_ping_ts)) =
 				(remaining_slots_entry, last_ping_ts_entry)
@@ -355,6 +312,11 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 				)?;
 
 				tx.write(&last_ping_ts_key, now)?;
+
+				tx.write(
+					&keys::runner::ProtocolVersionKey::new(input.runner_id),
+					input.protocol_version,
+				)?;
 
 				// Populate ns indexes
 				tx.write(
@@ -424,10 +386,44 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 				},
 			)?;
 
+			let runner_by_key_key = keys::ns::RunnerByKeyKey::new(
+				input.namespace_id,
+				input.name.clone(),
+				input.key.clone(),
+			);
+
+			// Allocate self
+			tx.write(
+				&runner_by_key_key,
+				RunnerByKeyKeyData {
+					runner_id: input.runner_id,
+					workflow_id: ctx.workflow_id(),
+				},
+			)?;
+
 			Ok(())
 		})
-		.custom_instrument(tracing::info_span!("runner_insert_tx"))
+		.custom_instrument(tracing::info_span!("runner_init_tx"))
 		.await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct MarkEligibleInput {
+	runner_id: Id,
+}
+
+#[activity(MarkEligible)]
+async fn mark_eligible(ctx: &ActivityCtx, input: &MarkEligibleInput) -> Result<()> {
+	// Mark eligible
+	ctx.op(crate::ops::runner::update_alloc_idx::Input {
+		runners: vec![crate::ops::runner::update_alloc_idx::Runner {
+			runner_id: input.runner_id,
+			action: crate::ops::runner::update_alloc_idx::Action::AddIdx,
+		}],
+	})
+	.await?;
 
 	Ok(())
 }
@@ -487,6 +483,11 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 						namespace_id,
 						input.name.clone(),
 						create_ts,
+						input.runner_id,
+					));
+
+					// Clear all actor data like commands
+					tx.delete_key_subspace(&keys::runner::ActorDataSubspaceKey::new(
 						input.runner_id,
 					));
 				}
@@ -810,4 +811,5 @@ join_signal!(Main {
 	Init,
 	CheckQueue,
 	Stop,
+	// Comment to prevent invalid formatting
 });

@@ -18,7 +18,6 @@ export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 4;
-const RUNNER_PING_INTERVAL = 3_000;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -197,9 +196,6 @@ export class Runner {
 	// WebSocket
 	__pegboardWebSocket?: WebSocket;
 	runnerId?: string;
-	#lastCommandIdx: number = -1;
-	#pingLoop?: NodeJS.Timeout;
-	#nextEventIdx: bigint = 0n;
 	#started: boolean = false;
 	#shutdown: boolean = false;
 	#shuttingDown: boolean = false;
@@ -211,7 +207,6 @@ export class Runner {
 	#runnerLostTimeout?: NodeJS.Timeout;
 
 	// Event storage for resending
-	#eventHistory: protocol.EventWrapper[] = [];
 	#eventBacklogWarned: boolean = false;
 
 	// Command acknowledgment
@@ -308,10 +303,6 @@ export class Runner {
 	}
 
 	#stopAllActors() {
-		this.log?.info({
-			msg: "stopping all actors due to runner lost threshold exceeded",
-		});
-
 		const actorIds = Array.from(this.#actors.keys());
 		for (const actorId of actorIds) {
 			this.forceStopActor(actorId);
@@ -475,12 +466,6 @@ export class Runner {
 		if (this.#runnerLostTimeout) {
 			clearTimeout(this.#runnerLostTimeout);
 			this.#runnerLostTimeout = undefined;
-		}
-
-		// Clear ping loop
-		if (this.#pingLoop) {
-			clearInterval(this.#pingLoop);
-			this.#pingLoop = undefined;
 		}
 
 		// Clear ack interval
@@ -738,10 +723,6 @@ export class Runner {
 				name: this.#config.runnerName,
 				version: this.#config.version,
 				totalSlots: this.#config.totalSlots,
-				lastCommandIdx:
-					this.#lastCommandIdx >= 0
-						? BigInt(this.#lastCommandIdx)
-						: null,
 				prepopulateActorNames: new Map(
 					Object.entries(this.#config.prepopulateActorNames).map(
 						([name, data]) => [
@@ -757,24 +738,6 @@ export class Runner {
 				tag: "ToServerInit",
 				val: init,
 			});
-
-			// Start ping interval
-			const pingLoop = setInterval(() => {
-				if (ws.readyState === 1) {
-					this.__sendToServer({
-						tag: "ToServerPing",
-						val: {
-							ts: BigInt(Date.now()),
-						},
-					});
-				} else {
-					clearInterval(pingLoop);
-					this.log?.info({
-						msg: "WebSocket not open, stopping ping loop",
-					});
-				}
-			}, RUNNER_PING_INTERVAL);
-			this.#pingLoop = pingLoop;
 
 			// Start command acknowledgment interval (5 minutes)
 			const ackInterval = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -815,8 +778,8 @@ export class Runner {
 				if (this.runnerId !== init.runnerId) {
 					this.runnerId = init.runnerId;
 
-					// Clear history if runner id changed
-					this.#eventHistory.length = 0;
+					// Clear actors if runner id changed
+					this.#stopAllActors();
 				}
 
 				// Store the runner lost threshold from metadata
@@ -826,13 +789,12 @@ export class Runner {
 
 				this.log?.info({
 					msg: "received init",
-					lastEventIdx: init.lastEventIdx,
 					runnerLostThreshold: this.#runnerLostThreshold,
 				});
 
 				// Resend pending events
 				this.#processUnsentKvRequests();
-				this.#resendUnacknowledgedEvents(init.lastEventIdx);
+				this.#resendUnacknowledgedEvents();
 				this.#tunnel?.resendBufferedEvents();
 
 				this.#config.onConnected();
@@ -846,9 +808,13 @@ export class Runner {
 				this.#handleKvResponse(kvResponse);
 			} else if (message.tag === "ToClientTunnelMessage") {
 				this.#tunnel?.handleTunnelMessage(message.val);
-			} else if (message.tag === "ToClientClose") {
-				this.#tunnel?.shutdown();
-				ws.close(1000, "manual closure");
+			} else if (message.tag === "ToClientPing") {
+				this.__sendToServer({
+					tag: "ToServerPong",
+					val: {
+						ts: message.val.ts
+					},
+				});
 			} else {
 				unreachable(message);
 			}
@@ -871,6 +837,10 @@ export class Runner {
 						seconds: this.#runnerLostThreshold / 1000,
 					});
 					this.#runnerLostTimeout = setTimeout(() => {
+						this.log?.info({
+							msg: "stopping all actors due to runner lost threshold",
+						});
+
 						this.#stopAllActors();
 					}, this.#runnerLostThreshold);
 				}
@@ -907,12 +877,6 @@ export class Runner {
 				}
 
 				this.#config.onDisconnected(ev.code, ev.reason);
-			}
-
-			// Clear ping loop on close
-			if (this.#pingLoop) {
-				clearInterval(this.#pingLoop);
-				this.#pingLoop = undefined;
 			}
 
 			// Clear ack interval on close
@@ -960,44 +924,52 @@ export class Runner {
 				unreachable(commandWrapper.inner);
 			}
 
-			this.#lastCommandIdx = Number(commandWrapper.index);
+			const actor = this.getActor(commandWrapper.checkpoint.actorId, commandWrapper.inner.val.generation);
+			if (actor) actor.lastCommandIdx = commandWrapper.checkpoint.index;
 		}
 	}
 
 	#handleAckEvents(ack: protocol.ToClientAckEvents) {
-		const lastAckedIdx = ack.lastEventIdx;
+		let originalTotalEvents = Array.from(this.#actors).reduce((s, [_, actor]) => s + actor.eventHistory.length, 0);
 
-		const originalLength = this.#eventHistory.length;
-		this.#eventHistory = this.#eventHistory.filter(
-			(event) => event.index > lastAckedIdx,
-		);
+		for (const [_, actor] of this.#actors) {
+			let checkpoint = ack.lastEventCheckpoints.find(x => x.actorId == actor.actorId);
 
-		const prunedCount = originalLength - this.#eventHistory.length;
+			if (checkpoint) actor.handleAckEvents(checkpoint.index);
+		}
+
+		const totalEvents = Array.from(this.#actors).reduce((s, [_, actor]) => s + actor.eventHistory.length, 0);
+		const prunedCount = originalTotalEvents - totalEvents;
+
 		if (prunedCount > 0) {
 			this.log?.info({
 				msg: "pruned acknowledged events",
-				lastAckedIdx: lastAckedIdx.toString(),
 				prunedCount,
 			});
 		}
 
-		if (this.#eventHistory.length <= EVENT_BACKLOG_WARN_THRESHOLD) {
+		if (totalEvents <= EVENT_BACKLOG_WARN_THRESHOLD) {
 			this.#eventBacklogWarned = false;
 		}
 	}
 
 	/** Track events to send to the server in case we need to resend it on disconnect. */
 	#recordEvent(eventWrapper: protocol.EventWrapper) {
-		this.#eventHistory.push(eventWrapper);
+		const actor = this.getActor(eventWrapper.checkpoint.actorId);
+		if (!actor) return;
+
+		actor.recordEvent(eventWrapper);
+
+		let totalEvents = Array.from(this.#actors).reduce((s, [_, actor]) => s + actor.eventHistory.length, 0);
 
 		if (
-			this.#eventHistory.length > EVENT_BACKLOG_WARN_THRESHOLD &&
+			totalEvents > EVENT_BACKLOG_WARN_THRESHOLD &&
 			!this.#eventBacklogWarned
 		) {
 			this.#eventBacklogWarned = true;
 			this.log?.warn({
 				msg: "unacknowledged event backlog exceeds threshold",
-				backlogSize: this.#eventHistory.length,
+				backlogSize: totalEvents,
 				threshold: EVENT_BACKLOG_WARN_THRESHOLD,
 			});
 		}
@@ -1013,7 +985,7 @@ export class Runner {
 		const startCommand = commandWrapper.inner
 			.val as protocol.CommandStartActor;
 
-		const actorId = startCommand.actorId;
+		const actorId = commandWrapper.checkpoint.actorId;
 		const generation = startCommand.generation;
 		const config = startCommand.config;
 
@@ -1094,7 +1066,7 @@ export class Runner {
 		const stopCommand = commandWrapper.inner
 			.val as protocol.CommandStopActor;
 
-		const actorId = stopCommand.actorId;
+		const actorId = commandWrapper.checkpoint.actorId;
 		const generation = stopCommand.generation;
 
 		await this.forceStopActor(actorId, generation);
@@ -1105,6 +1077,9 @@ export class Runner {
 		generation: number,
 		intentType: "sleep" | "stop",
 	) {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+
 		let actorIntent: protocol.ActorIntent;
 
 		if (intentType === "sleep") {
@@ -1124,9 +1099,11 @@ export class Runner {
 			intent: actorIntent,
 		};
 
-		const eventIndex = this.#nextEventIdx++;
 		const eventWrapper: protocol.EventWrapper = {
-			index: eventIndex,
+			checkpoint: {
+				actorId,
+				index: actor.nextEventIdx++,
+			},
 			inner: {
 				tag: "EventActorIntent",
 				val: intentEvent,
@@ -1146,6 +1123,9 @@ export class Runner {
 		generation: number,
 		stateType: "running" | "stopped",
 	) {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+
 		let actorState: protocol.ActorState;
 
 		if (stateType === "running") {
@@ -1168,9 +1148,11 @@ export class Runner {
 			state: actorState,
 		};
 
-		const eventIndex = this.#nextEventIdx++;
 		const eventWrapper: protocol.EventWrapper = {
-			index: eventIndex,
+			checkpoint: {
+				actorId,
+				index: actor.nextEventIdx++,
+			},
 			inner: {
 				tag: "EventActorStateUpdate",
 				val: stateUpdateEvent,
@@ -1186,9 +1168,18 @@ export class Runner {
 	}
 
 	#sendCommandAcknowledgment() {
-		if (this.#lastCommandIdx < 0) {
-			// No commands received yet, nothing to acknowledge
-			return;
+		const lastCommandCheckpoints = [];
+
+		for (const [_, actor] of this.#actors) {
+			if (actor.lastCommandIdx < 0) {
+				// No commands received yet, nothing to acknowledge
+				continue;
+			}
+
+			lastCommandCheckpoints.push({
+				actorId: actor.actorId,
+				index: actor.lastCommandIdx,
+			});
 		}
 
 		//this.#log?.log("Sending command acknowledgment", this.#lastCommandIdx);
@@ -1196,7 +1187,7 @@ export class Runner {
 		this.__sendToServer({
 			tag: "ToServerAckCommands",
 			val: {
-				lastCommandIdx: BigInt(this.#lastCommandIdx),
+				lastCommandCheckpoints,
 			},
 		});
 	}
@@ -1500,9 +1491,11 @@ export class Runner {
 			alarmTs: alarmTs !== null ? BigInt(alarmTs) : null,
 		};
 
-		const eventIndex = this.#nextEventIdx++;
 		const eventWrapper: protocol.EventWrapper = {
-			index: eventIndex,
+			checkpoint: {
+				actorId,
+				index: actor.nextEventIdx++,
+			},
 			inner: {
 				tag: "EventActorSetAlarm",
 				val: alarmEvent,
@@ -1669,6 +1662,7 @@ export class Runner {
 			tag: "ToServerlessServerInit",
 			val: {
 				runnerId: this.runnerId,
+				runnerProtocolVersion: PROTOCOL_VERSION,
 			},
 		});
 
@@ -1710,16 +1704,18 @@ export class Runner {
 		}, delay);
 	}
 
-	#resendUnacknowledgedEvents(lastEventIdx: bigint) {
-		const eventsToResend = this.#eventHistory.filter(
-			(event) => event.index > lastEventIdx,
-		);
+	#resendUnacknowledgedEvents() {
+		const eventsToResend = [];
+
+		for (const [_, actor] of this.#actors) {
+			eventsToResend.push(...actor.eventHistory);
+		}
 
 		if (eventsToResend.length === 0) return;
 
 		this.log?.info({
 			msg: "resending unacknowledged events",
-			fromIndex: lastEventIdx + 1n,
+			count: eventsToResend.length,
 		});
 
 		// Resend events in batches

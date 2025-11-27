@@ -42,7 +42,8 @@ impl RocksDbDatabaseDriver {
 		opts.create_if_missing(true);
 		opts.set_max_open_files(10000);
 		opts.set_keep_log_file_num(10);
-		opts.set_max_total_wal_size(64 * 1024 * 1024); // 64MB
+		opts.set_max_total_wal_size(64 * 1024 * 1024); // 64MiB
+		opts.set_write_buffer_size(256 * 1024 * 1024); // 256MiB for conflict detection
 
 		// Open the OptimisticTransactionDB
 		tracing::debug!(path=%db_path.display(), "opening rocksdb");

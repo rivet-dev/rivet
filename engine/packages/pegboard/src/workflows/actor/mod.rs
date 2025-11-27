@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_runner_protocol as protocol;
@@ -11,6 +13,9 @@ mod runtime;
 mod setup;
 
 pub use runtime::AllocationOverride;
+
+/// Batch size of how many events to ack.
+const EVENT_ACK_BATCH_SIZE: i64 = 250;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
@@ -26,7 +31,7 @@ pub struct Input {
 	pub input: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize)]
 pub struct State {
 	pub name: String,
 	pub key: Option<String>,
@@ -57,6 +62,8 @@ pub struct State {
 	// Null if not allocated
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
+	#[serde(default)]
+	pub runner_states: HashMap<Id, RunnerState>,
 }
 
 impl State {
@@ -92,6 +99,20 @@ impl State {
 
 			runner_id: None,
 			runner_workflow_id: None,
+			runner_states: HashMap::new(),
+		}
+	}
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct RunnerState {
+	pub last_command_idx: i64,
+}
+
+impl Default for RunnerState {
+	fn default() -> Self {
+		RunnerState {
+			last_command_idx: -1,
 		}
 	}
 }
@@ -250,55 +271,66 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		};
 
 	let lifecycle_res = ctx
-		.loope(
-			lifecycle_state,
-			|ctx, state| {
-				let input = input.clone();
+		.loope(lifecycle_state, |ctx, state| {
+			let input = input.clone();
 
-				async move {
-					let sig = if let Some(gc_timeout_ts) = state.gc_timeout_ts {
-						// Listen for signal with gc timeout. if a timeout happens, it means this actor is lost
-						if let Some(sig) = ctx.listen_until::<Main>(gc_timeout_ts).await? {
-							sig
-						} else {
-							tracing::warn!(actor_id=?input.actor_id, "actor lost");
+			async move {
+				let signals = if let Some(gc_timeout_ts) = state.gc_timeout_ts {
+					// Listen for signals with gc timeout. if a timeout happens, it means this actor is lost
+					let signals = ctx.listen_n_until::<Main>(gc_timeout_ts, 1024).await?;
+					if signals.is_empty() {
+						tracing::warn!(actor_id=?input.actor_id, "actor lost");
 
-							// Fake signal
-							Main::Lost(Lost {
-								generation: state.generation,
-								force_reschedule: false,
-								reset_rescheduling: false,
-							})
-						}
-					} else if let Some(alarm_ts) = state.alarm_ts {
-						// Listen for signal with timeout. if a timeout happens, it means this actor should
-						// wake up
-						if let Some(sig) = ctx.listen_until::<Main>(alarm_ts).await? {
-							sig
-						} else {
-							tracing::debug!(actor_id=?input.actor_id, "actor wake");
-
-							// Fake signal
-							Main::Wake(Wake { allocation_override: AllocationOverride::DontSleep { pending_timeout: None } })
-						}
+						// Fake signal
+						vec![Main::Lost(Lost {
+							generation: state.generation,
+							force_reschedule: false,
+							reset_rescheduling: false,
+						})]
 					} else {
-						// Listen for signal normally
-						ctx.listen::<Main>().await?
-					};
+						signals
+					}
+				} else if let Some(alarm_ts) = state.alarm_ts {
+					// Listen for signals with timeout. if a timeout happens, it means this actor should
+					// wake up
+					let signals = ctx.listen_n_until::<Main>(alarm_ts, 1024).await?;
+					if signals.is_empty() {
+						tracing::debug!(actor_id=?input.actor_id, "actor wake");
 
+						// Fake signal
+						vec![Main::Wake(Wake {
+							allocation_override: AllocationOverride::DontSleep {
+								pending_timeout: None,
+							},
+						})]
+					} else {
+						signals
+					}
+				} else {
+					// Listen for signals normally
+					ctx.listen_n::<Main>(1024).await?
+				};
+
+				for sig in signals {
 					match sig {
+						// NOTE: This is only received when allocated to mk1 runner
 						Main::Event(sig) => {
-							// Ignore state updates for previous generations
-							if crate::utils::event_generation(&sig.inner) != state.generation {
-								return Ok(Loop::Continue);
-							}
-
-							let (Some(runner_id), Some(runner_workflow_id), Some(runner_protocol_version)) =
-								(state.runner_id, state.runner_workflow_id, state.runner_protocol_version)
+							let (
+								Some(runner_id),
+								Some(runner_workflow_id),
+							) = (
+								state.runner_id,
+								state.runner_workflow_id,
+							)
 							else {
 								tracing::warn!("actor not allocated, ignoring event");
-								return Ok(Loop::Continue);
+								continue;
 							};
+
+							// Ignore events for previous generations
+							if crate::utils::event_generation_mk1(&sig.inner) != state.generation {
+								continue;
+							}
 
 							match sig.inner {
 								protocol::Event::EventActorIntent(protocol::EventActorIntent {
@@ -321,22 +353,18 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											if protocol::is_mk2(runner_protocol_version) {
-												// TODO: Send message to tunnel
-											} else {
-												// Send signal to stop actor now that we know it will be sleeping
-												ctx.signal(crate::workflows::runner::Command {
-													inner: protocol::Command::CommandStopActor(
-														protocol::CommandStopActor {
-															actor_id: input.actor_id.to_string(),
-															generation: state.generation,
-														},
-													),
-												})
-												.to_workflow_id(runner_workflow_id)
-												.send()
-												.await?;
-											}
+											// Send signal to stop actor now that we know it will be sleeping
+											ctx.signal(crate::workflows::runner::Command {
+												inner: protocol::Command::CommandStopActor(
+													protocol::CommandStopActor {
+														actor_id: input.actor_id.to_string(),
+														generation: state.generation,
+													},
+												),
+											})
+											.to_workflow_id(runner_workflow_id)
+											.send()
+											.await?;
 										}
 									}
 									protocol::ActorIntent::ActorIntentStop => {
@@ -355,21 +383,17 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											if protocol::is_mk2(runner_protocol_version) {
-												// TODO: Send message to tunnel
-											} else {
-												ctx.signal(crate::workflows::runner::Command {
-													inner: protocol::Command::CommandStopActor(
-														protocol::CommandStopActor {
-															actor_id: input.actor_id.to_string(),
-															generation: state.generation,
-														},
-													),
-												})
-												.to_workflow_id(runner_workflow_id)
-												.send()
-												.await?;
-											}
+											ctx.signal(crate::workflows::runner::Command {
+												inner: protocol::Command::CommandStopActor(
+													protocol::CommandStopActor {
+														actor_id: input.actor_id.to_string(),
+														generation: state.generation,
+													},
+												),
+											})
+											.to_workflow_id(runner_workflow_id)
+											.send()
+											.await?;
 										}
 									}
 								},
@@ -398,7 +422,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											ctx,
 											&input,
 											state,
-											StoppedVariant::Normal { code },
+											StoppedVariant::Normal {
+												code: match code {
+													protocol::StopCode::Ok => protocol::mk2::StopCode::Ok,
+													protocol::StopCode::Error => protocol::mk2::StopCode::Error,
+												}
+											},
 										)
 										.await?
 										{
@@ -415,6 +444,168 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								}
 							}
 						}
+						// NOTE: This signal is only received when allocated to a mk2 runner
+						Main::Events(sig) => {
+							let Some(runner_id) = state.runner_id else {
+								tracing::warn!("actor not allocated, ignoring events");
+								continue;
+							};
+
+							if sig.runner_id != runner_id {
+								tracing::debug!("events not from current runner, ignoring");
+								continue;
+							}
+
+							// Fetch the last event index for the current runner
+							let last_event_idx =
+								state.runner_states.entry(runner_id).or_default().last_event_idx;
+
+							// Filter already received events and events from previous generations
+							let generation = state.generation;
+							let new_events = sig.events
+								.iter()
+								.filter(|event| {
+									event.checkpoint.index > last_event_idx &&
+									crate::utils::event_generation(&event.inner) == generation
+								});
+							let new_last_event_idx =
+								new_events.clone().last().map(|event| event.checkpoint.index);
+
+							for event in new_events {
+								match &event.inner {
+									protocol::mk2::Event::EventActorIntent(
+										protocol::mk2::EventActorIntent { intent, .. },
+									) => match intent {
+										protocol::mk2::ActorIntent::ActorIntentSleep => {
+											if !state.sleeping {
+												state.gc_timeout_ts = Some(
+													util::timestamp::now()
+														+ ctx
+															.config()
+															.pegboard()
+															.actor_stop_threshold(),
+												);
+												state.sleeping = true;
+
+												ctx.activity(runtime::SetSleepingInput {
+													actor_id: input.actor_id,
+												})
+												.await?;
+
+												ctx.activity(runtime::InsertAndSendCommandsInput {
+													actor_id: input.actor_id,
+													runner_id,
+													commands: vec![protocol::mk2::Command::CommandStopActor(
+														protocol::mk2::CommandStopActor {
+															generation: state.generation,
+														},
+													)],
+												})
+												.await?;
+											}
+										}
+										protocol::mk2::ActorIntent::ActorIntentStop => {
+											if !state.stopping {
+												state.gc_timeout_ts = Some(
+													util::timestamp::now()
+														+ ctx
+															.config()
+															.pegboard()
+															.actor_stop_threshold(),
+												);
+												state.stopping = true;
+
+												ctx.activity(runtime::SetNotConnectableInput {
+													actor_id: input.actor_id,
+												})
+												.await?;
+
+												ctx.activity(runtime::InsertAndSendCommandsInput {
+													actor_id: input.actor_id,
+													runner_id,
+													commands: vec![protocol::mk2::Command::CommandStopActor(
+														protocol::mk2::CommandStopActor {
+															generation: state.generation,
+														},
+													)],
+												})
+												.await?;
+											}
+										}
+									},
+									protocol::mk2::Event::EventActorStateUpdate(
+										protocol::mk2::EventActorStateUpdate {
+											state: actor_state,
+											..
+										},
+									) => match actor_state {
+										protocol::mk2::ActorState::ActorStateRunning => {
+											state.gc_timeout_ts = None;
+
+											ctx.activity(runtime::SetStartedInput {
+												actor_id: input.actor_id,
+											})
+											.await?;
+
+											ctx.msg(Ready { runner_id })
+												.tag("actor_id", input.actor_id)
+												.send()
+												.await?;
+										}
+										protocol::mk2::ActorState::ActorStateStopped(
+											protocol::mk2::ActorStateStopped { code, .. },
+										) => {
+											if let StoppedResult::Destroy = handle_stopped(
+												ctx,
+												&input,
+												state,
+												StoppedVariant::Normal { code: code.clone() },
+											)
+											.await?
+											{
+												return Ok(Loop::Break(runtime::LifecycleResult {
+													generation: state.generation,
+												}));
+											}
+										}
+									},
+									protocol::mk2::Event::EventActorSetAlarm(
+										protocol::mk2::EventActorSetAlarm { alarm_ts, .. },
+									) => {
+										state.alarm_ts = *alarm_ts;
+									}
+								}
+							}
+
+							if let Some(new_last_event_idx) = new_last_event_idx {
+								// Reborrow for mutability guarantees
+								let runner_state = state.runner_states.entry(runner_id).or_default();
+
+								runner_state.last_event_idx = runner_state.last_event_idx.max(new_last_event_idx);
+
+								// Ack events in batch
+								if runner_state.last_event_idx
+									> runner_state.last_event_ack_idx.saturating_add(EVENT_ACK_BATCH_SIZE)
+								{
+									runner_state.last_event_ack_idx = runner_state.last_event_idx;
+
+									ctx.activity(runtime::SendMessagesToRunnerInput {
+										runner_id,
+										messages: vec![protocol::mk2::ToRunner::ToClientAckEvents(
+											protocol::mk2::ToClientAckEvents {
+												last_event_checkpoints: vec![
+													protocol::mk2::ActorCheckpoint {
+														actor_id: input.actor_id.to_string(),
+														index: runner_state.last_event_ack_idx,
+													},
+												],
+											},
+										)],
+									})
+									.await?;
+								}
+							}
+						}
 						Main::Wake(sig) => {
 							if state.sleeping {
 								if state.runner_id.is_none() {
@@ -422,8 +613,13 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									state.sleeping = false;
 									state.will_wake = false;
 
-									match runtime::reschedule_actor(ctx, &input, state, sig.allocation_override)
-										.await?
+									match runtime::reschedule_actor(
+										ctx,
+										&input,
+										state,
+										sig.allocation_override,
+									)
+									.await?
 									{
 										runtime::SpawnActorOutput::Allocated { .. } => {}
 										runtime::SpawnActorOutput::Sleep => {
@@ -454,7 +650,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						Main::Lost(sig) => {
 							// Ignore signals for previous generations
 							if sig.generation != state.generation {
-								return Ok(Loop::Continue);
+								continue;
 							}
 
 							if sig.reset_rescheduling {
@@ -479,7 +675,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						Main::GoingAway(sig) => {
 							// Ignore signals for previous generations
 							if sig.generation != state.generation {
-								return Ok(Loop::Continue);
+								continue;
 							}
 
 							if sig.reset_rescheduling {
@@ -487,8 +683,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}
 
 							if !state.going_away {
-								let (Some(runner_workflow_id), Some(runner_protocol_version)) = (state.runner_workflow_id, state.runner_protocol_version) else {
-									return Ok(Loop::Continue);
+								let (Some(runner_id), Some(runner_workflow_id), Some(runner_protocol_version)) =
+									(state.runner_id, state.runner_workflow_id, state.runner_protocol_version)
+								else {
+									continue;
 								};
 
 								state.gc_timeout_ts = Some(
@@ -503,13 +701,24 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								.await?;
 
 								if protocol::is_mk2(runner_protocol_version) {
-									// TODO: Send message to tunnel
+									ctx.activity(runtime::InsertAndSendCommandsInput {
+										actor_id: input.actor_id,
+										runner_id,
+										commands: vec![protocol::mk2::Command::CommandStopActor(
+											protocol::mk2::CommandStopActor {
+												generation: state.generation,
+											},
+										)],
+									})
+									.await?;
 								} else {
 									ctx.signal(crate::workflows::runner::Command {
-										inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-											actor_id: input.actor_id.to_string(),
-											generation: state.generation,
-										}),
+										inner: protocol::Command::CommandStopActor(
+											protocol::CommandStopActor {
+												actor_id: input.actor_id.to_string(),
+												generation: state.generation,
+											},
+										),
 									})
 									.to_workflow_id(runner_workflow_id)
 									.send()
@@ -519,15 +728,28 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						}
 						Main::Destroy(_) => {
 							// If allocated, send stop actor command
-							if let (Some(runner_workflow_id), Some(runner_protocol_version)) = (state.runner_workflow_id, state.runner_protocol_version) {
+							if let (Some(runner_id), Some(runner_workflow_id), Some(runner_protocol_version)) =
+								(state.runner_id, state.runner_workflow_id, state.runner_protocol_version)
+							{
 								if protocol::is_mk2(runner_protocol_version) {
-									// TODO: Send message to tunnel
+									ctx.activity(runtime::InsertAndSendCommandsInput {
+										actor_id: input.actor_id,
+										runner_id,
+										commands: vec![protocol::mk2::Command::CommandStopActor(
+											protocol::mk2::CommandStopActor {
+												generation: state.generation,
+											},
+										)],
+									})
+									.await?;
 								} else {
 									ctx.signal(crate::workflows::runner::Command {
-										inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-											actor_id: input.actor_id.to_string(),
-											generation: state.generation,
-										}),
+										inner: protocol::Command::CommandStopActor(
+											protocol::CommandStopActor {
+												actor_id: input.actor_id.to_string(),
+												generation: state.generation,
+											},
+										),
 									})
 									.to_workflow_id(runner_workflow_id)
 									.send()
@@ -540,12 +762,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}));
 						}
 					}
-
-					Ok(Loop::Continue)
 				}
-				.boxed()
-			},
-		)
+
+				Ok(Loop::Continue)
+			}
+			.boxed()
+		})
 		.await?;
 
 	// At this point, the actor is not allocated so no cleanup related to alloc idx/desired slots needs to be
@@ -566,7 +788,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 #[derive(Debug)]
 enum StoppedVariant {
-	Normal { code: protocol::StopCode },
+	Normal { code: protocol::mk2::StopCode },
 	Lost { force_reschedule: bool },
 }
 
@@ -586,7 +808,7 @@ async fn handle_stopped(
 	let force_reschedule = match &variant {
 		StoppedVariant::Normal { code } => {
 			// Reset retry count on successful exit
-			if let protocol::StopCode::Ok = code {
+			if let protocol::mk2::StopCode::Ok = code {
 				state.reschedule_state = Default::default();
 			}
 
@@ -598,7 +820,7 @@ async fn handle_stopped(
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
 	state.stopping = false;
-	state.runner_id = None;
+	let old_runner_id = state.runner_id.take();
 	let old_runner_workflow_id = state.runner_workflow_id.take();
 	let old_runner_protocol_version = state.runner_protocol_version.take();
 
@@ -641,15 +863,26 @@ async fn handle_stopped(
 	// command in case it ended up allocating
 	if let (
 		StoppedVariant::Lost { .. },
+		Some(old_runner_id),
 		Some(old_runner_workflow_id),
 		Some(old_runner_protocol_version),
 	) = (
 		&variant,
+		old_runner_id,
 		old_runner_workflow_id,
 		old_runner_protocol_version,
 	) {
 		if protocol::is_mk2(old_runner_protocol_version) {
-			// TODO: Send message to tunnel
+			ctx.activity(runtime::InsertAndSendCommandsInput {
+				actor_id: input.actor_id,
+				runner_id: old_runner_id,
+				commands: vec![protocol::mk2::Command::CommandStopActor(
+					protocol::mk2::CommandStopActor {
+						generation: state.generation,
+					},
+				)],
+			})
+			.await?;
 		} else {
 			ctx.signal(crate::workflows::runner::Command {
 				inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
@@ -695,7 +928,7 @@ async fn handle_stopped(
 			&& matches!(
 				variant,
 				StoppedVariant::Normal {
-					code: protocol::StopCode::Ok
+					code: protocol::mk2::StopCode::Ok
 				}
 			);
 
@@ -752,6 +985,21 @@ async fn handle_stopped(
 		.send()
 		.await?;
 
+	let res = ctx
+		.activity(runtime::CheckRunnersInput {
+			seen_runners: state
+				.runner_states
+				.iter()
+				.map(|(runner_id, _)| *runner_id)
+				.collect(),
+		})
+		.await?;
+
+	// Clean up state
+	for runner_id in res.remove_runners {
+		state.runner_states.remove(&runner_id);
+	}
+
 	Ok(StoppedResult::Continue)
 }
 
@@ -787,7 +1035,8 @@ pub struct Event {
 
 #[signal("pegboard_actor_events")]
 pub struct Events {
-	pub inner: Vec<protocol::Event>,
+	pub runner_id: Id,
+	pub events: Vec<protocol::mk2::EventWrapper>,
 }
 
 #[signal("pegboard_actor_wake")]
@@ -832,9 +1081,11 @@ join_signal!(PendingAllocation {
 });
 
 join_signal!(Main {
-	Event(Event),
+	Event,
+	Events,
 	Wake,
 	Lost,
 	GoingAway,
 	Destroy,
+	// Comment to prevent invalid formatting
 });

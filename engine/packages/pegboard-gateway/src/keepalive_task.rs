@@ -52,7 +52,7 @@ pub async fn task(
 			ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
 				actor_id,
 				gateway_id,
-				request_id,
+				request_id
 			}),
 			// Keep alive in flight req during hibernation
 			shared_state.keepalive_hws(request_id),

@@ -63,12 +63,9 @@ impl PostgresDatabaseDriver {
 			.await
 			.context("failed to create btree_gist extension")?;
 
-		conn.execute(
-			"CREATE UNLOGGED SEQUENCE IF NOT EXISTS global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1",
-			&[],
-		)
-		.await
-		.context("failed to create global version sequence")?;
+		conn.execute("CREATE UNLOGGED SEQUENCE IF NOT EXISTS global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1", &[])
+			.await
+			.context("failed to create global version sequence")?;
 
 		// Create the KV table if it doesn't exist
 		conn.execute(

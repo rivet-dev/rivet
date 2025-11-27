@@ -175,25 +175,25 @@ async fn start_websocket_server() -> SocketAddr {
 										match message_result {
 											Ok(msg) => {
 												match &msg {
-                                                    hyper_tungstenite::tungstenite::Message::Text(text) => {
-                                                        println!("Server: Received text message: {}", text);
-                                                    },
-                                                    hyper_tungstenite::tungstenite::Message::Binary(data) => {
-                                                        println!("Server: Received binary message of {} bytes", data.len());
-                                                    },
-                                                    hyper_tungstenite::tungstenite::Message::Ping(_) => {
-                                                        println!("Server: Received ping");
-                                                    },
-                                                    hyper_tungstenite::tungstenite::Message::Pong(_) => {
-                                                        println!("Server: Received pong");
-                                                    },
-                                                    hyper_tungstenite::tungstenite::Message::Close(_) => {
-                                                        println!("Server: Received close message");
-                                                    },
-                                                    _ => {
-                                                        println!("Server: Received unknown message type");
-                                                    }
-                                                }
+													hyper_tungstenite::tungstenite::Message::Text(text) => {
+														println!("Server: Received text message: {}", text);
+													}
+													hyper_tungstenite::tungstenite::Message::Binary(data) => {
+														println!("Server: Received binary message of {} bytes", data.len());
+													}
+													hyper_tungstenite::tungstenite::Message::Ping(_) => {
+														println!("Server: Received ping");
+													}
+													hyper_tungstenite::tungstenite::Message::Pong(_) => {
+														println!("Server: Received pong");
+													}
+													hyper_tungstenite::tungstenite::Message::Close(_) => {
+														println!("Server: Received close message");
+													}
+													_ => {
+														println!("Server: Received unknown message type");
+													}
+												}
 
 												println!("Server: Echoing message back");
 												match write.send(msg).await {
