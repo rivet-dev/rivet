@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use axum::response::{IntoResponse, Response};
+use gas::prelude::*;
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -18,7 +19,11 @@ pub struct ListQuery {
 	pub namespace: String,
 	pub name: Option<String>,
 	pub key: Option<String>,
+	/// Deprecated.
+	#[serde(default)]
 	pub actor_ids: Option<String>,
+	#[serde(default)]
+	pub actor_id: Vec<Id>,
 	pub include_destroyed: Option<bool>,
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
@@ -74,17 +79,25 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	ctx.auth().await?;
 
 	// Parse query
-	let actor_ids = query.actor_ids.as_ref().map(|x| {
-		x.split(',')
-			.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
-			.collect::<Vec<_>>()
-	});
+	let actor_ids = [
+		query.actor_id,
+		query
+			.actor_ids
+			.as_ref()
+			.map(|x| {
+				x.split(',')
+					.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default(),
+	]
+	.concat();
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
 
 	// Validate exclusive input: either (name + key) or actor_ids
-	if actor_ids.is_some() && (query.name.is_some() || query.key.is_some()) {
+	if !actor_ids.is_empty() && (query.name.is_some() || query.key.is_some()) {
 		return Err(errors::Validation::InvalidInput {
-			message: "Cannot provide both actor_ids and (name + key). Use either actor_ids or (name + key).".to_string(),
+			message: "Cannot provide both actor_id and (name + key). Use either actor_id or (name + key).".to_string(),
 		}
 		.build());
 	}
@@ -97,7 +110,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 		.build());
 	}
 
-	if let Some(actor_ids) = actor_ids {
+	if !actor_ids.is_empty() {
 		// Cap actor_ids count to 32
 		if actor_ids.len() > 32 {
 			return Err(errors::Validation::TooManyActorIds {
@@ -105,14 +118,6 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 				count: actor_ids.len(),
 			}
 			.build());
-		}
-
-		// If no actors specified, return empty result
-		if actor_ids.is_empty() {
-			return Ok(ListResponse {
-				actors: Vec::new(),
-				pagination: Pagination { cursor: None },
-			});
 		}
 
 		// Resolve namespace once to verify actors belong to it (namespace validation is done in api-peer)
@@ -202,6 +207,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 			name: Some(query.name.as_ref().unwrap().clone()),
 			key: query.key.clone(),
 			actor_ids: None,
+			actor_id: Vec::new(),
 			include_destroyed: query.include_destroyed,
 			limit: query.limit,
 			cursor: query.cursor.clone(),

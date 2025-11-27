@@ -1,3 +1,4 @@
+use gas::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -8,8 +9,11 @@ pub struct ListQuery {
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
 	pub name: Option<String>,
+	/// Deprecated.
 	#[serde(default)]
 	pub namespace_ids: Option<String>,
+	#[serde(default)]
+	pub namespace_id: Vec<Id>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

@@ -78,6 +78,7 @@ pub async fn pegboard_actor_get_for_key(ctx: &OperationCtx, input: &Input) -> Re
 				name: Some(input.name.clone()),
 				key: Some(input.key.clone()),
 				actor_ids: None,
+				actor_id: Vec::new(),
 				include_destroyed: Some(false),
 				limit: Some(1),
 				cursor: None,
