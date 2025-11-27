@@ -49,9 +49,14 @@ jobs:
 
             Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
 
-            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+            To post your review:
+            1. First, check if you've already commented on this PR by listing comments: `gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.user.login == "github-actions[bot]") | {id: .id, created_at: .created_at}' | tail -1`
+            2. If a comment exists (you get a comment ID), update it using: `gh api --method PATCH repos/${{ github.repository }}/issues/comments/COMMENT_ID -f body="YOUR_REVIEW_CONTENT"`
+            3. If no comment exists, create a new one using: `gh pr comment ${{ github.event.pull_request.number }} --body "YOUR_REVIEW_CONTENT"`
+
+            This ensures you edit your previous review instead of creating duplicate comments on subsequent PR updates.
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh api:*)"'
 
