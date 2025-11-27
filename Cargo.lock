@@ -3500,6 +3500,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+ "universaldb",
  "universalpubsub",
  "vbare",
 ]

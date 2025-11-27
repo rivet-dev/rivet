@@ -11,7 +11,7 @@ use crate::shared_state::SharedState;
 
 pub async fn task(
 	shared_state: SharedState,
-	request_id: protocol::RequestId,
+	request_id: protocol::mk2::RequestId,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
 	mut ws_to_tunnel_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
@@ -24,8 +24,8 @@ pub async fn task(
 					match msg {
 						Message::Binary(data) => {
 							let ws_message =
-								protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-									protocol::ToClientWebSocketMessage {
+								protocol::mk2::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+									protocol::mk2::ToClientWebSocketMessage {
 										data: data.into(),
 										binary: true,
 									},
@@ -36,8 +36,8 @@ pub async fn task(
 						}
 						Message::Text(text) => {
 							let ws_message =
-								protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-									protocol::ToClientWebSocketMessage {
+								protocol::mk2::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+									protocol::mk2::ToClientWebSocketMessage {
 										data: text.as_bytes().to_vec(),
 										binary: false,
 									},
