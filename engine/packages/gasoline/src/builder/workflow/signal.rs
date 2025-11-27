@@ -6,8 +6,13 @@ use rivet_util::Id;
 use serde::Serialize;
 
 use crate::{
-	builder::BuilderError, ctx::WorkflowCtx, error::WorkflowError, history::cursor::HistoryResult,
-	metrics, signal::Signal, workflow::Workflow,
+	builder::BuilderError,
+	ctx::WorkflowCtx,
+	error::WorkflowError,
+	history::{cursor::HistoryResult, event::EventType, removed::Signal as RemovedSignal},
+	metrics,
+	signal::Signal,
+	workflow::Workflow,
 };
 
 pub struct SignalBuilder<'a, T: Signal + Serialize> {
@@ -18,6 +23,7 @@ pub struct SignalBuilder<'a, T: Signal + Serialize> {
 	to_workflow_name: Option<&'static str>,
 	to_workflow_id: Option<Id>,
 	tags: serde_json::Map<String, serde_json::Value>,
+	graceful_not_found: bool,
 	error: Option<BuilderError>,
 }
 
@@ -31,6 +37,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 			to_workflow_name: None,
 			to_workflow_id: None,
 			tags: serde_json::Map::new(),
+			graceful_not_found: false,
 			error: None,
 		}
 	}
@@ -85,12 +92,37 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		self
 	}
 
+	/// Does not throw an error when the signal target is not found and instead returns `Ok(None)`.
+	pub fn graceful_not_found(mut self) -> Self {
+		if self.error.is_some() {
+			return self;
+		}
+
+		self.graceful_not_found = true;
+
+		self
+	}
+
+	/// Returns the signal id that was just sent. Unless `graceful_not_found` is set and the workflow does not
+	/// exist, will always return `Some`.
 	#[tracing::instrument(skip_all, fields(signal_name=T::NAME, signal_id))]
-	pub async fn send(self) -> Result<Id> {
+	pub async fn send(self) -> Result<Option<Id>> {
 		self.ctx.check_stop()?;
 
 		if let Some(err) = self.error {
 			return Err(err.into());
+		}
+
+		// Check if this signal is being replayed and previously had no target (will have a removed event)
+		if self.graceful_not_found && self.ctx.cursor().is_removed() {
+			self.ctx.cursor().compare_removed::<RemovedSignal<T>>()?;
+
+			tracing::debug!("replaying gracefully not found signal dispatch");
+
+			// Move to next event
+			self.ctx.cursor_mut().inc();
+
+			return Ok(None);
 		}
 
 		// Error for version mismatch. This is done in the builder instead of in `VersionedWorkflowCtx` to
@@ -105,7 +137,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 
 		// Signal sent before
 		let signal_id = if let HistoryResult::Event(signal) = history_res {
-			tracing::debug!("replaying signal dispatch",);
+			tracing::debug!("replaying signal dispatch");
 
 			signal.signal_id
 		}
@@ -133,8 +165,33 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 						.ctx
 						.db()
 						.find_workflow(workflow_name, &serde_json::Value::Object(self.tags))
-						.await?
-						.ok_or(WorkflowError::WorkflowNotFound)?;
+						.await?;
+
+					let Some(workflow_id) = workflow_id else {
+						// Handle signal target not found gracefully
+						if self.graceful_not_found {
+							tracing::debug!("signal target not found");
+
+							// Insert removed event
+							self.ctx
+								.db()
+								.commit_workflow_removed_event(
+									self.ctx.workflow_id(),
+									&location,
+									EventType::SignalSend,
+									Some(T::NAME),
+									self.ctx.loop_location(),
+								)
+								.await?;
+
+							// Move to next event
+							self.ctx.cursor_mut().update(&location);
+
+							return Ok(None);
+						} else {
+							return Err(WorkflowError::WorkflowNotFound.into());
+						}
+					};
 
 					self.ctx
 						.db()
@@ -222,6 +279,6 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		// Move to next event
 		self.ctx.cursor_mut().update(&location);
 
-		Ok(signal_id)
+		Ok(Some(signal_id))
 	}
 }
