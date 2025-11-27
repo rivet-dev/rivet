@@ -3,8 +3,8 @@ use std::cmp::Ordering;
 use super::{
 	History,
 	event::{
-		ActivityEvent, Event, EventData, EventType, LoopEvent, MessageSendEvent, SignalEvent,
-		SignalSendEvent, SleepEvent, SubWorkflowEvent,
+		ActivityEvent, Event, EventData, EventType, LoopEvent, MessageSendEvent, SignalSendEvent,
+		SignalsEvent, SleepEvent, SubWorkflowEvent,
 	},
 	location::{Coordinate, Location},
 	removed::Removed,
@@ -119,18 +119,7 @@ impl Cursor {
 
 	pub fn current_event(&self) -> Option<&Event> {
 		if let Some(branch) = self.events.get(&self.root_location) {
-			let event = branch.get(self.iter_idx);
-
-			// Empty events are considered `None`
-			if let Some(Event {
-				data: EventData::Empty,
-				..
-			}) = &event
-			{
-				None
-			} else {
-				event
-			}
+			branch.get(self.iter_idx)
 		} else {
 			None
 		}
@@ -183,320 +172,282 @@ impl Cursor {
 		Ok(())
 	}
 
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_activity(
 		&self,
 		version: usize,
 		name: &str,
 	) -> WorkflowResult<HistoryResult<&ActivityEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found activity {:?} v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					name,
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::Activity(activity) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found activity {:?}",
-					event.data,
-					self.current_location(),
-					name,
-				)));
-			};
-
-			if &activity.name != name {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected activity {:?} at {}, found activity {:?}",
-					activity.name,
-					self.current_location(),
-					name,
-				)));
-			}
-
-			Ok(HistoryResult::Event(activity))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found activity {:?} v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				name,
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::Activity(activity) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found activity {:?}",
+				event.data,
+				self.current_location(),
+				name,
+			)));
+		};
+
+		if &activity.name != name {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected activity {:?} at {}, found activity {:?}",
+				activity.name,
+				self.current_location(),
+				name,
+			)));
+		}
+
+		Ok(HistoryResult::Event(activity))
 	}
 
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_msg(
 		&self,
 		version: usize,
 		msg_name: &str,
 	) -> WorkflowResult<HistoryResult<&MessageSendEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found message send {:?} v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					msg_name,
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::MessageSend(msg) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found message send {:?}",
-					event.data,
-					self.current_location(),
-					msg_name,
-				)));
-			};
-
-			if msg.name != msg_name {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found message send {:?}",
-					event.data,
-					self.current_location(),
-					msg_name,
-				)));
-			}
-
-			Ok(HistoryResult::Event(msg))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found message send {:?} v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				msg_name,
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::MessageSend(msg) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found message send {:?}",
+				event.data,
+				self.current_location(),
+				msg_name,
+			)));
+		};
+
+		if msg.name != msg_name {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found message send {:?}",
+				event.data,
+				self.current_location(),
+				msg_name,
+			)));
+		}
+
+		Ok(HistoryResult::Event(msg))
 	}
 
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_signal_send(
 		&self,
 		version: usize,
 		signal_name: &str,
 	) -> WorkflowResult<HistoryResult<&SignalSendEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found signal send {:?} v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					signal_name,
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::SignalSend(signal) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found signal send {:?}",
-					event.data,
-					self.current_location(),
-					signal_name,
-				)));
-			};
-
-			if signal.name != signal_name {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found signal send {:?}",
-					event.data,
-					self.current_location(),
-					signal_name,
-				)));
-			}
-
-			Ok(HistoryResult::Event(signal))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found signal send {:?} v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				signal_name,
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::SignalSend(signal) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found signal send {:?}",
+				event.data,
+				self.current_location(),
+				signal_name,
+			)));
+		};
+
+		if signal.name != signal_name {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found signal send {:?}",
+				event.data,
+				self.current_location(),
+				signal_name,
+			)));
+		}
+
+		Ok(HistoryResult::Event(signal))
 	}
 
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_sub_workflow(
 		&self,
 		version: usize,
 		sub_workflow_name: &str,
 	) -> WorkflowResult<HistoryResult<&SubWorkflowEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found sub workflow {:?} v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					sub_workflow_name,
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::SubWorkflow(sub_workflow) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found sub workflow {:?}",
-					event.data,
-					self.current_location(),
-					sub_workflow_name,
-				)));
-			};
-
-			if sub_workflow.name != sub_workflow_name {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found sub_workflow {:?}",
-					event.data,
-					self.current_location(),
-					sub_workflow_name,
-				)));
-			}
-
-			Ok(HistoryResult::Event(sub_workflow))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found sub workflow {:?} v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				sub_workflow_name,
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::SubWorkflow(sub_workflow) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found sub workflow {:?}",
+				event.data,
+				self.current_location(),
+				sub_workflow_name,
+			)));
+		};
+
+		if sub_workflow.name != sub_workflow_name {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found sub_workflow {:?}",
+				event.data,
+				self.current_location(),
+				sub_workflow_name,
+			)));
+		}
+
+		Ok(HistoryResult::Event(sub_workflow))
 	}
 
-	/// Returns `Some` if the current event is being replayed.
-	pub fn compare_signal(&self, version: usize) -> WorkflowResult<HistoryResult<&SignalEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
-
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found signal v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::Signal(signal) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found signal",
-					event.data,
-					self.current_location(),
-				)));
-			};
-
-			Ok(HistoryResult::Event(signal))
-		} else {
-			Ok(HistoryResult::New)
-		}
-	}
-
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_loop(&self, version: usize) -> WorkflowResult<HistoryResult<&LoopEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found loop v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::Loop(loop_event) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found loop",
-					event.data,
-					self.current_location(),
-				)));
-			};
-
-			Ok(HistoryResult::Event(loop_event))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found loop v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::Loop(loop_event) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found loop",
+				event.data,
+				self.current_location(),
+			)));
+		};
+
+		Ok(HistoryResult::Event(loop_event))
 	}
 
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_sleep(&self, version: usize) -> WorkflowResult<HistoryResult<&SleepEvent>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found sleep v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::Sleep(sleep) = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found sleep",
-					event.data,
-					self.current_location(),
-				)));
-			};
-
-			Ok(HistoryResult::Event(sleep))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found sleep v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::Sleep(sleep) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found sleep",
+				event.data,
+				self.current_location(),
+			)));
+		};
+
+		Ok(HistoryResult::Event(sleep))
 	}
 
 	/// Returns `true` if the current event is being replayed.
 	pub fn compare_branch(&self, version: usize) -> WorkflowResult<HistoryResult<()>> {
-		if let Some(event) = self.current_event() {
-			if version > event.version {
-				return Ok(HistoryResult::Insertion);
-			}
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
 
-			if version < event.version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} v{} at {}, found branch v{}",
-					event.data,
-					event.version,
-					self.current_location(),
-					version,
-				)));
-			}
-
-			// Validate history is consistent
-			let EventData::Branch = &event.data else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {} at {}, found branch",
-					event.data,
-					self.current_location(),
-				)));
-			};
-
-			Ok(HistoryResult::Event(()))
-		} else {
-			Ok(HistoryResult::New)
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found branch v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::Branch = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found branch",
+				event.data,
+				self.current_location(),
+			)));
+		};
+
+		Ok(HistoryResult::Event(()))
 	}
 
 	/// Returns `true` if the current event is being replayed.
@@ -526,84 +477,116 @@ impl Cursor {
 
 	/// Returns `true` if the current event is being replayed.
 	pub fn compare_removed<T: Removed>(&self) -> WorkflowResult<bool> {
-		if let Some(event) = self.current_event() {
-			// Validate history is consistent
-			let valid = if let EventData::Removed(removed) = &event.data {
-				removed.event_type == T::event_type() && removed.name.as_deref() == T::name()
-			} else {
-				match T::event_type() {
-					EventType::Activity => {
-						if let EventData::Activity(activity) = &event.data {
-							T::name().expect("bad impl") == activity.name
-						} else {
-							false
-						}
+		let Some(event) = self.current_event() else {
+			return Ok(false);
+		};
+
+		// Validate history is consistent
+		let valid = if let EventData::Removed(removed) = &event.data {
+			removed.event_type == T::event_type() && removed.name.as_deref() == T::name()
+		} else {
+			match T::event_type() {
+				EventType::Activity => {
+					if let EventData::Activity(activity) = &event.data {
+						T::name().expect("bad impl") == activity.name
+					} else {
+						false
 					}
-					EventType::SignalSend => {
-						if let EventData::SignalSend(signal) = &event.data {
-							T::name().expect("bad impl") == signal.name
-						} else {
-							false
-						}
-					}
-					EventType::MessageSend => {
-						if let EventData::MessageSend(msg) = &event.data {
-							T::name().expect("bad impl") == msg.name
-						} else {
-							false
-						}
-					}
-					EventType::Signal => matches!(event.data, EventData::Signal(_)),
-					EventType::Loop => matches!(event.data, EventData::Loop(_)),
-					EventType::Sleep => matches!(event.data, EventData::Sleep(_)),
-					EventType::SubWorkflow => {
-						if let EventData::SubWorkflow(sub_workflow) = &event.data {
-							T::name().expect("bad impl") == sub_workflow.name
-						} else {
-							false
-						}
-					}
-					EventType::Branch => matches!(event.data, EventData::Branch),
-					_ => unreachable!("not implemented as a removable type"),
 				}
+				EventType::Signal => matches!(event.data, EventData::Signals(_)),
+				EventType::SignalSend => {
+					if let EventData::SignalSend(signal) = &event.data {
+						T::name().expect("bad impl") == signal.name
+					} else {
+						false
+					}
+				}
+				EventType::MessageSend => {
+					if let EventData::MessageSend(msg) = &event.data {
+						T::name().expect("bad impl") == msg.name
+					} else {
+						false
+					}
+				}
+				EventType::Loop => matches!(event.data, EventData::Loop(_)),
+				EventType::Sleep => matches!(event.data, EventData::Sleep(_)),
+				EventType::SubWorkflow => {
+					if let EventData::SubWorkflow(sub_workflow) = &event.data {
+						T::name().expect("bad impl") == sub_workflow.name
+					} else {
+						false
+					}
+				}
+				EventType::Branch => matches!(event.data, EventData::Branch),
+				EventType::Signals => matches!(event.data, EventData::Signals(_)),
+				EventType::Removed => unreachable!(),
+				EventType::VersionCheck => unreachable!("not implemented as a removable type"),
+			}
+		};
+
+		if !valid {
+			let msg = if let Some(name) = T::name() {
+				format!(
+					"expected {} at {}, found removed {} {name:?}",
+					event.data,
+					self.current_location(),
+					T::event_type(),
+				)
+			} else {
+				format!(
+					"expected {} at {}, found removed {}",
+					event.data,
+					self.current_location(),
+					T::event_type(),
+				)
 			};
 
-			if !valid {
-				let msg = if let Some(name) = T::name() {
-					format!(
-						"expected {} at {}, found removed {} {name:?}",
-						event.data,
-						self.current_location(),
-						T::event_type(),
-					)
-				} else {
-					format!(
-						"expected {} at {}, found removed {}",
-						event.data,
-						self.current_location(),
-						T::event_type(),
-					)
-				};
-
-				return Err(WorkflowError::HistoryDiverged(msg));
-			}
-
-			Ok(true)
-		} else {
-			Ok(false)
+			return Err(WorkflowError::HistoryDiverged(msg));
 		}
+
+		Ok(true)
 	}
 
-	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_version_check(&self) -> WorkflowResult<Option<(bool, usize)>> {
-		if let Some(event) = self.current_event() {
-			Ok(Some((
-				matches!(event.data, EventData::VersionCheck),
-				event.version,
-			)))
-		} else {
-			Ok(None)
+		let Some(event) = self.current_event() else {
+			return Ok(None);
+		};
+
+		Ok(Some((
+			matches!(event.data, EventData::VersionCheck),
+			event.version,
+		)))
+	}
+
+	pub fn compare_signals(&self, version: usize) -> WorkflowResult<HistoryResult<&SignalsEvent>> {
+		let Some(event) = self.current_event() else {
+			return Ok(HistoryResult::New);
+		};
+
+		if version > event.version {
+			return Ok(HistoryResult::Insertion);
 		}
+
+		if version < event.version {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} v{} at {}, found signals v{}",
+				event.data,
+				event.version,
+				self.current_location(),
+				version,
+			)));
+		}
+
+		// Validate history is consistent
+		let EventData::Signals(signals) = &event.data else {
+			return Err(WorkflowError::HistoryDiverged(format!(
+				"expected {} at {}, found signals",
+				event.data,
+				self.current_location(),
+			)));
+		};
+
+		Ok(HistoryResult::Event(signals))
 	}
 }
 

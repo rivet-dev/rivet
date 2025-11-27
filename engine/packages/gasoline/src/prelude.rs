@@ -17,7 +17,7 @@ pub use crate::{
 	error::{WorkflowError, WorkflowResult},
 	executable::Executable,
 	history::removed::*,
-	listen::{CustomListener, Listen},
+	listen::Listen,
 	message::Message as MessageTrait,
 	operation::Operation as OperationTrait,
 	registry::Registry,

@@ -1,5 +1,5 @@
 use rivet_metrics::KeyValue;
-use std::{ops::Deref, time::Instant};
+use std::ops::Deref;
 
 use crate::{
 	ctx::WorkflowCtx,
@@ -14,7 +14,7 @@ pub struct ListenCtx<'a> {
 	ctx: &'a WorkflowCtx,
 	location: &'a Location,
 	// Used by certain db drivers to know when to update internal indexes for signal wake conditions
-	last_try: bool,
+	last_attempt: bool,
 	// HACK: Prevent `ListenCtx::listen_any` from being called more than once
 	used: bool,
 }
@@ -24,14 +24,14 @@ impl<'a> ListenCtx<'a> {
 		ListenCtx {
 			ctx,
 			location,
-			last_try: false,
+			last_attempt: false,
 			used: false,
 		}
 	}
 
-	pub(crate) fn reset(&mut self, last_try: bool) {
+	pub(crate) fn reset(&mut self, last_attempt: bool) {
 		self.used = false;
-		self.last_try = last_try;
+		self.last_attempt = last_attempt;
 	}
 
 	/// Checks for a signal to this workflow with any of the given signal names.
@@ -40,75 +40,63 @@ impl<'a> ListenCtx<'a> {
 	pub async fn listen_any(
 		&mut self,
 		signal_names: &[&'static str],
-	) -> WorkflowResult<SignalData> {
+		limit: usize,
+	) -> WorkflowResult<Vec<SignalData>> {
 		if self.used {
 			return Err(WorkflowError::ListenCtxUsed);
 		} else {
 			self.used = true;
 		}
 
-		let start_instant = Instant::now();
-
-		// Fetch new pending signal
-		let signal = self
+		// Fetch new pending signals
+		let signals = self
 			.ctx
 			.db()
-			.pull_next_signal(
+			.pull_next_signals(
 				self.ctx.workflow_id(),
 				self.ctx.name(),
 				signal_names,
 				self.location,
 				self.ctx.version(),
 				self.ctx.loop_location(),
-				self.last_try,
+				limit,
+				self.last_attempt,
 			)
 			.await?;
 
-		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::SIGNAL_PULL_DURATION.record(
-			dt,
-			&[
-				KeyValue::new("workflow_name", self.ctx.name().to_string()),
-				KeyValue::new(
-					"signal_name",
-					signal
-						.as_ref()
-						.map(|signal| signal.signal_name.clone())
-						.unwrap_or("<none>".into()),
-				),
-			],
-		);
-
-		let Some(signal) = signal else {
+		if signals.is_empty() {
 			return Err(WorkflowError::NoSignalFound(Box::from(signal_names)));
-		};
+		}
 
-		let recv_lag = (rivet_util::timestamp::now() as f64 - signal.create_ts as f64) / 1000.;
-		crate::metrics::SIGNAL_RECV_LAG.record(
-			recv_lag,
-			&[
-				KeyValue::new("workflow_name", self.ctx.name().to_string()),
-				KeyValue::new("signal_name", signal.signal_name.clone()),
-			],
-		);
+		let now = rivet_util::timestamp::now();
+		for signal in &signals {
+			let recv_lag = (now as f64 - signal.create_ts as f64) / 1000.0;
+			metrics::SIGNAL_RECV_LAG.record(
+				recv_lag,
+				&[
+					KeyValue::new("workflow_name", self.ctx.name().to_string()),
+					KeyValue::new("signal_name", signal.signal_name.clone()),
+				],
+			);
 
-		if recv_lag > 3.0 {
-			// We print an error here so the trace of this workflow does not get dropped
-			tracing::error!(
-				?recv_lag,
+			if recv_lag > 3.0 {
+				// We print an error here so the trace of this workflow does not get dropped
+				tracing::error!(
+					?recv_lag,
+					signal_id=%signal.signal_id,
+					signal_name=%signal.signal_name,
+					"long signal recv time",
+				);
+			}
+
+			tracing::debug!(
 				signal_id=%signal.signal_id,
 				signal_name=%signal.signal_name,
-				"long signal recv time",
+				"signal received",
 			);
 		}
 
-		tracing::debug!(
-			signal_id=%signal.signal_id,
-			signal_name=%signal.signal_name,
-			"signal received",
-		);
-
-		Ok(signal)
+		Ok(signals)
 	}
 }
 
