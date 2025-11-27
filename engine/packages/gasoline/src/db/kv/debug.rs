@@ -518,7 +518,7 @@ impl DatabaseDebug for DatabaseKv {
 							async {
 								tx.get_ranges_keyvalues(
 									RangeOption {
-										mode: StreamingMode::WantAll,
+										mode: StreamingMode::Exact,
 										limit: Some(1),
 										..(&output_subspace).into()
 									},
@@ -670,7 +670,7 @@ impl DatabaseDebug for DatabaseKv {
 							async {
 								tx.get_ranges_keyvalues(
 									RangeOption {
-										mode: StreamingMode::WantAll,
+										mode: StreamingMode::Exact,
 										limit: Some(1),
 										..(&output_subspace).into()
 									},
