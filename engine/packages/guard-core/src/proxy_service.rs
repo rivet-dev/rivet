@@ -2522,6 +2522,10 @@ impl ProxyServiceFactory {
 	pub async fn wait_idle(&self) {
 		self.state.tasks.wait_idle().await
 	}
+
+	pub fn remaining_tasks(&self) -> usize {
+		self.state.tasks.remaining_tasks()
+	}
 }
 
 fn add_proxy_headers_with_addr(
