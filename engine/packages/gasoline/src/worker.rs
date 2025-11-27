@@ -25,6 +25,7 @@ pub(crate) const PING_INTERVAL: Duration = Duration::from_secs(10);
 const METRICS_INTERVAL: Duration = Duration::from_secs(20);
 // How long the pull workflows function can take before shutting down the runtime.
 const PULL_WORKFLOWS_TIMEOUT: Duration = Duration::from_secs(10);
+const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
@@ -297,6 +298,9 @@ impl Worker {
 			.map(|(_, wf)| &mut wf.handle)
 			.collect::<FuturesUnordered<_>>();
 
+		let mut progress_interval = tokio::time::interval(SHUTDOWN_PROGRESS_INTERVAL);
+		progress_interval.tick().await;
+
 		let shutdown_start = Instant::now();
 		loop {
 			// Future will resolve once all workflow tasks complete
@@ -305,6 +309,9 @@ impl Worker {
 			tokio::select! {
 				_ = join_fut => {
 					break;
+				}
+				_ = progress_interval.tick() => {
+					tracing::info!(remaining_workflows=%wf_futs.len(), "worker still shutting down");
 				}
 				abort = term_signal.recv() => {
 					if abort {

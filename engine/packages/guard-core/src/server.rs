@@ -1,6 +1,9 @@
 use std::{
 	net::SocketAddr,
-	sync::Arc,
+	sync::{
+		Arc,
+		atomic::{AtomicBool, Ordering},
+	},
 	time::{Duration, Instant},
 };
 
@@ -14,6 +17,8 @@ use tracing::Instrument;
 use crate::cert_resolver::{CertResolverFn, create_tls_config};
 use crate::metrics;
 use crate::proxy_service::{CacheKeyFn, MiddlewareFn, ProxyServiceFactory, RoutingFn};
+
+const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 
 // Start the server
 #[tracing::instrument(skip_all)]
@@ -248,26 +253,41 @@ pub async fn run_server(
 	}
 
 	let shutdown_duration = config.runtime.guard_shutdown_duration();
-	tracing::info!(duration=?shutdown_duration, "starting guard shutdown");
+	let remaining_tasks = http_factory.remaining_tasks()
+		+ https_factory
+			.as_ref()
+			.map(|f| f.remaining_tasks())
+			.unwrap_or(0);
+	tracing::info!(%remaining_tasks, hyper_shutdown=%false, duration=?shutdown_duration, "starting guard shutdown");
 
+	// Signifies that the hyper graceful shutdown completed
+	let hyper_shutdown = Arc::new(AtomicBool::new(false));
+
+	let hyper_shutdown2 = hyper_shutdown.clone();
+	let http_factory2 = http_factory.clone();
+	let https_factory2 = https_factory.clone();
 	let mut complete_fut = async move {
 		// Wait until remaining requests finish
 		graceful.shutdown().await;
+		hyper_shutdown2.store(true, Ordering::Release);
 
 		// Wait until remaining tasks finish
-		http_factory.wait_idle().await;
+		http_factory2.wait_idle().await;
 
-		if let Some(https_factory) = https_factory {
+		if let Some(https_factory) = https_factory2 {
 			https_factory.wait_idle().await;
 		}
 	}
 	.boxed();
 
+	let mut progress_interval = tokio::time::interval(SHUTDOWN_PROGRESS_INTERVAL);
+	progress_interval.tick().await;
+
 	let shutdown_start = Instant::now();
 	loop {
 		tokio::select! {
 			_ = &mut complete_fut => {
-				tracing::info!("all guard requests completed");
+				tracing::info!("all guard tasks completed");
 				break;
 			}
 			abort = term_signal.recv() => {
@@ -276,8 +296,15 @@ pub async fn run_server(
 					break;
 				}
 			}
+			_ = progress_interval.tick() => {
+				let remaining_tasks = http_factory.remaining_tasks() +
+					https_factory.as_ref().map(|f| f.remaining_tasks()).unwrap_or(0);
+				let hyper_shutdown = hyper_shutdown.load(Ordering::Acquire);
+
+				tracing::info!(%remaining_tasks, hyper_shutdown, "guard still shutting down");
+			}
 			_ = tokio::time::sleep(shutdown_duration.saturating_sub(shutdown_start.elapsed())) => {
-				tracing::warn!("guard shutdown timed out before all requests completed");
+				tracing::warn!("guard shutdown timed out before all tasks completed");
 				break;
 			}
 		}
