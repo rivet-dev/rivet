@@ -776,4 +776,79 @@ mod tests {
 		let new = cursor.current_location_for(&HistoryResult::<()>::Insertion);
 		assert_eq!(loc![coord![1], coord![2, 1, 0, 1]], new);
 	}
+
+	#[test]
+	fn holes_in_coordinates() {
+		let events = [(
+			loc![],
+			vec![
+				Event {
+					coordinate: coord![1],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+				Event {
+					coordinate: coord![3],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+				Event {
+					coordinate: coord![6],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+			],
+		)]
+		.into_iter()
+		.collect::<HashMap<_, _>>();
+		let mut cursor = Cursor::new(Arc::new(events), Location::empty());
+
+		// First event should be at coordinate 1
+		assert_eq!(coord![1], cursor.current_coord());
+		cursor.update(&cursor.current_location_for(&HistoryResult::<()>::Event(())));
+
+		// Second event should be at coordinate 3 (with hole at 2)
+		assert_eq!(coord![3], cursor.current_coord());
+		cursor.update(&cursor.current_location_for(&HistoryResult::<()>::Event(())));
+
+		// Third event should be at coordinate 6 (with holes at 4, 5)
+		assert_eq!(coord![6], cursor.current_coord());
+		cursor.update(&cursor.current_location_for(&HistoryResult::<()>::Event(())));
+
+		// After all events, coords should continue from last event's coordinate
+		assert_eq!(coord![7], cursor.current_coord());
+	}
+
+	#[test]
+	fn holes_in_coordinates2() {
+		let events = [(
+			loc![],
+			vec![
+				Event {
+					coordinate: coord![1],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+				Event {
+					coordinate: coord![3],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+				Event {
+					coordinate: coord![6],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+			],
+		)]
+		.into_iter()
+		.collect::<HashMap<_, _>>();
+
+		let mut cursor = Cursor::new(Arc::new(events), Location::empty());
+		cursor.update(&cursor.current_location_for(&HistoryResult::<()>::Event(())));
+
+		// Insert after coordinate 1, before coordinate 3
+		let new = cursor.current_location_for(&HistoryResult::<()>::Insertion);
+		assert_eq!(loc![coord![1, 1]], new);
+	}
 }
