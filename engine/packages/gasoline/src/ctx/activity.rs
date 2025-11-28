@@ -7,16 +7,18 @@ use tokio::sync::Mutex;
 use tracing::Instrument;
 
 use crate::{
+	builder::common as builder,
 	ctx::{
 		common,
 		message::{MessageCtx, SubscriptionHandle},
 	},
-	db::DatabaseHandle,
+	db::{DatabaseHandle, WorkflowData},
 	error::{WorkflowError, WorkflowResult},
 	message::Message,
 	operation::{Operation, OperationInput},
+	signal::Signal,
 	utils::tags::AsTags,
-	workflow::StateGuard,
+	workflow::{StateGuard, Workflow},
 };
 
 pub struct ActivityCtx {
@@ -77,6 +79,33 @@ impl ActivityCtx {
 }
 
 impl ActivityCtx {
+	/// Finds the first incomplete workflow with the given tags.
+	#[tracing::instrument(skip_all, ret(Debug), fields(workflow_name=W::NAME))]
+	pub async fn find_workflow<W: Workflow>(&self, tags: impl AsTags) -> Result<Option<Id>> {
+		common::find_workflow::<W>(&self.db, tags)
+			.in_current_span()
+			.await
+	}
+
+	/// Finds the first incomplete workflow with the given tags.
+	#[tracing::instrument(skip_all)]
+	pub async fn get_workflows(&self, workflow_ids: Vec<Id>) -> Result<Vec<WorkflowData>> {
+		common::get_workflows(&self.db, workflow_ids)
+			.in_current_span()
+			.await
+	}
+
+	/// Creates a signal builder.
+	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
+		builder::signal::SignalBuilder::new(
+			self.db.clone(),
+			self.config.clone(),
+			self.ray_id,
+			body,
+			true,
+		)
+	}
+
 	#[tracing::instrument(skip_all)]
 	pub fn state<T: Serialize + DeserializeOwned>(&self) -> Result<StateGuard<'_, T>> {
 		if self.parallelized {
