@@ -83,6 +83,28 @@ mod typescript {
 				String::from_utf8_lossy(&output.stderr),
 			);
 		}
+
+		// Post-process the generated TypeScript file to replace Node.js assert
+		post_process_typescript(&src_dir.join("index.ts"));
+	}
+
+	fn post_process_typescript(file_path: &Path) {
+		let content =
+			fs::read_to_string(file_path).expect("Failed to read generated TypeScript file");
+
+		// Remove Node.js assert import
+		let content = content.replace("import assert from \"node:assert\"\n", "");
+
+		// Add custom assert function at the end
+		let assert_function = r#"
+function assert(condition: boolean, message?: string): asserts condition {
+    if (!condition) throw new Error(message ?? "Assertion failed")
+}
+
+"#;
+		let content = format!("{}\n{}", content, assert_function);
+
+		fs::write(file_path, content).expect("Failed to write post-processed TypeScript file");
 	}
 }
 
