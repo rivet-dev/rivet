@@ -70,6 +70,18 @@ export function UserDropdown() {
 				>
 					Tokens
 				</DropdownMenuItem>
+				{isMatchingProjectRoute ? (
+					<DropdownMenuItem
+						onSelect={() => {
+							navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: "api-keys" }),
+							});
+						}}
+					>
+						API Keys
+					</DropdownMenuItem>
+				) : null}
 				{clerk.organization ? (
 					<DropdownMenuItem
 						onSelect={() => {
