@@ -330,6 +330,53 @@ export const createProjectContext = ({
 				},
 			});
 		},
+		// API Key methods
+		apiKeysQueryOptions() {
+			return queryOptions({
+				queryKey: [{ organization, project }, "api-keys"],
+				queryFn: async ({ signal: abortSignal }) => {
+					const response = await client.apiKeys.list(
+						project,
+						{ org: organization },
+						{ abortSignal },
+					);
+					return response;
+				},
+			});
+		},
+		createApiKeyMutationOptions(opts?: {
+			onSuccess?: (data: Rivet.CreateApiKeyResponse) => void;
+		}) {
+			return {
+				mutationKey: [{ organization, project }, "api-keys", "create"],
+				mutationFn: async (data: {
+					name: string;
+					expiresAt?: string;
+				}) => {
+					const response = await client.apiKeys.create(project, {
+						name: data.name,
+						expiresAt: data.expiresAt,
+						org: organization,
+					});
+					return response;
+				},
+				onSuccess: opts?.onSuccess,
+			};
+		},
+		revokeApiKeyMutationOptions(opts?: { onSuccess?: () => void }) {
+			return {
+				mutationKey: [{ organization, project }, "api-keys", "revoke"],
+				mutationFn: async (data: { apiKeyId: string }) => {
+					const response = await client.apiKeys.revoke(
+						project,
+						data.apiKeyId,
+						{ org: organization },
+					);
+					return response;
+				},
+				onSuccess: opts?.onSuccess,
+			};
+		},
 	};
 };
 
