@@ -7,8 +7,8 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 
-export const useDataProvider = () =>
-	match(__APP_TYPE__)
+export const useDataProvider = () => {
+	return match(__APP_TYPE__)
 		.with("cloud", () => {
 			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
 			return useRouteContext({
@@ -36,6 +36,7 @@ export const useDataProvider = () =>
 				});
 		})
 		.exhaustive();
+};
 
 export const useDataProviderCheck = () => {
 	const matchRoute = useMatchRoute();
@@ -104,16 +105,19 @@ export const useCloudNamespaceDataProvider = () => {
 };
 
 export const useEngineCompatDataProvider = () => {
+	const routePath = match(__APP_TYPE__)
+		.with("cloud", () => {
+			return "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace" as const;
+		})
+		.with("engine", () => {
+			return "/_context/_engine/ns/$namespace" as const;
+		})
+		.otherwise(() => {
+			throw new Error("Not in an engine-like context");
+		});
+
 	return useRouteContext({
-		from: match(__APP_TYPE__)
-			.with("cloud", () => {
-				return "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace" as const;
-			})
-			.with("engine", () => {
-				return "/_context/_engine/ns/$namespace" as const;
-			})
-			.otherwise(() => {
-				throw new Error("Not in an engine-like context");
-			}),
+		from: routePath,
+		strict: false,
 	}).dataProvider;
 };
