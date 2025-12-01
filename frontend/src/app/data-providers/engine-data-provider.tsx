@@ -2,6 +2,7 @@ import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
 import { fetcher } from "@rivetkit/engine-api-full/core";
 import {
 	infiniteQueryOptions,
+	type MutationKey,
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
@@ -354,7 +355,7 @@ export const createNamespaceContext = ({
 		createActorMutationOptions() {
 			return mutationOptions({
 				...def.createActorMutationOptions(),
-				mutationKey: [namespace, "actors"],
+				mutationKey: [namespace, "actors"] as MutationKey,
 				mutationFn: async (data) => {
 					const response = await client.actorsCreate({
 						namespace,

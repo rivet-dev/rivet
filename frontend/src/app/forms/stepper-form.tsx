@@ -51,6 +51,7 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 		content: Record<Steps[number]["id"], () => ReactNode>;
 		showAllSteps?: boolean;
 		initialStep?: Steps[number]["id"];
+		footer?: ReactNode;
 	};
 
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
@@ -80,6 +81,7 @@ function Content<const Steps extends Step[]>({
 	showAllSteps,
 	onSubmit,
 	initialStep,
+	footer,
 	...formProps
 }: StepperFormProps<Steps>) {
 	const stepper = useStepper({ initialStep });
@@ -144,6 +146,7 @@ function Content<const Steps extends Step[]>({
 									content={content}
 									showPrevious={false}
 									showControls={steps.length - 1 === index}
+									footer={footer}
 								/>
 							) : (
 								stepper.when(step.id, (step) => {
@@ -153,6 +156,7 @@ function Content<const Steps extends Step[]>({
 											stepper={stepper}
 											step={step}
 											content={content}
+											footer={footer}
 										/>
 									);
 								})
@@ -170,13 +174,15 @@ function StepPanel<const Steps extends Step[]>({
 	stepper,
 	step,
 	content,
-	showPrevious,
+	showPrevious = true,
 	showControls = true,
+	footer,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
 	step: Steps[number];
 	showControls?: boolean;
 	showPrevious?: boolean;
+	footer?: ReactNode;
 }) {
 	const form = useFormContext();
 
@@ -185,6 +191,7 @@ function StepPanel<const Steps extends Step[]>({
 			{stepper.match(step.id, content)}
 			{showControls ? (
 				<Stepper.Controls>
+					{footer}
 					{step.assist ? <NeedHelpButton /> : null}
 					{showPrevious ? (
 						<Button

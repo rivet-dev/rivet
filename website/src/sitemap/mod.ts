@@ -73,7 +73,7 @@ import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 const deploySidebarSections: SidebarItem[] = deployGroups.map(
 	({ title: groupTitle, items }) => ({
 		title: groupTitle,
-		pages: items.map(({ title, href, icon, badge }) => ({
+		pages: items.map(({ displayName: title, href, icon, badge }) => ({
 			title,
 			href,
 			icon,

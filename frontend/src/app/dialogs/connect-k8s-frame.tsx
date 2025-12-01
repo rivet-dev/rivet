@@ -1,31 +1,32 @@
-import { faAws, Icon } from "@rivet-gg/icons";
+import { faKubernetes, Icon } from "@rivet-gg/icons";
 import { type DialogContentProps, Frame } from "@/components";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 
-interface ConnectAwsFrameContentProps extends DialogContentProps {
+interface ConnectK8sFrameContentProps extends DialogContentProps {
 	footer?: React.ReactNode;
 	title?: React.ReactNode;
 }
 
-export default function ConnectAwsFrameContent({
+export default function ConnectK8sFrameContent({
 	onClose,
 	footer,
 	title,
-}: ConnectAwsFrameContentProps) {
+}: ConnectK8sFrameContentProps) {
 	return (
 		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					{title ?? (
 						<div>
-							Add <Icon icon={faAws} className="ml-0.5" /> AWS ECS
+							Add <Icon icon={faKubernetes} className="ml-0.5" />{" "}
+							Kubernetes
 						</div>
 					)}
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
 				<ConnectManualServerlfullFrameContent
-					provider="aws"
+					provider="k8s"
 					onClose={onClose}
 					footer={footer}
 				/>

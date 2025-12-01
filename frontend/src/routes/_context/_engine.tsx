@@ -44,6 +44,7 @@ function EngineModals() {
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
+	const StartWithTemplateDialog = useDialog.StartWithTemplate.Dialog;
 
 	return (
 		<>
@@ -253,6 +254,23 @@ function EngineModals() {
 					open: search.modal === "delete-provider-config",
 					// FIXME
 					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<StartWithTemplateDialog
+				template={search.template}
+				dialogProps={{
+					open: search.modal === "start-with-template",
+					onOpenChange: (value) => {
 						if (!value) {
 							navigate({
 								to: ".",

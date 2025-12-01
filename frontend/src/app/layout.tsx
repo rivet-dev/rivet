@@ -137,6 +137,18 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 	);
 };
 
+export const Logo = () => {
+	return (
+		<Link to="/" className="flex items-center gap-2 ps-3 pt-5 pb-4">
+			<img
+				src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
+				alt="Rivet.gg"
+				className="h-6"
+			/>
+		</Link>
+	);
+};
+
 const Sidebar = ({
 	ref,
 	...props
@@ -155,16 +167,7 @@ const Sidebar = ({
 				{...props}
 			>
 				<div className="flex-col gap-2 size-full flex">
-					<Link
-						to="/"
-						className="flex items-center gap-2 ps-3 pt-5 pb-4"
-					>
-						<img
-							src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
-							alt="Rivet.gg"
-							className="h-6"
-						/>
-					</Link>
+					<Logo />
 					<div className="flex flex-1 flex-col gap-4 px-2 min-h-0">
 						{match(__APP_TYPE__)
 							.with("inspector", () => (

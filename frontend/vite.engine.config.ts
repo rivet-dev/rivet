@@ -4,6 +4,7 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import favigo from "favigo/vite";
+import Macros from "unplugin-macros/vite";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { commonEnvSchema } from "./src/lib/env";
@@ -58,6 +59,7 @@ export default defineConfig(({ mode }) => {
 					background: "transparent",
 				},
 			}),
+			Macros(),
 		],
 		server: {
 			port: 43708,
