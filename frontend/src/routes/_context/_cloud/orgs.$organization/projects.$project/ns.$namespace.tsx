@@ -1,7 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
 import { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
 import { NotFoundCard } from "@/app/not-found-card";
 import { PendingRouteLayout, RouteLayout } from "@/app/route-layout";
+import { useDialog } from "@/app/use-dialog";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
@@ -36,5 +41,38 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-	return <RouteLayout />;
+	return (
+		<>
+			<RouteLayout />
+			<CloudNamespaceModals />
+		</>
+	);
+}
+
+function CloudNamespaceModals() {
+	const navigate = useNavigate();
+	const search = useSearch({ from: "/_context" });
+	const StartWithTemplateDialog = useDialog.StartWithTemplate.Dialog;
+
+	return (
+		<StartWithTemplateDialog
+			name={search.name}
+			provider={search.provider}
+			dialogProps={{
+				open: search.modal === "start-with-template",
+				onOpenChange: (value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+								name: undefined,
+							}),
+						});
+					}
+				},
+			}}
+		/>
+	);
 }

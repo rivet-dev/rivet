@@ -56,7 +56,7 @@ function CloudModals() {
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -73,7 +73,7 @@ function CloudModals() {
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,

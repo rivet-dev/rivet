@@ -82,6 +82,8 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: for types
+				return {} as PaginatedActorResponse;
 			},
 			getNextPageParam: (lastPage) => {
 				if (lastPage.pagination.cursor) {
@@ -109,6 +111,8 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: for types
+				return {} as PaginatedBuildsResponse;
 			},
 			getNextPageParam: () => {
 				return undefined;
@@ -328,6 +332,8 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: for types
+				return {} as PaginatedRegionsResponse;
 			},
 			getNextPageParam: () => null,
 			select: (data) => data.pages.flatMap((page) => page.regions),
@@ -339,6 +345,8 @@ const defaultContext = {
 			enabled: !!regionId,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: for types
+				return {} as Region;
 			},
 		});
 	},
@@ -350,6 +358,8 @@ const defaultContext = {
 			retry: 0,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: for types
+				return false as boolean;
 			},
 		});
 	},
@@ -358,6 +368,8 @@ const defaultContext = {
 			mutationKey: ["createActor"] as QueryKey,
 			mutationFn: async (_: CreateActor) => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: for types
+				return {} as string;
 			},
 			onSuccess: () => {
 				const keys = this.actorsQueryOptions({}).queryKey.filter(
