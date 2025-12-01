@@ -109,8 +109,8 @@ where
 
 	let res = tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
 		.await
-		.map_err(|_| WorkflowError::OperationTimeout(0))
-		.map(|res| res.map_err(WorkflowError::OperationFailure));
+		.map_err(|_| WorkflowError::OperationTimeout(I::Operation::NAME, 0))
+		.map(|res| res.map_err(|err| WorkflowError::OperationFailure(I::Operation::NAME, err)));
 
 	// Record metrics
 	{
