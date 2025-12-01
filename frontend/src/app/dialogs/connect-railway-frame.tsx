@@ -11,6 +11,7 @@ import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";
 import { type DialogContentProps, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
 import { EnvVariables } from "../env-variables";
 import {
@@ -83,16 +84,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
+			successfulBackendSetupEffect();
 
 			await queryClient.invalidateQueries(
 				provider.runnerConfigsQueryOptions(),
@@ -184,7 +176,7 @@ function StepDeploy() {
 					.
 				</p>
 			</div>
-			<ConnectRailwayForm.ConnectionCheck provider="Railway" />
+			<ConnectRailwayForm.ConnectionCheck provider="railway" />
 		</>
 	);
 }

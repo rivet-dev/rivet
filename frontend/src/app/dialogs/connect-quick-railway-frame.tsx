@@ -10,6 +10,7 @@ import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";
 import { type DialogContentProps, ExternalLinkCard, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
 import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
 import {
@@ -39,10 +40,13 @@ const stepper = defineStepper(
 	},
 );
 
-interface ConnectQuickRailwayFrameContentProps extends DialogContentProps {}
+interface ConnectQuickRailwayFrameContentProps extends DialogContentProps {
+	title?: React.ReactNode;
+}
 
 export default function ConnectQuickRailwayFrameContent({
 	onClose,
+	title,
 }: ConnectQuickRailwayFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
@@ -53,9 +57,12 @@ export default function ConnectQuickRailwayFrameContent({
 		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
-					<div>
-						Add <Icon icon={faRailway} className="ml-0.5" /> Railway
-					</div>
+					{title ?? (
+						<div>
+							Add <Icon icon={faRailway} className="ml-0.5" />{" "}
+							Railway
+						</div>
+					)}
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
@@ -73,16 +80,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
+			successfulBackendSetupEffect();
 
 			await queryClient.invalidateQueries(
 				provider.runnerConfigsQueryOptions(),
@@ -126,7 +124,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 	);
 }
 
-function Step1() {
+export function Step1() {
 	return (
 		<>
 			<div className="space-y-4">
@@ -158,7 +156,7 @@ function DeployStep() {
 					.
 				</p>
 			</div>
-			<ConnectRailwayForm.ConnectionCheck provider="Railway" />
+			<ConnectRailwayForm.ConnectionCheck provider="railway" />
 		</>
 	);
 }

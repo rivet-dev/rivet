@@ -52,6 +52,16 @@ const config = {
 					"monospace",
 				],
 			},
+			backgroundImage: {
+				"card-fade":
+					"linear-gradient(to bottom, transparent 0%, transparent 30%, hsl(var(--card) / 30%) 60%, hsl(var(--card) / 100%) 100%)",
+			},
+			dropShadow: {
+				"dialog-close": [
+					"0 0 8px rgb(0 0 0 / 1)",
+					"0 4px 3px rgb(0 0 0 / 1)",
+				],
+			},
 			data: {
 				active: 'status~="active"',
 				open: 'state*="open"',

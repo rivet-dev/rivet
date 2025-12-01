@@ -1,4 +1,5 @@
 import {
+	CancelledError,
 	MutationCache,
 	QueryCache,
 	QueryClient,
@@ -12,6 +13,11 @@ import { Changelog } from "./types";
 
 const queryCache = new QueryCache({
 	onError(error, query) {
+		// Silently ignore CancelledError - these are expected during navigation/unmount
+		if (error instanceof CancelledError) {
+			return;
+		}
+
 		if (
 			query.meta?.mightRequireAuth &&
 			"statusCode" in error &&

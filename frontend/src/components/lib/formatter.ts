@@ -3,10 +3,11 @@ export interface DurationOptions {
 	showMilliseconds?: boolean;
 	shorten?: boolean;
 	show0Min?: boolean;
+	absolute?: boolean;
 }
 
 export function formatDuration(duration: number, opts: DurationOptions = {}) {
-	const negative = Math.sign(duration) === -1;
+	const negative = !opts.absolute && Math.sign(duration) === -1;
 	const dur = Math.abs(duration);
 
 	// Decompose duration

@@ -21,7 +21,7 @@ export function PublishableTokenCodeGroup() {
 	// Check if Vercel is connected
 	const hasVercel = hasProvider(configs, ["vercel", "next-js"]);
 
-	const endpoint = useRivetDsn({ kind: "publishable" });
+	const endpoint = useRivetDsn({ endpoint: "", kind: "publishable" });
 
 	const nextJsTab = (
 		<CodeFrame
@@ -88,7 +88,10 @@ export function PublishableTokenCodeGroup() {
 				</a>
 			}
 		>
-			<CodePreview code={javascriptCode(endpoint)} language="typescript" />
+			<CodePreview
+				code={javascriptCode(endpoint)}
+				language="typescript"
+			/>
 		</CodeFrame>
 	);
 
@@ -101,12 +104,16 @@ export function PublishableTokenCodeGroup() {
 	);
 }
 
-const javascriptCode = (endpoint: string) => `import { createClient } from "rivetkit/client";
+const javascriptCode = (
+	endpoint: string,
+) => `import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>("${endpoint}");`;
 
-const reactCode = (endpoint: string) => `import { createRivetKit } from "@rivetkit/react";
+const reactCode = (
+	endpoint: string,
+) => `import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
 export const { useActor } = createRivetKit<typeof registry>("${endpoint}");`;

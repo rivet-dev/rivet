@@ -24,7 +24,10 @@ export default function CreateProjectFrameContent({
 			<Frame.Content>
 				<RunnerConfigToggleGroup mode={mode} onChange={setMode} />
 				{mode === "serverless" ? (
-					<ConnectManualServerlessFrameContent onClose={onClose} />
+					<ConnectManualServerlessFrameContent
+						provider="custom"
+						onClose={onClose}
+					/>
 				) : null}
 				{mode === "serverfull" ? (
 					<ConnectManualServerlfullFrameContent

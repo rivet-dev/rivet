@@ -274,7 +274,7 @@ function EmptyState() {
 	const { data: actorNames } = useInfiniteQuery({
 		...useEngineCompatDataProvider().buildsQueryOptions(),
 		select(data) {
-			return data.pages[0].builds.length > 0;
+			return Object.keys(data.pages[0].names).length > 0;
 		},
 	});
 

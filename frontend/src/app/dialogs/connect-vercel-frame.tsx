@@ -10,9 +10,13 @@ import { useWatch } from "react-hook-form";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { type DialogContentProps, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
+import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
-import { buildServerlessConfig, ConfigurationAccordion } from "./connect-manual-serverless-frame";
+import {
+	buildServerlessConfig,
+	ConfigurationAccordion,
+} from "./connect-manual-serverless-frame";
 
 const { stepper } = ConnectVercelForm;
 
@@ -61,16 +65,7 @@ function FormStepper({
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
+			successfulBackendSetupEffect();
 			await queryClient.invalidateQueries(
 				provider.runnerConfigsQueryOptions(),
 			);
@@ -95,15 +90,14 @@ function FormStepper({
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
-				const payload =
-					await buildServerlessConfig(
-						provider,
-						{
-							...values,
-							requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5,
-						},
-						{ provider: "vercel" },
-					);
+				const payload = await buildServerlessConfig(
+					provider,
+					{
+						...values,
+						requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5,
+					},
+					{ provider: "vercel" },
+				);
 
 				await mutateAsync({
 					name: values.runnerName,
@@ -162,7 +156,7 @@ function StepDeploy() {
 				</p>
 			</div>
 
-			<ConnectVercelForm.ConnectionCheck provider="Vercel" />
+			<ConnectVercelForm.ConnectionCheck provider="vercel" />
 		</>
 	);
 }

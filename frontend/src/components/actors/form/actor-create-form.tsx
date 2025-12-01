@@ -1,5 +1,8 @@
 import { Rivet } from "@rivetkit/engine-api-full";
-import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
@@ -216,7 +219,7 @@ export const PrefillActorName = () => {
 	const prefilled = useRef(false);
 	const { watch } = useFormContext<FormValues>();
 
-	const { data: name, isSuccess } = useSuspenseInfiniteQuery({
+	const { data: name, isSuccess } = useInfiniteQuery({
 		...useEngineCompatDataProvider().buildsQueryOptions(),
 		select: (data) => Object.keys(data.pages[0].names)[0],
 	});
@@ -239,7 +242,7 @@ export const PrefillRunnerName = () => {
 	const prefilled = useRef(false);
 	const { watch } = useFormContext<FormValues>();
 
-	const { data = [], isSuccess } = useSuspenseInfiniteQuery(
+	const { data = [], isSuccess } = useInfiniteQuery(
 		useEngineCompatDataProvider().runnerNamesQueryOptions(),
 	);
 

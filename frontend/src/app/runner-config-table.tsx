@@ -1,7 +1,6 @@
 import {
 	faAws,
-	faCog,
-	faCogs,
+	faCloudflare,
 	faEllipsisVertical,
 	faGoogleCloud,
 	faHetznerH,
@@ -376,6 +375,14 @@ function Provider({ metadata }: { metadata: unknown }) {
 		return <span>Unknown</span>;
 	}
 	if ("provider" in metadata && typeof metadata.provider === "string") {
+		if (metadata.provider === "cloudflare-workers") {
+			return (
+				<div>
+					<Icon icon={faCloudflare} className="mr-1" /> Cloudflare
+					Workers
+				</div>
+			);
+		}
 		if (metadata.provider === "vercel") {
 			return (
 				<div className="whitespace-nowrap">
