@@ -129,6 +129,7 @@
 		"ts-pattern": "^5.8.0",
 		"typescript": "^5.9.2",
 		"typescript-plugin-css-modules": "^5.2.0",
+		"unplugin-macros": "^0.18.3",
 		"usehooks-ts": "^3.1.1",
 		"vite": "^5.4.20",
 		"vite-plugin-favicons-inject": "^2.2.0",

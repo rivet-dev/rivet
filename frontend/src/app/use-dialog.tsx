@@ -43,4 +43,7 @@ export const useDialog = {
 		() => import("@/app/dialogs/provide-engine-credentials-frame"),
 	),
 	Tokens: createDialogHook(() => import("@/app/dialogs/tokens-frame")),
+	StartWithTemplate: createDialogHook(
+		() => import("@/app/dialogs/start-with-template-frame"),
+	),
 };
