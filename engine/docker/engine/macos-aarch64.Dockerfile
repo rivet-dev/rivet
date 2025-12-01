@@ -7,7 +7,6 @@ ARG VITE_APP_API_URL=__SAME__
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     git-lfs \
-    protobuf-compiler \
     clang \
     cmake \
     patch \

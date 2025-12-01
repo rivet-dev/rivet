@@ -35,14 +35,14 @@ pub struct CreateQuery {
 ///
 /// actor::get will always be in the same datacenter.
 #[utoipa::path(
-    post,
+	post,
 	operation_id = "actors_create",
-    path = "/actors",
-    params(CreateQuery),
-    request_body(content = CreateRequest, content_type = "application/json"),
-    responses(
-        (status = 200, body = CreateResponse),
-    ),
+	path = "/actors",
+	params(CreateQuery),
+	request_body(content = CreateRequest, content_type = "application/json"),
+	responses(
+		(status = 200, body = CreateResponse),
+	),
 )]
 pub async fn create(
 	Extension(ctx): Extension<ApiCtx>,

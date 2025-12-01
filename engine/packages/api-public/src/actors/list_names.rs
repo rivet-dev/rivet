@@ -16,13 +16,13 @@ use crate::ctx::ApiCtx;
 /// - GET /actors/names (fanout)
 /// - [api-peer] namespace::ops::resolve_for_name_global
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "actors_list_names",
-    path = "/actors/names",
-    params(ListNamesQuery),
-    responses(
-        (status = 200, body = ListNamesResponse),
-    ),
+	path = "/actors/names",
+	params(ListNamesQuery),
+	responses(
+		(status = 200, body = ListNamesResponse),
+	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]

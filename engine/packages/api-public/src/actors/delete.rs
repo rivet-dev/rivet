@@ -34,16 +34,16 @@ pub struct DeleteResponse {}
 /// - DELETE /actors/{}
 /// - [api-peer] namespace::ops::resolve_for_name_global
 #[utoipa::path(
-    delete,
+	delete,
 	operation_id = "actors_delete",
-    path = "/actors/{actor_id}",
-    params(
-        ("actor_id" = Id, Path),
-        DeleteQuery,
-    ),
-    responses(
-        (status = 200, body = DeleteResponse),
-    ),
+	path = "/actors/{actor_id}",
+	params(
+		("actor_id" = Id, Path),
+		DeleteQuery,
+	),
+	responses(
+		(status = 200, body = DeleteResponse),
+	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]

@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "runners_list",
-    path = "/runners",
-    params(ListQuery),
-    responses(
-        (status = 200, body = ListResponse),
-    ),
+	path = "/runners",
+	params(ListQuery),
+	responses(
+		(status = 200, body = ListResponse),
+	),
 )]
 #[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {

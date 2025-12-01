@@ -3,13 +3,13 @@ use rivet_api_builder::ApiCtx;
 use rivet_api_types::{actors::list::*, pagination::Pagination};
 
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "actors_list",
-    path = "/actors",
-    params(ListQuery),
-    responses(
-        (status = 200, body = ListResponse),
-    ),
+	path = "/actors",
+	params(ListQuery),
+	responses(
+		(status = 200, body = ListResponse),
+	),
 )]
 #[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {

@@ -7,12 +7,12 @@ use rivet_types::datacenters::Datacenter;
 use crate::ctx::ApiCtx;
 
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "datacenters_list",
-    path = "/datacenters",
-    responses(
-        (status = 200, body = ListResponse),
-    ),
+	path = "/datacenters",
+	responses(
+		(status = 200, body = ListResponse),
+	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]
