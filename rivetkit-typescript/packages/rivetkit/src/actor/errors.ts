@@ -297,7 +297,7 @@ export class DatabaseNotEnabled extends ActorError {
 	}
 }
 
-export class RequestHandlerNotDfeined extends ActorError {
+export class RequestHandlerNotDefined extends ActorError {
 	constructor() {
 		super(
 			"handler",
