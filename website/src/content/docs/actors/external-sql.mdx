@@ -62,26 +62,29 @@ export const userActor = actor({
     lastActive: Date.now()
   }),
   
-  // Insert user into database when actor starts
-  onWake: async (c, opts) => {
+  // Insert user into database when actor creates
+  onCreate: async (c, opts) => {
     const result = await pool.query(
       "INSERT INTO users (username, email, created_at) VALUES ($1, $2, $3)",
       [c.state.username, c.state.email, c.state.lastActive]
     );
   },
   
+  // Sync state changes to database
+  onStateChange: async (c, newState) => {
+    await pool.query(
+      "UPDATE users SET email = $1, last_active = $2 WHERE username = $3",
+      [newState.email, newState.lastActive, newState.username]
+    );
+  },
+
   actions: {
-    // Update user information
+    // Update user information, this will trigger onStateChange
     updateUser: async (c, email: string) => {
       c.state.requestCount++;
       c.state.email = email;
       c.state.lastActive = Date.now();
-      
-      await pool.query(
-        "UPDATE users SET email = $1 WHERE username = $3",
-        [email, c.state.username]
-      );
-      
+
       return { requestCount: c.state.requestCount };
     },
     
@@ -176,8 +179,8 @@ export const userActor = actor({
     lastActive: Date.now()
   }),
   
-  // Insert user into database when actor starts
-  onWake: async (c, opts) => {
+  // Insert user into database when actor creates
+  onCreate: async (c, opts) => {
     const result = await db.insert(users).values({
       username: c.state.username,
       email: c.state.email,
@@ -185,19 +188,23 @@ export const userActor = actor({
     });
   },
   
+  // Sync state changes to database
+  onStateChange: async (c, newState) => {
+    await db.update(users)
+      .set({
+        email: newState.email,
+        lastActive: new Date(newState.lastActive)
+      })
+      .where(eq(users.username, newState.username));
+  },
+
   actions: {
-    // Update user information
+    // Update user information, this will trigger onStateChange
     updateUser: async (c, email: string) => {
       c.state.requestCount++;
       c.state.email = email;
       c.state.lastActive = Date.now();
-      
-      await db.update(users)
-        .set({
-          email
-        })
-        .where(eq(users.username, c.state.username));
-      
+
       return { requestCount: c.state.requestCount };
     },
     
