@@ -26,7 +26,7 @@ export function DeployDropdown() {
 	}, [isOpen]);
 
 	const otherPlatforms = deployOptions.filter(
-		option => option.title !== "Vercel" && option.title !== "Railway"
+		option => option.displayName !== "Vercel" && option.displayName !== "Railway"
 	);
 
 	return (
@@ -45,7 +45,7 @@ export function DeployDropdown() {
 					<div className="py-1">
 						{otherPlatforms.map((option) => (
 							<Link
-								key={option.title}
+								key={option.displayName}
 								href={option.href}
 								target="_blank"
 								rel="noopener noreferrer"
@@ -53,7 +53,7 @@ export function DeployDropdown() {
 								onClick={() => setIsOpen(false)}
 							>
 								{option.icon && <Icon icon={option.icon} className="text-sm" />}
-								{option.shortTitle || option.title}
+								{option.shortTitle || option.displayName}
 							</Link>
 						))}
 					</div>

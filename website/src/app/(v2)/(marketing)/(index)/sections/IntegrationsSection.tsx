@@ -54,7 +54,7 @@ export const IntegrationsSection = () => (
             <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Infrastructure</h4>
           </div>
           <div className='relative z-10 flex flex-wrap gap-2'>
-            {deployOptions.map(({ title, shortTitle, href }) => (
+            {deployOptions.map(({ displayName: title, shortTitle, href }) => (
               <Link
                 key={title}
                 href={href}

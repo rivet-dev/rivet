@@ -16,7 +16,7 @@ export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
 )({
 	component: RouteComponent,
-	beforeLoad: async ({ context }) => {
+	beforeLoad: async ({ context, search }) => {
 		if (context.__type !== "cloud") {
 			throw notFound();
 		}
@@ -24,7 +24,12 @@ export const Route = createFileRoute(
 		const shouldDisplay = await shouldDisplayActors(context);
 
 		if (!shouldDisplay) {
-			throw redirect({ from: Route.to, replace: true, to: "./connect" });
+			throw redirect({
+				from: Route.to,
+				replace: true,
+				to: "./connect",
+				search,
+			});
 		}
 	},
 });

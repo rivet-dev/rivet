@@ -17,8 +17,8 @@ export const Route = createFileRoute("/_context/")({
 	beforeLoad: async ({ context, search }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async () => {
-				if (!(await redirectToOrganization(context.clerk))) {
-					throw redirect({ to: "/login" });
+				if (!(await redirectToOrganization(context.clerk, search))) {
+					throw redirect({ to: "/login", search: true });
 				}
 			})
 			.with({ __type: "engine" }, async (ctx) => {

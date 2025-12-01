@@ -1,4 +1,5 @@
 import {
+	faCloudflare,
 	faCog,
 	faCogs,
 	faNextjs,
@@ -208,7 +209,7 @@ function Row({
 	);
 }
 
-function getModal(provider: string | undefined) {
+function getModal(_provider: string | undefined) {
 	return "edit-provider-config";
 }
 
@@ -217,6 +218,14 @@ function Provider({ metadata }: { metadata: unknown }) {
 		return <span>Unknown</span>;
 	}
 	if ("provider" in metadata && typeof metadata.provider === "string") {
+		if (metadata.provider === "cloudflare-workers") {
+			return (
+				<div>
+					<Icon icon={faCloudflare} className="mr-1" /> Cloudflare
+					Workers
+				</div>
+			);
+		}
 		if (metadata.provider === "vercel") {
 			return (
 				<div>
