@@ -19,5 +19,12 @@
 		"@trpc/server": "^11.4.2",
 		"zod": "^3.25.76"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"trpc",
+			"typescript"
+		],
+		"tags": []
+	}
 }

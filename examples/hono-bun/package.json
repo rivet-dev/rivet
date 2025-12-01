@@ -36,5 +36,13 @@
 		"stateful",
 		"example"
 	],
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"hono",
+			"bun",
+			"typescript"
+		],
+		"tags": []
+	}
 }

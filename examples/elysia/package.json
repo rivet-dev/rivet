@@ -18,5 +18,13 @@
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"elysia",
+			"bun",
+			"typescript"
+		],
+		"tags": []
+	}
 }

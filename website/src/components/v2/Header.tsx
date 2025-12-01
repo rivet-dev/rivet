@@ -255,6 +255,14 @@ export function Header({
 									Documentation
 								</TextNavItem>
 								<TextNavItem
+									href="/templates"
+									ariaCurrent={
+										active === "templates" ? "page" : undefined
+									}
+								>
+									Templates
+								</TextNavItem>
+								<TextNavItem
 									href="/pricing"
 									ariaCurrent={
 										active === "pricing" ? "page" : undefined
@@ -339,6 +347,12 @@ export function Header({
 						Documentation
 					</TextNavItem>
 					<TextNavItem
+						href="/templates"
+						ariaCurrent={active === "templates" ? "page" : undefined}
+					>
+						Templates
+					</TextNavItem>
+					<TextNavItem
 						href="/pricing"
 						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
@@ -381,6 +395,7 @@ function DocsMobileNavigation({ tree }) {
 	const mainLinks = [
 		{ href: "/", label: "Home" },
 		{ href: "/docs", label: "Documentation" },
+		{ href: "/templates", label: "Templates" },
 		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },
 		{ href: "https://dashboard.rivet.dev/", label: "Dashboard" },
