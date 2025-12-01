@@ -28,5 +28,15 @@
 	},
 	"dependencies": {
 		"rivetkit": "workspace:*"
+	},
+	"template": {
+		"technologies": [
+			"websocket",
+			"typescript"
+		],
+		"tags": [
+			"quickstart",
+			"real-time"
+		]
 	}
 }

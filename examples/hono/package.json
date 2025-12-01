@@ -19,5 +19,12 @@
 		"@hono/node-server": "^1.14.0",
 		"hono": "^4.7.0"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"hono",
+			"typescript"
+		],
+		"tags": []
+	}
 }

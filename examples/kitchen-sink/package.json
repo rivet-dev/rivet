@@ -25,5 +25,11 @@
 		"tsx": "^4.7.1",
 		"typescript": "^5.2.2",
 		"vite": "^5.2.0"
+	},
+	"template": {
+		"technologies": [
+			"typescript"
+		],
+		"tags": []
 	}
 }
