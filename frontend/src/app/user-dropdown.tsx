@@ -36,6 +36,11 @@ export function UserDropdown() {
 		fuzzy: true,
 	});
 
+	const isMatchingNamespaceRoute = match({
+		to: "/orgs/$organization/projects/$project/ns/$namespace",
+		fuzzy: true,
+	});
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild={!params.organization}>
@@ -60,16 +65,18 @@ export function UserDropdown() {
 				>
 					Profile
 				</DropdownMenuItem>
-				<DropdownMenuItem
-					onSelect={() => {
-						navigate({
-							to: ".",
-							search: { ...params, modal: "tokens" },
-						});
-					}}
-				>
-					Tokens
-				</DropdownMenuItem>
+				{isMatchingNamespaceRoute ? (
+					<DropdownMenuItem
+						onSelect={() => {
+							navigate({
+								to: ".",
+								search: { ...params, modal: "tokens" },
+							});
+						}}
+					>
+						Tokens
+					</DropdownMenuItem>
+				) : null}
 				{clerk.organization ? (
 					<DropdownMenuItem
 						onSelect={() => {
