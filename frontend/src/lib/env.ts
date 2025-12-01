@@ -2,6 +2,7 @@ import z from "zod";
 import { getApiEndpoint } from "../components/lib/config";
 
 export const commonEnvSchema = z.object({
+	// Engine API endpoint - transformed via getApiEndpoint() for local development support
 	VITE_APP_API_URL: z.string().transform((url) => {
 		return getApiEndpoint(url);
 	}),
@@ -23,10 +24,7 @@ export const engineEnv = () => commonEnvSchema.parse(import.meta.env);
 
 export const cloudEnvSchema = commonEnvSchema.merge(
 	z.object({
-		VITE_APP_API_URL: z.string().transform((url) => {
-			return getApiEndpoint(url);
-		}),
-		VITE_APP_CLOUD_ENGINE_URL: z.string().url(),
+		// Cloud API endpoint - direct URL without transformation, used for cloud-specific operations
 		VITE_APP_CLOUD_API_URL: z.string().url(),
 		VITE_APP_CLERK_PUBLISHABLE_KEY: z.string(),
 	}),
