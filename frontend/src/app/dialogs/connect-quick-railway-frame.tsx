@@ -46,10 +46,13 @@ const stepper = defineStepper(
 	},
 );
 
-interface ConnectQuickRailwayFrameContentProps extends DialogContentProps {}
+interface ConnectQuickRailwayFrameContentProps extends DialogContentProps {
+	footer?: React.ReactNode;
+}
 
 export default function ConnectQuickRailwayFrameContent({
 	onClose,
+	footer,
 }: ConnectQuickRailwayFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
@@ -78,6 +81,7 @@ export default function ConnectQuickRailwayFrameContent({
 			</Frame.Header>
 			<Frame.Content>
 				<FormStepper
+					footer={footer}
 					onClose={onClose}
 					defaultDatacenter={prefferedRegionForRailway}
 				/>
@@ -89,9 +93,11 @@ export default function ConnectQuickRailwayFrameContent({
 function FormStepper({
 	onClose,
 	defaultDatacenter,
+	footer,
 }: {
 	onClose?: () => void;
 	defaultDatacenter: string;
+	footer?: React.ReactNode;
 }) {
 	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
@@ -116,6 +122,7 @@ function FormStepper({
 	});
 	return (
 		<StepperForm
+			footer={footer}
 			{...stepper}
 			onSubmit={async ({ values }) => {
 				await mutateAsync({

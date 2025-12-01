@@ -2,10 +2,13 @@ import { faHetznerH, Icon } from "@rivet-gg/icons";
 import { type DialogContentProps, Frame } from "@/components";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 
-interface ConnectHetznerFrameContentProps extends DialogContentProps {}
+interface ConnectHetznerFrameContentProps extends DialogContentProps {
+	footer?: React.ReactNode;
+}
 
 export default function ConnectHetznerFrameContent({
 	onClose,
+	footer,
 }: ConnectHetznerFrameContentProps) {
 	return (
 		<>
@@ -20,6 +23,7 @@ export default function ConnectHetznerFrameContent({
 			<Frame.Content>
 				<ConnectManualServerlfullFrameContent
 					provider="hetzner"
+					footer={footer}
 					onClose={onClose}
 				/>
 			</Frame.Content>

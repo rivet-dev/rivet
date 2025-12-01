@@ -51,11 +51,13 @@ const stepper = defineStepper(
 
 interface ConnectManualServerlfullFrameContentProps extends DialogContentProps {
 	provider: string;
+	footer?: React.ReactNode;
 }
 
 export default function ConnectManualServerlfullFrameContent({
 	onClose,
 	provider,
+	footer,
 }: ConnectManualServerlfullFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
@@ -75,6 +77,7 @@ export default function ConnectManualServerlfullFrameContent({
 
 	return (
 		<FormStepper
+			footer={footer}
 			onClose={onClose}
 			provider={provider}
 			defaultDatacenter={prefferedRegionForRailway}
@@ -86,10 +89,12 @@ function FormStepper({
 	onClose,
 	defaultDatacenter,
 	provider,
+	footer,
 }: {
 	onClose?: () => void;
 	provider: string;
 	defaultDatacenter: string;
+	footer?: React.ReactNode;
 }) {
 	const dataProvider = useEngineCompatDataProvider();
 
@@ -120,6 +125,7 @@ function FormStepper({
 	return (
 		<StepperForm
 			{...stepper}
+			footer={footer}
 			onSubmit={async ({ values }) => {
 				let existing: Record<string, Rivet.RunnerConfig> = {};
 				try {

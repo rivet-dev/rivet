@@ -25,10 +25,15 @@ import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 
 const { stepper } = ConnectVercelForm;
 
-interface ConnectQuickVercelFrameContentProps extends DialogContentProps {}
+interface ConnectQuickVercelFrameContentProps extends DialogContentProps {
+	title?: string;
+	footer?: React.ReactNode;
+}
 
 export default function ConnectQuickVercelFrameContent({
 	onClose,
+	title,
+	footer,
 }: ConnectQuickVercelFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
@@ -43,14 +48,20 @@ export default function ConnectQuickVercelFrameContent({
 		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
-					<div>
-						Add <Icon icon={faVercel} className="ml-0.5" />
-						Vercel
-					</div>
+					{title || (
+						<div>
+							Add <Icon icon={faVercel} className="ml-0.5" />
+							Vercel
+						</div>
+					)}
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<FormStepper onClose={onClose} datacenters={datacenters} />
+				<FormStepper
+					onClose={onClose}
+					datacenters={datacenters}
+					footer={footer}
+				/>
 			</Frame.Content>
 		</>
 	);
@@ -59,9 +70,11 @@ export default function ConnectQuickVercelFrameContent({
 function FormStepper({
 	datacenters,
 	onClose,
+	footer,
 }: {
 	onClose?: () => void;
 	datacenters: Region[];
+	footer?: React.ReactNode;
 }) {
 	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
@@ -86,6 +99,7 @@ function FormStepper({
 	return (
 		<StepperForm
 			{...stepper}
+			footer={footer}
 			showAllSteps
 			initialStep="deploy"
 			content={{
