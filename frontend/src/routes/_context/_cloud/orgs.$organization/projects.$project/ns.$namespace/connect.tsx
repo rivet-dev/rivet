@@ -436,18 +436,21 @@ function Runners() {
 }
 
 function usePublishableToken() {
-	const cloudProvider = useCloudNamespaceDataProvider();
-	const engineProvider = useEngineNamespaceDataProvider();
-	const cloudData = useSuspenseQuery(
-		cloudProvider.publishableTokenQueryOptions(),
-	);
-	const engineData = useSuspenseQuery(
-		engineProvider.engineAdminTokenQueryOptions(),
-	);
-
 	return match(__APP_TYPE__)
-		.with("cloud", () => cloudData.data)
-		.with("engine", () => engineData.data)
+		.with("cloud", () => {
+			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
+			return useSuspenseQuery(
+				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
+				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
+			).data;
+		})
+		.with("engine", () => {
+			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
+			return useSuspenseQuery(
+				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
+				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
+			).data;
+		})
 		.otherwise(() => {
 			throw new Error("Not in a valid context");
 		});
