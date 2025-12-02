@@ -23,16 +23,16 @@ pub struct DeletePath {
 }
 
 #[utoipa::path(
-    delete,
+	delete,
 	operation_id = "actors_delete",
-    path = "/actors/{actor_id}",
-    params(
-        ("actor_id" = Id, Path),
-        DeleteQuery,
-    ),
-    responses(
-        (status = 200, body = DeleteResponse),
-    ),
+	path = "/actors/{actor_id}",
+	params(
+		("actor_id" = Id, Path),
+		DeleteQuery,
+	),
+	responses(
+		(status = 200, body = DeleteResponse),
+	),
 )]
 #[tracing::instrument(skip_all)]
 pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {

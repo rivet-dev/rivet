@@ -4,13 +4,13 @@ use rivet_api_types::{actors::list_names::*, pagination::Pagination};
 use rivet_types::actors::ActorName;
 
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "actors_list_names",
-    path = "/actors/names",
-    params(ListNamesQuery),
-    responses(
-        (status = 200, body = ListNamesResponse),
-    ),
+	path = "/actors/names",
+	params(ListNamesQuery),
+	responses(
+		(status = 200, body = ListNamesResponse),
+	),
 )]
 #[tracing::instrument(skip_all)]
 pub async fn list_names(

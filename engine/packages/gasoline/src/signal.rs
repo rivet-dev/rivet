@@ -46,20 +46,20 @@ macro_rules! join_signal {
 		join_signal!(@ $vis $join [] [] $($tt)*);
 	};
 	(@
-	    $vis:vis $join:ident
-	    [$({ $names:tt } { $types:tt })*]
-	    [$({ $just_types:tt })*]
+		$vis:vis $join:ident
+		[$({ $names:tt } { $types:tt })*]
+		[$({ $just_types:tt })*]
 	) => {
-    	$vis enum $join {
+		$vis enum $join {
 			$( $names ($types) ),*
 		}
 
-    	#[async_trait::async_trait]
+		#[async_trait::async_trait]
 		impl Listen for $join {
 			#[tracing::instrument(skip_all, fields(t=std::any::type_name::<Self>()))]
 			async fn listen(ctx: &mut gas::prelude::ListenCtx) -> gas::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[
-				    $(<$just_types as gas::signal::Signal>::NAME),*
+					$(<$just_types as gas::signal::Signal>::NAME),*
 				]).await?;
 
 				Self::parse(&row.signal_name, &row.body)
@@ -67,7 +67,7 @@ macro_rules! join_signal {
 
 			fn parse(name: &str, body: &serde_json::value::RawValue) -> gas::prelude::WorkflowResult<Self> {
 				$(
-				    if name == <$types as gas::signal::Signal>::NAME {
+					if name == <$types as gas::signal::Signal>::NAME {
 						std::result::Result::Ok(
 							Self::$names(
 								serde_json::from_str(body.get())
@@ -84,33 +84,33 @@ macro_rules! join_signal {
 				}
 			}
 		}
-    };
+	};
 	(@
-	    $vis:vis $join:ident
-	    [$({ $names:tt } { $types:tt })*]
-	    [$({ $just_types:tt })*]
-	    $name:ident,
-	    $($tail:tt)*
+		$vis:vis $join:ident
+		[$({ $names:tt } { $types:tt })*]
+		[$({ $just_types:tt })*]
+		$name:ident,
+		$($tail:tt)*
 	) => {
 	   join_signal!(@
-	       $vis $join
-	       [$( { $names } { $types } )* { $name } { $name }]
-	       [$( { $just_types } )* { $name }]
-	       $($tail)*
+	   	$vis $join
+	   	[$( { $names } { $types } )* { $name } { $name }]
+	   	[$( { $just_types } )* { $name }]
+	   	$($tail)*
 	   );
 	};
 	(@
-	    $vis:vis $join:ident
-	    [$({ $names:tt } { $types:tt })*]
-	    [$({ $just_types:tt })*]
-	    $name:ident($ty:ty),
-	    $($tail:tt)*
+		$vis:vis $join:ident
+		[$({ $names:tt } { $types:tt })*]
+		[$({ $just_types:tt })*]
+		$name:ident($ty:ty),
+		$($tail:tt)*
 	) => {
 	   join_signal!(@
-	       $vis $join
-	       [$( { $names } { $types } )* { $name } { $ty }]
-	       [$( { $just_types } )* { $ty }]
-	       $($tail)*
+	   	$vis $join
+	   	[$( { $names } { $types } )* { $name } { $ty }]
+	   	[$( { $just_types } )* { $ty }]
+	   	$($tail)*
 	   );
 	};
 }

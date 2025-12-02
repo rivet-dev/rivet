@@ -11,13 +11,13 @@ use rivet_api_util::request_remote_datacenter;
 use crate::ctx::ApiCtx;
 
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "namespaces_list",
-    path = "/namespaces",
-    params(ListQuery),
-    responses(
-        (status = 200, body = ListResponse),
-    ),
+	path = "/namespaces",
+	params(ListQuery),
+	responses(
+		(status = 200, body = ListResponse),
+	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]
@@ -48,13 +48,13 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 }
 
 #[utoipa::path(
-    post,
+	post,
 	operation_id = "namespaces_create",
-    path = "/namespaces",
+	path = "/namespaces",
 	request_body(content = CreateRequest, content_type = "application/json"),
-    responses(
-        (status = 200, body = CreateResponse),
-    ),
+	responses(
+		(status = 200, body = CreateResponse),
+	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]

@@ -21,7 +21,6 @@ RUN apt-get update -y && \
     libpq-dev \
     libssl-dev \
     pkg-config \
-    protobuf-compiler \
     ca-certificates \
     gpg \
     openssl \

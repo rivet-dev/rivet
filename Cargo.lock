@@ -1488,7 +1488,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "portpicker",
- "protobuf",
  "reqwest",
  "rivet-api-builder",
  "rivet-config",
@@ -3859,12 +3858,6 @@ checksum = "52c2c1bf36ddb1a1c396b3601a3cec27c2462e45f07c386894ec3ccf5332bd16"
 dependencies = [
  "prost",
 ]
-
-[[package]]
-name = "protobuf"
-version = "2.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "quanta"
