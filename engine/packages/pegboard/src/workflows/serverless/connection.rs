@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use futures_util::{FutureExt, StreamExt};
@@ -5,8 +7,8 @@ use gas::prelude::*;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
+use rivet_runtime::TermSignal;
 use rivet_types::runner_configs::RunnerConfigKind;
-use std::time::Instant;
 use tokio::time::Duration;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
@@ -79,12 +81,12 @@ pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input
 
 				let next = backoff.step().expect("should not have max retry");
 				if let Some(_sig) = ctx
-					.listen_with_timeout::<DrainSignal>(Instant::from(next) - Instant::now())
+					.listen_with_timeout::<Drain>(Instant::from(next) - Instant::now())
 					.await?
 				{
 					tracing::debug!("drain received during serverless connection backoff");
 
-					// Notify parent that drain started
+					// Notify pool that drain started
 					return Ok(Loop::Break(true));
 				}
 
@@ -172,8 +174,9 @@ async fn outbound_req_inner(
 		});
 	}
 
+	let mut term_signal = TermSignal::new().await;
 	let mut drain_sub = ctx
-		.subscribe::<DrainMessage>(("workflow_id", ctx.workflow_id()))
+		.subscribe::<Drain>(("workflow_id", ctx.workflow_id()))
 		.await?;
 
 	let (runner_config_res, namespace_res) = tokio::try_join!(
@@ -331,6 +334,7 @@ async fn outbound_req_inner(
 		},
 		_ = tokio::time::sleep(sleep_until_drain) => {}
 		_ = drain_sub.next() => {}
+		_ = term_signal.recv() => {}
 	};
 
 	tracing::debug!(?runner_id, "connection reached lifespan, needs draining");
@@ -361,7 +365,8 @@ async fn outbound_req_inner(
 	// After we tell the pool we're draining, any remaining failures
 	// don't matter as the pool already stopped caring about us.
 	if let Err(err) =
-		finish_non_critical_draining(ctx, source, runner_id, runner_protocol_version).await
+		finish_non_critical_draining(ctx, term_signal, source, runner_id, runner_protocol_version)
+			.await
 	{
 		tracing::debug!(?err, "failed non critical draining phase");
 	}
@@ -371,6 +376,9 @@ async fn outbound_req_inner(
 	})
 }
 
+/// Reads from the adjacent serverless runner wf which is keeping track of signals while this workflow runs
+/// outbound requests.
+#[tracing::instrument(skip_all)]
 async fn is_runner_draining(ctx: &ActivityCtx, runner_wf_id: Id) -> Result<bool> {
 	let runner_wf = ctx
 		.get_workflows(vec![runner_wf_id])
@@ -383,8 +391,10 @@ async fn is_runner_draining(ctx: &ActivityCtx, runner_wf_id: Id) -> Result<bool>
 	Ok(state.is_draining)
 }
 
+#[tracing::instrument(skip_all)]
 async fn finish_non_critical_draining(
 	ctx: &ActivityCtx,
+	mut term_signal: TermSignal,
 	mut source: sse::EventSource,
 	mut runner_id: Option<Id>,
 	mut runner_protocol_version: Option<u16>,
@@ -437,6 +447,7 @@ async fn finish_non_critical_draining(
 		_ = tokio::time::sleep(DRAIN_GRACE_PERIOD) => {
 			tracing::debug!(?runner_id, "reached drain grace period before runner shut down")
 		}
+		_ = term_signal.recv() => {}
 	}
 
 	// Close connection
@@ -452,6 +463,7 @@ async fn finish_non_critical_draining(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn drain_runner(ctx: &ActivityCtx, runner_id: Id) -> Result<()> {
 	let res = ctx
 		.signal(crate::workflows::runner::Stop {
@@ -492,6 +504,7 @@ async fn drain_runner(ctx: &ActivityCtx, runner_id: Id) -> Result<()> {
 /// Send a stop message to the client.
 ///
 /// This will close the runner's WebSocket.
+#[tracing::instrument(skip_all)]
 async fn publish_to_client_stop(
 	ctx: &ActivityCtx,
 	runner_id: Id,
@@ -514,11 +527,9 @@ async fn publish_to_client_stop(
 	Ok(())
 }
 
-#[message("pegboard_serverless_connection_drain_msg")]
-pub struct DrainMessage {}
-
-#[signal("pegboard_serverless_connection_drain_sig")]
-pub struct DrainSignal {}
+#[message("pegboard_serverless_connection_drain")]
+#[signal("pegboard_serverless_connection_drain")]
+pub struct Drain {}
 
 fn reconnect_backoff(
 	retry_count: usize,
