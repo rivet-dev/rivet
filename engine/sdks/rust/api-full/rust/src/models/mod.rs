@@ -30,6 +30,8 @@ pub mod health_response;
 pub use self::health_response::HealthResponse;
 pub mod health_status;
 pub use self::health_status::HealthStatus;
+pub mod metadata_get_response;
+pub use self::metadata_get_response::MetadataGetResponse;
 pub mod namespace;
 pub use self::namespace::Namespace;
 pub mod namespace_list_response;

@@ -521,6 +521,42 @@ func (h HealthStatus) Ptr() *HealthStatus {
 	return &h
 }
 
+type MetadataGetResponse struct {
+	BuildTimestamp string `json:"build_timestamp"`
+	CargoProfile   string `json:"cargo_profile"`
+	CargoTarget    string `json:"cargo_target"`
+	GitSha         string `json:"git_sha"`
+	Runtime        string `json:"runtime"`
+	RustcHost      string `json:"rustc_host"`
+	RustcVersion   string `json:"rustc_version"`
+	Version        string `json:"version"`
+
+	_rawJSON json.RawMessage
+}
+
+func (m *MetadataGetResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler MetadataGetResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*m = MetadataGetResponse(value)
+	m._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (m *MetadataGetResponse) String() string {
+	if len(m._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(m._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(m); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", m)
+}
+
 type Namespace struct {
 	CreateTs    int64   `json:"create_ts"`
 	DisplayName string  `json:"display_name"`

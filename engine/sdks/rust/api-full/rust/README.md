@@ -34,6 +34,7 @@ Class | Method | HTTP request | Description
 *ActorsListNamesApi* | [**actors_list_names**](docs/ActorsListNamesApi.md#actors_list_names) | **GET** /actors/names | ## Datacenter Round Trips
 *DatacentersApi* | [**datacenters_list**](docs/DatacentersApi.md#datacenters_list) | **GET** /datacenters | 
 *HealthApi* | [**health_fanout**](docs/HealthApi.md#health_fanout) | **GET** /health/fanout | 
+*MetadataApi* | [**metadata_get**](docs/MetadataApi.md#metadata_get) | **DELETE** /metadata | Returns metadata about the API including runtime and version
 *NamespacesApi* | [**namespaces_create**](docs/NamespacesApi.md#namespaces_create) | **POST** /namespaces | 
 *NamespacesApi* | [**namespaces_list**](docs/NamespacesApi.md#namespaces_list) | **GET** /namespaces | 
 *RunnerConfigsDeleteApi* | [**runner_configs_delete**](docs/RunnerConfigsDeleteApi.md#runner_configs_delete) | **DELETE** /runner-configs/{runner_name} | 
@@ -63,6 +64,7 @@ Class | Method | HTTP request | Description
  - [HealthFanoutResponse](docs/HealthFanoutResponse.md)
  - [HealthResponse](docs/HealthResponse.md)
  - [HealthStatus](docs/HealthStatus.md)
+ - [MetadataGetResponse](docs/MetadataGetResponse.md)
  - [Namespace](docs/Namespace.md)
  - [NamespaceListResponse](docs/NamespaceListResponse.md)
  - [NamespacesCreateRequest](docs/NamespacesCreateRequest.md)

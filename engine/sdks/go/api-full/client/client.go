@@ -11,6 +11,7 @@ import (
 	core "sdk/core"
 	datacenters "sdk/datacenters"
 	health "sdk/health"
+	metadata "sdk/metadata"
 	namespaces "sdk/namespaces"
 	runners "sdk/runners"
 )
@@ -22,6 +23,7 @@ type Client struct {
 
 	Datacenters *datacenters.Client
 	Health      *health.Client
+	Metadata    *metadata.Client
 	Namespaces  *namespaces.Client
 	Runners     *runners.Client
 }
@@ -37,6 +39,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		header:      options.ToHeader(),
 		Datacenters: datacenters.NewClient(opts...),
 		Health:      health.NewClient(opts...),
+		Metadata:    metadata.NewClient(opts...),
 		Namespaces:  namespaces.NewClient(opts...),
 		Runners:     runners.NewClient(opts...),
 	}

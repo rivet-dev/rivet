@@ -9,6 +9,7 @@ import * as serializers from "./serialization/index";
 import * as errors from "./errors/index";
 import { Datacenters } from "./api/resources/datacenters/client/Client";
 import { Health } from "./api/resources/health/client/Client";
+import { Metadata } from "./api/resources/metadata/client/Client";
 import { Namespaces } from "./api/resources/namespaces/client/Client";
 import { Runners } from "./api/resources/runners/client/Client";
 
@@ -36,6 +37,7 @@ export declare namespace RivetClient {
 export class RivetClient {
     protected _datacenters: Datacenters | undefined;
     protected _health: Health | undefined;
+    protected _metadata: Metadata | undefined;
     protected _namespaces: Namespaces | undefined;
     protected _runners: Runners | undefined;
 
@@ -47,6 +49,10 @@ export class RivetClient {
 
     public get health(): Health {
         return (this._health ??= new Health(this._options));
+    }
+
+    public get metadata(): Metadata {
+        return (this._metadata ??= new Metadata(this._options));
     }
 
     public get namespaces(): Namespaces {
