@@ -114,7 +114,7 @@ export function Navigation({ navigation, ...props }) {
 					Changelog
 				</TopLevelNavItem>
 				<TopLevelNavItem href="/pricing" icon={faCoin}>
-					Pricing
+					Cloud
 				</TopLevelNavItem>
 
 				{/* Sidebar */}
