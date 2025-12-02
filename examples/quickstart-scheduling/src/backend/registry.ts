@@ -10,24 +10,13 @@ interface Reminder {
 interface ReminderActorState {
 	reminders: Reminder[];
 	completedCount: number;
-	healthCheckCount: number;
 }
 
 const reminderActor = actor({
 	state: {
 		reminders: [] as Reminder[],
 		completedCount: 0,
-		healthCheckCount: 0,
 	} satisfies ReminderActorState as ReminderActorState,
-
-	onCreate: async (c) => {
-		// Schedule a recurring health check action every 5 seconds
-		c.schedule.after(5000, "healthCheck");
-	},
-
-	onStart: (c) => {
-		console.log("reminder actor started");
-	},
 
 	actions: {
 		// Schedule a reminder with a delay in milliseconds
@@ -77,7 +66,7 @@ const reminderActor = actor({
 		},
 
 		// Get all reminders
-		getReminders: (c) => {
+		getReminders: (c): Reminder[] => {
 			return c.state.reminders;
 		},
 
@@ -107,17 +96,7 @@ const reminderActor = actor({
 				total,
 				completed,
 				pending,
-				healthCheckCount: c.state.healthCheckCount,
 			};
-		},
-
-		// Health check action (recurring)
-		healthCheck: (c) => {
-			c.state.healthCheckCount++;
-			console.log(`health check #${c.state.healthCheckCount}`);
-
-			// Schedule the next health check
-			c.schedule.after(5000, "healthCheck");
 		},
 	},
 });

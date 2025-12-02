@@ -10,7 +10,7 @@ export function App() {
 	const [delay, setDelay] = useState(5);
 	const [timestamp, setTimestamp] = useState("");
 	const [triggeredReminders, setTriggeredReminders] = useState<Reminder[]>([]);
-	const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0, healthCheckCount: 0 });
+	const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
 
 	const reminderActor = useActor({
 		name: "reminderActor",
@@ -133,10 +133,6 @@ export function App() {
 				<div className="stat">
 					<span className="stat-label">Pending:</span>
 					<span className="stat-value">{stats.pending}</span>
-				</div>
-				<div className="stat">
-					<span className="stat-label">Health Checks:</span>
-					<span className="stat-value">{stats.healthCheckCount}</span>
 				</div>
 			</div>
 

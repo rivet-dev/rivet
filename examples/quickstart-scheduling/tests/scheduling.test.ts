@@ -180,19 +180,6 @@ describe("reminder scheduling", () => {
 		expect(completed?.completedAt).toBeDefined();
 	});
 
-	test("recurring health check executes multiple times", async (ctx) => {
-		const { client } = await setupTest(ctx, registry);
-		const reminderClient =
-			client.reminderActor.getOrCreate("test-health-check");
-
-		// Wait for initial health check (onCreate schedules after 5 seconds, we changed to 100ms)
-		// Note: The actor still uses 5000ms in onCreate, so this test will take time
-		// For testing purposes, let's just verify the actor was created
-		const stats = await reminderClient.getStats();
-
-		// Health check count starts at 0, it won't have executed yet with 5000ms delay
-		expect(stats.healthCheckCount).toBe(0);
-	}, 10000);
 
 	test("updates stats correctly", async (ctx) => {
 		const { client } = await setupTest(ctx, registry);
