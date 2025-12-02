@@ -13,7 +13,7 @@ import { type ConnDriver, DriverReadyState } from "../driver";
  * actor's onWebSocket handler.
  */
 export function createRawWebSocketDriver(
-	hibernatable: ConnDriver['hibernatable'],
+	hibernatable: ConnDriver["hibernatable"],
 	closePromise: Promise<void>,
 ): { driver: ConnDriver; setWebSocket(ws: UniversalWebSocket): void } {
 	let websocket: UniversalWebSocket | undefined;
