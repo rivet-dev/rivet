@@ -22,7 +22,7 @@ const useDataProvider = () => {
 			return match(
 				// biome-ignore lint/correctness/useHookAtTopLevel: match will only run once per app load
 				useRouteContext({
-					from: "/_context/",
+					from: "/_context",
 				}),
 			)
 				.with({ __type: "engine" }, (ctx) => ctx.dataProvider)
