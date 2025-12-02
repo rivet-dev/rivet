@@ -302,6 +302,25 @@ export class Runner {
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
 	}
 
+	#handleLost() {
+		this.log?.info({
+			msg: "stopping all actors due to runner lost threshold",
+		});
+
+		// Remove all remaining kv requests
+		for (const [_, request] of this.#kvRequests.entries()) {
+			request.reject(
+				new Error(
+					"KV request timed out waiting for WebSocket connection",
+				),
+			);
+		}
+
+		this.#kvRequests.clear();
+
+		this.#stopAllActors();
+	}
+
 	#stopAllActors() {
 		const actorIds = Array.from(this.#actors.keys());
 		for (const actorId of actorIds) {
@@ -837,11 +856,7 @@ export class Runner {
 						seconds: this.#runnerLostThreshold / 1000,
 					});
 					this.#runnerLostTimeout = setTimeout(() => {
-						this.log?.info({
-							msg: "stopping all actors due to runner lost threshold",
-						});
-
-						this.#stopAllActors();
+						this.#handleLost();
 					}, this.#runnerLostThreshold);
 				}
 
@@ -897,7 +912,7 @@ export class Runner {
 						seconds: this.#runnerLostThreshold / 1000,
 					});
 					this.#runnerLostTimeout = setTimeout(() => {
-						this.#stopAllActors();
+						this.#handleLost();
 					}, this.#runnerLostThreshold);
 				}
 

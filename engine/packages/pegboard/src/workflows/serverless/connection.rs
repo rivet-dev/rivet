@@ -41,7 +41,7 @@ struct RescheduleState {
 #[workflow]
 pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Run the connection activity, which will handle the full lifecycle
-	let send_drain_started = ctx
+	let drain_sent = ctx
 		.loope(RescheduleState::default(), |ctx, state| {
 			let input = input.clone();
 
@@ -55,8 +55,8 @@ pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input
 					})
 					.await?;
 
-				if let OutboundReqOutput::Done(res) = res {
-					return Ok(Loop::Break(res.send_drain_started));
+				if let OutboundReqOutput::Draining { drain_sent } = res {
+					return Ok(Loop::Break(drain_sent));
 				}
 
 				let mut backoff = reconnect_backoff(
@@ -87,7 +87,7 @@ pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input
 					tracing::debug!("drain received during serverless connection backoff");
 
 					// Notify pool that drain started
-					return Ok(Loop::Break(true));
+					return Ok(Loop::Break(false));
 				}
 
 				Ok(Loop::Continue)
@@ -98,7 +98,7 @@ pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input
 
 	// If we failed to send inline during the activity, durably ensure the
 	// signal is dispatched here
-	if send_drain_started {
+	if !drain_sent {
 		ctx.signal(pool::RunnerDrainStarted {
 			runner_wf_id: input.runner_wf_id,
 		})
@@ -142,24 +142,35 @@ struct OutboundReqInput {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct OutboundReqInnerOutput {
-	send_drain_started: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 enum OutboundReqOutput {
-	Done(OutboundReqInnerOutput),
-	NeedsRetry,
+	Continue,
+	Draining {
+		/// Whether or not to retry sending the drain signal because it failed or was never sent.
+		drain_sent: bool,
+	},
+	Retry,
 }
 
 #[activity(OutboundReq)]
 #[timeout = u64::MAX]
 async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<OutboundReqOutput> {
-	match outbound_req_inner(ctx, input).await {
-		Ok(res) => Ok(OutboundReqOutput::Done(res)),
-		Err(error) => {
-			tracing::error!(?error, "outbound_req_inner failed, retrying after backoff");
-			Ok(OutboundReqOutput::NeedsRetry)
+	let mut term_signal = TermSignal::new().await;
+	let mut drain_sub = ctx
+		.subscribe::<Drain>(("workflow_id", ctx.workflow_id()))
+		.await?;
+
+	loop {
+		match outbound_req_inner(ctx, input, &mut term_signal, &mut drain_sub).await {
+			// If the outbound req exited successfully, continue with no backoff
+			Ok(OutboundReqOutput::Continue) => {}
+			Ok(OutboundReqOutput::Draining { drain_sent }) => {
+				return Ok(OutboundReqOutput::Draining { drain_sent });
+			}
+			Ok(OutboundReqOutput::Retry) => return Ok(OutboundReqOutput::Retry),
+			Err(error) => {
+				tracing::warn!(?error, "outbound_req_inner failed, retrying after backoff");
+				return Ok(OutboundReqOutput::Retry);
+			}
 		}
 	}
 }
@@ -167,17 +178,12 @@ async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<Out
 async fn outbound_req_inner(
 	ctx: &ActivityCtx,
 	input: &OutboundReqInput,
-) -> Result<OutboundReqInnerOutput> {
+	term_signal: &mut TermSignal,
+	drain_sub: &mut message::SubscriptionHandle<Drain>,
+) -> Result<OutboundReqOutput> {
 	if is_runner_draining(ctx, input.runner_wf_id).await? {
-		return Ok(OutboundReqInnerOutput {
-			send_drain_started: true,
-		});
+		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	}
-
-	let mut term_signal = TermSignal::new().await;
-	let mut drain_sub = ctx
-		.subscribe::<Drain>(("workflow_id", ctx.workflow_id()))
-		.await?;
 
 	let (runner_config_res, namespace_res) = tokio::try_join!(
 		ctx.op(crate::ops::runner_config::get::Input {
@@ -190,9 +196,7 @@ async fn outbound_req_inner(
 	)?;
 	let Some(runner_config) = runner_config_res.into_iter().next() else {
 		tracing::debug!("runner config does not exist, ending outbound req");
-		return Ok(OutboundReqInnerOutput {
-			send_drain_started: true,
-		});
+		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	};
 
 	let RunnerConfigKind::Serverless {
@@ -204,9 +208,7 @@ async fn outbound_req_inner(
 	} = runner_config.config.kind
 	else {
 		tracing::debug!("runner config is not serverless, ending outbound req");
-		return Ok(OutboundReqInnerOutput {
-			send_drain_started: true,
-		});
+		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	};
 
 	let namespace = namespace_res
@@ -320,26 +322,20 @@ async fn outbound_req_inner(
 		Duration::from_secs(request_lifespan as u64).saturating_sub(DRAIN_GRACE_PERIOD);
 	tokio::select! {
 		res = stream_handler => {
-			return match res {
-				Err(e) => Err(e.into()),
-				// TODO:
-				// For unexpected closes, we don’t know if the runner connected
-				// or not bc we can’t correlate the runner id.
-				//
-				// Lifecycle state falls apart
-				Ok(_) => Ok(OutboundReqInnerOutput {
-					send_drain_started: false
-				})
-			};
+			match res {
+				// If the outbound req was stopped from the client side, we can just continue the loop
+				Ok(_) => return Ok(OutboundReqOutput::Continue),
+				Err(e) => return Err(e.into()),
+			}
 		},
 		_ = tokio::time::sleep(sleep_until_drain) => {}
 		_ = drain_sub.next() => {}
 		_ = term_signal.recv() => {}
 	};
 
-	tracing::debug!(?runner_id, "connection reached lifespan, needs draining");
+	tracing::debug!(?runner_id, "connection reached lifespan, starting drain");
 
-	if let Err(e) = ctx
+	if let Err(err) = ctx
 		.signal(pool::RunnerDrainStarted {
 			runner_wf_id: input.runner_wf_id,
 		})
@@ -349,17 +345,9 @@ async fn outbound_req_inner(
 		.send()
 		.await
 	{
-		tracing::warn!(
-			runner_name=%input.runner_name.clone(),
-			namespace_id=%input.namespace_id,
-			workflow_id=%ctx.workflow_id(),
-			"failed to send signal: {}", e
-		);
+		tracing::debug!(?err, "failed to send drain signal");
 
-		// If we failed to send, have the workflow send it durably
-		return Ok(OutboundReqInnerOutput {
-			send_drain_started: true,
-		});
+		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	}
 
 	// After we tell the pool we're draining, any remaining failures
@@ -371,9 +359,7 @@ async fn outbound_req_inner(
 		tracing::debug!(?err, "failed non critical draining phase");
 	}
 
-	Ok(OutboundReqInnerOutput {
-		send_drain_started: false,
-	})
+	Ok(OutboundReqOutput::Draining { drain_sent: true })
 }
 
 /// Reads from the adjacent serverless runner wf which is keeping track of signals while this workflow runs
@@ -394,7 +380,7 @@ async fn is_runner_draining(ctx: &ActivityCtx, runner_wf_id: Id) -> Result<bool>
 #[tracing::instrument(skip_all)]
 async fn finish_non_critical_draining(
 	ctx: &ActivityCtx,
-	mut term_signal: TermSignal,
+	term_signal: &mut TermSignal,
 	mut source: sse::EventSource,
 	mut runner_id: Option<Id>,
 	mut runner_protocol_version: Option<u16>,

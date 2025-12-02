@@ -93,6 +93,12 @@ async fn upsert_inner(
 		.iter()
 		.map(|dc| (dc.clone(), body.datacenters.remove(&dc.name)))
 		.collect::<Vec<_>>();
+
+	// Check for leftover datacenters in the body, this means those datacenters don't exist
+	if !body.datacenters.is_empty() {
+		return Err(crate::errors::Datacenter::NotFound.build());
+	}
+
 	let any_endpoint_config_changed = futures_util::stream::iter(dcs)
 		.map(|(dc, runner_config)| {
 			let ctx = ctx.clone();
