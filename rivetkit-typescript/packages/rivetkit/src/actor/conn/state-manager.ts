@@ -1,7 +1,7 @@
 import type { HibernatingWebSocketMetadata } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import invariant from "invariant";
-import onChange from "on-change";
+import onChange from "@rivetkit/on-change";
 import { isCborSerializable } from "@/common/utils";
 import * as errors from "../errors";
 import { assertUnreachable } from "../utils";
