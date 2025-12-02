@@ -222,7 +222,9 @@ async function handleWebSocketGateway(
 			if (protocol.startsWith(WS_PROTOCOL_TARGET)) {
 				target = protocol.substring(WS_PROTOCOL_TARGET.length);
 			} else if (protocol.startsWith(WS_PROTOCOL_ACTOR)) {
-				actorId = decodeURIComponent(protocol.substring(WS_PROTOCOL_ACTOR.length));
+				actorId = decodeURIComponent(
+					protocol.substring(WS_PROTOCOL_ACTOR.length),
+				);
 			} else if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
 				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
 			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {

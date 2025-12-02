@@ -185,7 +185,9 @@ export function createTestInlineClientDriver(
 			const protocols: string[] = [];
 			protocols.push(WS_PROTOCOL_STANDARD);
 			protocols.push(`${WS_PROTOCOL_TARGET}actor`);
-			protocols.push(`${WS_PROTOCOL_ACTOR}${encodeURIComponent(actorId)}`);
+			protocols.push(
+				`${WS_PROTOCOL_ACTOR}${encodeURIComponent(actorId)}`,
+			);
 			protocols.push(`${WS_PROTOCOL_ENCODING}${encoding}`);
 			protocols.push(
 				`${WS_TEST_PROTOCOL_PATH}${encodeURIComponent(normalizedPath)}`,

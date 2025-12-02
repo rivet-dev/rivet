@@ -8,7 +8,7 @@ import { type ConnDriver, DriverReadyState } from "../driver";
 export type ConnDriverWebSocketState = Record<never, never>;
 
 export function createWebSocketDriver(
-	hibernatable: ConnDriver['hibernatable'],
+	hibernatable: ConnDriver["hibernatable"],
 	encoding: Encoding,
 	closePromise: Promise<void>,
 ): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
