@@ -19,8 +19,8 @@ pub enum WorkflowError {
 	#[error("activity failure, max retries reached: {0:?}")]
 	ActivityMaxFailuresReached(#[source] anyhow::Error),
 
-	#[error("operation failure: {0:?}")]
-	OperationFailure(#[source] anyhow::Error),
+	#[error("operation failure ({0}): {1:?}")]
+	OperationFailure(&'static str, #[source] anyhow::Error),
 
 	#[error("workflow missing from registry: {0}")]
 	WorkflowMissingFromRegistry(String),
@@ -150,8 +150,8 @@ pub enum WorkflowError {
 	ActivityTimeout(usize),
 
 	// Includes error count
-	#[error("operation timed out")]
-	OperationTimeout(usize),
+	#[error("operation {0} timed out")]
+	OperationTimeout(&'static str, usize),
 
 	#[error("duplicate registered workflow: {0}")]
 	DuplicateRegisteredWorkflow(String),
@@ -188,7 +188,7 @@ impl WorkflowError {
 		match self {
 			WorkflowError::ActivityFailure(_, error_count)
 			| WorkflowError::ActivityTimeout(error_count)
-			| WorkflowError::OperationTimeout(error_count) => {
+			| WorkflowError::OperationTimeout(_, error_count) => {
 				// NOTE: Max retry is handled in `WorkflowCtx::activity`
 				let mut backoff = rivet_util::backoff::Backoff::new_at(
 					8,
@@ -220,7 +220,7 @@ impl WorkflowError {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
 			| WorkflowError::ActivityTimeout(_)
-			| WorkflowError::OperationTimeout(_)
+			| WorkflowError::OperationTimeout(_, _)
 			| WorkflowError::NoSignalFound(_)
 			| WorkflowError::NoSignalFoundAndSleep(_, _)
 			| WorkflowError::SubWorkflowIncomplete(_)
@@ -235,7 +235,7 @@ impl WorkflowError {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
 			| WorkflowError::ActivityTimeout(_)
-			| WorkflowError::OperationTimeout(_) => true,
+			| WorkflowError::OperationTimeout(_, _) => true,
 			_ => false,
 		}
 	}
