@@ -1,5 +1,5 @@
 import { idToStr } from "@rivetkit/engine-runner";
-import onChange from "on-change";
+import onChange from "@rivetkit/on-change";
 import { isCborSerializable, stringifyError } from "@/common/utils";
 import {
 	ACTOR_VERSIONED,
