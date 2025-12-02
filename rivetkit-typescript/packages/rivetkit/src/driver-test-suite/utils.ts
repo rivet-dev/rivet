@@ -4,9 +4,9 @@ import { type Client, createClient } from "@/client/mod";
 import { RunConfigSchema } from "@/driver-helpers/mod";
 import { createClientWithDriver } from "@/mod";
 import type { registry } from "../../fixtures/driver-test-suite/registry";
+import { logger } from "./log";
 import type { DriverTestConfig } from "./mod";
 import { createTestInlineClientDriver } from "./test-inline-client-driver";
-import { logger } from "./log";
 
 export const FAKE_TIME = new Date("2024-01-01T00:00:00.000Z");
 

@@ -3,7 +3,9 @@ import { HIBERNATION_SLEEP_TIMEOUT } from "../../../fixtures/driver-test-suite/h
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
-export function runActorConnHibernationTests(driverTestConfig: DriverTestConfig) {
+export function runActorConnHibernationTests(
+	driverTestConfig: DriverTestConfig,
+) {
 	describe.skipIf(driverTestConfig.skip?.hibernation)(
 		"Connection Hibernation",
 		() => {
