@@ -13,6 +13,7 @@ export * from "./DatacentersListResponse";
 export * from "./HealthFanoutResponse";
 export * from "./HealthResponse";
 export * from "./HealthStatus";
+export * from "./MetadataGetResponse";
 export * from "./Namespace";
 export * from "./NamespaceListResponse";
 export * from "./NamespacesCreateResponse";

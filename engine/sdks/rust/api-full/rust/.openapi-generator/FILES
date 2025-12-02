@@ -27,6 +27,8 @@ docs/HealthApi.md
 docs/HealthFanoutResponse.md
 docs/HealthResponse.md
 docs/HealthStatus.md
+docs/MetadataApi.md
+docs/MetadataGetResponse.md
 docs/Namespace.md
 docs/NamespaceListResponse.md
 docs/NamespacesApi.md
@@ -78,6 +80,7 @@ src/apis/actors_list_names_api.rs
 src/apis/configuration.rs
 src/apis/datacenters_api.rs
 src/apis/health_api.rs
+src/apis/metadata_api.rs
 src/apis/mod.rs
 src/apis/namespaces_api.rs
 src/apis/runner_configs_delete_api.rs
@@ -103,6 +106,7 @@ src/models/datacenters_list_response.rs
 src/models/health_fanout_response.rs
 src/models/health_response.rs
 src/models/health_status.rs
+src/models/metadata_get_response.rs
 src/models/mod.rs
 src/models/namespace.rs
 src/models/namespace_list_response.rs
