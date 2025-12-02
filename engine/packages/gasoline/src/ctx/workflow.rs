@@ -618,12 +618,12 @@ impl WorkflowCtx {
 									WorkflowError::ActivityTimeout(error_count)
 								}
 							}
-							WorkflowError::OperationTimeout(_) => {
+							WorkflowError::OperationTimeout(op_name, _) => {
 								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(err.into())
 								} else {
 									// Add error count to the error for backoff calculation
-									WorkflowError::OperationTimeout(error_count)
+									WorkflowError::OperationTimeout(op_name, error_count)
 								}
 							}
 							_ => err,

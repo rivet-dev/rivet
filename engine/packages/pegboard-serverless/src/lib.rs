@@ -61,6 +61,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn tick(
 	ctx: &StandaloneCtx,
 	outbound_connections: &mut HashMap<(Id, String), Vec<OutboundConnection>>,
@@ -157,6 +158,7 @@ async fn tick(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn tick_runner_config(
 	ctx: &StandaloneCtx,
 	ns_id: Id,
@@ -264,32 +266,35 @@ fn spawn_connection(
 	let draining = Arc::new(AtomicBool::new(false));
 
 	let draining2 = draining.clone();
-	let handle = tokio::spawn(async move {
-		if let Err(err) = outbound_handler(
-			&ctx,
-			url,
-			headers,
-			request_lifespan,
-			slots_per_runner,
-			runner_name,
-			namespace_name,
-			shutdown_rx,
-			draining2,
-		)
-		.await
-		{
-			tracing::warn!(?err, "outbound req failed");
+	let handle = tokio::spawn(
+		async move {
+			if let Err(err) = outbound_handler(
+				&ctx,
+				url,
+				headers,
+				request_lifespan,
+				slots_per_runner,
+				runner_name,
+				namespace_name,
+				shutdown_rx,
+				draining2,
+			)
+			.await
+			{
+				tracing::warn!(?err, "outbound req failed");
 
-			// TODO: Add backoff
-			tokio::time::sleep(Duration::from_secs(1)).await;
+				// TODO: Add backoff
+				tokio::time::sleep(Duration::from_secs(1)).await;
 
-			// On error, bump the autoscaler loop again
-			let _ = ctx
-				.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
-				.send()
-				.await;
+				// On error, bump the autoscaler loop again
+				let _ = ctx
+					.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+					.send()
+					.await;
+			}
 		}
-	});
+		.custom_instrument(tracing::info_span!("outbound_req_task")),
+	);
 
 	OutboundConnection {
 		handle,
@@ -298,6 +303,7 @@ fn spawn_connection(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn outbound_handler(
 	ctx: &StandaloneCtx,
 	url: String,
@@ -478,6 +484,7 @@ async fn outbound_handler(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let res = ctx
 		.signal(pegboard::workflows::runner::Stop {
@@ -498,7 +505,7 @@ async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 			"runner workflow not found, likely already stopped"
 		);
 	} else {
-		res?;
+		res.context("failed sending drain signal")?;
 	}
 
 	Ok(())
@@ -507,6 +514,7 @@ async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 /// Send a stop message to the client.
 ///
 /// This will close the runner's WebSocket.
+#[tracing::instrument(skip_all)]
 async fn publish_to_client_stop(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let receiver_subject =
 		pegboard::pubsub_subjects::RunnerReceiverSubject::new(runner_id).to_string();
