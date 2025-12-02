@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
     clang-14 \
     libssl-dev \
     pkg-config \
-    protobuf-compiler \
     ca-certificates \
     g++ \
     g++-multilib \

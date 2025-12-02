@@ -30,12 +30,13 @@ use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_confi
 		runner_configs::refresh_metadata::refresh_metadata,
 		datacenters::list,
 		health::fanout,
+		metadata::get,
 	),
 	components(
 		schemas(rivet_types::keys::namespace::runner_config::RunnerConfigVariant)
 	),
 	security( ("bearer_auth" = []) ),
-    modifiers(&SecurityAddon),
+	modifiers(&SecurityAddon),
 )]
 pub struct ApiDoc;
 
@@ -53,7 +54,7 @@ pub async fn router(
 				axum::routing::get(|| async { Redirect::permanent("/ui/") }),
 			)
 			// MARK: Metadata
-			.route("/metadata", axum::routing::get(metadata::get_metadata))
+			.route("/metadata", axum::routing::get(metadata::get))
 			// MARK: Namespaces
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))

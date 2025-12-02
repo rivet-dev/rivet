@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y \
     libclang-14-dev \
     clang-14 \
     git-lfs \
-    protobuf-compiler \
     gcc-mingw-w64-x86-64 \
     g++-mingw-w64-x86-64 \
     binutils-mingw-w64-x86-64 \

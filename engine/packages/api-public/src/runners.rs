@@ -12,13 +12,13 @@ use utoipa::{IntoParams, ToSchema};
 use crate::ctx::ApiCtx;
 
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "runners_list",
-    path = "/runners",
-    params(ListQuery),
-    responses(
-        (status = 200, body = ListResponse),
-    ),
+	path = "/runners",
+	params(ListQuery),
+	responses(
+		(status = 200, body = ListResponse),
+	),
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]

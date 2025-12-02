@@ -55,13 +55,13 @@ pub struct ListResponse {
 ///
 /// ## Optimized Alternative Routes
 #[utoipa::path(
-    get,
+	get,
 	operation_id = "actors_list",
-    path = "/actors",
-    params(ListQuery),
-    responses(
-        (status = 200, body = ListResponse),
-    ),
+	path = "/actors",
+	params(ListQuery),
+	responses(
+		(status = 200, body = ListResponse),
+	),
 )]
 pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQuery>) -> Response {
 	match list_inner(ctx, query).await {

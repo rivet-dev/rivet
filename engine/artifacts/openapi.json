@@ -367,6 +367,27 @@
         ]
       }
     },
+    "/metadata": {
+      "delete": {
+        "tags": [
+          "metadata"
+        ],
+        "summary": "Returns metadata about the API including runtime and version",
+        "operationId": "metadata_get",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataGetResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/namespaces": {
       "get": {
         "tags": [
@@ -1252,6 +1273,45 @@
           "ok",
           "error"
         ]
+      },
+      "MetadataGetResponse": {
+        "type": "object",
+        "required": [
+          "runtime",
+          "version",
+          "git_sha",
+          "build_timestamp",
+          "rustc_version",
+          "rustc_host",
+          "cargo_target",
+          "cargo_profile"
+        ],
+        "properties": {
+          "build_timestamp": {
+            "type": "string"
+          },
+          "cargo_profile": {
+            "type": "string"
+          },
+          "cargo_target": {
+            "type": "string"
+          },
+          "git_sha": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "rustc_host": {
+            "type": "string"
+          },
+          "rustc_version": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
       },
       "Namespace": {
         "type": "object",

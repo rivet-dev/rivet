@@ -63,14 +63,14 @@ pub struct GetOrCreateResponse {
 ///
 /// ## Optimized Alternative Routes
 #[utoipa::path(
-    put,
+	put,
 	operation_id = "actors_get_or_create",
-    path = "/actors",
-    params(GetOrCreateQuery),
-    request_body(content = GetOrCreateRequest, content_type = "application/json"),
-    responses(
-        (status = 200, body = GetOrCreateResponse),
-    ),
+	path = "/actors",
+	params(GetOrCreateQuery),
+	request_body(content = GetOrCreateRequest, content_type = "application/json"),
+	responses(
+		(status = 200, body = GetOrCreateResponse),
+	),
 )]
 pub async fn get_or_create(
 	Extension(ctx): Extension<ApiCtx>,
