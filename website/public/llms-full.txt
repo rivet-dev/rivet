@@ -112,8 +112,9 @@ const user = actor(,
   actions: 
         });
       }
-      
-      // Rest of the user registration logic...
+
+      // Update username
+      c.state.username = username;
     }
   }
 });
@@ -121,6 +122,7 @@ const user = actor(,
 
 ```typescript }
 try  catch (error) 
+  }
 }
 ```
 
@@ -172,6 +174,14 @@ function incrementCount(c: ActionContextOf)
 ```
 
 See [helper types](/docs/actors/helper-types) for more details on using `ActionContextOf` and other utility types.
+
+## API Reference
+
+- [`Actions`](/typedoc/interfaces/rivetkit.mod.Actions.html) - Interface for defining actions
+- [`ActionContext`](/typedoc/interfaces/rivetkit.mod.ActionContext.html) - Context available in action handlers
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining actors with actions
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for calling actions from client
+- [`ActorActionFunction`](/typedoc/types/rivetkit.client_mod.ActorActionFunction.html) - Type for action functions
 ## Authentication
 
 # Authentication
@@ -470,6 +480,12 @@ const cachedAuthActor = actor(,
   },
 });
 ```
+
+## API Reference
+
+- [`AuthIntent`](/typedoc/types/rivetkit.mod.AuthIntent.html) - Authentication intent type
+- [`OnBeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html) - Context for auth checks
+- [`OnConnectContext`](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html) - Context after connection
 ## Clients
 
 # Clients
@@ -778,6 +794,14 @@ const handle = client.counter.getOrCreate("my-counter");
 const actorId = await handle.resolve();
 console.log(actorId); // "lrysjam017rhxofttna2x5nzjml610"
 ```
+
+## API Reference
+
+- [`createClient`](/typedoc/functions/rivetkit.client_mod.createClient.html) - Function to create clients
+- [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for interacting with actors
+- [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Connection to actors
+- [`ClientRaw`](/typedoc/interfaces/rivetkit.client_mod.ClientRaw.html) - Raw client interface
 ## Communicating Between Actors
 
 # Communicating Between Actors
@@ -867,6 +891,12 @@ const results = await Promise.all(
   items.map(item => client.processor.getOrCreate(item.type).process(item))
 );
 ```
+
+## API Reference
+
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for calling other actors
+- [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type for actor communication
+- [`ActorAccessor`](/typedoc/interfaces/rivetkit.client_mod.ActorAccessor.html) - Accessor for getting actor handles
 ## Connections
 
 # Connections
@@ -883,7 +913,7 @@ For example:
 
 ```typescript }
 const client = createClient("http://localhost:8080");
-const gameRoom = await client.gameRoom.get(
+const gameRoom = client.gameRoom.getOrCreate("room-123", 
 });
 ```
 
@@ -895,12 +925,12 @@ interface ConnState
 const gameRoom = actor(,
 
   // Handle connection setup
-  createConnState: (c, opts, params: ConnParams): ConnState => 
+  createConnState: (c, params: ConnParams): ConnState => 
 
     // Create connection state
     return ;
   },
-  
+
   actions: 
 });
 ```
@@ -943,16 +973,102 @@ There are two ways to define an actor's connection state:
 		});
 		```
 
-## Connection Lifecycle Hooks
+## Connection Lifecycle
 
-The connection lifecycle has several hooks:
+Each client connection goes through a series of lifecycle hooks that allow you to validate, initialize, and clean up connection-specific resources.
 
-- `onBeforeConnect`: Called before a client connects, returns the connection state
-- `onConnect`: Called when a client successfully connects
-- `createState`: Called when creating a connection state
-- `onDisconnect`: Called when a client disconnects
+**On Connect** (per client)
 
-See the documentation on [Actor Lifecycle](/docs/actors/lifecycle) for more details.
+- `onBeforeConnect`
+- `createConnState`
+- `onConnect`
+
+**On Disconnect** (per client)
+
+- `onDisconnect`
+
+### `createConnState` and `connState`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.CreateConnStateContext.html)
+
+There are two ways to define the initial state for connections:
+1. `connState`: Define a constant object that will be used as the initial state for all connections
+2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
+
+### `onBeforeConnect`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
+
+The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
+
+The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
+
+```typescript
+const chatRoom = actor(,
+
+  // Method 1: Use a static default connection state
+  connState: ,
+
+  // Method 2: Dynamically create connection state
+  createConnState: (c, params: ) => ;
+  },
+
+  // Validate connections before accepting them
+  onBeforeConnect: (c, params: ) => 
+
+    // Authentication is valid, connection will proceed
+    // The actual connection state will come from connState or createConnState
+  },
+
+  actions: 
+});
+```
+
+Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication, see [Authentication](/docs/actors/authentication) for details.
+
+### `onConnect`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
+
+Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
+
+```typescript
+const chatRoom = actor(, messages: [] },
+
+  onConnect: (c, conn) => ;
+
+    // Broadcast that a user joined
+    c.broadcast("userJoined", );
+
+    console.log(`User $ connected`);
+  },
+
+  actions: 
+});
+```
+
+Messages will not be processed for this actor until this hook succeeds. Errors thrown from this hook will cause the client to disconnect.
+
+### `onDisconnect`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
+
+Called when a client disconnects from the actor. Can be async. Receives the connection object as a second parameter. Use this to clean up any connection-specific resources.
+
+```typescript
+const chatRoom = actor(, messages: [] },
+
+  onDisconnect: (c, conn) => 
+
+    // Broadcast that a user left
+    c.broadcast("userLeft", );
+
+    console.log(`User $ disconnected`);
+  },
+
+  actions: 
+});
+```
 
 ## Connection List
 
@@ -994,6 +1110,15 @@ await c.conn.disconnect("Too many requests");
 ```
 
 This ensures the underlying network connections close cleanly before continuing.
+
+## API Reference
+
+- [`Conn`](/typedoc/interfaces/rivetkit.mod.Conn.html) - Connection interface
+- [`ConnInitContext`](/typedoc/interfaces/rivetkit.mod.ConnInitContext.html) - Connection initialization context
+- [`CreateConnStateContext`](/typedoc/interfaces/rivetkit.mod.CreateConnStateContext.html) - Context for creating connection state
+- [`OnBeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html) - Pre-connection lifecycle hook context
+- [`OnConnectContext`](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html) - Post-connection lifecycle hook context
+- [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Typed connection from client side
 ## Design Patterns
 
 # Design Patterns
@@ -1034,7 +1159,7 @@ Actors scale by splitting state into isolated entities. However, it's common to 
 
 **Coordinator actors** track other actors. Think of them as an index of data actors. Examples: a list of chat rooms, a list of active users, a list of game lobbies.
 
-**Example: Chat Rooms**
+**Example: Chat Room Coordinator**
 
 ```ts
 // Data actor: handles messages and connections
@@ -1053,6 +1178,9 @@ const chatRoomList = actor(,
   actions: ,
     listChatRooms: (c) => c.state.chatRoomIds,
   },
+});
+
+const registry = setup(,
 });
 ```
 
@@ -1081,37 +1209,45 @@ Sharding splits a single actor's workload across multiple actors based on a key.
 - Requests are routed to shards based on the key
 - Shards operate independently without coordination
 
-**Example: Sharded Analytics**
-
-Instead of one analytics actor handling all events, shard by time bucket:
+**Example: Sharding by Time**
 
 ```ts
+interface Event 
+
 const hourlyAnalytics = actor(,
   actions: ,
     getEvents: (c) => c.state.events,
   },
 });
+
+const registry = setup(,
+});
 ```
 
 ```ts
+const client = createClient("http://localhost:8080");
+
 // Shard by hour: hourlyAnalytics:2024-01-15T00, hourlyAnalytics:2024-01-15T01
 const shardKey = new Date().toISOString().slice(0, 13); // "2024-01-15T00"
 const analytics = client.hourlyAnalytics.getOrCreate(shardKey);
 await analytics.trackEvent();
 ```
 
-**Example: Sharded Rate Limiter**
-
-Instead of one rate limiter that becomes a bottleneck, shard randomly:
+**Example: Random Sharding**
 
 ```ts
 const rateLimiter = actor( as Record },
   actions: ,
   },
 });
+
+const registry = setup(,
+});
 ```
 
 ```ts
+const client = createClient("http://localhost:8080");
+
 // Shard randomly: rateLimiter:shard-0, rateLimiter:shard-1, rateLimiter:shard-2
 const shardKey = `shard-$`;
 const limiter = client.rateLimiter.getOrCreate(shardKey);
@@ -1131,6 +1267,10 @@ Fan-in and fan-out are patterns for distributing work and aggregating results.
 **Example: Map-Reduce**
 
 ```ts
+interface Task 
+
+interface Result 
+
 // Coordinator fans out tasks, then fans in results
 const coordinator = actor(,
   actions: ,
@@ -1141,12 +1281,20 @@ const coordinator = actor(,
 });
 
 const worker = actor(,
-  actions: ,
+  actions: ` };
+      const client = c.client();
+      await client.coordinator.getOrCreate("main").reportResult(result);
+    },
   },
+});
+
+const registry = setup(,
 });
 ```
 
 ```ts
+const client = createClient("http://localhost:8080");
+
 const coordinator = client.coordinator.getOrCreate("main");
 
 // Start a job with multiple tasks
@@ -1160,41 +1308,97 @@ await coordinator.startJob([
 const results = await coordinator.getResults();
 ```
 
-## State Loading From External Resources
+## Integrating With External Databases & APIs
+
+Actors can integrate with external resources like databases or external APIs.
+
+### Loading State
 
 Load external data during actor initialization using `createVars`. This keeps your actor's persisted state clean while caching expensive lookups.
 
-**When to use:**
+Use this when:
+
 - Fetching user profiles, configs, or permissions from a database
 - Loading data that changes externally and shouldn't be persisted
+- Caching expensive API calls or computations
 
-**Example: Loading User Data**
+**Example: Loading User Profile**
 
 ```ts
 const userSession = actor(,
 
+  // createVars runs on every wake (after restarts, crashes, or sleep), so
+  // external data stays fresh.
   createVars: async (c) => ;
   },
 
-  actions: );
+  actions: ,
+    updateEmail: async (c, email: string) => );
       // Refresh cached data
       c.vars.user = await db.users.findById(c.id);
     },
   },
 });
+
+const registry = setup(,
+});
 ```
 
 ```ts
+const client = createClient("http://localhost:8080");
+
 const session = client.userSession.getOrCreate("user-123");
 
 // Get profile (loaded from database on actor wake)
 const profile = await session.getProfile();
 
-// Update preference (writes to database and refreshes cache)
-await session.updatePreference("theme", "dark");
+// Update email (writes to database and refreshes cache)
+await session.updateEmail("alice@example.com");
 ```
 
-`createVars` runs on every wake (after restarts, crashes, or sleep), so external data stays fresh.
+### Syncing State Changes
+
+Use `onStateChange` to automatically sync actor state changes to external resources. This hook is called whenever the actor's state is modified.
+
+Use this when:
+
+- You need to mirror actor state in an external database
+- Triggering external side effects when state changes
+- Keeping external systems in sync with actor state
+
+**Example: Syncing to Database**
+
+```ts
+const userActor = actor(,
+
+  onCreate: async (c, input: ) => );
+  },
+
+  onStateChange: async (c, newState) => );
+  },
+
+  actions: ,
+    getUser: (c) => (),
+  },
+});
+
+const registry = setup(,
+});
+```
+
+```ts
+const client = createClient("http://localhost:8080");
+
+const user = await client.userActor.create("user-123", ,
+});
+
+// Updates state and triggers onStateChange
+await user.updateEmail("alice2@example.com");
+
+const userData = await user.getUser();
+```
+
+`onStateChange` is called after every state modification, ensuring external resources stay in sync.
 
 ## Anti-Patterns
 
@@ -1222,11 +1426,19 @@ Actors are designed to maintain state across multiple requests. Creating a new a
 
 **Problem:**
 ```ts
+const client = createClient("http://localhost:8080");
+
 // Bad: creating an actor for each API request
 app.post("/process", async (req) => );
 ```
 
 **Solution:** Use actors for entities that persist (users, sessions, documents), not for one-off operations. For stateless request handling, use regular functions.
+
+## API Reference
+
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for pattern examples
+- [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context usage patterns
+- [`ActionContext`](/typedoc/interfaces/rivetkit.mod.ActionContext.html) - Action patterns
 ## Destroying Actors
 
 # Destroying Actors
@@ -1298,6 +1510,11 @@ const userActor = actor(),
 ## Accessing Actor After Destroy
 
 Once an actor is destroyed, any subsequent requests to it will return an `actor_not_found` error. The actor's state is permanently deleted.
+
+## API Reference
+
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Has destroy methods
+- [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context during destruction
 ## Ephemeral Variables
 
 # Ephemeral Variables
@@ -1400,7 +1617,160 @@ Consult the documentation for each driver to learn more about their respective `
 
 # Errors
 
-TODO
+Rivet provides robust error handling with security built in by default. Errors are handled differently based on whether they should be exposed to clients or kept private.
+
+There are two types of errors:
+
+- **UserError**: Thrown from actors and safely returned to clients with full details
+- **Internal errors**: All other errors that are converted to a generic error message for security
+
+## Throwing and Catching Errors
+
+`UserError` lets you throw custom errors that will be safely returned to the client.
+
+Throw a `UserError` with just a message:
+
+```typescript
+const user = actor(,
+  actions: 
+
+      // Update username
+      c.state.username = username;
+    }
+  }
+});
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const conn = client.user.getOrCreate().connect();
+
+try  catch (error) 
+}
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const userActor = client.user.getOrCreate();
+
+try  catch (error) 
+}
+```
+
+## Error Codes
+
+Use error codes for explicit error matching in try-catch blocks:
+
+```typescript
+const user = actor(,
+  actions: );
+      }
+
+      // Update username
+      c.state.username = username;
+    }
+  }
+});
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const conn = client.user.getOrCreate().connect();
+
+try  catch (error)  else if (error.code === "username_too_long") 
+  }
+}
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const userActor = client.user.getOrCreate();
+
+try  catch (error)  else if (error.code === "username_too_long") 
+  }
+}
+```
+
+## Errors With Metadata
+
+Include metadata to provide additional context for rich error handling:
+
+```typescript
+const api = actor(,
+  actions: 
+        });
+      }
+
+      // Rest of request logic...
+    }
+  }
+});
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const conn = client.api.getOrCreate().connect();
+
+try  catch (error) 
+
+    if (error.code === "rate_limited")  seconds`);
+    }
+  }
+}
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const apiActor = client.api.getOrCreate();
+
+try  catch (error) 
+
+    if (error.code === "rate_limited")  seconds`);
+    }
+  }
+}
+```
+
+## Internal Errors
+
+All errors that are not UserError instances are automatically converted to a generic "internal error" response. This prevents accidentally leaking sensitive information like stack traces, database details, or internal system information.
+
+```typescript
+const payment = actor(,
+  actions: )
+      });
+
+      if (!result.ok) : $`);
+      }
+
+      // Rest of payment logic...
+    }
+  }
+});
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const conn = client.payment.getOrCreate().connect();
+
+try  catch (error) 
+}
+```
+
+```typescript
+const client = createClient("http://localhost:8080");
+const paymentActor = client.payment.getOrCreate();
+
+try  catch (error) 
+}
+```
+
+The original error message and stack trace are logged server-side for debugging. Check your server logs to see the full error details.
+
+## API Reference
+
+- [`UserError`](/typedoc/classes/rivetkit.actor_errors.UserError.html) - User-facing error class
+- [`ActorError`](/typedoc/classes/rivetkit.client_mod.ActorError.html) - Errors received by the client
 ## Events
 
 # Events
@@ -1554,6 +1924,16 @@ function ConditionalListener() );
 ## More About Connections
 
 For more details on actor connections, including connection lifecycle, authentication, and advanced connection patterns, see the [Connections documentation](/docs/actors/connections).
+
+## API Reference
+
+- [`RivetEvent`](/typedoc/interfaces/rivetkit.mod.RivetEvent.html) - Base event interface
+- [`RivetMessageEvent`](/typedoc/interfaces/rivetkit.mod.RivetMessageEvent.html) - Message event type
+- [`RivetCloseEvent`](/typedoc/interfaces/rivetkit.mod.RivetCloseEvent.html) - Close event type
+- [`UniversalEvent`](/typedoc/interfaces/rivetkit.mod.UniversalEvent.html) - Universal event type
+- [`UniversalMessageEvent`](/typedoc/interfaces/rivetkit.mod.UniversalMessageEvent.html) - Universal message event
+- [`UniversalErrorEvent`](/typedoc/interfaces/rivetkit.mod.UniversalErrorEvent.html) - Universal error event
+- [`EventUnsubscribe`](/typedoc/types/rivetkit.client_mod.EventUnsubscribe.html) - Unsubscribe function type
 ## External SQL Database
 
 # External SQL Database
@@ -1601,9 +1981,12 @@ const pool = new Pool();
 // Create the user actor
 const userActor = actor(),
   
-  // Insert user into database when actor starts
-  onWake: async (c, opts) => ,
+  // Insert user into database when actor creates
+  onCreate: async (c, opts) => ,
   
+  // Sync state changes to database
+  onStateChange: async (c, newState) => ,
+
   actions: ;
     },
     
@@ -1654,14 +2037,16 @@ const db = drizzle(pool);
 // Create the user actor
 const userActor = actor(),
   
-  // Insert user into database when actor starts
-  onWake: async (c, opts) => );
+  // Insert user into database when actor creates
+  onCreate: async (c, opts) => );
   },
   
-  actions: )
-        .where(eq(users.username, c.state.username));
-      
-      return ;
+  // Sync state changes to database
+  onStateChange: async (c, newState) => )
+      .where(eq(users.username, newState.username));
+  },
+
+  actions: ;
     },
     
     // Get user data
@@ -1734,6 +2119,19 @@ const counterWithProcessing = actor(,
 
 function processCounterAction(context: ActionContextOf) 
 ```
+
+## API Reference
+
+- [`ActorContextOf`](/typedoc/types/rivetkit.mod.ActorContextOf.html) - Extract context from actor
+- [`ActionContextOf`](/typedoc/types/rivetkit.mod.ActionContextOf.html) - Extract context from action
+- [`ActorConfig`](/typedoc/types/rivetkit.mod.ActorConfig.html) - Actor configuration type
+- [`ActorConfigInput`](/typedoc/types/rivetkit.mod.ActorConfigInput.html) - Actor configuration input
+- [`RegistryActors`](/typedoc/types/rivetkit.mod.RegistryActors.html) - Extract actors from registry
+- [`ExtractActorsFromRegistry`](/typedoc/types/rivetkit.client_mod.ExtractActorsFromRegistry.html) - Utility type
+- [`ExtractRegistryFromClient`](/typedoc/types/rivetkit.client_mod.ExtractRegistryFromClient.html) - Utility type
+- [`AnyActorDefinition`](/typedoc/types/rivetkit.mod.AnyActorDefinition.html) - Any actor definition type
+- [`AnyActorInstance`](/typedoc/types/rivetkit.mod.AnyActorInstance.html) - Any actor instance type
+- [`AnyClient`](/typedoc/types/rivetkit.mod.AnyClient.html) - Any client type
 ## Vanilla HTTP API
 
 # Vanilla HTTP API
@@ -1981,6 +2379,12 @@ const game = actor(,
   },
 });
 ```
+
+## API Reference
+
+- [`CreateOptions`](/typedoc/interfaces/rivetkit.client_mod.CreateOptions.html) - Options for creating actors
+- [`CreateRequest`](/typedoc/types/rivetkit.client_mod.CreateRequest.html) - Request type for creation
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining input types
 ## Actor Keys
 
 # Actor Keys
@@ -2097,11 +2501,16 @@ const chatRoom = await client.chatRoom.create(["room", roomName],
   }
 });
 ```
+
+## API Reference
+
+- [`ActorKey`](/typedoc/types/rivetkit.mod.ActorKey.html) - Key type for actors
+- [`ActorQuery`](/typedoc/types/rivetkit.mod.ActorQuery.html) - Query type using keys
+- [`GetOptions`](/typedoc/interfaces/rivetkit.client_mod.GetOptions.html) - Options for getting by key
+- [`QueryOptions`](/typedoc/interfaces/rivetkit.client_mod.QueryOptions.html) - Options for querying
 ## Lifecycle
 
 # Lifecycle
-
-Understand actor lifecycle hooks and initialization patterns
 
 Actors follow a well-defined lifecycle with hooks at each stage. Understanding these hooks is essential for proper initialization, state management, and cleanup.
 
@@ -2109,35 +2518,35 @@ Actors follow a well-defined lifecycle with hooks at each stage. Understanding t
 
 Actors transition through several states during their lifetime. Each transition triggers specific hooks that let you initialize resources, manage connections, and clean up state.
 
-**On Create** (first time only)
+**On Create** (runs once per actor)
 
-- `createState`
-- `onCreate`
-- `createVars`
-- `onWake`
-
-**On Wake** (after sleep, restart, or crash)
-
-- `createVars`
-- `onWake`
-
-**On Sleep**
-
-- `onSleep`
+1. `createState`
+2. `onCreate`
+3. `createVars`
+4. `onWake`
 
 **On Destroy**
 
-- `onDestroy`
+1. `onDestroy`
+
+**On Wake** (after sleep, restart, or crash)
+
+1. `createVars`
+2. `onWake`
+
+**On Sleep** (after idle period)
+
+1. `onSleep`
 
 **On Connect** (per client)
 
-- `onBeforeConnect`
-- `createConnState`
-- `onConnect`
+1. `onBeforeConnect`
+2. `createConnState`
+3. `onConnect`
 
 **On Disconnect** (per client)
 
-- `onDisconnect`
+1. `onDisconnect`
 
 ## Lifecycle Hooks
 
@@ -2155,7 +2564,7 @@ const counter = actor(,
 
 ### `createState`
 
-`createState(c: ActorContext, input: TInput): TState | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `createState` function dynamically initializes state based on input. Called only once when the actor is first created. Can be async. See [state documentation](/docs/actors/state) for more information.
 
@@ -2178,7 +2587,7 @@ const counter = actor(,
 
 ### `createVars`
 
-`createVars(c: InitContext, driverCtx: any): TVars | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. The `driverCtx` parameter provides driver-specific context. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables-vars) for more information.
 
@@ -2193,7 +2602,7 @@ const counter = actor(,
 
 ### `onCreate`
 
-`onCreate(c: ActorContext, input: TInput): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `onCreate` hook is called when the actor is first created. Can be async. Use this hook for initialization logic that doesn't affect the initial state.
 
@@ -2208,7 +2617,7 @@ const counter = actor(,
 
 ### `onDestroy`
 
-`onDestroy(c: ActorContext): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `onDestroy` hook is called when the actor is being permanently destroyed. Can be async. Use this for final cleanup operations like closing external connections, releasing resources, or performing any last-minute state persistence.
 
@@ -2220,7 +2629,7 @@ const gameSession = actor(,
 
 ### `onWake`
 
-`onWake(c: ActorContext): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 This hook is called any time the actor is started (e.g. after restarting, upgrading code, or crashing). Can be async.
 
@@ -2246,11 +2655,13 @@ const counter = actor(,
 
 ### `onSleep`
 
-`onSleep(c: ActorContext): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 This hook is called when the actor is going to sleep. Can be async. Use this to clean up resources, close connections, or perform any shutdown operations.
 
-Not supported on all platforms.
+This hook may not always be called in situations like crashes or forced terminations. Don't rely on it for critical cleanup operations.
+
+Not supported on Cloudflare Workers.
 
 ```typescript
 const counter = actor(,
@@ -2271,7 +2682,7 @@ const counter = actor(,
 
 ### `onStateChange`
 
-`onStateChange(c: ActorContext, newState: TState): void`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 Called whenever the actor's state changes. Cannot be async. This is often used to broadcast state updates.
 
@@ -2288,7 +2699,7 @@ const counter = actor(,
 
 ### `createConnState` and `connState`
 
-`createConnState(c: CreateConnStateContext, params: TConnParams): TConnState | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 There are two ways to define the initial state for connections:
 1. `connState`: Define a constant object that will be used as the initial state for all connections
@@ -2296,7 +2707,7 @@ There are two ways to define the initial state for connections:
 
 ### `onBeforeConnect`
 
-`onBeforeConnect(c: OnBeforeConnectContext, params: TConnParams): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
@@ -2327,7 +2738,7 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-`onConnect(c: OnConnectContext, conn: Conn): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
 
 Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
 
@@ -2350,7 +2761,7 @@ Messages will not be processed for this actor until this hook succeeds. Errors t
 
 ### `onDisconnect`
 
-`onDisconnect(c: ActorContext, conn: Conn): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 Called when a client disconnects from the actor. Can be async. Receives the connection object as a second parameter. Use this to clean up any connection-specific resources.
 
@@ -2371,7 +2782,7 @@ const chatRoom = actor(, messages: [] },
 
 ### `onRequest`
 
-`onRequest(c: RequestContext, request: Request): Response | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.RequestContext.html)
 
 The `onRequest` hook handles HTTP requests sent to your actor at `/actors//http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
 
@@ -2394,7 +2805,7 @@ const apiActor = actor(,
 
 ### `onWebSocket`
 
-`onWebSocket(c: ActorContext, websocket: WebSocket): void | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.WebSocketContext.html)
 
 The `onWebSocket` hook handles WebSocket connections to your actor. Can be async. It receives the actor context and a `WebSocket` object. Use this to set up WebSocket event listeners and handle real-time communication.
 
@@ -2420,7 +2831,7 @@ const realtimeActor = actor(,
 
 ### `onBeforeActionResponse`
 
-`onBeforeActionResponse(c: ActorContext, name: string, args: unknown[], output: TOutput): TOutput | Promise`
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
 The `onBeforeActionResponse` hook is called before sending an action response to the client. Can be async. Use this hook to modify or transform the output of an action before it's sent to the client. This is useful for formatting responses, adding metadata, or applying transformations to the output.
 
@@ -2429,7 +2840,7 @@ const loggingActor = actor(,
 
   onBeforeActionResponse: (c, actionName, args, output) =>  called with args:`, args);
     console.log(`Action $ returned:`, output);
-    
+
     // Add metadata to all responses
     return 
     };
@@ -2643,6 +3054,11 @@ const chatRoom = await client.chatRoom.get("general");
 const metadata = await chatRoom.getMetadata();
 console.log("Actor metadata:", metadata);
 ```
+
+## API Reference
+
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining metadata
+- [`CreateOptions`](/typedoc/interfaces/rivetkit.client_mod.CreateOptions.html) - Includes metadata options
 ## Node.js & Bun Quickstart
 
 # Node.js & Bun Quickstart
@@ -3278,8 +3694,13 @@ The `onRequest` handler is WinterTC compliant and will work with existing librar
 
 ## Limitations
 
-- Does not support streaming responses & server-sent events at the moment. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3529). 
+- Does not support streaming responses & server-sent events at the moment. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3529).
 - `OPTIONS` requests currently are handled by Rivet and are not passed to `onRequest`
+
+## API Reference
+
+- [`RequestContext`](/typedoc/interfaces/rivetkit.mod.RequestContext.html) - Context for HTTP request handlers
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining request handlers
 ## Scaling & Concurrency
 
 # Scaling & Concurrency
@@ -3483,6 +3904,12 @@ State is currently constrained to the following types:
 - `Set`
 - `Array`
 - Plain objects
+
+## API Reference
+
+- [`InitContext`](/typedoc/types/rivetkit.mod.InitContext.html) - Context available during actor initialization
+- [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context available throughout actor lifecycle
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining actors with state
 ## Testing
 
 # Testing
@@ -3638,6 +4065,12 @@ The `setupTest` function automatically calls `vi.useFakeTimers()`, allowing you 
 4. **Use realistic data**: Test with data that resembles production scenarios.
 
 Rivet's testing framework automatically handles server setup and teardown, so you can focus on writing effective tests for your business logic.
+
+## API Reference
+
+- [`test`](/typedoc/functions/rivetkit.mod.test.html) - Test helper function
+- [`createMemoryDriver`](/typedoc/functions/rivetkit.mod.createMemoryDriver.html) - In-memory driver for tests
+- [`createFileSystemDriver`](/typedoc/functions/rivetkit.mod.createFileSystemDriver.html) - Filesystem driver for tests
 ## Low-Level WebSocket Handler
 
 # Low-Level WebSocket Handler
@@ -3787,6 +4220,13 @@ onWebSocket: async (c, websocket) => ));
     websocket.addEventListener("message", (event) => );
 }
 ```
+
+## API Reference
+
+- [`WebSocketContext`](/typedoc/interfaces/rivetkit.mod.WebSocketContext.html) - Context for WebSocket handlers
+- [`UniversalWebSocket`](/typedoc/interfaces/rivetkit.mod.UniversalWebSocket.html) - Universal WebSocket interface
+- [`handleRawWebSocketHandler`](/typedoc/functions/rivetkit.mod.handleRawWebSocketHandler.html) - Function to handle raw WebSocket
+- [`UpgradeWebSocketArgs`](/typedoc/interfaces/rivetkit.mod.UpgradeWebSocketArgs.html) - Arguments for WebSocket upgrade
 ## Node.js & Bun
 
 # Node.js & Bun
@@ -3799,7 +4239,14 @@ See the [backend quickstart guide](/docs/actors/quickstart/backend) for getting 
 
 ## API Reference
 
-See the [RivetKit client API](http://rivet.dev/docs/actors/clients/#actor-client).
+**Package:** [@rivetkit/client](https://www.npmjs.com/package/@rivetkit/client)
+
+See the [RivetKit client API](/docs/actors/clients/#actor-client).
+
+- [`createClient`](/typedoc/functions/rivetkit.client_mod.createClient.html) - Create a client
+- [`createEngineDriver`](/typedoc/functions/rivetkit.mod.createEngineDriver.html) - Engine driver
+- [`DriverConfig`](/typedoc/types/rivetkit.mod.DriverConfig.html) - Driver configuration
+- [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type
 ## Next.js
 
 # Next.js
@@ -3816,7 +4263,18 @@ See the [Next.js quickstart guide](/docs/actors/quickstart/next-js) for getting 
 
 ## API Reference
 
-It's the same as the [React client API reference](https://rivet.dev/docs/clients/react#api-reference), since the RivetKit React package is used in both Next.js and React applications.
+**Package:** [@rivetkit/next-js](https://www.npmjs.com/package/@rivetkit/next-js)
+
+See the full Next.js API documentation at [rivetkit.org/docs/actors/clients](https://rivetkit.org/docs/actors/clients).
+
+The Next.js client uses the same hooks as the React client:
+
+- [`RivetKitProvider`](https://rivetkit.org/docs/actors/clients/#react-provider) - React context provider
+- [`useActor`](https://rivetkit.org/docs/actors/clients/#useactor) - React hook for actor instances
+- [`createClient`](/typedoc/functions/rivetkit.client_mod.createClient.html) - Create a client
+- [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for interacting with actors
+- [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Connection to actors
 ## React
 
 # React
@@ -3991,6 +4449,19 @@ function AuthenticatedApp() ,
 ```
 
 Learn more about [authentication](/docs/actors/authentication).
+
+## API Reference
+
+**Package:** [@rivetkit/react](https://www.npmjs.com/package/@rivetkit/react)
+
+See the full React API documentation at [rivetkit.org/docs/actors/clients](https://rivetkit.org/docs/actors/clients).
+
+- [`RivetKitProvider`](https://rivetkit.org/docs/actors/clients/#react-provider) - React context provider
+- [`useActor`](https://rivetkit.org/docs/actors/clients/#useactor) - React hook for actor instances
+- [`createClient`](/typedoc/functions/rivetkit.client_mod.createClient.html) - Create a client
+- [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type
+- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for interacting with actors
+- [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Connection to actors
 ## Rust
 
 # Rust
@@ -4625,181 +5096,6 @@ Follow realtime logs when debugging:
 ```bash
 sudo journalctl -u backend.service -f
 ```
-## Build Your Own
-
-# Build Your Own
-
-Each driver implements common interfaces defined by RivetKit, including:
-
-- **ActorDriver**: Manages actor state, lifecycle, and persistence
-- **ManagerDriver**: Handles actor discovery, routing, and scaling
-
-## Source Code Locations
-
-Get started by looking at source code for the driver interfaces and existing drivers:
-
-- **Driver Interfaces**
-  - **ActorDriver*** [Source Code](https://github.com/rivet-dev/rivetkit/blob/main/packages/core/src/actor/driver.ts)
-  - **ManagerDriver*** [Source Code](https://github.com/rivet-dev/rivetkit/blob/main/packages/core/src/manager/driver.ts)
-- **Driver Implementations**: [Source Code](https://github.com/rivet-dev/rivetkit/tree/main/packages/core/src/drivers)
-## File System
-
-# File System
-
-The File System driver is the default driver for Rivet Actors, providing local file-based storage for state management and inter-actor communication. If no driver is specified in your configuration, the File System driver will be used automatically.
-
-The File System driver is ideal for development and single-node deployments. For production applications that need to scale horizontally across multiple machines, use the [Redis driver](/docs/drivers/redis).
-
-## Feature Support
-
-| Feature | Supported |
-| --- | --- |
-| Horizontal scaling | No |
-| WebSockets | Yes |
-| Edge | No |
-| Scheduling | Yes |
-
-## Setup
-
-The File System driver is included with `rivetkit` - no additional packages needed:
-
-```bash
-npm install rivetkit
-```
-
-Use the default configuration with automatic path based on your current working directory:
-
-```typescript }
-const driver = createFileSystemDriver();
-const  = registry.start();
-
-// ...rest of your server...
-```
-
-The default path is stored in your system's data path. The path is unique to the current working directory, so you can safely run multiple projects on the same machine.
-
-Specify a custom path for actor storage:
-
-```typescript }
-const driver = createFileSystemDriver();
-const  = registry.start();
-
-// ...rest of your server...
-```
-
-**Configuration Options:**
-
-- `path` - Custom directory path for storing actor data (optional)
-
-## Data Management
-
-The path where your actors are stored is printed when you start your project. To reset your actors, delete the folder that is printed.
-
-If running on a single node, make sure to back up your actors folder regularly. `rsync` works nicely with this because each actor is stored as its own file.
-
-## Examples
-
-Basic File System driver setup and configuration example.
-## Memory
-
-# Memory
-
-The Memory driver stores all actor state and communication in memory, making it ideal for testing, development, and prototyping scenarios where persistence is not required.
-
-The Memory driver does not persist data between server restarts. For production applications that need to scale horizontally across multiple machines, see [self-hosting](/docs/self-hosting)
-
-## Feature Support
-
-| Feature | Supported |
-| --- | --- |
-| Horizontal scaling | No |
-| WebSockets | Yes |
-| Edge | No |
-| Scheduling | Yes |
-
-## Setup
-
-The Memory driver is included with `rivetkit` - no additional packages needed:
-
-```bash
-npm install rivetkit
-```
-
-Create and use the Memory driver:
-
-```typescript }
-const driver = createMemoryDriver();
-const  = registry.start();
-
-// ...rest of your server...
-```
-
-The Memory driver requires no configuration options.
-## Code Autofill Example
-
-# Code Autofill Example
-
-This page demonstrates the code autofill feature with template variables.
-
-## Basic Example
-
-The following code snippet uses autofill to populate your project and namespace information. Click on any blue highlighted value to change your selection:
-
-```ts }
-const client = createClient(}",
-  endpoint: "}"
-});
-
-console.log("Connected to project: }");
-console.log("Using namespace: }");
-```
-
-## Using Default Values
-
-You can specify default values that will be shown before the user selects a project. Format: `}`
-
-```ts }
-const client = createClient(}",
-  endpoint: "}"
-});
-
-const config = }",
-  namespace: "}",
-};
-```
-
-## Multiple Template Variables
-
-You can use various template variables in your code:
-
-```ts }
-const config = }",
-
-  // Project info
-  project: }",
-    name: "}",
-  },
-
-  // Namespace info
-  namespace: }",
-    name: "}",
-    token: "}",
-  },
-
-  // Connection
-  engineUrl: "}",
-};
-```
-
-## Regular Code Block (No Autofill)
-
-This code block doesn't use autofill:
-
-```ts
-// This is a regular code block without autofill
-const greeting = "Hello, World!";
-console.log(greeting);
-```
 ## Architecture
 
 # Architecture
@@ -5250,173 +5546,42 @@ rivet has similarities with both to provide more flexibility:
 
 # Cross-Origin Resource Sharing
 
-Cross-Origin Resource Sharing (CORS) is a security mechanism that allows a web application running at one origin to access resources from a different origin. Without CORS, browsers block cross-origin HTTP requests by default as a security measure.
+Cross-Origin Resource Sharing (CORS) controls which origins (domains) can access your actors. When actors are exposed to the public internet, proper origin validation is critical to prevent security breaches and denial of service attacks.
 
-You'll need to configure CORS when:
+Unlike stateless HTTP APIs that use CORS headers, Rivet Actors are stateful and support persistent WebSocket connections. Since WebSockets don't natively support CORS, we validate origins manually in the `onBeforeConnect` hook before connections may open.
 
-- **Local Development**: You're developing locally and your client runs on a different port than your actor service
-- **Different Domain**: Your frontend application is hosted on a different domain than your actor service
+## Implementing Origin Restrictions
 
-## Registry-Level CORS
-
-Configure CORS directly in your registry setup for applications that do not require configuring CORS on their own endpoints.
+To implement origin restrictions on Rivet Actors, use the `onBeforeConnect` hook to verify the request.
 
 ```typescript }
-const  = registry.start(
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://myapp.com",
+  "https://www.myapp.com"
+];
+
+const myActor = actor(,
+
+  onBeforeConnect: (c, params) => );
+    }
+  },
+
+  actions: 
+  }
 });
 ```
 
-### Configuration Options
-
-#### `origin`
-
-`string | string[] | (origin: string) => boolean | string`
-
-Specifies which domains can access your resources:
+To catch the error on the client, use the following code:
 
 ```typescript }
-// Single domain
-origin: "https://example.com"
+const client = createClient();
 
-// Multiple domains
-origin: ["https://app.com", "https://admin.com"]
-
-// Dynamic validation
-origin: (origin) => 
-
-// All domains (not recommended for production)
-origin: "*"
+try  catch (error) 
+}
 ```
 
-#### `allowMethods`
-
-`string[]`
-
-HTTP methods clients are allowed to use:
-
-```typescript
-allowMethods: ["GET", "POST", "OPTIONS"]  // Common for Rivet
-```
-
-#### `allowHeaders`
-
-`string[]`
-
-Headers that clients can send in requests:
-
-```typescript
-allowHeaders: [
-  "Authorization",           // Your auth headers
-  "Content-Type",           // Standard content type
-  "X-API-Key",              // Custom API key header
-  ...ALLOWED_PUBLIC_HEADERS // Required Rivet headers
-]
-```
-
-#### `credentials`
-
-`boolean`
-
-Whether to allow credentials (cookies, auth headers):
-
-```typescript
-credentials: true  // Required for authentication
-```
-
-When `credentials: true`, you cannot use `origin: "*"`. Specify exact origins instead.
-
-#### `maxAge`
-
-`number`
-
-How long browsers cache CORS preflight responses (in seconds):
-
-```typescript
-maxAge: 600  // Cache for 10 minutes
-```
-
-#### `exposeHeaders`
-
-`string[]`
-
-Server headers that browsers can access:
-
-```typescript
-exposeHeaders: ["Content-Length", "X-Request-Id"]
-```
-
-## Router-Level CORS
-
-For applications that need to expose their own routes, configure CORS at the router level:
-
-```typescript }
-registry.start();
-
-const app = new Hono();
-
-app.use("*", cors());
-
-serve(app);
-```
-
-```typescript }
-registry.start();
-
-const app = express();
-
-app.use(cors());
-
-app.use("/registry", handler);
-app.listen(8080);
-```
-
-### Required Headers for Rivet
-
-Rivet requires specific headers for communication. Always include `ALLOWED_PUBLIC_HEADERS`:
-
-```typescript }
-const corsConfig = ;
-```
-
-These are automatically configured if using `registry.start()`.
-
-Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
-
-## Development vs Production
-
-### Development Setup
-
-For local development, allow localhost origins:
-
-```typescript
-const isDev = process.env.NODE_ENV !== "production";
-
-const corsConfig = ;
-```
-
-### Production Setup
-
-For production, be restrictive with origins:
-
-```typescript
-const corsConfig = ;
-```
-
-## Troubleshooting
-
-### Common CORS Errors
-
-**"Access to fetch blocked by CORS policy"**
-- Add your frontend's origin to the `origin` list
-- Ensure `ALLOWED_PUBLIC_HEADERS` are included in `allowHeaders`
-
-**"Request header not allowed"**
-- Add the missing header to `allowHeaders` 
-- Include `ALLOWED_PUBLIC_HEADERS` in your configuration
-
-**"Credentials mode mismatch"**
-- Set `credentials: true` in CORS config
-- Cannot use `origin: "*"` with credentials
+	See tracking issue for [configuring CORS per-actor on the gateway](https://github.com/rivet-dev/rivet/issues/3539) that will remove the need to implement origin restrictions in `onBforeRequest`.
 ## Documentation for LLMs & AI
 
 # Documentation for LLMs & AI
@@ -5583,19 +5748,6 @@ You can disable the default RivetKit welcome message with:
 ```typescript
 registry.start()
 ```
-## Self-Hosting
-
-# Self-Hosting
-
-Take full control of your Rivet deployment with flexible hosting options and storage drivers.
-
-## Hosting Providers
-
-  Deploy Rivet applications with Railway's simple platform-as-a-service
-
-  Run Rivet actors on Cloudflare's edge computing platform
-
-  Managed Rivet hosting with enterprise features and support
 ## Overview
 
 # Overview
