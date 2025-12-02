@@ -31,9 +31,13 @@ export const cursorRoom = actor({
 	},
 
 	// Handle WebSocket connections
-	onWebSocket: async (c, websocket: UniversalWebSocket, { request }) => {
+	onWebSocket: async (c, websocket: UniversalWebSocket) => {
 		// Extract userId from query parameters
-		const url = new URL(request.url);
+		if (!c.request) {
+			websocket.close(1008, "Missing request");
+			return;
+		}
+		const url = new URL(c.request.url);
 		const userId = url.searchParams.get("userId");
 
 		// Validate userId exists

@@ -5,6 +5,12 @@ export interface InventoryInput {
 	itemName: string;
 }
 
+export interface InventoryState {
+	itemName: string;
+	stock: number;
+	reservations: string[]; // Track which checkouts have reserved items
+}
+
 export interface CheckoutInput {
 	customerName: string;
 }
@@ -21,13 +27,19 @@ export interface CheckoutResult {
 	remainingStock?: number;
 }
 
+export interface CheckoutState {
+	customerName: string;
+	items: CheckoutItem[];
+	completed: boolean;
+}
+
 // Inventory actor manages stock for a specific item
 export const inventory = actor({
 	// Each item has its own inventory actor instance
-	createState: (_c, input: InventoryInput) => ({
+	createState: (_c, input: InventoryInput): InventoryState => ({
 		itemName: input.itemName,
 		stock: input.initialStock,
-		reservations: [] as string[], // Track which checkouts have reserved items
+		reservations: [],
 	}),
 
 	actions: {
@@ -75,9 +87,9 @@ export const inventory = actor({
 
 // Checkout actor manages the checkout process and communicates with inventory
 export const checkout = actor({
-	createState: (_c, input: CheckoutInput) => ({
+	createState: (_c, input: CheckoutInput): CheckoutState => ({
 		customerName: input.customerName,
-		items: [] as CheckoutItem[],
+		items: [],
 		completed: false,
 	}),
 
@@ -97,7 +109,7 @@ export const checkout = actor({
 
 			// Try to reserve items from inventory
 			const reservation = await inventoryActor.reserveItems(
-				c.id, // Use checkout ID as reservation ID
+				c.actorId, // Use checkout ID as reservation ID
 				quantity,
 			);
 
@@ -149,7 +161,7 @@ export const checkout = actor({
 				const inventoryActor = c
 					.client()
 					.inventory.getOrCreate([item.itemId]);
-				await inventoryActor.releaseItems(c.id, item.quantity);
+				await inventoryActor.releaseItems(c.actorId, item.quantity);
 			}
 
 			// Clear the cart
