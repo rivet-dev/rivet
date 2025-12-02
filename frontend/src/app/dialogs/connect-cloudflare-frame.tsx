@@ -5,21 +5,18 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
-import { useMemo } from "react";
-import * as ConnectCloudflareForm from "@/app/forms/connect-quick-cloudflare-form";
+import * as ConnectCloudflareForm from "@/app/forms/connect-cloudflare-form";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 	type DialogContentProps,
-	ExternalLinkCard,
 	Frame,
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
-import { EnvVariablesStep } from "./connect-railway-frame";
 
 // Cloudflare Workers has a 30-second CPU time limit on the free plan
 // and up to 15 minutes on paid plans with Durable Objects
@@ -27,11 +24,11 @@ export const CLOUDFLARE_WORKERS_MAX_DURATION = 30;
 
 const { stepper } = ConnectCloudflareForm;
 
-interface ConnectQuickCloudflareFrameContentProps extends DialogContentProps {}
+interface ConnectCloudflareFrameContentProps extends DialogContentProps {}
 
-export default function ConnectQuickCloudflareFrameContent({
+export default function ConnectCloudflareFrameContent({
 	onClose,
-}: ConnectQuickCloudflareFrameContentProps) {
+}: ConnectCloudflareFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
 		pages: Infinity,
@@ -89,7 +86,9 @@ function FormStepper({
 		<StepperForm
 			{...stepper}
 			content={{
-				"initial-info": () => <StepInitialInfo />,
+				install: () => <StepInstall />,
+				configure: () => <StepConfigure />,
+				handler: () => <StepHandler />,
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
@@ -138,42 +137,24 @@ function FormStepper({
 	);
 }
 
-const useCloudflareTemplateLink = () => {
-	return useMemo(() => {
-		const repositoryUrl =
-			"https://github.com/rivet-dev/template-cloudflare-workers";
-		const deployUrl = `https://deploy.workers.cloudflare.com/?url=${encodeURIComponent(repositoryUrl)}`;
+function StepInstall() {
+	return <ConnectCloudflareForm.InstallCode />;
+}
 
-		return deployUrl;
-	}, []);
-};
+function StepConfigure() {
+	return <ConnectCloudflareForm.WranglerConfig />;
+}
 
-function StepInitialInfo() {
-	const cloudflareTemplateLink = useCloudflareTemplateLink();
-	return (
-		<>
-			<div className="space-y-4">
-				<p>
-					Deploy the Rivet Cloudflare Workers template to get started
-					quickly.
-				</p>
-				<ExternalLinkCard
-					href={cloudflareTemplateLink}
-					icon={faCloudflare}
-					title="Deploy Template to Cloudflare"
-				/>
-			</div>
-			<div className="space-y-4">
-				<p>Set the following environment variables:</p>
-				<EnvVariablesStep />
-			</div>
-		</>
-	);
+function StepHandler() {
+	return <ConnectCloudflareForm.HandlerCode />;
 }
 
 function StepDeploy() {
 	return (
 		<>
+			<p>
+				Deploy your code to Cloudflare and paste your deployment's endpoint:
+			</p>
 			<div className="mt-2">
 				<ConnectCloudflareForm.Endpoint
 					placeholder="https://my-rivet-app.workers.dev/api/rivet"
@@ -196,6 +177,18 @@ function StepDeploy() {
 				</Accordion>
 			</div>
 			<ConnectCloudflareForm.ConnectionCheck provider="Cloudflare" />
+			<p className="text-muted-foreground text-sm">
+				Need help deploying? See{" "}
+				<a
+					href="https://www.rivet.dev/docs/actors/quickstart/cloudflare-workers/"
+					target="_blank"
+					rel="noreferrer"
+					className="underline"
+				>
+					Cloudflare Workers deployment documentation
+				</a>
+				.
+			</p>
 		</>
 	);
 }

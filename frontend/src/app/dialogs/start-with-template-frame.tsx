@@ -2,7 +2,7 @@ import { useState } from "react";
 import { match } from "ts-pattern";
 import { type DialogContentProps, Frame } from "@/components";
 import { type Provider, TemplateProviders } from "../template-providers";
-import ConnectQuickCloudflareFrameContent from "./connect-quick-cloudflare-frame";
+import ConnectCloudflareFrameContent from "./connect-cloudflare-frame";
 import ConnectQuickVercelFrameContent from "./connect-quick-vercel-frame";
 
 interface ConnectAwsFrameContentProps extends DialogContentProps {
@@ -20,7 +20,7 @@ export default function StartWithTemplateFrame({
 			<ConnectQuickVercelFrameContent onClose={onClose} />
 		))
 		.with("cloudflare", () => (
-			<ConnectQuickCloudflareFrameContent onClose={onClose} />
+			<ConnectCloudflareFrameContent onClose={onClose} />
 		))
 		.otherwise(() => {
 			return (
