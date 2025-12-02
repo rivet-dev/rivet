@@ -2288,6 +2288,9 @@ importers:
       '@rivetkit/fast-json-patch':
         specifier: ^3.1.2
         version: 3.1.2
+      '@rivetkit/on-change':
+        specifier: ^6.0.2-rc.1
+        version: 6.0.2-rc.1
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
@@ -2300,9 +2303,6 @@ importers:
       nanoevents:
         specifier: ^9.1.0
         version: 9.1.0
-      on-change:
-        specifier: npm:@rivetkit/on-change@^6.0.2-rc.1
-        version: '@rivetkit/on-change@6.0.2-rc.1'
       p-retry:
         specifier: ^6.2.1
         version: 6.2.1
