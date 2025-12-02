@@ -1,8 +1,8 @@
-import { createRivetKit } from "@rivetkit/react";
+import { createClient } from "rivetkit/client";
 import { useEffect, useState } from "react";
 import type { registry } from "../backend/registry";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+const client = createClient<typeof registry>("http://localhost:6420");
 
 interface ItemStock {
 	itemName: string;
@@ -32,24 +32,9 @@ export function App() {
 		null
 	);
 
-	const laptopInventory = useActor({
-		name: "inventory",
-		key: ["laptop"],
-	});
-
-	const phoneInventory = useActor({
-		name: "inventory",
-		key: ["phone"],
-	});
-
-	const checkoutActor = useActor({
-		name: "checkout",
-		key: ["session-1"],
-	});
-
 	const initializeInventory = async () => {
 		// Initialize laptop inventory
-		const laptop = await laptopInventory.client.inventory.create(["laptop"], {
+		const laptop = await client.inventory.create(["laptop"], {
 			input: {
 				itemName: "Laptop",
 				initialStock: 10,
@@ -59,7 +44,7 @@ export function App() {
 		setLaptopStock(laptopInfo);
 
 		// Initialize phone inventory
-		const phone = await phoneInventory.client.inventory.create(["phone"], {
+		const phone = await client.inventory.create(["phone"], {
 			input: {
 				itemName: "Phone",
 				initialStock: 20,
@@ -72,18 +57,17 @@ export function App() {
 	};
 
 	const refreshInventory = async () => {
-		if (laptopInventory.connection) {
-			const laptopInfo = await laptopInventory.connection.getStock();
-			setLaptopStock(laptopInfo);
-		}
-		if (phoneInventory.connection) {
-			const phoneInfo = await phoneInventory.connection.getStock();
-			setPhoneStock(phoneInfo);
-		}
+		const laptopInventory = client.inventory.get(["laptop"]);
+		const laptopInfo = await laptopInventory.getStock();
+		setLaptopStock(laptopInfo);
+
+		const phoneInventory = client.inventory.get(["phone"]);
+		const phoneInfo = await phoneInventory.getStock();
+		setPhoneStock(phoneInfo);
 	};
 
 	const createCheckout = async () => {
-		const checkout = await checkoutActor.client.checkout.create(["session-1"], {
+		const checkout = await client.checkout.create(["session-1"], {
 			input: {
 				customerName,
 			},
@@ -95,17 +79,13 @@ export function App() {
 	};
 
 	const addItemToCheckout = async () => {
-		if (!checkoutActor.connection) {
-			setMessage("Please create checkout first");
-			return;
-		}
-
-		const result = await checkoutActor.connection.addItem(selectedItem, quantity);
+		const checkout = client.checkout.get(["session-1"]);
+		const result = await checkout.addItem(selectedItem, quantity);
 
 		if (result.success) {
 			setMessage(result.message);
 			// Refresh checkout and inventory
-			const summary = await checkoutActor.connection.getSummary();
+			const summary = await checkout.getSummary();
 			setCheckoutSummary(summary);
 			await refreshInventory();
 		} else {
@@ -114,31 +94,23 @@ export function App() {
 	};
 
 	const completeCheckout = async () => {
-		if (!checkoutActor.connection) return;
-
-		const result = await checkoutActor.connection.completeCheckout();
+		const checkout = client.checkout.get(["session-1"]);
+		const result = await checkout.completeCheckout();
 		setMessage(result.message);
 
-		const summary = await checkoutActor.connection.getSummary();
+		const summary = await checkout.getSummary();
 		setCheckoutSummary(summary);
 	};
 
 	const cancelCheckout = async () => {
-		if (!checkoutActor.connection) return;
-
-		const result = await checkoutActor.connection.cancelCheckout();
+		const checkout = client.checkout.get(["session-1"]);
+		const result = await checkout.cancelCheckout();
 		setMessage(result.message);
 
-		const summary = await checkoutActor.connection.getSummary();
+		const summary = await checkout.getSummary();
 		setCheckoutSummary(summary);
 		await refreshInventory();
 	};
-
-	useEffect(() => {
-		if (laptopInventory.connection && phoneInventory.connection) {
-			refreshInventory();
-		}
-	}, [laptopInventory.connection, phoneInventory.connection]);
 
 	return (
 		<div className="container">
@@ -191,7 +163,6 @@ export function App() {
 
 					<button
 						onClick={createCheckout}
-						disabled={!checkoutActor.connection}
 						className="primary"
 					>
 						Create Checkout
