@@ -260,7 +260,7 @@ export function Header({
 										active === "pricing" ? "page" : undefined
 									}
 								>
-									Pricing
+									Cloud
 								</TextNavItem>
 								<TextNavItem
 									href="/changelog"
@@ -342,7 +342,7 @@ export function Header({
 						href="/pricing"
 						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
-						Pricing
+						Cloud
 					</TextNavItem>
 					<TextNavItem
 						href="/changelog"
@@ -382,7 +382,7 @@ function DocsMobileNavigation({ tree }) {
 		{ href: "/", label: "Home" },
 		{ href: "/docs", label: "Documentation" },
 		{ href: "/changelog", label: "Changelog" },
-		{ href: "/pricing", label: "Pricing" },
+		{ href: "/pricing", label: "Cloud" },
 		{ href: "https://dashboard.rivet.dev/", label: "Dashboard" },
 	];
 
