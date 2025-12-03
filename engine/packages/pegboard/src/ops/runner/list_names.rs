@@ -39,7 +39,7 @@ pub async fn pegboard_runner_list_names(ctx: &OperationCtx, input: &Input) -> Re
 
 			tx.get_ranges_keyvalues(
 				universaldb::RangeOption {
-					mode: StreamingMode::WantAll,
+					mode: StreamingMode::Exact,
 					limit: Some(input.limit),
 					..(start, end).into()
 				},
