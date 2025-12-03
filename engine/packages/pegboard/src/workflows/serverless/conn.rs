@@ -13,8 +13,8 @@ use tokio::time::Duration;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use super::{pool, runner};
 use crate::pubsub_subjects::RunnerReceiverSubject;
+use crate::workflows::{runner_pool, serverless::receiver};
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
@@ -27,7 +27,7 @@ const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(5);
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
 	pub pool_wf_id: Id,
-	pub runner_wf_id: Id,
+	pub receiver_wf_id: Id,
 	pub namespace_id: Id,
 	pub runner_name: String,
 }
@@ -39,7 +39,7 @@ struct RescheduleState {
 }
 
 #[workflow]
-pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_serverless_conn(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Run the connection activity, which will handle the full lifecycle
 	let drain_sent = ctx
 		.loope(RescheduleState::default(), |ctx, state| {
@@ -49,7 +49,7 @@ pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input
 				let res = ctx
 					.activity(OutboundReqInput {
 						pool_wf_id: input.pool_wf_id,
-						runner_wf_id: input.runner_wf_id,
+						receiver_wf_id: input.receiver_wf_id,
 						namespace_id: input.namespace_id,
 						runner_name: input.runner_name.clone(),
 					})
@@ -99,8 +99,8 @@ pub async fn pegboard_serverless_connection(ctx: &mut WorkflowCtx, input: &Input
 	// If we failed to send inline during the activity, durably ensure the
 	// signal is dispatched here
 	if !drain_sent {
-		ctx.signal(pool::RunnerDrainStarted {
-			runner_wf_id: input.runner_wf_id,
+		ctx.signal(runner_pool::OutboundConnDrainStarted {
+			receiver_wf_id: input.receiver_wf_id,
 		})
 		.to_workflow_id(input.pool_wf_id)
 		.send()
@@ -136,7 +136,7 @@ async fn compare_retry(ctx: &ActivityCtx, input: &CompareRetryInput) -> Result<C
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct OutboundReqInput {
 	pool_wf_id: Id,
-	runner_wf_id: Id,
+	receiver_wf_id: Id,
 	namespace_id: Id,
 	runner_name: String,
 }
@@ -181,7 +181,7 @@ async fn outbound_req_inner(
 	term_signal: &mut TermSignal,
 	drain_sub: &mut message::SubscriptionHandle<Drain>,
 ) -> Result<OutboundReqOutput> {
-	if is_runner_draining(ctx, input.runner_wf_id).await? {
+	if is_runner_draining(ctx, input.receiver_wf_id).await? {
 		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	}
 
@@ -336,8 +336,8 @@ async fn outbound_req_inner(
 	tracing::debug!(?runner_id, "connection reached lifespan, starting drain");
 
 	if let Err(err) = ctx
-		.signal(pool::RunnerDrainStarted {
-			runner_wf_id: input.runner_wf_id,
+		.signal(runner_pool::OutboundConnDrainStarted {
+			receiver_wf_id: input.receiver_wf_id,
 		})
 		// This is ok, because we only send DrainStarted once
 		.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
@@ -365,14 +365,14 @@ async fn outbound_req_inner(
 /// Reads from the adjacent serverless runner wf which is keeping track of signals while this workflow runs
 /// outbound requests.
 #[tracing::instrument(skip_all)]
-async fn is_runner_draining(ctx: &ActivityCtx, runner_wf_id: Id) -> Result<bool> {
-	let runner_wf = ctx
-		.get_workflows(vec![runner_wf_id])
+async fn is_runner_draining(ctx: &ActivityCtx, receiver_wf_id: Id) -> Result<bool> {
+	let receiver_wf = ctx
+		.get_workflows(vec![receiver_wf_id])
 		.await?
 		.into_iter()
 		.next()
 		.context("cannot find own runner wf")?;
-	let state = runner_wf.parse_state::<runner::State>()?;
+	let state = receiver_wf.parse_state::<receiver::State>()?;
 
 	Ok(state.is_draining)
 }
@@ -513,8 +513,8 @@ async fn publish_to_client_stop(
 	Ok(())
 }
 
-#[message("pegboard_serverless_connection_drain")]
-#[signal("pegboard_serverless_connection_drain")]
+#[message("pegboard_serverless_conn_drain")]
+#[signal("pegboard_serverless_conn_drain")]
 pub struct Drain {}
 
 fn reconnect_backoff(

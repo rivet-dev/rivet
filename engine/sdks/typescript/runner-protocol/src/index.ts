@@ -85,22 +85,19 @@ export function writeKvValue(bc: bare.ByteCursor, x: KvValue): void {
 
 export type KvMetadata = {
     readonly version: ArrayBuffer
-    /**
-     * TODO: Rename to update_ts
-     */
-    readonly createTs: i64
+    readonly updateTs: i64
 }
 
 export function readKvMetadata(bc: bare.ByteCursor): KvMetadata {
     return {
         version: bare.readData(bc),
-        createTs: bare.readI64(bc),
+        updateTs: bare.readI64(bc),
     }
 }
 
 export function writeKvMetadata(bc: bare.ByteCursor, x: KvMetadata): void {
     bare.writeData(bc, x.version)
-    bare.writeI64(bc, x.createTs)
+    bare.writeI64(bc, x.updateTs)
 }
 
 /**

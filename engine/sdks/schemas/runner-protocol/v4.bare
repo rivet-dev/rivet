@@ -16,8 +16,7 @@ type KvKey data
 type KvValue data
 type KvMetadata struct {
 	version: data
-	# TODO: Rename to update_ts
-	createTs: i64
+	updateTs: i64
 }
 
 # Query types

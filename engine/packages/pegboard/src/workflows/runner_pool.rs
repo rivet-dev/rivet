@@ -1,10 +1,10 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use futures_util::FutureExt;
-use gas::{db::WorkflowData, prelude::*};
+use gas::prelude::*;
 use rivet_types::{keys, runner_configs::RunnerConfigKind};
 
-use super::runner;
+use super::serverless;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -19,13 +19,12 @@ struct LifecycleState {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RunnerState {
-	/// Serverless runner wf id, not normal runner wf id.
-	runner_wf_id: Id,
+	receiver_wf_id: Id,
 	details_hash: u64,
 }
 
 #[workflow]
-pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.loope(LifecycleState::default(), |ctx, state| {
 		let input = input.clone();
 		async move {
@@ -42,17 +41,6 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 				return Ok(Loop::Break(()));
 			};
 
-			let completed_runners = ctx
-				.activity(GetCompletedInput {
-					runners: state.runners.iter().map(|r| r.runner_wf_id).collect(),
-				})
-				.await?;
-
-			// Remove completed connections
-			state
-				.runners
-				.retain(|r| !completed_runners.contains(&r.runner_wf_id));
-
 			// Remove runners that have an outdated hash. This is done outside of the below draining mechanism
 			// because we drain specific runners, not just a number of runners
 			let (new, outdated) = std::mem::take(&mut state.runners)
@@ -61,8 +49,9 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 			state.runners = new;
 
 			for runner in outdated {
-				ctx.signal(runner::Drain {})
-					.to_workflow_id(runner.runner_wf_id)
+				// TODO: Spawn sub wf to process these so this is not blocking the loop
+				ctx.signal(serverless::receiver::Drain {})
+					.to_workflow_id(runner.receiver_wf_id)
 					.send()
 					.await?;
 			}
@@ -75,9 +64,10 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 				// TODO: Implement smart logic of draining runners with the lowest allocated actors
 				let draining_runners = state.runners.iter().take(drain_count).collect::<Vec<_>>();
 
+				// TODO: Spawn sub wf to process these so this is not blocking the loop
 				for runner in draining_runners {
-					ctx.signal(runner::Drain {})
-						.to_workflow_id(runner.runner_wf_id)
+					ctx.signal(serverless::receiver::Drain {})
+						.to_workflow_id(runner.receiver_wf_id)
 						.send()
 						.await?;
 				}
@@ -85,9 +75,10 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 
 			// Dispatch new runner workflows
 			if start_count != 0 {
+				// TODO: Spawn sub wf to process these so this is not blocking the loop
 				for _ in 0..start_count {
-					let runner_wf_id = ctx
-						.workflow(runner::Input {
+					let receiver_wf_id = ctx
+						.workflow(serverless::receiver::Input {
 							pool_wf_id: ctx.workflow_id(),
 							namespace_id: input.namespace_id,
 							runner_name: input.runner_name.clone(),
@@ -98,18 +89,22 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 						.await?;
 
 					state.runners.push(RunnerState {
-						runner_wf_id,
+						receiver_wf_id,
 						details_hash,
 					});
 				}
 			}
 
-			// Wait for Bump or runner update signals until we tick again
-			match ctx.listen::<Main>().await? {
-				Main::RunnerDrainStarted(sig) => {
-					state.runners.retain(|r| r.runner_wf_id != sig.runner_wf_id);
+			// Wait for Bump or serverless signals until we tick again
+			for sig in ctx.listen_n::<Main>(1024).await? {
+				match sig {
+					Main::OutboundConnDrainStarted(sig) => {
+						state
+							.runners
+							.retain(|r| r.receiver_wf_id != sig.receiver_wf_id);
+					}
+					Main::Bump(_) => {}
 				}
-				Main::Bump(_) => {}
 			}
 
 			Ok(Loop::Continue)
@@ -119,23 +114,6 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 	.await?;
 
 	Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct GetCompletedInput {
-	runners: Vec<Id>,
-}
-
-#[activity(GetCompleted)]
-async fn get_completed(ctx: &ActivityCtx, input: &GetCompletedInput) -> Result<Vec<Id>> {
-	Ok(ctx
-		.get_workflows(input.runners.clone())
-		.await?
-		.into_iter()
-		// When a workflow has output, it means it has completed
-		.filter(WorkflowData::has_output)
-		.map(|wf| wf.workflow_id)
-		.collect())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -155,12 +133,28 @@ enum ReadDesiredOutput {
 
 #[activity(ReadDesired)]
 async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<ReadDesiredOutput> {
-	let runner_config_res = ctx
-		.op(crate::ops::runner_config::get::Input {
+	let udb_pool = ctx.udb()?;
+	let (runner_config_res, desired_slots) = tokio::try_join!(
+		ctx.op(crate::ops::runner_config::get::Input {
 			runners: vec![(input.namespace_id, input.runner_name.clone())],
 			bypass_cache: false,
-		})
-		.await?;
+		}),
+		udb_pool.run(|tx| async move {
+			let tx = tx.with_subspace(keys::pegboard::subspace());
+
+			let desired_slots = tx
+				.read_opt(
+					&keys::pegboard::ns::ServerlessDesiredSlotsKey {
+						namespace_id: input.namespace_id,
+						runner_name: input.runner_name.clone(),
+					},
+					universaldb::utils::IsolationLevel::Serializable,
+				)
+				.await?;
+
+			Ok(desired_slots.unwrap_or_default())
+		}),
+	)?;
 	let Some(runner_config) = runner_config_res.into_iter().next() else {
 		return Ok(ReadDesiredOutput::Stop);
 	};
@@ -178,22 +172,6 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 	else {
 		return Ok(ReadDesiredOutput::Stop);
 	};
-
-	let desired_slots = ctx
-		.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::pegboard::subspace());
-
-			tx.read(
-				&keys::pegboard::ns::ServerlessDesiredSlotsKey {
-					namespace_id: input.namespace_id,
-					runner_name: input.runner_name.clone(),
-				},
-				universaldb::utils::IsolationLevel::Serializable,
-			)
-			.await
-		})
-		.await?;
 
 	let adjusted_desired_slots = if desired_slots < 0 {
 		tracing::error!(
@@ -228,16 +206,16 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 	})
 }
 
-#[signal("pegboard_serverless_bump")]
+#[signal("pegboard_runner_pool_bump")]
 #[derive(Debug)]
 pub struct Bump {}
 
-#[signal("pegboard_serverless_runner_drain_started")]
-pub struct RunnerDrainStarted {
-	pub runner_wf_id: Id,
+#[signal("pegboard_outbound_conn_drain_started")]
+pub struct OutboundConnDrainStarted {
+	pub receiver_wf_id: Id,
 }
 
 join_signal!(Main {
 	Bump,
-	RunnerDrainStarted,
+	OutboundConnDrainStarted,
 });

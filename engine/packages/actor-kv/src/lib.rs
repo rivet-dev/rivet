@@ -260,7 +260,7 @@ pub async fn put(
 							&EntryMetadataKey::new(key.clone()),
 							rp::KvMetadata {
 								version: VERSION.as_bytes().to_vec(),
-								create_ts: utils::now(),
+								update_ts: utils::now(),
 							},
 						)?;
 

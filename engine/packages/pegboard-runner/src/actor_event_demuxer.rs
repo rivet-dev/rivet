@@ -37,29 +37,20 @@ impl ActorEventDemuxer {
 	pub fn ingest(&mut self, actor_id: Id, event: protocol::mk2::EventWrapper) {
 		tracing::debug!(runner_id=?self.runner_id, ?actor_id, index=?event.checkpoint.index, "actor demuxer ingest");
 
-		if let Some(channel) = self.channels.get(&actor_id) {
+		if let Some(channel) = self.channels.get_mut(&actor_id) {
 			let _ = channel.tx.send(event);
+			channel.last_seen = Instant::now();
 		} else {
-			let (tx, mut rx) = mpsc::unbounded_channel();
+			let (tx, rx) = mpsc::unbounded_channel();
 
-			let ctx = self.ctx.clone();
-			let runner_id = self.runner_id;
-			let handle = tokio::spawn(async move {
-				loop {
-					let mut buffer = Vec::new();
+			let handle = tokio::spawn(channel_handler(
+				self.ctx.clone(),
+				self.runner_id,
+				actor_id,
+				rx,
+			));
 
-					// Batch process events
-					if rx.recv_many(&mut buffer, 1024).await == 0 {
-						break;
-					}
-
-					if let Err(err) = dispatch_events(&ctx, runner_id, actor_id, buffer).await {
-						tracing::error!(?err, "actor event processor failed");
-						break;
-					}
-				}
-			});
-
+			// Send initial event
 			let _ = tx.send(event);
 
 			self.channels.insert(
@@ -107,6 +98,27 @@ impl ActorEventDemuxer {
 		}
 
 		tracing::debug!("actor demuxer shut down");
+	}
+}
+
+async fn channel_handler(
+	ctx: StandaloneCtx,
+	runner_id: Id,
+	actor_id: Id,
+	mut rx: mpsc::UnboundedReceiver<protocol::mk2::EventWrapper>,
+) {
+	loop {
+		let mut buffer = Vec::new();
+
+		// Batch process events
+		if rx.recv_many(&mut buffer, 1024).await == 0 {
+			break;
+		}
+
+		if let Err(err) = dispatch_events(&ctx, runner_id, actor_id, buffer).await {
+			tracing::error!(?err, "actor event processor failed");
+			break;
+		}
 	}
 }
 

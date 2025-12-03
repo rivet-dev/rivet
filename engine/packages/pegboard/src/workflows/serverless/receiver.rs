@@ -1,6 +1,6 @@
 use gas::prelude::*;
 
-use super::connection;
+use super::conn;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -23,13 +23,13 @@ impl State {
 /// Runs alongside the connection workflow to process signals. This is required because the connection
 /// workflow cannot listen for signals while in an activity.
 #[workflow]
-pub async fn pegboard_serverless_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_serverless_receiver(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.activity(InitStateInput {}).await?;
 
 	let conn_wf_id = ctx
-		.workflow(connection::Input {
+		.workflow(conn::Input {
 			pool_wf_id: input.pool_wf_id,
-			runner_wf_id: ctx.workflow_id(),
+			receiver_wf_id: ctx.workflow_id(),
 			namespace_id: input.namespace_id,
 			runner_name: input.runner_name.clone(),
 		})
@@ -40,20 +40,20 @@ pub async fn pegboard_serverless_runner(ctx: &mut WorkflowCtx, input: &Input) ->
 
 	ctx.activity(MarkAsDrainingInput {}).await?;
 
-	ctx.signal(connection::Drain {})
+	// If the connection is between retries, this will be received
+	ctx.signal(conn::Drain {})
 		.to_workflow_id(conn_wf_id)
 		.send()
 		.await?;
 
-	ctx.msg(connection::Drain {})
+	// if the connection is currently running an outbound req, this will be received
+	ctx.msg(conn::Drain {})
 		.tag("workflow_id", conn_wf_id)
 		.send()
 		.await?;
 
 	// Wait for connection wf to complete so this wf's state remains readable
-	ctx.workflow::<connection::Input>(conn_wf_id)
-		.output()
-		.await?;
+	ctx.workflow::<conn::Input>(conn_wf_id).output().await?;
 
 	Ok(())
 }

@@ -60,8 +60,6 @@ pub async fn kv_get(ctx: ApiCtx, path: KvGetPath, _query: KvGetQuery) -> Result<
 
 	Ok(KvGetResponse {
 		value: value_base64,
-		// NOTE: Intentionally uses different name in public API. `create_ts` is actually
-		// `update_ts`.
-		update_ts: metadata[0].create_ts,
+		update_ts: metadata[0].update_ts,
 	})
 }
