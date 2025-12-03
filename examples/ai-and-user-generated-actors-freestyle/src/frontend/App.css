@@ -1,0 +1,280 @@
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+	margin: 0;
+	padding: 0;
+	background-color: rgb(10, 10, 10);
+	overflow: hidden;
+}
+
+.app {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	background: rgb(10, 10, 10);
+}
+
+.ide-layout {
+	display: flex;
+	height: 100vh;
+	overflow: hidden;
+	background: rgb(10, 10, 10);
+}
+
+.editors-row {
+	flex: 1;
+	display: flex;
+	overflow: hidden;
+}
+
+.editor-section {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-right: 1px solid #2c2c2e;
+}
+
+.editor-section:last-child {
+	border-right: none;
+}
+
+.editor-header {
+	background: rgb(10, 10, 10);
+	color: #ffffff;
+	padding: 12px 20px;
+	font-weight: 500;
+	font-size: 0.95em;
+	border-bottom: 1px solid #2c2c2e;
+}
+
+.editor-section textarea {
+	flex: 1;
+	overflow: auto !important;
+}
+
+.deploy-panel {
+	width: 400px;
+	background: rgb(10, 10, 10);
+	border-left: 1px solid #2c2c2e;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.panel-header {
+	background: rgb(10, 10, 10);
+	color: #ffffff;
+	padding: 12px 20px;
+	text-align: left;
+	border-bottom: 1px solid #2c2c2e;
+}
+
+.panel-header h2 {
+	margin: 0;
+	font-size: 0.95em;
+	font-weight: 500;
+}
+
+.tabs {
+	display: flex;
+	border-bottom: 1px solid #2c2c2e;
+	background: rgb(10, 10, 10);
+}
+
+.tabs button {
+	flex: 1;
+	padding: 12px 16px;
+	background: rgb(10, 10, 10);
+	border: none;
+	color: #8e8e93;
+	cursor: pointer;
+	font-size: 0.9em;
+	border-bottom: 3px solid transparent;
+	transition: all 0.2s;
+}
+
+.tabs button:hover {
+	background: #2c2c2e;
+	color: #ffffff;
+}
+
+.tabs button.active {
+	color: rgb(255, 79, 0);
+	border-bottom-color: rgb(255, 79, 0);
+}
+
+.panel-content {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	background: rgb(10, 10, 10);
+}
+
+.env-vars-section {
+	flex-shrink: 0;
+}
+
+.env-vars-section h3 {
+	margin-bottom: 15px;
+	color: #ffffff;
+	font-size: 1em;
+	font-weight: 600;
+}
+
+.env-vars {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.env-var {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.env-var label {
+	color: #8e8e93;
+	font-size: 0.85em;
+	font-weight: 500;
+}
+
+.env-var input {
+	padding: 8px 12px;
+	border: 1px solid #3a3a3c;
+	border-radius: 8px;
+	font-size: 0.9em;
+	transition: all 0.2s;
+	background: #2c2c2e;
+	color: #ffffff;
+}
+
+.env-var input::placeholder {
+	color: #8e8e93;
+}
+
+.env-var input:focus {
+	outline: none;
+	border-color: rgb(255, 79, 0);
+	box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.1);
+}
+
+.deploy-section {
+	flex-shrink: 0;
+}
+
+.deploy-button {
+	width: 100%;
+	padding: 12px 24px;
+	background: white;
+	color: black;
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	font-size: 1em;
+	font-weight: 500;
+	transition: all 0.2s;
+}
+
+.deploy-button:hover:not(:disabled) {
+	background: #e0e0e0;
+}
+
+.deploy-button:disabled {
+	background: #3a3a3c;
+	color: #8e8e93;
+	cursor: not-allowed;
+}
+
+.log-section {
+	flex-shrink: 0;
+	background: transparent;
+	border: 1px solid #2c2c2e;
+	border-radius: 8px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.log-section h3 {
+	color: #ffffff;
+	font-size: 1em;
+	font-weight: 600;
+	margin: 0;
+}
+
+.log-section > div {
+	font-family: ui-monospace, SFMono-Regular, SF Mono, Consolas, Liberation Mono, Menlo, monospace;
+	font-size: 0.8em;
+	color: #8e8e93;
+	line-height: 1.5;
+}
+
+.log-section.deploying > div:last-child {
+	color: rgb(255, 79, 0);
+	font-weight: 500;
+}
+
+.deployment-success {
+	background: transparent;
+	border: 1px solid #2c2c2e;
+	border-radius: 8px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.deployment-success h3 {
+	color: #ffffff;
+	font-size: 1em;
+	font-weight: 600;
+	margin: 0;
+}
+
+.deployment-success a {
+	color: rgb(255, 79, 0);
+	text-decoration: none;
+	font-size: 0.9em;
+}
+
+.deployment-success a:hover {
+	text-decoration: underline;
+}
+
+/* Code editor styling */
+textarea {
+	outline: none !important;
+	border: none !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: rgb(10, 10, 10);
+}
+
+::-webkit-scrollbar-thumb {
+	background: #3a3a3c;
+	border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #48484a;
+}

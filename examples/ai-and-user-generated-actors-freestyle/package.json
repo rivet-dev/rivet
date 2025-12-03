@@ -1,0 +1,39 @@
+{
+	"name": "example-ai-and-user-generated-actors-freestyle",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
+		"dev:backend": "tsx src/backend/index.ts",
+		"dev:frontend": "vite",
+		"build": "tsc && vite build",
+		"preview": "vite preview",
+		"check-types": "tsc --noEmit",
+		"test": "vitest",
+		"test:run": "vitest run"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.13.8",
+		"@monaco-editor/react": "^4.7.0",
+		"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221",
+		"@rivetkit/engine-api-full": "^25.7.2",
+		"dotenv": "^17.2.2",
+		"execa": "^9.5.2",
+		"freestyle-sandboxes": "^0.0.95",
+		"hono": "^4.6.0",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
+		"@vitejs/plugin-react": "^4.2.0",
+		"concurrently": "^8.2.2",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2",
+		"vite": "^5.0.0",
+		"vitest": "^2.1.8"
+	}
+}
