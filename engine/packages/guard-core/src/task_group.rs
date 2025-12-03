@@ -54,4 +54,8 @@ impl TaskGroup {
 			}
 		}
 	}
+
+	pub fn remaining_tasks(&self) -> usize {
+		self.running_count.load(Ordering::Acquire)
+	}
 }

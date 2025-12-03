@@ -12,6 +12,11 @@ pub enum WsError {
 	)]
 	Eviction,
 	#[error(
+		"going_away",
+		"The Rivet Engine is migrating. The websocket should attempt to reconnect as soon as possible."
+	)]
+	GoingAway,
+	#[error(
 		"timed_out_waiting_for_init",
 		"Timed out waiting for the init packet to be sent."
 	)]
