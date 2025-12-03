@@ -65,6 +65,8 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 					let remaining_slots_key =
 						keys::runner::RemainingSlotsKey::new(runner.runner_id);
 					let total_slots_key = keys::runner::TotalSlotsKey::new(runner.runner_id);
+					let protocol_version_key =
+						keys::runner::ProtocolVersionKey::new(runner.runner_id);
 					let last_ping_ts_key = keys::runner::LastPingTsKey::new(runner.runner_id);
 					let expired_ts_key = keys::runner::ExpiredTsKey::new(runner.runner_id);
 
@@ -75,6 +77,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						version_entry,
 						remaining_slots_entry,
 						total_slots_entry,
+						protocol_version_entry,
 						last_ping_ts_entry,
 						expired_ts_entry,
 					) = tokio::try_join!(
@@ -84,6 +87,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						tx.read_opt(&version_key, Serializable),
 						tx.read_opt(&remaining_slots_key, Serializable),
 						tx.read_opt(&total_slots_key, Serializable),
+						tx.read_opt(&protocol_version_key, Serializable),
 						tx.read_opt(&last_ping_ts_key, Serializable),
 						tx.read_opt(&expired_ts_key, Serializable),
 					)?;
@@ -95,6 +99,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						Some(version),
 						Some(remaining_slots),
 						Some(total_slots),
+						Some(protocol_version),
 						Some(old_last_ping_ts),
 					) = (
 						workflow_id_entry,
@@ -103,6 +108,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						version_entry,
 						remaining_slots_entry,
 						total_slots_entry,
+						protocol_version_entry,
 						last_ping_ts_entry,
 					)
 					else {
@@ -151,6 +157,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 									workflow_id,
 									remaining_slots,
 									total_slots,
+									protocol_version,
 								},
 							)?;
 						}
@@ -181,6 +188,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 										workflow_id,
 										remaining_slots,
 										total_slots,
+										protocol_version,
 									},
 								)?;
 

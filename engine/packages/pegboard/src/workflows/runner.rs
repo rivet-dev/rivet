@@ -2,7 +2,7 @@ use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION, versioned};
 use universaldb::{
 	options::{ConflictRangeType, StreamingMode},
 	utils::{FormalChunkedKey, IsolationLevel::*},
@@ -157,7 +157,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							// Forward to actor workflows
 							for event in new_events.clone() {
 								let actor_id =
-									crate::utils::event_actor_id(&event.inner).to_string();
+									crate::utils::event_actor_id_mk1(&event.inner).to_string();
 								let res = ctx
 									.signal(crate::workflows::actor::Event {
 										inner: event.inner.clone(),
@@ -1096,6 +1096,9 @@ pub(crate) async fn allocate_pending_actors(
 						signal: Allocate {
 							runner_id: old_runner_alloc_key.runner_id,
 							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
+							runner_protocol_version: Some(
+								old_runner_alloc_key_data.protocol_version,
+							),
 						},
 					});
 
@@ -1132,7 +1135,7 @@ async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerIn
 		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
 
 	let message_serialized = versioned::ToRunner::wrap_latest(input.message.clone())
-		.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+		.serialize_with_embedded_version(PROTOCOL_MK1_VERSION)?;
 
 	ctx.ups()?
 		.publish(&receiver_subject, &message_serialized, PublishOpts::one())

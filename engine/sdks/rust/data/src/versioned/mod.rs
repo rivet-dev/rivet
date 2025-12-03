@@ -52,6 +52,38 @@ impl OwnedVersionedData for RunnerAllocIdxKeyData {
 	}
 }
 
+impl RunnerAllocIdxKeyData {
+	fn v1_to_v2(self) -> Result<Self> {
+		if let RunnerAllocIdxKeyData::V1(x) = self {
+			Ok(RunnerAllocIdxKeyData::V2(
+				pegboard_namespace_runner_alloc_idx_v2::Data {
+					workflow_id: x.workflow_id,
+					remaining_slots: x.remaining_slots,
+					total_slots: x.total_slots,
+					// Default to mk1
+					protocol_version: rivet_runner_protocol::PROTOCOL_MK1_VERSION,
+				},
+			))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v2_to_v1(self) -> Result<Self> {
+		if let RunnerAllocIdxKeyData::V2(x) = self {
+			Ok(RunnerAllocIdxKeyData::V1(
+				pegboard_namespace_runner_alloc_idx_v1::Data {
+					workflow_id: x.workflow_id,
+					remaining_slots: x.remaining_slots,
+					total_slots: x.total_slots,
+				},
+			))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+}
+
 pub enum MetadataKeyData {
 	V1(pegboard_runner_metadata_v1::Data),
 }

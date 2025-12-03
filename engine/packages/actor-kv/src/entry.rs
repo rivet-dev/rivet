@@ -3,7 +3,7 @@ use std::result::Result::Ok;
 use anyhow::*;
 use universaldb::prelude::*;
 
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 
 use crate::key::KeyWrapper;
 

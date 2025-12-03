@@ -207,7 +207,7 @@ type CommandWrapper struct {
 
 # Message ID
 
-type MessageIdParts struct {
+type MessageId struct {
 	# Globally unique ID
 	gatewayId: GatewayId
 	# Unique ID to the gateway
@@ -216,7 +216,6 @@ type MessageIdParts struct {
 	messageIndex: MessageIndex
 }
 
-type MessageId data[12]
 
 # HTTP
 type ToClientRequestStart struct {
@@ -322,6 +321,10 @@ type ToClientTunnelMessage struct {
 	messageKind: ToClientTunnelMessageKind
 }
 
+type ToClientPing struct {
+	ts: i64
+}
+
 # MARK: To Server
 type ToServerInit struct {
 	name: str
@@ -424,6 +427,7 @@ type ToGateway union {
 # MARK: Serverless
 type ToServerlessServerInit struct {
 	runnerId: Id
+	runnerProtocolVersion: u16
 }
 
 type ToServerlessServer union {

@@ -127,7 +127,7 @@ pub async fn init_conn(
 				};
 
 				// Spawn a new runner workflow if one doesn't already exist
-				let workflow_id = if protocol::is_new(protocol_version) {
+				let workflow_id = if protocol::is_mk2(protocol_version) {
 					ctx.workflow(pegboard::workflows::runner2::Input {
 						runner_id,
 						namespace_id: namespace.namespace_id,
@@ -174,8 +174,17 @@ pub async fn init_conn(
 				return Err(WsError::InvalidInitialPacket("must be `ToServer::Init`").build());
 			};
 
-		if protocol::is_new(protocol_version) {
-			ctx.signal(Init);
+		if protocol::is_mk2(protocol_version) {
+			ctx.signal(pegboard::workflows::runner2::Init {})
+				.to_workflow_id(workflow_id)
+				.send()
+				.await
+				.with_context(|| {
+					format!(
+						"failed to forward initial packet to workflow: {}",
+						workflow_id
+					)
+				})?;
 		} else {
 			// Forward to runner wf
 			ctx.signal(pegboard::workflows::runner::Forward { inner: init_packet })
