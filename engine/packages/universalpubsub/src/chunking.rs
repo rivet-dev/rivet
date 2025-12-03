@@ -103,7 +103,7 @@ impl ChunkTracker {
 			.retain(|_, buffer| now.duration_since(buffer.last_chunk_ts) < CHUNK_BUFFER_MAX_AGE);
 		let size_after = self.chunks_in_process.len();
 
-		tracing::debug!(
+		tracing::trace!(
 			?size_before,
 			?size_after,
 			"performed chunk buffer garbage collection"
