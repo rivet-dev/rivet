@@ -1637,8 +1637,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@1fcfb72
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@1fcfb72
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -6416,6 +6416,10 @@ packages:
 
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
+
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@1fcfb72':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@1fcfb72}
+    version: 0.0.0
 
   '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2':
     resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2}
@@ -18253,6 +18257,19 @@ snapshots:
       form-data: 4.0.5
       js-base64: 3.7.8
       node-fetch: 2.7.0
+      qs: 6.14.0
+      readable-stream: 4.7.0
+      url-join: 5.0.0
+    transitivePeerDependencies:
+      - encoding
+
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@1fcfb72':
+    dependencies:
+      cross-fetch: 4.1.0
+      form-data: 4.0.5
+      js-base64: 3.7.8
+      node-fetch: 2.7.0
+      pino-pretty: 13.1.2
       qs: 6.14.0
       readable-stream: 4.7.0
       url-join: 5.0.0
