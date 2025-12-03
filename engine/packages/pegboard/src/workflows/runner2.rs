@@ -52,6 +52,8 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 	})
 	.await?;
 
+	// NOTE: This is only if there's a queue of actors. this path is not used if there is enough capacity of
+	// runners, the actor wf allocates itself independently
 	// Check for pending actors
 	let res = ctx
 		.activity(AllocatePendingActorsInput {

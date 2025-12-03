@@ -111,16 +111,11 @@ https://rivet.dev/docs/connect/railway
 https://rivet.dev/docs/connect/supabase
 https://rivet.dev/docs/connect/vercel
 https://rivet.dev/docs/connect/vm-and-bare-metal
-https://rivet.dev/docs/drivers/build-your-own
-https://rivet.dev/docs/drivers/file-system
-https://rivet.dev/docs/drivers/memory
-https://rivet.dev/docs/examples/autofill-example
 https://rivet.dev/docs/general/architecture
 https://rivet.dev/docs/general/cors
 https://rivet.dev/docs/general/docs-for-llms
 https://rivet.dev/docs/general/edge
 https://rivet.dev/docs/general/logging
-https://rivet.dev/docs/general/self-hosting
 https://rivet.dev/docs/index
 https://rivet.dev/docs/quickstart
 https://rivet.dev/docs/self-hosting
