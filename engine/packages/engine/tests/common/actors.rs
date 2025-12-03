@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
 use serde_json::json;
+use url::Url;
 
 #[derive(Clone)]
 pub struct CreateActorOptions {
@@ -292,34 +293,36 @@ pub async fn list_actors(
 	guard_port: u16,
 ) -> reqwest::Response {
 	let client = reqwest::Client::new();
-	let mut url = format!(
-		"http://127.0.0.1:{}/actors?namespace={}",
-		guard_port, namespace
-	);
+	let mut url = Url::parse(&format!("http://127.0.0.1:{guard_port}/actors")).unwrap();
+	let mut query = url.query_pairs_mut();
+
+	query.append_pair("namespace", namespace);
 
 	if let Some(name) = name {
-		url.push_str(&format!("&name={}", name));
+		query.append_pair("name", name);
 	}
 	if let Some(key) = key {
-		url.push_str(&format!("&key={}", key));
+		query.append_pair("key", &key);
 	}
-	if let Some(actor_ids) = actor_ids {
-		url.push_str(&format!("&actor_ids={}", actor_ids.join(",")));
+	for actor_id in actor_ids.into_iter().flatten() {
+		query.append_pair("actor_id", &actor_id);
 	}
 	if let Some(include_destroyed) = include_destroyed {
-		url.push_str(&format!("&include_destroyed={}", include_destroyed));
+		query.append_pair("include_destroyed", &include_destroyed.to_string());
 	}
 	if let Some(limit) = limit {
-		url.push_str(&format!("&limit={}", limit));
+		query.append_pair("limit", &limit.to_string());
 	}
 	if let Some(cursor) = cursor {
-		url.push_str(&format!("&cursor={}", cursor));
+		query.append_pair("cursor", cursor);
 	}
+
+	drop(query);
 
 	tracing::info!(?url, "listing actors");
 
 	client
-		.get(&url)
+		.get(url)
 		.send()
 		.await
 		.expect("Failed to send list request")

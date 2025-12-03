@@ -2909,7 +2909,6 @@ dependencies = [
  "internal",
  "reqwest",
  "rivet-api-builder",
- "rivet-api-types",
  "rivet-api-util",
  "rivet-data",
  "rivet-error",
@@ -4531,6 +4530,7 @@ dependencies = [
  "tracing-subscriber",
  "universaldb",
  "url",
+ "urlencoding",
  "uuid",
  "vbare",
 ]
@@ -4611,7 +4611,6 @@ dependencies = [
  "universalpubsub",
  "url",
  "urlencoding",
- "uuid",
 ]
 
 [[package]]

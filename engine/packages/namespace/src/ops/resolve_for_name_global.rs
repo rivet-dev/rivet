@@ -38,10 +38,7 @@ pub async fn namespace_resolve_for_name_global(
 							.custom_instrument(tracing::info_span!("namespaces_http_request"))
 							.await?;
 
-						let res = rivet_api_util::parse_response::<
-							rivet_api_types::namespaces::list::ListResponse,
-						>(res)
-						.await?;
+						let res = rivet_api_util::parse_response::<ListResponse>(res).await?;
 
 						let ns = res.namespaces.into_iter().next();
 
@@ -54,4 +51,10 @@ pub async fn namespace_resolve_for_name_global(
 			.await
 			.map(|x| x.flatten())
 	}
+}
+
+// TODO: Cyclical dependency with rivet_api_types
+#[derive(Deserialize)]
+struct ListResponse {
+	namespaces: Vec<Namespace>,
 }

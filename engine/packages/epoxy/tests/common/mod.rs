@@ -4,7 +4,6 @@ use epoxy_protocol::protocol::ReplicaId;
 use gas::prelude::{TestCtx as WorkflowTestCtx, *};
 // Note: workflows module no longer exposed in tests
 use rivet_util::Id;
-use serde_json::json;
 use std::collections::HashMap;
 use url::Url;
 
@@ -82,9 +81,7 @@ impl TestCtx {
 		// Start coordinator workflow on leader
 		let mut config_sub = test_ctx
 			.get_ctx(leader_id)
-			.subscribe::<epoxy::workflows::coordinator::ConfigChangeMessage>(
-				json!({ "replica": leader_id }),
-			)
+			.subscribe::<epoxy::workflows::coordinator::ConfigChangeMessage>(("replica", leader_id))
 			.await
 			.unwrap();
 
@@ -284,9 +281,7 @@ async fn setup_epoxy_coordinator_wf(
 
 	// Trigger reconfiguration
 	let mut sub = leader_ctx
-		.subscribe::<epoxy::workflows::coordinator::ConfigChangeMessage>(
-			json!({ "replica": leader_id }),
-		)
+		.subscribe::<epoxy::workflows::coordinator::ConfigChangeMessage>(("replica", leader_id))
 		.await?;
 	leader_ctx
 		.signal(epoxy::workflows::coordinator::Reconfigure {})

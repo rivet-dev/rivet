@@ -79,19 +79,13 @@ pub async fn fetch_actors_by_ids(
 		let limit = limit;
 
 		async move {
-			// Convert actor IDs to comma-separated string
-			let actor_ids_str = dc_actor_ids
-				.iter()
-				.map(|id| id.to_string())
-				.collect::<Vec<_>>()
-				.join(",");
-
 			// Prepare peer query with actor_ids
 			let peer_query = rivet_api_types::actors::list::ListQuery {
 				namespace: namespace.clone(),
 				name: None,
 				key: None,
-				actor_ids: Some(actor_ids_str),
+				actor_ids: None,
+				actor_id: dc_actor_ids,
 				include_destroyed,
 				limit,
 				cursor: None,

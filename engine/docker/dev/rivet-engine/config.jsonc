@@ -17,7 +17,12 @@
 				"datacenter_label": 1,
 				"is_leader": true,
 				"peer_url": "http://rivet-engine:6421",
-				"public_url": "http://rivet-engine:6420"
+				"public_url": "http://rivet-engine:6420",
+				"valid_hosts": [
+					"rivet-engine",
+					"127.0.0.1",
+					"localhost"
+				]
 			}
 		]
 	},
