@@ -80,9 +80,9 @@ rev = "b9f8bfa"
 git = "https://github.com/rivet-gg/deno_core"
 rev = "8a313913fa73d58f4f9532565b0084e723bc34ad"
 
-[workspace.dependencies.deno_runtime]
-git = "https://github.com/rivet-gg/deno"
-rev = "a6903d67063e07b82836399f63c7a0fa5be8bf56"
+# [workspace.dependencies.deno_runtime]
+# git = "https://github.com/rivet-gg/deno"
+# rev = "a6903d67063e07b82836399f63c7a0fa5be8bf56"
 
 [workspace.dependencies.api-helper]
 path = "packages/common/api-helper/build"
@@ -664,6 +664,9 @@ path = "packages/core/services/game/ops/version-list"
 
 [workspace.dependencies.game-version-validate]
 path = "packages/core/services/game/ops/version-validate"
+
+[workspace.dependencies.core-guard]
+path = "packages/core/services/guard"
 
 [workspace.dependencies.ip-info]
 path = "packages/core/services/ip/ops/info"

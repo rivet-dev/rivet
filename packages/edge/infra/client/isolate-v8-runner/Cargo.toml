@@ -13,7 +13,7 @@ path = "src/main.rs"
 anyhow.workspace = true
 deno_ast = "0.42.1"
 deno_core.workspace = true
-deno_runtime.workspace = true
+# deno_runtime.workspace = true
 fdb-util.workspace = true
 foundationdb.workspace = true
 futures-util = { version = "0.3" }

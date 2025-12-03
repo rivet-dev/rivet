@@ -474,6 +474,21 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<(
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 			);
 
+			let active_actor_key = keys::env::ActiveActorKey::new(
+				input.env_id,
+				input.create_ts,
+				input.actor_id,
+			);
+			let data = keys::env::ActiveActorKeyData {
+				tags: input.tags.clone().into_iter().collect(),
+			};
+			tx.set(
+				&keys::subspace().pack(&active_actor_key),
+				&active_actor_key
+					.serialize(data)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+			);
+
 			Ok(())
 		})
 		.custom_instrument(tracing::info_span!("actor_insert_tx"))
