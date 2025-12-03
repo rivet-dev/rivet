@@ -44,12 +44,18 @@ pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) ->
 
 	// Bump pool when a serverless config is modified
 	if delete_pool {
-		ctx.signal(crate::workflows::runner_pool::Bump {})
+		let res = ctx
+			.signal(crate::workflows::runner_pool::Bump {})
 			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", input.name.clone())
+			.graceful_not_found()
 			.send()
 			.await?;
+
+		if res.is_none() {
+			tracing::debug!(namespace_id=?input.namespace_id, name=%input.name, "no runner pool workflow to bump");
+		}
 	}
 
 	Ok(())
