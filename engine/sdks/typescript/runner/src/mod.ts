@@ -8,6 +8,7 @@ import { type HibernatingWebSocketMetadata, Tunnel } from "./tunnel";
 import {
 	calculateBackoff,
 	parseWebSocketCloseReason,
+	stringifyError,
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
@@ -22,6 +23,12 @@ const PROTOCOL_VERSION: number = 4;
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
 const SIGNAL_HANDLERS: (() => void | Promise<void>)[] = [];
+
+export class RunnerShutdownError extends Error {
+	constructor() {
+		super("Runner shut down");
+	}
+}
 
 export interface RunnerConfig {
 	logger?: Logger;
@@ -250,7 +257,14 @@ export class Runner {
 
 		// Start cleaning up old unsent KV requests every 15 seconds
 		this.#kvCleanupInterval = setInterval(() => {
-			this.#cleanupOldKvRequests();
+			try {
+				this.#cleanupOldKvRequests();
+			} catch (err) {
+				this.log?.error({
+					msg: "error cleaning up kv requests",
+					error: stringifyError(err),
+				});
+			}
 		}, 15000); // Run every 15 seconds
 	}
 
@@ -309,11 +323,7 @@ export class Runner {
 
 		// Remove all remaining kv requests
 		for (const [_, request] of this.#kvRequests.entries()) {
-			request.reject(
-				new Error(
-					"KV request timed out waiting for WebSocket connection",
-				),
-			);
+			request.reject(new RunnerShutdownError());
 		}
 
 		this.#kvRequests.clear();
@@ -324,7 +334,13 @@ export class Runner {
 	#stopAllActors() {
 		const actorIds = Array.from(this.#actors.keys());
 		for (const actorId of actorIds) {
-			this.forceStopActor(actorId);
+			this.forceStopActor(actorId).catch((err) => {
+				this.log?.error({
+					msg: "error stopping actor",
+					actorId,
+					error: stringifyError(err),
+				});
+			});
 		}
 	}
 
@@ -761,12 +777,19 @@ export class Runner {
 			// Start command acknowledgment interval (5 minutes)
 			const ackInterval = 5 * 60 * 1000; // 5 minutes in milliseconds
 			const ackLoop = setInterval(() => {
-				if (ws.readyState === 1) {
-					this.#sendCommandAcknowledgment();
-				} else {
-					clearInterval(ackLoop);
-					this.log?.info({
-						msg: "WebSocket not open, stopping ack loop",
+				try {
+					if (ws.readyState === 1) {
+						this.#sendCommandAcknowledgment();
+					} else {
+						clearInterval(ackLoop);
+						this.log?.info({
+							msg: "WebSocket not open, stopping ack loop",
+						});
+					}
+				} catch (err) {
+					this.log?.error({
+						msg: "error in command acknowledgment loop",
+						error: stringifyError(err),
 					});
 				}
 			}, ackInterval);
@@ -826,12 +849,17 @@ export class Runner {
 				const kvResponse = message.val;
 				this.#handleKvResponse(kvResponse);
 			} else if (message.tag === "ToClientTunnelMessage") {
-				this.#tunnel?.handleTunnelMessage(message.val);
+				this.#tunnel?.handleTunnelMessage(message.val).catch((err) => {
+					this.log?.error({
+						msg: "error handling tunnel message",
+						error: stringifyError(err),
+					});
+				});
 			} else if (message.tag === "ToClientPing") {
 				this.__sendToServer({
 					tag: "ToServerPong",
 					val: {
-						ts: message.val.ts
+						ts: message.val.ts,
 					},
 				});
 			} else {
@@ -856,7 +884,14 @@ export class Runner {
 						seconds: this.#runnerLostThreshold / 1000,
 					});
 					this.#runnerLostTimeout = setTimeout(() => {
-						this.#handleLost();
+						try {
+							this.#handleLost();
+						} catch (err) {
+							this.log?.error({
+								msg: "error handling runner lost",
+								error: stringifyError(err),
+							});
+						}
 					}, this.#runnerLostThreshold);
 				}
 
@@ -912,7 +947,14 @@ export class Runner {
 						seconds: this.#runnerLostThreshold / 1000,
 					});
 					this.#runnerLostTimeout = setTimeout(() => {
-						this.#handleLost();
+						try {
+							this.#handleLost();
+						} catch (err) {
+							this.log?.error({
+								msg: "error handling runner lost",
+								error: stringifyError(err),
+							});
+						}
 					}, this.#runnerLostThreshold);
 				}
 
@@ -931,29 +973,52 @@ export class Runner {
 		for (const commandWrapper of commands) {
 			if (commandWrapper.inner.tag === "CommandStartActor") {
 				// Spawn background promise
-				this.#handleCommandStartActor(commandWrapper);
+				this.#handleCommandStartActor(commandWrapper).catch((err) => {
+					this.log?.error({
+						msg: "error handling start actor command",
+						actorId: commandWrapper.checkpoint.actorId,
+						error: stringifyError(err),
+					});
+				});
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
 				// Spawn background promise
-				this.#handleCommandStopActor(commandWrapper);
+				this.#handleCommandStopActor(commandWrapper).catch((err) => {
+					this.log?.error({
+						msg: "error handling stop actor command",
+						actorId: commandWrapper.checkpoint.actorId,
+						error: stringifyError(err),
+					});
+				});
 			} else {
 				unreachable(commandWrapper.inner);
 			}
 
-			const actor = this.getActor(commandWrapper.checkpoint.actorId, commandWrapper.inner.val.generation);
+			const actor = this.getActor(
+				commandWrapper.checkpoint.actorId,
+				commandWrapper.inner.val.generation,
+			);
 			if (actor) actor.lastCommandIdx = commandWrapper.checkpoint.index;
 		}
 	}
 
 	#handleAckEvents(ack: protocol.ToClientAckEvents) {
-		let originalTotalEvents = Array.from(this.#actors).reduce((s, [_, actor]) => s + actor.eventHistory.length, 0);
+		let originalTotalEvents = Array.from(this.#actors).reduce(
+			(s, [_, actor]) => s + actor.eventHistory.length,
+			0,
+		);
 
 		for (const [_, actor] of this.#actors) {
-			let checkpoint = ack.lastEventCheckpoints.find(x => x.actorId == actor.actorId);
+			let checkpoint = ack.lastEventCheckpoints.find(
+				(x) => x.actorId == actor.actorId,
+			);
 
 			if (checkpoint) actor.handleAckEvents(checkpoint.index);
 		}
 
-		const totalEvents = Array.from(this.#actors).reduce((s, [_, actor]) => s + actor.eventHistory.length, 0);
+		const totalEvents = Array.from(this.#actors).reduce(
+			(s, [_, actor]) => s + actor.eventHistory.length,
+			0,
+		);
 		const prunedCount = originalTotalEvents - totalEvents;
 
 		if (prunedCount > 0) {
@@ -975,7 +1040,10 @@ export class Runner {
 
 		actor.recordEvent(eventWrapper);
 
-		let totalEvents = Array.from(this.#actors).reduce((s, [_, actor]) => s + actor.eventHistory.length, 0);
+		let totalEvents = Array.from(this.#actors).reduce(
+			(s, [_, actor]) => s + actor.eventHistory.length,
+			0,
+		);
 
 		if (
 			totalEvents > EVENT_BACKLOG_WARN_THRESHOLD &&
@@ -1708,13 +1776,18 @@ export class Runner {
 			msg: `Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
 		});
 
-		this.#reconnectTimeout = setTimeout(async () => {
+		this.#reconnectTimeout = setTimeout(() => {
 			if (!this.#shutdown) {
 				this.#reconnectAttempt++;
 				this.log?.debug({
 					msg: `Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
 				});
-				await this.#openPegboardWebSocket();
+				this.#openPegboardWebSocket().catch((err) => {
+					this.log?.error({
+						msg: "error during websocket reconnection",
+						error: stringifyError(err),
+					});
+				});
 			}
 		}, delay);
 	}
