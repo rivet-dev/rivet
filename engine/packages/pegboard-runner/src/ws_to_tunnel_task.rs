@@ -54,9 +54,17 @@ pub async fn task_inner(
 	event_demuxer: &mut ActorEventDemuxer,
 ) -> Result<LifecycleResult> {
 	let mut ws_rx = ws_rx.lock().await;
+	let mut term_signal = rivet_runtime::TermSignal::new().await;
 
 	loop {
-		match recv_msg(&mut ws_rx, &mut eviction_sub2, &mut ws_to_tunnel_abort_rx).await? {
+		match recv_msg(
+			&mut ws_rx,
+			&mut eviction_sub2,
+			&mut ws_to_tunnel_abort_rx,
+			&mut term_signal,
+		)
+		.await?
+		{
 			Ok(Some(msg)) => {
 				if protocol::is_mk2(conn.protocol_version) {
 					handle_message_mk2(&ctx, &conn, event_demuxer, msg).await?;
@@ -74,6 +82,7 @@ async fn recv_msg(
 	ws_rx: &mut MutexGuard<'_, WebSocketReceiver>,
 	eviction_sub2: &mut Subscriber,
 	ws_to_tunnel_abort_rx: &mut watch::Receiver<()>,
+	term_signal: &mut rivet_runtime::TermSignal,
 ) -> Result<std::result::Result<Option<Bytes>, LifecycleResult>> {
 	let msg = tokio::select! {
 		res = ws_rx.try_next() => {
@@ -91,6 +100,9 @@ async fn recv_msg(
 		_ = ws_to_tunnel_abort_rx.changed() => {
 			tracing::debug!("task aborted");
 			return Ok(Err(LifecycleResult::Aborted));
+		}
+		_ = term_signal.recv() => {
+			return Err(errors::WsError::GoingAway.build());
 		}
 	};
 

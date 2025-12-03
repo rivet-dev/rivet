@@ -1,0 +1,5 @@
+{
+  "code": "going_away",
+  "group": "ws",
+  "message": "The Rivet Engine is migrating. The websocket should attempt to reconnect as soon as possible."
+}
