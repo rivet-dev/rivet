@@ -2500,17 +2500,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "internal"
-version = "2.0.25"
-dependencies = [
- "anyhow",
- "gasoline",
- "rivet-api-util",
- "rivet-types",
- "serde",
-]
-
-[[package]]
 name = "io-uring"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2906,8 +2895,6 @@ dependencies = [
  "epoxy",
  "epoxy-protocol",
  "gasoline",
- "internal",
- "reqwest",
  "rivet-api-builder",
  "rivet-api-util",
  "rivet-data",
@@ -3427,6 +3414,8 @@ dependencies = [
  "namespace",
  "nix 0.30.1",
  "rand 0.8.5",
+ "reqwest",
+ "reqwest-eventsource",
  "rivet-api-types",
  "rivet-api-util",
  "rivet-data",
@@ -3442,6 +3431,7 @@ dependencies = [
  "tracing",
  "universaldb",
  "universalpubsub",
+ "url",
  "utoipa",
  "uuid",
  "vbare",
@@ -3537,28 +3527,6 @@ dependencies = [
  "universaldb",
  "universalpubsub",
  "url",
- "vbare",
-]
-
-[[package]]
-name = "pegboard-serverless"
-version = "2.0.25"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "epoxy",
- "gasoline",
- "namespace",
- "pegboard",
- "reqwest",
- "reqwest-eventsource",
- "rivet-config",
- "rivet-runner-protocol",
- "rivet-types",
- "rivet-util",
- "tracing",
- "universaldb",
- "universalpubsub",
  "vbare",
 ]
 
@@ -4495,7 +4463,6 @@ dependencies = [
  "once_cell",
  "pegboard",
  "pegboard-runner",
- "pegboard-serverless",
  "portpicker",
  "rand 0.8.5",
  "reqwest",

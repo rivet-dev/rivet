@@ -11,18 +11,23 @@ pub struct Input {
 	pub config: RunnerConfig,
 }
 
+struct UpsertOutput {
+	endpoint_config_changed: bool,
+	serverless_runner_created: bool,
+}
+
 #[operation]
-pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<bool> {
-	let endpoint_config_changed = ctx
+pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<bool> {
+	let res = ctx
 		.udb()?
 		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+			let tx = tx.with_subspace(namespace::keys::subspace());
 
 			let runner_config_key =
 				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
 			// Check if config changed (for serverless, compare URL and headers)
-			let endpoint_config_changed = if let Some(existing_config) =
+			let output = if let Some(existing_config) =
 				tx.read_opt(&runner_config_key, Serializable).await?
 			{
 				// Delete previous index
@@ -45,15 +50,34 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 							headers: new_headers,
 							..
 						},
-					) => old_url != new_url || old_headers != new_headers,
+					) => UpsertOutput {
+						endpoint_config_changed: old_url != new_url || old_headers != new_headers,
+						serverless_runner_created: false,
+					},
+					(RunnerConfigKind::Normal { .. }, RunnerConfigKind::Serverless { .. }) => {
+						// Config type changed to serverless
+						UpsertOutput {
+							endpoint_config_changed: true,
+							serverless_runner_created: true,
+						}
+					}
 					_ => {
-						// Config type changed or is not serverless
-						true
+						// Not serverless
+						UpsertOutput {
+							endpoint_config_changed: true,
+							serverless_runner_created: false,
+						}
 					}
 				}
 			} else {
 				// New config
-				true
+				UpsertOutput {
+					endpoint_config_changed: true,
+					serverless_runner_created: matches!(
+						input.config.kind,
+						RunnerConfigKind::Serverless { .. }
+					),
+				}
 			};
 
 			// Write new config
@@ -131,18 +155,32 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 				}
 			}
 
-			Ok(Ok(endpoint_config_changed))
+			Ok(Ok(output))
 		})
 		.custom_instrument(tracing::info_span!("runner_config_upsert_tx"))
 		.await?
 		.map_err(|err| err.build())?;
 
 	// Bump autoscaler
-	if input.config.affects_autoscaler() {
-		ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+	if res.serverless_runner_created {
+		ctx.workflow(crate::workflows::serverless::pool::Input {
+			namespace_id: input.namespace_id,
+			runner_name: input.name.clone(),
+		})
+		.tag("namespace_id", input.namespace_id)
+		.tag("runner_name", input.name.clone())
+		.unique()
+		.dispatch()
+		.await?;
+	} else if input.config.affects_autoscaler() {
+		// Maybe scale it
+		ctx.signal(crate::workflows::serverless::pool::Bump {})
+			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+			.tag("namespace_id", input.namespace_id)
+			.tag("runner_name", input.name.clone())
 			.send()
 			.await?;
 	}
 
-	Ok(endpoint_config_changed)
+	Ok(res.endpoint_config_changed)
 }

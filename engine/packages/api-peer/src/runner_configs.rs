@@ -26,7 +26,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 
 	if !runner_names.is_empty() {
 		let runner_configs = ctx
-			.op(namespace::ops::runner_config::get::Input {
+			.op(pegboard::ops::runner_config::get::Input {
 				runners: runner_names
 					.into_iter()
 					.map(|name| (namespace.namespace_id, name))
@@ -63,7 +63,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 		};
 
 		let runner_configs = ctx
-			.op(namespace::ops::runner_config::list::Input {
+			.op(pegboard::ops::runner_config::list::Input {
 				namespace_id: namespace.namespace_id,
 				variant,
 				after_name,
@@ -121,7 +121,7 @@ pub async fn upsert(
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	let endpoint_config_changed = ctx
-		.op(namespace::ops::runner_config::upsert::Input {
+		.op(pegboard::ops::runner_config::upsert::Input {
 			namespace_id: namespace.namespace_id,
 			name: path.runner_name,
 			config: body.0.into(),
@@ -159,7 +159,7 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	ctx.op(namespace::ops::runner_config::delete::Input {
+	ctx.op(pegboard::ops::runner_config::delete::Input {
 		namespace_id: namespace.namespace_id,
 		name: path.runner_name,
 	})
