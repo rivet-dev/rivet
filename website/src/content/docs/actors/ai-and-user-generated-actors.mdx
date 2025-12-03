@@ -19,6 +19,16 @@ Deploying AI and user-generated Rivet Actors to sandboxed namespaces is useful f
 - **Preview deployments**: Create ephemeral environments for testing pull requests
 - **Multi-tenant applications**: Isolate each customer in their own sandboxed namespace
 
+## Rivet Actors For AI-Generated Backends
+
+Traditional architectures require AI agents to coordinate across multiple disconnected systems: a database schemas, API logic, and synchronizing schemas & APIs.
+
+With Rivet Actors, **state and logic live together in a single actor definition**. This consolidation means:
+
+- **Less LLM context required**: No need to understand multiple systems or keep them in sync
+- **Fewer errors**: State and behavior can't drift apart when they're defined together
+- **More powerful generation**: AI agents can focus on business logic instead of infrastructure plumbing
+
 ## How It Works
 
 The deployment process involves four key steps:
@@ -39,11 +49,11 @@ The deployment process involves four key steps:
 			<Step title="Prerequisites">
 				Before you begin, ensure you have:
 				- Node.js 18+ installed
-				- A [Freestyle](https://freestyle.sh) account and API key
+				- A [Freestyle](https://freestyle.sh) account and API token
 				- A [Rivet Cloud](https://dashboard.rivet.dev/) account
 			</Step>
 
-			<Step title="Create Cloud API Key">
+			<Step title="Create Cloud API Token">
 				1. Visit your project on [Rivet Cloud](https://dashboard.rivet.dev/)
 				2. Click on "Tokens" in the sidebar
 				3. Under "Cloud API Tokens" click "Create Token"
