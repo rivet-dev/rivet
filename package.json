@@ -11,6 +11,7 @@
 		"test": "npx turbo test",
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",
+		"lint": "pnpm biome check .",
 		"fmt": "pnpm biome check --write --diagnostic-level=error ."
 	},
 	"devDependencies": {

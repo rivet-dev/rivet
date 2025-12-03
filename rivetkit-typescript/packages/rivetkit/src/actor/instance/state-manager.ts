@@ -256,11 +256,21 @@ export class StateManager<S, CP, CS, I> {
 			this.#pendingSaveTimeout = setTimeout(() => {
 				this.#pendingSaveTimeout = undefined;
 				this.#pendingSaveScheduledTimestamp = undefined;
-				this.#savePersistInner();
+				this.#savePersistInner().catch((error) => {
+					this.#actor.rLog.error({
+						msg: "error saving persist data in scheduled save",
+						error: stringifyError(error),
+					});
+				});
 			}, saveDelay);
 		} else {
 			// Save immediately
-			this.#savePersistInner();
+			this.#savePersistInner().catch((error) => {
+				this.#actor.rLog.error({
+					msg: "error saving persist data immediately",
+					error: stringifyError(error),
+				});
+			});
 		}
 	}
 
