@@ -13,7 +13,7 @@ pub struct Input {
 
 struct UpsertOutput {
 	endpoint_config_changed: bool,
-	serverless_runner_created: bool,
+	pool_created: bool,
 }
 
 #[operation]
@@ -52,20 +52,20 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 						},
 					) => UpsertOutput {
 						endpoint_config_changed: old_url != new_url || old_headers != new_headers,
-						serverless_runner_created: false,
+						pool_created: false,
 					},
 					(RunnerConfigKind::Normal { .. }, RunnerConfigKind::Serverless { .. }) => {
 						// Config type changed to serverless
 						UpsertOutput {
 							endpoint_config_changed: true,
-							serverless_runner_created: true,
+							pool_created: true,
 						}
 					}
 					_ => {
 						// Not serverless
 						UpsertOutput {
 							endpoint_config_changed: true,
-							serverless_runner_created: false,
+							pool_created: false,
 						}
 					}
 				}
@@ -73,10 +73,7 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 				// New config
 				UpsertOutput {
 					endpoint_config_changed: true,
-					serverless_runner_created: matches!(
-						input.config.kind,
-						RunnerConfigKind::Serverless { .. }
-					),
+					pool_created: matches!(input.config.kind, RunnerConfigKind::Serverless { .. }),
 				}
 			};
 
@@ -161,9 +158,8 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		.await?
 		.map_err(|err| err.build())?;
 
-	// Bump autoscaler
-	if res.serverless_runner_created {
-		ctx.workflow(crate::workflows::serverless::pool::Input {
+	if res.pool_created {
+		ctx.workflow(crate::workflows::runner_pool::Input {
 			namespace_id: input.namespace_id,
 			runner_name: input.name.clone(),
 		})
@@ -172,10 +168,9 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		.unique()
 		.dispatch()
 		.await?;
-	} else if input.config.affects_autoscaler() {
-		// Maybe scale it
-		ctx.signal(crate::workflows::serverless::pool::Bump {})
-			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+	} else if input.config.affects_pool() {
+		ctx.signal(crate::workflows::runner_pool::Bump {})
+			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", input.name.clone())
 			.send()

@@ -131,6 +131,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								.await?;
 							}
 
+							// Check for pending actors (which happen when there is not enough runner capacity)
 							let res = ctx
 								.activity(AllocatePendingActorsInput {
 									namespace_id: input.namespace_id,
@@ -282,7 +283,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 					}
 				}
 				Some(Main::CheckQueue(_)) => {
-					// Check for pending actors
+					// Check for pending actors (which happen when there is not enough runner capacity)
 					let res = ctx
 						.activity(AllocatePendingActorsInput {
 							namespace_id: input.namespace_id,
