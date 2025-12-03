@@ -128,7 +128,7 @@ pub async fn init_conn(
 
 				// Spawn a new runner workflow if one doesn't already exist
 				let workflow_id = ctx
-					.workflow(pegboard::workflows::runner::Input {
+					.workflow(pegboard::workflows::runner2::Input {
 						runner_id,
 						namespace_id: namespace.namespace_id,
 						name: name.clone(),

@@ -431,3 +431,8 @@ debug = false
 lto = "fat"
 codegen-units = 1
 opt-level = 3
+
+# strip = true
+# panic = "abort"
+# overflow-checks = false
+# debug-assertions = false
