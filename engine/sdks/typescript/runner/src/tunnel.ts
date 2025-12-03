@@ -671,9 +671,6 @@ export class Tunnel {
 					message.messageKind.val,
 				);
 				break;
-			case "DeprecatedTunnelAck":
-				// Ignore deprecated tunnel ack messages
-				break;
 			default:
 				unreachable(message.messageKind);
 		}

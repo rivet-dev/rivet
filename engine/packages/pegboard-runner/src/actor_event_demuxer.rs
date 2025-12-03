@@ -11,35 +11,39 @@ const GC_INTERVAL: Duration = Duration::from_secs(30);
 const MAX_LAST_SEEN: Duration = Duration::from_secs(30);
 
 struct Channel {
-	tx: mpsc::UnboundedSender<protocol::mk2::Event>,
+	tx: mpsc::UnboundedSender<protocol::mk2::EventWrapper>,
 	handle: JoinHandle<()>,
 	last_seen: Instant,
 }
 
 pub struct ActorEventDemuxer {
 	ctx: StandaloneCtx,
+	runner_id: Id,
 	channels: HashMap<Id, Channel>,
 	last_gc: Instant,
 }
 
 impl ActorEventDemuxer {
-	pub fn new(ctx: StandaloneCtx) -> Self {
+	pub fn new(ctx: StandaloneCtx, runner_id: Id) -> Self {
 		Self {
 			ctx,
+			runner_id,
 			channels: HashMap::new(),
 			last_gc: Instant::now(),
 		}
 	}
 
 	/// Process an event by routing it to the appropriate actor's queue
-	#[tracing::instrument(skip_all)]
-	pub fn ingest(&mut self, actor_id: Id, event: protocol::mk2::Event) {
+	pub fn ingest(&mut self, actor_id: Id, event: protocol::mk2::EventWrapper) {
+		tracing::debug!(runner_id=?self.runner_id, ?actor_id, index=?event.checkpoint.index, "actor demuxer ingest");
+
 		if let Some(channel) = self.channels.get(&actor_id) {
 			let _ = channel.tx.send(event);
 		} else {
 			let (tx, mut rx) = mpsc::unbounded_channel();
 
 			let ctx = self.ctx.clone();
+			let runner_id = self.runner_id;
 			let handle = tokio::spawn(async move {
 				loop {
 					let mut buffer = Vec::new();
@@ -49,12 +53,14 @@ impl ActorEventDemuxer {
 						break;
 					}
 
-					if let Err(err) = dispatch_events(&ctx, actor_id, buffer).await {
+					if let Err(err) = dispatch_events(&ctx, runner_id, actor_id, buffer).await {
 						tracing::error!(?err, "actor event processor failed");
 						break;
 					}
 				}
 			});
+
+			let _ = tx.send(event);
 
 			self.channels.insert(
 				actor_id,
@@ -104,13 +110,18 @@ impl ActorEventDemuxer {
 	}
 }
 
+#[tracing::instrument(skip_all, fields(?runner_id, ?actor_id))]
 async fn dispatch_events(
 	ctx: &StandaloneCtx,
+	runner_id: Id,
 	actor_id: Id,
-	events: Vec<protocol::mk2::Event>,
+	events: Vec<protocol::mk2::EventWrapper>,
 ) -> Result<()> {
+	tracing::debug!(count=?events.len(), "actor demuxer dispatch");
+
 	let res = ctx
-		.signal(pegboard::workflows::actor::Events { inner: events })
+		.signal(pegboard::workflows::actor::Events { runner_id, events })
+		.to_workflow::<pegboard::workflows::actor::Workflow>()
 		.tag("actor_id", actor_id)
 		.graceful_not_found()
 		.send()

@@ -37,6 +37,16 @@ impl OwnedVersionedData for ToClientMk2 {
 			ToClientMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
+	}
 }
 
 pub enum ToServerMk2 {
@@ -71,6 +81,16 @@ impl OwnedVersionedData for ToServerMk2 {
 			ToServerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
+	}
 }
 
 pub enum ToRunnerMk2 {
@@ -104,6 +124,16 @@ impl OwnedVersionedData for ToRunnerMk2 {
 		match self {
 			ToRunnerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
 	}
 }
 
@@ -980,12 +1010,12 @@ impl OwnedVersionedData for ToServerlessServer {
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v3
-		vec![Ok, Ok, Ok, Self::v3_to_v4]
+		vec![Ok, Ok, Self::v3_to_v4]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v3
-		vec![Self::v4_to_v3, Ok, Ok, Ok]
+		vec![Self::v4_to_v3, Ok, Ok]
 	}
 }
 
@@ -1021,6 +1051,51 @@ impl ToServerlessServer {
 		} else {
 			bail!("unexpected version");
 		}
+	}
+}
+
+pub enum ActorCommandKeyData {
+	// Only in v4
+	V4(v4::ActorCommandKeyData),
+}
+
+impl OwnedVersionedData for ActorCommandKeyData {
+	type Latest = v4::ActorCommandKeyData;
+
+	fn wrap_latest(latest: v4::ActorCommandKeyData) -> Self {
+		ActorCommandKeyData::V4(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let ActorCommandKeyData::V4(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			4 => Ok(ActorCommandKeyData::V4(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			ActorCommandKeyData::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		// No changes between v1 and v4
+		vec![Ok, Ok, Ok]
 	}
 }
 

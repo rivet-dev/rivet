@@ -4,18 +4,38 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
+use rivet_runner_protocol::{
+	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
+};
 use rivet_types::{
 	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
 	runner_configs::RunnerConfigKind,
 };
+use std::collections::HashMap;
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
+use universalpubsub::PublishOpts;
+use vbare::OwnedVersionedData;
 
 use crate::{keys, metrics};
 
 use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
+
+#[derive(Deserialize, Serialize)]
+pub struct LifecycleRunnerState {
+	pub last_event_idx: i64,
+	pub last_event_ack_idx: i64,
+}
+
+impl Default for LifecycleRunnerState {
+	fn default() -> Self {
+		LifecycleRunnerState {
+			last_event_idx: -1,
+			last_event_ack_idx: -1,
+		}
+	}
+}
 
 // TODO: Rewrite this as a series of nested structs/enums for better transparency of current state (likely
 // requires actor wf v2)
@@ -27,6 +47,8 @@ pub struct LifecycleState {
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
 	pub runner_protocol_version: Option<u16>,
+	#[serde(default)]
+	pub runner_states: HashMap<Id, LifecycleRunnerState>,
 
 	pub sleeping: bool,
 	#[serde(default)]
@@ -58,6 +80,7 @@ impl LifecycleState {
 			runner_id: Some(runner_id),
 			runner_workflow_id: Some(runner_workflow_id),
 			runner_protocol_version: Some(runner_protocol_version),
+			runner_states: HashMap::new(),
 			sleeping: false,
 			stopping: false,
 			going_away: false,
@@ -74,6 +97,7 @@ impl LifecycleState {
 			runner_id: None,
 			runner_workflow_id: None,
 			runner_protocol_version: None,
+			runner_states: HashMap::new(),
 			sleeping: true,
 			stopping: false,
 			going_away: false,
@@ -537,7 +561,31 @@ pub async fn spawn_actor(
 				.await?;
 
 			if protocol::is_mk2(runner_protocol_version) {
-				// TODO: Send message to tunnel
+				ctx.activity(InsertAndSendCommandsInput {
+					actor_id: input.actor_id,
+					runner_id,
+					commands: vec![protocol::mk2::Command::CommandStartActor(
+						protocol::mk2::CommandStartActor {
+							generation,
+							config: protocol::mk2::ActorConfig {
+								name: input.name.clone(),
+								key: input.key.clone(),
+								// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
+								// changes (like activity inputs) so this is fine for now.
+								create_ts: util::timestamp::now(),
+								input: input
+									.input
+									.as_ref()
+									.map(|x| BASE64_STANDARD.decode(x))
+									.transpose()?,
+							},
+							// Empty because request ids are ephemeral. This is intercepted by guard and
+							// populated before it reaches the runner
+							hibernating_requests: Vec::new(),
+						},
+					)],
+				})
+				.await?;
 			} else {
 				ctx.signal(crate::workflows::runner::Command {
 					inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
@@ -604,7 +652,29 @@ pub async fn spawn_actor(
 					.await?;
 
 					if protocol::is_mk2(runner_protocol_version) {
-						// TODO: Send message to tunnel
+						ctx.activity(InsertAndSendCommandsInput {
+							actor_id: input.actor_id,
+							runner_id: sig.runner_id,
+							commands: vec![protocol::mk2::Command::CommandStartActor(
+								protocol::mk2::CommandStartActor {
+									generation,
+									config: protocol::mk2::ActorConfig {
+										name: input.name.clone(),
+										key: input.key.clone(),
+										create_ts: util::timestamp::now(),
+										input: input
+											.input
+											.as_ref()
+											.map(|x| BASE64_STANDARD.decode(x))
+											.transpose()?,
+									},
+									// Empty because request ids are ephemeral. This is intercepted by guard and
+									// populated before it reaches the runner
+									hibernating_requests: Vec::new(),
+								},
+							)],
+						})
+						.await?;
 					} else {
 						ctx.signal(crate::workflows::runner::Command {
 							inner: protocol::Command::CommandStartActor(
@@ -692,7 +762,29 @@ pub async fn spawn_actor(
 						.await?;
 
 						if protocol::is_mk2(runner_protocol_version) {
-							// TODO: Send message to tunnel
+							ctx.activity(InsertAndSendCommandsInput {
+								actor_id: input.actor_id,
+								runner_id: sig.runner_id,
+								commands: vec![protocol::mk2::Command::CommandStartActor(
+									protocol::mk2::CommandStartActor {
+										generation,
+										config: protocol::mk2::ActorConfig {
+											name: input.name.clone(),
+											key: input.key.clone(),
+											create_ts: util::timestamp::now(),
+											input: input
+												.input
+												.as_ref()
+												.map(|x| BASE64_STANDARD.decode(x))
+												.transpose()?,
+										},
+										// Empty because request ids are ephemeral. This is intercepted by guard and
+										// populated before it reaches the runner
+										hibernating_requests: Vec::new(),
+									},
+								)],
+							})
+							.await?;
 						} else {
 							ctx.signal(crate::workflows::runner::Command {
 								inner: protocol::Command::CommandStartActor(
@@ -949,4 +1041,149 @@ fn reschedule_backoff(
 	max_exponent: usize,
 ) -> util::backoff::Backoff {
 	util::backoff::Backoff::new_at(max_exponent, None, base_retry_timeout, 500, retry_count)
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct CheckRunnersInput {
+	pub seen_runners: Vec<Id>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct CheckRunnersOutput {
+	pub remove_runners: Vec<Id>,
+}
+
+#[activity(CheckRunners)]
+pub async fn check_runners(
+	ctx: &ActivityCtx,
+	input: &CheckRunnersInput,
+) -> Result<CheckRunnersOutput> {
+	ctx.udb()?
+		.run(|tx| async move {
+			// Diff the list of seen runners with the list of active runners so we know which we can clean up
+			// state
+			let remove_runners = futures_util::stream::iter(input.seen_runners.clone())
+				.map(|runner_id| {
+					let tx = tx.clone();
+					async move {
+						if tx
+							.exists(&keys::runner::StopTsKey::new(runner_id), Snapshot)
+							.await?
+						{
+							anyhow::Ok(Some(runner_id))
+						} else {
+							Ok(None)
+						}
+					}
+				})
+				.buffer_unordered(1024)
+				.try_filter_map(|x| std::future::ready(Ok(x)))
+				.try_collect::<Vec<_>>()
+				.await?;
+
+			Ok(CheckRunnersOutput { remove_runners })
+		})
+		.await
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct InsertAndSendCommandsInput {
+	pub actor_id: Id,
+	pub runner_id: Id,
+	pub commands: Vec<protocol::mk2::Command>,
+}
+
+#[activity(InsertAndSendCommands)]
+pub async fn insert_and_send_commands(
+	ctx: &ActivityCtx,
+	input: &InsertAndSendCommandsInput,
+) -> Result<()> {
+	let mut state = ctx.state::<State>()?;
+
+	let runner_state = state.runner_states.entry(input.runner_id).or_default();
+	let old_last_command_idx = runner_state.last_command_idx;
+	runner_state.last_command_idx += input.commands.len() as i64;
+
+	// This does not have to be part of its own activity because the txn is idempotent
+	let last_command_idx = runner_state.last_command_idx;
+	ctx.udb()?
+		.run(|tx| async move {
+			tx.write(
+				&keys::runner::ActorLastCommandIdxKey::new(input.runner_id, input.actor_id),
+				last_command_idx,
+			)?;
+
+			for (i, command) in input.commands.iter().enumerate() {
+				tx.write(
+					&keys::runner::ActorCommandKey::new(
+						input.runner_id,
+						input.actor_id,
+						old_last_command_idx + i as i64 + 1,
+					),
+					match command {
+						protocol::mk2::Command::CommandStartActor(x) => {
+							protocol::mk2::ActorCommandKeyData::CommandStartActor(x.clone())
+						}
+						protocol::mk2::Command::CommandStopActor(x) => {
+							protocol::mk2::ActorCommandKeyData::CommandStopActor(x.clone())
+						}
+					},
+				)?;
+			}
+
+			Ok(())
+		})
+		.await?;
+
+	let receiver_subject =
+		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+
+	let message_serialized =
+		versioned::ToRunnerMk2::wrap_latest(protocol::mk2::ToRunner::ToClientCommands(
+			input
+				.commands
+				.iter()
+				.enumerate()
+				.map(|(i, command)| protocol::mk2::CommandWrapper {
+					checkpoint: protocol::mk2::ActorCheckpoint {
+						actor_id: input.actor_id.to_string(),
+						index: old_last_command_idx + i as i64 + 1,
+					},
+					inner: command.clone(),
+				})
+				.collect(),
+		))
+		.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)?;
+
+	ctx.ups()?
+		.publish(&receiver_subject, &message_serialized, PublishOpts::one())
+		.await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct SendMessagesToRunnerInput {
+	pub runner_id: Id,
+	pub messages: Vec<protocol::mk2::ToRunner>,
+}
+
+#[activity(SendMessagesToRunner)]
+pub async fn send_messages_to_runner(
+	ctx: &ActivityCtx,
+	input: &SendMessagesToRunnerInput,
+) -> Result<()> {
+	let receiver_subject =
+		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+
+	for message in &input.messages {
+		let message_serialized = versioned::ToRunnerMk2::wrap_latest(message.clone())
+			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)?;
+
+		ctx.ups()?
+			.publish(&receiver_subject, &message_serialized, PublishOpts::one())
+			.await?;
+	}
+
+	Ok(())
 }

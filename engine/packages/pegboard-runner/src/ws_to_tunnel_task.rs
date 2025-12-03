@@ -3,17 +3,15 @@ use bytes::Bytes;
 use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use gas::prelude::*;
-use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use pegboard::utils::event_actor_id;
 use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
-use rivet_runner_protocol::{
-	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
-};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
 use tokio::sync::{Mutex, MutexGuard, watch};
+use universaldb::utils::end_of_key_range;
 use universalpubsub::PublishOpts;
 use universalpubsub::Subscriber;
 use vbare::OwnedVersionedData;
@@ -28,7 +26,7 @@ pub async fn task(
 	eviction_sub2: Subscriber,
 	ws_to_tunnel_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
-	let mut event_demuxer = ActorEventDemuxer::new(ctx.clone());
+	let mut event_demuxer = ActorEventDemuxer::new(ctx.clone(), conn.runner_id);
 
 	let res = task_inner(
 		ctx,
@@ -97,7 +95,7 @@ async fn recv_msg(
 	};
 
 	match msg {
-		WsMessage::Binary(data) => {
+		Message::Binary(data) => {
 			tracing::trace!(
 				data_len = data.len(),
 				"received binary message from WebSocket"
@@ -105,7 +103,7 @@ async fn recv_msg(
 
 			Ok(Ok(Some(data)))
 		}
-		WsMessage::Close(_) => {
+		Message::Close(_) => {
 			tracing::debug!("websocket closed");
 			return Ok(Err(LifecycleResult::Closed));
 		}
@@ -388,67 +386,22 @@ async fn handle_message_mk2(
 			}
 		}
 		protocol::mk2::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message_mk2(&ctx, &conn, tunnel_msg)
+			handle_tunnel_message_mk2(&ctx, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
-		protocol::mk2::ToServer::ToServerInit(init) => {
-			// We send the signal first because we don't want to continue if this fails
-			ctx.signal(pegboard::workflows::runner2::Init {})
-				.to_workflow_id(conn.workflow_id)
-				.send()
-				.await
-				.with_context(|| {
-					format!(
-						"failed to send signal to runner workflow: {}",
-						conn.workflow_id
-					)
-				})?;
-
-			let init_data = ctx
-				.activity(ProcessInitInput {
-					runner_id: conn.runner_id,
-					namespace_id: conn.namespace_id,
-					last_command_idx: init.last_command_idx.unwrap_or(-1),
-					prepopulate_actor_names: init.prepopulate_actor_names,
-					metadata: init.metadata,
-				})
-				.await?;
-
-			// Send init packet
-			let init_msg = versioned::ToClientMk2::wrap_latest(
-				protocol::mk2::ToClient::ToClientInit(protocol::mk2::ToClientInit {
-					runner_id: conn.runner_id.to_string(),
-					last_event_idx: init_data.last_event_idx,
-					metadata: protocol::mk2::ProtocolMetadata {
-						runner_lost_threshold: ctx.config().pegboard().runner_lost_threshold(),
-					},
-				}),
-			);
-			let init_msg_serialized = init_msg.serialize(conn.protocol_version)?;
-			conn.ws_handle
-				.send(Message::Binary(init_msg_serialized.into()))
-				.await?;
-
-			// Send missed commands
-			if !init_data.missed_commands.is_empty() {
-				let msg = versioned::ToClientMk2::wrap_latest(
-					protocol::mk2::ToClient::ToClientCommands(init_data.missed_commands),
-				);
-				let msg_serialized = msg.serialize(conn.protocol_version)?;
-				conn.ws_handle
-					.send(Message::Binary(msg_serialized.into()))
-					.await?;
-			}
+		// NOTE: This does not process the first init event. See `conn::init_conn`
+		protocol::mk2::ToServer::ToServerInit(_) => {
+			tracing::debug!("received additional init packet, ignoring");
 		}
 		// Forward to actor wf
 		protocol::mk2::ToServer::ToServerEvents(events) => {
 			for event in events {
-				event_demuxer.ingest(Id::parse(event_actor_id(&event.inner))?, event.inner);
+				event_demuxer.ingest(Id::parse(event_actor_id(&event.inner))?, event);
 			}
 		}
-		protocol::mk2::ToServer::ToServerAckCommands(_) => {
-			ack_commands(&ctx).await?;
+		protocol::mk2::ToServer::ToServerAckCommands(ack) => {
+			ack_commands(&ctx, conn.runner_id, ack).await?;
 		}
 		protocol::mk2::ToServer::ToServerStopping => {
 			ctx.signal(pegboard::workflows::runner2::Stop {
@@ -793,21 +746,43 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 	Ok(())
 }
 
-async fn ack_commands(ctx: &StandaloneCtx) -> Result<()> {
-	// ctx.udb()?.run(|| {
-	// 	let last_ack = ;
-	// 	let stream = .read_ranges_keyvalues({
-	// 		limit:
-	// 	});
-	// }).await?;
+async fn ack_commands(
+	ctx: &StandaloneCtx,
+	runner_id: Id,
+	ack: protocol::mk2::ToServerAckCommands,
+) -> Result<()> {
+	ctx.udb()?
+		.run(|tx| {
+			let ack = ack.clone();
+			async move {
+				let tx = tx.with_subspace(pegboard::keys::subspace());
 
-	todo!();
+				for checkpoint in &ack.last_command_checkpoints {
+					let start = tx.pack(
+						&pegboard::keys::runner::ActorCommandKey::subspace_with_actor(
+							runner_id,
+							Id::parse(&checkpoint.actor_id)?,
+						),
+					);
+					let end = end_of_key_range(&tx.pack(
+						&pegboard::keys::runner::ActorCommandKey::subspace_with_index(
+							runner_id,
+							Id::parse(&checkpoint.actor_id)?,
+							checkpoint.index,
+						),
+					));
+					tx.clear_range(&start, &end);
+				}
+
+				Ok(())
+			}
+		})
+		.await
 }
 
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message_mk2(
 	ctx: &StandaloneCtx,
-	conn: &Conn,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
 	// Publish message to UPS
