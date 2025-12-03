@@ -164,19 +164,14 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									})
 									.to_workflow::<crate::workflows::actor::Workflow>()
 									.tag("actor_id", &actor_id)
+									.graceful_not_found()
 									.send()
-									.await;
-
-								if let Some(WorkflowError::WorkflowNotFound) =
-									res.as_ref().err().and_then(|x| {
-										x.chain().find_map(|x| x.downcast_ref::<WorkflowError>())
-									}) {
+									.await?;
+								if res.is_none() {
 									tracing::warn!(
 										?actor_id,
 										"actor workflow not found, likely already stopped"
 									);
-								} else {
-									res?;
 								}
 							}
 
@@ -257,20 +252,14 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							})
 							.to_workflow::<crate::workflows::actor::Workflow>()
 							.tag("actor_id", actor_id)
+							.graceful_not_found()
 							.send()
-							.await;
-
-						if let Some(WorkflowError::WorkflowNotFound) = res
-							.as_ref()
-							.err()
-							.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
-						{
+							.await?;
+						if res.is_none() {
 							tracing::warn!(
 								?actor_id,
 								"actor workflow not found, likely already stopped"
 							);
-						} else {
-							res?;
 						}
 					} else {
 						let index = ctx
@@ -356,20 +345,14 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
 			.tag("actor_id", actor_id)
+			.graceful_not_found()
 			.send()
-			.await;
-
-		if let Some(WorkflowError::WorkflowNotFound) = res
-			.as_ref()
-			.err()
-			.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
-		{
+			.await?;
+		if res.is_none() {
 			tracing::warn!(
 				?actor_id,
 				"actor workflow not found, likely already stopped"
 			);
-		} else {
-			res?;
 		}
 	}
 

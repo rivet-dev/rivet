@@ -208,20 +208,15 @@ async fn route_request_inner(
 							},
 						})
 						.to_workflow_id(actor.workflow_id)
+						.graceful_not_found()
 						.send()
 						.await;
 
-						if let Some(WorkflowError::WorkflowNotFound) = res
-							.as_ref()
-							.err()
-							.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
-						{
+						if res.is_none() {
 							tracing::warn!(
 								?actor_id,
 								"actor workflow not found for rewake"
 							);
-						} else {
-							res?;
 						}
 					} else {
 						tracing::warn!("actor retried waking 16 times, has not yet started");

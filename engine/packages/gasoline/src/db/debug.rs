@@ -122,7 +122,7 @@ impl std::fmt::Display for EventData {
 				unique_names.sort();
 				unique_names.dedup();
 
-				write!(f, "signals {:?}", unique_names.join(", "))
+				write!(f, "signal receive {:?}", unique_names.join(", "))
 			}
 		}
 	}

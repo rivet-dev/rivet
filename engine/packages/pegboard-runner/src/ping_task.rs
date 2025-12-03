@@ -26,7 +26,7 @@ pub async fn task(
 
 async fn update_runner_ping(ctx: &StandaloneCtx, conn: &Conn) -> Result<()> {
 	let Some(wf) = ctx
-		.workflow::<pegboard::workflows::runner::Input>(conn.workflow_id)
+		.workflow::<pegboard::workflows::runner2::Input>(conn.workflow_id)
 		.get()
 		.await?
 	else {
