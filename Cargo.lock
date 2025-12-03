@@ -3422,6 +3422,7 @@ dependencies = [
  "rivet-error",
  "rivet-metrics",
  "rivet-runner-protocol",
+ "rivet-runtime",
  "rivet-types",
  "rivet-util",
  "serde",
