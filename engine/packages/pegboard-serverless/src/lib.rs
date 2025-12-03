@@ -487,25 +487,33 @@ async fn outbound_handler(
 #[tracing::instrument(skip_all)]
 async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let res = ctx
-		.signal(pegboard::workflows::runner::Stop {
+		.signal(pegboard::workflows::runner2::Stop {
 			reset_actor_rescheduling: true,
 		})
-		.to_workflow::<pegboard::workflows::runner::Workflow>()
+		.to_workflow::<pegboard::workflows::runner2::Workflow>()
 		.tag("runner_id", runner_id)
+		.graceful_not_found()
 		.send()
-		.await;
+		.await?;
 
-	if let Some(WorkflowError::WorkflowNotFound) = res
-		.as_ref()
-		.err()
-		.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
-	{
-		tracing::warn!(
-			?runner_id,
-			"runner workflow not found, likely already stopped"
-		);
-	} else {
-		res.context("failed sending drain signal")?;
+	if res.is_none() {
+		// Retry with old runner wf
+		let res = ctx
+			.signal(pegboard::workflows::runner::Stop {
+				reset_actor_rescheduling: true,
+			})
+			.to_workflow::<pegboard::workflows::runner::Workflow>()
+			.tag("runner_id", runner_id)
+			.graceful_not_found()
+			.send()
+			.await?;
+
+		if res.is_none() {
+			tracing::warn!(
+				?runner_id,
+				"runner workflow not found, likely already stopped"
+			);
+		}
 	}
 
 	Ok(())
