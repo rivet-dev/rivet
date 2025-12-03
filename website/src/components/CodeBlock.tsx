@@ -17,6 +17,7 @@ const LANGS: shiki.BundledLanguage[] = [
 	"powershell",
 	"ts",
 	"typescript",
+	"sql",
 	"yaml",
 	"http",
 	"prisma",

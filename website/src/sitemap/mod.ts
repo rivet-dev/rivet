@@ -251,6 +251,10 @@ export const sitemap = [
 								// icon: faVialCircleCheck,
 							},
 							{
+								title: "AI & User-Generated Actors",
+								href: "/docs/actors/ai-and-user-generated-actors",
+							},
+							{
 								title: "Helper Types",
 								href: "/docs/actors/helper-types",
 								//icon: faCode,

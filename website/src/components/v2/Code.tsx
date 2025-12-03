@@ -32,6 +32,7 @@ const languageNames = {
 	ruby: "Ruby",
 	ts: "TypeScript",
 	typescript: "TypeScript",
+	sql: "SQL",
 	yaml: "YAML",
 	gdscript: "GDScript",
 	powershell: "Command Line",

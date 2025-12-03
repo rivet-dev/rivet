@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rivet Counter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+            background: #000000;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        .counter-container {
+            text-align: center;
+            padding: 40px;
+            background: #1c1c1e;
+            border-radius: 16px;
+            border: 1px solid #2c2c2e;
+            min-width: 300px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .counter-display {
+            background: #2c2c2e;
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 32px;
+        }
+
+        .counter-display h2 {
+            font-size: 64px;
+            font-weight: 700;
+            color: #007aff;
+        }
+
+        .counter-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        button {
+            width: 64px;
+            height: 64px;
+            border: none;
+            border-radius: 12px;
+            background: #007aff;
+            color: white;
+            font-size: 32px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:hover:not(:disabled) {
+            background: #0056cc;
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            background: #3a3a3c;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            font-size: 14px;
+            color: #8e8e93;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+</body>
+</html>
