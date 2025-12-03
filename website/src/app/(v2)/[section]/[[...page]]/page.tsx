@@ -13,7 +13,7 @@ import { faPencil, Icon } from "@rivet-gg/icons";
 import clsx from "clsx";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Comments } from "@/components/Comments";
+import { CommentsWrapper } from "@/components/CommentsWrapper";
 import { DocsNavigation } from "@/components/DocsNavigation";
 import { DocsPageDropdown } from "@/components/DocsPageDropdown";
 import { DocsTableOfContents } from "@/components/DocsTableOfContents";
@@ -71,9 +71,9 @@ async function loadContent(path: string[]) {
 export async function generateMetadata({
 	params,
 }: {
-	params: { section: string; page?: string[] };
+	params: Promise<{ section: string; page?: string[] }>;
 }): Promise<Metadata> {
-	const { section, page } = params;
+	const { section, page } = await params;
 	const path = buildPathComponents(section, page);
 	const {
 		component: { title, description },
@@ -92,10 +92,11 @@ export async function generateMetadata({
 }
 
 export default async function CatchAllCorePage({
-	params: { section, page },
+	params,
 }: {
-	params: { section: string; page?: string[] };
+	params: Promise<{ section: string; page?: string[] }>;
 }) {
+	const { section, page } = await params;
 	if (!VALID_SECTIONS.includes(section)) {
 		return notFound();
 	}
@@ -165,7 +166,7 @@ export default async function CatchAllCorePage({
 								Suggest changes to this page
 							</a>
 						</Button>
-						<Comments />
+						<CommentsWrapper />
 					</main>
 					{tableOfContents && (
 						<aside className="hidden xl:block w-64 min-w-0 flex-shrink-0 pb-4">
