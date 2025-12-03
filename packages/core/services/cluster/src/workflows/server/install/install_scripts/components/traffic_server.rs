@@ -3,7 +3,7 @@ use include_dir::{include_dir, Dir};
 
 use super::s3;
 
-const TRAFFIC_SERVER_IMAGE: &str = "ghcr.io/rivet-gg/apache-traffic-server:9934dc2";
+const TRAFFIC_SERVER_IMAGE: &str = "ghcr.io/rivet-dev/apache-traffic-server:9934dc2";
 
 pub fn install() -> String {
 	include_str!("../files/traffic_server_install.sh").replace("__IMAGE__", TRAFFIC_SERVER_IMAGE)

@@ -128,11 +128,11 @@ fn create_middleware_function(
 			// This could be fetched from a database in a real implementation
 			Ok(MiddlewareResponse::Ok(MiddlewareConfig {
 				rate_limit: RateLimitConfig {
-					requests: 100, // 100 requests
+					requests: 100_000, // 100 requests
 					period: 60,    // per 60 seconds
 				},
 				max_in_flight: MaxInFlightConfig {
-					amount: 20, // 20 concurrent requests
+					amount: 20_000, // 20 concurrent requests
 				},
 				retry: RetryConfig {
 					max_attempts: 7,

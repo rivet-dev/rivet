@@ -289,43 +289,43 @@ pub async fn basic_rate_limit(
 	config: &rivet_config::Config,
 	rate_limit_ctx: crate::auth::AuthRateLimitCtx<'_>,
 ) -> GlobalResult<()> {
-	if let Some(remote_address) = rate_limit_ctx.remote_address {
-		let rate_limit_config = rate_limit_ctx.rate_limit_config;
-
-		// Trigger rate limit
-		let rate_limit_key = rate_limit_config.key.to_owned();
-		let rate_limit_results = rate_limit_ctx
-			.cache
-			.rate_limit(
-				&("req", rate_limit_config.key.to_owned()),
-				&remote_address.to_string(),
-				rate_limit_config,
-			)
-			.await;
-
-		// Decode bypass token
-		if let Some(bypass_token) = rate_limit_ctx.bypass_token {
-			as_auth_expired(rivet_claims::decode(
-				&config.server()?.jwt.public,
-				&bypass_token,
-			)?)?
-			.as_bypass()?;
-		}
-		// Handle rate limiting
-		else if let Some(rate_limit_result) = rate_limit_results.iter().find(|res| !res.is_valid)
-		{
-			tracing::info!(
-				?remote_address,
-				?rate_limit_key,
-				result=%rate_limit_result,
-				"too many requests"
-			);
-
-			return Err(err_code!(API_RATE_LIMIT {
-				metadata: rate_limit_result.retry_after_ts(),
-			}));
-		}
-	}
+	// if let Some(remote_address) = rate_limit_ctx.remote_address {
+	// 	let rate_limit_config = rate_limit_ctx.rate_limit_config;
+	//
+	// 	// Trigger rate limit
+	// 	let rate_limit_key = rate_limit_config.key.to_owned();
+	// 	let rate_limit_results = rate_limit_ctx
+	// 		.cache
+	// 		.rate_limit(
+	// 			&("req", rate_limit_config.key.to_owned()),
+	// 			&remote_address.to_string(),
+	// 			rate_limit_config,
+	// 		)
+	// 		.await;
+	//
+	// 	// Decode bypass token
+	// 	if let Some(bypass_token) = rate_limit_ctx.bypass_token {
+	// 		as_auth_expired(rivet_claims::decode(
+	// 			&config.server()?.jwt.public,
+	// 			&bypass_token,
+	// 		)?)?
+	// 		.as_bypass()?;
+	// 	}
+	// 	// Handle rate limiting
+	// 	else if let Some(rate_limit_result) = rate_limit_results.iter().find(|res| !res.is_valid)
+	// 	{
+	// 		tracing::info!(
+	// 			?remote_address,
+	// 			?rate_limit_key,
+	// 			result=%rate_limit_result,
+	// 			"too many requests"
+	// 		);
+	//
+	// 		return Err(err_code!(API_RATE_LIMIT {
+	// 			metadata: rate_limit_result.retry_after_ts(),
+	// 		}));
+	// 	}
+	// }
 
 	Ok(())
 }

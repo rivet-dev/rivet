@@ -369,6 +369,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 	#[tracing::instrument(skip_all)]
 	async fn publish_metrics(&self, _worker_instance_id: Uuid) -> WorkflowResult<()> {
+		return Ok(());
+
 		// Attempt to be the only worker publishing metrics by writing to the lock key
 		let acquired_lock = self
 			.pools
