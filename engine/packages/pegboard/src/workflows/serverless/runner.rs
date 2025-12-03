@@ -20,6 +20,8 @@ impl State {
 	}
 }
 
+/// Runs alongside the connection workflow to process signals. This is required because the connection
+/// workflow cannot listen for signals while in an activity.
 #[workflow]
 pub async fn pegboard_serverless_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.activity(InitStateInput {}).await?;
@@ -38,12 +40,12 @@ pub async fn pegboard_serverless_runner(ctx: &mut WorkflowCtx, input: &Input) ->
 
 	ctx.activity(MarkAsDrainingInput {}).await?;
 
-	ctx.signal(connection::DrainSignal {})
+	ctx.signal(connection::Drain {})
 		.to_workflow_id(conn_wf_id)
 		.send()
 		.await?;
 
-	ctx.msg(connection::DrainMessage {})
+	ctx.msg(connection::Drain {})
 		.tag("workflow_id", conn_wf_id)
 		.send()
 		.await?;

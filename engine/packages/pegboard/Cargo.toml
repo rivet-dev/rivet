@@ -22,6 +22,7 @@ rivet-data.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
 rivet-runner-protocol.workspace = true
+rivet-runtime.workspace = true
 rivet-types.workspace = true
 rivet-util.workspace = true
 serde_bare.workspace = true
