@@ -22,7 +22,7 @@ use crate::{
 		BumpSubSubject,
 		debug::{
 			ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,
-			MessageSendEvent, SignalData, SignalEvent, SignalSendEvent, SignalState,
+			MessageSendEvent, SignalData, SignalEvent, SignalSendEvent, SignalState, SignalsEvent,
 			SubWorkflowEvent, WorkflowData, WorkflowState,
 		},
 	},
@@ -895,6 +895,44 @@ impl DatabaseDebug for DatabaseKv {
 									let inner_event_type = key.deserialize(entry.value())?;
 
 									current_event.inner_event_type = Some(inner_event_type);
+								} else if let Ok(key) =
+									self.subspace
+										.unpack::<keys::history::IndexedSignalIdKey>(entry.key())
+								{
+									ensure!(
+										current_event.indexed_signal_ids.len() == key.index,
+										"corrupt history, index doesn't exist yet or is out of order"
+									);
+
+									let signal_id = key.deserialize(entry.value())?;
+									current_event
+										.indexed_signal_ids
+										.insert(key.index, signal_id);
+								} else if let Ok(key) = self
+									.subspace
+									.unpack::<keys::history::IndexedNameKey>(entry.key())
+								{
+									ensure!(
+										current_event.indexed_names.len() == key.index,
+										"corrupt history, index doesn't exist yet or is out of order"
+									);
+
+									let name = key.deserialize(entry.value())?;
+									current_event.indexed_names.insert(key.index, name);
+								} else if let Ok(key) =
+									self.subspace
+										.unpack::<keys::history::IndexedInputChunkKey>(entry.key())
+								{
+									ensure!(
+										current_event.indexed_input_chunks.len() == key.index,
+										"corrupt history, index doesn't exist yet or is out of order"
+									);
+
+									if let Some(input_chunks) =
+										current_event.indexed_input_chunks.get_mut(key.index)
+									{
+										input_chunks.push(entry);
+									}
 								}
 
 								// We ignore keys we don't need (like tags)
@@ -1190,6 +1228,10 @@ struct WorkflowHistoryEventBuilder {
 	deadline_ts: Option<i64>,
 	sleep_state: Option<SleepState>,
 	inner_event_type: Option<EventType>,
+
+	indexed_signal_ids: Vec<Id>,
+	indexed_names: Vec<String>,
+	indexed_input_chunks: Vec<Vec<Value>>,
 }
 
 impl WorkflowHistoryEventBuilder {
@@ -1211,6 +1253,10 @@ impl WorkflowHistoryEventBuilder {
 			deadline_ts: None,
 			sleep_state: None,
 			inner_event_type: None,
+
+			indexed_signal_ids: Vec::new(),
+			indexed_names: Vec::new(),
+			indexed_input_chunks: Vec::new(),
 		}
 	}
 }
@@ -1243,6 +1289,7 @@ impl TryFrom<WorkflowHistoryEventBuilder> for Event {
 				EventType::Branch => EventData::Branch,
 				EventType::Removed => EventData::Removed(value.try_into()?),
 				EventType::VersionCheck => EventData::VersionCheck,
+				EventType::Signals => EventData::Signals(value.try_into()?),
 			},
 		})
 	}
@@ -1488,6 +1535,45 @@ impl TryFrom<WorkflowHistoryEventBuilder> for RemovedEvent {
 			event_type: value
 				.inner_event_type
 				.ok_or(WorkflowError::MissingEventData("inner_event_type"))?,
+		})
+	}
+}
+
+impl TryFrom<WorkflowHistoryEventBuilder> for SignalsEvent {
+	type Error = WorkflowError;
+
+	fn try_from(value: WorkflowHistoryEventBuilder) -> WorkflowResult<Self> {
+		Ok(SignalsEvent {
+			signal_ids: if value.indexed_signal_ids.is_empty() {
+				return Err(WorkflowError::MissingEventData("signal_id"));
+			} else {
+				value.indexed_signal_ids
+			},
+			names: if value.indexed_names.is_empty() {
+				return Err(WorkflowError::MissingEventData("name"));
+			} else {
+				value.indexed_names
+			},
+			bodies: if value.indexed_input_chunks.is_empty() {
+				return Err(WorkflowError::MissingEventData("input"));
+			} else {
+				value
+					.indexed_input_chunks
+					.into_iter()
+					.map(|input_chunks| {
+						// workflow_id not needed
+						let input_key =
+							keys::history::InputKey::new(Id::nil(), value.location.clone());
+						let v = input_key
+							.combine(input_chunks)
+							.map_err(WorkflowError::DeserializeEventData)?;
+
+						serde_json::from_str::<serde_json::Value>(v.get())
+							.map_err(Into::into)
+							.map_err(WorkflowError::DeserializeEventData)
+					})
+					.collect::<std::result::Result<_, _>>()?
+			},
 		})
 	}
 }
