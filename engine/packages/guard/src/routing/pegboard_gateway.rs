@@ -210,7 +210,7 @@ async fn route_request_inner(
 						.to_workflow_id(actor.workflow_id)
 						.graceful_not_found()
 						.send()
-						.await;
+						.await?;
 
 						if res.is_none() {
 							tracing::warn!(

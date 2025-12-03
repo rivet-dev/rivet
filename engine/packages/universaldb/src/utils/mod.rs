@@ -24,6 +24,14 @@ pub enum IsolationLevel {
 #[derive(Debug, Clone, Copy)]
 pub struct MaybeCommitted(pub bool);
 
+impl std::ops::Deref for MaybeCommitted {
+	type Target = bool;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
 /// Calculate exponential backoff based on attempt.
 ///
 /// Ours:

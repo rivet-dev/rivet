@@ -71,9 +71,7 @@ async fn tick(
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
-			let serverless_desired_subspace = keys::subspace().subspace(
-				&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::entire_subspace(),
-			);
+			let serverless_desired_subspace = keys::subspace().subspace(&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::entire_subspace());
 
 			tx.get_ranges_keyvalues(
 				universaldb::RangeOption {
@@ -85,8 +83,7 @@ async fn tick(
 			)
 			.map(|res| match res {
 				Ok(entry) => {
-					let (key, desired_slots) =
-						tx.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
+					let (key, desired_slots) = tx.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
 
 					Ok((key.namespace_id, key.runner_name, desired_slots))
 				}
@@ -378,9 +375,7 @@ async fn outbound_handler(
 
 					if runner_id.is_none() {
 						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
-						let payload =
-							protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data)
-								.context("invalid payload")?;
+						let payload = protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data).context("invalid payload")?;
 
 						match payload {
 							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
@@ -443,11 +438,7 @@ async fn outbound_handler(
 					// send it now
 					if runner_id.is_none() {
 						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
-						let payload =
-						protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(
-							&data,
-						)
-						.context("invalid payload")?;
+						let payload = protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data).context("invalid payload")?;
 
 						match payload {
 							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {

@@ -978,6 +978,62 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
+/**
+ * We redeclare this so its top level
+ */
+export type ActorCommandKeyData =
+    | { readonly tag: "CommandStartActor"; readonly val: CommandStartActor }
+    | { readonly tag: "CommandStopActor"; readonly val: CommandStopActor }
+
+export function readActorCommandKeyData(bc: bare.ByteCursor): ActorCommandKeyData {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "CommandStartActor", val: readCommandStartActor(bc) }
+        case 1:
+            return { tag: "CommandStopActor", val: readCommandStopActor(bc) }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeActorCommandKeyData(bc: bare.ByteCursor, x: ActorCommandKeyData): void {
+    switch (x.tag) {
+        case "CommandStartActor": {
+            bare.writeU8(bc, 0)
+            writeCommandStartActor(bc, x.val)
+            break
+        }
+        case "CommandStopActor": {
+            bare.writeU8(bc, 1)
+            writeCommandStopActor(bc, x.val)
+            break
+        }
+    }
+}
+
+export function encodeActorCommandKeyData(x: ActorCommandKeyData, config?: Partial<bare.Config>): Uint8Array {
+    const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
+    const bc = new bare.ByteCursor(
+        new Uint8Array(fullConfig.initialBufferLength),
+        fullConfig,
+    )
+    writeActorCommandKeyData(bc, x)
+    return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
+}
+
+export function decodeActorCommandKeyData(bytes: Uint8Array): ActorCommandKeyData {
+    const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
+    const result = readActorCommandKeyData(bc)
+    if (bc.offset < bc.view.byteLength) {
+        throw new bare.BareError(bc.offset, "remaining bytes")
+    }
+    return result
+}
+
 export type MessageId = {
     /**
      * Globally unique ID
@@ -1460,26 +1516,7 @@ export function writeToClientPing(bc: bare.ByteCursor, x: ToClientPing): void {
     bare.writeI64(bc, x.ts)
 }
 
-function read11(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
-    const len = bare.readUintSafe(bc)
-    if (len === 0) {
-        return []
-    }
-    const result = [readActorCheckpoint(bc)]
-    for (let i = 1; i < len; i++) {
-        result[i] = readActorCheckpoint(bc)
-    }
-    return result
-}
-
-function write11(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
-    bare.writeUintSafe(bc, x.length)
-    for (let i = 0; i < x.length; i++) {
-        writeActorCheckpoint(bc, x[i])
-    }
-}
-
-function read12(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -1494,7 +1531,7 @@ function read12(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write12(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -1502,22 +1539,22 @@ function write12(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read13(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read12(bc) : null
+function read12(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read11(bc) : null
 }
 
-function write13(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write12(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write12(bc, x)
+        write11(bc, x)
     }
 }
 
-function read14(bc: bare.ByteCursor): Json | null {
+function read13(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write14(bc: bare.ByteCursor, x: Json | null): void {
+function write13(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
@@ -1531,7 +1568,6 @@ export type ToServerInit = {
     readonly name: string
     readonly version: u32
     readonly totalSlots: u32
-    readonly lastCommandCheckpoints: readonly ActorCheckpoint[]
     readonly prepopulateActorNames: ReadonlyMap<string, ActorName> | null
     readonly metadata: Json | null
 }
@@ -1541,9 +1577,8 @@ export function readToServerInit(bc: bare.ByteCursor): ToServerInit {
         name: bare.readString(bc),
         version: bare.readU32(bc),
         totalSlots: bare.readU32(bc),
-        lastCommandCheckpoints: read11(bc),
-        prepopulateActorNames: read13(bc),
-        metadata: read14(bc),
+        prepopulateActorNames: read12(bc),
+        metadata: read13(bc),
     }
 }
 
@@ -1551,9 +1586,8 @@ export function writeToServerInit(bc: bare.ByteCursor, x: ToServerInit): void {
     bare.writeString(bc, x.name)
     bare.writeU32(bc, x.version)
     bare.writeU32(bc, x.totalSlots)
-    write11(bc, x.lastCommandCheckpoints)
-    write13(bc, x.prepopulateActorNames)
-    write14(bc, x.metadata)
+    write12(bc, x.prepopulateActorNames)
+    write13(bc, x.metadata)
 }
 
 export type ToServerEvents = readonly EventWrapper[]
@@ -1577,18 +1611,37 @@ export function writeToServerEvents(bc: bare.ByteCursor, x: ToServerEvents): voi
     }
 }
 
+function read14(bc: bare.ByteCursor): readonly ActorCheckpoint[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readActorCheckpoint(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readActorCheckpoint(bc)
+    }
+    return result
+}
+
+function write14(bc: bare.ByteCursor, x: readonly ActorCheckpoint[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeActorCheckpoint(bc, x[i])
+    }
+}
+
 export type ToServerAckCommands = {
-    readonly lastCommandIdx: i64
+    readonly lastCommandCheckpoints: readonly ActorCheckpoint[]
 }
 
 export function readToServerAckCommands(bc: bare.ByteCursor): ToServerAckCommands {
     return {
-        lastCommandIdx: bare.readI64(bc),
+        lastCommandCheckpoints: read14(bc),
     }
 }
 
 export function writeToServerAckCommands(bc: bare.ByteCursor, x: ToServerAckCommands): void {
-    bare.writeI64(bc, x.lastCommandIdx)
+    write14(bc, x.lastCommandCheckpoints)
 }
 
 export type ToServerStopping = null
@@ -1738,21 +1791,18 @@ export function writeProtocolMetadata(bc: bare.ByteCursor, x: ProtocolMetadata):
 
 export type ToClientInit = {
     readonly runnerId: Id
-    readonly lastEventCheckpoints: readonly ActorCheckpoint[]
     readonly metadata: ProtocolMetadata
 }
 
 export function readToClientInit(bc: bare.ByteCursor): ToClientInit {
     return {
         runnerId: readId(bc),
-        lastEventCheckpoints: read11(bc),
         metadata: readProtocolMetadata(bc),
     }
 }
 
 export function writeToClientInit(bc: bare.ByteCursor, x: ToClientInit): void {
     writeId(bc, x.runnerId)
-    write11(bc, x.lastEventCheckpoints)
     writeProtocolMetadata(bc, x.metadata)
 }
 
@@ -1783,12 +1833,12 @@ export type ToClientAckEvents = {
 
 export function readToClientAckEvents(bc: bare.ByteCursor): ToClientAckEvents {
     return {
-        lastEventCheckpoints: read11(bc),
+        lastEventCheckpoints: read14(bc),
     }
 }
 
 export function writeToClientAckEvents(bc: bare.ByteCursor, x: ToClientAckEvents): void {
-    write11(bc, x.lastEventCheckpoints)
+    write14(bc, x.lastEventCheckpoints)
 }
 
 export type ToClientKvResponse = {

@@ -11,6 +11,7 @@ async-trait.workspace = true
 deadpool-postgres.workspace = true
 foundationdb-tuple.workspace = true
 futures-util.workspace = true
+hex.workspace = true
 lazy_static.workspace = true
 rand.workspace = true
 rivet-metrics.workspace = true

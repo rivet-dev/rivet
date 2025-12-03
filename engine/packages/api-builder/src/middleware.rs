@@ -186,13 +186,7 @@ pub async fn http_logging_middleware(
 		);
 
 		// Update metrics
-		metrics::API_REQUEST_PENDING.add(
-			-1,
-			&[
-				KeyValue::new("method", method_clone.to_string()),
-				KeyValue::new("path", path_clone.clone()),
-			],
-		);
+		metrics::API_REQUEST_PENDING.add(-1, &[KeyValue::new("method", method_clone.to_string()), KeyValue::new("path", path_clone.clone())]);
 
 		let error_code: String = if status.is_success() {
 			String::new()
