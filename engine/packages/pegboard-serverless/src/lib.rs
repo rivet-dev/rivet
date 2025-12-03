@@ -366,7 +366,9 @@ async fn outbound_handler(
 
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 	let mut runner_id = None;
+	let mut runner_protocol_version = None;
 
+	let runner_protocol_version2 = &mut runner_protocol_version;
 	let stream_handler = async {
 		while let Some(event) = source.next().await {
 			match event {
@@ -381,9 +383,10 @@ async fn outbound_handler(
 								.context("invalid payload")?;
 
 						match payload {
-							protocol::ToServerlessServer::ToServerlessServerInit(init) => {
+							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
 								runner_id =
 									Some(Id::parse(&init.runner_id).context("invalid runner id")?);
+								*runner_protocol_version2 = Some(init.runner_protocol_version);
 							}
 						}
 					}
@@ -428,6 +431,7 @@ async fn outbound_handler(
 	}
 
 	// Continue waiting on req while draining
+	let runner_protocol_version2 = &mut runner_protocol_version;
 	let wait_for_shutdown_fut = async move {
 		while let Some(event) = source.next().await {
 			match event {
@@ -446,10 +450,11 @@ async fn outbound_handler(
 						.context("invalid payload")?;
 
 						match payload {
-							protocol::ToServerlessServer::ToServerlessServerInit(init) => {
+							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
 								let runner_id_local =
 									Id::parse(&init.runner_id).context("invalid runner id")?;
 								runner_id = Some(runner_id_local);
+								*runner_protocol_version2 = Some(init.runner_protocol_version);
 								drain_runner(ctx, runner_id_local).await?;
 							}
 						}
@@ -475,8 +480,8 @@ async fn outbound_handler(
 	//
 	// This will force the runner to stop the request in order to avoid hitting the serverless
 	// timeout threshold
-	if let Some(runner_id) = runner_id {
-		publish_to_client_stop(ctx, runner_id).await?;
+	if let (Some(runner_id), Some(runner_protocol_version)) = (runner_id, runner_protocol_version) {
+		publish_to_client_stop(ctx, runner_id, runner_protocol_version).await?;
 	}
 
 	tracing::debug!(?runner_id, "outbound req stopped");
@@ -523,13 +528,21 @@ async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 ///
 /// This will close the runner's WebSocket.
 #[tracing::instrument(skip_all)]
-async fn publish_to_client_stop(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
+async fn publish_to_client_stop(
+	ctx: &StandaloneCtx,
+	runner_id: Id,
+	runner_protocol_version: u16,
+) -> Result<()> {
 	let receiver_subject =
 		pegboard::pubsub_subjects::RunnerReceiverSubject::new(runner_id).to_string();
 
-	let message_serialized =
-		protocol::versioned::ToRunner::wrap_latest(protocol::ToRunner::ToRunnerClose)
-			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)?;
+	let message_serialized = if protocol::is_mk2(runner_protocol_version) {
+		protocol::versioned::ToRunnerMk2::wrap_latest(protocol::mk2::ToRunner::ToRunnerClose)
+			.serialize_with_embedded_version(protocol::PROTOCOL_MK2_VERSION)?
+	} else {
+		protocol::versioned::ToRunner::wrap_latest(protocol::ToRunner::ToClientClose)
+			.serialize_with_embedded_version(protocol::PROTOCOL_MK1_VERSION)?
+	};
 
 	ctx.ups()?
 		.publish(&receiver_subject, &message_serialized, PublishOpts::one())

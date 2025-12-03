@@ -1,4 +1,4 @@
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 use universaldb::tuple::{
 	Bytes, PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset,
 };

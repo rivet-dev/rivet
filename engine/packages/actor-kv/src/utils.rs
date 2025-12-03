@@ -1,7 +1,7 @@
 use std::result::Result::Ok;
 
 use anyhow::*;
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 
 use crate::{
 	MAX_KEY_SIZE, MAX_KEYS, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE, key::KeyWrapper,

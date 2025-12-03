@@ -184,6 +184,50 @@ impl<'de> TupleUnpack<'de> for TotalSlotsKey {
 }
 
 #[derive(Debug)]
+pub struct ProtocolVersionKey {
+	runner_id: Id,
+}
+
+impl ProtocolVersionKey {
+	pub fn new(runner_id: Id) -> Self {
+		ProtocolVersionKey { runner_id }
+	}
+}
+
+impl FormalKey for ProtocolVersionKey {
+	type Value = u16;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(u16::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for ProtocolVersionKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (RUNNER, DATA, self.runner_id, PROTOCOL_VERSION);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for ProtocolVersionKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, runner_id, _)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let v = ProtocolVersionKey { runner_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
 pub struct ActorKey {
 	runner_id: Id,
 	pub actor_id: Id,

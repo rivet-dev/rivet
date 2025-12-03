@@ -131,4 +131,5 @@ define_keys! {
 	// 103 - RESERVED BY EE
 	// 104 - RESERVED BY EE
 	// 105 - RESERVED BY EE
+	(106, PROTOCOL_VERSION, "protocol_version"),
 }
