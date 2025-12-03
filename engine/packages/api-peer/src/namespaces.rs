@@ -8,11 +8,18 @@ use utoipa::ToSchema;
 
 #[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
-	let namespace_ids = query.namespace_ids.as_ref().map(|x| {
-		x.split(',')
-			.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
-			.collect::<Vec<_>>()
-	});
+	let namespace_ids = [
+		query.namespace_id,
+		query
+			.namespace_ids
+			.map(|x| {
+				x.split(',')
+					.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default(),
+	]
+	.concat();
 
 	// If name filter is provided, resolve and return only that namespace
 	if let Some(name) = query.name {
@@ -30,7 +37,7 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 			namespaces,
 			pagination: Pagination { cursor: None },
 		})
-	} else if let Some(namespace_ids) = namespace_ids {
+	} else if !namespace_ids.is_empty() {
 		let namespaces = ctx
 			.op(namespace::ops::get_global::Input { namespace_ids })
 			.await?;
