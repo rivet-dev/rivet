@@ -1,6 +1,5 @@
 import {
 	faAws,
-	faChevronRight,
 	faGoogleCloud,
 	faHetznerH,
 	faNextjs,
@@ -23,17 +22,15 @@ import {
 	Link,
 	notFound,
 	Link as RouterLink,
+	useParams,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
-import { hasProvider } from "@/app/data-providers/engine-data-provider";
 import { HelpDropdown } from "@/app/help-dropdown";
+import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
 import {
 	Button,
-	CodeFrame,
-	CodeGroup,
-	CodePreview,
 	DocsSheet,
 	DropdownMenu,
 	DropdownMenuContent,
@@ -50,7 +47,7 @@ import {
 	useEngineCompatDataProvider,
 	useEngineNamespaceDataProvider,
 } from "@/components/actors";
-import { cloudEnv, engineEnv } from "@/lib/env";
+import { cloudEnv } from "@/lib/env";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
@@ -64,6 +61,7 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
+	const params = useParams({ strict: false });
 	const { data: runnerNamesCount, isLoading } = useSuspenseInfiniteQuery({
 		...useEngineCompatDataProvider().runnerNamesQueryOptions(),
 		select: (data) => data.pages[0].names.length,
@@ -78,20 +76,15 @@ export function RouteComponent() {
 			<div className="bg-card h-full border my-2 mr-2 rounded-lg overflow-auto">
 				<div className=" max-w-5xl mx-auto">
 					<div className="mt-2 flex justify-between items-center px-6 py-4 ">
-						<H1>Connect</H1>
-						<div className="flex gap-4">
-							<Link to="." search={{ modal: "tokens" }}>
-								<Button variant="outline">Tokens</Button>
-							</Link>
-							<HelpDropdown>
-								<Button
-									variant="outline"
-									startIcon={<Icon icon={faQuestionCircle} />}
-								>
-									Need help?
-								</Button>
-							</HelpDropdown>
-						</div>
+						<H1>Overview</H1>
+						<HelpDropdown>
+							<Button
+								variant="outline"
+								startIcon={<Icon icon={faQuestionCircle} />}
+							>
+								Need help?
+							</Button>
+						</HelpDropdown>
 					</div>
 					<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
 						Connect your RivetKit application to Rivet Cloud. Use
@@ -197,21 +190,14 @@ export function RouteComponent() {
 					<div className="max-w-3xl w-full border rounded-lg bg-card">
 						<div className="mt-2 flex justify-between items-center px-6 py-4">
 							<H2>Connect Existing Project</H2>
-							<div className="flex gap-4">
-								<Link to="." search={{ modal: "tokens" }}>
-									<Button variant="outline">Tokens</Button>
-								</Link>
-								<HelpDropdown>
-									<Button
-										variant="outline"
-										startIcon={
-											<Icon icon={faQuestionCircle} />
-										}
-									>
-										Need help?
-									</Button>
-								</HelpDropdown>
-							</div>
+							<HelpDropdown>
+								<Button
+									variant="outline"
+									startIcon={<Icon icon={faQuestionCircle} />}
+								>
+									Need help?
+								</Button>
+							</HelpDropdown>
 						</div>
 						<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
 							Connect your RivetKit application to Rivet Cloud.
@@ -320,20 +306,15 @@ export function RouteComponent() {
 			<div className=" ">
 				<div className="mb-4 pt-2 max-w-5xl mx-auto">
 					<div className="flex justify-between items-center px-10 py-4 ">
-						<H1>Connect</H1>
-						<div className="flex gap-4">
-							<Link to="." search={{ modal: "tokens" }}>
-								<Button variant="outline">Tokens</Button>
-							</Link>
-							<HelpDropdown>
-								<Button
-									variant="outline"
-									startIcon={<Icon icon={faQuestionCircle} />}
-								>
-									Need help?
-								</Button>
-							</HelpDropdown>
-						</div>
+						<H1>Overview</H1>
+						<HelpDropdown>
+							<Button
+								variant="outline"
+								startIcon={<Icon icon={faQuestionCircle} />}
+							>
+								Need help?
+							</Button>
+						</HelpDropdown>
 					</div>
 					<p className="max-w-5xl mb-6 px-10 text-muted-foreground">
 						Connect your RivetKit application to Rivet Cloud. Use
@@ -367,7 +348,7 @@ function Providers() {
 
 	return (
 		<div className="p-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
-			<div className="flex gap-2 items-center mb-2">
+			<div className="flex gap-2 items-center justify-between mb-2">
 				<H3>Providers</H3>
 
 				<ProviderDropdown>
@@ -475,90 +456,6 @@ function ConnectYourFrontend() {
 	const dataProvider = useEngineCompatDataProvider();
 	const namespace = dataProvider.engineNamespace;
 
-	const { data: configs } = useInfiniteQuery({
-		...dataProvider.runnerConfigsQueryOptions(),
-		refetchInterval: 5000,
-	});
-
-	// Check if Vercel is connected
-	const hasVercel = hasProvider(configs, ["vercel", "next-js"]);
-
-	const nextJsTab = (
-		<CodeFrame
-			language="typescript"
-			title="Next.js"
-			icon={faNextjs}
-			footer={
-				<DocsSheet
-					path={"/docs/actors/quickstart/next-js"}
-					title={"Next.js Quickstart"}
-				>
-					<span className="cursor-pointer hover:underline">
-						See Next.js Documentation{" "}
-						<Icon icon={faChevronRight} className="text-xs" />
-					</span>
-				</DocsSheet>
-			}
-		>
-			<CodePreview
-				code={nextJsCode({ token, endpoint, namespace })}
-				language="typescript"
-			/>
-		</CodeFrame>
-	);
-
-	const reactTab = (
-		<CodeFrame
-			language="typescript"
-			title="React"
-			icon={faReact}
-			footer={
-				<DocsSheet
-					path={"/docs/actors/quickstart/react"}
-					title={"React Quickstart"}
-				>
-					<span className="cursor-pointer hover:underline">
-						See React Documentation{" "}
-						<Icon icon={faChevronRight} className="text-xs" />
-					</span>
-				</DocsSheet>
-			}
-		>
-			<CodePreview
-				code={reactCode({ token, endpoint, namespace })}
-				language="typescript"
-			/>
-		</CodeFrame>
-	);
-
-	const javascriptTab = (
-		<CodeFrame
-			language="typescript"
-			title="JavaScript"
-			icon={faNodeJs}
-			footer={
-				<DocsSheet
-					path={"/docs/actors/quickstart/backend"}
-					title={"JavaScript Quickstart"}
-				>
-					<span className="cursor-pointer hover:underline">
-						See JavaScript Documentation{" "}
-						<Icon icon={faChevronRight} className="text-xs" />
-					</span>
-				</DocsSheet>
-			}
-		>
-			<CodePreview
-				code={javascriptCode({
-					token,
-					endpoint,
-					namespace,
-				})}
-				language="typescript"
-			/>
-		</CodeFrame>
-	);
-
 	return (
 		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
 			<div className="flex gap-2 items-center mb-2 mt-6">
@@ -568,68 +465,15 @@ function ConnectYourFrontend() {
 				This token is safe to publish on your frontend.
 			</p>
 			<div>
-				<CodeGroup>
-					{hasVercel
-						? [nextJsTab, reactTab, javascriptTab]
-						: [javascriptTab, reactTab, nextJsTab]}
-				</CodeGroup>
+				<PublishableTokenCodeGroup
+					token={token}
+					endpoint={endpoint}
+					namespace={namespace}
+				/>
 			</div>
 		</div>
 	);
 }
-
-const javascriptCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => `import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-
-const client = createClient<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	token: "${token}",
-});`;
-
-const reactCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => `import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
-
-export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	token: "${token}",
-});`;
-
-const nextJsCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => `"use client";
-import { createRivetKit } from "@rivetkit/next-js/client";
-import type { registry } from "@/rivet/registry";
-
-export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${engineEnv().VITE_APP_API_URL}",
-	namespace: "${namespace}",
-	token: "${token}",
-});
-`;
 
 function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	const navigate = Route.useNavigate();

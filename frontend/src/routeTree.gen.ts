@@ -29,6 +29,7 @@ import { Route as ContextCloudOrgsOrganizationProjectsProjectRouteImport } from 
 import { Route as ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/index'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/index'
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/tokens'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/connect'
 
 const SsoCallbackRoute = SsoCallbackRouteImport.update({
@@ -143,6 +144,15 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute =
         ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
     } as any,
   )
+const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute =
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport.update(
+    {
+      id: '/tokens',
+      path: '/tokens',
+      getParentRoute: () =>
+        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+    } as any,
+  )
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport.update(
     {
@@ -171,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRoutesByTo {
@@ -187,6 +198,7 @@ export interface FileRoutesByTo {
   '/orgs/$organization/projects': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRoutesById {
@@ -211,6 +223,7 @@ export interface FileRoutesById {
   '/_context/_cloud/orgs/$organization/projects/$project/': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRouteTypes {
@@ -233,6 +246,7 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/'
     | '/orgs/$organization/projects/$project/ns/$namespace'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -249,6 +263,7 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects'
     | '/orgs/$organization/projects/$project'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace'
   id:
     | '__root__'
@@ -272,6 +287,7 @@ export interface FileRouteTypes {
     | '/_context/_cloud/orgs/$organization/projects/$project/'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesById: FileRoutesById
 }
@@ -425,6 +441,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
     }
+    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens': {
+      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens'
+      path: '/tokens'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/tokens'
+      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport
+      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
+    }
     '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': {
       id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
       path: '/connect'
@@ -437,6 +460,7 @@ declare module '@tanstack/react-router' {
 
 interface ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren {
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 
@@ -444,6 +468,8 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: Conte
   {
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute,
+    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute:
+      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute,
   }
