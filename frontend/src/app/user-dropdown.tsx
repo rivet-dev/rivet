@@ -65,18 +65,6 @@ export function UserDropdown() {
 				>
 					Profile
 				</DropdownMenuItem>
-				{isMatchingNamespaceRoute ? (
-					<DropdownMenuItem
-						onSelect={() => {
-							navigate({
-								to: ".",
-								search: { ...params, modal: "tokens" },
-							});
-						}}
-					>
-						Tokens
-					</DropdownMenuItem>
-				) : null}
 				{clerk.organization ? (
 					<DropdownMenuItem
 						onSelect={() => {

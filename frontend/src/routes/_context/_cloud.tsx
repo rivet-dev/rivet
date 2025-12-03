@@ -47,7 +47,6 @@ function CloudModals() {
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
-	const TokensDialog = useDialog.Tokens.Dialog;
 
 	return (
 		<>
@@ -231,23 +230,6 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search.modal === "connect-hetzner",
-					// FIXME
-					onOpenChange: (value: any) => {
-						if (!value) {
-							navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<TokensDialog
-				dialogProps={{
-					open: search.modal === "tokens",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

@@ -2,6 +2,8 @@ import { useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faBolt,
+	faHome,
+	faKey,
 	faLink,
 	faServer,
 	faSpinnerThird,
@@ -408,15 +410,15 @@ const Subnav = () => {
 					to="/ns/$namespace/connect"
 					className="font-normal"
 					params={nsMatch}
-					icon={faBolt}
+					icon={faHome}
 				>
-					Connect
+					Overview
 				</HeaderLink>
 			) : null}
 			{hasDataProvider && hasQuery ? (
 				<div className="w-full">
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
-						Instances
+						Actors
 					</span>
 					<ActorBuildsList />
 				</div>
@@ -430,7 +432,7 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 		<HeaderButton
 			asChild
 			variant="ghost"
-			className="font-medium px-1 text-foreground data-active:bg-accent"
+			className="font-medium px-1 text-muted-foreground data-active:text-foreground data-active:bg-accent"
 			{...props}
 			startIcon={
 				icon ? (
@@ -560,19 +562,27 @@ function CloudSidebarContentInner(props: {
 	const hasDataProvider = useDataProviderCheck();
 	const hasQuery = !!useDataProvider().buildsQueryOptions;
 	return (
-		<div className="flex gap-1.5 flex-col">
+		<div className="flex gap-0.5 flex-col">
 			<HeaderLink
 				to="/orgs/$organization/projects/$project/ns/$namespace/connect"
 				className="font-normal"
 				{...props}
-				icon={faBolt}
+				icon={faHome}
 			>
-				Connect
+				Overview
+			</HeaderLink>
+			<HeaderLink
+				to="/orgs/$organization/projects/$project/ns/$namespace/tokens"
+				className="font-normal"
+				{...props}
+				icon={faKey}
+			>
+				Tokens
 			</HeaderLink>
 			{hasDataProvider && hasQuery ? (
 				<div className="w-full pt-1.5">
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
-						Instances
+						Actors
 					</span>
 					<ActorBuildsList />
 				</div>
