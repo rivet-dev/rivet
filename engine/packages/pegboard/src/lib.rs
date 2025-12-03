@@ -5,7 +5,8 @@ pub mod keys;
 mod metrics;
 pub mod ops;
 pub mod pubsub_subjects;
-mod utils;
+pub mod tunnel;
+pub mod utils;
 pub mod workflows;
 
 pub fn registry() -> WorkflowResult<Registry> {

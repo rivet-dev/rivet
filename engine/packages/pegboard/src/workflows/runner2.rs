@@ -23,17 +23,13 @@ pub struct Input {
 	pub key: String,
 	pub version: u32,
 	pub total_slots: u32,
+	pub protocol_version: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct State {
 	namespace_id: Id,
 	create_ts: i64,
-
-	last_event_idx: i64,
-	last_command_idx: i64,
-	commands: Vec<CommandRow>,
-	// events: Vec<EventRow>,
 }
 
 impl State {
@@ -41,9 +37,6 @@ impl State {
 		State {
 			namespace_id,
 			create_ts,
-			last_event_idx: -1,
-			last_command_idx: -1,
-			commands: Vec::new(),
 		}
 	}
 }
@@ -72,258 +65,77 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 		async move {
 			let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
 
-			// Batch fetch pending signals
-			let signals = ctx
-				.listen_n_with_timeout::<Main>(runner_lost_threshold, 1024)
-				.await?;
+			match ctx
+				.listen_with_timeout::<Main>(runner_lost_threshold)
+				.await?
+			{
+				Some(Main::Init(_)) => {
+					if !state.draining {
+						ctx.activity(InsertDbInput {
+							runner_id: input.runner_id,
+							namespace_id: input.namespace_id,
+							name: input.name.clone(),
+							key: input.key.clone(),
+							version: input.version,
+							total_slots: input.total_slots,
+							create_ts: ctx.create_ts(),
+						})
+						.await?;
 
-			if signals.is_empty() {
-				let expired = ctx
-					.activity(CheckExpiredInput {
-						runner_id: input.runner_id,
-					})
-					.await?;
+						// Check for pending actors
+						let res = ctx
+							.activity(AllocatePendingActorsInput {
+								namespace_id: input.namespace_id,
+								name: input.name.clone(),
+							})
+							.await?;
 
-				if state.draining || expired {
-					return Ok(Loop::Break(()));
-				} else {
-					return Ok(Loop::Continue);
-				}
-			}
-
-			let mut init = None;
-			let mut events = Vec::new();
-			let mut commands = Vec::new();
-			let mut ack_last_command_idx = -1;
-			let mut check_queue = false;
-
-			// Batch process signals
-			for signal in signals {
-				match signal {
-					Main::Forward(sig) => {
-						match sig.inner {
-							protocol::ToServer::ToServerInit(init_sig) => {
-								init = Some(init_sig);
-								check_queue = true;
-							}
-							protocol::ToServer::ToServerEvents(new_events) => {
-								// Ignore events that were already received
-								events.extend(
-									new_events
-										.into_iter()
-										.filter(|event| event.index > state.last_event_idx),
-								);
-							}
-							protocol::ToServer::ToServerAckCommands(
-								protocol::ToServerAckCommands { last_command_idx },
-							) => {
-								ack_last_command_idx = ack_last_command_idx.max(last_command_idx);
-							}
-							protocol::ToServer::ToServerStopping => {
-								handle_stopping(ctx, &input, state, false).await?;
-							}
-							protocol::ToServer::ToServerPing(_)
-							| protocol::ToServer::ToServerKvRequest(_)
-							| protocol::ToServer::ToServerTunnelMessage(_) => {
-								bail!(
-									"received message that should not be sent to runner workflow: {:?}",
-									sig.inner
-								)
-							}
-						}
-					}
-					Main::Command(command) => {
-						// If draining, ignore start actor command and inform the actor wf that it is lost
-						if let (
-							protocol::Command::CommandStartActor(protocol::CommandStartActor {
-								actor_id,
-								generation,
-								..
-							}),
-							true,
-						) = (&command.inner, state.draining)
-						{
-							tracing::warn!(
-								?actor_id,
-								"attempt to schedule actor to draining runner, reallocating"
-							);
-
-							let res = ctx
-								.signal(crate::workflows::actor::Lost {
-									generation: *generation,
-									// Because this is a race condition, we want the actor to reschedule
-									// regardless of its crash policy
-									force_reschedule: true,
-									reset_rescheduling: true,
-								})
+						// Dispatch pending allocs
+						for alloc in res.allocations {
+							ctx.signal(alloc.signal)
 								.to_workflow::<crate::workflows::actor::Workflow>()
-								.tag("actor_id", actor_id)
-								.graceful_not_found()
+								.tag("actor_id", alloc.actor_id)
 								.send()
 								.await?;
-							if res.is_none() {
-								tracing::warn!(
-									?actor_id,
-									"actor workflow not found, likely already stopped"
-								);
-							}
-						} else {
-							commands.push(command.inner);
 						}
 					}
-					Main::CheckQueue(_) => {
-						check_queue = true;
-					}
-					Main::Stop(sig) => {
-						handle_stopping(ctx, &input, state, sig.reset_actor_rescheduling).await?;
-					}
 				}
-			}
-
-			let mut messages = Vec::new();
-
-			// Process init packet
-			if let Some(protocol::ToServerInit {
-				last_command_idx,
-				prepopulate_actor_names,
-				metadata,
-				..
-			}) = init
-			{
-				let init_data = ctx
-					.activity(ProcessInitInput {
-						runner_id: input.runner_id,
-						namespace_id: input.namespace_id,
-						last_command_idx: last_command_idx.unwrap_or(-1),
-						prepopulate_actor_names,
-						metadata,
-					})
-					.await?;
-
-				messages.push(protocol::ToClient::ToClientInit(protocol::ToClientInit {
-					runner_id: input.runner_id.to_string(),
-					last_event_idx: init_data.last_event_idx,
-					metadata: protocol::ProtocolMetadata {
-						runner_lost_threshold: runner_lost_threshold,
-					},
-				}));
-
-				// Send missed commands
-				if !init_data.missed_commands.is_empty() {
-					messages.push(protocol::ToClient::ToClientCommands(
-						init_data.missed_commands,
-					));
-				}
-
-				if !state.draining {
-					ctx.activity(InsertDbInput {
-						runner_id: input.runner_id,
-						namespace_id: input.namespace_id,
-						name: input.name.clone(),
-						key: input.key.clone(),
-						version: input.version,
-						total_slots: input.total_slots,
-						create_ts: ctx.create_ts(),
-					})
-					.await?;
-				}
-			}
-
-			let last_event_idx = events.last().map(|event| event.index);
-
-			// NOTE: This should not be parallelized because signals should be sent in order
-			// Forward events to actor workflows
-			for event in &events {
-				let actor_id = crate::utils::event_actor_id(&event.inner).to_string();
-				let res = ctx
-					.signal(crate::workflows::actor::Event {
-						inner: event.inner.clone(),
-					})
-					.to_workflow::<crate::workflows::actor::Workflow>()
-					.tag("actor_id", &actor_id)
-					.graceful_not_found()
-					.send()
-					.await?;
-				if res.is_none() {
-					tracing::warn!(
-						?actor_id,
-						"actor workflow not found, likely already stopped"
-					);
-				}
-			}
-
-			// If events is not empty, insert and ack
-			if let Some(last_event_idx) = last_event_idx {
-				ctx.activity(InsertEventsInput { events }).await?;
-
-				state.last_event_idx = last_event_idx;
-
-				// Ack events in batch
-				if last_event_idx
-					> state
-						.last_event_ack_idx
-						.saturating_add(EVENT_ACK_BATCH_SIZE)
-				{
-					state.last_event_ack_idx = last_event_idx;
-
-					messages.push(protocol::ToClient::ToClientAckEvents(
-						protocol::ToClientAckEvents {
-							last_event_idx: state.last_event_ack_idx,
-						},
-					));
-				}
-			}
-
-			// Insert/ack commands
-			let batch_start_index = if ack_last_command_idx != -1 || !commands.is_empty() {
-				ctx.activity(InsertCommandsInput {
-					commands: commands.clone(),
-					ack_last_command_idx,
-				})
-				.await?
-			} else {
-				None
-			};
-
-			// If commands were present during this loop iteration, forward to runner
-			if let Some(batch_start_index) = batch_start_index {
-				messages.push(protocol::ToClient::ToClientCommands(
-					commands
-						.into_iter()
-						.enumerate()
-						.map(|(index, cmd)| protocol::CommandWrapper {
-							index: batch_start_index + index as i64,
-							inner: cmd,
+				Some(Main::CheckQueue(_)) => {
+					// Check for pending actors
+					let res = ctx
+						.activity(AllocatePendingActorsInput {
+							namespace_id: input.namespace_id,
+							name: input.name.clone(),
 						})
-						.collect(),
-				));
-			}
-
-			if check_queue {
-				// Check for pending actors
-				let res = ctx
-					.activity(AllocatePendingActorsInput {
-						namespace_id: input.namespace_id,
-						name: input.name.clone(),
-					})
-					.await?;
-
-				// Dispatch pending allocs
-				for alloc in res.allocations {
-					ctx.signal(alloc.signal)
-						.to_workflow::<crate::workflows::actor::Workflow>()
-						.tag("actor_id", alloc.actor_id)
-						.send()
 						.await?;
-				}
-			}
 
-			if !messages.is_empty() {
-				ctx.activity(SendMessagesToRunnerInput {
-					runner_id: input.runner_id,
-					messages,
-				})
-				.await?;
+					// Dispatch pending allocs
+					for alloc in res.allocations {
+						ctx.signal(alloc.signal)
+							.to_workflow::<crate::workflows::actor::Workflow>()
+							.tag("actor_id", alloc.actor_id)
+							.send()
+							.await?;
+					}
+				}
+				Some(Main::Stop(sig)) => {
+					handle_stopping(ctx, &input, state, sig.reset_actor_rescheduling).await?;
+				}
+				None => {
+					let expired = ctx
+						.activity(CheckExpiredInput {
+							runner_id: input.runner_id,
+						})
+						.await?;
+
+					// TODO: Periodically ack events
+
+					if state.draining || expired {
+						return Ok(Loop::Break(()));
+					} else {
+						return Ok(Loop::Continue);
+					}
+				}
 			}
 
 			Ok(Loop::Continue)
@@ -370,7 +182,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 	// Close websocket connection (its unlikely to be open)
 	ctx.activity(SendMessagesToRunnerInput {
 		runner_id: input.runner_id,
-		messages: vec![protocol::ToClient::ToClientClose],
+		messages: vec![protocol::ToRunner::ToRunnerClose],
 	})
 	.await?;
 
@@ -424,17 +236,11 @@ async fn handle_stopping(
 #[derive(Debug, Serialize, Deserialize)]
 struct LifecycleState {
 	draining: bool,
-	last_event_idx: i64,
-	last_event_ack_idx: i64,
 }
 
 impl LifecycleState {
 	fn new() -> Self {
-		LifecycleState {
-			draining: false,
-			last_event_idx: -1,
-			last_event_ack_idx: -1,
-		}
+		LifecycleState { draining: false }
 	}
 }
 
@@ -447,14 +253,8 @@ struct InitInput {
 	create_ts: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct InitOutput {
-	/// Deprecated.
-	evict_workflow_id: Option<Id>,
-}
-
 #[activity(Init)]
-async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
+async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
 	let mut state = ctx.state::<Option<State>>()?;
 
 	*state = Some(State::new(input.namespace_id, input.create_ts));
@@ -483,9 +283,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 		.custom_instrument(tracing::info_span!("runner_init_tx"))
 		.await?;
 
-	Ok(InitOutput {
-		evict_workflow_id: None,
-	})
+	Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -494,6 +292,7 @@ struct InsertDbInput {
 	namespace_id: Id,
 	name: String,
 	key: String,
+	protocol_version: u16,
 	version: u32,
 	total_slots: u32,
 	create_ts: i64,
@@ -630,6 +429,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 					workflow_id: ctx.workflow_id(),
 					remaining_slots,
 					total_slots: input.total_slots,
+					protocol_version: input.protocol_version,
 				},
 			)?;
 
@@ -716,152 +516,6 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 	.await?;
 
 	Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct ProcessInitInput {
-	runner_id: Id,
-	namespace_id: Id,
-	last_command_idx: i64,
-	prepopulate_actor_names: Option<util::serde::HashableMap<String, protocol::ActorName>>,
-	metadata: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ProcessInitOutput {
-	last_event_idx: i64,
-	missed_commands: Vec<protocol::CommandWrapper>,
-}
-
-#[activity(ProcessInit)]
-async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<ProcessInitOutput> {
-	let state = ctx.state::<State>()?;
-
-	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
-
-			// Populate actor names if provided
-			if let Some(actor_names) = &input.prepopulate_actor_names {
-				// Write each actor name into the namespace actor names list
-				for (name, data) in actor_names {
-					let metadata =
-						serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
-							&data.metadata,
-						)
-						.unwrap_or_default();
-
-					tx.write(
-						&keys::ns::ActorNameKey::new(input.namespace_id, name.clone()),
-						ActorNameKeyData { metadata },
-					)?;
-				}
-			}
-
-			if let Some(metadata) = &input.metadata {
-				let metadata = MetadataKeyData {
-					metadata: serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
-						&metadata,
-					)
-					.unwrap_or_default(),
-				};
-
-				let metadata_key = keys::runner::MetadataKey::new(input.runner_id);
-
-				// Clear old metadata
-				tx.delete_key_subspace(&metadata_key);
-
-				// Write metadata
-				for (i, chunk) in metadata_key.split(metadata)?.into_iter().enumerate() {
-					let chunk_key = metadata_key.chunk(i);
-
-					tx.set(&tx.pack(&chunk_key), &chunk);
-				}
-			}
-
-			Ok(())
-		})
-		.custom_instrument(tracing::info_span!("runner_process_init_tx"))
-		.await?;
-
-	Ok(ProcessInitOutput {
-		last_event_idx: state.last_event_idx,
-		missed_commands: state
-			.commands
-			.iter()
-			.filter(|row| row.index > input.last_command_idx)
-			.map(|row| protocol::CommandWrapper {
-				index: row.index,
-				inner: row.command.clone(),
-			})
-			.collect(),
-	})
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct InsertEventsInput {
-	events: Vec<protocol::EventWrapper>,
-}
-
-#[activity(InsertEvents)]
-async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> Result<()> {
-	let last_event_idx = if let Some(last_event_wrapper) = input.events.last() {
-		last_event_wrapper.index
-	} else {
-		return Ok(());
-	};
-
-	let mut state = ctx.state::<State>()?;
-
-	// TODO: Storing events is disabled for now, otherwise state will grow indefinitely. This is only used
-	// for debugging anyway
-	// state.events.extend(input.events.into_iter().enumerate().map(|(i, event)| EventRow {
-	// 	index: event.index,
-	// 	event: event.inner,
-	// 	ack_ts: util::timestamp::now(),
-	// }));
-
-	state.last_event_idx = last_event_idx;
-
-	Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct InsertCommandsInput {
-	commands: Vec<protocol::Command>,
-	ack_last_command_idx: i64,
-}
-
-#[activity(InsertCommands)]
-async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Result<Option<i64>> {
-	let mut state = ctx.state::<State>()?;
-
-	if input.ack_last_command_idx != -1 {
-		state
-			.commands
-			.retain(|row| row.index > input.ack_last_command_idx);
-	}
-
-	if input.commands.is_empty() {
-		return Ok(None);
-	}
-
-	let old_last_command_idx = state.last_command_idx;
-	state.commands.extend(
-		input
-			.commands
-			.iter()
-			.enumerate()
-			.map(|(i, command)| CommandRow {
-				index: old_last_command_idx + i as i64 + 1,
-				command: command.clone(),
-				create_ts: util::timestamp::now(),
-			}),
-	);
-
-	state.last_command_idx += input.commands.len() as i64;
-
-	Ok(Some(old_last_command_idx + 1))
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -1067,6 +721,7 @@ pub(crate) async fn allocate_pending_actors(
 							workflow_id: old_runner_alloc_key_data.workflow_id,
 							remaining_slots: new_remaining_slots,
 							total_slots: old_runner_alloc_key_data.total_slots,
+							protocol_version: old_runner_alloc_key_data.protocol_version,
 						},
 					)?;
 
@@ -1123,7 +778,7 @@ pub(crate) async fn allocate_pending_actors(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct SendMessagesToRunnerInput {
 	runner_id: Id,
-	messages: Vec<protocol::ToClient>,
+	messages: Vec<protocol::ToRunner>,
 }
 
 #[activity(SendMessagesToRunner)]
@@ -1135,7 +790,7 @@ async fn send_messages_to_runner(
 		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
 
 	for message in &input.messages {
-		let message_serialized = versioned::ToClient::wrap_latest(message.clone())
+		let message_serialized = versioned::ToRunner::wrap_latest(message.clone())
 			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 
 		ctx.ups()?
@@ -1154,18 +809,12 @@ pub struct Stop {
 	pub reset_actor_rescheduling: bool,
 }
 
-#[signal("pegboard_runner_command")]
-pub struct Command {
-	pub inner: protocol::Command,
-}
-
 #[signal("pegboard_runner_forward")]
 pub struct Forward {
 	pub inner: protocol::ToServer,
 }
 
 join_signal!(Main {
-	Command(Command),
 	// Forwarded from the ws to this workflow
 	Forward(Forward),
 	CheckQueue,
