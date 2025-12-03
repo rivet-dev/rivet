@@ -157,3 +157,19 @@ export function idToStr(id: ArrayBuffer): string {
 		.map((byte) => byte.toString(16).padStart(2, "0"))
 		.join("");
 }
+
+export function stringifyError(error: unknown): string {
+	if (error instanceof Error) {
+		return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
+	} else if (typeof error === "string") {
+		return error;
+	} else if (typeof error === "object" && error !== null) {
+		try {
+			return `${JSON.stringify(error)}`;
+		} catch {
+			return `[object ${error.constructor?.name || "Object"}]`;
+		}
+	} else {
+		return String(error);
+	}
+}

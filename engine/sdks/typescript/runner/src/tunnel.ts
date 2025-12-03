@@ -10,12 +10,12 @@ import {
 	stringify as uuidstringify,
 	v4 as uuidv4,
 } from "uuid";
-import type { Runner, RunnerActor } from "./mod";
+import { RunnerShutdownError, type Runner, type RunnerActor } from "./mod";
 import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import { arraysEqual, idToStr, unreachable } from "./utils";
+import { arraysEqual, idToStr, stringifyError, unreachable } from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,
@@ -39,12 +39,6 @@ export interface HibernatingWebSocketMetadata {
 
 	path: string;
 	headers: Record<string, string>;
-}
-
-class RunnerShutdownError extends Error {
-	constructor() {
-		super("Runner shut down");
-	}
 }
 
 export class Tunnel {
@@ -226,7 +220,7 @@ export class Tunnel {
 						this.log?.error({
 							msg: "error creating websocket during restore",
 							requestId: requestIdStr,
-							err,
+							error: stringifyError(err),
 						});
 
 						// Close the WebSocket on error
@@ -291,7 +285,7 @@ export class Tunnel {
 						this.log?.error({
 							msg: "error creating stale websocket during restore",
 							requestId: requestIdStr,
-							err,
+							error: stringifyError(err),
 						});
 					});
 
