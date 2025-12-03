@@ -1,0 +1,328 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Client",
+  "type": "object",
+  "required": [
+    "cluster",
+    "foundationdb",
+    "network",
+    "runner"
+  ],
+  "properties": {
+    "cluster": {
+      "$ref": "#/definitions/Cluster"
+    },
+    "cni": {
+      "$ref": "#/definitions/Cni"
+    },
+    "data_dir": {
+      "type": "string"
+    },
+    "foundationdb": {
+      "$ref": "#/definitions/FoundationDb"
+    },
+    "images": {
+      "$ref": "#/definitions/Images"
+    },
+    "logs": {
+      "$ref": "#/definitions/Logs"
+    },
+    "metrics": {
+      "$ref": "#/definitions/Metrics"
+    },
+    "network": {
+      "$ref": "#/definitions/Network"
+    },
+    "reserved_resources": {
+      "$ref": "#/definitions/ReservedResources"
+    },
+    "runner": {
+      "$ref": "#/definitions/Runner"
+    },
+    "vector": {
+      "$ref": "#/definitions/Vector"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Addresses": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "dynamic"
+          ],
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "required": [
+                "fetch_endpoint"
+              ],
+              "properties": {
+                "fetch_endpoint": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "static"
+          ],
+          "properties": {
+            "static": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ClientFlavor": {
+      "type": "string",
+      "enum": [
+        "container",
+        "isolate"
+      ]
+    },
+    "Cluster": {
+      "type": "object",
+      "required": [
+        "api_endpoint",
+        "client_id",
+        "ws_addresses"
+      ],
+      "properties": {
+        "api_endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "client_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "ws_addresses": {
+          "$ref": "#/definitions/Addresses"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Cni": {
+      "type": "object",
+      "required": [
+        "network_interface"
+      ],
+      "properties": {
+        "bin_path": {
+          "type": "string"
+        },
+        "config_path": {
+          "type": "string"
+        },
+        "network_interface": {
+          "type": "string"
+        },
+        "network_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FoundationDb": {
+      "type": "object",
+      "required": [
+        "addresses",
+        "cluster_description",
+        "cluster_id"
+      ],
+      "properties": {
+        "addresses": {
+          "$ref": "#/definitions/Addresses"
+        },
+        "cluster_description": {
+          "type": "string"
+        },
+        "cluster_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HostEntry": {
+      "type": "object",
+      "required": [
+        "hostname",
+        "ip"
+      ],
+      "properties": {
+        "hostname": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Images": {
+      "type": "object",
+      "properties": {
+        "max_cache_size": {
+          "description": "Bytes. Defaults to 64 GiB.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "pull_addresses": {
+          "$ref": "#/definitions/Addresses"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Logs": {
+      "type": "object",
+      "properties": {
+        "redirect_logs": {
+          "type": "boolean"
+        },
+        "retention": {
+          "description": "Log retention in seconds. Defaults to 10 days. Only applies with log redirection enabled.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metrics": {
+      "type": "object",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Network": {
+      "type": "object",
+      "required": [
+        "bind_ip",
+        "lan_hostname",
+        "wan_hostname"
+      ],
+      "properties": {
+        "bind_ip": {
+          "description": "Address to serve actor traffic on.\n\nThis will usually be the same as `actor_lan_ip` unless the node is accessed within the LAN by a different IP.",
+          "type": "string",
+          "format": "ipv4"
+        },
+        "lan_hostname": {
+          "description": "Address to access this node in a LAN.\n\nThis IP is used to route traffic from Game Guard.",
+          "type": "string"
+        },
+        "lan_port_range_max": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "lan_port_range_min": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "wan_hostname": {
+          "description": "Address to access this node publicly.\n\nThis IP is used when providing the actor's IP & port for host networking.",
+          "type": "string"
+        },
+        "wan_port_range_max": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "wan_port_range_min": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReservedResources": {
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "memory": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Runner": {
+      "type": "object",
+      "required": [
+        "flavor"
+      ],
+      "properties": {
+        "container_runner_binary_path": {
+          "type": "string"
+        },
+        "custom_hosts": {
+          "description": "Custom host entries to append to /etc/hosts in actor containers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HostEntry"
+          }
+        },
+        "flavor": {
+          "$ref": "#/definitions/ClientFlavor"
+        },
+        "isolate_runner_binary_path": {
+          "type": "string"
+        },
+        "port": {
+          "description": "WebSocket Port for runners on this machine to connect to.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "use_mounts": {
+          "description": "Whether or not to use a mount for actor file systems.",
+          "type": "boolean"
+        },
+        "use_resource_constraints": {
+          "description": "Whether or not to use resource constraints on containers.\n\nYou should enable this if you see this error in development:\n\n``` cannot enter cgroupv2 \"/sys/fs/cgroup/test\" with domain controllers -- it is in an invalid state ````",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Vector": {
+      "type": "object",
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

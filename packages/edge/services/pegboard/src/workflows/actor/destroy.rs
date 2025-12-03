@@ -155,6 +155,13 @@ pub async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResu
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 				);
 
+				let active_actor_key = keys::env::ActiveActorKey::new(
+					input.actor.env_id,
+					input.actor.create_ts,
+					input.actor_id,
+				);
+				tx.clear(&keys::subspace().pack(&active_actor_key));
+
 				clear_ports_and_resources(
 					input.actor_id,
 					input.build_kind,
