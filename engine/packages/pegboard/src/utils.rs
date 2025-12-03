@@ -1,4 +1,8 @@
 use rivet_runner_protocol as protocol;
+use rivet_types::{
+	keys::namespace::runner_config::RunnerConfigVariant,
+	runner_configs::{RunnerConfig, RunnerConfigKind},
+};
 
 pub fn event_actor_id(event: &protocol::mk2::Event) -> &str {
 	match event {
@@ -59,5 +63,12 @@ pub fn event_generation_mk1(event: &protocol::Event) -> u32 {
 		protocol::Event::EventActorSetAlarm(protocol::EventActorSetAlarm {
 			generation, ..
 		}) => *generation,
+	}
+}
+
+pub fn runner_config_variant(runner_config: &RunnerConfig) -> RunnerConfigVariant {
+	match runner_config.kind {
+		RunnerConfigKind::Normal { .. } => RunnerConfigVariant::Normal,
+		RunnerConfigKind::Serverless { .. } => RunnerConfigVariant::Serverless,
 	}
 }

@@ -19,7 +19,7 @@ pub struct RunnerConfig {
 }
 
 #[operation]
-pub async fn namespace_runner_config_get(
+pub async fn pegboard_runner_config_get(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Vec<RunnerConfig>> {
@@ -62,7 +62,7 @@ async fn runner_config_get_inner(
 						let tx = tx.clone();
 
 						async move {
-							let tx = tx.with_subspace(keys::subspace());
+							let tx = tx.with_subspace(namespace::keys::subspace());
 
 							let runner_config_key = keys::runner_config::DataKey::new(
 								namespace_id,
