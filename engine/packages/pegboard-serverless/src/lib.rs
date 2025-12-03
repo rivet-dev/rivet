@@ -528,7 +528,7 @@ async fn publish_to_client_stop(ctx: &StandaloneCtx, runner_id: Id) -> Result<()
 		pegboard::pubsub_subjects::RunnerReceiverSubject::new(runner_id).to_string();
 
 	let message_serialized =
-		protocol::versioned::ToRunner::wrap_latest(protocol::ToRunner::ToClientClose)
+		protocol::versioned::ToRunner::wrap_latest(protocol::ToRunner::ToRunnerClose)
 			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)?;
 
 	ctx.ups()?
