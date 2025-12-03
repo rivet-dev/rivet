@@ -89,8 +89,8 @@ impl From<rivet_data::generated::namespace_runner_config_v2::RunnerConfig> for R
 }
 
 impl RunnerConfig {
-	/// If updates to this run config affects the autoscaler.
-	pub fn affects_autoscaler(&self) -> bool {
+	/// If updates to this run config affects the pool.
+	pub fn affects_pool(&self) -> bool {
 		matches!(self.kind, RunnerConfigKind::Serverless { .. })
 	}
 }

@@ -842,15 +842,15 @@ async fn handle_stopped(
 		.await?;
 
 	if allocate_pending_res.allocations.is_empty() {
-		// Bump autoscaler so it can scale down if needed
+		// Bump pool so it can scale down if needed
 		if deallocate_res.for_serverless {
 			ctx.removed::<Message<BumpServerlessAutoscalerStub>>()
 				.await?;
 
 			let res = ctx
 				.v(2)
-				.signal(crate::workflows::serverless::pool::Bump {})
-				.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+				.signal(crate::workflows::runner_pool::Bump {})
+				.to_workflow::<crate::workflows::runner_pool::Workflow>()
 				.tag("namespace_id", input.namespace_id)
 				.tag("runner_name", input.runner_name_selector.clone())
 				.send()

@@ -637,12 +637,12 @@ pub async fn spawn_actor(
 			ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
 				.await?;
 
-			// Bump the autoscaler so it can scale up
+			// Bump the pool so it can scale up
 			if allocate_res.serverless {
 				let res = ctx
 					.v(2)
-					.signal(crate::workflows::serverless::pool::Bump {})
-					.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+					.signal(crate::workflows::runner_pool::Bump {})
+					.to_workflow::<crate::workflows::runner_pool::Workflow>()
 					.tag("namespace_id", input.namespace_id)
 					.tag("runner_name", input.runner_name_selector.clone())
 					.send()
@@ -728,12 +728,12 @@ pub async fn spawn_actor(
 			ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
 				.await?;
 
-			// Bump the autoscaler so it can scale up
+			// Bump the pool so it can scale up
 			if allocate_res.serverless {
 				let res = ctx
 					.v(2)
-					.signal(crate::workflows::serverless::pool::Bump {})
-					.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+					.signal(crate::workflows::runner_pool::Bump {})
+					.to_workflow::<crate::workflows::runner_pool::Workflow>()
 					.tag("namespace_id", input.namespace_id)
 					.tag("runner_name", input.runner_name_selector.clone())
 					.send()

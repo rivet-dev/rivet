@@ -558,7 +558,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 												.into_iter()
 												.map(|x| protocol::KvMetadata {
 													version: x.version,
-													create_ts: x.create_ts,
+													create_ts: x.update_ts,
 												})
 												.collect(),
 										},
@@ -626,7 +626,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 												.into_iter()
 												.map(|x| protocol::KvMetadata {
 													version: x.version,
-													create_ts: x.create_ts,
+													create_ts: x.update_ts,
 												})
 												.collect(),
 										},

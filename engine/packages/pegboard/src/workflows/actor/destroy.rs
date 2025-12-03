@@ -30,7 +30,7 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 		})
 		.await?;
 
-	// If a slot was allocated at the time of actor destruction then bump the serverless autoscaler so it can scale down
+	// If a slot was allocated at the time of actor destruction then bump the runner pool so it can scale down
 	// if needed
 	if res.allocated_serverless_slot {
 		ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
@@ -38,8 +38,8 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 
 		let bump_res = ctx
 			.v(2)
-			.signal(crate::workflows::serverless::pool::Bump {})
-			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+			.signal(crate::workflows::runner_pool::Bump {})
+			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", res.runner_name_selector.clone())
 			.send()

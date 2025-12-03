@@ -11,7 +11,7 @@ pub struct Input {
 
 #[operation]
 pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) -> Result<()> {
-	let delete_workflow = ctx
+	let delete_pool = ctx
 		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(namespace::keys::subspace());
@@ -20,7 +20,7 @@ pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) ->
 			let runner_config_key =
 				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
-			let delete_workflow =
+			let delete_pool =
 				if let Some(config) = tx.read_opt(&runner_config_key, Serializable).await? {
 					tx.delete(&runner_config_key);
 
@@ -32,20 +32,20 @@ pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) ->
 						input.name.clone(),
 					));
 
-					config.affects_autoscaler()
+					config.affects_pool()
 				} else {
 					false
 				};
 
-			Ok(delete_workflow)
+			Ok(delete_pool)
 		})
 		.custom_instrument(tracing::info_span!("runner_config_delete_tx"))
 		.await?;
 
-	// Bump autoscaler when a serverless config is modified
-	if delete_workflow {
-		ctx.signal(crate::workflows::serverless::pool::Bump {})
-			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+	// Bump pool when a serverless config is modified
+	if delete_pool {
+		ctx.signal(crate::workflows::runner_pool::Bump {})
+			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", input.name.clone())
 			.send()
