@@ -372,9 +372,13 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 		#[async_trait::async_trait]
 		impl gas::listen::Listen for #ident {
-			async fn listen(ctx: &mut gas::prelude::ListenCtx) -> gas::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[<Self as gas::signal::Signal>::NAME]).await?;
-				Self::parse(&row.signal_name, &row.body)
+			async fn listen(ctx: &mut gas::prelude::ListenCtx, limit: usize) -> gas::prelude::WorkflowResult<Vec<Self>> {
+				ctx
+					.listen_any(&[<Self as gas::signal::Signal>::NAME], limit)
+					.await?
+					.into_iter()
+					.map(|signal| Self::parse(&signal.signal_name, &signal.body))
+					.collect()
 			}
 
 			fn parse(_name: &str, body: &serde_json::value::RawValue) -> gas::prelude::WorkflowResult<Self> {
