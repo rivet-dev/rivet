@@ -149,8 +149,8 @@ impl TuplePack for ActiveActorKey {
 
 impl<'de> TupleUnpack<'de> for ActiveActorKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, environment_id, _, create_ts, actor_id)) =
-			<(usize, Uuid, usize, i64, Uuid)>::unpack(input, tuple_depth)?;
+		let (input, (_, environment_id, _, _, create_ts, actor_id)) =
+			<(usize, Uuid, usize, usize, i64, Uuid)>::unpack(input, tuple_depth)?;
 		let v = ActiveActorKey {
 			environment_id,
 			create_ts,

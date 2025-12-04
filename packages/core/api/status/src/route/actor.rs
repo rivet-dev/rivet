@@ -267,6 +267,17 @@ pub async fn status(
 	)
 	.await;
 
+	// Unwrap res
+	match &test_res {
+		Ok(Ok(())) => {}
+		Ok(Err(err)) => {
+			tracing::error!(?err, "status check error");
+		}
+		Err(_) => {
+			tracing::error!("status check timeout");
+		}
+	}
+
 	// Destroy actor regardless of connection status
 	{
 		use actors_api::ActorsDestroyError::*;
@@ -331,8 +342,13 @@ pub async fn status(
 
 #[tracing::instrument]
 async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) -> GlobalResult<()> {
+	tracing::info!("starting actor connection test");
+
 	// Look up IP for the actor's host
+	tracing::info!(?hostname, port, "looking up DNS");
 	let gg_ips = lookup_dns(hostname, port).await?;
+	tracing::info!(?gg_ips, "DNS lookup complete");
+
 	ensure_with!(
 		!gg_ips.is_empty(),
 		INTERNAL_STATUS_CHECK_FAILED,
@@ -340,6 +356,7 @@ async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) ->
 	);
 
 	// Test HTTP connectivity
+	tracing::info!(ip_count = gg_ips.len(), "testing HTTP connectivity to all IPs");
 	let test_http_res = futures_util::future::join_all(gg_ips.iter().cloned().map(|x| {
 		test_http(
 			actor_origin.to_string(),
@@ -348,6 +365,7 @@ async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) ->
 		)
 	}))
 	.await;
+
 	let failed_tests = gg_ips
 		.iter()
 		.zip(test_http_res.iter())
@@ -359,7 +377,14 @@ async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) ->
 			}
 		})
 		.collect::<Vec<_>>();
+
 	if !failed_tests.is_empty() {
+		tracing::error!(
+			failed_count = failed_tests.len(),
+			total_count = gg_ips.len(),
+			?failed_tests,
+			"HTTP connectivity tests failed"
+		);
 		bail_with!(
 			INTERNAL_STATUS_CHECK_FAILED,
 			error = format!(
@@ -371,13 +396,20 @@ async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) ->
 		);
 	}
 
+	tracing::info!("all HTTP connectivity tests passed");
+
 	// Test WebSocket connectivity
+	tracing::info!("testing WebSocket connectivity");
 	test_ws(actor_origin).await.map_err(|err| {
+		tracing::error!(?err, "WebSocket connectivity test failed");
 		err_code!(
 			INTERNAL_STATUS_CHECK_FAILED,
 			error = format!("ws failed: {err:?}")
 		)
 	})?;
+
+	tracing::info!("WebSocket connectivity test passed");
+	tracing::info!("actor connection test completed successfully");
 
 	Ok(())
 }
@@ -410,18 +442,49 @@ async fn test_http(
 	hostname: String,
 	addr: SocketAddr,
 ) -> Result<(), reqwest::Error> {
+	tracing::info!(?addr, "starting HTTP test");
+
 	// Resolve the host to the specific IP addr
 	let client = reqwest::Client::builder()
 		.resolve(&hostname, addr)
 		.build()?;
 
+	let url = format!("{actor_origin}/health");
+	tracing::info!(?url, "sending HTTP request");
+
 	// Test HTTP connectivity
-	client
-		.get(format!("{actor_origin}/health"))
+	let response = client
+		.get(&url)
 		.send()
 		.instrument(tracing::info_span!("health_request"))
-		.await?
-		.error_for_status()?;
+		.await?;
+
+	let status = response.status();
+	let headers = response.headers().clone();
+
+	// Check status before consuming the response for logging
+	// This way we get proper reqwest::Error if status is not successful
+	let response = match response.error_for_status() {
+		Ok(resp) => resp,
+		Err(e) => {
+			// Try to read the body even on error for logging
+			tracing::error!(?status, ?headers, ?e, "HTTP request returned error status");
+			return Err(e);
+		}
+	};
+
+	// Read body (this consumes the response)
+	let body = response.text().await?;
+
+	tracing::info!(
+		?status,
+		?headers,
+		?body,
+		body_len = body.len(),
+		"HTTP response received"
+	);
+
+	tracing::info!(?addr, "HTTP test completed successfully");
 
 	Ok(())
 }

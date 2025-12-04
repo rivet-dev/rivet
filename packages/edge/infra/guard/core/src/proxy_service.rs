@@ -533,38 +533,40 @@ impl ProxyState {
 		ip_addr: std::net::IpAddr,
 		actor_id: &Option<Uuid>,
 	) -> GlobalResult<bool> {
-		let Some(actor_id) = *actor_id else {
-			// No rate limiting when actor_id is None
-			return Ok(true);
-		};
+		// let Some(actor_id) = *actor_id else {
+		// 	// No rate limiting when actor_id is None
+		// 	return Ok(true);
+		// };
+		//
+		// // Get actor-specific middleware config
+		// let middleware_config = self.get_middleware_config(&actor_id).await?;
+		//
+		// let cache_key = (actor_id, ip_addr);
+		//
+		// // Get existing limiter or create a new one
+		// let limiter_arc = if let Some(existing_limiter) = self.rate_limiters.get(&cache_key).await {
+		// 	existing_limiter
+		// } else {
+		// 	let new_limiter = Arc::new(Mutex::new(RateLimiter::new(
+		// 		middleware_config.rate_limit.requests,
+		// 		middleware_config.rate_limit.period,
+		// 	)));
+		// 	self.rate_limiters
+		// 		.insert(cache_key, new_limiter.clone())
+		// 		.await;
+		// 	metrics::RATE_LIMITER_COUNT.set(self.rate_limiters.entry_count() as i64);
+		// 	new_limiter
+		// };
+		//
+		// // Try to acquire from the limiter
+		// let result = {
+		// 	let mut limiter = limiter_arc.lock().await;
+		// 	limiter.try_acquire()
+		// };
+		//
+		// Ok(result)
 
-		// Get actor-specific middleware config
-		let middleware_config = self.get_middleware_config(&actor_id).await?;
-
-		let cache_key = (actor_id, ip_addr);
-
-		// Get existing limiter or create a new one
-		let limiter_arc = if let Some(existing_limiter) = self.rate_limiters.get(&cache_key).await {
-			existing_limiter
-		} else {
-			let new_limiter = Arc::new(Mutex::new(RateLimiter::new(
-				middleware_config.rate_limit.requests,
-				middleware_config.rate_limit.period,
-			)));
-			self.rate_limiters
-				.insert(cache_key, new_limiter.clone())
-				.await;
-			metrics::RATE_LIMITER_COUNT.set(self.rate_limiters.entry_count() as i64);
-			new_limiter
-		};
-
-		// Try to acquire from the limiter
-		let result = {
-			let mut limiter = limiter_arc.lock().await;
-			limiter.try_acquire()
-		};
-
-		Ok(result)
+		Ok(true)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -573,53 +575,55 @@ impl ProxyState {
 		ip_addr: std::net::IpAddr,
 		actor_id: &Option<Uuid>,
 	) -> GlobalResult<bool> {
-		let Some(actor_id) = *actor_id else {
-			// No in-flight limiting when actor_id is None
-			return Ok(true);
-		};
+		// let Some(actor_id) = *actor_id else {
+		// 	// No in-flight limiting when actor_id is None
+		// 	return Ok(true);
+		// };
+		//
+		// // Get actor-specific middleware config
+		// let middleware_config = self.get_middleware_config(&actor_id).await?;
+		//
+		// let cache_key = (actor_id, ip_addr);
+		//
+		// // Get existing counter or create a new one
+		// let counter_arc =
+		// 	if let Some(existing_counter) = self.in_flight_counters.get(&cache_key).await {
+		// 		existing_counter
+		// 	} else {
+		// 		let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
+		// 			middleware_config.max_in_flight.amount,
+		// 		)));
+		// 		self.in_flight_counters
+		// 			.insert(cache_key, new_counter.clone())
+		// 			.await;
+		// 		metrics::IN_FLIGHT_COUNTER_COUNT.set(self.in_flight_counters.entry_count() as i64);
+		// 		new_counter
+		// 	};
+		//
+		// // Try to acquire from the counter
+		// let result = {
+		// 	let mut counter = counter_arc.lock().await;
+		// 	counter.try_acquire()
+		// };
+		//
+		// Ok(result)
 
-		// Get actor-specific middleware config
-		let middleware_config = self.get_middleware_config(&actor_id).await?;
-
-		let cache_key = (actor_id, ip_addr);
-
-		// Get existing counter or create a new one
-		let counter_arc =
-			if let Some(existing_counter) = self.in_flight_counters.get(&cache_key).await {
-				existing_counter
-			} else {
-				let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
-					middleware_config.max_in_flight.amount,
-				)));
-				self.in_flight_counters
-					.insert(cache_key, new_counter.clone())
-					.await;
-				metrics::IN_FLIGHT_COUNTER_COUNT.set(self.in_flight_counters.entry_count() as i64);
-				new_counter
-			};
-
-		// Try to acquire from the counter
-		let result = {
-			let mut counter = counter_arc.lock().await;
-			counter.try_acquire()
-		};
-
-		Ok(result)
+		Ok(true)
 	}
 
 	#[tracing::instrument(skip_all)]
 	async fn release_in_flight(&self, ip_addr: std::net::IpAddr, actor_id: &Option<Uuid>) {
-		// Skip if actor_id is None (no in-flight tracking)
-		let actor_id = match actor_id {
-			Some(id) => *id,
-			None => return, // No in-flight tracking when actor_id is None
-		};
-
-		let cache_key = (actor_id, ip_addr);
-		if let Some(counter_arc) = self.in_flight_counters.get(&cache_key).await {
-			let mut counter = counter_arc.lock().await;
-			counter.release();
-		}
+		// // Skip if actor_id is None (no in-flight tracking)
+		// let actor_id = match actor_id {
+		// 	Some(id) => *id,
+		// 	None => return, // No in-flight tracking when actor_id is None
+		// };
+		//
+		// let cache_key = (actor_id, ip_addr);
+		// if let Some(counter_arc) = self.in_flight_counters.get(&cache_key).await {
+		// 	let mut counter = counter_arc.lock().await;
+		// 	counter.release();
+		// }
 	}
 }
 
@@ -728,19 +732,20 @@ impl ProxyService {
 		let client_ip = self.remote_addr.ip();
 
 		// Apply rate limiting
-		let res = if !self.state.check_rate_limit(client_ip, &actor_id).await? {
-			Response::builder()
-				.status(StatusCode::TOO_MANY_REQUESTS)
-				.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))
-				.map_err(Into::into)
-		}
-		// Check in-flight limit
-		else if !self.state.acquire_in_flight(client_ip, &actor_id).await? {
-			Response::builder()
-				.status(StatusCode::TOO_MANY_REQUESTS)
-				.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))
-				.map_err(Into::into)
-		} else {
+		// let res = if !self.state.check_rate_limit(client_ip, &actor_id).await? {
+		// 	Response::builder()
+		// 		.status(StatusCode::TOO_MANY_REQUESTS)
+		// 		.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))
+		// 		.map_err(Into::into)
+		// }
+		// // Check in-flight limit
+		// else if !self.state.acquire_in_flight(client_ip, &actor_id).await? {
+		// 	Response::builder()
+		// 		.status(StatusCode::TOO_MANY_REQUESTS)
+		// 		.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))
+		// 		.map_err(Into::into)
+		// } else {
+		let res = {
 			// Increment metrics
 			metrics::PROXY_REQUEST_PENDING.inc();
 			metrics::PROXY_REQUEST_TOTAL.inc();

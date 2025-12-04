@@ -89,10 +89,9 @@ pub async fn pegboard_actor_list_for_env(
 						}
 					}
 				}
-			}
+			} else {
+				// Old idx with scanning
 
-			// Old idx with scanning
-			if results.len() < input.limit {
 				let actor_subspace =
 					keys::subspace().subspace(&keys::env::ActorKey::subspace(input.env_id));
 				let (start, end) = actor_subspace.range();
@@ -116,7 +115,6 @@ pub async fn pegboard_actor_list_for_env(
 					// NOTE: Does not have to be serializable because we are listing, stale data does not matter
 					SNAPSHOT,
 				);
-				let mut results = Vec::new();
 	
 				while let Some(entry) = stream.try_next().await? {
 					let actor_key = keys::subspace()
