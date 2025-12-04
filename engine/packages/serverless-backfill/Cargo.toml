@@ -1,0 +1,13 @@
+[package]
+name = "rivet-serverless-backfill"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+pegboard.workspace = true
+rivet-config.workspace = true
+rivet-types.workspace = true
+tracing.workspace = true
+universaldb.workspace = true
