@@ -32,6 +32,7 @@ rivet-guard.workspace = true
 rivet-logs.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true
+rivet-serverless-backfill.workspace = true
 rivet-service-manager.workspace = true
 rivet-telemetry.workspace = true
 rivet-term.workspace = true
