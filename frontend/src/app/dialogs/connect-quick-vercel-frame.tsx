@@ -20,10 +20,7 @@ import {
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
-import {
-	EnvVariablesStep,
-	useSelectedDatacenter,
-} from "./connect-railway-frame";
+import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
 import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 
 const { stepper } = ConnectVercelForm;
@@ -89,6 +86,8 @@ function FormStepper({
 	return (
 		<StepperForm
 			{...stepper}
+			showAllSteps
+			initialStep="deploy"
 			content={{
 				"initial-info": () => <StepInitialInfo />,
 				deploy: () => <StepDeploy />,
@@ -178,7 +177,7 @@ function StepInitialInfo() {
 			</div>
 			<div className="space-y-4">
 				<p>Set the following environment variables:</p>
-				<EnvVariablesStep />
+				<ConnectVercelForm.EnvVariables />
 			</div>
 		</>
 	);
