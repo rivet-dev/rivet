@@ -4478,6 +4478,7 @@ dependencies = [
  "rivet-pools",
  "rivet-runner-protocol",
  "rivet-runtime",
+ "rivet-serverless-backfill",
  "rivet-service-manager",
  "rivet-telemetry",
  "rivet-term",
@@ -4737,6 +4738,19 @@ dependencies = [
  "tracing-logfmt",
  "tracing-opentelemetry",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "rivet-serverless-backfill"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gasoline",
+ "pegboard",
+ "rivet-config",
+ "rivet-types",
+ "tracing",
+ "universaldb",
 ]
 
 [[package]]
