@@ -3,7 +3,6 @@ import {
 	useMutation,
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
-	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import confetti from "canvas-confetti";
@@ -20,14 +19,10 @@ import {
 	Frame,
 	getConfig,
 } from "@/components";
-import {
-	type Region,
-	useCloudNamespaceDataProvider,
-	useEngineCompatDataProvider,
-	useEngineNamespaceDataProvider,
-} from "@/components/actors";
+import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
+import { usePublishableToken } from "../env-variables";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
 const { stepper } = ConnectVercelForm;
@@ -37,24 +32,6 @@ type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 export const VERCEL_SERVERLESS_MAX_DURATION = 300;
 
 interface CreateProjectFrameContentProps extends DialogContentProps {}
-
-function usePublishableToken() {
-	const cloudProvider = useCloudNamespaceDataProvider();
-	const engineProvider = useEngineNamespaceDataProvider();
-	const cloudData = useSuspenseQuery(
-		cloudProvider.publishableTokenQueryOptions(),
-	);
-	const engineData = useSuspenseQuery(
-		engineProvider.engineAdminTokenQueryOptions(),
-	);
-
-	return match(__APP_TYPE__)
-		.with("cloud", () => cloudData.data)
-		.with("engine", () => engineData.data)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
-}
 
 const useEndpoint = () => {
 	return match(__APP_TYPE__)

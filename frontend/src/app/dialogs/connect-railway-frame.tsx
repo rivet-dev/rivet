@@ -14,20 +14,17 @@ import {
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
-	Button,
-	CopyButton,
 	type DialogContentProps,
-	DiscreteInput,
 	Frame,
-	Label,
-	Skeleton,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { engineEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
+import { EnvVariables } from "../env-variables";
 import { StepperForm } from "../forms/stepper-form";
+import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
 
 const stepper = defineStepper(
 	{
@@ -156,60 +153,6 @@ function FormStepper({
 	);
 }
 
-export function EnvVariablesStep() {
-	return (
-		<>
-			<div>
-				<div
-					className="gap-1 items-center grid grid-cols-2"
-					data-env-variables
-				>
-					<Label
-						asChild
-						className="text-muted-foreground text-xs mb-1"
-					>
-						<p>Key</p>
-					</Label>
-					<Label
-						asChild
-						className="text-muted-foreground text-xs mb-1"
-					>
-						<p>Value</p>
-					</Label>
-					<RivetEndpointEnv />
-					<RivetTokenEnv />
-					<RivetNamespaceEnv />
-					<RivetRunnerEnv />
-				</div>
-				<div className="mt-2 flex justify-end">
-					<CopyButton
-						value={() => {
-							const inputs =
-								document.querySelectorAll<HTMLInputElement>(
-									"[data-env-variables] input",
-								);
-							return Array.from(inputs)
-								.reduce((acc, input, index) => {
-									if (index % 2 === 0) {
-										acc.push(
-											`${input.value}=${inputs[index + 1]?.value}`,
-										);
-									}
-									return acc;
-								}, [] as string[])
-								.join("\n");
-						}}
-					>
-						<Button size="sm" variant="outline">
-							Copy all raw
-						</Button>
-					</CopyButton>
-				</div>
-			</div>
-		</>
-	);
-}
-
 function Step1() {
 	return (
 		<>
@@ -242,93 +185,16 @@ function Step2() {
 				Set the following environment variables in your Railway project
 				settings.
 			</p>
-			<EnvVariablesStep />
+			<EnvVariables
+				endpoint={useSelectedDatacenter()}
+				runnerName={useWatch({ name: "runnerName" })}
+			/>
 		</>
 	);
 }
 
 function Step3() {
 	return <ConnectRailwayForm.ConnectionCheck provider="railway" />;
-}
-
-function RivetRunnerEnv() {
-	const runnerName = useWatch({ name: "runnerName" });
-	if (runnerName === "default") return null;
-
-	return (
-		<>
-			<DiscreteInput
-				aria-label="environment variable key"
-				value="RIVET_RUNNER"
-				show
-			/>
-			<DiscreteInput
-				aria-label="environment variable value"
-				value={runnerName || "default"}
-				show
-			/>
-		</>
-	);
-}
-
-function RivetTokenEnv() {
-	const { data, isLoading } = useQuery(
-		useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
-	);
-	return (
-		<>
-			<DiscreteInput
-				aria-label="environment variable key"
-				value="RIVET_TOKEN"
-				show
-			/>
-			{isLoading ? (
-				<Skeleton className="w-full h-10" />
-			) : (
-				<DiscreteInput
-					aria-label="environment variable value"
-					value={(data as string) || ""}
-					show
-				/>
-			)}
-		</>
-	);
-}
-
-function RivetEndpointEnv() {
-	const url = useSelectedDatacenter();
-	return (
-		<>
-			<DiscreteInput
-				aria-label="environment variable key"
-				value="RIVET_ENDPOINT"
-				show
-			/>
-			<DiscreteInput
-				aria-label="environment variable value"
-				value={url}
-				show
-			/>
-		</>
-	);
-}
-
-function RivetNamespaceEnv() {
-	const dataProvider = useEngineCompatDataProvider();
-	return (
-		<>
-			<DiscreteInput
-				aria-label="environment variable key"
-				value="RIVET_NAMESPACE"
-				show
-			/>
-			<DiscreteInput
-				aria-label="environment variable value"
-				value={dataProvider.engineNamespace || ""}
-				show
-			/>
-		</>
-	);
 }
 
 function DeployToRailwayButton() {
@@ -354,13 +220,3 @@ function DeployToRailwayButton() {
 		</a>
 	);
 }
-
-export const useSelectedDatacenter = () => {
-	const datacenter = useWatch({ name: "datacenter" });
-
-	const { data } = useQuery(
-		useEngineCompatDataProvider().regionQueryOptions(datacenter || "auto"),
-	);
-
-	return data?.url || engineEnv().VITE_APP_API_URL;
-};

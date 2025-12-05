@@ -5,14 +5,16 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
+import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import type { DialogContentProps } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { queryClient } from "@/queries/global";
+import { EnvVariables } from "../env-variables";
 import { StepperForm } from "../forms/stepper-form";
-import { EnvVariablesStep } from "./connect-railway-frame";
+import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
 
 const stepper = defineStepper(
 	{
@@ -199,7 +201,10 @@ function Step2() {
 	return (
 		<>
 			<p>Set the following environment variables.</p>
-			<EnvVariablesStep />
+			<EnvVariables
+				endpoint={useSelectedDatacenter()}
+				runnerName={useWatch({ name: "runnerName" })}
+			/>
 		</>
 	);
 }

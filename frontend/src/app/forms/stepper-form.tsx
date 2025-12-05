@@ -6,6 +6,7 @@ import {
 	type UseFormProps,
 	type UseFormReturn,
 	useForm,
+	useFormContext,
 } from "react-hook-form";
 import type * as z from "zod";
 import { Button } from "@/components";
@@ -48,6 +49,8 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 			stepper: ReturnType<Stepperize.StepperReturn<Steps>["useStepper"]>;
 		}) => Promise<void> | void;
 		content: Record<Steps[number]["id"], () => ReactNode>;
+		showAllSteps?: boolean;
+		initialStep?: Steps[number]["id"];
 	};
 
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
@@ -63,7 +66,7 @@ export function StepperForm<const Steps extends Step[]>(
 ) {
 	const Stepper = props.Stepper;
 	return (
-		<Stepper.Provider variant="vertical">
+		<Stepper.Provider variant="vertical" initialStep={props.initialStep}>
 			<Content<Steps> {...props} />
 		</Stepper.Provider>
 	);
@@ -74,10 +77,12 @@ function Content<const Steps extends Step[]>({
 	Stepper,
 	useStepper,
 	content,
+	showAllSteps,
 	onSubmit,
+	initialStep,
 	...formProps
 }: StepperFormProps<Steps>) {
-	const stepper = useStepper();
+	const stepper = useStepper({ initialStep });
 	const form = useForm<z.infer<JoinStepSchemas<Steps>>>({
 		defaultValues,
 		resolver: zodResolver(stepper.current.schema),
@@ -103,7 +108,7 @@ function Content<const Steps extends Step[]>({
 						return form.handleSubmit(handleSubmit)(event);
 					}}
 				>
-					{stepper.all.map((step) => (
+					{stepper.all.map((step, index, steps) => (
 						<Stepper.Step
 							key={step.id}
 							className="min-w-0"
@@ -111,48 +116,82 @@ function Content<const Steps extends Step[]>({
 						>
 							<Stepper.Title>{step.title}</Stepper.Title>
 
-							{stepper.when(step.id, (step) => {
-								return (
-									<Stepper.Panel className="space-y-6">
-										{stepper.switch(content)}
-										<Stepper.Controls>
-											{step.assist ? (
-												<NeedHelpButton />
-											) : null}
-											<Button
-												type="button"
-												variant="outline"
-												onClick={() => {
-													form.reset(undefined, {
-														keepErrors: false,
-														keepValues: true,
-													});
-													stepper.prev();
-												}}
-												disabled={stepper.isFirst}
-											>
-												Previous
-											</Button>
-											<Button
-												type="submit"
-												disabled={
-													!form.formState.isValid
-												}
-												isLoading={
-													form.formState.isSubmitting
-												}
-											>
-												{step.next}
-											</Button>
-										</Stepper.Controls>
-									</Stepper.Panel>
-								);
-							})}
+							{showAllSteps ? (
+								<StepPanel<Steps>
+									key={step.id}
+									Stepper={Stepper}
+									stepper={stepper}
+									step={step}
+									content={content}
+									showPrevious={false}
+									showControls={steps.length - 1 === index}
+								/>
+							) : (
+								stepper.when(step.id, (step) => {
+									return (
+										<StepPanel<Steps>
+											Stepper={Stepper}
+											stepper={stepper}
+											step={step}
+											content={content}
+										/>
+									);
+								})
+							)}
 						</Stepper.Step>
 					))}
 				</form>
 			</FormProvider>
 		</Stepper.Navigation>
+	);
+}
+
+function StepPanel<const Steps extends Step[]>({
+	Stepper,
+	stepper,
+	step,
+	content,
+	showPrevious,
+	showControls = false,
+}: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
+	stepper: Stepperize.Stepper<Steps>;
+	step: Steps[number];
+	showControls?: boolean;
+	showPrevious?: boolean;
+}) {
+	const form = useFormContext();
+	return (
+		<Stepper.Panel className="space-y-6">
+			{stepper.match(step.id, content)}
+			{showControls ? (
+				<Stepper.Controls>
+					{step.assist ? <NeedHelpButton /> : null}
+					{showPrevious ? (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => {
+								form.reset(undefined, {
+									keepErrors: false,
+									keepValues: true,
+								});
+								stepper.prev();
+							}}
+							disabled={stepper.isFirst}
+						>
+							Previous
+						</Button>
+					) : null}
+					<Button
+						type="submit"
+						disabled={!form.formState.isValid}
+						isLoading={form.formState.isSubmitting}
+					>
+						{step.next}
+					</Button>
+				</Stepper.Controls>
+			) : null}
+		</Stepper.Panel>
 	);
 }
 

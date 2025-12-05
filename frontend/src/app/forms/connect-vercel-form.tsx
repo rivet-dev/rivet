@@ -1,8 +1,7 @@
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectManualServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	Code,
 	CodeFrame,
 	CodeGroup,
 	CodePreview,
@@ -19,6 +18,8 @@ import {
 	SelectValue,
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
+import { useSelectedDatacenter } from "../dialogs/connect-manual-serverfull-frame";
+import { EnvVariables as EnvVariablesSection } from "../env-variables";
 
 const endpointSchema = z
 	.string()
@@ -288,3 +289,13 @@ export const { useActor } = createRivetKit<typeof registry>({
 		</div>
 	);
 };
+
+export function EnvVariables() {
+	return (
+		<EnvVariablesSection
+			prefix="NEXT_PUBLIC"
+			endpoint={useSelectedDatacenter()}
+			runnerName={useWatch({ name: "runnerName" }) as string}
+		/>
+	);
+}
