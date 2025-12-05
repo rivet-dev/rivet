@@ -152,7 +152,7 @@ function StepPanel<const Steps extends Step[]>({
 	step,
 	content,
 	showPrevious,
-	showControls = false,
+	showControls = true,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
 	step: Steps[number];
