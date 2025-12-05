@@ -1,33 +1,34 @@
-# Hono Integration for RivetKit
+# Drizzle Integration
 
-Example project demonstrating Hono web framework integration with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Demonstrates Drizzle ORM integration with Rivet Actors for type-safe database operations.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/hono
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/drizzle
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-Open your browser to http://localhost:3000 to see the Hono server with RivetKit integration.
+
+## Features
+
+- **Drizzle ORM integration**: Use Drizzle for type-safe database operations within actors
+- **Automatic migrations**: Database schema migrations managed automatically
+- **Type-safe queries**: Full TypeScript type safety from schema to queries
+- **Actor-scoped database**: Each actor can have its own isolated database instance
+
+## Implementation
+
+This example demonstrates database integration with Rivet Actors using Drizzle ORM:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/drizzle/src/backend/registry.ts)): Shows how to integrate Drizzle ORM for type-safe database operations within actors
+
+## Resources
+
+Read more about [database integration](/docs/actors/database), [actions](/docs/actors/actions), and [state](/docs/actors/state).
 
 ## License
 
-Apache 2.0
+MIT

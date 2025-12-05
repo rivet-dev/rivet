@@ -252,7 +252,7 @@ export function Header({
 										active === "docs" ? "page" : undefined
 									}
 								>
-									Documentation
+									Docs
 								</TextNavItem>
 								<TextNavItem
 									href="/templates"
@@ -290,7 +290,7 @@ export function Header({
 	return (
 		<RivetHeader
 			className={cn(
-				"sticky top-0 z-50",
+				"sticky top-0 z-50 bg-neutral-950",
 				"[&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
 				// 0 padding on bottom for larger screens when subnav is showing
 				subnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
@@ -344,7 +344,7 @@ export function Header({
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}
 					>
-						Documentation
+						Docs
 					</TextNavItem>
 					<TextNavItem
 						href="/templates"
@@ -394,7 +394,7 @@ function DocsMobileNavigation({ tree }) {
 
 	const mainLinks = [
 		{ href: "/", label: "Home" },
-		{ href: "/docs", label: "Documentation" },
+		{ href: "/docs", label: "Docs" },
 		{ href: "/templates", label: "Templates" },
 		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },

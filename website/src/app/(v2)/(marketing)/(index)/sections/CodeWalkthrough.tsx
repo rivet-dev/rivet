@@ -237,7 +237,7 @@ export const CodeWalkthrough = () => {
                 <p className='text-lg leading-relaxed text-zinc-400'>{step.description}</p>
 
                 {/* Mobile Only Code Snippet */}
-                <div className='mt-6 overflow-x-auto rounded-lg border border-white/10 bg-[#0A0A0A] p-4 font-mono text-xs text-zinc-300 lg:hidden'>
+                <div className='mt-6 overflow-x-auto rounded-lg border border-white/10 bg-background p-4 font-mono text-xs text-zinc-300 lg:hidden'>
                   {step.lines.map(lineIdx => (
                     <div key={lineIdx} className='whitespace-pre'>
                       {codeLines[lineIdx]}

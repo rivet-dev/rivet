@@ -1,33 +1,34 @@
-# Hono React Integration for RivetKit
+# React Integration
 
-Example project demonstrating full-stack Hono backend with React frontend integration with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Demonstrates React frontend integration with Rivet Actors.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/hono-react
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/react
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-This will start both the Hono backend server and Vite React frontend. Open your browser to http://localhost:5173 to see the React app connected to Rivet Actors.
+
+## Features
+
+- **React frontend**: Build interactive UIs with React that connect to Rivet Actors
+- **Type-safe client**: Use `@rivetkit/react` hooks for type-safe actor communication
+- **Real-time updates**: Subscribe to actor events for live UI updates
+- **Actor state management**: Actors handle backend logic while React manages UI state
+
+## Implementation
+
+This example demonstrates React frontend integration with Rivet Actors:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/react/src/backend/registry.ts)): Backend actors with React frontend integration using type-safe hooks
+
+## Resources
+
+Read more about [React integration](/docs/platforms/react), [actions](/docs/actors/actions), [state](/docs/actors/state), and [events](/docs/actors/events).
 
 ## License
 
-Apache 2.0
+MIT

@@ -8,7 +8,7 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
-				'background': '#0A0A0A',
+				'background': '#000000',
 				'text-primary': '#FAFAFA',
 				'text-secondary': '#A0A0A0',
 				'border': '#252525',
@@ -73,7 +73,7 @@ module.exports = {
 						"--tw-prose-invert-captions": "hsl(var(--foreground))",
 						"--tw-prose-invert-code": "hsl(var(--foreground))",
 						"--tw-prose-invert-pre-code": "hsl(var(--foreground))",
-						"--tw-prose-invert-pre-bg": "rgb(0 0 0 / 50%)",
+						"--tw-prose-invert-pre-bg": "#0c0a09",
 						"--tw-prose-invert-th-borders": "hsl(var(--border))",
 						"--tw-prose-invert-td-borders": "hsl(var(--border))",
 						code: {

@@ -32,6 +32,8 @@
 		],
 		"tags": [
 			"real-time"
-		]
-	}
+		],
+		"frontendPort": 3000
+	},
+	"license": "MIT"
 }

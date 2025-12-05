@@ -32,7 +32,7 @@ export const BACKGROUND_PROPERTIES = [
 const theme = structuredClone(originalTheme) as any;
 
 const replaceColor = "#0b0e14";
-const newColor = "#0c0a09";
+const newColor = "#0a0a0a";
 
 for (const key in theme.colors) {
 	if (theme.colors[key] === replaceColor) {

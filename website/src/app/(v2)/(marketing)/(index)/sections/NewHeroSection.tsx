@@ -19,7 +19,7 @@ const StyleInjector = () => (
       bottom: 0;
       width: 100%;
       height: 100%;
-      background-color: #0a0a0a;
+      background-color: #000000;
       background-image:
         linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);

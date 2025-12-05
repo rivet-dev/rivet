@@ -1,55 +1,35 @@
-# Raw WebSocket Handler Proxy for RivetKit
+# Raw WebSocket Handler Proxy
 
-Example project demonstrating raw WebSocket handling with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Demonstrates raw WebSocket handling using a proxy endpoint pattern for routing connections to actors.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js 18 or later
-- pnpm (for monorepo management)
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/raw-websocket-handler-proxy
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/raw-websocket-handler-proxy
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-This starts both the backend server (on port 9000) and the frontend development server (on port 5173).
-
-Open http://localhost:5173 in your browser to see the chat application demo.
-
-### Testing
-
-```sh
-npm test
-```
 
 ## Features
 
-This example demonstrates:
+- **Raw WebSocket handlers**: Use `onWebSocket` for low-level WebSocket control and custom protocols
+- **Proxy endpoint pattern**: Route WebSocket connections through a proxy endpoint to actors
+- **Connection management**: Track WebSocket connections with state and broadcasting
+- **Real-time chat**: Message broadcasting with user presence and chat history
+- **Persistent state**: Messages and user data automatically saved in actor state
 
-- Creating actors with raw WebSocket handlers using `onWebsocket`
-- Managing WebSocket connections and broadcasting messages
-- Maintaining actor state across connections
-- Supporting multiple connection methods (direct actor connection vs proxy endpoint)
-- Real-time chat functionality with user presence
-- Message persistence and history limits
-- User name changes
-- Comprehensive test coverage
+## Implementation
+
+This example demonstrates routing WebSocket connections through a proxy:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/raw-websocket-handler-proxy/src/backend/registry.ts)): Uses proxy endpoint pattern to route WebSocket connections to actors
+
+## Resources
+
+Read more about [WebSockets](/docs/actors/websockets), [state](/docs/actors/state), and [events](/docs/actors/events).
 
 ## License
 
-Apache 2.0
+MIT
