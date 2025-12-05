@@ -1,0 +1,76 @@
+export const author = "nathan-flurry"
+export const published = "2025-12-05"
+export const category = "changelog"
+export const keywords = ["inspector", "devtools", "debugging", "actors", "local-development", "visualization"]
+
+# Introducing the New Local Inspector
+
+**Debug, visualize, and interact with your Actors in real-time. The new Rivet Inspector is built with new features and improvements to improve developer velocity.**
+
+Building stateful backends has always had one major friction point: observability. Unlike stateless functions where a request comes in and goes out, Actors maintain memory, handle persistent connections, and evolve over time. `console.log` doesn't cut it when you need to understand the lifecycle of a long-running process.
+
+Today, we are launching the inspector button for the **Rivet Local Inspector**. It’s a dedicated DevTool that runs alongside your Rivetkit project, giving you X-ray vision into your application's state.
+
+## The Problem: State is a Black Box
+
+When developing with Rivet Actors, your data lives in memory. This provides incredible performance, but it also means you can't just query a database to see "what happened." You need to know:
+
+- What is the exact state of this Actor *right now*?
+- Who is connected via WebSocket?
+- Why did that state transition happen?
+
+Previously, answering these questions required writing custom debug actions or sifting through verbose logs.
+
+## The Solution: A Visual DevTool for Your Backend
+
+The new Local Inspector treats your backend like a frontend. It connects directly to your local Rivet runtime and visualizes the topology of your Actors.
+
+### 1. Live State Editing
+
+You can now view and **mutate** your Actor's state directly from the UI. Need to test how your game logic handles a specific edge case? Just edit the JSON state, and the Actor updates instantly—no restart required.
+
+### 2. Event Timeline & Time Travel
+
+Debugging race conditions is now trivial. The Event Timeline records every Action, Event, and State Change. You can scrub through history to see exactly how an Actor arrived at its current state.
+
+- **Filter by Source:** Isolate events from specific user IDs or connection types.
+- **Diff View:** See exactly which properties changed between ticks.
+
+### 3. Integrated REPL
+
+The Inspector now includes a context-aware REPL. You can invoke Actions directly from the browser without needing to curl an endpoint or trigger a client-side event.
+
+```typescript
+// Call actions directly from the Inspector console
+> chatRoom.connect("user_123")
+> chatRoom.call("sendMessage", { text: "Hello from Inspector!" })
+< Action dispatched: "sendMessage"
+< State updated: messages.length is now 42
+```
+
+### 4. Connection Topology
+
+Visualize your WebSocket connections in real-time. See which clients are connected to which Actors, monitor latency, and force-disconnect clients to test reconnection logic.
+
+## Zero-Config Setup
+
+The best part? If you are running the latest version of `rivetkit`, you already have it. The Inspector automatically detects your local dev server.
+
+Just start your project:
+
+```bash
+npx rivet dev
+```
+
+And open the dashboard:
+
+`http://localhost:6420/_inspector`
+
+## Available Now
+
+The new Local Inspector is available in **Rivet v2.1.0**.
+
+- **Get Started:** Update your packages via `npm install rivetkit@latest`.
+- **Documentation:** Read the full [Inspector Documentation](https://rivet.dev/docs/inspector).
+- **Feedback:** Join us on [Discord](https://discord.gg/rivet) to share your thoughts.
+
