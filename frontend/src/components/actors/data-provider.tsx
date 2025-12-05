@@ -118,6 +118,5 @@ export const useEngineCompatDataProvider = () => {
 
 	return useRouteContext({
 		from: routePath,
-		strict: false,
 	}).dataProvider;
 };

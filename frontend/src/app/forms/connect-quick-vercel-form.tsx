@@ -1,8 +1,7 @@
-import { useFormContext } from "react-hook-form";
 import z from "zod";
-import * as ConnectManualServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { defineStepper } from "@/components/ui/stepper";
+import { useSelectedDatacenter } from "../dialogs/connect-manual-serverfull-frame";
 
 const endpointSchema = z
 	.string()
@@ -60,3 +59,5 @@ export const Headers = ConnectVercelForm.Headers;
 export const Endpoint = ConnectVercelForm.Endpoint;
 
 export const ConnectionCheck = ConnectVercelForm.ConnectionCheck;
+
+export const EnvVariables = ConnectVercelForm.EnvVariables;
