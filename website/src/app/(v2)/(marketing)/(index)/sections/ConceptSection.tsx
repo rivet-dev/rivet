@@ -178,34 +178,49 @@ const ArchitectureComparison = () => {
 export const ConceptSection = () => (
   <section id='actors' className='border-y border-white/5 bg-zinc-900/10 py-32'>
     <div className='mx-auto max-w-7xl px-6'>
-      <div className='flex flex-col gap-16 md:flex-row'>
+      <div className='flex flex-col gap-16'>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className='flex-1'
         >
           <h2 className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'>
             Think in Actors,
             <br />
             not just Functions.
           </h2>
-          <p className='mb-6 text-lg leading-relaxed text-zinc-400'>
+        </motion.div>
+
+        <div className='grid grid-cols-1 gap-8 md:grid-cols-2'>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className='text-lg leading-relaxed text-zinc-400'
+          >
             <strong className='text-white'>What is an Actor?</strong>
             <br />
-            An Actor is a tiny, isolated server that holds its own data in memory. Unlike a stateless function
-            that forgets everything after it runs, an Actor remembers.
-          </p>
-          <p className='text-lg leading-relaxed text-zinc-400'>
+            An Actor is a tiny, isolated server that holds its own data in memory. Unlike a stateless function that
+            forgets everything after it runs, an Actor remembers.
+          </motion.p>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className='text-lg leading-relaxed text-zinc-400'
+          >
             <strong className='text-white'>Why use them?</strong>
             <br />
-            When you need to manage state — like a chat room, user session, or multiplayer document — fetching
-            that data frequently from a database is slow and expensive. Actors combine state and compute,
-            keeping your data in memory in the same place as your application code.
-          </p>
-        </motion.div>
-        <div className='flex-1'>
+            When you need to manage state — like a chat room, user session, or multiplayer document — fetching that data
+            frequently from a database is slow and expensive. Actors combine state and compute, keeping your data in
+            memory in the same place as your application code.
+          </motion.p>
+        </div>
+
+        <div className='w-full'>
           <ArchitectureComparison />
         </div>
       </div>
