@@ -1,6 +1,6 @@
-# Next.js for RivetKit
+# quickstart-cross-actor-actions
 
-Example Next.js project demonstrating basic actor state management and real-time updates with [RivetKit](https://rivetkit.org).
+Example project for quickstart-cross-actor-actions
 
 [Learn More →](https://github.com/rivet-dev/rivetkit)
 
@@ -10,13 +10,13 @@ Example Next.js project demonstrating basic actor state management and real-time
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js
 
 ### Installation
 
 ```sh
 git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/next-js
+cd rivetkit/examples/quickstart-cross-actor-actions
 npm install
 ```
 
@@ -25,8 +25,6 @@ npm install
 ```sh
 npm run dev
 ```
-
-Open your browser to `http://localhost:3000`.
 
 ## License
 

@@ -1,6 +1,7 @@
 import type { Template } from "@/data/templates/shared";
 import { TECHNOLOGIES } from "@/data/templates/shared";
 import Link from "next/link";
+import Image from "next/image";
 import clsx from "clsx";
 
 interface TemplateCardProps {
@@ -16,21 +17,15 @@ export function TemplateCard({ template }: TemplateCardProps) {
 					"group-hover:border-[white]/40 cursor-pointer",
 				)}
 			>
-				{/* Placeholder Image */}
-				<div className="w-full h-48 bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center text-zinc-600">
-					<svg
-						className="w-16 h-16"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={1.5}
-							d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-						/>
-					</svg>
+				{/* Template Image - 16:9 aspect ratio matches screenshots (see frontend/packages/example-registry/scripts/build/screenshots.ts) */}
+				<div className="w-full aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 relative overflow-hidden">
+					<Image
+						src={`/examples/${template.name}/image.png`}
+						alt={template.displayName}
+						fill
+						className="object-cover"
+						sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+					/>
 				</div>
 
 				{/* Content */}
