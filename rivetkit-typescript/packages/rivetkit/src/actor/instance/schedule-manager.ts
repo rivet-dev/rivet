@@ -260,36 +260,13 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					action: event.action,
 				});
 
-				// Look up the action function
-				const fn = this.#config.actions[event.action];
-
-				if (!fn) {
-					throw new Error(
-						`Missing action for scheduled event: ${event.action}`,
-					);
-				}
-
-				if (typeof fn !== "function") {
-					throw new Error(
-						`Scheduled event action ${event.action} is not a function (got ${typeof fn})`,
-					);
-				}
-
-				// Decode arguments and execute
+				// Decode arguments
 				const args = event.args
 					? cbor.decode(new Uint8Array(event.args))
 					: [];
 
-				const result = fn.call(
-					undefined,
-					this.#actor.actorContext,
-					...args,
-				);
-
-				// Handle async actions
-				if (result instanceof Promise) {
-					await result;
-				}
+				// Execute through actor with proper concurrency handling
+				await this.#actor.executeScheduledAction(event.action, args);
 
 				this.#actor.log.debug({
 					msg: "scheduled event completed",

@@ -15,7 +15,7 @@ import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { EXTRA_ERROR_LOG } from "@/utils";
-import type { ActorConfig, InitContext } from "../config";
+import { type ActorConfig, type InitContext } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -45,6 +45,7 @@ import {
 	deadline,
 	generateSecureToken,
 } from "../utils";
+import { ConcurrencyManager } from "./concurrency-manager";
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./kv";
@@ -136,6 +137,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
+
+	// MARK: - Concurrency Manager
+	#concurrencyManager!: ConcurrencyManager<S, CP, CS, V, I, DB>;
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
@@ -284,6 +288,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return this.#config;
 	}
 
+	get concurrencyManager(): ConcurrencyManager<S, CP, CS, V, I, DB> {
+		return this.#concurrencyManager;
+	}
+
 	// MARK: - State Access
 	get persist(): PersistedActor<S, I> {
 		return this.stateManager.persist;
@@ -343,6 +351,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.connectionManager = new ConnectionManager(this);
 		this.stateManager = new StateManager(this, actorDriver, this.#config);
 		this.eventManager = new EventManager(this);
+		this.#concurrencyManager = new ConcurrencyManager(this, this.#config);
 		this.#scheduleManager = new ScheduleManager(
 			this,
 			actorDriver,
@@ -583,87 +592,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: - Action Execution
+
 	async executeAction(
 		ctx: ActionContext<S, CP, CS, V, I, DB>,
 		actionName: string,
 		args: unknown[],
 	): Promise<unknown> {
-		this.assertReady();
-
-		if (!(actionName in this.#config.actions)) {
-			this.#rLog.warn({ msg: "action does not exist", actionName });
-			throw new errors.ActionNotFound(actionName);
-		}
-
-		const actionFunction = this.#config.actions[actionName];
-		if (typeof actionFunction !== "function") {
-			this.#rLog.warn({
-				msg: "action is not a function",
-				actionName,
-				type: typeof actionFunction,
-			});
-			throw new errors.ActionNotFound(actionName);
-		}
-
-		try {
-			this.#rLog.debug({
-				msg: "executing action",
-				actionName,
-				args,
-			});
-
-			const outputOrPromise = actionFunction.call(
-				undefined,
-				ctx,
-				...args,
-			);
-
-			let output: unknown;
-			if (outputOrPromise instanceof Promise) {
-				output = await deadline(
-					outputOrPromise,
-					this.#config.options.actionTimeout,
-				);
-			} else {
-				output = outputOrPromise;
-			}
-
-			// Process through onBeforeActionResponse if configured
-			if (this.#config.onBeforeActionResponse) {
-				try {
-					const processedOutput = this.#config.onBeforeActionResponse(
-						this.actorContext,
-						actionName,
-						args,
-						output,
-					);
-					if (processedOutput instanceof Promise) {
-						output = await processedOutput;
-					} else {
-						output = processedOutput;
-					}
-				} catch (error) {
-					this.#rLog.error({
-						msg: "error in `onBeforeActionResponse`",
-						error: stringifyError(error),
-					});
-				}
-			}
-
-			return output;
-		} catch (error) {
-			if (error instanceof DeadlineError) {
-				throw new errors.ActionTimedOut();
-			}
-			this.#rLog.error({
-				msg: "action error",
-				actionName,
-				error: stringifyError(error),
-			});
-			throw error;
-		} finally {
-			this.stateManager.savePersistThrottled();
-		}
+		return this.#concurrencyManager.executeAction(ctx, actionName, args);
 	}
 
 	// MARK: - HTTP/WebSocket Handlers
@@ -678,8 +613,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		try {
-			const ctx = new RequestContext(this, conn, request);
-			const response = await this.#config.onRequest(ctx, request);
+			const response = await this.#concurrencyManager.executeHookWithReturn(
+				this.#config.onRequest,
+				(handler) => {
+					const ctx = new RequestContext(this, conn, request);
+					return handler(ctx, request);
+				},
+			);
 			if (!response) {
 				throw new errors.InvalidRequestHandlerResponse();
 			}
@@ -712,20 +652,24 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			// Reset sleep timer when handling WebSocket
 			this.resetSleepTimer();
 
-			// Handle WebSocket
-			const ctx = new WebSocketContext(this, conn, request);
-
-			// NOTE: This is async and will run in the background
-			const voidOrPromise = this.#config.onWebSocket(ctx, websocket);
-
-			// Save changes from the WebSocket open
-			if (voidOrPromise instanceof Promise) {
-				voidOrPromise.then(() => {
+			// NOTE: This is async and will run in the background with concurrency handling
+			this.#concurrencyManager
+				.executeHook(
+					this.#config.onWebSocket,
+					(handler) => {
+						const ctx = new WebSocketContext(this, conn, request);
+						return handler(ctx, websocket);
+					},
+				)
+				.then(() => {
 					this.stateManager.savePersistThrottled();
+				})
+				.catch((error) => {
+					this.#rLog.error({
+						msg: "onWebSocket async error",
+						error: stringifyError(error),
+					});
 				});
-			} else {
-				this.stateManager.savePersistThrottled();
-			}
 		} catch (error) {
 			this.#rLog.error({
 				msg: "onWebSocket error",
@@ -742,6 +686,32 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		args: unknown[],
 	): Promise<void> {
 		await this.#scheduleManager.scheduleEvent(timestamp, action, args);
+	}
+
+	/**
+	 * Executes a scheduled action with proper concurrency handling.
+	 * This is called by the ScheduleManager for scheduled events.
+	 * @internal
+	 */
+	async executeScheduledAction(
+		actionName: string,
+		args: unknown[],
+	): Promise<unknown> {
+		return this.#concurrencyManager.executeScheduledAction(
+			async () => {
+				// Create a temporary internal connection for the scheduled action
+				return this.connectionManager.prepareAndConnectConn(
+					createHttpDriver(),
+					// Scheduled actions don't have connection params
+					undefined as unknown as CP,
+					undefined,
+					undefined,
+					undefined,
+				);
+			},
+			actionName,
+			args,
+		);
 	}
 
 	async onAlarm() {
@@ -825,9 +795,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		await this.stateManager.initializeState(persistData);
 
 		// Call onCreate lifecycle
-		if (this.#config.onCreate) {
-			await this.#config.onCreate(this.actorContext, persistData.input!);
-		}
+		await this.#concurrencyManager.executeHook(
+			this.#config.onCreate,
+			(handler) => handler(this.actorContext, persistData.input!),
+		);
 	}
 
 	async #restoreExistingActor(persistData: PersistedActor<S, I>) {
@@ -915,57 +886,56 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #callOnStart() {
 		this.#rLog.info({ msg: "actor starting" });
-		if (this.#config.onWake) {
-			const result = this.#config.onWake(this.actorContext);
-			if (result instanceof Promise) {
-				await result;
-			}
-		}
+		await this.#concurrencyManager.executeHook(
+			this.#config.onWake,
+			(handler) => handler(this.actorContext),
+		);
 	}
 
 	async #callOnSleep() {
-		if (this.#config.onSleep) {
-			try {
-				this.#rLog.debug({ msg: "calling onSleep" });
-				const result = this.#config.onSleep(this.actorContext);
-				if (result instanceof Promise) {
-					await deadline(result, this.#config.options.onSleepTimeout);
-				}
-				this.#rLog.debug({ msg: "onSleep completed" });
-			} catch (error) {
-				if (error instanceof DeadlineError) {
-					this.#rLog.error({ msg: "onSleep timed out" });
-				} else {
-					this.#rLog.error({
-						msg: "error in onSleep",
-						error: stringifyError(error),
-					});
-				}
+		try {
+			this.#rLog.debug({ msg: "calling onSleep" });
+			await this.#concurrencyManager.executeHook(
+				this.#config.onSleep,
+				(handler) =>
+					deadline(
+						Promise.resolve(handler(this.actorContext)),
+						this.#config.options.onSleepTimeout,
+					),
+			);
+			this.#rLog.debug({ msg: "onSleep completed" });
+		} catch (error) {
+			if (error instanceof DeadlineError) {
+				this.#rLog.error({ msg: "onSleep timed out" });
+			} else {
+				this.#rLog.error({
+					msg: "error in onSleep",
+					error: stringifyError(error),
+				});
 			}
 		}
 	}
 
 	async #callOnDestroy() {
-		if (this.#config.onDestroy) {
-			try {
-				this.#rLog.debug({ msg: "calling onDestroy" });
-				const result = this.#config.onDestroy(this.actorContext);
-				if (result instanceof Promise) {
-					await deadline(
-						result,
+		try {
+			this.#rLog.debug({ msg: "calling onDestroy" });
+			await this.#concurrencyManager.executeHook(
+				this.#config.onDestroy,
+				(handler) =>
+					deadline(
+						Promise.resolve(handler(this.actorContext)),
 						this.#config.options.onDestroyTimeout,
-					);
-				}
-				this.#rLog.debug({ msg: "onDestroy completed" });
-			} catch (error) {
-				if (error instanceof DeadlineError) {
-					this.#rLog.error({ msg: "onDestroy timed out" });
-				} else {
-					this.#rLog.error({
-						msg: "error in onDestroy",
-						error: stringifyError(error),
-					});
-				}
+					),
+			);
+			this.#rLog.debug({ msg: "onDestroy completed" });
+		} catch (error) {
+			if (error instanceof DeadlineError) {
+				this.#rLog.error({ msg: "onDestroy timed out" });
+			} else {
+				this.#rLog.error({
+					msg: "error in onDestroy",
+					error: stringifyError(error),
+				});
 			}
 		}
 	}

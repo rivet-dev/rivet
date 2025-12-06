@@ -111,10 +111,13 @@ export class ConnectionManager<
 		}
 
 		// Create new connection
-		if (this.#actor.config.onBeforeConnect) {
-			const ctx = new OnBeforeConnectContext(this.#actor, request);
-			await this.#actor.config.onBeforeConnect(ctx, params);
-		}
+		await this.#actor.concurrencyManager.executeHook(
+			this.#actor.config.onBeforeConnect,
+			(handler) => {
+				const ctx = new OnBeforeConnectContext(this.#actor, request);
+				return handler(ctx, params);
+			},
+		);
 
 		// Create connection state if enabled
 		let connState: CS | undefined;
@@ -294,28 +297,18 @@ export class ConnectionManager<
 
 		this.#actor.inspector.emitter.emit("connectionUpdated");
 
-		// Trigger disconnect
-		if (this.#actor.config.onDisconnect) {
-			try {
-				const result = this.#actor.config.onDisconnect(
-					this.#actor.actorContext,
-					conn,
-				);
-				if (result instanceof Promise) {
-					result.catch((error) => {
-						this.#actor.rLog.error({
-							msg: "error in `onDisconnect`",
-							error: stringifyError(error),
-						});
-					});
-				}
-			} catch (error) {
+		// Trigger disconnect with concurrency handling (runs in background)
+		this.#actor.concurrencyManager
+			.executeHook(
+				this.#actor.config.onDisconnect,
+				(handler) => handler(this.#actor.actorContext, conn),
+			)
+			.catch((error) => {
 				this.#actor.rLog.error({
 					msg: "error in `onDisconnect`",
 					error: stringifyError(error),
 				});
-			}
-		}
+			});
 
 		// Remove from connsWithPersistChanged after onDisconnect to handle any
 		// state changes made during the disconnect callback. Disconnected connections
@@ -437,29 +430,24 @@ export class ConnectionManager<
 	}
 
 	#callOnConnect(conn: Conn<S, CP, CS, V, I, DB>) {
-		if (this.#actor.config.onConnect) {
-			try {
-				const ctx = new OnConnectContext(this.#actor, conn);
-				const result = this.#actor.config.onConnect(ctx, conn);
-				if (result instanceof Promise) {
-					deadline(
-						result,
+		// Run in background with concurrency handling
+		this.#actor.concurrencyManager
+			.executeHook(
+				this.#actor.config.onConnect,
+				(handler) => {
+					const ctx = new OnConnectContext(this.#actor, conn);
+					return deadline(
+						Promise.resolve(handler(ctx, conn)),
 						this.#actor.config.options.onConnectTimeout,
-					).catch((error) => {
-						this.#actor.rLog.error({
-							msg: "error in `onConnect`, closing socket",
-							error,
-						});
-						conn?.disconnect("`onConnect` failed");
-					});
-				}
-			} catch (error) {
+					);
+				},
+			)
+			.catch((error) => {
 				this.#actor.rLog.error({
-					msg: "error in `onConnect`",
+					msg: "error in `onConnect`, closing socket",
 					error: stringifyError(error),
 				});
 				conn?.disconnect("`onConnect` failed");
-			}
-		}
+			});
 	}
 }

@@ -19,6 +19,103 @@ export type InitContext = ActorContext<
 	undefined
 >;
 
+// MARK: - Concurrency Types
+
+/**
+ * Concurrency mode for actions and hooks.
+ *
+ * - `serial`: Waits for all serial & parallel operations to complete before executing.
+ *             Blocks other serial & parallel operations from running while executing.
+ * - `parallel`: Waits for all serial operations to complete before executing.
+ *               Can run concurrently with other parallel operations.
+ * - `readonly`: Does not wait for or block any other operations. Can always run immediately.
+ *
+ * @default "serial"
+ */
+export type Concurrency = "serial" | "parallel" | "readonly";
+
+/**
+ * Base options for concurrency control.
+ */
+export interface ConcurrencyOptions {
+	/**
+	 * Concurrency mode for this operation.
+	 *
+	 * - `serial`: Waits for all serial & parallel operations to complete before executing.
+	 *             Blocks other serial & parallel operations from running while executing.
+	 * - `parallel`: Waits for all serial operations to complete before executing.
+	 *               Can run concurrently with other parallel operations.
+	 * - `readonly`: Does not wait for or block any other operations. Can always run immediately.
+	 *
+	 * @default "serial"
+	 */
+	concurrency?: Concurrency;
+}
+
+/**
+ * Configuration options for an individual action.
+ */
+export interface ActionOptions extends ConcurrencyOptions {
+	/**
+	 * Custom timeout for this action in milliseconds.
+	 * Overrides the default actionTimeout from actor options.
+	 */
+	timeout?: number;
+}
+
+/**
+ * Configuration options for a hook.
+ */
+export type HookOptions = ConcurrencyOptions;
+
+// MARK: - Wrapped Definition Types
+
+/**
+ * Symbol used to identify wrapped definitions (actions and hooks).
+ */
+export const WRAPPED_DEFINITION_SYMBOL = Symbol.for("rivet.wrappedDefinition");
+
+/**
+ * A wrapped definition containing the handler and options.
+ * Used for both actions and hooks.
+ */
+export interface WrappedDefinition<
+	THandler extends (...args: any[]) => any,
+	TOptions,
+> {
+	[WRAPPED_DEFINITION_SYMBOL]: true;
+	handler: THandler;
+	options: TOptions;
+}
+
+/**
+ * Type guard to check if a value is a WrappedDefinition.
+ */
+export function isWrappedDefinition<
+	THandler extends (...args: any[]) => any,
+	TOptions,
+>(
+	value: THandler | WrappedDefinition<THandler, TOptions> | undefined,
+): value is WrappedDefinition<THandler, TOptions> {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		WRAPPED_DEFINITION_SYMBOL in value
+	);
+}
+
+/**
+ * A wrapped action definition containing the handler and options.
+ */
+export type ActionDefinition<THandler extends (...args: any[]) => any> =
+	WrappedDefinition<THandler, ActionOptions>;
+
+/**
+ * A wrapped hook definition containing the handler and options.
+ */
+export type HookDefinition<THandler extends (...args: any[]) => any> =
+	WrappedDefinition<THandler, HookOptions>;
+
 export interface ActorTypes<
 	TState,
 	TConnParams,
@@ -36,8 +133,40 @@ export interface ActorTypes<
 }
 
 // Helper for validating function types - accepts generic for specific function signatures
-const zFunction = <T extends (...args: any[]) => any = (...args: unknown[]) => unknown>() =>
-	z.custom<T>((val) => typeof val === "function");
+const zFunction = <
+	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,
+>() => z.custom<T>((val) => typeof val === "function");
+
+// Schema for hook options (concurrency only)
+const HookOptionsSchema = z.object({
+	concurrency: z.enum(["serial", "parallel", "readonly"]).optional(),
+});
+
+// Schema for a hook that can be either a function or a wrapped definition
+const hookSchema = z
+	.union([
+		zFunction(),
+		z.object({
+			handler: zFunction(),
+			options: HookOptionsSchema,
+		}),
+	])
+	.optional();
+
+// Schema for action options (concurrency + timeout)
+const ActionOptionsSchema = z.object({
+	timeout: z.number().positive().optional(),
+	concurrency: z.enum(["serial", "parallel", "readonly"]).optional(),
+});
+
+// Schema for an action that can be either a function or a wrapped definition
+const ActionSchema = z.union([
+	zFunction(),
+	z.object({
+		handler: zFunction(),
+		options: ActionOptionsSchema,
+	}),
+]);
 
 // This schema is used to validate the input at runtime. The generic types are defined below in `ActorConfig`.
 //
@@ -46,18 +175,18 @@ const zFunction = <T extends (...args: any[]) => any = (...args: unknown[]) => u
 // (b) it makes the type definitions incredibly difficult to read as opposed to vanilla TypeScript.
 export const ActorConfigSchema = z
 	.object({
-		onCreate: zFunction().optional(),
-		onDestroy: zFunction().optional(),
-		onWake: zFunction().optional(),
-		onSleep: zFunction().optional(),
-		onStateChange: zFunction().optional(),
-		onBeforeConnect: zFunction().optional(),
-		onConnect: zFunction().optional(),
-		onDisconnect: zFunction().optional(),
-		onBeforeActionResponse: zFunction().optional(),
-		onRequest: zFunction().optional(),
-		onWebSocket: zFunction().optional(),
-		actions: z.record(z.string(), zFunction()).default(() => ({})),
+		onCreate: hookSchema,
+		onDestroy: hookSchema,
+		onWake: hookSchema,
+		onSleep: hookSchema,
+		onStateChange: hookSchema,
+		onBeforeConnect: hookSchema,
+		onConnect: hookSchema,
+		onDisconnect: hookSchema,
+		onBeforeActionResponse: hookSchema,
+		onRequest: hookSchema,
+		onWebSocket: hookSchema,
+		actions: z.record(z.string(), ActionSchema).default(() => ({})),
 		state: z.any().optional(),
 		createState: zFunction().optional(),
 		connState: z.any().optional(),
@@ -186,6 +315,44 @@ type CreateVars<TState, TConnParams, TConnState, TVars, TInput, TDatabase> =
 	  }
 	| Record<never, never>;
 
+/**
+ * Type for an action handler function.
+ */
+export type ActionHandler<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+> = (
+	c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	...args: any[]
+) => any;
+
+/**
+ * Type for an action entry - either a raw handler function or a wrapped ActionDefinition.
+ */
+export type ActionEntry<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+> =
+	| ActionHandler<TState, TConnParams, TConnState, TVars, TInput, TDatabase>
+	| ActionDefinition<
+			ActionHandler<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>
+	  >;
+
 export interface Actions<
 	TState,
 	TConnParams,
@@ -194,18 +361,22 @@ export interface Actions<
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
 > {
-	[Action: string]: (
-		c: ActionContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		...args: any[]
-	) => any;
+	[Action: string]: ActionEntry<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase
+	>;
 }
+
+/**
+ * Type for a hook entry - either a raw handler function or a wrapped HookDefinition.
+ */
+export type HookEntry<THandler extends (...args: any[]) => any> =
+	| THandler
+	| HookDefinition<THandler>;
 
 //export type ActorConfig<TState, TConnParams, TConnState, TVars, TInput, TAuthData> = BaseActorConfig<TState, TConnParams, TConnState, TVars, TInput, TAuthData> &
 //	ActorConfigLifecycle<TState, TConnParams, TConnState, TVars, TInput, TAuthData> &
@@ -239,31 +410,35 @@ interface BaseActorConfig<
 	 * Use this hook to initialize your actor's state.
 	 * This is called before any other lifecycle hooks.
 	 */
-	onCreate?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		input: TInput,
-	) => void | Promise<void>;
+	onCreate?: HookEntry<
+		(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			input: TInput,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called when the actor is destroyed.
 	 */
-	onDestroy?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	) => void | Promise<void>;
+	onDestroy?: HookEntry<
+		(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called when the actor is started and ready to receive connections and action.
@@ -273,16 +448,18 @@ interface BaseActorConfig<
 	 *
 	 * @returns Void or a Promise that resolves when startup is complete
 	 */
-	onWake?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	) => void | Promise<void>;
+	onWake?: HookEntry<
+		(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called when the actor is stopping or sleeping.
@@ -294,16 +471,18 @@ interface BaseActorConfig<
 	 *
 	 * @returns Void or a Promise that resolves when shutdown is complete
 	 */
-	onSleep?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	) => void | Promise<void>;
+	onSleep?: HookEntry<
+		(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called when the actor's state changes.
@@ -316,17 +495,19 @@ interface BaseActorConfig<
 	 *
 	 * @param newState The updated state
 	 */
-	onStateChange?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		newState: TState,
-	) => void;
+	onStateChange?: HookEntry<
+		(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			newState: TState,
+		) => void
+	>;
 
 	/**
 	 * Called before a client connects to the actor.
@@ -338,10 +519,12 @@ interface BaseActorConfig<
 	 * @returns The initial connection state or a Promise that resolves to it
 	 * @throws Throw an error to reject the connection
 	 */
-	onBeforeConnect?: (
-		c: OnBeforeConnectContext<TState, TVars, TInput, TDatabase>,
-		params: TConnParams,
-	) => void | Promise<void>;
+	onBeforeConnect?: HookEntry<
+		(
+			c: OnBeforeConnectContext<TState, TVars, TInput, TDatabase>,
+			params: TConnParams,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called when a client successfully connects to the actor.
@@ -352,17 +535,26 @@ interface BaseActorConfig<
 	 * @param conn The connection object
 	 * @returns Void or a Promise that resolves when connection handling is complete
 	 */
-	onConnect?: (
-		c: OnConnectContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-	) => void | Promise<void>;
+	onConnect?: HookEntry<
+		(
+			c: OnConnectContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			conn: Conn<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called when a client disconnects from the actor.
@@ -373,17 +565,26 @@ interface BaseActorConfig<
 	 * @param conn The connection that is being closed
 	 * @returns Void or a Promise that resolves when disconnect handling is complete
 	 */
-	onDisconnect?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-	) => void | Promise<void>;
+	onDisconnect?: HookEntry<
+		(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			conn: Conn<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+		) => void | Promise<void>
+	>;
 
 	/**
 	 * Called before sending an action response to the client.
@@ -397,19 +598,21 @@ interface BaseActorConfig<
 	 * @param output The output that will be sent to the client
 	 * @returns The modified output to send to the client
 	 */
-	onBeforeActionResponse?: <Out>(
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		name: string,
-		args: unknown[],
-		output: Out,
-	) => Out | Promise<Out>;
+	onBeforeActionResponse?: HookEntry<
+		<Out>(
+			c: ActorContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			name: string,
+			args: unknown[],
+			output: Out,
+		) => Out | Promise<Out>
+	>;
 
 	/**
 	 * Called when a raw HTTP request is made to the actor.
@@ -422,17 +625,19 @@ interface BaseActorConfig<
 	 * @param opts Additional options
 	 * @returns A Response object to send back, or void to continue with default routing
 	 */
-	onRequest?: (
-		c: RequestContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		request: Request,
-	) => Response | Promise<Response>;
+	onRequest?: HookEntry<
+		(
+			c: RequestContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			request: Request,
+		) => Response | Promise<Response>
+	>;
 
 	/**
 	 * Called when a raw WebSocket connection is established to the actor.
@@ -444,17 +649,19 @@ interface BaseActorConfig<
 	 * @param websocket The raw WebSocket connection
 	 * @param opts Additional options including the original HTTP upgrade request
 	 */
-	onWebSocket?: (
-		c: WebSocketContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		websocket: UniversalWebSocket,
-	) => void | Promise<void>;
+	onWebSocket?: HookEntry<
+		(
+			c: WebSocketContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase
+			>,
+			websocket: UniversalWebSocket,
+		) => void | Promise<void>
+	>;
 
 	actions: TActions;
 }
@@ -573,6 +780,59 @@ export type ActorConfigInput<
 	CreateConnState<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
 	CreateVars<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
 	ActorDatabaseConfig<TDatabase>;
+
+/**
+ * Wraps an action handler with configuration options.
+ *
+ * @example
+ * ```ts
+ * actor({
+ *   actions: {
+ *     foo: action((c, arg1: number) => { ... }, { timeout: 30000 })
+ *   }
+ * })
+ * ```
+ *
+ * @param handler The action handler function
+ * @param options Configuration options for this action
+ * @returns An ActionDefinition that can be used in the actions object
+ */
+export function action<THandler extends (...args: any[]) => any>(
+	handler: THandler,
+	options: ActionOptions = {},
+): ActionDefinition<THandler> {
+	return {
+		[WRAPPED_DEFINITION_SYMBOL]: true,
+		handler,
+		options,
+	};
+}
+
+/**
+ * Wraps a hook handler with configuration options.
+ *
+ * @example
+ * ```ts
+ * actor({
+ *   onCreate: handler((c, input) => { ... }, { concurrency: "serial" }),
+ *   onConnect: handler((c, conn) => { ... }, { concurrency: "parallel" }),
+ * })
+ * ```
+ *
+ * @param fn The hook handler function
+ * @param options Configuration options for this hook
+ * @returns A HookDefinition that can be used for lifecycle/connection hooks
+ */
+export function handler<THandler extends (...args: any[]) => any>(
+	fn: THandler,
+	options: HookOptions = {},
+): HookDefinition<THandler> {
+	return {
+		[WRAPPED_DEFINITION_SYMBOL]: true,
+		handler: fn,
+		options,
+	};
+}
 
 // For testing type definitions:
 export function test<

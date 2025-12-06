@@ -1,0 +1,25 @@
+{
+	"name": "example-effect",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "tsx src/server.ts",
+		"check-types": "tsc --noEmit",
+		"connect": "tsx scripts/connect.ts",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@effect/language-service": "^0.60.0",
+		"@types/node": "^22.13.9",
+		"rivetkit": "workspace:*",
+		"tsx": "^3.12.7",
+		"typescript": "^5.7.3",
+		"vitest": "^3.1.1"
+	},
+	"stableVersion": "0.8.0",
+	"dependencies": {
+		"@effect/workflow": "^0.15.1",
+		"effect": "^3.19.9"
+	}
+}
