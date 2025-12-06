@@ -17,5 +17,12 @@
 	"dependencies": {
 		"hono": "4.9.8",
 		"rivetkit": "workspace:*"
+	},
+	"template": {
+		"technologies": [
+			"deno",
+			"typescript"
+		],
+		"tags": []
 	}
 }

@@ -20,5 +20,13 @@
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19"
+	},
+	"template": {
+		"technologies": [
+			"next-js",
+			"react",
+			"typescript"
+		],
+		"tags": []
 	}
 }

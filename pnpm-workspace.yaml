@@ -9,6 +9,7 @@ packages:
   - examples/*
   - frontend
   - frontend/packages/components/
+  - frontend/packages/example-registry/
   - frontend/packages/icons/
   - rivetkit-typescript/packages/*
   - scripts/release

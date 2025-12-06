@@ -1,0 +1,26 @@
+{
+	"name": "@rivet-gg/example-registry",
+	"private": true,
+	"version": "2.0.21",
+	"type": "module",
+	"files": [
+		"dist",
+		"src"
+	],
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"exports": {
+		".": {
+			"import": "./src/index.ts"
+		}
+	},
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsx scripts/build.ts"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3"
+	}
+}
