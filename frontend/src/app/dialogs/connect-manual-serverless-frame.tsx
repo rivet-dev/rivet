@@ -62,10 +62,13 @@ const stepper = defineStepper(
 	},
 );
 
-interface ConnectManualServerlessFrameContentProps extends DialogContentProps {}
+interface ConnectManualServerlessFrameContentProps extends DialogContentProps {
+	provider: string;
+}
 
 export default function ConnectManualServerlessFrameContent({
 	onClose,
+	provider,
 }: ConnectManualServerlessFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
@@ -76,24 +79,32 @@ export default function ConnectManualServerlessFrameContent({
 		useEngineCompatDataProvider().regionsQueryOptions(),
 	);
 
-	return <FormStepper onClose={onClose} datacenters={datacenters} />;
+	return (
+		<FormStepper
+			onClose={onClose}
+			datacenters={datacenters}
+			provider={provider}
+		/>
+	);
 }
 
 function FormStepper({
 	onClose,
 	datacenters,
+	provider,
 }: {
 	onClose?: () => void;
 	datacenters: Region[];
+	provider: string;
 }) {
-	const provider = useEngineCompatDataProvider();
+	const dataProvider = useEngineCompatDataProvider();
 
 	const { data } = useSuspenseInfiniteQuery({
-		...provider.runnerConfigsQueryOptions(),
+		...dataProvider.runnerConfigsQueryOptions(),
 	});
 
 	const { mutateAsync } = useMutation({
-		...provider.upsertRunnerConfigMutationOptions(),
+		...dataProvider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
 			confetti({
 				angle: 60,
@@ -107,7 +118,7 @@ function FormStepper({
 			});
 
 			await queryClient.invalidateQueries(
-				provider.runnerConfigsQueryOptions(),
+				dataProvider.runnerConfigsQueryOptions(),
 			);
 			onClose?.();
 		},
@@ -119,7 +130,7 @@ function FormStepper({
 				let existing: Record<string, Rivet.RunnerConfig> = {};
 				try {
 					const runnerConfig = await queryClient.fetchQuery(
-						provider.runnerConfigQueryOptions({
+						dataProvider.runnerConfigQueryOptions({
 							name: values.runnerName,
 						}),
 					);
@@ -144,7 +155,7 @@ function FormStepper({
 						),
 					},
 					metadata: {
-						provider: "custom",
+						provider,
 					},
 				};
 
@@ -176,7 +187,7 @@ function FormStepper({
 			content={{
 				"step-1": () => <Step1 />,
 				"step-2": () => <Step2 />,
-				"step-3": () => <Step3 />,
+				"step-3": () => <Step3 provider={provider} />,
 			}}
 		/>
 	);
@@ -209,11 +220,11 @@ function Step2() {
 	);
 }
 
-function Step3() {
+function Step3({ provider }: { provider: string }) {
 	return (
 		<>
 			<ConnectServerlessForm.Endpoint placeholder="https://your-serverless-endpoint.com/api/rivet" />
-			<ConnectServerlessForm.ConnectionCheck provider="Your serverless provider" />
+			<ConnectServerlessForm.ConnectionCheck provider={provider} />
 		</>
 	);
 }
