@@ -291,6 +291,7 @@ async function configureServerlessRunner(config: RunnerConfig): Promise<void> {
 			headers: config.headers,
 			getUpgradeWebSocket: config.getUpgradeWebSocket,
 			disableMetadataLookup: true, // We don't need health check for this operation
+			devtools: false,
 		};
 
 		// Fetch all datacenters
