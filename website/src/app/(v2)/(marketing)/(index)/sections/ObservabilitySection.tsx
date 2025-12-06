@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, Activity, Terminal, Wifi, ArrowRight, Play } from 'lucide-react';
+import { Eye, Activity, Terminal, Wifi, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import imgInspector from '../images/screenshots/inspector-6.png';
@@ -115,15 +115,6 @@ export const ObservabilitySection = () => {
                 >
                   Visit The Inspector
                   <ArrowRight className='h-4 w-4' />
-                </a>
-                <a
-                  href='https://x.com/NathanFlurry/status/1976427064678023634'
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white subpixel-antialiased shadow-sm transition-colors hover:border-white/20'
-                >
-                  <Play className='h-4 w-4' />
-                  Watch Demo
                 </a>
               </motion.div>
 

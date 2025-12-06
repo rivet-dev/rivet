@@ -28,13 +28,15 @@ export const HostingSection = () => (
         </motion.p>
       </div>
 
-      <div className='grid grid-cols-1 gap-8 md:grid-cols-3'>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className='grid grid-cols-1 gap-8 md:grid-cols-3'
+      >
         {/* Card 1: Self-Host */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+        <div
           className='relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-white/[0.05] hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]'
         >
           {/* Top Shine Highlight */}
@@ -58,14 +60,10 @@ export const HostingSection = () => (
           >
             View Self-Hosting Docs
           </a>
-        </motion.div>
+        </div>
 
         {/* Card 2: Rivet Cloud */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.3 }}
+        <div
           className='group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#FF4500]/10 to-transparent p-8 backdrop-blur-sm transition-colors hover:border-[#FF4500]/30'
         >
           {/* Top Shine Highlight (Orange) */}
@@ -93,14 +91,10 @@ export const HostingSection = () => (
           >
             Sign Up
           </a>
-        </motion.div>
+        </div>
 
         {/* Card 3: Open Source */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+        <div
           className='relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-white/[0.05] hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]'
         >
           {/* Top Shine Highlight */}
@@ -135,8 +129,8 @@ export const HostingSection = () => (
             <Github className='h-3 w-3' />
             View on GitHub
           </a>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </div>
   </section>
 );
