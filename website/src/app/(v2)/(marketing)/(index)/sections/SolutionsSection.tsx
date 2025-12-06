@@ -96,17 +96,19 @@ export const SolutionsSection = () => {
           </motion.p>
         </div>
 
-        <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'
+        >
           {solutions.map((solution, idx) => (
-            <motion.a
+            <a
               key={idx}
               href={solution.exampleUrl}
               target='_blank'
               rel='noopener noreferrer'
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: idx * 0.05 }}
               className='group relative flex flex-col justify-between overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-white/[0.05] hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]'
             >
               {/* Top Shine Highlight */}
@@ -119,9 +121,9 @@ export const SolutionsSection = () => {
                 <ArrowRight className='h-4 w-4 text-zinc-600 transition-colors group-hover:text-white' />
               </div>
               <p className='relative z-10 text-sm leading-relaxed text-zinc-400'>{solution.description}</p>
-            </motion.a>
+            </a>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );
