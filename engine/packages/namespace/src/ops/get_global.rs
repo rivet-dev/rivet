@@ -30,12 +30,18 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 						let url = leader_dc.peer_url.join(&format!("/namespaces"))?;
 						let res = client
 							.get(url)
-							.query(
-								&namespace_ids
-									.iter()
-									.map(|ns_id| ("namespace_id", ns_id))
-									.collect::<Vec<_>>(),
-							)
+							.query(&rivet_api_types::namespaces::list::ListQuery {
+								namespace_ids: Some(
+									namespace_ids
+										.iter()
+										.map(|ns_id| ns_id.to_string())
+										.collect::<Vec<_>>()
+										.join(","),
+								),
+								limit: None,
+								cursor: None,
+								name: None,
+							})
 							.send()
 							.await?;
 
