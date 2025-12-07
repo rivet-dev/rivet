@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
+import { askForLocalNetworkAccess } from "@/lib/permissions";
 import { Actors } from "./actors";
 import { BuildPrefiller } from "./build-prefiller";
 import { Connect } from "./connect";
@@ -70,6 +71,17 @@ export function InspectorRoot() {
 				<Connect
 					formRef={formRef}
 					onSubmit={async (values, form) => {
+						const hasLocalNetworkAccess =
+							await askForLocalNetworkAccess();
+
+						if (!hasLocalNetworkAccess) {
+							form.setError("token", {
+								message:
+									"Local network access is required to connect to local RivetKit. Please enable local network access in your browser settings and try again.",
+							});
+							return;
+						}
+
 						try {
 							const client = createClient({
 								url: values.username,
