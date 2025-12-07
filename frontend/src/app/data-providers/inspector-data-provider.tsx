@@ -183,5 +183,9 @@ export function createClient({ url, token }: { url: string; token: string }) {
 
 	return createManagerInspectorClient(newUrl.href, {
 		headers: { Authorization: `Bearer ${token}` },
+		init: {
+			// @ts-expect-error missing types
+			targetAddressSpace: "loopback",
+		},
 	});
 }
