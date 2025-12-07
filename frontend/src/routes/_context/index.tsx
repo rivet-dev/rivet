@@ -5,6 +5,7 @@ import { InspectorRoot } from "@/app/inspector-root";
 import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 import { redirectToOrganization } from "@/lib/auth";
+import { askForLocalNetworkAccess } from "@/lib/permissions";
 
 export const Route = createFileRoute("/_context/")({
 	component: () =>
@@ -45,6 +46,12 @@ export const Route = createFileRoute("/_context/")({
 			})
 			.with({ __type: "inspector" }, async (ctx) => {
 				if (!search.t || !search.u) {
+					return { connectedInPreflight: false };
+				}
+
+				const hasLocalNetworkAccess = await askForLocalNetworkAccess();
+
+				if (!hasLocalNetworkAccess) {
 					return { connectedInPreflight: false };
 				}
 
