@@ -33,7 +33,7 @@ export default function Layout({
 					) : null
 				}
 			/>
-			<div className="w-full relative z-10 font-sans">
+			<div className="w-full relative z-10 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
 				<div
 					className="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs-no-sidebar lg:grid-cols-docs"
 					style={{ "--header-height": "6.5rem" } as CSSProperties}

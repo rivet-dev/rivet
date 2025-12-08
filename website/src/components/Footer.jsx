@@ -21,6 +21,18 @@ const footer = {
 	product: [
 		{ name: "Actors", href: "/docs/actors" },
 	],
+	solutions: [
+		{ name: "Agent Orchestration", href: "/solutions/agents" },
+		{ name: "Game Servers", href: "/solutions/game-servers" },
+		{ name: "Multiplayer Apps", href: "/solutions/collaborative-state" },
+		{ name: "Workflows", href: "/solutions/workflows" },
+		{ name: "E-commerce", href: "/solutions/commerce" },
+		{ name: "App Generators", href: "/solutions/app-generators" },
+		{ name: "Stateful MCP Servers", href: "/solutions/mcp" },
+		{ name: "Background Jobs", href: "/solutions/background-jobs" },
+		{ name: "Per-tenant DB", href: "/solutions/per-tenant-db" },
+		{ name: "Geo-distributed DBs", href: "/solutions/geo-distributed-db" },
+	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
@@ -158,13 +170,31 @@ function SmallPrint() {
 				</div>
 
 				{/* Links */}
-				<div className="mt-16 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-4 xl:col-span-9 xl:mt-0">
+				<div className="mt-16 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2 lg:grid-cols-5 xl:col-span-9 xl:mt-0">
 					<div>
 						<div className="text-sm font-semibold leading-6 text-white">
 							Product
 						</div>
 						<ul role="list" className="mt-3 space-y-2">
 							{footer.product.map((item) => (
+								<li key={item.name}>
+									<Link
+										href={item.href}
+										target={item.target}
+										className="text-sm leading-4 text-gray-300 hover:text-white"
+									>
+										{item.name}
+									</Link>
+								</li>
+							))}
+						</ul>
+					</div>
+					<div>
+						<div className="text-sm font-semibold leading-6 text-white">
+							Solutions
+						</div>
+						<ul role="list" className="mt-3 space-y-2">
+							{footer.solutions.map((item) => (
 								<li key={item.name}>
 									<Link
 										href={item.href}
