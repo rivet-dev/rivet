@@ -399,3 +399,115 @@ impl TestActor for VerifyInputActor {
 		"VerifyInputActor"
 	}
 }
+
+/// Generic actor that accepts closures for on_start and on_stop
+/// This allows tests to define actor behavior inline without creating separate structs
+pub struct CustomActor {
+	on_start_fn: Box<
+		dyn Fn(
+				ActorConfig,
+			) -> std::pin::Pin<
+				Box<dyn std::future::Future<Output = Result<ActorStartResult>> + Send>,
+			> + Send
+			+ Sync,
+	>,
+	on_stop_fn: Box<
+		dyn Fn() -> std::pin::Pin<
+				Box<dyn std::future::Future<Output = Result<ActorStopResult>> + Send>,
+			> + Send
+			+ Sync,
+	>,
+}
+
+/// Builder for CustomActor with default implementations
+pub struct CustomActorBuilder {
+	on_start_fn: Option<
+		Box<
+			dyn Fn(
+					ActorConfig,
+				) -> std::pin::Pin<
+					Box<dyn std::future::Future<Output = Result<ActorStartResult>> + Send>,
+				> + Send
+				+ Sync,
+		>,
+	>,
+	on_stop_fn: Option<
+		Box<
+			dyn Fn() -> std::pin::Pin<
+					Box<dyn std::future::Future<Output = Result<ActorStopResult>> + Send>,
+				> + Send
+				+ Sync,
+		>,
+	>,
+}
+
+impl CustomActorBuilder {
+	pub fn new() -> Self {
+		Self {
+			on_start_fn: None,
+			on_stop_fn: None,
+		}
+	}
+
+	pub fn on_start<F>(mut self, f: F) -> Self
+	where
+		F: Fn(
+				ActorConfig,
+			) -> std::pin::Pin<
+				Box<dyn std::future::Future<Output = Result<ActorStartResult>> + Send>,
+			> + Send
+			+ Sync
+			+ 'static,
+	{
+		self.on_start_fn = Some(Box::new(f));
+		self
+	}
+
+	pub fn on_stop<F>(mut self, f: F) -> Self
+	where
+		F: Fn() -> std::pin::Pin<
+				Box<dyn std::future::Future<Output = Result<ActorStopResult>> + Send>,
+			> + Send
+			+ Sync
+			+ 'static,
+	{
+		self.on_stop_fn = Some(Box::new(f));
+		self
+	}
+
+	pub fn build(self) -> CustomActor {
+		CustomActor {
+			on_start_fn: self.on_start_fn.unwrap_or_else(|| {
+				Box::new(|_config| {
+					Box::pin(async { Ok(ActorStartResult::Running) })
+						as std::pin::Pin<
+							Box<dyn std::future::Future<Output = Result<ActorStartResult>> + Send>,
+						>
+				})
+			}),
+			on_stop_fn: self.on_stop_fn.unwrap_or_else(|| {
+				Box::new(|| {
+					Box::pin(async { Ok(ActorStopResult::Success) })
+						as std::pin::Pin<
+							Box<dyn std::future::Future<Output = Result<ActorStopResult>> + Send>,
+						>
+				})
+			}),
+		}
+	}
+}
+
+#[async_trait]
+impl TestActor for CustomActor {
+	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
+		(self.on_start_fn)(config).await
+	}
+
+	async fn on_stop(&mut self) -> Result<ActorStopResult> {
+		(self.on_stop_fn)().await
+	}
+
+	fn name(&self) -> &str {
+		"CustomActor"
+	}
+}

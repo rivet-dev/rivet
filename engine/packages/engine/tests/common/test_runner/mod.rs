@@ -14,8 +14,8 @@ mod runner;
 
 pub use actor::{ActorConfig, ActorStartResult, ActorStopResult, TestActor};
 pub use behaviors::{
-	CrashNTimesThenSucceedActor, CrashOnStartActor, DelayedStartActor, EchoActor,
-	NotifyOnStartActor, SleepImmediatelyActor, StopImmediatelyActor, TimeoutActor,
-	VerifyInputActor,
+	CrashNTimesThenSucceedActor, CrashOnStartActor, CustomActor, CustomActorBuilder,
+	DelayedStartActor, EchoActor, NotifyOnStartActor, SleepImmediatelyActor, StopImmediatelyActor,
+	TimeoutActor, VerifyInputActor,
 };
-pub use runner::{TestRunner, TestRunnerBuilder};
+pub use runner::{ActorLifecycleEvent, TestRunner, TestRunnerBuilder};

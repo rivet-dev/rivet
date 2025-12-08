@@ -2,31 +2,6 @@ use std::sync::{Arc, Mutex};
 
 mod common;
 
-async fn create_actor(
-	port: u16,
-	namespace: &str,
-	name: &str,
-	runner_name: &str,
-	crash_policy: rivet_types::actors::CrashPolicy,
-) -> common::api_types::actors::create::CreateResponse {
-	common::api::public::actors_create(
-		port,
-		common::api_types::actors::create::CreateQuery {
-			namespace: namespace.to_string(),
-		},
-		common::api_types::actors::create::CreateRequest {
-			datacenter: None,
-			name: name.to_string(),
-			key: None,
-			input: None,
-			runner_name_selector: runner_name.to_string(),
-			crash_policy,
-		},
-	)
-	.await
-	.expect("failed to create actor")
-}
-
 // MARK: Creation and Initialization
 #[test]
 fn actor_basic_create() {
@@ -45,7 +20,7 @@ fn actor_basic_create() {
 		})
 		.await;
 
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"test-actor",
@@ -170,7 +145,7 @@ fn actor_start_timeout() {
 			tracing::info!("test runner ready, creating actor that will timeout");
 
 			// Create actor with destroy crash policy
-			let res = create_actor(
+			let res = common::create_actor(
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"timeout-actor",
@@ -221,7 +196,7 @@ fn actor_starts_and_connectable_via_guard_http() {
 		})
 		.await;
 
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"test-actor",
@@ -281,7 +256,7 @@ fn actor_connectable_via_guard_websocket() {
 		})
 		.await;
 
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"test-actor",
@@ -341,7 +316,7 @@ fn actor_graceful_stop_with_destroy_policy() {
 		tracing::info!("test runner ready, creating actor that will stop gracefully");
 
 		// Create actor with destroy crash policy
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"stop-actor",
@@ -403,7 +378,7 @@ fn actor_explicit_destroy() {
 		})
 		.await;
 
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"test-actor",
@@ -489,7 +464,7 @@ fn crash_policy_restart() {
 		tracing::info!("test runner ready, creating actor with restart policy");
 
 		// Create actor with restart crash policy
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"crash-actor",
@@ -552,7 +527,7 @@ fn crash_policy_restart_resets_on_success() {
 		tracing::info!("test runner ready, creating actor with restart policy");
 
 		// Create actor with restart crash policy
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"crash-recover-actor",
@@ -623,7 +598,7 @@ fn crash_policy_sleep() {
 		tracing::info!("test runner ready, creating actor with sleep policy");
 
 		// Create actor with sleep crash policy
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"crash-actor",
@@ -695,7 +670,7 @@ fn crash_policy_destroy() {
 		tracing::info!("test runner ready, creating actor with destroy policy");
 
 		// Create actor with destroy crash policy
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"crash-actor",
@@ -760,7 +735,7 @@ fn actor_sleep_intent() {
 		tracing::info!("test runner ready, creating actor that will sleep");
 
 		// Create actor
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"sleep-actor",
@@ -828,7 +803,7 @@ fn actor_pending_allocation_no_runners() {
 		tracing::info!("runner with 1 slot started");
 
 		// Fill the slot with a filler actor
-		let filler_res = create_actor(
+		let filler_res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"filler-actor",
@@ -853,7 +828,7 @@ fn actor_pending_allocation_no_runners() {
 		);
 
 		// Create test actor (should be pending because runner is full)
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"test-actor",
@@ -940,7 +915,7 @@ fn pending_allocation_queue_ordering() {
 		let mut actor_ids = Vec::new();
 		for i in 0..3 {
 			let name = format!("test-actor-{}", i);
-			let res = create_actor(
+			let res = common::create_actor(
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				&name,
@@ -1014,7 +989,7 @@ fn actor_survives_runner_disconnect() {
 			})
 			.await;
 
-			let res = create_actor(
+			let res = common::create_actor(
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"test-actor",
@@ -1109,7 +1084,7 @@ fn runner_at_max_capacity() {
 			// Create first two actors to fill capacity
 			let mut actor_ids = Vec::new();
 			for _i in 0..2 {
-				let res = create_actor(
+				let res = common::create_actor(
 					ctx.leader_dc().guard_port(),
 					&namespace,
 					"test-actor",
@@ -1138,7 +1113,7 @@ fn runner_at_max_capacity() {
 			assert!(runner.has_actor(&actor_ids[1]).await);
 
 			// Create third actor (should be pending)
-			let res3 = create_actor(
+			let res3 = common::create_actor(
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"test-actor",
@@ -1213,7 +1188,7 @@ fn exponential_backoff_max_retries() {
 		tracing::info!("test runner ready, creating actor that will always crash");
 
 		// Create actor with restart crash policy
-		let res = create_actor(
+		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"crash-always-actor",
