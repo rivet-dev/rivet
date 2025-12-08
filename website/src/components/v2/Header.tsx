@@ -118,7 +118,14 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 			clearTimeout(closeTimeoutRef.current);
 			closeTimeoutRef.current = null;
 		}
-		setIsOpen(open);
+		if (open) {
+			setIsOpen(true);
+		} else {
+			// Use delay for closing to prevent flashing when Radix triggers state changes
+			closeTimeoutRef.current = setTimeout(() => {
+				setIsOpen(false);
+			}, 200);
+		}
 	};
 
 	useEffect(() => {
@@ -256,7 +263,7 @@ export function Header({
 										<img src={logoUrl.src}
 											width={80}
 											height={24}
-											className="ml-1 w-20"
+											className="ml-1 w-20 shrink-0"
 											alt="Rivet logo"
 										/>
 									</a>
@@ -353,7 +360,7 @@ export function Header({
 							<img src={logoUrl.src}
 								width={80}
 								height={24}
-								className="ml-1 w-20"
+								className="ml-1 w-20 shrink-0"
 								alt="Rivet logo"
 							/>
 						</a>
