@@ -12,7 +12,7 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio_tungstenite::{
 	connect_async,
 	tungstenite::{self, Message},
@@ -25,6 +25,13 @@ const RUNNER_PING_INTERVAL: Duration = Duration::from_secs(15);
 type ActorFactory = Arc<dyn Fn(ActorConfig) -> Box<dyn TestActor> + Send + Sync>;
 type WsStream =
 	tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Lifecycle events for actors that tests can subscribe to
+#[derive(Debug, Clone)]
+pub enum ActorLifecycleEvent {
+	Started { actor_id: String, generation: u32 },
+	Stopped { actor_id: String, generation: u32 },
+}
 
 /// Configuration for test runner
 #[derive(Clone)]
@@ -60,6 +67,9 @@ pub struct TestRunner {
 	kv_request_rx: Arc<Mutex<mpsc::UnboundedReceiver<KvRequest>>>,
 	next_kv_request_id: Arc<Mutex<u32>>,
 	kv_pending_requests: Arc<Mutex<HashMap<u32, oneshot::Sender<rp::KvResponseData>>>>,
+
+	// Lifecycle event broadcast channel
+	lifecycle_tx: broadcast::Sender<ActorLifecycleEvent>,
 
 	// Shutdown channel
 	shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
@@ -144,6 +154,9 @@ impl TestRunnerBuilder {
 		// Create KV request channel for actors to send KV requests
 		let (kv_request_tx, kv_request_rx) = mpsc::unbounded_channel();
 
+		// Create lifecycle event broadcast channel (capacity of 100 for buffering)
+		let (lifecycle_tx, _) = broadcast::channel(100);
+
 		Ok(TestRunner {
 			config,
 			runner_id: Arc::new(Mutex::new(None)),
@@ -158,12 +171,18 @@ impl TestRunnerBuilder {
 			kv_request_rx: Arc::new(Mutex::new(kv_request_rx)),
 			next_kv_request_id: Arc::new(Mutex::new(0)),
 			kv_pending_requests: Arc::new(Mutex::new(HashMap::new())),
+			lifecycle_tx,
 			shutdown_tx: Arc::new(Mutex::new(None)),
 		})
 	}
 }
 
 impl TestRunner {
+	/// Subscribe to actor lifecycle events
+	pub fn subscribe_lifecycle_events(&self) -> broadcast::Receiver<ActorLifecycleEvent> {
+		self.lifecycle_tx.subscribe()
+	}
+
 	/// Start the test runner
 	pub async fn start(&self) -> Result<()> {
 		tracing::info!(
@@ -230,6 +249,7 @@ impl TestRunner {
 			kv_request_rx: self.kv_request_rx.clone(),
 			next_kv_request_id: self.next_kv_request_id.clone(),
 			kv_pending_requests: self.kv_pending_requests.clone(),
+			lifecycle_tx: self.lifecycle_tx.clone(),
 			shutdown_tx: self.shutdown_tx.clone(),
 		}
 	}
@@ -566,6 +586,12 @@ impl TestRunner {
 			"actor on_start completed"
 		);
 
+		// Broadcast lifecycle event
+		let _ = self.lifecycle_tx.send(ActorLifecycleEvent::Started {
+			actor_id: actor_id.clone(),
+			generation,
+		});
+
 		// Store actor
 		let actor_state = ActorState {
 			actor_id: actor_id.clone(),
@@ -666,6 +692,12 @@ impl TestRunner {
 			?stop_result,
 			"actor on_stop completed"
 		);
+
+		// Broadcast lifecycle event
+		let _ = self.lifecycle_tx.send(ActorLifecycleEvent::Stopped {
+			actor_id: actor_id.clone(),
+			generation,
+		});
 
 		// Handle stop result
 		match stop_result {
