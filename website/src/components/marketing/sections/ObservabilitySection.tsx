@@ -62,7 +62,7 @@ export const ObservabilitySection = () => {
               </div>
               {/* Content Area - Dashboard Image */}
               <div className='relative w-full bg-zinc-900/50' style={{ aspectRatio: `${imgInspector.width} / ${imgInspector.height}` }}>
-                <img src={imgInspector}
+                <img src={imgInspector.src}
                   alt='Rivet Inspector Dashboard'
                   className='h-full w-full object-cover'
                 />

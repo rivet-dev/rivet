@@ -6,44 +6,45 @@ import {
 	Zap,
 	Globe,
 	ArrowRight,
+	Box,
 	Database,
+	Layers,
 	Check,
+	Cpu,
 	RefreshCw,
 	Clock,
-	Lock,
-	ShoppingCart,
-	ShoppingBag,
-	Search,
-	Lightbulb,
-	Users,
-	CreditCard,
-	Smartphone,
+	Shield,
+	Cloud,
+	Activity,
+	Workflow,
+	AlertTriangle,
+	Archive,
+	Gauge,
+	Play,
 	Link as LinkIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 // --- Shared Design Components ---
-const Badge = ({ text, color = "cyan" }) => {
+const Badge = ({ text, color = "orange" }) => {
 	const colorClasses = {
 		orange: "text-orange-400 border-orange-500/20 bg-orange-500/10",
 		blue: "text-blue-400 border-blue-500/20 bg-blue-500/10",
 		red: "text-red-400 border-red-500/20 bg-red-500/10",
-		pink: "text-pink-400 border-pink-500/20 bg-pink-500/10",
-		indigo: "text-indigo-400 border-indigo-500/20 bg-indigo-500/10",
-		cyan: "text-cyan-400 border-cyan-500/20 bg-cyan-500/10",
+		zinc: "text-zinc-400 border-zinc-500/20 bg-zinc-500/10",
 	};
 
 	return (
 		<div
 			className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium mb-8 transition-colors cursor-default ${colorClasses[color]}`}
 		>
-			<span className={`w-1.5 h-1.5 rounded-full ${color === "orange" ? "bg-orange-400" : color === "blue" ? "bg-blue-400" : color === "red" ? "bg-red-400" : color === "pink" ? "bg-pink-400" : color === "indigo" ? "bg-indigo-400" : "bg-cyan-400"} animate-pulse`} />
+			<span className={`w-1.5 h-1.5 rounded-full ${color === "orange" ? "bg-orange-400" : color === "blue" ? "bg-blue-400" : color === "red" ? "bg-red-400" : "bg-zinc-400"} animate-pulse`} />
 			{text}
 		</div>
 	);
 };
 
-const CodeBlock = ({ code, fileName = "cart.ts" }) => {
+const CodeBlock = ({ code, fileName = "worker.ts" }) => {
 	return (
 		<div className="relative group rounded-xl overflow-hidden border border-white/10 bg-black shadow-2xl">
 			<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent z-10" />
@@ -80,11 +81,11 @@ const CodeBlock = ({ code, fileName = "cart.ts" }) => {
 										parts.forEach((part, j) => {
 											const trimmed = part.trim();
 
-											if (["import", "from", "export", "const", "return", "async", "await", "function", "if", "throw"].includes(trimmed)) {
+											if (["import", "from", "export", "const", "return", "async", "await", "try", "catch", "if"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
-											} else if (["actor", "recommend", "addItem", "rpc", "inventory", "reserve", "ai", "broadcast"].includes(trimmed)) {
+											} else if (["actor", "schedule", "sendEmail", "enqueue", "process"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
-											} else if (["state", "actions", "items", "history", "productId", "qty", "stock", "recent", "slice"].includes(trimmed)) {
+											} else if (["state", "actions", "queue", "job", "attempts", "err", "delay", "shift", "push"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											} else if (part.startsWith('"') || part.startsWith("'")) {
 												tokens.push(<span key={j} className="text-[#FF4500]">{part}</span>);
@@ -111,7 +112,7 @@ const CodeBlock = ({ code, fileName = "cart.ts" }) => {
 	);
 };
 
-const SolutionCard = ({ title, description, icon: Icon, color = "cyan" }) => {
+const SolutionCard = ({ title, description, icon: Icon, color = "orange" }) => {
 	const getColorClasses = (col) => {
 		switch (col) {
 			case "orange":
@@ -141,41 +142,23 @@ const SolutionCard = ({ title, description, icon: Icon, color = "cyan" }) => {
 					border: "border-red-500",
 					glow: "rgba(239,68,68,0.15)",
 				};
-			case "pink":
+			case "zinc":
 				return {
-					bg: "bg-pink-500/10",
-					text: "text-pink-400",
-					hoverBg: "group-hover:bg-pink-500/20",
-					hoverShadow: "group-hover:shadow-[0_0_15px_rgba(236,72,153,0.5)]",
-					border: "border-pink-500",
-					glow: "rgba(236,72,153,0.15)",
-				};
-			case "indigo":
-				return {
-					bg: "bg-indigo-500/10",
-					text: "text-indigo-400",
-					hoverBg: "group-hover:bg-indigo-500/20",
-					hoverShadow: "group-hover:shadow-[0_0_15px_rgba(99,102,241,0.5)]",
-					border: "border-indigo-500",
-					glow: "rgba(99,102,241,0.15)",
-				};
-			case "cyan":
-				return {
-					bg: "bg-cyan-500/10",
-					text: "text-cyan-400",
-					hoverBg: "group-hover:bg-cyan-500/20",
-					hoverShadow: "group-hover:shadow-[0_0_15px_rgba(34,211,238,0.5)]",
-					border: "border-cyan-500",
-					glow: "rgba(34,211,238,0.15)",
+					bg: "bg-zinc-500/10",
+					text: "text-zinc-400",
+					hoverBg: "group-hover:bg-zinc-500/20",
+					hoverShadow: "group-hover:shadow-[0_0_15px_rgba(113,113,122,0.5)]",
+					border: "border-zinc-500",
+					glow: "rgba(113,113,122,0.15)",
 				};
 			default:
 				return {
-					bg: "bg-cyan-500/10",
-					text: "text-cyan-400",
-					hoverBg: "group-hover:bg-cyan-500/20",
-					hoverShadow: "group-hover:shadow-[0_0_15px_rgba(34,211,238,0.5)]",
-					border: "border-cyan-500",
-					glow: "rgba(34,211,238,0.15)",
+					bg: "bg-orange-500/10",
+					text: "text-orange-400",
+					hoverBg: "group-hover:bg-orange-500/20",
+					hoverShadow: "group-hover:shadow-[0_0_15px_rgba(249,115,22,0.5)]",
+					border: "border-orange-500",
+					glow: "rgba(249,115,22,0.15)",
 				};
 		}
 	};
@@ -209,12 +192,12 @@ const SolutionCard = ({ title, description, icon: Icon, color = "cyan" }) => {
 
 const Hero = () => (
 	<section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
-		<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-cyan-500/[0.03] blur-[100px] rounded-full pointer-events-none" />
+		<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-orange-500/[0.03] blur-[100px] rounded-full pointer-events-none" />
 
 		<div className="max-w-7xl mx-auto px-6 relative z-10">
 			<div className="flex flex-col lg:flex-row gap-16 items-center">
 				<div className="flex-1 max-w-2xl">
-					<Badge text="Real-time Commerce" color="cyan" />
+					<Badge text="Serverless Workers" color="orange" />
 
 					<motion.h1
 						initial={{ opacity: 0, y: 20 }}
@@ -222,8 +205,8 @@ const Hero = () => (
 						transition={{ duration: 0.5 }}
 						className="text-5xl md:text-7xl font-medium text-white tracking-tight leading-[1.1] mb-6"
 					>
-						The Cart that <br />
-						<span className="text-cyan-400">Never Forgets.</span>
+						Background Jobs <br />
+						<span className="text-orange-400">Redefined.</span>
 					</motion.h1>
 
 					<motion.p
@@ -232,7 +215,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.1 }}
 						className="text-lg md:text-xl text-zinc-400 leading-relaxed mb-8 max-w-lg"
 					>
-						Eliminate database contention on launch day. Use Rivet Actors to hold shopping carts, reserve inventory, and power agentic search sessions across devices.
+						Forget Redis, SQS, and worker fleets. Rivet Actors combine the queue and the worker into a single, persistent entity. Schedule tasks, retry failures, and sleep for free.
 					</motion.p>
 
 					<motion.div
@@ -242,7 +225,7 @@ const Hero = () => (
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
 						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
-							Start Building
+							Start Scheduling
 							<ArrowRight className="w-4 h-4" />
 						</button>
 					</motion.div>
@@ -250,27 +233,34 @@ const Hero = () => (
 
 				<div className="flex-1 w-full max-w-xl">
 					<div className="relative">
-						<div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-xl blur opacity-40" />
+						<div className="absolute -inset-1 bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-xl blur opacity-40" />
 						<CodeBlock
-							fileName="shopping_cart.ts"
+							fileName="email_worker.ts"
 							code={`import { actor } from "rivetkit";
 
-export const shoppingCart = actor({
-  state: { items: [], history: [] },
+export const emailWorker = actor({
+  // Persistent job queue in memory
+  state: { queue: [] },
 
   actions: {
-    // Instant recommendations based on hot state
-    recommend: async (c) => {
-      const recent = c.state.history.slice(-5);
-      return await c.ai.recommend(recent);
+    enqueue: (c, job) => {
+      c.state.queue.push({ ...job, attempts: 0 });
+      c.schedule("process", "immediate");
     },
 
-    addItem: async (c, { productId, qty }) => {
-      const stock = await c.rpc.inventory.reserve(productId, qty);
-      if (!stock) throw "Out of Stock";
+    process: async (c) => {
+      const job = c.state.queue.shift();
+      if (!job) return;
 
-      c.state.items.push({ productId, qty });
-      c.broadcast("cart_updated", c.state);
+      try {
+        await sendEmail(job);
+      } catch (err) {
+        job.attempts++;
+        // Retry with exponential backoff
+        const delay = Math.pow(2, job.attempts) + "s";
+        c.state.queue.push(job);
+        c.schedule("process", delay);
+      }
     }
   }
 });`}
@@ -282,7 +272,7 @@ export const shoppingCart = actor({
 	</section>
 );
 
-const CommerceArchitecture = () => {
+const QueueArchitecture = () => {
 	return (
 		<section className="py-24 bg-black border-y border-white/5 relative">
 			<div className="max-w-7xl mx-auto px-6">
@@ -294,7 +284,7 @@ const CommerceArchitecture = () => {
 						transition={{ duration: 0.5 }}
 						className="text-3xl md:text-5xl font-medium text-white mb-6 tracking-tight"
 					>
-						The Universal Session
+						The Actor as a Worker
 					</motion.h2>
 					<motion.p
 						initial={{ opacity: 0, y: 20 }}
@@ -303,94 +293,142 @@ const CommerceArchitecture = () => {
 						transition={{ duration: 0.5, delay: 0.1 }}
 						className="text-zinc-400 max-w-2xl mx-auto text-lg leading-relaxed"
 					>
-						Stop syncing database rows to keep devices in sync. With Rivet, the Actor <em>is</em> the session. All devices connect to the same living process.
+						No need for a separate worker fleet. Every actor can schedule its own tasks, sleep while waiting, and wake up to retry failures.
 					</motion.p>
 				</div>
 
 				<div className="relative h-[450px] w-full rounded-2xl border border-white/10 bg-zinc-900/20 flex items-center justify-center overflow-hidden p-8">
 					<div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px]" />
 
-					<div className="relative z-10 w-full max-w-4xl grid grid-cols-3 gap-8 items-center">
-						{/* Left: Mobile User */}
-						<div className="flex flex-col items-center gap-4 group">
-							<div className="w-20 h-32 rounded-2xl bg-zinc-950 border border-zinc-700 flex flex-col items-center justify-center shadow-lg relative group-hover:border-cyan-500/50 transition-colors">
-								<div className="absolute top-2 w-8 h-1 bg-zinc-800 rounded-full" />
-								<Smartphone className="w-8 h-8 text-cyan-400 mb-2" />
-								<div className="text-[10px] text-zinc-500 font-mono">Mobile App</div>
-
-								<div className="absolute -right-12 top-8 bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[10px] px-2 py-1 rounded backdrop-blur-md">
-									+1 Sneakers
-								</div>
+					<div className="relative z-10 w-full max-w-6xl flex items-center justify-between gap-12 px-8">
+						{/* Input Stream */}
+						<div className="flex flex-col items-center gap-4 relative z-20 flex-shrink-0">
+							<div className="w-20 h-20 rounded-xl bg-zinc-950 border border-zinc-700 flex items-center justify-center shadow-lg relative">
+								<div className="absolute -top-3 px-2 py-0.5 bg-zinc-800 text-[10px] rounded-full text-zinc-400 border border-zinc-700">Source</div>
+								<Cloud className="w-8 h-8 text-zinc-400" />
+							</div>
+							{/* Emitting Jobs Animation */}
+							<div className="absolute top-1/2 left-full w-8 h-8 flex items-center justify-center">
+								<div className="w-3 h-3 bg-orange-500/50 rounded animate-ping absolute" />
+								<div className="w-3 h-3 bg-orange-500/50 rounded animate-ping delay-300 absolute" style={{ animationDelay: '300ms' }} />
 							</div>
 						</div>
 
-						{/* Middle: The Session Actor */}
-						<div className="flex flex-col items-center justify-center relative">
-							<div className="w-32 h-32 rounded-full border-2 border-cyan-500/30 bg-black flex flex-col items-center justify-center relative shadow-[0_0_60px_rgba(34,211,238,0.2)]">
-								<div className="absolute inset-0 rounded-full border border-cyan-400/20 animate-[spin_10s_linear_infinite]" />
-								<ShoppingCart className="w-10 h-10 text-cyan-400 mb-2" />
-								<div className="text-xs font-mono text-zinc-300 font-medium">Cart Actor</div>
-								<div className="text-[10px] text-zinc-500 font-mono">1 Item • $120</div>
+						{/* The Queue Pipe */}
+						<div className="flex-1 h-32 bg-zinc-950/80 border border-zinc-800 rounded-2xl relative overflow-hidden flex items-center px-4 gap-4 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+							<div className="absolute top-3 left-4 text-[10px] text-zinc-600 font-mono flex items-center gap-2">
+								<Workflow className="w-3 h-3" />
+								IN-MEMORY QUEUE
+							</div>
+
+							{/* Background Flow Animation */}
+							<div className="absolute inset-0 opacity-20">
+								<div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(249,115,22,0.1),transparent)] animate-[flow_3s_linear_infinite]" />
+							</div>
+
+							{/* Jobs Animation Container - Using pure CSS traverse for smoothness */}
+							<div className="flex-1 h-full relative overflow-hidden">
+								{[0, 1, 2, 3, 4].map((i) => (
+									<div
+										key={i}
+										className="absolute top-1/2 -translate-y-1/2 h-16 w-16 rounded-xl border bg-zinc-900 border-zinc-700 flex flex-col items-center justify-center gap-2 shadow-md animate-[traverse_5s_linear_infinite]"
+										style={{
+											animationDelay: `${i * 1}s`,
+										}}
+									>
+										<Box className="w-6 h-6 text-orange-400" />
+										<div className="w-10 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+											<div
+												className="h-full bg-orange-500/50 w-full animate-[progress_5s_linear_infinite]"
+												style={{ animationDelay: `${i * 1}s` }}
+											/>
+										</div>
+									</div>
+								))}
 							</div>
 						</div>
 
-						{/* Right: Desktop User */}
-						<div className="flex flex-col items-center gap-4 group">
-							<div className="w-32 h-24 rounded-lg bg-zinc-950 border border-zinc-700 flex flex-col items-center justify-center shadow-lg relative group-hover:border-cyan-500/50 transition-colors">
-								<div className="absolute bottom-[-20px] w-24 h-2 bg-zinc-800 rounded-b-lg" />
-								<div className="absolute bottom-[-20px] w-4 h-4 bg-zinc-800 skew-x-12" />
-								<Globe className="w-8 h-8 text-cyan-400 mb-2" />
-								<div className="text-[10px] text-zinc-500 font-mono">Web Store</div>
+						{/* The Worker (Actor) */}
+						<div className="flex flex-col items-center gap-4 relative z-20 flex-shrink-0">
+							<div className="w-32 h-32 rounded-full bg-black border-2 border-orange-500/50 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(249,115,22,0.3)] relative z-10 overflow-hidden group">
+								{/* Pulsing Core */}
+								<div className="absolute inset-0 bg-orange-500/10 animate-pulse" />
+								<div className="absolute inset-2 rounded-full border border-orange-500/20 animate-[spin_10s_linear_infinite]" />
 
-								<div className="absolute -top-3 -right-3 bg-green-500/20 border border-green-500/50 text-green-400 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-									<RefreshCw className="w-3 h-3" /> Synced
-								</div>
+								<Cpu className="w-12 h-12 text-orange-500 mb-1 relative z-10 animate-[pulse_2s_ease-in-out_infinite]" />
+								<span className="text-xs text-orange-300 font-mono relative z-10">Processing</span>
+
+								{/* Job Ingestion Effect */}
+								<div className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 bg-orange-500/20 rounded-full blur-md animate-[ingest_4s_linear_infinite] opacity-0" />
 							</div>
+							{/* Connection Beam */}
+							<div className="absolute top-1/2 right-full w-8 h-[2px] bg-gradient-to-r from-transparent to-orange-500/50" />
 						</div>
 					</div>
 				</div>
+				<style>{`
+					@keyframes flow {
+						0% { transform: translateX(-100%); }
+						100% { transform: translateX(100%); }
+					}
+					@keyframes traverse {
+						0% { left: -80px; opacity: 0; transform: translateY(-50%) scale(0.8); }
+						10% { opacity: 1; transform: translateY(-50%) scale(1); }
+						90% { opacity: 1; transform: translateY(-50%) scale(1); }
+						100% { left: 100%; opacity: 0; transform: translateY(-50%) scale(0.8); }
+					}
+					@keyframes progress {
+						0% { width: 0%; }
+						100% { width: 100%; }
+					}
+					@keyframes ingest {
+						0%, 80% { opacity: 0; transform: translate(-20px, -50%) scale(0.5); }
+						90% { opacity: 1; transform: translate(0, -50%) scale(1.2); }
+						100% { opacity: 0; transform: translate(10px, -50%) scale(0.5); }
+					}
+				`}</style>
 			</div>
 		</section>
 	);
 };
 
-const CommerceFeatures = () => {
+const JobFeatures = () => {
 	const features = [
 		{
-			title: "Inventory Reservation",
-			description: "Hold items in the actor's memory for 10 minutes. If the user doesn't checkout, release stock instantly.",
-			icon: Lock,
-			color: "cyan",
-		},
-		{
-			title: "Universal Cart",
-			description: "The same cart state follows the user from mobile to desktop to tablet. No refresh required.",
-			icon: ShoppingBag,
-			color: "blue",
-		},
-		{
-			title: "Agentic Search",
-			description: "Use the actor's session history to feed a vector search instantly, re-ranking results based on user intent.",
-			icon: Search,
-			color: "indigo",
-		},
-		{
-			title: "Live Recommendations",
-			description: "Update suggested products in real-time as the user scrolls, based on their immediate view history held in RAM.",
-			icon: Lightbulb,
+			title: "Cron Schedules",
+			description: "Built-in cron support. Wake up an actor every hour, day, or month to perform maintenance or reporting.",
+			icon: Clock,
 			color: "orange",
 		},
 		{
-			title: "Flash Sales",
-			description: "Handle huge spikes in traffic. 100k users can add to cart simultaneously without locking your database.",
-			icon: Zap,
+			title: "Exponential Backoff",
+			description: "Network flaked? API down? Easily implement robust retry logic with increasing delays between attempts.",
+			icon: RefreshCw,
+			color: "blue",
+		},
+		{
+			title: "Dead Letter Queues",
+			description: "Move failed jobs to a separate list in state for manual inspection after max retries are exhausted.",
+			icon: Archive,
 			color: "red",
 		},
 		{
-			title: "Collaborative Shopping",
-			description: "Allow multiple users to view and edit the same cart (e.g. families or procurement teams).",
-			icon: Users,
-			color: "pink",
+			title: "Rate Limiting",
+			description: "Protect downstream APIs. Use a token bucket in actor memory to strictly limit outgoing request rates.",
+			icon: Gauge,
+			color: "zinc",
+		},
+		{
+			title: "Batching",
+			description: "Accumulate webhooks or events in memory and flush them to your database in a single bulk insert.",
+			icon: Layers,
+			color: "orange",
+		},
+		{
+			title: "Job Prioritization",
+			description: "Use multiple lists (high, normal, low) within your actor state to ensure critical tasks run first.",
+			icon: AlertTriangle,
+			color: "blue",
 		},
 	];
 
@@ -404,8 +442,8 @@ const CommerceFeatures = () => {
 					transition={{ duration: 0.5 }}
 					className="mb-20"
 				>
-					<h2 className="text-3xl md:text-5xl font-medium text-white mb-6 tracking-tight">Built for Conversion</h2>
-					<p className="text-zinc-400 text-lg leading-relaxed">Speed is revenue. Rivet makes your store feel instant.</p>
+					<h2 className="text-3xl md:text-5xl font-medium text-white mb-6 tracking-tight">Complete Job Control</h2>
+					<p className="text-zinc-400 text-lg leading-relaxed">Primitives for building reliable background systems.</p>
 				</motion.div>
 
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -431,7 +469,7 @@ const CaseStudy = () => (
 		<div className="max-w-7xl mx-auto px-6">
 			<div className="grid md:grid-cols-2 gap-16 items-center">
 				<div>
-					<Badge text="Case Study" color="cyan" />
+					<Badge text="Case Study" color="orange" />
 					<motion.h2
 						initial={{ opacity: 0, y: 20 }}
 						whileInView={{ opacity: 1, y: 0 }}
@@ -439,7 +477,7 @@ const CaseStudy = () => (
 						transition={{ duration: 0.5 }}
 						className="text-3xl md:text-5xl font-medium text-white mb-6 tracking-tight"
 					>
-						High-Volume Drop
+						Video Transcoding Pipeline
 					</motion.h2>
 					<motion.p
 						initial={{ opacity: 0, y: 20 }}
@@ -448,10 +486,10 @@ const CaseStudy = () => (
 						transition={{ duration: 0.5, delay: 0.1 }}
 						className="text-lg text-zinc-400 mb-8 leading-relaxed"
 					>
-						A streetwear brand launching a limited edition collection. 50,000 users arrive in 60 seconds.
+						Coordinate a complex, multi-step media processing workflow without managing intermediate state in a database.
 					</motion.p>
 					<ul className="space-y-4">
-						{["No Overselling: Atomic decrement of inventory in memory", "Queueing: Fair FIFO processing of checkout requests", "Instant Feedback: UI updates immediately on success/fail"].map((item, i) => (
+						{["Step 1: Upload triggers Actor creation", "Step 2: Actor calls external Transcoder API", "Step 3: Actor sleeps until webhook callback received", "Step 4: Notify user via WebSocket"].map((item, i) => (
 							<motion.li
 								key={i}
 								initial={{ opacity: 0, x: -20 }}
@@ -460,8 +498,8 @@ const CaseStudy = () => (
 								transition={{ duration: 0.5, delay: 0.2 + i * 0.1 }}
 								className="flex items-center gap-3 text-zinc-300"
 							>
-								<div className="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center">
-									<Check className="w-3 h-3 text-cyan-400" />
+								<div className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center">
+									<Check className="w-3 h-3 text-orange-400" />
 								</div>
 								{item}
 							</motion.li>
@@ -475,33 +513,24 @@ const CaseStudy = () => (
 					transition={{ duration: 0.5 }}
 					className="relative"
 				>
-					<div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-transparent rounded-2xl blur-2xl" />
+					<div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-transparent rounded-2xl blur-2xl" />
 					<div className="relative rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
 						<div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
 							<div className="flex items-center gap-3">
-								<div className="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center">
-									<ShoppingBag className="w-5 h-5 text-cyan-400" />
+								<div className="w-8 h-8 rounded bg-orange-500/20 flex items-center justify-center">
+									<Play className="w-5 h-5 text-orange-400" />
 								</div>
 								<div>
-									<div className="text-sm font-medium text-white">Item: Retro High '85</div>
-									<div className="text-xs text-zinc-500">Stock: 42 / 5000</div>
+									<div className="text-sm font-medium text-white">Job: 1080p_Render</div>
+									<div className="text-xs text-zinc-500">Duration: 4m 12s</div>
 								</div>
 							</div>
-							<div className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-xs border border-red-500/20">Selling Fast</div>
+							<div className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-400 text-xs border border-yellow-500/20">Waiting</div>
 						</div>
 						<div className="space-y-4 text-sm font-mono">
-							<div className="p-3 rounded bg-zinc-950 border border-white/5 text-zinc-400 flex justify-between">
-								<span>User: guest_9921</span>
-								<span className="text-green-400">Checkout Success</span>
-							</div>
-							<div className="p-3 rounded bg-zinc-950 border border-white/5 text-zinc-400 flex justify-between">
-								<span>User: guest_4402</span>
-								<span className="text-red-400">Cart Expired</span>
-							</div>
-							<div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-								<div className="bg-cyan-500 h-full w-[98%] animate-pulse" />
-							</div>
-							<div className="text-right text-[10px] text-zinc-500">Inventory Load: 98%</div>
+							<div className="p-3 rounded bg-zinc-950 border border-white/5 text-zinc-400">&gt; Transcode started. Sleeping...</div>
+							<div className="p-3 rounded bg-zinc-950 border border-white/5 text-zinc-500 opacity-50">(Actor Hibernated to Disk)</div>
+							<div className="p-3 rounded bg-orange-900/20 border border-orange-500/30 text-orange-200 animate-pulse">&lt; Webhook received. Waking up!</div>
 						</div>
 					</div>
 				</motion.div>
@@ -513,20 +542,20 @@ const CaseStudy = () => (
 const UseCases = () => {
 	const cases = [
 		{
-			title: "Marketplaces",
-			desc: "Coordinate buyers and sellers in real-time auctions with instant bid updates.",
+			title: "Email Drip Campaigns",
+			desc: "Schedule a sequence of emails for a user. Sleep for days between sends. Store user progress in state.",
 		},
 		{
-			title: "Ticketing",
-			desc: "Reserve seats for concerts or events. Prevent double-booking with atomic locks.",
+			title: "Report Generation",
+			desc: "Trigger a heavy aggregation job. Poll the database, build the PDF, and email it when done.",
 		},
 		{
-			title: "Food Delivery",
-			desc: "Track order status, driver location, and inventory in a single stateful entity.",
+			title: "AI Batch Processing",
+			desc: "Queue thousands of prompts for LLM processing. Rate limit requests to avoid API bans.",
 		},
 		{
-			title: "Subscription Apps",
-			desc: "Manage access rights and feature gating dynamically based on payment status.",
+			title: "Webhook Ingestion",
+			desc: "Buffer high-velocity webhooks (e.g. Stripe events) in memory and process them reliably in order.",
 		},
 	];
 
@@ -540,7 +569,7 @@ const UseCases = () => {
 					transition={{ duration: 0.5 }}
 					className="text-3xl md:text-5xl font-medium text-white mb-12 text-center tracking-tight"
 				>
-					Commerce at Scale
+					Built for Reliability
 				</motion.h2>
 				<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
 					{cases.map((c, i) => (
@@ -550,10 +579,10 @@ const UseCases = () => {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: i * 0.05 }}
-							className="p-6 rounded-xl border border-white/10 bg-zinc-900/30 hover:bg-cyan-900/10 hover:border-cyan-500/30 transition-colors group"
+							className="p-6 rounded-xl border border-white/10 bg-zinc-900/30 hover:bg-orange-900/10 hover:border-orange-500/30 transition-colors group"
 						>
 							<div className="mb-4">
-								<CreditCard className="w-6 h-6 text-cyan-500 group-hover:scale-110 transition-transform" />
+								<Activity className="w-6 h-6 text-orange-500 group-hover:scale-110 transition-transform" />
 							</div>
 							<h4 className="text-white font-medium mb-2">{c.title}</h4>
 							<p className="text-sm text-zinc-400">{c.desc}</p>
@@ -578,7 +607,7 @@ const Ecosystem = () => (
 				Works with your stack
 			</motion.h2>
 			<div className="flex flex-wrap justify-center gap-4">
-				{["Shopify", "Stripe", "Medusa", "BigCommerce", "Adyen", "Algolia"].map((tech, i) => (
+				{["Stripe", "Resend", "Twilio", "Slack", "OpenAI", "Postgres"].map((tech, i) => (
 					<motion.div
 						key={tech}
 						initial={{ opacity: 0, y: 20 }}
@@ -595,13 +624,13 @@ const Ecosystem = () => (
 	</section>
 );
 
-export default function CommercePage() {
+export default function BackgroundJobsPage() {
 	return (
-		<div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
+		<div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-orange-500/30 selection:text-orange-200">
 			<main>
 				<Hero />
-				<CommerceArchitecture />
-				<CommerceFeatures />
+				<QueueArchitecture />
+				<JobFeatures />
 				<CaseStudy />
 				<UseCases />
 				<Ecosystem />
@@ -616,7 +645,7 @@ export default function CommercePage() {
 							transition={{ duration: 0.5 }}
 							className="text-4xl md:text-5xl font-medium text-white mb-6 tracking-tight"
 						>
-							Sell without limits.
+							Fire and forget.
 						</motion.h2>
 						<motion.p
 							initial={{ opacity: 0, y: 20 }}
@@ -625,7 +654,7 @@ export default function CommercePage() {
 							transition={{ duration: 0.5, delay: 0.1 }}
 							className="text-lg text-zinc-400 mb-10 leading-relaxed"
 						>
-							Build shopping experiences that are fast, reliable, and instantly synchronized.
+							Start building reliable, self-healing background jobs with Rivet.
 						</motion.p>
 						<motion.div
 							initial={{ opacity: 0, y: 20 }}
