@@ -24,6 +24,17 @@ pub struct Actor {
 // TODO: Add cache (remember to purge cache when runner changes)
 #[operation]
 pub async fn pegboard_actor_get_runner(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+	// Ensure all actor IDs belong to this datacenter
+	for actor_id in &input.actor_ids {
+		ensure!(
+			actor_id.label() == ctx.config().dc_label(),
+			"actor id {} belongs to datacenter {} but current datacenter is {}",
+			actor_id,
+			actor_id.label(),
+			ctx.config().dc_label()
+		);
+	}
+
 	let actors = ctx
 		.udb()?
 		.run(|tx| async move {

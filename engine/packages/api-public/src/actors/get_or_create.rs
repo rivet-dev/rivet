@@ -12,14 +12,14 @@ use utoipa::{IntoParams, ToSchema};
 use crate::actors::utils;
 use crate::ctx::ApiCtx;
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
 pub struct GetOrCreateQuery {
 	pub namespace: String,
 }
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = ActorsGetOrCreateRequest)]
 pub struct GetOrCreateRequest {
@@ -31,7 +31,7 @@ pub struct GetOrCreateRequest {
 	pub crash_policy: CrashPolicy,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 #[schema(as = ActorsGetOrCreateResponse)]
 pub struct GetOrCreateResponse {
 	pub actor: rivet_types::actors::Actor,
@@ -127,44 +127,61 @@ async fn get_or_create_inner(
 	)
 	.await?;
 
-	let actor_id = Id::new_v1(target_dc_label);
+	// Forward to correct datacenter or create locally
+	if target_dc_label == ctx.config().dc_label() {
+		// Create in current datacenter
+		let actor_id = Id::new_v1(ctx.config().dc_label());
 
-	match ctx
-		.op(pegboard::ops::actor::create::Input {
-			actor_id,
-			namespace_id: namespace.namespace_id,
-			name: body.name.clone(),
-			key: Some(body.key.clone()),
-			runner_name_selector: body.runner_name_selector,
-			input: body.input.clone(),
-			crash_policy: body.crash_policy,
-			forward_request: true,
-			datacenter_name: body.datacenter.clone(),
-		})
-		.await
-	{
-		Ok(res) => Ok(GetOrCreateResponse {
-			actor: res.actor,
-			created: true,
-		}),
-		Err(err) => {
-			// Check if this is a DuplicateKey error and extract the existing actor ID
-			if let Some(existing_actor_id) = utils::extract_duplicate_key_error(&err) {
-				tracing::info!(
-					?existing_actor_id,
-					"received duplicate key error, returning existing actor id"
-				);
-				let actor =
-					utils::fetch_actor_by_id(&ctx, existing_actor_id, query.namespace.clone())
-						.await?;
-				return Ok(GetOrCreateResponse {
-					actor,
-					created: false,
-				});
+		match ctx
+			.op(pegboard::ops::actor::create::Input {
+				actor_id,
+				namespace_id: namespace.namespace_id,
+				name: body.name.clone(),
+				key: Some(body.key.clone()),
+				runner_name_selector: body.runner_name_selector,
+				input: body.input.clone(),
+				crash_policy: body.crash_policy,
+				forward_request: false,
+				datacenter_name: body.datacenter.clone(),
+			})
+			.await
+		{
+			Ok(res) => Ok(GetOrCreateResponse {
+				actor: res.actor,
+				created: true,
+			}),
+			Err(err) => {
+				// Check if this is a DuplicateKey error and extract the existing actor ID
+				if let Some(existing_actor_id) = utils::extract_duplicate_key_error(&err) {
+					tracing::info!(
+						?existing_actor_id,
+						"received duplicate key error, returning existing actor id"
+					);
+					let actor =
+						utils::fetch_actor_by_id(&ctx, existing_actor_id, query.namespace.clone())
+							.await?;
+					return Ok(GetOrCreateResponse {
+						actor,
+						created: false,
+					});
+				}
+
+				// Re-throw the original error if it's not a DuplicateKey
+				Err(err)
 			}
-
-			// Re-throw the original error if it's not a DuplicateKey
-			Err(err)
 		}
+	} else {
+		// Forward to remote datacenter
+		rivet_api_util::request_remote_datacenter::<GetOrCreateResponse>(
+			ctx.config(),
+			target_dc_label,
+			"/actors",
+			axum::http::Method::PUT,
+			Some(&GetOrCreateQuery {
+				namespace: query.namespace,
+			}),
+			Some(&body),
+		)
+		.await
 	}
 }

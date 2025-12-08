@@ -29,6 +29,14 @@ pub struct Output {
 
 #[operation]
 pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+	// Ensure actor ID belongs to this datacenter
+	ensure!(
+		input.actor_id.label() == ctx.config().dc_label(),
+		"actor id belongs to datacenter {} but current datacenter is {}",
+		input.actor_id.label(),
+		ctx.config().dc_label()
+	);
+
 	// Set up subscriptions before dispatching workflow
 	let mut create_sub = ctx
 		.subscribe::<crate::workflows::actor::CreateComplete>(("actor_id", input.actor_id))
