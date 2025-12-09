@@ -1,20 +1,32 @@
-# Raw Fetch Handler Example for RivetKit
+# Raw Fetch Handler Example
 
-Example project demonstrating raw HTTP fetch handling with Hono integration in [RivetKit](https://rivetkit.org).
+Example project demonstrating raw HTTP fetch handling with Hono integration.
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+## Getting Started
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/raw-fetch-handler
+npm install
+npm run dev
+```
 
-## Overview
 
-This example demonstrates:
-- Using Hono router inside an actor's `onFetch` handler via `createVars`
-- Creating named counter actors that maintain independent state
-- Making fetch requests to actors through the frontend client
-- Forwarding requests from custom Hono endpoints to actor fetch handlers
-- Building a React frontend that interacts with RivetKit actors
-- Testing actors with fetch handlers
+## Features
+
+- **Raw fetch handlers**: Use `onRequest` for low-level HTTP request handling with custom routing
+- **Hono integration**: Embed Hono router inside actor fetch handlers using `createVars`
+- **HTTP endpoints**: Define custom HTTP endpoints directly within actors
+- **Proxy routing**: Forward HTTP requests from external endpoints to actor fetch handlers
+- **Multiple actor instances**: Each named counter maintains independent state
+
+## Implementation
+
+The backend defines a counter actor with a Hono router embedded in the `onRequest` handler. Each counter is identified by a unique name, and the frontend can interact with counters through direct actor fetch calls or HTTP requests through a forward endpoint. Multiple counters maintain independent state.
+
+### Key Implementation
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/raw-fetch-handler/src/backend/registry.ts)): Demonstrates `onRequest` handler with Hono router for custom HTTP routing
 
 ## Project Structure
 
@@ -26,72 +38,10 @@ raw-fetch-handler/
 └── tests/           # Vitest test suite
 ```
 
-## Getting Started
+## Resources
 
-### Prerequisites
-
-- Node.js
-
-### Installation
-
-```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/raw-fetch-handler
-pnpm install
-```
-
-### Development
-
-Start both backend and frontend:
-
-```sh
-pnpm dev
-```
-
-Or run them separately:
-
-```sh
-# Terminal 1 - Backend
-pnpm dev:backend
-
-# Terminal 2 - Frontend
-pnpm dev:frontend
-```
-
-Run tests:
-
-```sh
-pnpm test
-```
-
-## Features
-
-### Backend
-
-1. **Counter Actor** - A simple counter with HTTP endpoints
-   - `GET /count` - Get current count
-   - `POST /increment` - Increment the counter
-
-2. **Forward Endpoint** - Routes requests to actor fetch handlers
-   - `/forward/:name/*` - Forward any request to the named actor
-
-### Frontend
-
-A React app demonstrating:
-- Creating multiple named counters
-- Interacting via actor fetch API
-- Using the forward endpoint
-- Real-time state updates
-
-## How It Works
-
-1. The backend defines a counter actor with a Hono router
-2. Each counter is identified by a unique name
-3. The frontend can interact with counters in two ways:
-   - Direct actor fetch calls using the RivetKit client
-   - HTTP requests through the forward endpoint
-4. Multiple counters maintain independent state
+Read more about [HTTP request handling](/docs/actors/http), [state](/docs/actors/state), and [actions](/docs/actors/actions).
 
 ## License
 
-Apache 2.0
+MIT

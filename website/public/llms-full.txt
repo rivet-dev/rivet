@@ -5971,6 +5971,38 @@ Get started with Rivet in minutes. Choose your preferred framework or runtime to
   Build server-rendered Next.js experiences backed by actors
 
   Deploy actors on Cloudflare Workers with zero infrastructure
+## Submit a Template
+
+# Submit a Template
+
+Share it with the community by submitting it as a template.
+
+## How to Submit
+
+Create your example in the `examples/` folder of the [Rivet repository](https://github.com/rivet-dev/rivet).
+
+Add a `template` block to your example's `package.json`:
+
+```json
+,
+  "scripts": 
+}
+```
+
+Run the following command to regenerate the template registry:
+
+```bash
+pnpm build -F @rivetkit/example-registry
+```
+
+Submit your changes by [creating a pull request](https://github.com/rivet-dev/rivet/compare) to the Rivet repository.
+
+## Template Options
+
+- `technologies` (required) - Array of technologies used
+- `tags` (required) - Array of tags categorizing the template
+- `noFrontend` (optional) - Set to `true` to skip screenshot generation
+- `priority` (optional) - Lower numbers appear first in the list
 ## Quickstart
 
 # Quickstart

@@ -23,7 +23,7 @@ export const ArchitectureSection = () => {
 			</div>
 
 			{/* Architecture Diagram */}
-			<div className="bg-[#0A0A0A] rounded-xl p-8 mb-16">
+			<div className="bg-background rounded-xl p-8 mb-16">
 				<div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-8 items-center">
 					{/* Your Applications */}
 					<div className="text-center">

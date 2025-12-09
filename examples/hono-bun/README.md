@@ -1,41 +1,34 @@
-# Hono + Bun Integration for RivetKit
+# Hono + Bun
 
-Example project demonstrating Hono web framework with Bun runtime and React frontend integration with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example demonstrating Hono web framework with Bun runtime and React frontend integration.
 
 ## Getting Started
 
-### Prerequisites
-
-- Bun
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/hono-bun
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/hono-bun
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-This will start both the backend server (on port 8080) and the frontend dev server (on port 5173).
 
-Open your browser to [http://localhost:5173](http://localhost:5173) to see the counter application.
+## Features
 
-You can also test the server directly by running:
+- **Hono + Bun runtime**: High-performance HTTP routing with Bun's fast JavaScript runtime
+- **React frontend**: Full-stack example with React UI and actor backend
+- **Type-safe API**: Full TypeScript type safety from frontend to actor actions
+- **Fast development**: Hot reloading and instant startup with Bun
 
-```sh
-curl -X POST http://localhost:8080/increment/test
-```
+## Implementation
+
+This example demonstrates using Hono with Bun runtime and React:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/hono-bun/src/backend/registry.ts)): Shows how to integrate Hono, Bun, and React with Rivet Actors
+
+## Resources
+
+Read more about [actions](/docs/actors/actions) and [setup](/docs/setup).
 
 ## License
 
-Apache 2.0
+MIT

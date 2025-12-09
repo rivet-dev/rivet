@@ -53,7 +53,7 @@ interface CodeGroupProps {
 }
 
 const getChildIdx = (child: ReactElement) =>
-	child.props?.file || child.props?.title || child.props?.language || "code";
+	child.props?.file || child.props?.title || child.props?.language || "text";
 
 export function CodeGroup({ children, className }: CodeGroupProps) {
 	const tabChildren = Children.toArray(children).filter(
@@ -66,7 +66,7 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 
 	return (
 		<div
-			className={cn("code-group group my-4 rounded-md border", className)}
+			className={cn("code-group group my-4 overflow-hidden rounded-md border bg-neutral-950", className)}
 			data-code-group
 		>
 			<Tabs defaultValue={getChildIdx(tabChildren[0])}>
@@ -77,11 +77,10 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 					<TabsList>
 						{tabChildren.map((child) => {
 							const idx = getChildIdx(child);
+							const displayName = child.props.title || languageNames[child.props.language];
 							return (
 								<TabsTrigger key={idx} value={idx}>
-									{child.props.title ||
-										languageNames[child.props.language] ||
-										"Code"}
+									{displayName || "Code"}
 								</TabsTrigger>
 							);
 						})}
@@ -106,11 +105,12 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 interface PreProps {
 	file?: string;
 	title?: string;
-	language: keyof typeof languageNames;
+	language?: keyof typeof languageNames | string;
 	isInGroup?: boolean;
 	children?: ReactElement;
 	autofill?: boolean;
 	code?: string;
+	flush?: boolean;
 }
 export const pre = ({
 	children,
@@ -120,10 +120,14 @@ export const pre = ({
 	isInGroup,
 	autofill,
 	code,
+	flush,
 }: PreProps) => {
 	const codeBlock = (
-		<div className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
-			<div className="bg-background text-wrap p-2 text-sm">
+		<div className={cn(
+			"not-prose group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none group-[.code-group]:overflow-visible",
+			flush ? "" : "my-4 overflow-hidden rounded-md border"
+		)}>
+			<div className="bg-neutral-950 text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
 					{children
 						? cloneElement(children, { escaped: true })
@@ -131,7 +135,7 @@ export const pre = ({
 				</ScrollArea>
 			</div>
 
-			<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
+			<div className="text-foreground flex items-center justify-between gap-2 border-t bg-black p-2 text-xs">
 				<div className="text-muted-foreground flex items-center gap-2">
 					{file ? (
 						<>
@@ -139,9 +143,11 @@ export const pre = ({
 							<span>{file}</span>
 						</>
 					) : isInGroup ? null : (
-						<Badge variant="outline">
-							{title || languageNames[language]}
-						</Badge>
+						(title || languageNames[language]) && language !== "text" ? (
+							<Badge variant="outline">
+								{title || languageNames[language]}
+							</Badge>
+						) : null
 					)}
 					{autofill && <AutofillFooter />}
 				</div>

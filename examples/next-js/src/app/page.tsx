@@ -1,5 +1,5 @@
-import { ChatRoom } from "@/components/ChatRoom";
+import { Counter } from "@/components/Counter";
 
 export default function Home() {
-	return <ChatRoom />;
+	return <Counter />;
 }

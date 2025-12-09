@@ -24,7 +24,7 @@ export function Card({
 	const content = (
 		<div
 			className={clsx(
-				"rounded-xl bg-white/2 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col w-full h-full",
+				"rounded-xl bg-neutral-950 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col w-full h-full",
 				href && "group-hover:border-[white]/40 cursor-pointer",
 				className,
 			)}

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "Rivet Chat",
-	description: "Real-time chat powered by RivetKit",
+	title: "Rivet Counter",
+	description: "Real-time counter powered by RivetKit",
 };
 
 export default function RootLayout({

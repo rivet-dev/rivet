@@ -47,3 +47,7 @@ LICENSE*
 # Frontend
 !frontend/dist/
 
+# RivetKit packages (need pre-built dist for screenshot generation)
+!rivetkit-typescript/packages/*/dist/
+!engine/sdks/typescript/*/dist/
+

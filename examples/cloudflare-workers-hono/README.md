@@ -1,63 +1,34 @@
-# Cloudflare Workers with Hono for RivetKit
+# Cloudflare Workers with Hono
 
-Example project demonstrating Cloudflare Workers deployment with Hono router using [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example project demonstrating Cloudflare Workers deployment with Hono router.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js
-- Cloudflare account with Actors enabled
-- Wrangler CLI installed globally (`npm install -g wrangler`)
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/cloudflare-workers-hono
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/cloudflare-workers-hono
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-This will start the Cloudflare Workers development server locally at http://localhost:8787.
 
-### Testing the Application
+## Features
 
-You can test the Hono router endpoint by making a POST request to increment a counter:
+- **Cloudflare Workers integration**: Deploy Rivet Actors to Cloudflare's edge network using Durable Objects
+- **Hono routing**: Use Hono web framework for HTTP request handling
+- **Edge-native execution**: Actors run at the edge for low-latency global access
+- **Type-safe API endpoints**: Full TypeScript support across actor and HTTP layers
 
-```sh
-curl -X POST http://localhost:8787/increment/my-counter
-```
+## Implementation
 
-Or run the client script to interact with your actors:
+This example demonstrates combining Hono with Rivet Actors on Cloudflare Workers:
 
-```sh
-npm run client
-```
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/cloudflare-workers-hono/src/backend/registry.ts)): Shows how to integrate Hono router with actors on Cloudflare Workers
 
-### Deploy to Cloudflare
+## Resources
 
-First, authenticate with Cloudflare:
-
-```sh
-wrangler login
-```
-
-Then deploy:
-
-```sh
-npm run deploy
-```
+Read more about [Cloudflare Workers integration](/docs/platforms/cloudflare-workers) and [actions](/docs/actors/actions).
 
 ## License
 
-Apache 2.0
+MIT

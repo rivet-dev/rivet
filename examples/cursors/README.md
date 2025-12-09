@@ -1,43 +1,34 @@
-# Real-time Collaborative Cursors for RivetKit
+# Real-time Collaborative Cursors
 
-Example project demonstrating real-time cursor tracking and collaborative canvas with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example project demonstrating real-time cursor tracking and collaborative canvas.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js 18+
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/cursors
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/cursors
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-Open your browser to `http://localhost:5173`. Open multiple tabs or windows to see real-time cursor tracking and text placement across different users.
 
 ## Features
 
-- Real-time cursor position tracking
-- Multiple users with color-coded cursors
-- Click-to-place text on canvas
-- Multiple room support for different collaborative spaces
-- Persistent text labels across sessions
-- Event-driven architecture with RivetKit actors
-- TypeScript support throughout
+- **Real-time cursor tracking**: Broadcast cursor positions to all connected users instantly
+- **Event-driven architecture**: Use actor events to push updates to WebSocket clients
+- **Persistent canvas state**: Text labels automatically saved in actor state across sessions
+- **Multiple rooms**: Each room is a separate actor instance with isolated state
+
+## Implementation
+
+This example demonstrates real-time collaboration using WebSockets and Rivet Actors:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/cursors/src/backend/registry.ts)): Implements the `canvasRoom` actor for tracking cursor positions and managing collaborative canvas state
+
+## Resources
+
+Read more about [WebSockets](/docs/actors/websockets), [state](/docs/actors/state), and [events](/docs/actors/events).
 
 ## License
 
-Apache 2.0
+MIT

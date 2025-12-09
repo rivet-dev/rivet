@@ -1,32 +1,21 @@
 import { actor, setup } from "rivetkit";
 
-export type Message = { sender: string; text: string; timestamp: number };
-
-export const chatRoom = actor({
-	options: {
-		sleepTimeout: 2000,
-	},
-	// Persistent state that survives restarts
+const counter = actor({
 	state: {
-		messages: [] as Message[],
+		count: 0,
 	},
-
 	actions: {
-		// Callable functions from clients
-		sendMessage: (c, sender: string, text: string) => {
-			const message = { sender, text, timestamp: Date.now() };
-			// State changes are automatically persisted
-			c.state.messages.push(message);
-			// Send events to all connected clients
-			c.broadcast("newMessage", message);
-			return message;
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
 		},
-
-		getHistory: (c) => c.state.messages,
+		getCount: (c) => {
+			return c.state.count;
+		},
 	},
 });
 
-// Register actors for use
 export const registry = setup({
-	use: { chatRoom },
+	use: { counter },
 });

@@ -10,7 +10,11 @@ const nextConfig = {
 	output: "export",
 	trailingSlash: true, // Required for Vercel
 	reactStrictMode: true,
-	transpilePackages: ["@rivet-gg/components", "@rivet-gg/icons"],
+	transpilePackages: [
+		"@rivet-gg/components",
+		"@rivet-gg/icons",
+		"@rivetkit/example-registry",
+	],
 	typescript: {
 		ignoreBuildErrors: true,
 	},

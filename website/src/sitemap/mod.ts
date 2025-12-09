@@ -336,6 +336,16 @@ export const sitemap = [
 							},
 						]
 					},
+					{
+						title: "More",
+						collapsible: true,
+						pages: [
+							{
+								title: "Submit Template",
+								href: "/docs/meta/submit-template",
+							},
+						]
+					},
 					// {
 					// 	title: "Architecture",
 					// 	href: "/docs/general/architecture",

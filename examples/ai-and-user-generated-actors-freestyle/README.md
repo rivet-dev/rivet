@@ -1,8 +1,16 @@
-# User and AI Generated Rivet Actors Freestyle Deployer
+# User and AI Generated Actors Freestyle Deployer
 
 Shows how to deploy user or AI-generated Rivet Actor code using a sandboxed namespace and Freestyle
 
-[View Full Documentation](https://rivet.dev/docs/actors/ai-and-user-generated-actors)
+## Getting Started
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/ai-and-user-generated-actors-freestyle
+npm install
+npm run dev
+```
+
 
 ## Features
 
@@ -10,40 +18,14 @@ Shows how to deploy user or AI-generated Rivet Actor code using a sandboxed name
 - **Deploy user or AI generated code**: Deploy custom actor and frontend code directly to Freestyle
 - **Automatic configuration**: Configure Rivet & Freestyle together automatically without manual setup
 
-## How It Works
+## Implementation
 
 The logic lives in `src/backend/`:
 
 1. **Receives user or AI-generated code**: The backend receives custom actor code (`registry.ts`) and frontend code (`App.tsx`)
-2. **Creates a sandboxed Rivet namespace**: Either using Rivet Cloud or Rivet self-hosted API (see [`deploy-with-rivet-cloud.ts`](src/backend/deploy-with-rivet-cloud.ts) and [`deploy-with-rivet-self-hosted.ts`](src/backend/deploy-with-rivet-self-hosted.ts))
-3. **Deploys actor and frontend to Freestyle**: Builds the project and deploys to Freestyle (see [`src/backend/utils.ts`](src/backend/utils.ts))
+2. **Creates a sandboxed Rivet namespace**: Either using Rivet Cloud or Rivet self-hosted API (see [`deploy-with-rivet-cloud.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-and-user-generated-actors-freestyle/src/backend/deploy-with-rivet-cloud.ts) and [`deploy-with-rivet-self-hosted.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-and-user-generated-actors-freestyle/src/backend/deploy-with-rivet-self-hosted.ts))
+3. **Deploys actor and frontend to Freestyle**: Builds the project and deploys to Freestyle (see [`utils.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-and-user-generated-actors-freestyle/src/backend/utils.ts))
 4. **Configures Rivet to connect to Freestyle**: Sets up the Rivet runner to point to the Rivet deployment for running the actors
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and pnpm
-- A [Freestyle](https://freestyle.sh) account and API key
-- Either:
-  - [Rivet Cloud](https://dashboard.rivet.dev/) account with API token, or
-  - [Self-hosted Rivet instance](https://www.rivet.dev/docs/self-hosting/) with endpoint and token
-
-### Installation
-
-```bash
-pnpm install
-```
-
-### Running the Application
-
-Start both the frontend and backend servers:
-
-```bash
-pnpm dev
-```
-
-Open http://localhost:5173 in your browser.
 
 ## Usage
 
@@ -82,6 +64,10 @@ template/  # The Rivet template code to deploy with Rivet
 		frontend/ # Frontend to be deployed
 tests/ # Vitest tests
 ```
+
+## Resources
+
+Read more about [AI and user generated actors](/docs/actors/ai-and-user-generated-actors).
 
 ## License
 

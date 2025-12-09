@@ -1,57 +1,34 @@
-# Cloudflare Workers for RivetKit
+# Cloudflare Workers
 
-Example project demonstrating Cloudflare Workers deployment with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example project demonstrating Cloudflare Workers deployment.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js
-- Cloudflare account with Actors enabled
-- Wrangler CLI installed globally (`npm install -g wrangler`)
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/cloudflare-workers
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/cloudflare-workers
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-This will start the Cloudflare Workers development server locally at http://localhost:8787.
 
-### Testing the Client
+## Features
 
-In a separate terminal, run the client script to interact with your actors:
+- **Cloudflare Workers integration**: Deploy Rivet Actors to Cloudflare's edge network using Durable Objects
+- **Edge-native execution**: Actors run at the edge for low-latency global access
+- **Built-in HTTP API**: Actors automatically exposed via HTTP endpoints
+- **Wrangler CLI integration**: Standard Cloudflare tooling for development and deployment
 
-```sh
-npm run client
-```
+## Implementation
 
-### Deploy to Cloudflare
+This example demonstrates deploying Rivet Actors to Cloudflare Workers:
 
-First, authenticate with Cloudflare:
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/cloudflare-workers/src/backend/registry.ts)): Shows how to set up actors for Cloudflare Workers deployment using Durable Objects
 
-```sh
-wrangler login
-```
+## Resources
 
-Then deploy:
-
-```sh
-npm run deploy
-```
+Read more about [Cloudflare Workers integration](/docs/platforms/cloudflare-workers), [actions](/docs/actors/actions), and [state](/docs/actors/state).
 
 ## License
 
-Apache 2.0
+MIT

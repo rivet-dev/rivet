@@ -474,7 +474,7 @@ export const PowerfulPrimitivesSection = () => {
 			</div>
 
 			{/* Box Container - no border */}
-			<div className="bg-[#0A0A0A] rounded-xl overflow-hidden">
+			<div className="bg-background rounded-xl overflow-hidden">
 				<div className="flex flex-col lg:flex-row">
 					{/* Left Column - Tab Buttons - 50% width on desktop */}
 					<div className="w-full lg:w-1/2 p-5">

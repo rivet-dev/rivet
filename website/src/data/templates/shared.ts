@@ -5,4 +5,4 @@ export {
 	type Technology,
 	type Tag,
 	type Template,
-} from "@rivet-gg/example-registry";
+} from "@rivetkit/example-registry";
