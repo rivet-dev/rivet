@@ -1492,15 +1492,14 @@ impl ProxyService {
 								);
 
 								// Send a close message to the client since we can't connect to upstream
-								tracing::debug!(
-									"Sending close message to client due to upstream connection failure"
+								let err = errors::RetryAttemptsExceeded { attempts }.build();
+								tracing::warn!(
+									?err,
+									"sending close message to client due to upstream connection failure"
 								);
 								let (mut client_sink, _) = client_ws.split();
 								match client_sink
-									.send(to_hyper_close(Some(err_to_close_frame(
-										errors::RetryAttemptsExceeded { attempts }.build(),
-										ray_id,
-									))))
+									.send(to_hyper_close(Some(err_to_close_frame(err, ray_id))))
 									.await
 								{
 									Ok(_) => {
@@ -1572,11 +1571,13 @@ impl ProxyService {
 									return;
 								}
 								Ok(ResolveRouteOutput::CustomServe(_)) => {
+									let err = errors::WebSocketTargetChanged.build();
+									tracing::warn!(
+										?err,
+										"websocket target changed to custom serve"
+									);
 									let _ = client_ws
-										.close(Some(err_to_close_frame(
-											errors::WebSocketTargetChanged.build(),
-											ray_id,
-										)))
+										.close(Some(err_to_close_frame(err, ray_id)))
 										.await;
 									return;
 								}
@@ -2046,6 +2047,7 @@ impl ProxyService {
 										);
 
 										// Close WebSocket with error
+										tracing::warn!(?err, "closing websocket with error");
 										ws_handle
 											.send(to_hyper_close(Some(err_to_close_frame(
 												err, ray_id,
@@ -2104,10 +2106,14 @@ impl ProxyService {
 											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 										}
 										Ok(ResolveRouteOutput::Target(_)) => {
+											let err = errors::WebSocketTargetChanged.build();
+											tracing::warn!(
+												?err,
+												"websocket target changed to target"
+											);
 											ws_handle
 												.send(to_hyper_close(Some(err_to_close_frame(
-													errors::WebSocketTargetChanged.build(),
-													ray_id,
+													err, ray_id,
 												))))
 												.await?;
 
@@ -2120,6 +2126,10 @@ impl ProxyService {
 											break;
 										}
 										Err(err) => {
+											tracing::warn!(
+												?err,
+												"closing websocket due to route resolution error"
+											);
 											ws_handle
 												.send(to_hyper_close(Some(err_to_close_frame(
 													err, ray_id,

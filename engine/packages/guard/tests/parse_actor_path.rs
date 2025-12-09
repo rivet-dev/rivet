@@ -7,7 +7,7 @@ fn test_parse_actor_path_with_token() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, Some("my-token".to_string()));
-	assert_eq!(result.remaining_path, "/api/v1/endpoint");
+	assert_eq!(result.stripped_path, "/api/v1/endpoint");
 }
 
 #[test]
@@ -17,7 +17,7 @@ fn test_parse_actor_path_without_token() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/api/v1/endpoint");
+	assert_eq!(result.stripped_path, "/api/v1/endpoint");
 }
 
 #[test]
@@ -27,7 +27,7 @@ fn test_parse_actor_path_with_uuid() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "12345678-1234-1234-1234-123456789abc");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/status");
+	assert_eq!(result.stripped_path, "/status");
 }
 
 #[test]
@@ -37,14 +37,14 @@ fn test_parse_actor_path_with_query_params() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-456");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/api/endpoint?foo=bar&baz=qux");
+	assert_eq!(result.stripped_path, "/api/endpoint?foo=bar&baz=qux");
 
 	// Path with token and query parameters
 	let path = "/gateway/actor-456@token123/api?key=value";
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-456");
 	assert_eq!(result.token, Some("token123".to_string()));
-	assert_eq!(result.remaining_path, "/api?key=value");
+	assert_eq!(result.stripped_path, "/api?key=value");
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn test_parse_actor_path_with_fragment() {
 	assert_eq!(result.actor_id, "actor-789");
 	assert_eq!(result.token, None);
 	// Fragment is stripped during parsing
-	assert_eq!(result.remaining_path, "/page");
+	assert_eq!(result.stripped_path, "/page");
 }
 
 #[test]
@@ -65,14 +65,14 @@ fn test_parse_actor_path_empty_remaining() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-000");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/");
+	assert_eq!(result.stripped_path, "/");
 
 	// With token and no remaining path
 	let path = "/gateway/actor-000@tok";
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-000");
 	assert_eq!(result.token, Some("tok".to_string()));
-	assert_eq!(result.remaining_path, "/");
+	assert_eq!(result.stripped_path, "/");
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn test_parse_actor_path_with_trailing_slash() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-111");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/api/");
+	assert_eq!(result.stripped_path, "/api/");
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn test_parse_actor_path_complex_remaining() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-complex");
 	assert_eq!(result.token, Some("secure-token".to_string()));
-	assert_eq!(result.remaining_path, "/api/v2/users/123/profile/settings");
+	assert_eq!(result.stripped_path, "/api/v2/users/123/profile/settings");
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn test_parse_actor_path_special_characters() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor_id-123.test");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn test_parse_actor_path_encoded_characters() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/api%20endpoint/test%2Fpath");
+	assert_eq!(result.stripped_path, "/api%20endpoint/test%2Fpath");
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn test_parse_actor_path_encoded_actor_id() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn test_parse_actor_path_encoded_token() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, Some("tok@en".to_string()));
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn test_parse_actor_path_encoded_actor_id_and_token() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, Some("token-with-encoded".to_string()));
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn test_parse_actor_path_encoded_spaces() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor with spaces");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
 
 // Invalid path tests
@@ -206,7 +206,7 @@ fn test_parse_actor_path_query_and_fragment() {
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, None);
 	// Fragment is stripped, query is preserved
-	assert_eq!(result.remaining_path, "/api?query=1");
+	assert_eq!(result.stripped_path, "/api?query=1");
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn test_parse_actor_path_only_query_string() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, None);
-	assert_eq!(result.remaining_path, "/?direct=true");
+	assert_eq!(result.stripped_path, "/?direct=true");
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn test_parse_actor_path_token_with_special_chars() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, Some("token_with-chars.123".to_string()));
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
 
 #[test]
@@ -236,5 +236,5 @@ fn test_parse_actor_path_multiple_at_signs() {
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, Some("token@with@ats".to_string()));
-	assert_eq!(result.remaining_path, "/endpoint");
+	assert_eq!(result.stripped_path, "/endpoint");
 }
