@@ -30,5 +30,11 @@
 		"typescript": "^5.7.3",
 		"vite": "^5.4.19",
 		"vitest": "^3.1.1"
+	},
+	"template": {
+		"technologies": [
+			"typescript"
+		],
+		"tags": []
 	}
 }

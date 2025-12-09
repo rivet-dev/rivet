@@ -31,5 +31,14 @@
 		"react-dom": "^18.2.0",
 		"zod": "^3.25.69"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"typescript"
+		],
+		"tags": [
+			"ai",
+			"real-time"
+		]
+	}
 }
