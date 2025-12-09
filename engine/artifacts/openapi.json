@@ -1130,7 +1130,8 @@
           "created": {
             "type": "boolean"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ActorsKvGetResponse": {
         "type": "object",
