@@ -39,6 +39,9 @@
 		"tags": [
 			"ai",
 			"real-time"
-		]
-	}
+		],
+		"priority": 100,
+		"frontendPort": 3000
+	},
+	"license": "MIT"
 }

@@ -73,13 +73,13 @@ export function CollapsibleSidebarItem({
 	const getPaddingClass = (level: number) => {
 		switch (level) {
 			case 0:
-				return "pl-3 pr-3";
+				return "pl-2 pr-3";
 			case 1:
-				return "pl-6 pr-3";
+				return "pl-5 pr-3";
 			case 2:
-				return "pl-9 pr-3";
+				return "pl-8 pr-3";
 			default:
-				return "pl-12 pr-3";
+				return "pl-11 pr-3";
 		}
 	};
 
@@ -101,7 +101,7 @@ export function CollapsibleSidebarItem({
 					{item.icon ? (
 						<Icon
 							icon={item.icon}
-							className="mr-2 size-3.5 flex-shrink-0"
+							className="size-3.5 flex-shrink-0"
 						/>
 					) : null}
 					<span className="truncate">{item.title}</span>

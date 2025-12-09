@@ -43,6 +43,8 @@
 			"websocket",
 			"typescript"
 		],
-		"tags": []
-	}
+		"tags": [],
+		"frontendPort": 5173
+	},
+	"license": "MIT"
 }

@@ -1,5 +1,5 @@
 {
-	"name": "example-hono-bun",
+	"name": "hono-bun",
 	"version": "2.0.21",
 	"private": true,
 	"type": "module",
@@ -43,6 +43,10 @@
 			"bun",
 			"typescript"
 		],
-		"tags": []
-	}
+		"tags": [
+			"starter"
+		],
+		"noFrontend": true
+	},
+	"license": "MIT"
 }

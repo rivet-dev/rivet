@@ -1,0 +1,21 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"inputs": [
+				"scripts/**",
+				"src/**",
+				"../../examples/**/package.json",
+				"../../examples/**/README.md"
+			],
+			"outputs": ["src/_gen.ts"],
+			"env": [
+				"RAILWAY_API_TOKEN",
+				"RAILWAY_WORKSPACE_ID",
+				"RAILWAY_PROJECT_ID",
+				"SKIP_RAILWAY_TEMPLATES"
+			]
+		}
+	}
+}

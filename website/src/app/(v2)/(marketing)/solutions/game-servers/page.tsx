@@ -73,7 +73,7 @@ const Badge = ({ text, color = "red" }) => {
 
 const CodeBlock = ({ code, fileName = "match.ts" }) => {
 	return (
-		<div className="relative group rounded-xl overflow-hidden border border-white/10 bg-[#0A0A0A] shadow-2xl">
+		<div className="relative group rounded-xl overflow-hidden border border-white/10 bg-background shadow-2xl">
 			<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent z-10" />
 			<div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
 				<div className="flex items-center gap-2">

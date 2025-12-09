@@ -23,6 +23,8 @@
 			"deno",
 			"typescript"
 		],
-		"tags": []
-	}
+		"tags": [],
+		"noFrontend": true
+	},
+	"license": "MIT"
 }

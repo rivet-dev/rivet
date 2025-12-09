@@ -1,5 +1,5 @@
 {
-	"name": "example-hono-react",
+	"name": "hono-react",
 	"version": "2.0.21",
 	"private": true,
 	"type": "module",
@@ -38,7 +38,9 @@
 			"typescript"
 		],
 		"tags": [
-			"real-time"
-		]
-	}
+			"starter"
+		],
+		"frontendPort": 5173
+	},
+	"license": "MIT"
 }

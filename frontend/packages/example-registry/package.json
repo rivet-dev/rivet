@@ -1,5 +1,5 @@
 {
-	"name": "@rivet-gg/example-registry",
+	"name": "@rivetkit/example-registry",
 	"private": true,
 	"version": "2.0.21",
 	"type": "module",
@@ -16,10 +16,11 @@
 	},
 	"types": "./dist/index.d.ts",
 	"scripts": {
-		"build": "tsx scripts/build.ts"
+		"build": "tsx scripts/build/index.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
+		"puppeteer": "^23.11.1",
 		"tsx": "^4.20.6",
 		"typescript": "^5.9.3"
 	}

@@ -1,6 +1,7 @@
 import type { Template } from "@/data/templates/shared";
-import { TECHNOLOGIES } from "@/data/templates/shared";
+import { Icon, faArrowRight, faCode } from "@rivet-gg/icons";
 import Link from "next/link";
+import Image from "next/image";
 import clsx from "clsx";
 
 interface TemplateCardProps {
@@ -8,57 +9,73 @@ interface TemplateCardProps {
 }
 
 export function TemplateCard({ template }: TemplateCardProps) {
+	// Strip markdown links from description
+	const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
 	return (
 		<Link href={`/templates/${template.name}`} className="group block h-full">
 			<div
 				className={clsx(
-					"rounded-xl bg-white/2 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col h-full",
+					"rounded-xl bg-neutral-950 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col h-full",
 					"group-hover:border-[white]/40 cursor-pointer",
 				)}
 			>
-				{/* Placeholder Image */}
-				<div className="w-full h-48 bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center text-zinc-600">
-					<svg
-						className="w-16 h-16"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={1.5}
-							d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-						/>
-					</svg>
-				</div>
-
 				{/* Content */}
-				<div className="flex-1 flex flex-col p-6">
+				<div className="pt-6 px-6 pb-4 flex-1 flex flex-col">
 					{/* Title */}
-					<h3 className="text-lg font-semibold text-white mb-2 group-hover:text-[#FF4500] transition-colors">
-						{template.displayName}
-					</h3>
+					<div className="flex items-center justify-between mb-2 gap-4">
+						<h3 className="text-base font-semibold text-white flex-1 truncate">
+							{template.displayName}
+						</h3>
+						<Icon
+							icon={faArrowRight}
+							className="text-white/0 group-hover:text-white/60 transition-all duration-200 -translate-x-2 group-hover:translate-x-0 flex-shrink-0"
+						/>
+					</div>
 
 					{/* Description */}
-					<p className="text-sm text-zinc-400 mb-4 flex-1 line-clamp-2">
-						{template.description}
+					<p className="text-sm text-zinc-400 line-clamp-2">
+						{description}
 					</p>
+				</div>
 
-					{/* Technologies */}
-					<div className="flex flex-wrap gap-2">
-						{template.technologies.map((tech) => {
-							const techInfo = TECHNOLOGIES.find((t) => t.name === tech);
-							return (
-								<span
-									key={tech}
-									className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-white/5 text-zinc-300 border border-white/10"
-								>
-									{techInfo?.displayName || tech}
-								</span>
-							);
-						})}
+				{/* Template Image - 16:9 aspect ratio matches screenshots (see frontend/packages/example-registry/scripts/build/screenshots.ts) */}
+				<div className="px-6 relative">
+					<div
+						className={clsx(
+							"w-full relative overflow-hidden transition-transform duration-200 translate-y-1 group-hover:translate-y-0 bg-gradient-to-br from-zinc-800 to-zinc-900 border-t border-l border-r border-white/20 rounded-t-md",
+						)}
+					>
+						{/* Browser Title Bar */}
+						<div className="flex items-center gap-2 border-b border-white/5 bg-white/5 px-2 py-1">
+							<div className="flex gap-1">
+								<div className="h-1.5 w-1.5 rounded-full border border-zinc-500/50 bg-zinc-500/20" />
+								<div className="h-1.5 w-1.5 rounded-full border border-zinc-500/50 bg-zinc-500/20" />
+								<div className="h-1.5 w-1.5 rounded-full border border-zinc-500/50 bg-zinc-500/20" />
+							</div>
+						</div>
+						{/* Screenshot Content */}
+						<div className="aspect-video relative">
+							{!template.noFrontend ? (
+								<Image
+									src={`/examples/${template.name}/image.png`}
+									alt={template.displayName}
+									fill
+									className="object-cover"
+									sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+								/>
+							) : (
+								<div className="absolute inset-0 flex items-center justify-center">
+									<Icon
+										icon={faCode}
+										className="text-zinc-600 text-6xl"
+									/>
+								</div>
+							)}
+						</div>
 					</div>
+					{/* Bottom gradient overlay - stays fixed while screenshot moves */}
+					<div className="absolute inset-x-6 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none rounded-t-md overflow-hidden" />
 				</div>
 			</div>
 		</Link>

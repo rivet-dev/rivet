@@ -1,39 +1,34 @@
-# Deno Example for RivetKit
+# Deno Example
 
-Example project demonstrating basic actor state management and RPC calls with [RivetKit](https://rivetkit.org) using Deno runtime.
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example project demonstrating basic actor state management and RPC calls using Deno runtime.
 
 ## Getting Started
 
-### Prerequisites
-
-- Deno
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/deno
-pnpm install
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/deno
+npm install
+npm run dev
 ```
 
-**Notice:** We use `pnpm install` here as Deno offers compatability with package.json via npm/pnpm. Some packages used in rivetkit are simpler to install with npm/pnpm.
 
-### Development
+## Features
 
-```sh
-deno task dev
-```
+- **Deno runtime support**: Run Rivet Actors on Deno for modern JavaScript/TypeScript execution
+- **Type-safe actions**: Define and call actor actions with full TypeScript type safety
+- **Actor state management**: Persistent state automatically managed across actor lifecycle
+- **RPC-style communication**: Call actor methods from client code with automatic serialization
 
-Run the connect script to interact with the counter:
+## Implementation
 
-```sh
-deno task connect
-```
+This example demonstrates using Rivet Actors with the Deno runtime:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/deno/src/backend/registry.ts)): Shows how to configure actors for Deno runtime
+
+## Resources
+
+Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), and [setup](/docs/setup).
 
 ## License
 
-Apache 2.0
+MIT

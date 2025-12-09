@@ -73,17 +73,19 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 
 	return (
 		<NavLink href={item.href} external={item.external} level={level}>
-			{item.icon && "prefix" in item.icon ? (
-				<Icon icon={item.icon} className="mr-2 size-3.5" />
-			) : item.icon ? (
-				<img
-					{...(item.icon as Record<string, string>)}
-					className="mr-2 size-3.5"
-					alt={item.title}
-				/>
-			) : null}
-			<span className="truncate">
-				{item.title ?? routes.pages[getAliasedHref(item.href)]?.title}
+			<span className="flex items-center truncate gap-2">
+				{item.icon && "prefix" in item.icon ? (
+					<Icon icon={item.icon} className="size-3.5 flex-shrink-0" />
+				) : item.icon ? (
+					<img
+						{...(item.icon as Record<string, string>)}
+						className="size-3.5 flex-shrink-0"
+						alt={item.title}
+					/>
+				) : null}
+				<span className="truncate">
+					{item.title ?? routes.pages[getAliasedHref(item.href)]?.title}
+				</span>
 			</span>
 			{"badge" in item && item.badge ? (
 				<span className="ml-2 px-[6px] py-0 text-[10px] font-medium bg-muted border border-white/10 text-muted-foreground rounded-sm whitespace-nowrap">
@@ -145,13 +147,13 @@ export function NavLink({
 	const getPaddingClass = (level: number) => {
 		switch (level) {
 			case 0:
-				return "pl-3 pr-3";
+				return "pl-2 pr-3";
 			case 1:
-				return "pl-6 pr-3";
+				return "pl-5 pr-3";
 			case 2:
-				return "pl-9 pr-3";
+				return "pl-8 pr-3";
 			default:
-				return "pl-12 pr-3";
+				return "pl-11 pr-3";
 		}
 	};
 

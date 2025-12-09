@@ -86,22 +86,29 @@ function rehypeShiki() {
 
 				node.properties.code = textNode.value;
 
-				if (node.properties.language) {
-					const transformers = [transformerNotationFocus()];
+				// Default to "text" if no language specified
+				const lang = node.properties.language || "text";
+				node.properties.language = lang;
 
-					// Add template variable transformer for autofill blocks
-					if (
-						node.properties?.autofill ||
-						parentNode.properties?.autofill
-					) {
-						transformers.push(transformerTemplateVariables());
-					}
+				const transformers = [transformerNotationFocus()];
 
-					textNode.value = highlighter.codeToHtml(textNode.value, {
-						lang: node.properties.language,
+				// Add template variable transformer for autofill blocks
+				if (
+					node.properties?.autofill ||
+					parentNode.properties?.autofill
+				) {
+					transformers.push(transformerTemplateVariables());
+				}
+
+				try {
+					const result = highlighter.codeToHtml(textNode.value, {
+						lang,
 						theme: theme.name,
 						transformers,
 					});
+					textNode.value = result;
+				} catch (error) {
+					console.error("[rehypeShiki] Error highlighting code:", error);
 				}
 			}
 		});

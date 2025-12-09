@@ -120,6 +120,7 @@ https://rivet.dev/docs/general/docs-for-llms
 https://rivet.dev/docs/general/edge
 https://rivet.dev/docs/general/logging
 https://rivet.dev/docs/index
+https://rivet.dev/docs/meta/submit-template
 https://rivet.dev/docs/quickstart
 https://rivet.dev/docs/self-hosting
 https://rivet.dev/docs/self-hosting/configuration

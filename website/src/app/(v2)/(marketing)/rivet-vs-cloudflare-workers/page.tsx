@@ -848,7 +848,7 @@ const ComparisonTable = () => {
 								{group.features.map((feature, featureIndex) => (
 									<tr
 										key={`${groupIndex}-${featureIndex}`}
-										className={`border-b border-zinc-800 ${featureIndex % 2 === 0 ? "bg-zinc-900/30" : "bg-[#0A0A0A]"}`}
+										className={`border-b border-zinc-800 ${featureIndex % 2 === 0 ? "bg-zinc-900/30" : "bg-background"}`}
 									>
 										<td className="py-4 px-6 text-sm font-medium text-white">
 											{feature.feature}

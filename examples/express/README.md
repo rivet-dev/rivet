@@ -1,33 +1,34 @@
-# Express Integration for RivetKit
+# Express Integration
 
-Example project demonstrating Express web framework integration with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example project demonstrating Express web framework integration.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/express
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/express
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-Open your browser to http://localhost:3000 to see the Express server with RivetKit integration.
+
+## Features
+
+- **Express web framework**: Use Express for HTTP routing and middleware with actors
+- **Familiar API**: Standard Express patterns and middleware work seamlessly
+- **Actor integration**: Call actor actions from Express route handlers
+- **Type-safe communication**: TypeScript support for actor method calls
+
+## Implementation
+
+This example demonstrates integrating Express web framework with Rivet Actors:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/express/src/backend/registry.ts)): Shows how to use Express middleware and routing with actors
+
+## Resources
+
+Read more about [actions](/docs/actors/actions) and [setup](/docs/setup).
 
 ## License
 
-Apache 2.0
+MIT

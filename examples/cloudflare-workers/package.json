@@ -26,6 +26,8 @@
 			"cloudflare-workers",
 			"typescript"
 		],
-		"tags": []
-	}
+		"tags": [],
+		"noFrontend": true
+	},
+	"license": "MIT"
 }

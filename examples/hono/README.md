@@ -1,33 +1,34 @@
-# Hono Integration for RivetKit
+# Hono Integration
 
-Example project demonstrating Hono web framework integration with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+Example project demonstrating Hono web framework integration.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js
-
-### Installation
-
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/hono
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/hono
 npm install
-```
-
-### Development
-
-```sh
 npm run dev
 ```
 
-Open your browser to http://localhost:3000 to see the Hono server with RivetKit integration.
+
+## Features
+
+- **Hono web framework**: Lightweight, fast HTTP routing for actor APIs
+- **Actor integration**: Call actor actions from Hono route handlers
+- **Type-safe endpoints**: Full TypeScript type safety across HTTP and actor layers
+- **Middleware support**: Use Hono middleware for authentication, logging, and more
+
+## Implementation
+
+This example demonstrates integrating Hono web framework with Rivet Actors:
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/hono/src/backend/registry.ts)): Shows how to use Hono for HTTP routing with actors
+
+## Resources
+
+Read more about [actions](/docs/actors/actions) and [setup](/docs/setup).
 
 ## License
 
-Apache 2.0
+MIT

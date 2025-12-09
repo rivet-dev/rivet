@@ -68,6 +68,10 @@ gt m
 
 - If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at https://docs.rs/serde/
 
+## Examples
+
+All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.
+
 ## Architecture
 
 ### Monorepo Structure
@@ -183,4 +187,5 @@ Data structures often include:
 ## Documentation
 
 - When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun
+
 

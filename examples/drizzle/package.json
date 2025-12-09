@@ -26,6 +26,8 @@
 		],
 		"tags": [
 			"database"
-		]
-	}
+		],
+		"noFrontend": true
+	},
+	"license": "MIT"
 }

@@ -31,14 +31,14 @@ export async function CodeBlock({
 	lang,
 	code,
 	className,
-}: { lang: shiki.BundledLanguage; code: string; className?: string }) {
+}: { lang?: shiki.BundledLanguage | string; code: string; className?: string }) {
 	highlighter ??= await shiki.getSingletonHighlighter({
 		langs: LANGS,
 		themes: [theme],
 	});
 
 	const out = highlighter.codeToHtml(code, {
-		lang,
+		lang: (lang as shiki.BundledLanguage) || "text",
 		theme: theme.name,
 	});
 

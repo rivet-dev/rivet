@@ -106,7 +106,7 @@ function CodePanelHeader({ tag, label }) {
 	}
 
 	return (
-		<div className="flex h-9 items-center gap-2 border-y border-b-white/7.5 border-t-transparent bg-charcole-950 bg-white/2.5 px-4 dark:border-b-white/5 dark:bg-white/1">
+		<div className="flex h-9 items-center gap-2 border-y border-b-white/7.5 border-t-transparent bg-neutral-950 px-4 dark:border-b-white/5">
 			{tag && (
 				<div className="dark flex">
 					<Tag variant="small">{tag}</Tag>
@@ -131,7 +131,7 @@ function CodePanel({ tag, label, code, children }) {
 	const child = Children.only(children);
 
 	return (
-		<div className="group dark:bg-white/2.5">
+		<div className="group bg-neutral-950">
 			<CodePanelHeader
 				tag={child.props.tag ?? tag}
 				label={child.props.label ?? label}
@@ -154,7 +154,7 @@ function CodeGroupHeader({ title, children, selectedIndex }) {
 	}
 
 	return (
-		<div className="flex min-h-[calc(theme(spacing.12)+1px)] flex-wrap items-start gap-x-4 border-b border-charcole-700 bg-charcole-800 px-4 dark:border-charcole-800 dark:bg-transparent">
+		<div className="flex min-h-[calc(theme(spacing.12)+1px)] flex-wrap items-start gap-x-4 border-b border-neutral-800 bg-neutral-950 px-4">
 			{title && (
 				<h3 className="mr-auto pt-3 font-sans text-xs font-semibold text-white">
 					{title}
@@ -284,7 +284,7 @@ export function CodeGroup({ children, title, ...props }) {
 		<CodeGroupContext.Provider value={true}>
 			<Container
 				{...containerProps}
-				className="not-prose my-6 overflow-hidden rounded-2xl bg-charcole-950 shadow-md dark:ring-1 dark:ring-white/10"
+				className="not-prose my-6 overflow-hidden rounded-2xl bg-neutral-950 shadow-md dark:ring-1 dark:ring-white/10"
 			>
 				<CodeGroupHeader title={title} {...headerProps}>
 					{children}
