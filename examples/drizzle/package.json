@@ -18,5 +18,14 @@
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"drizzle",
+			"typescript"
+		],
+		"tags": [
+			"database"
+		]
+	}
 }

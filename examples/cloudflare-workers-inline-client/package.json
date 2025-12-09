@@ -21,5 +21,12 @@
 		"rivetkit": "workspace:*",
 		"@rivetkit/cloudflare-workers": "workspace:*"
 	},
-	"stableVersion": "0.8.0"
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"cloudflare-workers",
+			"typescript"
+		],
+		"tags": []
+	}
 }
