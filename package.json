@@ -33,5 +33,12 @@
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@clerk/shared": "3.27.1"
+	},
+	"pnpm": {
+		"overrides": {
+			"@mastra/core": "0.0.0-ai-v5-20250718021026",
+			"@mastra/mcp": "0.0.0-ai-v5-20250718021026",
+			"mastra": "0.0.0-ai-v5-20250718021026"
+		}
 	}
 }
