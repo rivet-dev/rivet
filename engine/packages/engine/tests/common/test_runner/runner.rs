@@ -57,6 +57,7 @@ pub struct TestRunner {
 	next_event_idx: Arc<Mutex<u64>>,
 	event_history: Arc<Mutex<Vec<rp::EventWrapper>>>,
 	shutdown: Arc<AtomicBool>,
+	is_child_task: bool,
 
 	// Event channel for actors to push events
 	event_tx: mpsc::UnboundedSender<ActorEvent>,
@@ -165,6 +166,7 @@ impl TestRunnerBuilder {
 			next_event_idx: Arc::new(Mutex::new(0)),
 			event_history: Arc::new(Mutex::new(Vec::new())),
 			shutdown: Arc::new(AtomicBool::new(false)),
+			is_child_task: false,
 			event_tx,
 			event_rx: Arc::new(Mutex::new(event_rx)),
 			kv_request_tx,
@@ -242,6 +244,7 @@ impl TestRunner {
 			last_command_idx: self.last_command_idx.clone(),
 			next_event_idx: self.next_event_idx.clone(),
 			event_history: self.event_history.clone(),
+			is_child_task: true,
 			shutdown: self.shutdown.clone(),
 			event_tx: self.event_tx.clone(),
 			event_rx: self.event_rx.clone(),
@@ -371,6 +374,7 @@ impl TestRunner {
 				// Listen for events pushed from actors
 				Some(actor_event) = event_rx.recv() => {
 					if self.shutdown.load(Ordering::SeqCst) {
+						tracing::info!("shutting down");
 						break;
 					}
 
@@ -547,11 +551,13 @@ impl TestRunner {
 		tracing::info!(?actor_id, generation, name = %cmd.config.name, "starting actor");
 
 		// Create actor config
-		let mut config = ActorConfig::from(&cmd.config);
-		config.actor_id = actor_id.clone();
-		config.generation = generation;
-		config.event_tx = self.event_tx.clone();
-		config.kv_request_tx = self.kv_request_tx.clone();
+		let config = ActorConfig::new(
+			&cmd.config,
+			actor_id.clone(),
+			generation,
+			self.event_tx.clone(),
+			self.kv_request_tx.clone(),
+		);
 
 		// Get factory for this actor name
 		let factory = self
@@ -561,32 +567,58 @@ impl TestRunner {
 			.context(format!(
 				"no factory registered for actor name: {}",
 				cmd.config.name
-			))?;
+			))?
+			.clone();
 
-		// Create actor
-		let mut actor = factory(config.clone());
+		// Clone self for the spawned task
+		let runner = self.clone_for_task();
+		let actor_id_clone = actor_id.clone();
 
-		tracing::debug!(
-			?actor_id,
-			generation,
-			actor_type = actor.name(),
-			"created actor instance"
-		);
+		// Spawn actor execution in separate task to avoid blocking message loop
+		tokio::spawn(async move {
+			// Create actor
+			let mut actor = factory(config.clone());
 
-		// Call on_start
-		let start_result = actor
-			.on_start(config)
-			.await
-			.context("actor on_start failed")?;
+			tracing::debug!(
+				?actor_id,
+				generation,
+				actor_type = actor.name(),
+				"created actor instance"
+			);
 
-		tracing::debug!(
-			?actor_id,
-			generation,
-			?start_result,
-			"actor on_start completed"
-		);
+			// Call on_start
+			let start_result = match actor.on_start(config).await {
+				Result::Ok(result) => result,
+				Err(err) => {
+					tracing::error!(?actor_id_clone, generation, ?err, "actor on_start failed");
+					return;
+				}
+			};
 
+			tracing::debug!(
+				?actor_id_clone,
+				generation,
+				?start_result,
+				"actor on_start completed"
+			);
+
+			runner
+				.handle_actor_start_result(actor_id_clone, generation, actor, start_result)
+				.await;
+		});
+
+		Ok(())
+	}
+
+	async fn handle_actor_start_result(
+		&self,
+		actor_id: String,
+		generation: u32,
+		actor: Box<dyn TestActor>,
+		start_result: ActorStartResult,
+	) {
 		// Broadcast lifecycle event
+		tracing::info!("lifecycle_tx start");
 		let _ = self.lifecycle_tx.send(ActorLifecycleEvent::Started {
 			actor_id: actor_id.clone(),
 			generation,
@@ -603,34 +635,46 @@ impl TestRunner {
 			.await
 			.insert(actor_id.clone(), actor_state);
 
-		// Handle start result
+		// Handle start result and send state update via event
 		match start_result {
 			ActorStartResult::Running => {
-				self.send_actor_state_update(
+				let event = protocol::make_actor_state_update(
 					&actor_id,
 					generation,
 					rp::ActorState::ActorStateRunning,
-					ws_stream,
-				)
-				.await?;
+				);
+				self.event_tx
+					.send(ActorEvent {
+						actor_id: actor_id.clone(),
+						generation,
+						event,
+					})
+					.expect("failed to send state update");
 			}
 			ActorStartResult::Delay(duration) => {
-				//TODO: For now, we just wait synchronously. In the future, we could
-				// implement this with a channel-based event queue
-				tracing::info!(
-					?actor_id,
-					generation,
-					delay_ms = duration.as_millis(),
-					"delaying before sending running state"
-				);
-				tokio::time::sleep(duration).await;
-				self.send_actor_state_update(
-					&actor_id,
-					generation,
-					rp::ActorState::ActorStateRunning,
-					ws_stream,
-				)
-				.await?;
+				let actor_id_clone = actor_id.clone();
+				let event_tx = self.event_tx.clone();
+				tokio::spawn(async move {
+					tracing::info!(
+						?actor_id_clone,
+						generation,
+						delay_ms = duration.as_millis(),
+						"delaying before sending running state"
+					);
+					tokio::time::sleep(duration).await;
+					let event = protocol::make_actor_state_update(
+						&actor_id_clone,
+						generation,
+						rp::ActorState::ActorStateRunning,
+					);
+					event_tx
+						.send(ActorEvent {
+							actor_id: actor_id_clone,
+							generation,
+							event,
+						})
+						.expect("failed to send delayed state update");
+				});
 			}
 			ActorStartResult::Timeout => {
 				tracing::warn!(
@@ -642,7 +686,7 @@ impl TestRunner {
 			}
 			ActorStartResult::Crash { code, message } => {
 				tracing::warn!(?actor_id, generation, code, %message, "actor crashed on start");
-				self.send_actor_state_update(
+				let event = protocol::make_actor_state_update(
 					&actor_id,
 					generation,
 					rp::ActorState::ActorStateStopped(rp::ActorStateStopped {
@@ -653,16 +697,20 @@ impl TestRunner {
 						},
 						message: Some(message),
 					}),
-					ws_stream,
-				)
-				.await?;
+				);
+				let _ = self
+					.event_tx
+					.send(ActorEvent {
+						actor_id: actor_id.clone(),
+						generation,
+						event,
+					})
+					.expect("failed to send crash state update");
 
 				// Remove actor
 				self.actors.lock().await.remove(&actor_id);
 			}
 		}
-
-		Ok(())
 	}
 
 	async fn handle_stop_actor(
@@ -774,23 +822,15 @@ impl TestRunner {
 	) -> Result<()> {
 		let event = protocol::make_actor_state_update(actor_id, generation, state);
 
-		let mut idx = self.next_event_idx.lock().await;
-		let event_wrapper = protocol::make_event_wrapper(*idx, event);
-		*idx += 1;
-		drop(idx);
-
-		self.event_history.lock().await.push(event_wrapper.clone());
-
-		tracing::debug!(
-			?actor_id,
-			generation,
-			event_idx = event_wrapper.index,
-			"sending actor state update"
-		);
-
-		let msg = rp::ToServer::ToServerEvents(vec![event_wrapper]);
-		let encoded = protocol::encode_to_server(msg);
-		ws_stream.send(Message::Binary(encoded.into())).await?;
+		self.send_actor_event(
+			ws_stream,
+			ActorEvent {
+				actor_id: actor_id.to_string(),
+				generation,
+				event,
+			},
+		)
+		.await?;
 
 		Ok(())
 	}
@@ -841,17 +881,11 @@ impl TestRunner {
 
 impl Drop for TestRunner {
 	fn drop(&mut self) {
+		if self.is_child_task {
+			return;
+		}
 		// Signal shutdown when runner is dropped
 		self.shutdown.store(true, Ordering::SeqCst);
 		tracing::debug!("test runner dropped, shutdown signaled");
 	}
 }
-
-// actor_graceful_stop_with_destroy_policy
-// actor_sleep_intent
-// actor_start_timeout
-// crash_policy_destroy
-// crash_policy_restart
-// crash_policy_restart_resets_on_success
-// crash_policy_sleep
-// exponential_backoff_max_retries

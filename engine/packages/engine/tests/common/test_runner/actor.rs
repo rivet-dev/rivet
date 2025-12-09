@@ -23,15 +23,17 @@ pub struct ActorConfig {
 	pub kv_request_tx: mpsc::UnboundedSender<KvRequest>,
 }
 
-impl From<&rp::ActorConfig> for ActorConfig {
-	fn from(config: &rp::ActorConfig) -> Self {
-		// Create dummy channels (will be replaced by runner)
-		let (event_tx, _) = mpsc::unbounded_channel();
-		let (kv_request_tx, _) = mpsc::unbounded_channel();
-
+impl ActorConfig {
+	pub fn new(
+		config: &rp::ActorConfig,
+		actor_id: String,
+		generation: u32,
+		event_tx: mpsc::UnboundedSender<ActorEvent>,
+		kv_request_tx: mpsc::UnboundedSender<KvRequest>,
+	) -> Self {
 		ActorConfig {
-			actor_id: String::new(), // Will be set by runner
-			generation: 0,           // Will be set by runner
+			actor_id,
+			generation,
 			name: config.name.clone(),
 			key: config.key.clone(),
 			create_ts: config.create_ts,
@@ -150,9 +152,11 @@ impl ActorConfig {
 			data: rp::KvRequestData::KvPutRequest(rp::KvPutRequest { keys, values }),
 			response_tx,
 		};
+
 		self.kv_request_tx
 			.send(request)
 			.map_err(|_| anyhow!("failed to send KV put request"))?;
+
 		let response: rp::KvResponseData = response_rx
 			.await
 			.map_err(|_| anyhow!("KV put request response channel closed"))?;

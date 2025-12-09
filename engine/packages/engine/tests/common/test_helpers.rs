@@ -114,6 +114,7 @@ pub async fn assert_actor_in_dc(actor_id_str: &str, expected_dc_label: u16) {
 	let actor_id: rivet_util::Id = actor_id_str.parse().expect("Failed to parse actor ID");
 	let actual_dc_label = actor_id.label();
 
+	// TODO: make this fetch as well
 	assert_eq!(
 		actual_dc_label, expected_dc_label,
 		"Actor should be in datacenter {} but is in {}",
