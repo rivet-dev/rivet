@@ -1,6 +1,9 @@
 import * as cbor from "cbor-x";
 import type * as protocol from "@/schemas/client-protocol/mod";
-import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
+import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
+	TO_CLIENT_VERSIONED,
+} from "@/schemas/client-protocol/versioned";
 import {
 	type ToClient as ToClientJson,
 	ToClientSchema,
@@ -172,6 +175,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		const toClientSerializer = new CachedSerializer(
 			eventData,
 			TO_CLIENT_VERSIONED,
+			CLIENT_PROTOCOL_CURRENT_VERSION,
 			ToClientSchema,
 			// JSON: args is the raw value (array of arguments)
 			(value): ToClientJson => ({

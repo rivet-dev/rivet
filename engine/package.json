@@ -6,6 +6,6 @@
 	"license": "ISC",
 	"packageManager": "pnpm@10.13.1",
 	"dependencies": {
-		"@vbare/compiler": "^0.0.3"
+		"@vbare/compiler": "^0.0.4"
 	}
 }

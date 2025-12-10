@@ -8,7 +8,10 @@ import {
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import type * as protocol from "@/schemas/client-protocol/mod";
-import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/schemas/client-protocol/versioned";
+import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
+	HTTP_RESPONSE_ERROR_VERSIONED,
+} from "@/schemas/client-protocol/versioned";
 import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
@@ -76,6 +79,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 		encoding,
 		errorData,
 		HTTP_RESPONSE_ERROR_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
 		HttpResponseErrorSchema,
 		// JSON: metadata is the raw value (will be serialized by jsonStringifyCompat)
 		(value): HttpResponseErrorJson => ({
