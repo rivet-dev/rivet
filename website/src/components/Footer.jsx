@@ -35,7 +35,7 @@ const footer = {
 			name: "Rivet vs Cloudflare Workers",
 			href: "/rivet-vs-cloudflare-workers",
 		},
-		{ name: "Pricing", href: "/pricing" },
+		{ name: "Pricing", href: "/cloud#pricing" },
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
