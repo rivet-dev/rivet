@@ -72,7 +72,7 @@ function buildGuardHeadersForHttp(
 	}
 	// Add extra headers from config
 	for (const [key, value] of Object.entries(runConfig.headers)) {
-		headers.set(key, value);
+		headers.set(key, value as string);
 	}
 	// Add guard-specific headers
 	if (runConfig.token) {

@@ -32,7 +32,7 @@ export const ClientConfigSchema = z.object({
 
 	encoding: EncodingSchema.default("bare"),
 
-	headers: z.record(z.string()).optional().default({}),
+	headers: z.record(z.string(), z.string()).optional().default(() => ({})),
 
 	// See RunConfig.getUpgradeWebSocket
 	getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),

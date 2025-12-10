@@ -35,6 +35,10 @@ export interface ActorTypes<
 	database?: TDatabase;
 }
 
+// Helper for validating function types - accepts generic for specific function signatures
+const zFunction = <T extends (...args: any[]) => any = (...args: unknown[]) => unknown>() =>
+	z.custom<T>((val) => typeof val === "function");
+
 // This schema is used to validate the input at runtime. The generic types are defined below in `ActorConfig`.
 //
 // We don't use Zod generics with `z.custom` because:
@@ -42,25 +46,25 @@ export interface ActorTypes<
 // (b) it makes the type definitions incredibly difficult to read as opposed to vanilla TypeScript.
 export const ActorConfigSchema = z
 	.object({
-		onCreate: z.function().optional(),
-		onDestroy: z.function().optional(),
-		onWake: z.function().optional(),
-		onSleep: z.function().optional(),
-		onStateChange: z.function().optional(),
-		onBeforeConnect: z.function().optional(),
-		onConnect: z.function().optional(),
-		onDisconnect: z.function().optional(),
-		onBeforeActionResponse: z.function().optional(),
-		onRequest: z.function().optional(),
-		onWebSocket: z.function().optional(),
-		actions: z.record(z.function()).default({}),
+		onCreate: zFunction().optional(),
+		onDestroy: zFunction().optional(),
+		onWake: zFunction().optional(),
+		onSleep: zFunction().optional(),
+		onStateChange: zFunction().optional(),
+		onBeforeConnect: zFunction().optional(),
+		onConnect: zFunction().optional(),
+		onDisconnect: zFunction().optional(),
+		onBeforeActionResponse: zFunction().optional(),
+		onRequest: zFunction().optional(),
+		onWebSocket: zFunction().optional(),
+		actions: z.record(z.string(), zFunction()).default(() => ({})),
 		state: z.any().optional(),
-		createState: z.function().optional(),
+		createState: zFunction().optional(),
 		connState: z.any().optional(),
-		createConnState: z.function().optional(),
+		createConnState: zFunction().optional(),
 		vars: z.any().optional(),
 		db: z.any().optional(),
-		createVars: z.function().optional(),
+		createVars: zFunction().optional(),
 		options: z
 			.object({
 				createVarsTimeout: z.number().positive().default(5000),
@@ -87,15 +91,12 @@ export const ActorConfigSchema = z
 				canHibernateWebSocket: z
 					.union([
 						z.boolean(),
-						z
-							.function()
-							.args(z.custom<Request>())
-							.returns(z.boolean()),
+						zFunction<(request: Request) => boolean>(),
 					])
 					.default(false),
 			})
 			.strict()
-			.default({}),
+			.prefault(() => ({})),
 	})
 	.strict()
 	.refine(
