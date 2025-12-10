@@ -103,7 +103,7 @@ export class ActionTimedOut extends ActorError {
 		super(
 			"action",
 			"timed_out",
-			"Action timed out. This can be increased with: `actor({ options: { action: { timeout: ... } } })`",
+			"Action timed out. This can be increased with: `actor({ options: { actionTimeout: ... } })`",
 			{ public: true },
 		);
 	}

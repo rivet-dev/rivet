@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+	/* Dark theme matching Rivet website */
+	/* background: 20 14.3% 4.1% -> very dark brown/black */
+	--color-background: oklch(0.145 0.01 50);
+	/* foreground: 60 9.1% 97.8% -> almost white with warm tint */
+	--color-foreground: oklch(0.985 0.005 90);
+	/* card: 0 9.09% 6.47% -> slightly lighter dark */
+	--color-card: oklch(0.18 0.008 30);
+	--color-card-foreground: oklch(0.985 0.005 90);
+	/* popover: same as card */
+	--color-popover: oklch(0.18 0.008 30);
+	--color-popover-foreground: oklch(0.985 0.005 90);
+	/* primary: Rivet orange */
+	--color-primary: #ff4f00;
+	--color-primary-foreground: #000000;
+	/* secondary: 12 6.5% 15.1% */
+	--color-secondary: oklch(0.25 0.015 30);
+	--color-secondary-foreground: oklch(0.985 0.005 90);
+	/* muted: 34 10% 10% */
+	--color-muted: oklch(0.2 0.015 50);
+	--color-muted-foreground: oklch(0.65 0.01 50);
+	/* accent: 12 6.5% 15.1% */
+	--color-accent: oklch(0.25 0.015 30);
+	--color-accent-foreground: oklch(0.985 0.005 90);
+	/* destructive: 0 72.2% 50.6% */
+	--color-destructive: oklch(0.55 0.22 25);
+	--color-destructive-foreground: oklch(0.985 0.005 90);
+	/* border: 12 6.5% 15.1% */
+	--color-border: oklch(0.25 0.015 30);
+	/* input: 12 6.5% 15.1% */
+	--color-input: oklch(0.25 0.015 30);
+	/* ring: Rivet orange */
+	--color-ring: #ff4f00;
+	--radius-sm: 0.25rem;
+	--radius-md: 0.375rem;
+	--radius-lg: 0.5rem;
+	--radius-xl: 0.75rem;
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+}
+
+/* Text selection styles matching Rivet website */
+::selection {
+	background-color: #ff4f00;
+	color: black;
+}
+
+::-moz-selection {
+	background-color: #ff4f00;
+	color: black;
+}
