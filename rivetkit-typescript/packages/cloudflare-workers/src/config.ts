@@ -2,7 +2,7 @@ import type { Client } from "rivetkit";
 import { RunConfigSchema } from "rivetkit/driver-helpers";
 import { z } from "zod";
 
-export const ConfigSchema = RunConfigSchema.removeDefault()
+const ConfigSchemaBase = RunConfigSchema.removeDefault()
 	.omit({ driver: true, getUpgradeWebSocket: true })
 	.extend({
 		/** Path that the Rivet manager API will be mounted. */
@@ -13,7 +13,9 @@ export const ConfigSchema = RunConfigSchema.removeDefault()
 				ExportedHandlerFetchHandler<{ RIVET: Client<any> }, unknown>
 			>()
 			.optional(),
-	})
-	.default({});
+	});
+export const ConfigSchema = ConfigSchemaBase.default(() =>
+	ConfigSchemaBase.parse({}),
+);
 export type InputConfig = z.input<typeof ConfigSchema>;
 export type Config = z.infer<typeof ConfigSchema>;

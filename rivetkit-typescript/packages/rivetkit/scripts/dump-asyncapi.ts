@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { toJsonSchema } from "./schema-utils";
 import {
 	ActionRequestSchema,
 	ActionResponseSchema,
@@ -71,50 +71,15 @@ function getSchemaWithoutDefinitions(jsonSchema: any): any {
 }
 
 function main() {
-	// Convert Zod schemas to JSON schemas
-	const toClientJsonSchema = zodToJsonSchema(ToClientSchema, {
-		name: "ToClient",
-		$refStrategy: "none",
-	});
-
-	const toServerJsonSchema = zodToJsonSchema(ToServerSchema, {
-		name: "ToServer",
-		$refStrategy: "none",
-	});
-
-	// Convert individual message schemas
-	const initJsonSchema = zodToJsonSchema(InitSchema, {
-		name: "Init",
-		$refStrategy: "none",
-	});
-
-	const errorJsonSchema = zodToJsonSchema(ErrorSchema, {
-		name: "Error",
-		$refStrategy: "none",
-	});
-
-	const actionResponseJsonSchema = zodToJsonSchema(ActionResponseSchema, {
-		name: "ActionResponse",
-		$refStrategy: "none",
-	});
-
-	const eventJsonSchema = zodToJsonSchema(EventSchema, {
-		name: "Event",
-		$refStrategy: "none",
-	});
-
-	const actionRequestJsonSchema = zodToJsonSchema(ActionRequestSchema, {
-		name: "ActionRequest",
-		$refStrategy: "none",
-	});
-
-	const subscriptionRequestJsonSchema = zodToJsonSchema(
-		SubscriptionRequestSchema,
-		{
-			name: "SubscriptionRequest",
-			$refStrategy: "none",
-		},
-	);
+	// Convert Zod schemas to JSON schemas using native z.toJSONSchema with BigInt support
+	const toClientJsonSchema = toJsonSchema(ToClientSchema);
+	const toServerJsonSchema = toJsonSchema(ToServerSchema);
+	const initJsonSchema = toJsonSchema(InitSchema);
+	const errorJsonSchema = toJsonSchema(ErrorSchema);
+	const actionResponseJsonSchema = toJsonSchema(ActionResponseSchema);
+	const eventJsonSchema = toJsonSchema(EventSchema);
+	const actionRequestJsonSchema = toJsonSchema(ActionRequestSchema);
+	const subscriptionRequestJsonSchema = toJsonSchema(SubscriptionRequestSchema);
 
 	// Build AsyncAPI v3.0.0 specification
 	const asyncApiSpec = {

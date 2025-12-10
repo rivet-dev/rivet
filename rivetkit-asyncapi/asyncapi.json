@@ -62,7 +62,7 @@
           "type": "object",
           "properties": {
             "body": {
-              "anyOf": [
+              "oneOf": [
                 {
                   "type": "object",
                   "properties": {
@@ -114,9 +114,14 @@
                         },
                         "metadata": {},
                         "actionId": {
-                          "type": [
-                            "integer",
-                            "null"
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "format": "int64"
+                            },
+                            {
+                              "type": "null"
+                            }
                           ]
                         }
                       },
@@ -152,7 +157,8 @@
                         "output": {}
                       },
                       "required": [
-                        "id"
+                        "id",
+                        "output"
                       ],
                       "additionalProperties": false
                     }
@@ -179,7 +185,8 @@
                         "args": {}
                       },
                       "required": [
-                        "name"
+                        "name",
+                        "args"
                       ],
                       "additionalProperties": false
                     }
@@ -268,7 +275,7 @@
           "type": "object",
           "properties": {
             "body": {
-              "anyOf": [
+              "oneOf": [
                 {
                   "type": "object",
                   "properties": {
@@ -290,7 +297,8 @@
                       },
                       "required": [
                         "id",
-                        "name"
+                        "name",
+                        "args"
                       ],
                       "additionalProperties": false
                     }
@@ -404,9 +412,14 @@
           },
           "metadata": {},
           "actionId": {
-            "type": [
-              "integer",
-              "null"
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },
@@ -429,7 +442,8 @@
           "output": {}
         },
         "required": [
-          "id"
+          "id",
+          "output"
         ],
         "additionalProperties": false,
         "description": "Response to an action request"
@@ -443,7 +457,8 @@
           "args": {}
         },
         "required": [
-          "name"
+          "name",
+          "args"
         ],
         "additionalProperties": false,
         "description": "Event broadcast to subscribed clients"
@@ -462,7 +477,8 @@
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "args"
         ],
         "additionalProperties": false,
         "description": "Request to execute an action on the actor"

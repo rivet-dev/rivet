@@ -49,7 +49,7 @@
 	},
 	"dependencies": {
 		"invariant": "^2.2.4",
-		"zod": "^3.25.76",
+		"zod": "^4.1.0",
 		"hono": "^4.7.0",
 		"rivetkit": "workspace:*"
 	},
