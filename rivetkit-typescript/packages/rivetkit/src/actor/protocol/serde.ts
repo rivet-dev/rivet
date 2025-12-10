@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import { z } from "zod";
 import * as errors from "@/actor/errors";
-import type { VersionedDataHandler } from "@/common/versioned-data";
+import type { VersionedDataHandler } from "vbare";
 import { serializeWithEncoding } from "@/serde";
 import { loggerWithoutContext } from "../log";
 import { assertUnreachable } from "../utils";
@@ -26,6 +26,7 @@ export class CachedSerializer<TBare, TJson, T = TBare> {
 	#data: T;
 	#cache = new Map<Encoding, OutputData>();
 	#versionedDataHandler: VersionedDataHandler<TBare>;
+	#version: number;
 	#zodSchema: z.ZodType<TJson>;
 	#toJson: (value: T) => TJson;
 	#toBare: (value: T) => TBare;
@@ -33,12 +34,14 @@ export class CachedSerializer<TBare, TJson, T = TBare> {
 	constructor(
 		data: T,
 		versionedDataHandler: VersionedDataHandler<TBare>,
+		version: number,
 		zodSchema: z.ZodType<TJson>,
 		toJson: (value: T) => TJson,
 		toBare: (value: T) => TBare,
 	) {
 		this.#data = data;
 		this.#versionedDataHandler = versionedDataHandler;
+		this.#version = version;
 		this.#zodSchema = zodSchema;
 		this.#toJson = toJson;
 		this.#toBare = toBare;
@@ -57,6 +60,7 @@ export class CachedSerializer<TBare, TJson, T = TBare> {
 				encoding,
 				this.#data,
 				this.#versionedDataHandler,
+				this.#version,
 				this.#zodSchema,
 				this.#toJson,
 				this.#toBare,

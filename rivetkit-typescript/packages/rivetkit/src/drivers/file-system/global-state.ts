@@ -12,6 +12,7 @@ import type * as schema from "@/schemas/file-system-driver/mod";
 import {
 	ACTOR_ALARM_VERSIONED,
 	ACTOR_STATE_VERSIONED,
+	CURRENT_VERSION as FILE_SYSTEM_DRIVER_CURRENT_VERSION,
 } from "@/schemas/file-system-driver/versioned";
 import {
 	arrayBuffersEqual,
@@ -587,6 +588,7 @@ export class FileSystemGlobalState {
 				const data =
 					ACTOR_ALARM_VERSIONED.serializeWithEmbeddedVersion(
 						alarmData,
+						FILE_SYSTEM_DRIVER_CURRENT_VERSION,
 					);
 				const fs = getNodeFs();
 				await fs.writeFile(tempPath, data);
@@ -655,7 +657,10 @@ export class FileSystemGlobalState {
 
 			// Perform atomic write
 			const serializedState =
-				ACTOR_STATE_VERSIONED.serializeWithEmbeddedVersion(bareState);
+				ACTOR_STATE_VERSIONED.serializeWithEmbeddedVersion(
+					bareState,
+					FILE_SYSTEM_DRIVER_CURRENT_VERSION,
+				);
 			const fs = getNodeFs();
 			await fs.writeFile(tempPath, serializedState);
 

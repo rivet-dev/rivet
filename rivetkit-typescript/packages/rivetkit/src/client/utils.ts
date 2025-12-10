@@ -3,7 +3,7 @@ import invariant from "invariant";
 import type { z } from "zod";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/common/utils";
-import type { VersionedDataHandler } from "@/common/versioned-data";
+import type { VersionedDataHandler } from "vbare";
 import type { HttpResponseError } from "@/schemas/client-protocol/mod";
 import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/schemas/client-protocol/versioned";
 import {
@@ -55,9 +55,11 @@ export interface HttpRequestOpts<
 	signal?: AbortSignal;
 	customFetch?: (req: globalThis.Request) => Promise<globalThis.Response>;
 	requestVersionedDataHandler: VersionedDataHandler<RequestBare> | undefined;
+	requestVersion: number | undefined;
 	responseVersionedDataHandler:
 		| VersionedDataHandler<ResponseBare>
 		| undefined;
+	responseVersion: number | undefined;
 	requestZodSchema: z.ZodType<RequestJson>;
 	responseZodSchema: z.ZodType<ResponseJson>;
 	requestToJson: (value: Request) => RequestJson;
@@ -99,6 +101,7 @@ export async function sendHttpRequest<
 			opts.encoding,
 			opts.body,
 			opts.requestVersionedDataHandler,
+			opts.requestVersion,
 			opts.requestZodSchema,
 			opts.requestToJson,
 			opts.requestToBare,

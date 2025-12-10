@@ -1,7 +1,10 @@
 import * as cbor from "cbor-x";
 import { KEYS } from "@/actor/instance/kv";
 import type * as persistSchema from "@/schemas/actor-persist/mod";
-import { ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
+import {
+	ACTOR_VERSIONED,
+	CURRENT_VERSION,
+} from "@/schemas/actor-persist/versioned";
 import { bufferToArrayBuffer } from "@/utils";
 import type { ActorDriver } from "./mod";
 
@@ -15,7 +18,10 @@ function serializeEmptyPersistData(input: unknown | undefined): Uint8Array {
 		state: bufferToArrayBuffer(cbor.encode(undefined)),
 		scheduledEvents: [],
 	};
-	return ACTOR_VERSIONED.serializeWithEmbeddedVersion(persistData);
+	return ACTOR_VERSIONED.serializeWithEmbeddedVersion(
+		persistData,
+		CURRENT_VERSION,
+	);
 }
 
 /**
