@@ -10,6 +10,7 @@ import {
 import { deconstructError } from "@/common/utils";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED,
 	TO_SERVER_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
@@ -217,6 +218,7 @@ export async function processMessage<
 				new CachedSerializer(
 					output,
 					TO_CLIENT_VERSIONED,
+					CLIENT_PROTOCOL_CURRENT_VERSION,
 					ToClientSchema,
 					// JSON: output is the raw value
 					(value): ToClientJson => ({
@@ -298,6 +300,7 @@ export async function processMessage<
 			new CachedSerializer(
 				errorData,
 				TO_CLIENT_VERSIONED,
+				CLIENT_PROTOCOL_CURRENT_VERSION,
 				ToClientSchema,
 				// JSON: metadata is the raw value (keep as undefined if not present)
 				(value): ToClientJson => {

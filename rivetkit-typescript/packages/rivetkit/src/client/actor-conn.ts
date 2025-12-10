@@ -22,6 +22,7 @@ import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED,
 	TO_SERVER_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
@@ -749,6 +750,7 @@ enc
 						this.#encoding,
 						message,
 						TO_SERVER_VERSIONED,
+					CLIENT_PROTOCOL_CURRENT_VERSION,
 						ToServerSchema,
 						// JSON: args is the raw value
 						(msg): ToServerJson => msg as ToServerJson,
