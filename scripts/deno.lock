@@ -23,6 +23,7 @@
     "jsr:@std/streams@0.221": "0.221.0",
     "jsr:@std/toml@^1.0.1": "1.0.8",
     "jsr:@std/yaml@^1.0.5": "1.0.8",
+    "npm:@types/node@*": "22.15.15",
     "npm:glob@11": "11.0.3"
   },
   "jsr": {
@@ -127,6 +128,12 @@
         "strip-ansi-cjs@npm:strip-ansi@6.0.1",
         "wrap-ansi@8.1.0",
         "wrap-ansi-cjs@npm:wrap-ansi@7.0.0"
+      ]
+    },
+    "@types/node@22.15.15": {
+      "integrity": "sha512-R5muMcZob3/Jjchn5LcO8jdKwSCbzqmPB6ruBxMcf9kbxtniZHP327s6C37iOfuw8mbKK3cAQa7sEl7afLrQ8A==",
+      "dependencies": [
+        "undici-types"
       ]
     },
     "ansi-regex@5.0.1": {
@@ -265,6 +272,9 @@
       "dependencies": [
         "ansi-regex@6.1.0"
       ]
+    },
+    "undici-types@6.21.0": {
+      "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="
     },
     "which@2.0.2": {
       "integrity": "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==",

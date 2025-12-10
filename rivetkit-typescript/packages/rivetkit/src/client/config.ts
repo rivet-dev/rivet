@@ -39,6 +39,15 @@ export const ClientConfigSchema = z.object({
 
 	/** Whether to automatically perform health checks when the client is created. */
 	disableMetadataLookup: z.boolean().optional().default(false),
+
+	/** Whether to enable RivetKit Devtools integration. */
+	devtools: z
+		.boolean()
+		.default(
+			() =>
+				typeof globalThis.window !== "undefined" &&
+				window?.location?.hostname === "localhost",
+		),
 });
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;
