@@ -113,8 +113,8 @@ export function Navigation({ navigation, ...props }) {
 				<TopLevelNavItem href="/changelog" icon={faNewspaper}>
 					Changelog
 				</TopLevelNavItem>
-				<TopLevelNavItem href="/pricing" icon={faCoin}>
-					Pricing
+				<TopLevelNavItem href="/cloud" icon={faCoin}>
+					Cloud
 				</TopLevelNavItem>
 
 				{/* Sidebar */}

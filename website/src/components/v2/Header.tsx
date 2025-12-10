@@ -142,7 +142,7 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 }
 
 interface HeaderProps {
-	active?: "product" | "docs" | "blog" | "cloud" | "pricing" | "solutions" | "learn";
+	active?: "product" | "docs" | "blog" | "cloud" | "solutions" | "learn";
 	subnav?: ReactNode;
 	mobileSidebar?: ReactNode;
 	variant?: "floating" | "full-width";
@@ -263,12 +263,12 @@ export function Header({
 									Templates
 								</TextNavItem>
 								<TextNavItem
-									href="/pricing"
+									href="/cloud"
 									ariaCurrent={
-										active === "pricing" ? "page" : undefined
+										active === "cloud" ? "page" : undefined
 									}
 								>
-									Pricing
+									Cloud
 								</TextNavItem>
 								<TextNavItem
 									href="/changelog"
@@ -353,10 +353,10 @@ export function Header({
 						Templates
 					</TextNavItem>
 					<TextNavItem
-						href="/pricing"
-						ariaCurrent={active === "pricing" ? "page" : undefined}
+						href="/cloud"
+						ariaCurrent={active === "cloud" ? "page" : undefined}
 					>
-						Pricing
+						Cloud
 					</TextNavItem>
 					<TextNavItem
 						href="/changelog"
@@ -397,7 +397,7 @@ function DocsMobileNavigation({ tree }) {
 		{ href: "/docs", label: "Docs" },
 		{ href: "/templates", label: "Templates" },
 		{ href: "/changelog", label: "Changelog" },
-		{ href: "/pricing", label: "Pricing" },
+		{ href: "/cloud", label: "Cloud" },
 		{ href: "https://dashboard.rivet.dev/", label: "Dashboard" },
 	];
 

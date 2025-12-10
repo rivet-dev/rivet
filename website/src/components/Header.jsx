@@ -199,8 +199,8 @@ export const Header = forwardRef(function Header(
 							<TopLevelNavItem href="/changelog">
 								Changelog
 							</TopLevelNavItem>
-							<TopLevelNavItem href="/pricing">
-								Pricing
+							<TopLevelNavItem href="/cloud">
+								Cloud
 							</TopLevelNavItem>
 						</div>
 					</div>
