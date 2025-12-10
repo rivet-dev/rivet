@@ -72,7 +72,9 @@ impl Registry {
 							// Differentiate between WorkflowError and user error
 							Err(err) => match err.downcast::<WorkflowError>() {
 								Ok(inner_err) => return Err(inner_err),
-								Err(err) => return Err(WorkflowError::WorkflowFailure(err)),
+								Err(err) => {
+									return Err(WorkflowError::WorkflowFailure(W::NAME, err));
+								}
 							},
 						};
 

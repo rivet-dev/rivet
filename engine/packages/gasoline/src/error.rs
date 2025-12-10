@@ -9,17 +9,17 @@ pub type WorkflowResult<T> = Result<T, WorkflowError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WorkflowError {
-	#[error("workflow failure: {0:?}")]
-	WorkflowFailure(#[source] anyhow::Error),
+	#[error("workflow {0} failed: {1:?}")]
+	WorkflowFailure(&'static str, #[source] anyhow::Error),
 
 	// Includes error count
-	#[error("activity failure: {0:?}")]
-	ActivityFailure(#[source] anyhow::Error, usize),
+	#[error("activity {0} failed: {1:?}")]
+	ActivityFailure(&'static str, #[source] anyhow::Error, usize),
 
-	#[error("activity failure, max retries reached: {0:?}")]
-	ActivityMaxFailuresReached(#[source] anyhow::Error),
+	#[error("activity {0} failed, max retries reached: {1:?}")]
+	ActivityMaxFailuresReached(&'static str, #[source] anyhow::Error),
 
-	#[error("operation failure ({0}): {1:?}")]
+	#[error("operation {0} failed: {1:?}")]
 	OperationFailure(&'static str, #[source] anyhow::Error),
 
 	#[error("workflow missing from registry: {0}")]
@@ -146,8 +146,8 @@ pub enum WorkflowError {
 	Config(#[source] anyhow::Error),
 
 	// Includes error count
-	#[error("activity timed out")]
-	ActivityTimeout(usize),
+	#[error("activity {0} timed out")]
+	ActivityTimeout(&'static str, usize),
 
 	// Includes error count
 	#[error("operation {0} timed out")]
@@ -186,8 +186,8 @@ impl WorkflowError {
 	/// Returns the next deadline for a workflow to be woken up again based on the error.
 	pub(crate) fn deadline_ts(&self) -> Option<i64> {
 		match self {
-			WorkflowError::ActivityFailure(_, error_count)
-			| WorkflowError::ActivityTimeout(error_count)
+			WorkflowError::ActivityFailure(_, _, error_count)
+			| WorkflowError::ActivityTimeout(_, error_count)
 			| WorkflowError::OperationTimeout(_, error_count) => {
 				// NOTE: Max retry is handled in `WorkflowCtx::activity`
 				let mut backoff = rivet_util::backoff::Backoff::new_at(
@@ -218,8 +218,8 @@ impl WorkflowError {
 	/// Any error that the workflow can continue on with its execution from.
 	pub(crate) fn is_recoverable(&self) -> bool {
 		match self {
-			WorkflowError::ActivityFailure(_, _)
-			| WorkflowError::ActivityTimeout(_)
+			WorkflowError::ActivityFailure(_, _, _)
+			| WorkflowError::ActivityTimeout(_, _)
 			| WorkflowError::OperationTimeout(_, _)
 			| WorkflowError::NoSignalFound(_)
 			| WorkflowError::NoSignalFoundAndSleep(_, _)
@@ -233,8 +233,8 @@ impl WorkflowError {
 	/// Any error that the workflow can try again on a fixed number of times. Only used for printing.
 	pub(crate) fn is_retryable(&self) -> bool {
 		match self {
-			WorkflowError::ActivityFailure(_, _)
-			| WorkflowError::ActivityTimeout(_)
+			WorkflowError::ActivityFailure(_, _, _)
+			| WorkflowError::ActivityTimeout(_, _)
 			| WorkflowError::OperationTimeout(_, _) => true,
 			_ => false,
 		}

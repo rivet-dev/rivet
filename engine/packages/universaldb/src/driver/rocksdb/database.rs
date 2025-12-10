@@ -4,7 +4,6 @@ use std::{
 		Arc,
 		atomic::{AtomicI32, Ordering},
 	},
-	time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -15,14 +14,13 @@ use crate::{
 	driver::{BoxFut, DatabaseDriver, Erased},
 	error::DatabaseError,
 	options::DatabaseOption,
+	transaction::TXN_TIMEOUT,
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
 
 use super::{
 	transaction::RocksDbTransactionDriver, transaction_conflict_tracker::TransactionConflictTracker,
 };
-
-const TXN_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct RocksDbDatabaseDriver {
 	db: Arc<OptimisticTransactionDB>,

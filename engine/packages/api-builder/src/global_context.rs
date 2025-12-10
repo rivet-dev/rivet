@@ -18,7 +18,7 @@ impl GlobalApiCtx {
 		name: &'static str,
 	) -> Result<Self> {
 		let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
-		let db = gas::prelude::db::DatabaseKv::from_pools(pools.clone()).await?;
+		let db = gas::prelude::db::DatabaseKv::new(config.clone(), pools.clone()).await?;
 
 		Ok(Self {
 			db,

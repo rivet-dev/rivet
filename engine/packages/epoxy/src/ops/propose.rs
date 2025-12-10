@@ -38,7 +38,8 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 		.udb()?
 		.run(|tx| async move { utils::read_config(&tx, replica_id).await })
 		.custom_instrument(tracing::info_span!("read_config_tx"))
-		.await?;
+		.await
+		.context("failed reading config")?;
 
 	// Lead consensus
 	let payload = ctx
@@ -48,7 +49,8 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 			async move { replica::lead_consensus::lead_consensus(&*tx, replica_id, proposal).await }
 		})
 		.custom_instrument(tracing::info_span!("lead_consensus_tx"))
-		.await?;
+		.await
+		.context("failed leading consensus")?;
 
 	// Get quorum members (only active replicas for voting)
 	let quorum_members = utils::get_quorum_members(&config);
@@ -66,7 +68,8 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 			async move { replica::decide_path::decide_path(&*tx, pre_accept_oks, &payload) }
 		})
 		.custom_instrument(tracing::info_span!("decide_path_tx"))
-		.await?;
+		.await
+		.context("failed deciding path")?;
 
 	match path {
 		Path::PathFast(protocol::PathFast { payload }) => {
@@ -105,7 +108,8 @@ pub async fn run_paxos_accept(
 			async move { replica::messages::accepted(&*tx, replica_id, payload).await }
 		})
 		.custom_instrument(tracing::info_span!("accept_tx"))
-		.await?;
+		.await
+		.context("failed accepting")?;
 
 	// EPaxos Step 17
 	let quorum = send_accepts(
@@ -150,7 +154,8 @@ pub async fn commit(
 				}
 			})
 			.custom_instrument(tracing::info_span!("committed_tx"))
-			.await?
+			.await
+			.context("failed committing")?
 	};
 
 	// EPaxos Step 23

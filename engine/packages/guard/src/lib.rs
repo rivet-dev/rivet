@@ -12,7 +12,7 @@ pub mod tls;
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
 	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = StandaloneCtx::new(
-		db::DatabaseKv::from_pools(pools.clone()).await?,
+		db::DatabaseKv::new(config.clone(), pools.clone()).await?,
 		config.clone(),
 		pools,
 		cache,
