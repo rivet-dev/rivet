@@ -1,0 +1,28 @@
+# File System Driver Schema (v3)
+
+# MARK: Actor State
+type ActorKvEntry struct {
+	key: data
+	value: data
+}
+
+type ActorState struct {
+	actorId: str
+	name: str
+	key: list<str>
+	# KV storage map for actor and connection data
+	# Keys are strings (base64 encoded), values are byte arrays
+	kvStorage: list<ActorKvEntry>
+	createdAt: u64
+	# New timestamp fields for lifecycle tracking
+	startTs: optional<u64>
+	connectableTs: optional<u64>
+	sleepTs: optional<u64>
+	destroyTs: optional<u64>
+}
+
+# MARK: Actor Alarm
+type ActorAlarm struct {
+	actorId: str
+	timestamp: uint
+}
