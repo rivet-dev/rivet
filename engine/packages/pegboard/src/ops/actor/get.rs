@@ -17,6 +17,17 @@ pub struct Output {
 
 #[operation]
 pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+	// Ensure all actor IDs belong to this datacenter
+	for actor_id in &input.actor_ids {
+		ensure!(
+			actor_id.label() == ctx.config().dc_label(),
+			"actor id {} belongs to datacenter {} but current datacenter is {}",
+			actor_id,
+			actor_id.label(),
+			ctx.config().dc_label()
+		);
+	}
+
 	let actors_with_wf_ids = ctx
 		.udb()?
 		.run(|tx| async move {

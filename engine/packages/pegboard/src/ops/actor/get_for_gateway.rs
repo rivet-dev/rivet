@@ -24,6 +24,15 @@ pub async fn pegboard_actor_get_for_gateway(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Option<Output>> {
+	// Ensure actor ID belongs to this datacenter
+	ensure!(
+		input.actor_id.label() == ctx.config().dc_label(),
+		"actor id {} belongs to datacenter {} but current datacenter is {}",
+		input.actor_id,
+		input.actor_id.label(),
+		ctx.config().dc_label()
+	);
+
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
