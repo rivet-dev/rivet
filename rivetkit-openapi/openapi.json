@@ -445,6 +445,9 @@
                 "properties": {
                   "args": {}
                 },
+                "required": [
+                  "args"
+                ],
                 "additionalProperties": false
               }
             }
@@ -460,6 +463,9 @@
                   "properties": {
                     "output": {}
                   },
+                  "required": [
+                    "output"
+                  ],
                   "additionalProperties": false
                 }
               }

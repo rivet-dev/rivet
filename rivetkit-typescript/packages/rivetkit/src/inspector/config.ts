@@ -35,8 +35,7 @@ export const InspectorConfigSchema = z
 		 * Token used to access the Inspector.
 		 */
 		token: z
-			.function()
-			.returns(z.string())
+			.custom<() => string>()
 			.optional()
 			.default(() => defaultTokenFn),
 

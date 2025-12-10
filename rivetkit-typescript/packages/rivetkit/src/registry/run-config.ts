@@ -18,7 +18,7 @@ export const DriverConfigSchema = z.object({
 export type DriverConfig = z.infer<typeof DriverConfigSchema>;
 
 /** Base config used for the actor config across all platforms. */
-export const RunnerConfigSchema = z
+const RunnerConfigSchemaUnmerged = z
 	.object({
 		driver: DriverConfigSchema.optional(),
 
@@ -95,7 +95,7 @@ export const RunnerConfigSchema = z
 				level: LogLevelSchema.optional(),
 			})
 			.optional()
-			.default({}),
+			.default(() => ({})),
 
 		/**
 		 * @experimental
@@ -115,7 +115,7 @@ export const RunnerConfigSchema = z
 					requestLifespan: z.number().optional(),
 					runnersMargin: z.number().optional(),
 					slotsPerRunner: z.number().optional(),
-					metadata: z.record(z.unknown()).optional(),
+					metadata: z.record(z.string(), z.unknown()).optional(),
 				}),
 			])
 			.optional(),
@@ -126,8 +126,12 @@ export const RunnerConfigSchema = z
 		// created or must be imported async using `await import(...)`
 		getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 	})
-	.merge(EngineConfigSchema.removeDefault())
-	.default({});
+	.merge(EngineConfigSchema.removeDefault());
+
+const RunnerConfigSchemaBase = RunnerConfigSchemaUnmerged;
+export const RunnerConfigSchema = RunnerConfigSchemaBase.default(() =>
+	RunnerConfigSchemaBase.parse({}),
+);
 
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
 export type RunnerConfigInput = z.input<typeof RunnerConfigSchema>;

@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { toJsonSchema } from "./schema-utils";
 import { ClientConfigSchema } from "@/client/config";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import type {
@@ -106,15 +106,11 @@ function injectActorRouter(openApiDoc: any) {
 		openApiDoc.paths = {};
 	}
 
-	// Convert Zod schemas to JSON Schema and remove $schema property
-	const actionRequestSchema = zodToJsonSchema(HttpActionRequestSchema, {
-		$refStrategy: "none",
-	});
+	// Convert Zod schemas to JSON Schema
+	const actionRequestSchema = toJsonSchema(HttpActionRequestSchema);
 	delete (actionRequestSchema as any).$schema;
 
-	const actionResponseSchema = zodToJsonSchema(HttpActionResponseSchema, {
-		$refStrategy: "none",
-	});
+	const actionResponseSchema = toJsonSchema(HttpActionResponseSchema);
 	delete (actionResponseSchema as any).$schema;
 
 	// Common actorId parameter
