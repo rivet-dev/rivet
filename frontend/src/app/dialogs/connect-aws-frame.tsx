@@ -2,10 +2,13 @@ import { faAws, Icon } from "@rivet-gg/icons";
 import { type DialogContentProps, Frame } from "@/components";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 
-interface ConnectAwsFrameContentProps extends DialogContentProps {}
+interface ConnectAwsFrameContentProps extends DialogContentProps {
+	footer?: React.ReactNode;
+}
 
 export default function ConnectAwsFrameContent({
 	onClose,
+	footer,
 }: ConnectAwsFrameContentProps) {
 	return (
 		<>
@@ -20,6 +23,7 @@ export default function ConnectAwsFrameContent({
 				<ConnectManualServerlfullFrameContent
 					provider="aws"
 					onClose={onClose}
+					footer={footer}
 				/>
 			</Frame.Content>
 		</>

@@ -2,11 +2,14 @@ import { faGoogleCloud, Icon } from "@rivet-gg/icons";
 import { type DialogContentProps, Frame } from "@/components";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 
-interface ConnectAwsFrameContentProps extends DialogContentProps {}
+interface ConnectGcpFrameContentProps extends DialogContentProps {
+	footer?: React.ReactNode;
+}
 
-export default function ConnectAwsFrameContent({
+export default function ConnectGcpFrameContent({
 	onClose,
-}: ConnectAwsFrameContentProps) {
+	footer,
+}: ConnectGcpFrameContentProps) {
 	return (
 		<>
 			<Frame.Header>
@@ -20,6 +23,7 @@ export default function ConnectAwsFrameContent({
 			<Frame.Content>
 				<ConnectManualServerlfullFrameContent
 					provider="gcp"
+					footer={footer}
 					onClose={onClose}
 				/>
 			</Frame.Content>

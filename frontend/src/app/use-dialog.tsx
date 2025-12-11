@@ -47,4 +47,7 @@ export const useDialog = {
 	CreateApiToken: createDialogHook(
 		() => import("@/app/dialogs/create-api-token-frame"),
 	),
+	StartWithTemplate: createDialogHook(
+		() => import("@/app/dialogs/start-with-template-frame"),
+	),
 };

@@ -10,7 +10,8 @@ import {
 } from "@rivet-gg/icons";
 
 export interface DeployOption {
-	title: string;
+	displayName: string;
+	name: string;
 	shortTitle?: string;
 	href: string;
 	description: string;
@@ -25,12 +26,13 @@ export interface DeployGroup {
 	items: DeployOption[];
 }
 
-export const deployGroups: DeployGroup[] = [
+export const deployGroups = [
 	{
 		title: "Serverless",
 		items: [
 			{
-				title: "Vercel",
+				displayName: "Vercel",
+				name: "vercel" as const,
 				href: "/docs/connect/vercel",
 				description:
 					"Deploy Next.js + RivetKit apps to Vercel's edge network",
@@ -39,7 +41,8 @@ export const deployGroups: DeployGroup[] = [
 				specializedPlatform: true,
 			},
 			{
-				title: "Cloudflare Workers",
+				displayName: "Cloudflare Workers",
+				name: "cloudflare" as const,
 				shortTitle: "Cloudflare",
 				href: "/docs/connect/cloudflare-workers",
 				description:
@@ -53,7 +56,8 @@ export const deployGroups: DeployGroup[] = [
 		title: "Containers",
 		items: [
 			{
-				title: "Railway",
+				displayName: "Railway",
+				name: "railway" as const,
 				href: "/docs/connect/railway",
 				description:
 					"Deploy containers to Railway's managed infrastructure",
@@ -61,14 +65,16 @@ export const deployGroups: DeployGroup[] = [
 				badge: "1-Click Deploy",
 			},
 			{
-				title: "Kubernetes",
+				displayName: "Kubernetes",
+				name: "kubernetes" as const,
 				href: "/docs/connect/kubernetes",
 				description:
 					"Deploy to any Kubernetes cluster with container images",
 				icon: faKubernetes,
 			},
 			{
-				title: "AWS ECS",
+				displayName: "AWS ECS",
+				name: "aws-ecs" as const,
 				shortTitle: "AWS",
 				href: "/docs/connect/aws-ecs",
 				description:
@@ -76,7 +82,8 @@ export const deployGroups: DeployGroup[] = [
 				icon: faAws,
 			},
 			{
-				title: "Google Cloud Run",
+				displayName: "Google Cloud Run",
+				name: "gcp-cloud-run" as const,
 				shortTitle: "GCP",
 				href: "/docs/connect/gcp-cloud-run",
 				description:
@@ -89,14 +96,16 @@ export const deployGroups: DeployGroup[] = [
 		title: "Virtual Machines",
 		items: [
 			{
-				title: "Hetzner",
+				displayName: "Hetzner",
+				name: "hetzner" as const,
 				href: "/docs/connect/hetzner",
 				description:
 					"Deploy to Hetzner's cost-effective cloud infrastructure",
 				icon: faHetzner,
 			},
 			{
-				title: "VM & Bare Metal",
+				displayName: "VM & Bare Metal",
+				name: "vm-bare-metal" as const,
 				shortTitle: "VM",
 				href: "/docs/connect/vm-and-bare-metal",
 				description:
@@ -105,7 +114,7 @@ export const deployGroups: DeployGroup[] = [
 			},
 		],
 	},
-];
+] satisfies DeployGroup[];
 
 // Flat list of all deploy options for backward compatibility
 export const deployOptions: DeployOption[] = deployGroups.flatMap(

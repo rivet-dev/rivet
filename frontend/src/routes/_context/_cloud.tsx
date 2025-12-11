@@ -47,6 +47,7 @@ function CloudModals() {
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
+	const StartWithTemplateDialog = useDialog.StartWithTemplate.Dialog;
 
 	return (
 		<>
@@ -56,7 +57,7 @@ function CloudModals() {
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -73,7 +74,7 @@ function CloudModals() {
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -274,6 +275,24 @@ function CloudModals() {
 					onOpenChange: (value: any) => {
 						if (!value) {
 							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<StartWithTemplateDialog
+				name={search.name}
+				provider={search.provider}
+				dialogProps={{
+					open: search.modal === "start-with-template",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
