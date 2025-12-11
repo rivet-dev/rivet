@@ -1,0 +1,1 @@
+npm i --force ai@beta @ai-sdk/anthropic@beta @ai-sdk/react@beta @ai-sdk/ui-utils@canary mastra@ai-v5 @mastra/core@ai-v5 @mastra/mcp@ai-v5 @mastra/memory@ai-v5 @mastra/pg@ai-v5

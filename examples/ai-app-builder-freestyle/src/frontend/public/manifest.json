@@ -1,0 +1,14 @@
+{
+  "short_name": "AI App Builder",
+  "name": "Rivet AI App Builder",
+  "icons": [],
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#ffffff",
+  "shortcuts": [],
+  "description": "An open source AI app builder powered by Rivet.",
+  "screenshots": []
+}

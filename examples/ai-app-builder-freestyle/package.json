@@ -1,0 +1,58 @@
+{
+	"name": "example-ai-app-builder-freestyle",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"dev:backend": "tsx --env-file=.env --watch src/backend/server.ts",
+		"dev:frontend": "vite",
+		"build": "vite build",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@ai-sdk/anthropic": "^2.0.0",
+		"@ai-sdk/mcp": "^0.0.11",
+		"@modelcontextprotocol/sdk": "^1.24.3",
+		"@radix-ui/react-dialog": "^1.1.15",
+		"@rivetkit/react": "workspace:*",
+		"ai": "^5.0.0",
+		"class-variance-authority": "^0.7.1",
+		"clsx": "^2.1.1",
+		"freestyle-sandboxes": "^0.0.97",
+		"lucide-react": "^0.487.0",
+		"openai": "^4.77.0",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"react-markdown": "^10.1.0",
+		"react-router-dom": "^7.1.1",
+		"rivetkit": "workspace:*",
+		"sonner": "^2.0.3",
+		"tailwind-merge": "^3.2.0",
+		"zod": "^3.25.0"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.1.3",
+		"@types/node": "^22.13.9",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
+		"@vitejs/plugin-react": "^4.2.0",
+		"concurrently": "^8.2.2",
+		"tailwindcss": "^4.1.3",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2",
+		"vite": "^5.0.0"
+	},
+	"template": {
+		"technologies": [
+			"react",
+			"typescript"
+		],
+		"tags": [
+			"ai",
+			"app-builder"
+		],
+		"frontendPort": 5173
+	},
+	"license": "MIT"
+}
