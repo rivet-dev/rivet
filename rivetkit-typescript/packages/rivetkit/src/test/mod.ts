@@ -1,82 +1,19 @@
 import { createServer } from "node:net";
-import { serve as honoServe, type ServerType } from "@hono/node-server";
+import { serve as honoServe } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
+import invariant from "invariant";
 import { type TestContext, vi } from "vitest";
-import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
-import { chooseDefaultDriver } from "@/drivers/default";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import {
-	configureInspectorAccessToken,
-	getInspectorUrl,
-} from "@/inspector/utils";
+import { configureInspectorAccessToken } from "@/inspector/utils";
 import { createManagerRouter } from "@/manager/router";
-import { createClientWithDriver } from "@/mod";
-import type { Registry } from "@/registry/mod";
+import { createClientWithDriver, type Registry, type RunConfig } from "@/mod";
+import { ClientConfigSchema } from "@/client/config";
 import { RunnerConfigSchema } from "@/registry/run-config";
-import { ConfigSchema, type InputConfig } from "./config";
 import { logger } from "./log";
-
-async function serve(
-	registry: Registry<any>,
-	inputConfig?: InputConfig,
-): Promise<ServerType> {
-	// Configure default configuration
-	inputConfig ??= {};
-
-	const config = ConfigSchema.parse(inputConfig);
-
-	let upgradeWebSocket: any;
-	if (!config.getUpgradeWebSocket) {
-		config.getUpgradeWebSocket = () => upgradeWebSocket!;
-	}
-
-	// Create router
-	const runConfig = RunnerConfigSchema.parse(inputConfig);
-	const driver =
-		inputConfig.driver ?? (await createFileSystemOrMemoryDriver(false));
-	const managerDriver = driver.manager(registry.config, config);
-	const client = createClientWithDriver(
-		managerDriver,
-		ClientConfigSchema.parse({}),
-	);
-	configureInspectorAccessToken(config, managerDriver);
-	const { router } = createManagerRouter(
-		registry.config,
-		runConfig,
-		managerDriver,
-		driver,
-		client,
-	);
-
-	// Inject WebSocket
-	const nodeWebSocket = createNodeWebSocket({ app: router });
-	upgradeWebSocket = nodeWebSocket.upgradeWebSocket;
-
-	const server = honoServe({
-		fetch: router.fetch,
-		hostname: config.hostname,
-		port: config.port,
-	});
-	nodeWebSocket.injectWebSocket(server);
-
-	logger().info({
-		msg: "rivetkit started",
-		hostname: config.hostname,
-		port: config.port,
-		definitions: Object.keys(registry.config.use).length,
-	});
-
-	return server;
-}
 
 export interface SetupTestResult<A extends Registry<any>> {
 	client: Client<A>;
-	mockDriver: {
-		actorDriver: {
-			setCreateVarsContext: (ctx: any) => void;
-		};
-	};
 }
 
 // Must use `TestContext` since global hooks do not work when running concurrently
@@ -84,39 +21,76 @@ export async function setupTest<A extends Registry<any>>(
 	c: TestContext,
 	registry: A,
 ): Promise<SetupTestResult<A>> {
-	vi.useFakeTimers();
+	// Force enable test mode
+	registry.config.test.enabled = true;
 
-	// Set up mock driver for testing createVars context
-	const mockDriverContext: any = {};
-	const setDriverContextFn = (ctx: any) => {
-		mockDriverContext.current = ctx;
-	};
-
-	// We don't need to modify the driver context anymore since we're testing with the actual context
-
-	// Start server with a random port
-	const port = await getPort();
-	const server = await serve(registry, { port });
-	c.onTestFinished(
-		async () =>
-			await new Promise((resolve) => server.close(() => resolve())),
+	// Create driver
+	const driver = await createFileSystemOrMemoryDriver(
+		true,
+		`/tmp/rivetkit-test-${crypto.randomUUID()}`,
 	);
 
-	throw "TODO: Fix engine port";
+	// Build driver config
+	// biome-ignore lint/style/useConst: Assigned later
+	let upgradeWebSocket: any;
+	const config: RunConfig = RunnerConfigSchema.parse({
+		driver,
+		getUpgradeWebSocket: () => upgradeWebSocket!,
+		inspector: {
+			enabled: true,
+			token: () => "token",
+		},
+	});
 
-	// // TODO: Figure out how to make this the correct endpoint
-	// // Create client
-	// const client = createClient<A>(`http://127.0.0.1:${port}`);
-	// c.onTestFinished(async () => await client.dispose());
-	//
-	// return {
-	// 	client,
-	// 	mockDriver: {
-	// 		actorDriver: {
-	// 			setCreateVarsContext: setDriverContextFn,
-	// 		},
-	// 	},
-	// };
+	// Create router
+	const managerDriver = driver.manager(registry.config, config);
+	const internalClient = createClientWithDriver(
+		managerDriver,
+		ClientConfigSchema.parse({}),
+	);
+	configureInspectorAccessToken(config, managerDriver);
+	const { router } = createManagerRouter(
+		registry.config,
+		config,
+		managerDriver,
+		driver,
+		internalClient,
+	);
+
+	// Inject WebSocket
+	const nodeWebSocket = createNodeWebSocket({ app: router });
+	upgradeWebSocket = nodeWebSocket.upgradeWebSocket;
+
+	// Start server
+	const port = await getPort();
+	const server = honoServe({
+		fetch: router.fetch,
+		hostname: "127.0.0.1",
+		port,
+	});
+	invariant(
+		nodeWebSocket.injectWebSocket !== undefined,
+		"should have injectWebSocket",
+	);
+	nodeWebSocket.injectWebSocket(server);
+	const endpoint = `http://127.0.0.1:${port}`;
+
+	logger().info({ msg: "test server listening", port });
+
+	// Cleanup on test finish
+	c.onTestFinished(async () => {
+		await new Promise((resolve) => server.close(() => resolve(undefined)));
+	});
+
+	// Create client
+	const client = createClient<A>({
+		endpoint,
+		namespace: "default",
+		runnerName: "default",
+	});
+	c.onTestFinished(async () => await client.dispose());
+
+	return { client };
 }
 
 export async function getPort(): Promise<number> {
