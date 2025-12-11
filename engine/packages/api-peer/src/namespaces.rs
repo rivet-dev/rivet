@@ -69,8 +69,8 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 #[serde(deny_unknown_fields)]
 #[schema(as = NamespacesCreateRequest)]
 pub struct CreateRequest {
-	name: String,
-	display_name: String,
+	pub name: String,
+	pub display_name: String,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

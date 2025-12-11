@@ -2,6 +2,8 @@ use gas::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::pagination::Pagination;
+
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams, Default)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
@@ -24,5 +26,5 @@ pub struct ListQuery {
 #[schema(as = ActorsListResponse)]
 pub struct ListResponse {
 	pub actors: Vec<rivet_types::actors::Actor>,
-	pub pagination: crate::pagination::Pagination,
+	pub pagination: Pagination,
 }

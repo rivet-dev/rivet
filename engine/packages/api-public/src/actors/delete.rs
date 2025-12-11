@@ -4,29 +4,11 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
+use rivet_api_types::actors::delete::*;
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 
 use crate::ctx::ApiCtx;
-
-#[derive(Debug, Deserialize, Serialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct DeleteQuery {
-	pub namespace: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DeletePath {
-	pub actor_id: Id,
-}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = ActorsDeleteResponse)]
-pub struct DeleteResponse {}
 
 /// ## Datacenter Round Trips
 ///
@@ -63,13 +45,7 @@ async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Resu
 	ctx.auth().await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {
-		let peer_path = rivet_api_peer::actors::delete::DeletePath {
-			actor_id: path.actor_id,
-		};
-		let peer_query = rivet_api_peer::actors::delete::DeleteQuery {
-			namespace: query.namespace,
-		};
-		let res = rivet_api_peer::actors::delete::delete(ctx.into(), peer_path, peer_query).await?;
+		let res = rivet_api_peer::actors::delete::delete(ctx.into(), path, query).await?;
 
 		Ok(Json(res).into_response())
 	} else {

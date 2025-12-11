@@ -1,8 +1,6 @@
 use anyhow::Result;
 use rivet_api_builder::ApiCtx;
-use rivet_api_types::{pagination::Pagination, runners::list::*};
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
+use rivet_api_types::{pagination::Pagination, runners::list::*, runners::list_names::*};
 
 #[utoipa::path(
 	get,
@@ -67,23 +65,6 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 			pagination: Pagination { cursor },
 		})
 	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct ListNamesQuery {
-	pub namespace: String,
-	pub limit: Option<usize>,
-	pub cursor: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = RunnersListNamesResponse)]
-pub struct ListNamesResponse {
-	pub names: Vec<String>,
-	pub pagination: Pagination,
 }
 
 #[tracing::instrument(skip_all)]
