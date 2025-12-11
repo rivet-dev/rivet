@@ -220,6 +220,39 @@ export const createDefaultActorContext = (
 		};
 	},
 
+	actorKvQueryOptions(
+		actorId: ActorId,
+		{ enabled, prefix, limit, reverse }: { enabled?: boolean; prefix?: string; limit?: number; reverse?: boolean } = {},
+	) {
+		return queryOptions({
+			enabled: enabled ?? true,
+			refetchInterval: 1000,
+			queryKey: [hash, "actor", actorId, "kv", { prefix, limit, reverse }],
+			queryFn: async ({ queryKey: [, , actorId] }) => {
+				const client = await this.createActorInspector(actorId);
+				const params = new URLSearchParams();
+				if (prefix) params.append("prefix", prefix);
+				if (limit) params.append("limit", String(limit));
+				if (reverse) params.append("reverse", String(reverse));
+				
+				const response = await client.kv.$get({
+					query: Object.fromEntries(params),
+				});
+
+				if (!response.ok) {
+					throw response;
+				}
+				return (await response.json()) as {
+					entries: Array<{
+						key: string;
+						value: string;
+						updateTs: number;
+					}>;
+				};
+			},
+		});
+	},
+
 	actorWakeUpMutationOptions(actorId: ActorId) {
 		return {
 			mutationKey: [hash, "actor", actorId, "wake-up"],
