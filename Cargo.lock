@@ -4448,6 +4448,7 @@ name = "rivet-engine"
 version = "2.0.25"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.4",
  "base64 0.22.1",
  "chrono",

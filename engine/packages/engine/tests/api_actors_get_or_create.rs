@@ -360,15 +360,20 @@ fn get_or_create_race_condition_across_datacenters() {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
-		let _runner2 = common::setup_runner(
-			ctx.get_dc(2),
-			&namespace,
-			&format!("key-{:012x}", rand::random::<u64>()),
-			1,
-			20,
-			Some(DC2_RUNNER_NAME.to_string()),
-		)
-		.await;
+		let mut _runner2 = common::test_runner::TestRunnerBuilder::new(&namespace)
+			.with_runner_key(&format!("key-{:012x}", rand::random::<u64>()))
+			.with_version(1)
+			.with_total_slots(20)
+			.with_runner_name(DC2_RUNNER_NAME)
+			.with_actor_behavior("test-actor", |_config| {
+				Box::new(common::test_runner::EchoActor::new())
+			})
+			.build(ctx.get_dc(2))
+			.await
+			.expect("failed to build test runner");
+
+		_runner2.start().await.expect("failed to start runner");
+		_runner2.wait_ready().await;
 
 		let actor_name = "cross-dc-race-actor";
 		let actor_key = "cross-dc-race-key";

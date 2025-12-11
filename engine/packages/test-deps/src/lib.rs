@@ -1,5 +1,6 @@
 use anyhow::*;
 use futures_util::future;
+use tokio::sync::OnceCell;
 use url::Url;
 
 mod datacenter;
@@ -7,6 +8,20 @@ mod datacenter;
 pub use datacenter::*;
 pub use rivet_test_deps_docker::*;
 use uuid::Uuid;
+
+static IS_TEST_ENVIRON_SETUP: OnceCell<()> = OnceCell::const_new();
+
+async fn set_test_environment_variables() {
+	IS_TEST_ENVIRON_SETUP
+		.get_or_init(async || {
+			// SAFETY: RIVET_TEST_RUNTIME is set before anything else
+			// happens in the test, and is initialized only once.
+			unsafe {
+				std::env::set_var("RIVET_TEST_RUNTIME", "1");
+			};
+		})
+		.await;
+}
 
 pub struct TestDeps {
 	pub pools: rivet_pools::Pools,
@@ -19,10 +34,12 @@ pub struct TestDeps {
 
 impl TestDeps {
 	pub async fn new() -> Result<Self> {
+		set_test_environment_variables().await;
 		TestDeps::new_with_test_id(Uuid::new_v4()).await
 	}
 
 	pub async fn new_with_test_id(test_id: Uuid) -> Result<Self> {
+		set_test_environment_variables().await;
 		TestDeps::new_multi_with_test_id(&[1], test_id)
 			.await?
 			.into_iter()
@@ -31,10 +48,12 @@ impl TestDeps {
 	}
 
 	pub async fn new_multi(dc_ids: &[u16]) -> Result<Vec<Self>> {
+		set_test_environment_variables().await;
 		Self::new_multi_with_test_id(dc_ids, Uuid::new_v4()).await
 	}
 
 	pub async fn new_multi_with_test_id(dc_ids: &[u16], test_id: Uuid) -> Result<Vec<Self>> {
+		set_test_environment_variables().await;
 		tracing::info!(?dc_ids, "setting up test dependencies");
 
 		let mut datacenters = Vec::with_capacity(dc_ids.len());
