@@ -1,67 +1,54 @@
-#!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-write
+#!/usr/bin/env tsx
 
-import { exists, walk } from "@std/fs";
-import { join, relative } from "@std/path";
-import { parse, stringify } from "@std/toml";
+import { readFile, writeFile, access } from 'node:fs/promises';
+import { join, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse, stringify } from '@iarna/toml';
+import fg from 'fast-glob';
 
-const rootDir = join(import.meta.dirname, "../..");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const rootDir = join(__dirname, "../..");
+
+async function exists(path: string): Promise<boolean> {
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 async function updateCargoToml() {
 	const workspaceTomlPath = join(rootDir, "Cargo.toml");
-	const workspaceTomlContent = await Deno.readTextFile(workspaceTomlPath);
-	const workspaceToml = parse(workspaceTomlContent);
+	const workspaceTomlContent = await readFile(workspaceTomlPath, 'utf-8');
+	const workspaceToml = parse(workspaceTomlContent) as any;
 
-	const entries = (async function* () {
-		// Yield from engine/packages/* (1 level deep)
-		for await (const entry of walk(join(rootDir, "engine", "packages"), {
-			includeDirs: false,
-			exts: ["toml"],
-			skip: [/node_modules/],
-		})) {
-			if (entry.path.endsWith("Cargo.toml")) {
-				const relativePath = relative(
-					join(rootDir, "engine", "packages"),
-					entry.path,
-				);
-				const pathParts = relativePath.split("/");
-				if (pathParts.length === 2) {
-					// Directly in a subdirectory
-					yield entry;
-				}
-			}
-		}
+	// Find all Cargo.toml files in engine/packages/* (1 level deep)
+	const enginePackages = await fg('engine/packages/*/Cargo.toml', {
+		cwd: rootDir,
+		ignore: ['**/node_modules/**'],
+	});
 
-		// Yield from engine/sdks/rust/* (1 level deep) if it exists
-		const sdksRustDir = join(rootDir, "engine", "sdks", "rust");
-		if (await exists(sdksRustDir)) {
-			for await (const entry of walk(sdksRustDir, {
-				includeDirs: false,
-				exts: ["toml"],
-				skip: [/node_modules/],
-			})) {
-				if (entry.path.endsWith("Cargo.toml")) {
-					const relativePath = relative(sdksRustDir, entry.path);
-					const pathParts = relativePath.split("/");
-					if (pathParts.length === 2) {
-						// Directly in a subdirectory
-						yield entry;
-					}
-				}
-			}
-		}
-	})();
+	// Find all Cargo.toml files in engine/sdks/rust/* (1 level deep) if it exists
+	const sdksRustDir = join(rootDir, "engine", "sdks", "rust");
+	let sdkPackages: string[] = [];
+	if (await exists(sdksRustDir)) {
+		sdkPackages = await fg('engine/sdks/rust/*/Cargo.toml', {
+			cwd: rootDir,
+			ignore: ['**/node_modules/**'],
+		});
+	}
 
-	// Find all workspace members
+	const allCargoTomls = [...enginePackages, ...sdkPackages];
+
+	// Build list of workspace members
 	const members: string[] = [];
-	for await (const entry of entries) {
-		const packagePath = relative(
-			rootDir,
-			entry.path.replace(/\/Cargo\.toml$/, ""),
-		);
+	for (const cargoTomlPath of allCargoTomls) {
+		const packagePath = cargoTomlPath.replace(/\/Cargo\.toml$/, "");
 		members.push(packagePath);
 	}
 
-	// Sort deps
+	// Sort members
 	members.sort();
 
 	// Remove path dependencies, since we'll replace these. This lets us
@@ -79,10 +66,11 @@ async function updateCargoToml() {
 		"rivet-util": ["util"],
 		gasoline: ["gas"],
 	};
+
 	for (const packagePath of members) {
 		const packageTomlPath = join(rootDir, packagePath, "Cargo.toml");
-		const packageTomlContent = await Deno.readTextFile(packageTomlPath);
-		const packageToml = parse(packageTomlContent);
+		const packageTomlContent = await readFile(packageTomlPath, 'utf-8');
+		const packageToml = parse(packageTomlContent) as any;
 
 		// Save to workspace
 		newDependencies[packageToml.package.name] = {
@@ -115,7 +103,7 @@ async function updateCargoToml() {
 
 		// // Write the updated package Cargo.toml
 		// const updatedPackageTomlContent = stringify(packageToml);
-		// await Deno.writeTextFile(packageTomlPath, updatedPackageTomlContent);
+		// await writeFile(packageTomlPath, updatedPackageTomlContent, 'utf-8');
 	}
 
 	// Update and write workspace
@@ -127,7 +115,7 @@ async function updateCargoToml() {
 	};
 
 	const updatedTomlContent = stringify(workspaceToml);
-	await Deno.writeTextFile(workspaceTomlPath, updatedTomlContent);
+	await writeFile(workspaceTomlPath, updatedTomlContent, 'utf-8');
 }
 
 updateCargoToml().catch(console.error);
