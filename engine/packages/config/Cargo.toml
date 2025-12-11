@@ -18,3 +18,4 @@ serde_json.workspace = true
 serde.workspace = true
 url.workspace = true
 uuid.workspace = true
+tracing.workspace = true

@@ -79,11 +79,15 @@ fn add_source<P: AsRef<Path>>(
 	let path = path.as_ref();
 
 	if !path.exists() {
+		tracing::debug!(path=%path.display(), "ignoring non-existent config path");
+
 		// Silently ignore non-existent paths
 		return Ok(settings);
 	}
 
 	if path.is_dir() {
+		tracing::debug!(path=%path.display(), "loading config from directory");
+
 		for entry in std::fs::read_dir(path)? {
 			let entry = entry?;
 			let path = entry.path();
@@ -96,9 +100,14 @@ fn add_source<P: AsRef<Path>>(
 			}
 		}
 	} else if path.is_file() {
+		tracing::debug!(path=%path.display(), "loading config from file");
+
 		settings = add_file_source(settings, path)?;
 	} else {
-		bail!("Invalid path: {}", path.display());
+		bail!(
+			"Invalid Rivet config path: {}. Ensure the path exists and is either a directory with config files or a specific config file.",
+			path.display()
+		);
 	}
 
 	Ok(settings)
