@@ -18,6 +18,7 @@ rivet-api-util.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-pools.workspace = true
+rivet-runner-protocol.workspace = true
 rivet-util.workspace = true
 rivet-types.workspace = true
 serde.workspace = true

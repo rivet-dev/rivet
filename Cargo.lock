@@ -4259,6 +4259,7 @@ dependencies = [
  "rivet-config",
  "rivet-error",
  "rivet-pools",
+ "rivet-runner-protocol",
  "rivet-types",
  "rivet-util",
  "serde",
