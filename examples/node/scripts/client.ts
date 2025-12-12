@@ -20,6 +20,8 @@ async function main() {
 		const result1 = await counter.increment(1);
 		console.log("New count:", result1);
 
+		await new Promise(res => setTimeout(res, 4000));
+
 		// Increment again with larger value
 		console.log("Incrementing counter 'demo' by 5...");
 		const result2 = await counter.increment(5);

@@ -12,7 +12,6 @@ use rivet_types::{
 	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
 	runner_configs::RunnerConfigKind,
 };
-use std::collections::HashMap;
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
@@ -23,7 +22,7 @@ use crate::{keys, metrics};
 
 use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LifecycleRunnerState {
 	pub last_event_idx: i64,
 	pub last_event_ack_idx: i64,
@@ -48,8 +47,7 @@ pub struct LifecycleState {
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
 	pub runner_protocol_version: Option<u16>,
-	#[serde(default)]
-	pub runner_states: HashMap<Id, LifecycleRunnerState>,
+	pub runner_state: Option<LifecycleRunnerState>,
 
 	pub sleeping: bool,
 	#[serde(default)]
@@ -81,7 +79,7 @@ impl LifecycleState {
 			runner_id: Some(runner_id),
 			runner_workflow_id: Some(runner_workflow_id),
 			runner_protocol_version: Some(runner_protocol_version),
-			runner_states: HashMap::new(),
+			runner_state: Some(LifecycleRunnerState::default()),
 			sleeping: false,
 			stopping: false,
 			going_away: false,
@@ -98,7 +96,7 @@ impl LifecycleState {
 			runner_id: None,
 			runner_workflow_id: None,
 			runner_protocol_version: None,
-			runner_states: HashMap::new(),
+			runner_state: None,
 			sleeping: true,
 			stopping: false,
 			going_away: false,
@@ -561,6 +559,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 	state.connectable_ts = None;
 	state.runner_id = None;
 	state.runner_workflow_id = None;
+	state.runner_state = None;
 	// Slot was cleared by the above txn
 	state.allocated_serverless_slot = false;
 
@@ -663,10 +662,10 @@ pub async fn spawn_actor(
 			if protocol::is_mk2(runner_protocol_version) {
 				ctx.activity(InsertAndSendCommandsInput {
 					actor_id: input.actor_id,
+					generation,
 					runner_id,
 					commands: vec![protocol::mk2::Command::CommandStartActor(
 						protocol::mk2::CommandStartActor {
-							generation,
 							config: protocol::mk2::ActorConfig {
 								name: input.name.clone(),
 								key: input.key.clone(),
@@ -778,10 +777,10 @@ pub async fn spawn_actor(
 					if protocol::is_mk2(runner_protocol_version) {
 						ctx.activity(InsertAndSendCommandsInput {
 							actor_id: input.actor_id,
+							generation,
 							runner_id: sig.runner_id,
 							commands: vec![protocol::mk2::Command::CommandStartActor(
 								protocol::mk2::CommandStartActor {
-									generation,
 									config: protocol::mk2::ActorConfig {
 										name: input.name.clone(),
 										key: input.key.clone(),
@@ -888,10 +887,10 @@ pub async fn spawn_actor(
 						if protocol::is_mk2(runner_protocol_version) {
 							ctx.activity(InsertAndSendCommandsInput {
 								actor_id: input.actor_id,
+								generation,
 								runner_id: sig.runner_id,
 								commands: vec![protocol::mk2::Command::CommandStartActor(
 									protocol::mk2::CommandStartActor {
-										generation,
 										config: protocol::mk2::ActorConfig {
 											name: input.name.clone(),
 											key: input.key.clone(),
@@ -1187,53 +1186,9 @@ fn reschedule_backoff(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct CheckRunnersInput {
-	pub seen_runners: Vec<Id>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct CheckRunnersOutput {
-	pub remove_runners: Vec<Id>,
-}
-
-#[activity(CheckRunners)]
-pub async fn check_runners(
-	ctx: &ActivityCtx,
-	input: &CheckRunnersInput,
-) -> Result<CheckRunnersOutput> {
-	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
-
-			// Diff the list of seen runners with the list of active runners so we know which we can clean up
-			// state
-			let remove_runners = futures_util::stream::iter(input.seen_runners.clone())
-				.map(|runner_id| {
-					let tx = tx.clone();
-					async move {
-						if tx
-							.exists(&keys::runner::StopTsKey::new(runner_id), Snapshot)
-							.await?
-						{
-							anyhow::Ok(Some(runner_id))
-						} else {
-							Ok(None)
-						}
-					}
-				})
-				.buffer_unordered(1024)
-				.try_filter_map(|x| std::future::ready(Ok(x)))
-				.try_collect::<Vec<_>>()
-				.await?;
-
-			Ok(CheckRunnersOutput { remove_runners })
-		})
-		.await
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct InsertAndSendCommandsInput {
 	pub actor_id: Id,
+	pub generation: u32,
 	pub runner_id: Id,
 	pub commands: Vec<protocol::mk2::Command>,
 }
@@ -1245,7 +1200,7 @@ pub async fn insert_and_send_commands(
 ) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
 
-	let runner_state = state.runner_states.entry(input.runner_id).or_default();
+	let runner_state = state.runner_state.get_or_insert_default();
 	let old_last_command_idx = runner_state.last_command_idx;
 	runner_state.last_command_idx += input.commands.len() as i64;
 
@@ -1254,7 +1209,11 @@ pub async fn insert_and_send_commands(
 	ctx.udb()?
 		.run(|tx| async move {
 			tx.write(
-				&keys::runner::ActorLastCommandIdxKey::new(input.runner_id, input.actor_id),
+				&keys::runner::ActorLastCommandIdxKey::new(
+					input.runner_id,
+					input.actor_id,
+					input.generation,
+				),
 				last_command_idx,
 			)?;
 
@@ -1263,14 +1222,15 @@ pub async fn insert_and_send_commands(
 					&keys::runner::ActorCommandKey::new(
 						input.runner_id,
 						input.actor_id,
+						input.generation,
 						old_last_command_idx + i as i64 + 1,
 					),
 					match command {
 						protocol::mk2::Command::CommandStartActor(x) => {
 							protocol::mk2::ActorCommandKeyData::CommandStartActor(x.clone())
 						}
-						protocol::mk2::Command::CommandStopActor(x) => {
-							protocol::mk2::ActorCommandKeyData::CommandStopActor(x.clone())
+						protocol::mk2::Command::CommandStopActor => {
+							protocol::mk2::ActorCommandKeyData::CommandStopActor
 						}
 					},
 				)?;
@@ -1292,6 +1252,7 @@ pub async fn insert_and_send_commands(
 				.map(|(i, command)| protocol::mk2::CommandWrapper {
 					checkpoint: protocol::mk2::ActorCheckpoint {
 						actor_id: input.actor_id.to_string(),
+						generation: input.generation,
 						index: old_last_command_idx + i as i64 + 1,
 					},
 					inner: command.clone(),
@@ -1331,4 +1292,12 @@ pub async fn send_messages_to_runner(
 	}
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct CheckRunnersStubInput {}
+
+#[activity(CheckRunnersStub)]
+pub async fn check_runners(ctx: &ActivityCtx, input: &CheckRunnersStubInput) -> Result<()> {
+	unreachable!();
 }
