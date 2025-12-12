@@ -279,6 +279,22 @@ export const templates: Template[] = [
     "noFrontend": true
   },
   {
+    "name": "experimental-durable-streams-ai-agent",
+    "displayName": "AI Agent with Durable Streams (Experimental)",
+    "description": "Example project demonstrating how to build an AI agent that communicates through durable streams for reliable message delivery and persistence.",
+    "technologies": [
+      "rivet",
+      "typescript",
+      "durable-streams"
+    ],
+    "tags": [
+      "ai",
+      "real-time",
+      "experimental"
+    ],
+    "noFrontend": false
+  },
+  {
     "name": "express",
     "displayName": "Express Integration",
     "description": "Example project demonstrating Express web framework integration.",
