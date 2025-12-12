@@ -291,6 +291,11 @@ export class Runner {
 	}
 
 	async forceStopActor(actorId: string, generation?: number) {
+		this.log?.debug({
+			msg: "force stopping actor",
+			actorId,
+		});
+
 		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
 
@@ -308,12 +313,11 @@ export class Runner {
 		// Close requests after onActorStop so you can send messages over the tunnel
 		this.#tunnel?.closeActiveRequests(actor);
 
-		// Remove actor after stopping in order to ensure that we can still
-		// call actions on the runner. Do this before sending stopped update in
-		// order to ensure we don't have duplicate actors.
-		this.#removeActor(actorId, generation);
-
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
+
+		// Remove actor after stopping in order to ensure that we can still
+		// call actions on the runner
+		this.#removeActor(actorId, generation);
 	}
 
 	#handleLost() {
@@ -980,6 +984,14 @@ export class Runner {
 						error: stringifyError(err),
 					});
 				});
+
+				// NOTE: We don't do this for CommandStopActor because the actor will be removed by that call
+				// so we cant update the checkpoint
+				const actor = this.getActor(
+					commandWrapper.checkpoint.actorId,
+					commandWrapper.inner.val.generation,
+				);
+				if (actor) actor.lastCommandIdx = commandWrapper.checkpoint.index;
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
 				// Spawn background promise
 				this.#handleCommandStopActor(commandWrapper).catch((err) => {
@@ -992,12 +1004,6 @@ export class Runner {
 			} else {
 				unreachable(commandWrapper.inner);
 			}
-
-			const actor = this.getActor(
-				commandWrapper.checkpoint.actorId,
-				commandWrapper.inner.val.generation,
-			);
-			if (actor) actor.lastCommandIdx = commandWrapper.checkpoint.index;
 		}
 	}
 
