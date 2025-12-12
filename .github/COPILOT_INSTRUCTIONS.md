@@ -153,8 +153,18 @@ tracing::info!("foo {x}");
 
 ## Configuration Management
 
-- Do not make changes to `engine/docker/dev*` configs directly
-- Instead, edit the template in `engine/docker/template/` and rerun `(cd engine/docker/template && pnpm start)` to regenerate
+### Docker Configuration
+- Do not edit `engine/docker/dev*` config files directly
+- Instead, edit the template in `engine/docker/template/` and rerun `(cd engine/docker/template && pnpm start)` to regenerate the configs
+
+## Docker Development Environment
+
+To start the development environment (using the generated configs):
+
+```bash
+cd engine/docker/dev
+docker-compose up -d
+```
 
 ## Optimizations
 
@@ -176,12 +186,4 @@ All example READMEs in `/examples/` should follow a consistent format. Refer to 
 When committing changes, use Graphite CLI with conventional commits:
 ```bash
 gt c -m "chore(my-pkg): foo bar"
-```
-
-## Docker Development Environment
-
-```bash
-# Start the development environment with all services
-cd engine/docker/dev
-docker-compose up -d
 ```
