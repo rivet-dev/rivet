@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct Runtime {
+	/// Adjusts worker curve around this value (in millicores, i.e. 1000 = 1 core). Is not a hard limit. When
+	/// unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.
+	pub worker_cpu_max: Option<usize>,
 	/// Time (in seconds) to allow for the gasoline worker engine to stop gracefully after receiving SIGTERM.
 	/// Defaults to 30 seconds.
 	worker_shutdown_duration: Option<u32>,

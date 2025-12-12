@@ -148,4 +148,14 @@ lazy_static::lazy_static! {
 	pub static ref OPERATION_ERRORS: Counter<u64> = METER.u64_counter("rivet_gasoline_operation_errors")
 		.with_description("All errors made by this operation.")
 		.build();
+
+	// MARK: Load Shedding
+	pub static ref CPU_USAGE: Histogram<f64> = METER.f64_histogram("rivet_gasoline_cpu_usage")
+		.with_description("CPU usage (100 per core).")
+		.with_boundaries(vec![0.0, 0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0])
+		.build();
+	pub static ref LOAD_SHEDDING_RATIO: Histogram<f64> = METER.f64_histogram("rivet_gasoline_load_shedding_ratio")
+		.with_description("Load shedding ratio (0-1) based on CPU usage, determining the fraction of workflows to pull.")
+		.with_boundaries(vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+		.build();
 }

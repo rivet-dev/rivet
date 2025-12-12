@@ -301,7 +301,7 @@ impl WorkflowCtx {
 
 		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input).in_current_span())
 			.await
-			.map_err(|_| WorkflowError::ActivityTimeout(0));
+			.map_err(|_| WorkflowError::ActivityTimeout(A::NAME, 0));
 
 		let dt = start_instant.elapsed().as_secs_f64();
 
@@ -401,7 +401,7 @@ impl WorkflowCtx {
 					],
 				);
 
-				Err(WorkflowError::ActivityFailure(err, 0))
+				Err(WorkflowError::ActivityFailure(A::NAME, err, 0))
 			}
 			Err(err) => {
 				tracing::debug!("activity timeout");
@@ -604,25 +604,28 @@ impl WorkflowCtx {
 						// Convert error in the case of max retries exceeded. This will only act on retryable
 						// errors
 						let err = match err {
-							WorkflowError::ActivityFailure(err, _) => {
+							WorkflowError::ActivityFailure(name, err, _) => {
 								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
-									WorkflowError::ActivityMaxFailuresReached(err)
+									WorkflowError::ActivityMaxFailuresReached(name, err)
 								} else {
 									// Add error count to the error for backoff calculation
-									WorkflowError::ActivityFailure(err, error_count)
+									WorkflowError::ActivityFailure(name, err, error_count)
 								}
 							}
-							WorkflowError::ActivityTimeout(_) => {
+							WorkflowError::ActivityTimeout(name, _) => {
 								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
-									WorkflowError::ActivityMaxFailuresReached(err.into())
+									WorkflowError::ActivityMaxFailuresReached(name, err.into())
 								} else {
 									// Add error count to the error for backoff calculation
-									WorkflowError::ActivityTimeout(error_count)
+									WorkflowError::ActivityTimeout(name, error_count)
 								}
 							}
 							WorkflowError::OperationTimeout(op_name, _) => {
 								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
-									WorkflowError::ActivityMaxFailuresReached(err.into())
+									WorkflowError::ActivityMaxFailuresReached(
+										I::Activity::NAME,
+										err.into(),
+									)
 								} else {
 									// Add error count to the error for backoff calculation
 									WorkflowError::OperationTimeout(op_name, error_count)

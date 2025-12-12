@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::*;
+use anyhow::{Result, ensure};
 use clap::{Parser, ValueEnum};
 use gas::db::{
 	self, Database,
@@ -32,6 +32,18 @@ pub enum SubCommand {
 	Silence { workflow_ids: Vec<Id> },
 	/// Sets the wake immediate property of a workflow to true.
 	Wake { workflow_ids: Vec<Id> },
+	/// Wakes dead workflows that match the name and error queries.
+	Revive {
+		#[clap(short = 'n', long)]
+		name: Vec<String>,
+		/// Matches via substring (i.e. error = "database" will match workflows that died with error "database transaction failed").
+		#[clap(short = 'e', long)]
+		error: Vec<String>,
+		#[clap(short = 'd', long)]
+		dry_run: bool,
+		#[clap(short = 'p', long)]
+		parallelization: Option<u128>,
+	},
 	/// Lists the entire event history of a workflow.
 	History {
 		#[clap(index = 1)]
@@ -58,7 +70,7 @@ pub enum SubCommand {
 impl SubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
-		let db = db::DatabaseKv::from_pools(pools).await? as Arc<dyn DatabaseDebug>;
+		let db = db::DatabaseKv::new(config.clone(), pools).await? as Arc<dyn DatabaseDebug>;
 
 		match self {
 			Self::Get { workflow_ids } => {
@@ -85,6 +97,31 @@ impl SubCommand {
 			}
 			Self::Silence { workflow_ids } => db.silence_workflows(workflow_ids).await,
 			Self::Wake { workflow_ids } => db.wake_workflows(workflow_ids).await,
+			Self::Revive {
+				name,
+				error,
+				dry_run,
+				parallelization,
+			} => {
+				ensure!(!name.is_empty(), "must provide at least one name");
+
+				let total = db
+					.revive_workflows(
+						&name.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+						&error.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+						dry_run,
+						parallelization.unwrap_or(1),
+					)
+					.await?;
+
+				if dry_run {
+					rivet_term::status::success("Workflows Matched", total);
+				} else {
+					rivet_term::status::success("Workflows Revived", total);
+				}
+
+				Ok(())
+			}
 			Self::History {
 				workflow_id,
 				exclude_json,

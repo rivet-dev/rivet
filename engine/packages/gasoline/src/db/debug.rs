@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::Result;
 use rivet_util::Id;
 
 use super::Database;
@@ -39,6 +39,14 @@ pub trait DatabaseDebug: Database {
 	) -> Result<Vec<SignalData>>;
 
 	async fn silence_signals(&self, signal_ids: Vec<Id>) -> Result<()>;
+
+	async fn revive_workflows(
+		&self,
+		names: &[&str],
+		error_like: &[&str],
+		dry_run: bool,
+		parallelization: u128,
+	) -> Result<usize>;
 }
 
 #[derive(Debug)]

@@ -5,7 +5,7 @@ use std::{
 	collections::{HashMap, HashSet},
 	hash::{DefaultHasher, Hash, Hasher},
 	sync::Arc,
-	time::Instant,
+	time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, ensure};
@@ -48,8 +48,10 @@ mod system;
 const WORKER_LOST_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
 /// How long before overwriting an existing metrics lock.
 const METRICS_LOCK_TIMEOUT_MS: i64 = rivet_util::duration::seconds(30);
+const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
 
 pub struct DatabaseKv {
+	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 	subspace: universaldb::utils::Subspace,
 	system: Mutex<system::SystemInfo>,
@@ -417,8 +419,12 @@ impl Database for DatabaseKv {
 		std::time::Duration::from_secs(4)
 	}
 
-	async fn from_pools(pools: rivet_pools::Pools) -> anyhow::Result<Arc<Self>> {
+	async fn new(
+		config: rivet_config::Config,
+		pools: rivet_pools::Pools,
+	) -> anyhow::Result<Arc<Self>> {
 		Ok(Arc::new(DatabaseKv {
+			config,
 			pools,
 			subspace: universaldb::utils::Subspace::new(&(RIVET, GASOLINE, KV)),
 			system: Mutex::new(system::SystemInfo::new()),
@@ -436,6 +442,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::PoolsGeneric)?
 			.subscribe(&subjects::convert(subject))
 			.await
+			.context("failed to subscribe to bump sub")
 			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?;
 
 		let stream = async_stream::stream! {
@@ -463,6 +470,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::PoolsGeneric)?
 			.run(|tx| {
 				async move {
+					let start = Instant::now();
 					let now = rivet_util::timestamp::now();
 
 					let mut last_ping_cache: Vec<(Id, i64)> = Vec::new();
@@ -484,7 +492,16 @@ impl Database for DatabaseKv {
 						Snapshot,
 					);
 
-					while let Some(lease_key_entry) = stream.try_next().await? {
+					loop {
+						if start.elapsed() > EARLY_TXN_TIMEOUT {
+							tracing::warn!("timed out processing expired leases");
+							break;
+						}
+
+						let Some(lease_key_entry) = stream.try_next().await? else {
+							break;
+						};
+
 						let lease_key = self
 							.subspace
 							.unpack::<keys::workflow::LeaseKey>(lease_key_entry.key())?;
@@ -580,6 +597,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("clear_expired_leases_tx"))
 			.await
+			.context("failed to clear expired leases")
 			.map_err(WorkflowError::Udb)?;
 
 		if expired_workflow_count != 0 {
@@ -630,6 +648,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("acquire_lock_tx"))
 			.await
+			.context("failed to acquire metrics lock")
 			.map_err(WorkflowError::Udb)?;
 
 		if acquired_lock {
@@ -659,6 +678,7 @@ impl Database for DatabaseKv {
 				})
 				.custom_instrument(tracing::info_span!("read_metrics_tx"))
 				.await
+				.context("failed to read metrics")
 				.map_err(WorkflowError::Udb)?;
 
 			let mut total_workflow_counts: Vec<(String, usize)> = Vec::new();
@@ -675,9 +695,9 @@ impl Database for DatabaseKv {
 							.iter_mut()
 							.find(|(name, _)| name == &workflow_name)
 						{
-							entry.1 += 1;
+							entry.1 += count;
 						} else {
-							total_workflow_counts.push((workflow_name, 1));
+							total_workflow_counts.push((workflow_name, count));
 						}
 					}
 					keys::metric::GaugeMetric::WorkflowSleeping(workflow_name) => {
@@ -690,9 +710,9 @@ impl Database for DatabaseKv {
 							.iter_mut()
 							.find(|(name, _)| name == &workflow_name)
 						{
-							entry.1 += 1;
+							entry.1 += count;
 						} else {
-							total_workflow_counts.push((workflow_name, 1));
+							total_workflow_counts.push((workflow_name, count));
 						}
 					}
 					keys::metric::GaugeMetric::WorkflowDead(workflow_name, error) => {
@@ -708,9 +728,9 @@ impl Database for DatabaseKv {
 							.iter_mut()
 							.find(|(name, _)| name == &workflow_name)
 						{
-							entry.1 += 1;
+							entry.1 += count;
 						} else {
-							total_workflow_counts.push((workflow_name, 1));
+							total_workflow_counts.push((workflow_name, count));
 						}
 					}
 					keys::metric::GaugeMetric::WorkflowComplete(workflow_name) => {
@@ -718,9 +738,9 @@ impl Database for DatabaseKv {
 							.iter_mut()
 							.find(|(name, _)| name == &workflow_name)
 						{
-							entry.1 += 1;
+							entry.1 += count;
 						} else {
-							total_workflow_counts.push((workflow_name, 1));
+							total_workflow_counts.push((workflow_name, count));
 						}
 					}
 					keys::metric::GaugeMetric::SignalPending(signal_name) => {
@@ -749,6 +769,7 @@ impl Database for DatabaseKv {
 				})
 				.custom_instrument(tracing::info_span!("clear_lock_tx"))
 				.await
+				.context("failed to release metrics lock")
 				.map_err(WorkflowError::Udb)?;
 		}
 
@@ -789,6 +810,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("update_worker_ping_tx"))
 			.await
+			.context("failed to update worker ping")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -814,6 +836,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("mark_worker_inactive_tx"))
 			.await
+			.context("failed to mark worker inactive")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -1010,9 +1033,26 @@ impl Database for DatabaseKv {
 
 					// Determine load shedding ratio based on linear mapping on cpu usage. We will gradually
 					// pull less workflows as the cpu usage increases
-					let cpu_usage = { self.system.lock().await.cpu_usage() };
+					//       |     .   .
+					//  100% | _____   .
+					//       |     .\  .
+					// % wfs |     . \ .
+					//       |     .  \.
+					//    5% |     .   \_____
+					//       |_____.___.______
+					//       0    50% 80%
+					//         avg cpu usage
+					let cpu_usage_ratio = {
+						self.system
+							.lock()
+							.await
+							.cpu_usage_ratio(self.config.runtime.worker_cpu_max)
+					};
 					let load_shed_ratio_x1000 =
-						calc_pull_ratio((cpu_usage.max(100.0) * 10.0) as u64, 500, 1000, 800, 100);
+						calc_pull_ratio((cpu_usage_ratio * 1000.0) as u64, 500, 1000, 800, 50);
+
+					// Record load shedding ratio metric
+					metrics::LOAD_SHEDDING_RATIO.record(load_shed_ratio_x1000 as f64 / 1000.0, &[]);
 
 					let active_worker_subspace_start = tx.pack(
 						&keys::worker::ActiveWorkerIdxKey::subspace(active_workers_after),
@@ -1039,32 +1079,52 @@ impl Database for DatabaseKv {
 							Ok(key.worker_id)
 						})
 						.try_collect::<Vec<_>>(),
-						futures_util::stream::iter(owned_filter)
-							.map(|wf_name| {
-								let wake_subspace_start = end_of_key_range(&tx.pack(
-									&keys::wake::WorkflowWakeConditionKey::subspace_without_ts(
-										wf_name.clone(),
-									),
-								));
-								let wake_subspace_end =
-									tx.pack(&keys::wake::WorkflowWakeConditionKey::subspace(
-										wf_name,
-										pull_before,
+						async {
+							let start = Instant::now();
+							let mut buffer = Vec::new();
+							let mut stream = futures_util::stream::iter(owned_filter)
+								.map(|wf_name| {
+									let wake_subspace_start = end_of_key_range(&tx.pack(
+										&keys::wake::WorkflowWakeConditionKey::subspace_without_ts(
+											wf_name.clone(),
+										),
 									));
+									let wake_subspace_end =
+										tx.pack(&keys::wake::WorkflowWakeConditionKey::subspace(
+											wf_name,
+											pull_before,
+										));
 
-								tx.get_ranges_keyvalues(
-									universaldb::RangeOption {
-										mode: StreamingMode::WantAll,
-										..(wake_subspace_start, wake_subspace_end).into()
-									},
-									// This is Snapshot to reduce contention with any new wake conditions
-									// being inserted. Conflicts are handled by workflow leases.
-									Snapshot,
-								)
-							})
-							.flatten()
-							.map(|res| tx.unpack::<keys::wake::WorkflowWakeConditionKey>(res?.key()))
-							.try_collect::<Vec<_>>(),
+									tx.get_ranges_keyvalues(
+										universaldb::RangeOption {
+											mode: StreamingMode::WantAll,
+											..(wake_subspace_start, wake_subspace_end).into()
+										},
+										// This is Snapshot to reduce contention with any new wake conditions
+										// being inserted. Conflicts are handled by workflow leases.
+										Snapshot,
+									)
+								})
+								.flatten()
+								.map(|res| {
+									tx.unpack::<keys::wake::WorkflowWakeConditionKey>(res?.key())
+								});
+
+							loop {
+								if start.elapsed() > EARLY_TXN_TIMEOUT {
+									tracing::warn!("timed out pulling wake conditions");
+									break;
+								}
+
+								let Some(wake_key) = stream.try_next().await? else {
+									break;
+								};
+
+								buffer.push(wake_key);
+							}
+
+							anyhow::Ok(buffer)
+						}
 					)?;
 
 					// Sort for consistency across all workers
@@ -1089,67 +1149,77 @@ impl Database for DatabaseKv {
 					let active_worker_count = active_worker_ids.len() as u64;
 
 					// Collect name and deadline ts for each wf id
-					let mut dedup_workflows: Vec<MinimalPulledWorkflow> = Vec::new();
+					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();
 					for wake_key in &wake_keys {
-						if let Some(wf) = dedup_workflows
-							.iter_mut()
-							.find(|wf| wf.workflow_id == wake_key.workflow_id)
-						{
-							let key_wake_deadline_ts = wake_key.condition.deadline_ts();
+						let Some(wf) = dedup_workflows.get_mut(&wake_key.workflow_id) else {
+							dedup_workflows.insert(
+								wake_key.workflow_id,
+								MinimalPulledWorkflow {
+									workflow_id: wake_key.workflow_id,
+									workflow_name: wake_key.workflow_name.clone(),
+									wake_deadline_ts: wake_key.condition.deadline_ts(),
+									earliest_wake_condition_ts: wake_key.ts,
+								},
+							);
 
-							// Update wake condition ts if earlier
-							if wake_key.ts < wf.earliest_wake_condition_ts {
-								wf.earliest_wake_condition_ts = wake_key.ts;
-							}
-
-							// Update wake deadline ts if earlier
-							if wf.wake_deadline_ts.is_none()
-								|| key_wake_deadline_ts < wf.wake_deadline_ts
-							{
-								wf.wake_deadline_ts = key_wake_deadline_ts;
+							// Hard limit of 10k deduped workflows, this gets further limited to 1000 at
+							// `assigned_workflows`
+							if dedup_workflows.len() >= 10000 {
+								break;
 							}
 
 							continue;
+						};
+
+						let key_wake_deadline_ts = wake_key.condition.deadline_ts();
+
+						// Update wake condition ts if earlier
+						if wake_key.ts < wf.earliest_wake_condition_ts {
+							wf.earliest_wake_condition_ts = wake_key.ts;
 						}
 
-						dedup_workflows.push(MinimalPulledWorkflow {
-							workflow_id: wake_key.workflow_id,
-							workflow_name: wake_key.workflow_name.clone(),
-							wake_deadline_ts: wake_key.condition.deadline_ts(),
-							earliest_wake_condition_ts: wake_key.ts,
-						});
+						// Update wake deadline ts if earlier
+						if wf.wake_deadline_ts.is_none()
+							|| key_wake_deadline_ts < wf.wake_deadline_ts
+						{
+							wf.wake_deadline_ts = key_wake_deadline_ts;
+						}
 					}
 
 					// Filter workflows in a way that spreads all current pending workflows across all active
 					// workers evenly
-					let assigned_workflows = dedup_workflows.into_iter().filter(|wf| {
-						let mut hasher = DefaultHasher::new();
+					let assigned_workflows = dedup_workflows
+						.into_values()
+						.filter(|wf| {
+							let mut hasher = DefaultHasher::new();
 
-						// Earliest wake condition ts is consistent for hashing purposes because when it
-						// changes it means a worker has leased it
-						wf.earliest_wake_condition_ts.hash(&mut hasher);
-						let wf_hash = hasher.finish();
+							// Earliest wake condition ts is consistent for hashing purposes because when it
+							// changes it means a worker has leased it
+							wf.earliest_wake_condition_ts.hash(&mut hasher);
+							let wf_hash = hasher.finish();
 
-						let pseudorandom_value_x1000 = {
-							// Add a little pizazz to the hash so its a different number than wf_hash but
-							// still consistent
-							1234i32.hash(&mut hasher);
-							hasher.finish() % 1000 // 0-1000
-						};
+							let pseudorandom_value_x1000 = {
+								// Add a little pizazz to the hash so its a different number than wf_hash but
+								// still consistent
+								1234i32.hash(&mut hasher);
+								hasher.finish() % 1000 // 0-1000
+							};
 
-						if pseudorandom_value_x1000 < load_shed_ratio_x1000 {
-							return false;
-						}
+							if pseudorandom_value_x1000 > load_shed_ratio_x1000 {
+								return false;
+							}
 
-						let wf_worker_idx = wf_hash % active_worker_count;
+							let wf_worker_idx = wf_hash % active_worker_count;
 
-						// Every worker pulls workflows that has to the current worker as well as the next
-						// worker for redundancy. this results in increased txn conflicts but less chance of
-						// orphaned workflows
-						let next_worker_idx = (current_worker_idx + 1) % active_worker_count;
+							// Every worker pulls workflows that has to the current worker as well as the next
+							// worker for redundancy. this results in increased txn conflicts but less chance of
+							// orphaned workflows
+							let next_worker_idx = (current_worker_idx + 1) % active_worker_count;
 
-						wf_worker_idx == current_worker_idx || wf_worker_idx == next_worker_idx
-					});
+							wf_worker_idx == current_worker_idx || wf_worker_idx == next_worker_idx
+						})
+						// Hard limit of 1000 workflows per pull
+						.take(1000);
 
 					// Check leases
 					let leased_workflows = futures_util::stream::iter(assigned_workflows)
@@ -1252,6 +1322,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("pull_workflows_tx"))
 			.await
+			.context("failed to lease workflows")
 			.map_err(WorkflowError::Udb)?;
 
 		let worker_id_str = worker_id.to_string();
@@ -1285,8 +1356,10 @@ impl Database for DatabaseKv {
 								let ray_id_key = keys::workflow::RayIdKey::new(wf.workflow_id);
 								let input_key = keys::workflow::InputKey::new(wf.workflow_id);
 								let state_key = keys::workflow::StateKey::new(wf.workflow_id);
+								let output_key = keys::workflow::OutputKey::new(wf.workflow_id);
 								let input_subspace = self.subspace.subspace(&input_key);
 								let state_subspace = self.subspace.subspace(&state_key);
+								let output_subspace = self.subspace.subspace(&output_key);
 								let active_history_subspace = self.subspace.subspace(
 									&keys::history::HistorySubspaceKey::new(
 										wf.workflow_id,
@@ -1299,36 +1372,39 @@ impl Database for DatabaseKv {
 									ray_id_entry,
 									input_chunks,
 									state_chunks,
+									has_output,
 									events,
 								) = tokio::try_join!(
-									async {
-										tx.get(&self.subspace.pack(&create_ts_key), Serializable)
-											.await
-									},
-									async {
-										tx.get(&self.subspace.pack(&ray_id_key), Serializable).await
-									},
+									tx.get(&self.subspace.pack(&create_ts_key), Serializable),
+									tx.get(&self.subspace.pack(&ray_id_key), Serializable),
+									tx.get_ranges_keyvalues(
+										universaldb::RangeOption {
+											mode: StreamingMode::WantAll,
+											..(&input_subspace).into()
+										},
+										Serializable,
+									)
+									.try_collect::<Vec<_>>(),
+									tx.get_ranges_keyvalues(
+										universaldb::RangeOption {
+											mode: StreamingMode::WantAll,
+											..(&state_subspace).into()
+										},
+										Serializable,
+									)
+									.try_collect::<Vec<_>>(),
 									async {
 										tx.get_ranges_keyvalues(
 											universaldb::RangeOption {
-												mode: StreamingMode::WantAll,
-												..(&input_subspace).into()
+												mode: StreamingMode::Exact,
+												limit: Some(1),
+												..(&output_subspace).into()
 											},
 											Serializable,
 										)
-										.try_collect::<Vec<_>>()
+										.try_next()
 										.await
-									},
-									async {
-										tx.get_ranges_keyvalues(
-											universaldb::RangeOption {
-												mode: StreamingMode::WantAll,
-												..(&state_subspace).into()
-											},
-											Serializable,
-										)
-										.try_collect::<Vec<_>>()
-										.await
+										.map(|entry| entry.is_some())
 									},
 									async {
 										let mut events_by_location: HashMap<Location, Vec<Event>> =
@@ -1523,6 +1599,19 @@ impl Database for DatabaseKv {
 									}
 								)?;
 
+								if has_output {
+									tracing::warn!(workflow_id=?wf.workflow_id, "workflow already completed, ignoring");
+
+									// Clear lease
+									let lease_key = keys::workflow::LeaseKey::new(wf.workflow_id);
+									tx.clear(&self.subspace.pack(&lease_key));
+									let worker_id_key =
+										keys::workflow::WorkerIdKey::new(wf.workflow_id);
+									tx.clear(&self.subspace.pack(&worker_id_key));
+
+									return Ok(None);
+								}
+
 								let create_ts = create_ts_key
 									.deserialize(&create_ts_entry.context("key should exist")?)?;
 								let ray_id = ray_id_key
@@ -1534,7 +1623,7 @@ impl Database for DatabaseKv {
 									state_key.combine(state_chunks)?
 								};
 
-								Result::<_>::Ok(PulledWorkflowData {
+								anyhow::Ok(Some(PulledWorkflowData {
 									workflow_id: wf.workflow_id,
 									workflow_name: wf.workflow_name,
 									create_ts,
@@ -1543,11 +1632,12 @@ impl Database for DatabaseKv {
 									state,
 									wake_deadline_ts: wf.wake_deadline_ts,
 									events,
-								})
+								}))
 							}
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(512)
+						.try_filter_map(|x| std::future::ready(Ok(x)))
 						.try_collect::<Vec<_>>()
 						.instrument(tracing::trace_span!("map_to_partial_workflow"))
 						.await
@@ -1555,6 +1645,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("pull_workflow_history_tx"))
 			.await
+			.context("failed to pull workflow history")
 			.map_err(WorkflowError::Udb)?;
 
 		let dt2 = start_instant2.elapsed().as_secs_f64();
@@ -3112,13 +3203,16 @@ fn value_to_str(v: &serde_json::Value) -> WorkflowResult<String> {
 }
 
 fn calc_pull_ratio(x: u64, ax: u64, ay: u64, bx: u64, by: u64) -> u64 {
-	// must have neg slope, inversely proportional
+	// Must have neg slope, inversely proportional
 	assert!(ax < bx);
 	assert!(ay > by);
 
-	let neg_dy = ay - by;
-	let dx = bx - ax;
-	let neg_b = ay * neg_dy / dx;
+	// Bound domain
+	let x = x.max(ax).min(bx);
 
-	return neg_b.saturating_sub(x * neg_dy / dx);
+	let dx = bx - ax;
+	let neg_dy = ay - by;
+	let b = ay + ax * neg_dy / dx;
+
+	return b.saturating_sub(x * neg_dy / dx);
 }

@@ -22,11 +22,11 @@ pub async fn epoxy_purger(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 		let replica_id = input.replica_id;
 
 		async move {
-			let sig = ctx.listen::<Purge>().await?;
+			let signals = ctx.listen_n::<Purge>(1024).await?;
 
 			ctx.activity(PurgeInput {
 				replica_id,
-				keys: sig.keys,
+				keys: signals.into_iter().flat_map(|sig| sig.keys).collect(),
 			})
 			.await?;
 

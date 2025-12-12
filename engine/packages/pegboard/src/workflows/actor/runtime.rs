@@ -535,7 +535,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 	let runner_name_selector = &state.runner_name_selector;
 	let namespace_id = state.namespace_id;
 	let runner_id = state.runner_id;
-	let for_serverless = state.for_serverless;
+	let allocated_serverless_slot = state.allocated_serverless_slot;
 
 	ctx.udb()?
 		.run(|tx| async move {
@@ -543,18 +543,15 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 
 			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
-			// Only clear slot if we have a runner id
-			if let Some(runner_id) = runner_id {
-				destroy::clear_slot(
-					input.actor_id,
-					namespace_id,
-					runner_name_selector,
-					runner_id,
-					for_serverless,
-					&tx,
-				)
-				.await?;
-			}
+			destroy::clear_slot(
+				input.actor_id,
+				namespace_id,
+				runner_name_selector,
+				runner_id,
+				allocated_serverless_slot,
+				&tx,
+			)
+			.await?;
 
 			Ok(())
 		})
@@ -1036,6 +1033,10 @@ pub async fn clear_pending_allocation(
 	ctx: &ActivityCtx,
 	input: &ClearPendingAllocationInput,
 ) -> Result<bool> {
+	let mut state = ctx.state::<State>()?;
+
+	let allocated_serverless_slot = state.allocated_serverless_slot;
+
 	// Clear self from alloc queue
 	let cleared = ctx
 		.udb()?
@@ -1050,12 +1051,27 @@ pub async fn clear_pending_allocation(
 
 			let exists = tx.get(&pending_alloc_key, Serializable).await?.is_some();
 
-			tx.clear(&pending_alloc_key);
+			if exists {
+				tx.clear(&pending_alloc_key);
+
+				if allocated_serverless_slot {
+					tx.atomic_op(
+						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
+							input.namespace_id,
+							input.runner_name_selector.clone(),
+						),
+						&(-1i64).to_le_bytes(),
+						MutationType::Add,
+					);
+				}
+			}
 
 			Ok(exists)
 		})
 		.custom_instrument(tracing::info_span!("actor_clear_pending_alloc_tx"))
 		.await?;
+
+	state.allocated_serverless_slot = false;
 
 	Ok(cleared)
 }
@@ -1187,6 +1203,8 @@ pub async fn check_runners(
 ) -> Result<CheckRunnersOutput> {
 	ctx.udb()?
 		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
 			// Diff the list of seen runners with the list of active runners so we know which we can clean up
 			// state
 			let remove_runners = futures_util::stream::iter(input.seen_runners.clone())
