@@ -26,7 +26,9 @@
 		"zx": "^8.8.5"
 	},
 	"dependencies": {
-		"@sentry/vite-plugin": "^2.23.1"
+		"@iarna/toml": "^2.2.5",
+		"@sentry/vite-plugin": "^2.23.1",
+		"fast-glob": "^3.3.3"
 	},
 	"resolutions": {
 		"rivetkit": "workspace:*",
