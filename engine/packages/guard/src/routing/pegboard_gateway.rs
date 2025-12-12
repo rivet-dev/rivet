@@ -19,14 +19,23 @@ pub async fn route_request_path_based(
 	shared_state: &SharedState,
 	actor_id_str: &str,
 	token: Option<&str>,
-	path: &str,
+	original_path: &str,
+	stripped_path: &str,
 	_headers: &hyper::HeaderMap,
 	_is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Parse actor ID
 	let actor_id = Id::parse(actor_id_str).context("invalid actor id in path")?;
 
-	route_request_inner(ctx, shared_state, actor_id, path, token).await
+	route_request_inner(
+		ctx,
+		shared_state,
+		actor_id,
+		original_path,
+		stripped_path,
+		token,
+	)
+	.await
 }
 
 /// Route requests to actor services based on headers
@@ -105,14 +114,15 @@ pub async fn route_request(
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, actor_id, path, token).await
+	route_request_inner(ctx, shared_state, actor_id, path, path, token).await
 }
 
 async fn route_request_inner(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
 	actor_id: Id,
-	path: &str,
+	original_path: &str,
+	stripped_path: &str,
 	_token: Option<&str>,
 ) -> Result<Option<RoutingOutput>> {
 	// NOTE: Token validation implemented in EE
@@ -136,7 +146,7 @@ async fn route_request_inner(
 				port: peer_dc
 					.proxy_url_port()
 					.context("bad peer dc proxy url port")?,
-				path: path.to_owned(),
+				path: original_path.to_owned(),
 			}],
 			timeout: RoutingTimeout {
 				routing_timeout: 10,
@@ -247,7 +257,7 @@ async fn route_request_inner(
 		shared_state.pegboard_gateway.clone(),
 		runner_id,
 		actor_id,
-		path.to_string(),
+		stripped_path.to_string(),
 	);
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(
 		gateway,
