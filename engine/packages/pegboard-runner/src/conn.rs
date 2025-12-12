@@ -336,18 +336,20 @@ pub async fn handle_init(
 							Ok(protocol::mk2::CommandWrapper {
 								checkpoint: protocol::mk2::ActorCheckpoint {
 									actor_id: key.actor_id.to_string(),
+									generation: key.generation,
 									index: key.index,
 								},
 								inner: protocol::mk2::Command::CommandStartActor(x),
 							})
 						}
-						protocol::mk2::ActorCommandKeyData::CommandStopActor(x) => {
+						protocol::mk2::ActorCommandKeyData::CommandStopActor => {
 							Ok(protocol::mk2::CommandWrapper {
 								checkpoint: protocol::mk2::ActorCheckpoint {
 									actor_id: key.actor_id.to_string(),
+									generation: key.generation,
 									index: key.index,
 								},
-								inner: protocol::mk2::Command::CommandStopActor(x),
+								inner: protocol::mk2::Command::CommandStopActor,
 							})
 						}
 					}
