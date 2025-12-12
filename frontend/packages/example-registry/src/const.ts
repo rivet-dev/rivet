@@ -16,6 +16,8 @@ export const TECHNOLOGIES = [
 	{ name: "drizzle", displayName: "Drizzle" },
 	{ name: "websocket", displayName: "WebSocket" },
 	{ name: "typescript", displayName: "TypeScript" },
+	{ name: "durable-streams", displayName: "Durable Streams" },
+	{ name: "react", displayName: "React" },
 ] as const;
 
 export const TAGS = [
@@ -24,6 +26,7 @@ export const TAGS = [
 	{ name: "real-time", displayName: "Real-time" },
 	{ name: "database", displayName: "Database" },
 	{ name: "gaming", displayName: "Gaming" },
+	{ name: "experimental", displayName: "Experimental" },
 ] as const;
 
 export type Technology = (typeof TECHNOLOGIES)[number]["name"];

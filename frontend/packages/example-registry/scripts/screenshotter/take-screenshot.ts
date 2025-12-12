@@ -156,7 +156,8 @@ async function takeScreenshot(
 			deviceScaleFactor: 2, // Capture at 2x resolution
 		});
 
-		const response = await page.goto(serverUrl, { waitUntil: "networkidle0" });
+		// Don't use networkidle0 since some have chatty network interfaces
+		const response = await page.goto(serverUrl, { waitUntil: "load" });
 
 		// Accept 200-level responses and 304 (Not Modified, which is fine for cached content)
 		const status = response?.status() ?? 0;
