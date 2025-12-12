@@ -2666,6 +2666,11 @@ fn err_to_close_frame(err: anyhow::Error, ray_id: Option<Id>) -> CloseFrame {
 		_ => CloseCode::Error,
 	};
 
+	match code {
+		CloseCode::Normal => tracing::info!("websocket closed"),
+		_ => tracing::error!(?err, "websocket failed"),
+	}
+
 	let reason = if let Some(ray_id) = ray_id {
 		format!("{}.{}#{}", rivet_err.group(), rivet_err.code(), ray_id)
 	} else {
