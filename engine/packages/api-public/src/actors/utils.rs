@@ -2,7 +2,6 @@ use anyhow::Result;
 use axum::http::Method;
 use rivet_api_builder::ApiCtx;
 use rivet_api_util::request_remote_datacenter;
-use rivet_error::RivetError;
 use rivet_types::actors::Actor;
 use rivet_util::Id;
 use std::collections::HashMap;
@@ -127,49 +126,6 @@ pub async fn fetch_actors_by_ids(
 	actors.sort_by_cached_key(|x| std::cmp::Reverse(x.create_ts));
 
 	Ok(actors)
-}
-
-/// Helper function to extract the existing actor ID from a duplicate key error
-///
-/// Returns Some(actor_id) if the error is a duplicate key error with metadata, None otherwise
-pub fn extract_duplicate_key_error(err: &anyhow::Error) -> Option<Id> {
-	// Try to downcast to RivetError first (local calls)
-	let rivet_err = err.chain().find_map(|x| x.downcast_ref::<RivetError>());
-	if let Some(rivet_err) = rivet_err {
-		if rivet_err.group() == "actor" && rivet_err.code() == "duplicate_key" {
-			// Extract existing_actor_id from metadata
-			if let Some(metadata) = rivet_err.metadata() {
-				if let Some(actor_id_str) =
-					metadata.get("existing_actor_id").and_then(|v| v.as_str())
-				{
-					if let Ok(actor_id) = actor_id_str.parse::<Id>() {
-						return Some(actor_id);
-					}
-				}
-			}
-		}
-	}
-
-	// Try to downcast to RawErrorResponse (for remote API calls)
-	let raw_err = err
-		.chain()
-		.find_map(|x| x.downcast_ref::<rivet_api_builder::error_response::RawErrorResponse>());
-	if let Some(raw_err) = raw_err {
-		if raw_err.1.group == "actor" && raw_err.1.code == "duplicate_key" {
-			// Extract existing_actor_id from metadata (now available in ErrorResponse)
-			if let Some(metadata) = &raw_err.1.metadata {
-				if let Some(actor_id_str) =
-					metadata.get("existing_actor_id").and_then(|v| v.as_str())
-				{
-					if let Ok(actor_id) = actor_id_str.parse::<Id>() {
-						return Some(actor_id);
-					}
-				}
-			}
-		}
-	}
-
-	None
 }
 
 /// Determine the datacenter label to create the actor in.
