@@ -191,13 +191,6 @@ docker-compose up -d
 
 All example READMEs in `/examples/` should follow a consistent format. Refer to `.claude/resources/EXAMPLE_TEMPLATE.md` in the repository for the standard structure.
 
-## Git Workflow
-
-When committing changes, use Graphite CLI with conventional commits:
-```bash
-gt c -m "chore(my-pkg): foo bar"
-```
-
 ---
 
 # Rivetkit SDK Packages
@@ -249,6 +242,31 @@ cargo build
 # Run tests
 cargo test
 ```
+
+## Python SDK
+
+Located in `rivetkit-python/`:
+- Client SDK for Python applications
+- Python type hints for type safety
+- Async/await support
+
+### Build Commands
+
+```bash
+# From rivetkit-python directory
+# Install in development mode
+pip install -e .
+
+# Run tests
+pytest
+```
+
+### Development
+
+- Follow Python best practices (PEP 8)
+- Use type hints for all public APIs
+- Maintain compatibility with Python 3.8+
+- Follow existing patterns for API design
 
 ---
 
