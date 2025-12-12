@@ -179,7 +179,7 @@ docker-compose up -d
 
 ## Examples
 
-All example READMEs in `/examples/` should follow a consistent format. Refer to the example template in the repository for the standard structure.
+All example READMEs in `/examples/` should follow a consistent format. Refer to `.claude/resources/EXAMPLE_TEMPLATE.md` in the repository for the standard structure.
 
 ## Git Workflow
 
