@@ -3,12 +3,14 @@
 package api
 
 type RunnersListRequest struct {
-	Namespace      string  `json:"-"`
-	Name           *string `json:"-"`
-	RunnerIds      *string `json:"-"`
-	IncludeStopped *bool   `json:"-"`
-	Limit          *int    `json:"-"`
-	Cursor         *string `json:"-"`
+	Namespace string  `json:"-"`
+	Name      *string `json:"-"`
+	// Deprecated.
+	RunnerIds      *string    `json:"-"`
+	RunnerId       []*RivetId `json:"-"`
+	IncludeStopped *bool      `json:"-"`
+	Limit          *int       `json:"-"`
+	Cursor         *string    `json:"-"`
 }
 
 type RunnersListNamesRequest struct {

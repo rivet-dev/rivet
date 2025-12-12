@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## runner_configs_list
 
-> models::RunnerConfigsListResponse runner_configs_list(namespace, limit, cursor, variant, runner_names)
+> models::RunnerConfigsListResponse runner_configs_list(namespace, limit, cursor, variant, runner_names, runner_name)
 
 
 ### Parameters
@@ -22,7 +22,8 @@ Name | Type | Description  | Required | Notes
 **limit** | Option<**i32**> |  |  |
 **cursor** | Option<**String**> |  |  |
 **variant** | Option<[**RunnerConfigVariant**](.md)> |  |  |
-**runner_names** | Option<**String**> |  |  |
+**runner_names** | Option<**String**> | Deprecated. |  |
+**runner_name** | Option<[**Vec<String>**](String.md)> |  |  |
 
 ### Return type
 
