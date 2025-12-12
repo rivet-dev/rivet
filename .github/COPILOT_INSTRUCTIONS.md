@@ -2,7 +2,17 @@
 
 ## Overview
 
-Rivet is a Rust workspace-based monorepo for a distributed actor/server orchestration system. This guide provides essential context for working with the codebase.
+Rivet is a monorepo containing multiple projects:
+- **Engine** - Rust-based distributed actor/server orchestration system
+- **Rivetkit** - SDK packages for multiple languages (TypeScript, Rust, Python)
+- **Frontend** - React/Vite TypeScript application for the Rivet dashboard
+- **Website** - Next.js documentation and marketing site
+
+This guide provides essential context for working with each part of the codebase.
+
+---
+
+# Rust Engine (`engine/`)
 
 ## Monorepo Structure
 
@@ -180,6 +190,197 @@ docker-compose up -d
 ## Examples
 
 All example READMEs in `/examples/` should follow a consistent format. Refer to `.claude/resources/EXAMPLE_TEMPLATE.md` in the repository for the standard structure.
+
+## Git Workflow
+
+When committing changes, use Graphite CLI with conventional commits:
+```bash
+gt c -m "chore(my-pkg): foo bar"
+```
+
+---
+
+# Rivetkit SDK Packages
+
+Rivetkit provides SDK packages for multiple languages located in `rivetkit-*` directories:
+- **TypeScript** (`rivetkit-typescript/`) - Client SDK, React hooks, Next.js integration, Cloudflare Workers adapter
+- **Rust** (`rivetkit-rust/`) - Client SDK for Rust applications
+- **Python** (`rivetkit-python/`) - Client SDK for Python applications
+
+## TypeScript Packages
+
+Located in `rivetkit-typescript/packages/`:
+- `rivetkit` - Core TypeScript/JavaScript SDK
+- `react` - React hooks and components
+- `next-js` - Next.js integration
+- `cloudflare-workers` - Cloudflare Workers adapter
+- `db` - Database utilities
+- `framework-base` - Base framework utilities
+
+### Build Commands
+
+```bash
+# From rivetkit-typescript directory
+pnpm build
+
+# Build specific package
+pnpm --filter @rivetkit/react build
+```
+
+### Development
+
+- Follow TypeScript best practices
+- Use pnpm for package management
+- Maintain type safety across all packages
+- Follow existing patterns for API design
+
+## Rust SDK
+
+Located in `rivetkit-rust/packages/client/`:
+- Client SDK for Rust applications
+- Follows Rust best practices and patterns from engine
+
+### Build Commands
+
+```bash
+# From rivetkit-rust directory
+cargo build
+
+# Run tests
+cargo test
+```
+
+---
+
+# Frontend (`frontend/`)
+
+React/Vite TypeScript application for the Rivet dashboard with multiple configurations:
+- **Inspector** - Actor inspection interface
+- **Engine** - Engine management interface
+- **Cloud** - Cloud dashboard interface
+
+## Technology Stack
+
+- **React** - UI framework
+- **Vite** - Build tool and dev server
+- **TypeScript** - Type-safe JavaScript
+- **Tailwind CSS** - Utility-first CSS
+- **Radix UI** - Accessible component primitives
+- **Clerk** - Authentication
+- **CodeMirror** - Code editing components
+
+## Build Commands
+
+```bash
+# Development (runs all three apps)
+pnpm dev
+
+# Development for specific app
+pnpm dev:inspector
+pnpm dev:engine
+pnpm dev:cloud
+
+# Production builds
+pnpm build:inspector
+pnpm build:engine
+pnpm build:cloud
+
+# Type checking
+pnpm ts-check
+```
+
+## Development Guidelines
+
+- Follow React best practices and hooks patterns
+- Maintain type safety with TypeScript
+- Use existing UI components from `@radix-ui` before creating new ones
+- Follow Tailwind CSS utility patterns
+- Keep components modular and reusable
+- Use proper error boundaries
+
+## Code Style
+
+- Use TypeScript for all new files
+- Follow existing component structure patterns
+- Use functional components with hooks
+- Prefer composition over inheritance
+- Keep components focused and single-purpose
+
+---
+
+# Website (`website/`)
+
+Next.js-based documentation and marketing site.
+
+## Technology Stack
+
+- **Next.js** - React framework with SSR/SSG
+- **TypeScript** - Type-safe JavaScript
+- **MDX** - Markdown with JSX for content
+- **Tailwind CSS** - Utility-first CSS
+- **Giscus** - GitHub discussions-based comments
+
+## Build Commands
+
+```bash
+# Development
+pnpm dev
+
+# Production build
+pnpm build
+
+# Linting
+pnpm lint
+
+# Code formatting
+pnpm format
+```
+
+## Content Generation
+
+The website has several content generation scripts:
+
+```bash
+# Generate navigation structure
+pnpm gen:navigation
+
+# Generate examples from repository
+pnpm gen:examples
+
+# Generate markdown and LLM content
+pnpm gen:markdown
+
+# Generate README files
+pnpm gen:readme
+
+# Generate TypeDoc API documentation
+pnpm gen:typedoc
+
+# Run all generators
+pnpm gen
+```
+
+## Development Guidelines
+
+- **Avoid `"use client"`** for components with text content for SEO and performance
+- If client-side functionality is needed:
+  - Add a `useEffect` hook, or
+  - Move client-side code to a separate client-only component
+- Follow Next.js best practices for SSR/SSG
+- Use MDX for documentation content
+- Maintain consistent documentation structure
+- Ensure all links are valid (use `pnpm lint` to check)
+
+## Content Structure
+
+- Documentation lives in `src/app/(docs)/` 
+- Blog posts and articles follow specific formats
+- Use frontmatter for metadata
+- Follow existing patterns for new content pages
+
+---
+
+# General Guidelines
 
 ## Git Workflow
 
