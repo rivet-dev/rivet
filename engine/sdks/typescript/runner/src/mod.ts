@@ -18,7 +18,7 @@ export { RunnerActor, type ActorConfig };
 export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 4;
+const PROTOCOL_VERSION: number = 5;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -989,7 +989,7 @@ export class Runner {
 				// so we cant update the checkpoint
 				const actor = this.getActor(
 					commandWrapper.checkpoint.actorId,
-					commandWrapper.inner.val.generation,
+					commandWrapper.checkpoint.generation,
 				);
 				if (actor) actor.lastCommandIdx = commandWrapper.checkpoint.index;
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
@@ -1075,7 +1075,7 @@ export class Runner {
 			.val as protocol.CommandStartActor;
 
 		const actorId = commandWrapper.checkpoint.actorId;
-		const generation = startCommand.generation;
+		const generation = commandWrapper.checkpoint.generation;
 		const config = startCommand.config;
 
 		const actorConfig: ActorConfig = {
@@ -1156,7 +1156,7 @@ export class Runner {
 			.val as protocol.CommandStopActor;
 
 		const actorId = commandWrapper.checkpoint.actorId;
-		const generation = stopCommand.generation;
+		const generation = commandWrapper.checkpoint.generation;
 
 		await this.forceStopActor(actorId, generation);
 	}
@@ -1183,14 +1183,13 @@ export class Runner {
 		}
 
 		const intentEvent: protocol.EventActorIntent = {
-			actorId,
-			generation,
 			intent: actorIntent,
 		};
 
 		const eventWrapper: protocol.EventWrapper = {
 			checkpoint: {
 				actorId,
+				generation,
 				index: actor.nextEventIdx++,
 			},
 			inner: {
@@ -1232,14 +1231,13 @@ export class Runner {
 		}
 
 		const stateUpdateEvent: protocol.EventActorStateUpdate = {
-			actorId,
-			generation,
 			state: actorState,
 		};
 
 		const eventWrapper: protocol.EventWrapper = {
 			checkpoint: {
 				actorId,
+				generation,
 				index: actor.nextEventIdx++,
 			},
 			inner: {
@@ -1267,6 +1265,7 @@ export class Runner {
 
 			lastCommandCheckpoints.push({
 				actorId: actor.actorId,
+				generation: actor.generation,
 				index: actor.lastCommandIdx,
 			});
 		}
@@ -1575,14 +1574,13 @@ export class Runner {
 		if (!actor) return;
 
 		const alarmEvent: protocol.EventActorSetAlarm = {
-			actorId,
-			generation: actor.generation,
 			alarmTs: alarmTs !== null ? BigInt(alarmTs) : null,
 		};
 
 		const eventWrapper: protocol.EventWrapper = {
 			checkpoint: {
 				actorId,
+				generation: actor.generation,
 				index: actor.nextEventIdx++,
 			},
 			inner: {

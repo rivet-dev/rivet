@@ -2,23 +2,23 @@ use anyhow::{Ok, Result, bail};
 use vbare::OwnedVersionedData;
 
 use crate::PROTOCOL_MK1_VERSION;
-use crate::generated::{v1, v2, v3, v4};
+use crate::generated::{v1, v2, v3, v4, v5};
 use crate::uuid_compat::{decode_bytes_from_uuid, encode_bytes_to_uuid};
 
 pub enum ToClientMk2 {
 	V4(v4::ToClient),
+	V5(v5::ToClient),
 }
 
 impl OwnedVersionedData for ToClientMk2 {
-	type Latest = v4::ToClient;
+	type Latest = v5::ToClient;
 
-	fn wrap_latest(latest: v4::ToClient) -> Self {
-		ToClientMk2::V4(latest)
+	fn wrap_latest(latest: v5::ToClient) -> Self {
+		ToClientMk2::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		#[allow(irrefutable_let_patterns)]
-		if let ToClientMk2::V4(data) = self {
+		if let ToClientMk2::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -28,6 +28,7 @@ impl OwnedVersionedData for ToClientMk2 {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			4 => Ok(ToClientMk2::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(ToClientMk2::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -35,34 +36,211 @@ impl OwnedVersionedData for ToClientMk2 {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ToClientMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToClientMk2::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v5]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Self::v5_to_v4, Ok, Ok, Ok]
+	}
+}
+
+impl ToClientMk2 {
+	fn v4_to_v5(self) -> Result<Self> {
+		if let ToClientMk2::V4(x) = self {
+			let inner = match x {
+				v4::ToClient::ToClientInit(init) => v5::ToClient::ToClientInit(v5::ToClientInit {
+					runner_id: init.runner_id,
+					metadata: v5::ProtocolMetadata {
+						runner_lost_threshold: init.metadata.runner_lost_threshold,
+					},
+				}),
+				v4::ToClient::ToClientCommands(commands) => v5::ToClient::ToClientCommands(
+					commands
+						.into_iter()
+						.map(|cmd| v5::CommandWrapper {
+							checkpoint: v5::ActorCheckpoint {
+								actor_id: cmd.checkpoint.actor_id,
+								generation: match &cmd.inner {
+									v4::Command::CommandStartActor(start) => start.generation,
+									v4::Command::CommandStopActor(stop) => stop.generation,
+								},
+								index: cmd.checkpoint.index,
+							},
+							inner: match cmd.inner {
+								v4::Command::CommandStartActor(start) => {
+									v5::Command::CommandStartActor(v5::CommandStartActor {
+										config: v5::ActorConfig {
+											name: start.config.name,
+											key: start.config.key,
+											create_ts: start.config.create_ts,
+											input: start.config.input,
+										},
+										hibernating_requests: start
+											.hibernating_requests
+											.into_iter()
+											.map(|req| v5::HibernatingRequest {
+												gateway_id: req.gateway_id,
+												request_id: req.request_id,
+											})
+											.collect(),
+									})
+								}
+								v4::Command::CommandStopActor(_) => v5::Command::CommandStopActor,
+							},
+						})
+						.collect(),
+				),
+				v4::ToClient::ToClientAckEvents(ack) => {
+					v5::ToClient::ToClientAckEvents(v5::ToClientAckEvents {
+						last_event_checkpoints: ack
+							.last_event_checkpoints
+							.into_iter()
+							.map(|cp| v5::ActorCheckpoint {
+								actor_id: cp.actor_id,
+								generation: 0, // Unknown in v4, use default
+								index: cp.index,
+							})
+							.collect(),
+					})
+				}
+				v4::ToClient::ToClientKvResponse(resp) => {
+					v5::ToClient::ToClientKvResponse(v5::ToClientKvResponse {
+						request_id: resp.request_id,
+						data: convert_kv_response_data_v4_to_v5(resp.data),
+					})
+				}
+				v4::ToClient::ToClientTunnelMessage(msg) => {
+					v5::ToClient::ToClientTunnelMessage(v5::ToClientTunnelMessage {
+						message_id: v5::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_client_tunnel_message_kind_v4_to_v5(
+							msg.message_kind,
+						),
+					})
+				}
+				v4::ToClient::ToClientPing(ping) => {
+					v5::ToClient::ToClientPing(v5::ToClientPing { ts: ping.ts })
+				}
+			};
+
+			Ok(ToClientMk2::V5(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		if let ToClientMk2::V5(x) = self {
+			let inner = match x {
+				v5::ToClient::ToClientInit(init) => v4::ToClient::ToClientInit(v4::ToClientInit {
+					runner_id: init.runner_id,
+					metadata: v4::ProtocolMetadata {
+						runner_lost_threshold: init.metadata.runner_lost_threshold,
+					},
+				}),
+				v5::ToClient::ToClientCommands(commands) => v4::ToClient::ToClientCommands(
+					commands
+						.into_iter()
+						.map(|cmd| v4::CommandWrapper {
+							checkpoint: v4::ActorCheckpoint {
+								actor_id: cmd.checkpoint.actor_id,
+								index: cmd.checkpoint.index,
+							},
+							inner: match cmd.inner {
+								v5::Command::CommandStartActor(start) => {
+									v4::Command::CommandStartActor(v4::CommandStartActor {
+										generation: cmd.checkpoint.generation,
+										config: v4::ActorConfig {
+											name: start.config.name,
+											key: start.config.key,
+											create_ts: start.config.create_ts,
+											input: start.config.input,
+										},
+										hibernating_requests: start
+											.hibernating_requests
+											.into_iter()
+											.map(|req| v4::HibernatingRequest {
+												gateway_id: req.gateway_id,
+												request_id: req.request_id,
+											})
+											.collect(),
+									})
+								}
+								v5::Command::CommandStopActor => {
+									v4::Command::CommandStopActor(v4::CommandStopActor {
+										generation: cmd.checkpoint.generation,
+									})
+								}
+							},
+						})
+						.collect(),
+				),
+				v5::ToClient::ToClientAckEvents(ack) => {
+					v4::ToClient::ToClientAckEvents(v4::ToClientAckEvents {
+						last_event_checkpoints: ack
+							.last_event_checkpoints
+							.into_iter()
+							.map(|cp| v4::ActorCheckpoint {
+								actor_id: cp.actor_id,
+								index: cp.index,
+							})
+							.collect(),
+					})
+				}
+				v5::ToClient::ToClientKvResponse(resp) => {
+					v4::ToClient::ToClientKvResponse(v4::ToClientKvResponse {
+						request_id: resp.request_id,
+						data: convert_kv_response_data_v5_to_v4(resp.data),
+					})
+				}
+				v5::ToClient::ToClientTunnelMessage(msg) => {
+					v4::ToClient::ToClientTunnelMessage(v4::ToClientTunnelMessage {
+						message_id: v4::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_client_tunnel_message_kind_v5_to_v4(
+							msg.message_kind,
+						),
+					})
+				}
+				v5::ToClient::ToClientPing(ping) => {
+					v4::ToClient::ToClientPing(v4::ToClientPing { ts: ping.ts })
+				}
+			};
+
+			Ok(ToClientMk2::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
 	}
 }
 
 pub enum ToServerMk2 {
 	V4(v4::ToServer),
+	V5(v5::ToServer),
 }
 
 impl OwnedVersionedData for ToServerMk2 {
-	type Latest = v4::ToServer;
+	type Latest = v5::ToServer;
 
-	fn wrap_latest(latest: v4::ToServer) -> Self {
-		ToServerMk2::V4(latest)
+	fn wrap_latest(latest: v5::ToServer) -> Self {
+		ToServerMk2::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		#[allow(irrefutable_let_patterns)]
-		if let ToServerMk2::V4(data) = self {
+		if let ToServerMk2::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -72,6 +250,7 @@ impl OwnedVersionedData for ToServerMk2 {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			4 => Ok(ToServerMk2::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(ToServerMk2::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -79,34 +258,239 @@ impl OwnedVersionedData for ToServerMk2 {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ToServerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToServerMk2::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v5]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Self::v5_to_v4, Ok, Ok, Ok]
+	}
+}
+
+impl ToServerMk2 {
+	fn v4_to_v5(self) -> Result<Self> {
+		if let ToServerMk2::V4(x) = self {
+			let inner = match x {
+				v4::ToServer::ToServerInit(init) => v5::ToServer::ToServerInit(v5::ToServerInit {
+					name: init.name,
+					version: init.version,
+					total_slots: init.total_slots,
+					prepopulate_actor_names: init.prepopulate_actor_names.map(|map| {
+						map.into_iter()
+							.map(|(k, v)| {
+								(
+									k,
+									v5::ActorName {
+										metadata: v.metadata,
+									},
+								)
+							})
+							.collect()
+					}),
+					metadata: init.metadata,
+				}),
+				v4::ToServer::ToServerEvents(events) => v5::ToServer::ToServerEvents(
+					events
+						.into_iter()
+						.map(|event| {
+							let generation = match &event.inner {
+								v4::Event::EventActorIntent(intent) => intent.generation,
+								v4::Event::EventActorStateUpdate(state) => state.generation,
+								v4::Event::EventActorSetAlarm(alarm) => alarm.generation,
+							};
+
+							v5::EventWrapper {
+								checkpoint: v5::ActorCheckpoint {
+									actor_id: event.checkpoint.actor_id,
+									generation,
+									index: event.checkpoint.index,
+								},
+								inner: match event.inner {
+									v4::Event::EventActorIntent(intent) => {
+										v5::Event::EventActorIntent(v5::EventActorIntent {
+											intent: convert_actor_intent_v4_to_v5(intent.intent),
+										})
+									}
+									v4::Event::EventActorStateUpdate(state) => {
+										v5::Event::EventActorStateUpdate(
+											v5::EventActorStateUpdate {
+												state: convert_actor_state_v4_to_v5(state.state),
+											},
+										)
+									}
+									v4::Event::EventActorSetAlarm(alarm) => {
+										v5::Event::EventActorSetAlarm(v5::EventActorSetAlarm {
+											alarm_ts: alarm.alarm_ts,
+										})
+									}
+								},
+							}
+						})
+						.collect(),
+				),
+				v4::ToServer::ToServerAckCommands(ack) => {
+					v5::ToServer::ToServerAckCommands(v5::ToServerAckCommands {
+						last_command_checkpoints: ack
+							.last_command_checkpoints
+							.into_iter()
+							.map(|cp| v5::ActorCheckpoint {
+								actor_id: cp.actor_id,
+								generation: 0, // Unknown in v4, use default
+								index: cp.index,
+							})
+							.collect(),
+					})
+				}
+				v4::ToServer::ToServerStopping => v5::ToServer::ToServerStopping,
+				v4::ToServer::ToServerPong(pong) => {
+					v5::ToServer::ToServerPong(v5::ToServerPong { ts: pong.ts })
+				}
+				v4::ToServer::ToServerKvRequest(req) => {
+					v5::ToServer::ToServerKvRequest(v5::ToServerKvRequest {
+						actor_id: req.actor_id,
+						request_id: req.request_id,
+						data: convert_kv_request_data_v4_to_v5(req.data),
+					})
+				}
+				v4::ToServer::ToServerTunnelMessage(msg) => {
+					v5::ToServer::ToServerTunnelMessage(v5::ToServerTunnelMessage {
+						message_id: v5::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_server_tunnel_message_kind_v4_to_v5(
+							msg.message_kind,
+						),
+					})
+				}
+			};
+
+			Ok(ToServerMk2::V5(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		if let ToServerMk2::V5(x) = self {
+			let inner = match x {
+				v5::ToServer::ToServerInit(init) => v4::ToServer::ToServerInit(v4::ToServerInit {
+					name: init.name,
+					version: init.version,
+					total_slots: init.total_slots,
+					prepopulate_actor_names: init.prepopulate_actor_names.map(|map| {
+						map.into_iter()
+							.map(|(k, v)| {
+								(
+									k,
+									v4::ActorName {
+										metadata: v.metadata,
+									},
+								)
+							})
+							.collect()
+					}),
+					metadata: init.metadata,
+				}),
+				v5::ToServer::ToServerEvents(events) => v4::ToServer::ToServerEvents(
+					events
+						.into_iter()
+						.map(|event| v4::EventWrapper {
+							checkpoint: v4::ActorCheckpoint {
+								actor_id: event.checkpoint.actor_id.clone(),
+								index: event.checkpoint.index,
+							},
+							inner: match event.inner {
+								v5::Event::EventActorIntent(intent) => {
+									v4::Event::EventActorIntent(v4::EventActorIntent {
+										actor_id: event.checkpoint.actor_id,
+										generation: event.checkpoint.generation,
+										intent: convert_actor_intent_v5_to_v4(intent.intent),
+									})
+								}
+								v5::Event::EventActorStateUpdate(state) => {
+									v4::Event::EventActorStateUpdate(v4::EventActorStateUpdate {
+										actor_id: event.checkpoint.actor_id,
+										generation: event.checkpoint.generation,
+										state: convert_actor_state_v5_to_v4(state.state),
+									})
+								}
+								v5::Event::EventActorSetAlarm(alarm) => {
+									v4::Event::EventActorSetAlarm(v4::EventActorSetAlarm {
+										actor_id: event.checkpoint.actor_id,
+										generation: event.checkpoint.generation,
+										alarm_ts: alarm.alarm_ts,
+									})
+								}
+							},
+						})
+						.collect(),
+				),
+				v5::ToServer::ToServerAckCommands(ack) => {
+					v4::ToServer::ToServerAckCommands(v4::ToServerAckCommands {
+						last_command_checkpoints: ack
+							.last_command_checkpoints
+							.into_iter()
+							.map(|cp| v4::ActorCheckpoint {
+								actor_id: cp.actor_id,
+								index: cp.index,
+							})
+							.collect(),
+					})
+				}
+				v5::ToServer::ToServerStopping => v4::ToServer::ToServerStopping,
+				v5::ToServer::ToServerPong(pong) => {
+					v4::ToServer::ToServerPong(v4::ToServerPong { ts: pong.ts })
+				}
+				v5::ToServer::ToServerKvRequest(req) => {
+					v4::ToServer::ToServerKvRequest(v4::ToServerKvRequest {
+						actor_id: req.actor_id,
+						request_id: req.request_id,
+						data: convert_kv_request_data_v5_to_v4(req.data),
+					})
+				}
+				v5::ToServer::ToServerTunnelMessage(msg) => {
+					v4::ToServer::ToServerTunnelMessage(v4::ToServerTunnelMessage {
+						message_id: v4::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_server_tunnel_message_kind_v5_to_v4(
+							msg.message_kind,
+						)?,
+					})
+				}
+			};
+
+			Ok(ToServerMk2::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
 	}
 }
 
 pub enum ToRunnerMk2 {
 	V4(v4::ToRunner),
+	V5(v5::ToRunner),
 }
 
 impl OwnedVersionedData for ToRunnerMk2 {
-	type Latest = v4::ToRunner;
+	type Latest = v5::ToRunner;
 
-	fn wrap_latest(latest: v4::ToRunner) -> Self {
-		ToRunnerMk2::V4(latest)
+	fn wrap_latest(latest: v5::ToRunner) -> Self {
+		ToRunnerMk2::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		#[allow(irrefutable_let_patterns)]
-		if let ToRunnerMk2::V4(data) = self {
+		if let ToRunnerMk2::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -116,6 +500,7 @@ impl OwnedVersionedData for ToRunnerMk2 {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			4 => Ok(ToRunnerMk2::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(ToRunnerMk2::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -123,17 +508,176 @@ impl OwnedVersionedData for ToRunnerMk2 {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ToRunnerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToRunnerMk2::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v5]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Self::v5_to_v4, Ok, Ok, Ok]
+	}
+}
+
+impl ToRunnerMk2 {
+	fn v4_to_v5(self) -> Result<Self> {
+		if let ToRunnerMk2::V4(x) = self {
+			let inner = match x {
+				v4::ToRunner::ToRunnerPing(ping) => v5::ToRunner::ToRunnerPing(v5::ToRunnerPing {
+					gateway_id: ping.gateway_id,
+					request_id: ping.request_id,
+					ts: ping.ts,
+				}),
+				v4::ToRunner::ToRunnerClose => v5::ToRunner::ToRunnerClose,
+				v4::ToRunner::ToClientCommands(commands) => v5::ToRunner::ToClientCommands(
+					commands
+						.into_iter()
+						.map(|cmd| v5::CommandWrapper {
+							checkpoint: v5::ActorCheckpoint {
+								actor_id: cmd.checkpoint.actor_id,
+								generation: match &cmd.inner {
+									v4::Command::CommandStartActor(start) => start.generation,
+									v4::Command::CommandStopActor(stop) => stop.generation,
+								},
+								index: cmd.checkpoint.index,
+							},
+							inner: match cmd.inner {
+								v4::Command::CommandStartActor(start) => {
+									v5::Command::CommandStartActor(v5::CommandStartActor {
+										config: v5::ActorConfig {
+											name: start.config.name,
+											key: start.config.key,
+											create_ts: start.config.create_ts,
+											input: start.config.input,
+										},
+										hibernating_requests: start
+											.hibernating_requests
+											.into_iter()
+											.map(|req| v5::HibernatingRequest {
+												gateway_id: req.gateway_id,
+												request_id: req.request_id,
+											})
+											.collect(),
+									})
+								}
+								v4::Command::CommandStopActor(_) => v5::Command::CommandStopActor,
+							},
+						})
+						.collect(),
+				),
+				v4::ToRunner::ToClientAckEvents(ack) => {
+					v5::ToRunner::ToClientAckEvents(v5::ToClientAckEvents {
+						last_event_checkpoints: ack
+							.last_event_checkpoints
+							.into_iter()
+							.map(|cp| v5::ActorCheckpoint {
+								actor_id: cp.actor_id,
+								generation: 0, // Unknown in v4, use default
+								index: cp.index,
+							})
+							.collect(),
+					})
+				}
+				v4::ToRunner::ToClientTunnelMessage(msg) => {
+					v5::ToRunner::ToClientTunnelMessage(v5::ToClientTunnelMessage {
+						message_id: v5::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_client_tunnel_message_kind_v4_to_v5(
+							msg.message_kind,
+						),
+					})
+				}
+			};
+
+			Ok(ToRunnerMk2::V5(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		if let ToRunnerMk2::V5(x) = self {
+			let inner = match x {
+				v5::ToRunner::ToRunnerPing(ping) => v4::ToRunner::ToRunnerPing(v4::ToRunnerPing {
+					gateway_id: ping.gateway_id,
+					request_id: ping.request_id,
+					ts: ping.ts,
+				}),
+				v5::ToRunner::ToRunnerClose => v4::ToRunner::ToRunnerClose,
+				v5::ToRunner::ToClientCommands(commands) => v4::ToRunner::ToClientCommands(
+					commands
+						.into_iter()
+						.map(|cmd| v4::CommandWrapper {
+							checkpoint: v4::ActorCheckpoint {
+								actor_id: cmd.checkpoint.actor_id,
+								index: cmd.checkpoint.index,
+							},
+							inner: match cmd.inner {
+								v5::Command::CommandStartActor(start) => {
+									v4::Command::CommandStartActor(v4::CommandStartActor {
+										generation: cmd.checkpoint.generation,
+										config: v4::ActorConfig {
+											name: start.config.name,
+											key: start.config.key,
+											create_ts: start.config.create_ts,
+											input: start.config.input,
+										},
+										hibernating_requests: start
+											.hibernating_requests
+											.into_iter()
+											.map(|req| v4::HibernatingRequest {
+												gateway_id: req.gateway_id,
+												request_id: req.request_id,
+											})
+											.collect(),
+									})
+								}
+								v5::Command::CommandStopActor => {
+									v4::Command::CommandStopActor(v4::CommandStopActor {
+										generation: cmd.checkpoint.generation,
+									})
+								}
+							},
+						})
+						.collect(),
+				),
+				v5::ToRunner::ToClientAckEvents(ack) => {
+					v4::ToRunner::ToClientAckEvents(v4::ToClientAckEvents {
+						last_event_checkpoints: ack
+							.last_event_checkpoints
+							.into_iter()
+							.map(|cp| v4::ActorCheckpoint {
+								actor_id: cp.actor_id,
+								index: cp.index,
+							})
+							.collect(),
+					})
+				}
+				v5::ToRunner::ToClientTunnelMessage(msg) => {
+					v4::ToRunner::ToClientTunnelMessage(v4::ToClientTunnelMessage {
+						message_id: v4::MessageId {
+							gateway_id: msg.message_id.gateway_id,
+							request_id: msg.message_id.request_id,
+							message_index: msg.message_id.message_index,
+						},
+						message_kind: convert_to_client_tunnel_message_kind_v5_to_v4(
+							msg.message_kind,
+						),
+					})
+				}
+			};
+
+			Ok(ToRunnerMk2::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
 	}
 }
 
@@ -855,31 +1399,31 @@ impl OwnedVersionedData for ToRunner {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		// No changes between v1 and v3
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		// No changes between v1 and v3
+		vec![Ok, Ok]
 	}
 }
 
 pub enum ToGateway {
 	V3(v3::ToGateway),
-	V4(v4::ToGateway),
+	V5(v5::ToGateway),
 }
 
 impl OwnedVersionedData for ToGateway {
-	type Latest = v4::ToGateway;
+	type Latest = v5::ToGateway;
 
-	fn wrap_latest(latest: v4::ToGateway) -> Self {
-		ToGateway::V4(latest)
+	fn wrap_latest(latest: v5::ToGateway) -> Self {
+		ToGateway::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let ToGateway::V4(data) = self {
+		if let ToGateway::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -889,7 +1433,7 @@ impl OwnedVersionedData for ToGateway {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			1 | 2 | 3 => Ok(ToGateway::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(ToGateway::V4(serde_bare::from_slice(payload)?)),
+			4 | 5 => Ok(ToGateway::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -897,18 +1441,18 @@ impl OwnedVersionedData for ToGateway {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ToGateway::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
-			ToGateway::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToGateway::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v4 but we need a converter to bridge mk1 to mk2
-		vec![Ok, Ok, Self::v3_to_v4]
+		// No changes between v1-v5 but we need a converter to bridge mk1 to mk2
+		vec![Ok, Ok, Self::v3_to_v4, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v4 but we need a converter to bridge mk2 to mk1
-		vec![Self::v4_to_v3, Ok, Ok]
+		// No changes between v1-v5 but we need a converter to bridge mk2 to mk1
+		vec![Ok, Self::v4_to_v3, Ok, Ok]
 	}
 }
 
@@ -917,14 +1461,14 @@ impl ToGateway {
 		if let ToGateway::V3(x) = self {
 			let inner = match x {
 				v3::ToGateway::ToGatewayPong(pong) => {
-					v4::ToGateway::ToGatewayPong(v4::ToGatewayPong {
+					v5::ToGateway::ToGatewayPong(v5::ToGatewayPong {
 						request_id: pong.request_id,
 						ts: pong.ts,
 					})
 				}
 				v3::ToGateway::ToServerTunnelMessage(msg) => {
-					v4::ToGateway::ToServerTunnelMessage(v4::ToServerTunnelMessage {
-						message_id: v4::MessageId {
+					v5::ToGateway::ToServerTunnelMessage(v5::ToServerTunnelMessage {
+						message_id: v5::MessageId {
 							gateway_id: msg.message_id.gateway_id,
 							request_id: msg.message_id.request_id,
 							message_index: msg.message_id.message_index,
@@ -936,22 +1480,22 @@ impl ToGateway {
 				}
 			};
 
-			Ok(ToGateway::V4(inner))
+			Ok(ToGateway::V5(inner))
 		} else {
 			bail!("unexpected version");
 		}
 	}
 
 	fn v4_to_v3(self) -> Result<Self> {
-		if let ToGateway::V4(x) = self {
+		if let ToGateway::V5(x) = self {
 			let inner = match x {
-				v4::ToGateway::ToGatewayPong(pong) => {
+				v5::ToGateway::ToGatewayPong(pong) => {
 					v3::ToGateway::ToGatewayPong(v3::ToGatewayPong {
 						request_id: pong.request_id,
 						ts: pong.ts,
 					})
 				}
-				v4::ToGateway::ToServerTunnelMessage(msg) => {
+				v5::ToGateway::ToServerTunnelMessage(msg) => {
 					v3::ToGateway::ToServerTunnelMessage(v3::ToServerTunnelMessage {
 						message_id: v3::MessageId {
 							gateway_id: msg.message_id.gateway_id,
@@ -974,19 +1518,19 @@ impl ToGateway {
 
 pub enum ToServerlessServer {
 	V3(v3::ToServerlessServer),
-	V4(v4::ToServerlessServer),
+	V5(v5::ToServerlessServer),
 }
 
 impl OwnedVersionedData for ToServerlessServer {
-	type Latest = v4::ToServerlessServer;
+	type Latest = v5::ToServerlessServer;
 
-	fn wrap_latest(latest: v4::ToServerlessServer) -> Self {
-		ToServerlessServer::V4(latest)
+	fn wrap_latest(latest: v5::ToServerlessServer) -> Self {
+		ToServerlessServer::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let ToServerlessServer::V4(data) = self {
+		if let ToServerlessServer::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -996,7 +1540,7 @@ impl OwnedVersionedData for ToServerlessServer {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			1 | 2 | 3 => Ok(ToServerlessServer::V3(serde_bare::from_slice(payload)?)),
-			4 => Ok(ToServerlessServer::V4(serde_bare::from_slice(payload)?)),
+			4 | 5 => Ok(ToServerlessServer::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -1004,18 +1548,18 @@ impl OwnedVersionedData for ToServerlessServer {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ToServerlessServer::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
-			ToServerlessServer::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToServerlessServer::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v3
-		vec![Ok, Ok, Self::v3_to_v4]
+		// No changes between v1-v3, v4-v5
+		vec![Ok, Ok, Self::v3_to_v4, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1 and v3
-		vec![Self::v4_to_v3, Ok, Ok]
+		// No changes between v1-v3, v4-v5
+		vec![Ok, Self::v4_to_v3, Ok, Ok]
 	}
 }
 
@@ -1024,23 +1568,23 @@ impl ToServerlessServer {
 		if let ToServerlessServer::V3(x) = self {
 			let inner = match x {
 				v3::ToServerlessServer::ToServerlessServerInit(init) => {
-					v4::ToServerlessServer::ToServerlessServerInit(v4::ToServerlessServerInit {
+					v5::ToServerlessServer::ToServerlessServerInit(v5::ToServerlessServerInit {
 						runner_id: init.runner_id,
 						runner_protocol_version: PROTOCOL_MK1_VERSION,
 					})
 				}
 			};
 
-			Ok(ToServerlessServer::V4(inner))
+			Ok(ToServerlessServer::V5(inner))
 		} else {
 			bail!("unexpected version");
 		}
 	}
 
 	fn v4_to_v3(self) -> Result<Self> {
-		if let ToServerlessServer::V4(x) = self {
+		if let ToServerlessServer::V5(x) = self {
 			let inner = match x {
-				v4::ToServerlessServer::ToServerlessServerInit(init) => {
+				v5::ToServerlessServer::ToServerlessServerInit(init) => {
 					v3::ToServerlessServer::ToServerlessServerInit(v3::ToServerlessServerInit {
 						runner_id: init.runner_id,
 					})
@@ -1055,20 +1599,19 @@ impl ToServerlessServer {
 }
 
 pub enum ActorCommandKeyData {
-	// Only in v4
 	V4(v4::ActorCommandKeyData),
+	V5(v5::ActorCommandKeyData),
 }
 
 impl OwnedVersionedData for ActorCommandKeyData {
-	type Latest = v4::ActorCommandKeyData;
+	type Latest = v5::ActorCommandKeyData;
 
-	fn wrap_latest(latest: v4::ActorCommandKeyData) -> Self {
-		ActorCommandKeyData::V4(latest)
+	fn wrap_latest(latest: v5::ActorCommandKeyData) -> Self {
+		ActorCommandKeyData::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		#[allow(irrefutable_let_patterns)]
-		if let ActorCommandKeyData::V4(data) = self {
+		if let ActorCommandKeyData::V5(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -1078,6 +1621,7 @@ impl OwnedVersionedData for ActorCommandKeyData {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			4 => Ok(ActorCommandKeyData::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(ActorCommandKeyData::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -1085,17 +1629,89 @@ impl OwnedVersionedData for ActorCommandKeyData {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ActorCommandKeyData::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ActorCommandKeyData::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v5]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok]
+		vec![Self::v5_to_v4, Ok, Ok, Ok]
+	}
+}
+
+impl ActorCommandKeyData {
+	fn v4_to_v5(self) -> Result<Self> {
+		if let ActorCommandKeyData::V4(x) = self {
+			let inner = match x {
+				v4::ActorCommandKeyData::CommandStartActor(start) => {
+					v5::ActorCommandKeyData::CommandStartActor(v5::CommandStartActor {
+						config: v5::ActorConfig {
+							name: start.config.name,
+							key: start.config.key,
+							create_ts: start.config.create_ts,
+							input: start.config.input,
+						},
+						hibernating_requests: start
+							.hibernating_requests
+							.into_iter()
+							.map(|req| v5::HibernatingRequest {
+								gateway_id: req.gateway_id,
+								request_id: req.request_id,
+							})
+							.collect(),
+					})
+				}
+				v4::ActorCommandKeyData::CommandStopActor(_) => {
+					v5::ActorCommandKeyData::CommandStopActor
+				}
+			};
+
+			Ok(ActorCommandKeyData::V5(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		if let ActorCommandKeyData::V5(x) = self {
+			// Since v4 commands have generation but v5 doesn't, we can't fully convert back
+			// We'll use generation 0 as a placeholder
+			let inner = match x {
+				v5::ActorCommandKeyData::CommandStartActor(start) => {
+					v4::ActorCommandKeyData::CommandStartActor(v4::CommandStartActor {
+						generation: 0, // Lost during conversion
+						config: v4::ActorConfig {
+							name: start.config.name,
+							key: start.config.key,
+							create_ts: start.config.create_ts,
+							input: start.config.input,
+						},
+						hibernating_requests: start
+							.hibernating_requests
+							.into_iter()
+							.map(|req| v4::HibernatingRequest {
+								gateway_id: req.gateway_id,
+								request_id: req.request_id,
+							})
+							.collect(),
+					})
+				}
+				v5::ActorCommandKeyData::CommandStopActor => {
+					v4::ActorCommandKeyData::CommandStopActor(v4::CommandStopActor {
+						generation: 0, // Lost during conversion
+					})
+				}
+			};
+
+			Ok(ActorCommandKeyData::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
 	}
 }
 
@@ -2009,10 +2625,10 @@ fn convert_kv_metadata_v3_to_v2(metadata: v3::KvMetadata) -> v2::KvMetadata {
 
 fn convert_to_server_tunnel_message_kind_v3_to_v4(
 	kind: v3::ToServerTunnelMessageKind,
-) -> v4::ToServerTunnelMessageKind {
+) -> v5::ToServerTunnelMessageKind {
 	match kind {
 		v3::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
-			v4::ToServerTunnelMessageKind::ToServerResponseStart(v4::ToServerResponseStart {
+			v5::ToServerTunnelMessageKind::ToServerResponseStart(v5::ToServerResponseStart {
 				status: resp.status,
 				headers: resp.headers,
 				body: resp.body,
@@ -2020,32 +2636,32 @@ fn convert_to_server_tunnel_message_kind_v3_to_v4(
 			})
 		}
 		v3::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
-			v4::ToServerTunnelMessageKind::ToServerResponseChunk(v4::ToServerResponseChunk {
+			v5::ToServerTunnelMessageKind::ToServerResponseChunk(v5::ToServerResponseChunk {
 				body: chunk.body,
 				finish: chunk.finish,
 			})
 		}
 		v3::ToServerTunnelMessageKind::ToServerResponseAbort => {
-			v4::ToServerTunnelMessageKind::ToServerResponseAbort
+			v5::ToServerTunnelMessageKind::ToServerResponseAbort
 		}
 		v3::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
-			v4::ToServerTunnelMessageKind::ToServerWebSocketOpen(v4::ToServerWebSocketOpen {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketOpen(v5::ToServerWebSocketOpen {
 				can_hibernate: open.can_hibernate,
 			})
 		}
 		v3::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
-			v4::ToServerTunnelMessageKind::ToServerWebSocketMessage(v4::ToServerWebSocketMessage {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketMessage(v5::ToServerWebSocketMessage {
 				data: msg.data,
 				binary: msg.binary,
 			})
 		}
 		v3::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
-			v4::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
-				v4::ToServerWebSocketMessageAck { index: ack.index },
+			v5::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
+				v5::ToServerWebSocketMessageAck { index: ack.index },
 			)
 		}
 		v3::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
-			v4::ToServerTunnelMessageKind::ToServerWebSocketClose(v4::ToServerWebSocketClose {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketClose(v5::ToServerWebSocketClose {
 				code: close.code,
 				reason: close.reason,
 				hibernate: close.hibernate,
@@ -2054,16 +2670,16 @@ fn convert_to_server_tunnel_message_kind_v3_to_v4(
 		v3::ToServerTunnelMessageKind::DeprecatedTunnelAck => {
 			// v4 removed DeprecatedTunnelAck, this should not occur in practice
 			// but if it does, we'll convert it to a response abort as a safe fallback
-			v4::ToServerTunnelMessageKind::ToServerResponseAbort
+			v5::ToServerTunnelMessageKind::ToServerResponseAbort
 		}
 	}
 }
 
 fn convert_to_server_tunnel_message_kind_v4_to_v3(
-	kind: v4::ToServerTunnelMessageKind,
+	kind: v5::ToServerTunnelMessageKind,
 ) -> Result<v3::ToServerTunnelMessageKind> {
 	Ok(match kind {
-		v4::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+		v5::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
 			v3::ToServerTunnelMessageKind::ToServerResponseStart(v3::ToServerResponseStart {
 				status: resp.status,
 				headers: resp.headers,
@@ -2071,32 +2687,32 @@ fn convert_to_server_tunnel_message_kind_v4_to_v3(
 				stream: resp.stream,
 			})
 		}
-		v4::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
+		v5::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
 			v3::ToServerTunnelMessageKind::ToServerResponseChunk(v3::ToServerResponseChunk {
 				body: chunk.body,
 				finish: chunk.finish,
 			})
 		}
-		v4::ToServerTunnelMessageKind::ToServerResponseAbort => {
+		v5::ToServerTunnelMessageKind::ToServerResponseAbort => {
 			v3::ToServerTunnelMessageKind::ToServerResponseAbort
 		}
-		v4::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
+		v5::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
 			v3::ToServerTunnelMessageKind::ToServerWebSocketOpen(v3::ToServerWebSocketOpen {
 				can_hibernate: open.can_hibernate,
 			})
 		}
-		v4::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
+		v5::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
 			v3::ToServerTunnelMessageKind::ToServerWebSocketMessage(v3::ToServerWebSocketMessage {
 				data: msg.data,
 				binary: msg.binary,
 			})
 		}
-		v4::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+		v5::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
 			v3::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
 				v3::ToServerWebSocketMessageAck { index: ack.index },
 			)
 		}
-		v4::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+		v5::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 			v3::ToServerTunnelMessageKind::ToServerWebSocketClose(v3::ToServerWebSocketClose {
 				code: close.code,
 				reason: close.reason,
@@ -2106,8 +2722,9 @@ fn convert_to_server_tunnel_message_kind_v4_to_v3(
 	})
 }
 
-pub fn to_client_tunnel_message_v4_to_v3(
-	msg: v4::ToClientTunnelMessage,
+// Used specifically for the gateway because there were no changes between mk2 and mk1 for the tunnel messages
+pub fn to_client_tunnel_message_mk2_to_mk1(
+	msg: v5::ToClientTunnelMessage,
 ) -> v3::ToClientTunnelMessage {
 	v3::ToClientTunnelMessage {
 		message_id: v3::MessageId {
@@ -2115,15 +2732,15 @@ pub fn to_client_tunnel_message_v4_to_v3(
 			request_id: msg.message_id.request_id,
 			message_index: msg.message_id.message_index,
 		},
-		message_kind: convert_to_client_tunnel_message_kind_v4_to_v3(msg.message_kind),
+		message_kind: convert_to_client_tunnel_message_kind_mk2_to_mk1(msg.message_kind),
 	}
 }
 
-fn convert_to_client_tunnel_message_kind_v4_to_v3(
-	kind: v4::ToClientTunnelMessageKind,
+fn convert_to_client_tunnel_message_kind_mk2_to_mk1(
+	kind: v5::ToClientTunnelMessageKind,
 ) -> v3::ToClientTunnelMessageKind {
 	match kind {
-		v4::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
+		v5::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
 			v3::ToClientTunnelMessageKind::ToClientRequestStart(v3::ToClientRequestStart {
 				actor_id: req.actor_id,
 				method: req.method,
@@ -2133,33 +2750,433 @@ fn convert_to_client_tunnel_message_kind_v4_to_v3(
 				stream: req.stream,
 			})
 		}
-		v4::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
+		v5::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
 			v3::ToClientTunnelMessageKind::ToClientRequestChunk(v3::ToClientRequestChunk {
 				body: chunk.body,
 				finish: chunk.finish,
 			})
 		}
-		v4::ToClientTunnelMessageKind::ToClientRequestAbort => {
+		v5::ToClientTunnelMessageKind::ToClientRequestAbort => {
 			v3::ToClientTunnelMessageKind::ToClientRequestAbort
 		}
-		v4::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
+		v5::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketOpen(v3::ToClientWebSocketOpen {
 				actor_id: ws.actor_id,
 				path: ws.path,
 				headers: ws.headers,
 			})
 		}
-		v4::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
+		v5::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketMessage(v3::ToClientWebSocketMessage {
 				data: msg.data,
 				binary: msg.binary,
 			})
 		}
-		v4::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
+		v5::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
 			v3::ToClientTunnelMessageKind::ToClientWebSocketClose(v3::ToClientWebSocketClose {
 				code: close.code,
 				reason: close.reason,
 			})
 		}
 	}
+}
+
+// Helper conversion functions for v4 <-> v5
+
+fn convert_actor_intent_v4_to_v5(intent: v4::ActorIntent) -> v5::ActorIntent {
+	match intent {
+		v4::ActorIntent::ActorIntentSleep => v5::ActorIntent::ActorIntentSleep,
+		v4::ActorIntent::ActorIntentStop => v5::ActorIntent::ActorIntentStop,
+	}
+}
+
+fn convert_actor_intent_v5_to_v4(intent: v5::ActorIntent) -> v4::ActorIntent {
+	match intent {
+		v5::ActorIntent::ActorIntentSleep => v4::ActorIntent::ActorIntentSleep,
+		v5::ActorIntent::ActorIntentStop => v4::ActorIntent::ActorIntentStop,
+	}
+}
+
+fn convert_actor_state_v4_to_v5(state: v4::ActorState) -> v5::ActorState {
+	match state {
+		v4::ActorState::ActorStateRunning => v5::ActorState::ActorStateRunning,
+		v4::ActorState::ActorStateStopped(stopped) => {
+			v5::ActorState::ActorStateStopped(v5::ActorStateStopped {
+				code: convert_stop_code_v4_to_v5(stopped.code),
+				message: stopped.message,
+			})
+		}
+	}
+}
+
+fn convert_actor_state_v5_to_v4(state: v5::ActorState) -> v4::ActorState {
+	match state {
+		v5::ActorState::ActorStateRunning => v4::ActorState::ActorStateRunning,
+		v5::ActorState::ActorStateStopped(stopped) => {
+			v4::ActorState::ActorStateStopped(v4::ActorStateStopped {
+				code: convert_stop_code_v5_to_v4(stopped.code),
+				message: stopped.message,
+			})
+		}
+	}
+}
+
+fn convert_stop_code_v4_to_v5(code: v4::StopCode) -> v5::StopCode {
+	match code {
+		v4::StopCode::Ok => v5::StopCode::Ok,
+		v4::StopCode::Error => v5::StopCode::Error,
+	}
+}
+
+fn convert_stop_code_v5_to_v4(code: v5::StopCode) -> v4::StopCode {
+	match code {
+		v5::StopCode::Ok => v4::StopCode::Ok,
+		v5::StopCode::Error => v4::StopCode::Error,
+	}
+}
+
+fn convert_kv_request_data_v4_to_v5(data: v4::KvRequestData) -> v5::KvRequestData {
+	match data {
+		v4::KvRequestData::KvGetRequest(req) => {
+			v5::KvRequestData::KvGetRequest(v5::KvGetRequest { keys: req.keys })
+		}
+		v4::KvRequestData::KvListRequest(req) => {
+			v5::KvRequestData::KvListRequest(v5::KvListRequest {
+				query: convert_kv_list_query_v4_to_v5(req.query),
+				reverse: req.reverse,
+				limit: req.limit,
+			})
+		}
+		v4::KvRequestData::KvPutRequest(req) => v5::KvRequestData::KvPutRequest(v5::KvPutRequest {
+			keys: req.keys,
+			values: req.values,
+		}),
+		v4::KvRequestData::KvDeleteRequest(req) => {
+			v5::KvRequestData::KvDeleteRequest(v5::KvDeleteRequest { keys: req.keys })
+		}
+		v4::KvRequestData::KvDropRequest => v5::KvRequestData::KvDropRequest,
+	}
+}
+
+fn convert_kv_request_data_v5_to_v4(data: v5::KvRequestData) -> v4::KvRequestData {
+	match data {
+		v5::KvRequestData::KvGetRequest(req) => {
+			v4::KvRequestData::KvGetRequest(v4::KvGetRequest { keys: req.keys })
+		}
+		v5::KvRequestData::KvListRequest(req) => {
+			v4::KvRequestData::KvListRequest(v4::KvListRequest {
+				query: convert_kv_list_query_v5_to_v4(req.query),
+				reverse: req.reverse,
+				limit: req.limit,
+			})
+		}
+		v5::KvRequestData::KvPutRequest(req) => v4::KvRequestData::KvPutRequest(v4::KvPutRequest {
+			keys: req.keys,
+			values: req.values,
+		}),
+		v5::KvRequestData::KvDeleteRequest(req) => {
+			v4::KvRequestData::KvDeleteRequest(v4::KvDeleteRequest { keys: req.keys })
+		}
+		v5::KvRequestData::KvDropRequest => v4::KvRequestData::KvDropRequest,
+	}
+}
+
+fn convert_kv_response_data_v4_to_v5(data: v4::KvResponseData) -> v5::KvResponseData {
+	match data {
+		v4::KvResponseData::KvErrorResponse(err) => {
+			v5::KvResponseData::KvErrorResponse(v5::KvErrorResponse {
+				message: err.message,
+			})
+		}
+		v4::KvResponseData::KvGetResponse(resp) => {
+			v5::KvResponseData::KvGetResponse(v5::KvGetResponse {
+				keys: resp.keys,
+				values: resp.values,
+				metadata: resp
+					.metadata
+					.into_iter()
+					.map(convert_kv_metadata_v4_to_v5)
+					.collect(),
+			})
+		}
+		v4::KvResponseData::KvListResponse(resp) => {
+			v5::KvResponseData::KvListResponse(v5::KvListResponse {
+				keys: resp.keys,
+				values: resp.values,
+				metadata: resp
+					.metadata
+					.into_iter()
+					.map(convert_kv_metadata_v4_to_v5)
+					.collect(),
+			})
+		}
+		v4::KvResponseData::KvPutResponse => v5::KvResponseData::KvPutResponse,
+		v4::KvResponseData::KvDeleteResponse => v5::KvResponseData::KvDeleteResponse,
+		v4::KvResponseData::KvDropResponse => v5::KvResponseData::KvDropResponse,
+	}
+}
+
+fn convert_kv_response_data_v5_to_v4(data: v5::KvResponseData) -> v4::KvResponseData {
+	match data {
+		v5::KvResponseData::KvErrorResponse(err) => {
+			v4::KvResponseData::KvErrorResponse(v4::KvErrorResponse {
+				message: err.message,
+			})
+		}
+		v5::KvResponseData::KvGetResponse(resp) => {
+			v4::KvResponseData::KvGetResponse(v4::KvGetResponse {
+				keys: resp.keys,
+				values: resp.values,
+				metadata: resp
+					.metadata
+					.into_iter()
+					.map(convert_kv_metadata_v5_to_v4)
+					.collect(),
+			})
+		}
+		v5::KvResponseData::KvListResponse(resp) => {
+			v4::KvResponseData::KvListResponse(v4::KvListResponse {
+				keys: resp.keys,
+				values: resp.values,
+				metadata: resp
+					.metadata
+					.into_iter()
+					.map(convert_kv_metadata_v5_to_v4)
+					.collect(),
+			})
+		}
+		v5::KvResponseData::KvPutResponse => v4::KvResponseData::KvPutResponse,
+		v5::KvResponseData::KvDeleteResponse => v4::KvResponseData::KvDeleteResponse,
+		v5::KvResponseData::KvDropResponse => v4::KvResponseData::KvDropResponse,
+	}
+}
+
+fn convert_kv_list_query_v4_to_v5(query: v4::KvListQuery) -> v5::KvListQuery {
+	match query {
+		v4::KvListQuery::KvListAllQuery => v5::KvListQuery::KvListAllQuery,
+		v4::KvListQuery::KvListRangeQuery(range) => {
+			v5::KvListQuery::KvListRangeQuery(v5::KvListRangeQuery {
+				start: range.start,
+				end: range.end,
+				exclusive: range.exclusive,
+			})
+		}
+		v4::KvListQuery::KvListPrefixQuery(prefix) => {
+			v5::KvListQuery::KvListPrefixQuery(v5::KvListPrefixQuery { key: prefix.key })
+		}
+	}
+}
+
+fn convert_kv_list_query_v5_to_v4(query: v5::KvListQuery) -> v4::KvListQuery {
+	match query {
+		v5::KvListQuery::KvListAllQuery => v4::KvListQuery::KvListAllQuery,
+		v5::KvListQuery::KvListRangeQuery(range) => {
+			v4::KvListQuery::KvListRangeQuery(v4::KvListRangeQuery {
+				start: range.start,
+				end: range.end,
+				exclusive: range.exclusive,
+			})
+		}
+		v5::KvListQuery::KvListPrefixQuery(prefix) => {
+			v4::KvListQuery::KvListPrefixQuery(v4::KvListPrefixQuery { key: prefix.key })
+		}
+	}
+}
+
+fn convert_kv_metadata_v4_to_v5(metadata: v4::KvMetadata) -> v5::KvMetadata {
+	v5::KvMetadata {
+		version: metadata.version,
+		update_ts: metadata.update_ts,
+	}
+}
+
+fn convert_kv_metadata_v5_to_v4(metadata: v5::KvMetadata) -> v4::KvMetadata {
+	v4::KvMetadata {
+		version: metadata.version,
+		update_ts: metadata.update_ts,
+	}
+}
+
+fn convert_to_client_tunnel_message_kind_v4_to_v5(
+	kind: v4::ToClientTunnelMessageKind,
+) -> v5::ToClientTunnelMessageKind {
+	match kind {
+		v4::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
+			v5::ToClientTunnelMessageKind::ToClientRequestStart(v5::ToClientRequestStart {
+				actor_id: req.actor_id,
+				method: req.method,
+				path: req.path,
+				headers: req.headers,
+				body: req.body,
+				stream: req.stream,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
+			v5::ToClientTunnelMessageKind::ToClientRequestChunk(v5::ToClientRequestChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientRequestAbort => {
+			v5::ToClientTunnelMessageKind::ToClientRequestAbort
+		}
+		v4::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
+			v5::ToClientTunnelMessageKind::ToClientWebSocketOpen(v5::ToClientWebSocketOpen {
+				actor_id: ws.actor_id,
+				path: ws.path,
+				headers: ws.headers,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
+			v5::ToClientTunnelMessageKind::ToClientWebSocketMessage(v5::ToClientWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v4::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
+			v5::ToClientTunnelMessageKind::ToClientWebSocketClose(v5::ToClientWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+			})
+		}
+	}
+}
+
+fn convert_to_client_tunnel_message_kind_v5_to_v4(
+	kind: v5::ToClientTunnelMessageKind,
+) -> v4::ToClientTunnelMessageKind {
+	match kind {
+		v5::ToClientTunnelMessageKind::ToClientRequestStart(req) => {
+			v4::ToClientTunnelMessageKind::ToClientRequestStart(v4::ToClientRequestStart {
+				actor_id: req.actor_id,
+				method: req.method,
+				path: req.path,
+				headers: req.headers,
+				body: req.body,
+				stream: req.stream,
+			})
+		}
+		v5::ToClientTunnelMessageKind::ToClientRequestChunk(chunk) => {
+			v4::ToClientTunnelMessageKind::ToClientRequestChunk(v4::ToClientRequestChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v5::ToClientTunnelMessageKind::ToClientRequestAbort => {
+			v4::ToClientTunnelMessageKind::ToClientRequestAbort
+		}
+		v5::ToClientTunnelMessageKind::ToClientWebSocketOpen(ws) => {
+			v4::ToClientTunnelMessageKind::ToClientWebSocketOpen(v4::ToClientWebSocketOpen {
+				actor_id: ws.actor_id,
+				path: ws.path,
+				headers: ws.headers,
+			})
+		}
+		v5::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg) => {
+			v4::ToClientTunnelMessageKind::ToClientWebSocketMessage(v4::ToClientWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v5::ToClientTunnelMessageKind::ToClientWebSocketClose(close) => {
+			v4::ToClientTunnelMessageKind::ToClientWebSocketClose(v4::ToClientWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+			})
+		}
+	}
+}
+
+fn convert_to_server_tunnel_message_kind_v4_to_v5(
+	kind: v4::ToServerTunnelMessageKind,
+) -> v5::ToServerTunnelMessageKind {
+	match kind {
+		v4::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			v5::ToServerTunnelMessageKind::ToServerResponseStart(v5::ToServerResponseStart {
+				status: resp.status,
+				headers: resp.headers,
+				body: resp.body,
+				stream: resp.stream,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
+			v5::ToServerTunnelMessageKind::ToServerResponseChunk(v5::ToServerResponseChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerResponseAbort => {
+			v5::ToServerTunnelMessageKind::ToServerResponseAbort
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketOpen(v5::ToServerWebSocketOpen {
+				can_hibernate: open.can_hibernate,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketMessage(v5::ToServerWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
+				v5::ToServerWebSocketMessageAck { index: ack.index },
+			)
+		}
+		v4::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+			v5::ToServerTunnelMessageKind::ToServerWebSocketClose(v5::ToServerWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+				hibernate: close.hibernate,
+			})
+		}
+	}
+}
+
+fn convert_to_server_tunnel_message_kind_v5_to_v4(
+	kind: v5::ToServerTunnelMessageKind,
+) -> Result<v4::ToServerTunnelMessageKind> {
+	Ok(match kind {
+		v5::ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			v4::ToServerTunnelMessageKind::ToServerResponseStart(v4::ToServerResponseStart {
+				status: resp.status,
+				headers: resp.headers,
+				body: resp.body,
+				stream: resp.stream,
+			})
+		}
+		v5::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => {
+			v4::ToServerTunnelMessageKind::ToServerResponseChunk(v4::ToServerResponseChunk {
+				body: chunk.body,
+				finish: chunk.finish,
+			})
+		}
+		v5::ToServerTunnelMessageKind::ToServerResponseAbort => {
+			v4::ToServerTunnelMessageKind::ToServerResponseAbort
+		}
+		v5::ToServerTunnelMessageKind::ToServerWebSocketOpen(open) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketOpen(v4::ToServerWebSocketOpen {
+				can_hibernate: open.can_hibernate,
+			})
+		}
+		v5::ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketMessage(v4::ToServerWebSocketMessage {
+				data: msg.data,
+				binary: msg.binary,
+			})
+		}
+		v5::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(
+				v4::ToServerWebSocketMessageAck { index: ack.index },
+			)
+		}
+		v5::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+			v4::ToServerTunnelMessageKind::ToServerWebSocketClose(v4::ToServerWebSocketClose {
+				code: close.code,
+				reason: close.reason,
+				hibernate: close.hibernate,
+			})
+		}
+	})
 }
