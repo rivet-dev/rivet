@@ -137,3 +137,21 @@ export async function updateRunnerConfig(
 		request,
 	);
 }
+
+// MARK: KV Get
+interface KvGetResponse {
+	update_ts: string;
+	value: string | null;
+}
+
+export async function kvGet(
+	config: ClientConfig,
+	actorId: RivetId,
+	key: string,
+): Promise<KvGetResponse> {
+	return apiCall<{}, KvGetResponse>(
+		config,
+		"GET",
+		`/actors/${encodeURIComponent(actorId)}/kv/keys/${encodeURIComponent(key)}`,
+	);
+}

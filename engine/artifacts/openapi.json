@@ -380,7 +380,7 @@
       }
     },
     "/metadata": {
-      "delete": {
+      "get": {
         "tags": [
           "metadata"
         ],

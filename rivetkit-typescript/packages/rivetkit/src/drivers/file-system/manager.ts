@@ -17,8 +17,6 @@ import type {
 	ListActorsInput,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
-import { ManagerInspector } from "@/inspector/manager";
-import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
 import type {
 	DriverConfig,
@@ -41,8 +39,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	#actorDriver: ActorDriver;
 	#actorRouter: ActorRouter;
 
-	inspector?: ManagerInspector;
-
 	constructor(
 		registryConfig: RegistryConfig,
 		runConfig: RunConfig,
@@ -53,73 +49,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		this.#runConfig = runConfig;
 		this.#state = state;
 		this.#driverConfig = driverConfig;
-
-		if (runConfig.inspector.enabled) {
-			const startedAt = new Date().toISOString();
-			function transformActor(actorState: schema.ActorState): Actor {
-				return {
-					id: actorState.actorId as ActorId,
-					name: actorState.name,
-					key: actorState.key as string[],
-					startedAt: startedAt,
-					createdAt: new Date(
-						Number(actorState.createdAt),
-					).toISOString(),
-					features: [
-						ActorFeature.State,
-						ActorFeature.Connections,
-						ActorFeature.Console,
-						ActorFeature.EventsMonitoring,
-						ActorFeature.Database,
-					],
-				};
-			}
-
-			this.inspector = new ManagerInspector(() => {
-				return {
-					getAllActors: async ({ cursor, limit }) => {
-						const itr = this.#state.getActorsIterator({ cursor });
-						const actors: Actor[] = [];
-
-						for await (const actor of itr) {
-							actors.push(transformActor(actor));
-							if (limit && actors.length >= limit) {
-								break;
-							}
-						}
-						return actors;
-					},
-					getActorById: async (id) => {
-						try {
-							const result =
-								await this.#state.loadActorStateOrError(id);
-							return transformActor(result);
-						} catch {
-							return null;
-						}
-					},
-					getBuilds: async () => {
-						return Object.keys(this.#registryConfig.use).map(
-							(name) => ({
-								name,
-							}),
-						);
-					},
-					createActor: async (input) => {
-						const { actorId } = await this.createActor(input);
-						try {
-							const result =
-								await this.#state.loadActorStateOrError(
-									actorId,
-								);
-							return transformActor(result);
-						} catch {
-							return null;
-						}
-					},
-				};
-			});
-		}
 
 		// Actors run on the same node as the manager, so we create a dummy actor router that we route requests to
 		const inlineClient = createClientWithDriver(
@@ -173,6 +102,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			undefined,
 			false,
 			false,
+			undefined,
 		);
 		return new InlineWebSocketAdapter(wsHandler);
 	}
@@ -216,6 +146,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			undefined,
 			false,
 			false,
+			c.get("inspectorToken"),
 		);
 		return upgradeWebSocket(() => wsHandler)(c, noopNext());
 	}
@@ -329,6 +260,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		return actors;
 	}
 
+	async kvGet(actorId: string, key: Uint8Array): Promise<Uint8Array | null> {
+		const response = await this.#state.kvBatchGet(actorId, [key]);
+		return response[0];
+	}
+
 	displayInformation(): ManagerDisplayInformation {
 		return {
 			name: this.#state.persist ? "File System" : "Memory",
@@ -346,9 +282,5 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			instances: this.#state.actorCountOnStartup,
 			data: this.#state.storagePath,
 		};
-	}
-
-	getOrCreateInspectorAccessToken() {
-		return this.#state.getOrCreateInspectorAccessToken();
 	}
 }

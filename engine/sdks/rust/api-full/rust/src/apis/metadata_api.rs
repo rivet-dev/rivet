@@ -26,7 +26,7 @@ pub enum MetadataGetError {
 pub async fn metadata_get(configuration: &configuration::Configuration, ) -> Result<models::MetadataGetResponse, Error<MetadataGetError>> {
 
     let uri_str = format!("{}/metadata", configuration.base_path);
-    let mut req_builder = configuration.client.request(reqwest::Method::DELETE, &uri_str);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());

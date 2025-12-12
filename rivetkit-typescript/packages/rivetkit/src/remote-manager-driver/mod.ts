@@ -2,7 +2,6 @@ import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
-import { generateRandomString } from "@/actor/utils";
 import type { ClientConfig } from "@/client/client";
 import type { MetadataResponse } from "@/common/router";
 import { noopNext, stringifyError } from "@/common/utils";
@@ -31,6 +30,7 @@ import {
 	getActorByKey,
 	getMetadata,
 	getOrCreateActor,
+	kvGet,
 	listActorsByName,
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
@@ -378,11 +378,26 @@ export class RemoteManagerDriver implements ManagerDriver {
 		return await upgradeWebSocket(() => args)(c, noopNext());
 	}
 
-	displayInformation(): ManagerDisplayInformation {
-		return { name: "Remote", properties: {} };
+	async kvGet(actorId: string, key: Uint8Array): Promise<Uint8Array | null> {
+		// Wait for metadata check to complete if in progress
+		if (this.#metadataPromise) {
+			await this.#metadataPromise;
+		}
+
+		logger().debug({ msg: "getting kv value via engine api", key });
+
+		const response = await kvGet(
+			this.#config,
+			actorId,
+			new TextDecoder("utf8").decode(key),
+		);
+
+		return typeof response.value === "string"
+			? new TextEncoder().encode(response.value)
+			: null;
 	}
 
-	getOrCreateInspectorAccessToken() {
-		return generateRandomString();
+	displayInformation(): ManagerDisplayInformation {
+		return { name: "Remote", properties: {} };
 	}
 }

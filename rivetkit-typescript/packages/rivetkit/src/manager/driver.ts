@@ -1,6 +1,5 @@
 import type { Env, Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
-import type { ManagerInspector } from "@/inspector/manager";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 
@@ -45,19 +44,8 @@ export interface ManagerDriver {
 		router: Hono,
 	) => void;
 
-	// TODO(kacper): Remove this in favor of standard manager API
-	/**
-	 * @internal
-	 */
-	readonly inspector?: ManagerInspector;
-
-	// TODO(kacper): Remove this in favor of ActorDriver.getinspectorToken
-	/**
-	 * Get or create the inspector access token.
-	 * @experimental
-	 * @returns creates or returns existing inspector access token
-	 */
-	getOrCreateInspectorAccessToken: () => string;
+	/** Read a key. Returns null if the key doesn't exist. */
+	kvGet(actorId: string, key: Uint8Array): Promise<Uint8Array | null>;
 }
 
 export interface ManagerDisplayInformation {

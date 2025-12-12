@@ -94,17 +94,6 @@ export function generateSecureToken(length = 32) {
 		.replace(/=/g, "");
 }
 
-export function generateRandomString(length = 32) {
-	const characters =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-	let result = "";
-	for (let i = 0; i < length; i++) {
-		const randomIndex = Math.floor(Math.random() * characters.length);
-		result += characters[randomIndex];
-	}
-	return result;
-}
-
 /**
  * Checks if a path is an actor state path within the persisted actor data.
  */

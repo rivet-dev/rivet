@@ -24,10 +24,19 @@ declare module "@tanstack/react-router" {
 	}
 }
 
+declare module "@tanstack/history" {
+	interface HistoryState {
+		// inspector specific
+		// indicates that the inspector was already connected as the result of submission of connection form
+		connectedInForm?: boolean;
+	}
+}
+
 declare module "@tanstack/react-query" {
 	interface Register {
 		queryMeta: {
 			mightRequireAuth?: boolean;
+			statusCheck?: boolean;
 		};
 	}
 }

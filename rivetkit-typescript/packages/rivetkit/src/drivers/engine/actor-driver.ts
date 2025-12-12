@@ -553,7 +553,8 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Parse configuration from Sec-WebSocket-Protocol header (optional for path-based routing)
 		const protocols = request.headers.get("sec-websocket-protocol");
-		const { encoding, connParams } = parseWebSocketProtocols(protocols);
+		const { encoding, connParams, inspectorToken } =
+			parseWebSocketProtocols(protocols);
 
 		// Fetch WS handler
 		//
@@ -573,6 +574,7 @@ export class EngineActorDriver implements ActorDriver {
 				requestIdBuf,
 				isHibernatable,
 				isRestoringHibernatable,
+				inspectorToken,
 			);
 		} catch (err) {
 			logger().error({ msg: "building websocket handlers errored", err });

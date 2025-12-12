@@ -17,7 +17,7 @@ const counter = actor({
 });
 
 export const registry = setup({
-	use: { counter },
+	use: { counter, counter2: counter },
 });
 
 export type Registry = typeof registry;
