@@ -43,6 +43,8 @@ pub struct State {
 	pub create_ts: i64,
 	pub create_complete_ts: Option<i64>,
 
+	// As opposed to allocated_serverless_slot, this is only set when allocating if the chosen runner has a
+	// serverless config
 	#[serde(default)]
 	pub for_serverless: bool,
 	// This is used for state management for incrementing/decrementing the serverless desired slots key
