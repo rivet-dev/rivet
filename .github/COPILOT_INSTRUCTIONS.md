@@ -8,11 +8,10 @@ Rivet is a Rust workspace-based monorepo for a distributed actor/server orchestr
 
 Key packages and components:
 
-- **Core Engine** (`packages/core/engine/`) - Main orchestration service that coordinates all operations
-- **Workflow Engine** (`packages/common/gasoline/`) - Handles complex multi-step operations with reliability and observability
-- **Pegboard** (`packages/core/pegboard/`) - Actor/server lifecycle management system
-- **Common Packages** (`/packages/common/`) - Foundation utilities, database connections, caching, metrics, logging, health checks, workflow engine core
-- **Core Packages** (`/packages/core/`) - Main engine executable, Pegboard actor orchestration, workflow workers
+- **Core Engine** (`engine/packages/engine/`) - Main orchestration service that coordinates all operations
+- **Workflow Engine** (`engine/packages/gasoline/`) - Handles complex multi-step operations with reliability and observability
+- **Pegboard** (`engine/packages/pegboard/`) - Actor/server lifecycle management system
+- **Common Packages** (`engine/packages/`) - Foundation utilities, database connections, caching, metrics, logging, health checks, workflow engine core
 - **Service Infrastructure** - Distributed services communicate via NATS messaging with service discovery
 
 ## Build Commands
@@ -58,7 +57,7 @@ cargo clippy -- -W warnings
 
 ## Error Handling
 
-Custom error system at `packages/common/error/` using derive macros with struct-based error definitions.
+Custom error system at `engine/packages/error/` using derive macros with struct-based error definitions.
 
 Example usage:
 
@@ -108,7 +107,7 @@ Key error handling principles:
 
 - **UniversalDB** for distributed state storage
 - **ClickHouse** for analytics and time-series data
-- Connection pooling through `packages/common/pools/`
+- Connection pooling through `engine/packages/pools/`
 
 ## Code Style
 
@@ -154,8 +153,8 @@ tracing::info!("foo {x}");
 
 ## Configuration Management
 
-- Do not make changes to `docker/dev*` configs directly
-- Instead, edit the template in `docker/template/` and rerun `(cd docker/template && pnpm start)` to regenerate
+- Do not make changes to `engine/docker/dev*` configs directly
+- Instead, edit the template in `engine/docker/template/` and rerun `(cd engine/docker/template && pnpm start)` to regenerate
 
 ## Optimizations
 
@@ -183,6 +182,6 @@ gt c -m "chore(my-pkg): foo bar"
 
 ```bash
 # Start the development environment with all services
-cd docker/dev
+cd engine/docker/dev
 docker-compose up -d
 ```
