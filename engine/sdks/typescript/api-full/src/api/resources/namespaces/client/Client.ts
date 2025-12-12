@@ -4,8 +4,8 @@
 
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
-import urlJoin from "url-join";
 import * as serializers from "../../../../serialization/index";
+import urlJoin from "url-join";
 import * as errors from "../../../../errors/index";
 
 export declare namespace Namespaces {
@@ -43,7 +43,7 @@ export class Namespaces {
         request: Rivet.NamespacesListRequest = {},
         requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.NamespaceListResponse> {
-        const { limit, cursor, name, namespaceIds } = request;
+        const { limit, cursor, name, namespaceIds, namespaceId } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (limit != null) {
             _queryParams["limit"] = limit.toString();
@@ -59,6 +59,16 @@ export class Namespaces {
 
         if (namespaceIds != null) {
             _queryParams["namespace_ids"] = namespaceIds;
+        }
+
+        if (namespaceId != null) {
+            if (Array.isArray(namespaceId)) {
+                _queryParams["namespace_id"] = namespaceId.map((item) =>
+                    serializers.RivetId.jsonOrThrow(item, { unrecognizedObjectKeys: "strip" }),
+                );
+            } else {
+                _queryParams["namespace_id"] = namespaceId;
+            }
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({

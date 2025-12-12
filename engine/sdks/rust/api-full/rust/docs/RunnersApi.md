@@ -11,7 +11,7 @@ Method | HTTP request | Description
 
 ## runners_list
 
-> models::RunnersListResponse runners_list(namespace, name, runner_ids, include_stopped, limit, cursor)
+> models::RunnersListResponse runners_list(namespace, name, runner_ids, runner_id, include_stopped, limit, cursor)
 
 
 ### Parameters
@@ -21,7 +21,8 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **namespace** | **String** |  | [required] |
 **name** | Option<**String**> |  |  |
-**runner_ids** | Option<**String**> |  |  |
+**runner_ids** | Option<**String**> | Deprecated. |  |
+**runner_id** | Option<[**Vec<String>**](String.md)> |  |  |
 **include_stopped** | Option<**bool**> |  |  |
 **limit** | Option<**i32**> |  |  |
 **cursor** | Option<**String**> |  |  |

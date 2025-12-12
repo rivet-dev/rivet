@@ -44,6 +44,9 @@ func (c *Client) List(ctx context.Context, request *sdk.RunnersListRequest) (*sd
 	if request.RunnerIds != nil {
 		queryParams.Add("runner_ids", fmt.Sprintf("%v", *request.RunnerIds))
 	}
+	for _, value := range request.RunnerId {
+		queryParams.Add("runner_id", fmt.Sprintf("%v", *value))
+	}
 	if request.IncludeStopped != nil {
 		queryParams.Add("include_stopped", fmt.Sprintf("%v", *request.IncludeStopped))
 	}

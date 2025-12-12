@@ -33,13 +33,15 @@ type ActorsGetOrCreateRequest struct {
 }
 
 type ActorsListRequest struct {
-	Namespace        string  `json:"-"`
-	Name             *string `json:"-"`
-	Key              *string `json:"-"`
-	ActorIds         *string `json:"-"`
-	IncludeDestroyed *bool   `json:"-"`
-	Limit            *int    `json:"-"`
-	Cursor           *string `json:"-"`
+	Namespace string  `json:"-"`
+	Name      *string `json:"-"`
+	Key       *string `json:"-"`
+	// Deprecated.
+	ActorIds         *string    `json:"-"`
+	ActorId          []*RivetId `json:"-"`
+	IncludeDestroyed *bool      `json:"-"`
+	Limit            *int       `json:"-"`
+	Cursor           *string    `json:"-"`
 }
 
 type ActorsListNamesRequest struct {
@@ -53,11 +55,13 @@ type RunnerConfigsDeleteRequest struct {
 }
 
 type RunnerConfigsListRequest struct {
-	Namespace   string               `json:"-"`
-	Limit       *int                 `json:"-"`
-	Cursor      *string              `json:"-"`
-	Variant     *RunnerConfigVariant `json:"-"`
-	RunnerNames *string              `json:"-"`
+	Namespace string               `json:"-"`
+	Limit     *int                 `json:"-"`
+	Cursor    *string              `json:"-"`
+	Variant   *RunnerConfigVariant `json:"-"`
+	// Deprecated.
+	RunnerNames *string   `json:"-"`
+	RunnerName  []*string `json:"-"`
 }
 
 type RunnerConfigsRefreshMetadataRequest struct {
