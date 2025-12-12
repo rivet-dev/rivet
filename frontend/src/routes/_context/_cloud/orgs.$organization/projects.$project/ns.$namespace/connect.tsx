@@ -19,10 +19,8 @@ import {
 } from "@tanstack/react-query";
 import {
 	createFileRoute,
-	Link,
 	notFound,
 	Link as RouterLink,
-	useParams,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -61,15 +59,35 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const params = useParams({ strict: false });
-	const { data: runnerNamesCount, isLoading } = useSuspenseInfiniteQuery({
-		...useEngineCompatDataProvider().runnerNamesQueryOptions(),
-		select: (data) => data.pages[0].names.length,
-		refetchInterval: 5000,
-	});
+	const engineCompatDataProvider = useEngineCompatDataProvider();
 
+	const runnerNamesQueryOptions =
+		engineCompatDataProvider.runnerNamesQueryOptions();
+	const runnerConfigsQueryOptions =
+		engineCompatDataProvider.runnerConfigsQueryOptions();
+
+	const { data: runnerNamesCount, isLoading: isRunnerNamesLoading } =
+		useSuspenseInfiniteQuery({
+			...runnerNamesQueryOptions,
+			queryKey: [...runnerNamesQueryOptions.queryKey, "count"],
+			select: (data) => data.pages[0].names.length,
+			refetchInterval: 5000,
+		});
+
+	const { data: runnerConfigsCount, isLoading: isRunnerConfigsLoading } =
+		useSuspenseInfiniteQuery({
+			...runnerConfigsQueryOptions,
+			queryKey: [...runnerConfigsQueryOptions.queryKey, "count"],
+			select: (data) =>
+				Object.entries(data.pages[0].runnerConfigs).length,
+			refetchInterval: 5000,
+		});
+
+	const isLoading = isRunnerNamesLoading || isRunnerConfigsLoading;
 	const hasRunnerNames =
 		runnerNamesCount !== undefined && runnerNamesCount > 0;
+	const hasRunnerConfigs =
+		runnerConfigsCount !== undefined && runnerConfigsCount > 0;
 
 	if (isLoading) {
 		return (
@@ -108,7 +126,7 @@ export function RouteComponent() {
 		);
 	}
 
-	if (!hasRunnerNames) {
+	if (!hasRunnerNames && !hasRunnerConfigs) {
 		return (
 			<div className="h-full border my-2 mr-2 px-4 py-4 rounded-lg flex flex-col items-center justify-safe-center overflow-auto @container">
 				<div className="grid grid-cols-1 @7xl:grid-cols-2 gap-8 justify-safe-center">
