@@ -362,10 +362,10 @@ pnpm gen
 
 ## Development Guidelines
 
-- **Avoid `"use client"`** for components with text content for SEO and performance
-- If client-side functionality is needed:
-  - Add a `useEffect` hook, or
-  - Move client-side code to a separate client-only component
+- **Minimize `"use client"`** - Avoid using `"use client"` for components with text content that should be indexed by search engines or primarily contain static content
+- For client-side functionality:
+  - Add a `useEffect` hook for minimal client-side logic, or
+  - Move interactive code to a separate client-only component while keeping static content server-rendered
 - Follow Next.js best practices for SSR/SSG
 - Use MDX for documentation content
 - Maintain consistent documentation structure
@@ -373,7 +373,7 @@ pnpm gen
 
 ## Content Structure
 
-- Documentation lives in `src/app/(docs)/` 
+- Documentation lives in `src/app/(docs)/`
 - Blog posts and articles follow specific formats
 - Use frontmatter for metadata
 - Follow existing patterns for new content pages
