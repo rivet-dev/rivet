@@ -17,7 +17,7 @@ use serde_json;
 use rivet_runner_protocol as protocol;
 use std::{
 	borrow::Cow,
-	collections::{HashMap as StdHashMap, HashSet},
+	collections::HashMap as StdHashMap,
 	net::SocketAddr,
 	sync::Arc,
 	time::{Duration, Instant},
@@ -350,7 +350,7 @@ pub struct ProxyState {
 	route_cache: RouteCache,
 	rate_limiters: Cache<(Id, std::net::IpAddr), Arc<Mutex<RateLimiter>>>,
 	in_flight_counters: Cache<(Id, std::net::IpAddr), Arc<Mutex<InFlightCounter>>>,
-	in_flight_requests: Arc<Mutex<HashSet<protocol::RequestId>>>,
+	in_flight_requests: Cache<protocol::RequestId, ()>,
 	port_type: PortType,
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	tasks: Arc<TaskGroup>,
@@ -379,7 +379,7 @@ impl ProxyState {
 				.max_capacity(10_000)
 				.time_to_live(PROXY_STATE_CACHE_TTL)
 				.build(),
-			in_flight_requests: Arc::new(Mutex::new(HashSet::new())),
+			in_flight_requests: Cache::builder().max_capacity(10_000_000).build(),
 			port_type,
 			clickhouse_inserter,
 			tasks: TaskGroup::new(),
@@ -660,22 +660,20 @@ impl ProxyState {
 		}
 
 		// Release request ID
-		let mut requests = self.in_flight_requests.lock().await;
-		requests.remove(&request_id);
+		self.in_flight_requests.invalidate(&request_id).await;
 	}
 
 	/// Generate a unique request ID that is not currently in flight
 	async fn generate_unique_request_id(&self) -> Result<protocol::RequestId> {
 		const MAX_TRIES: u32 = 100;
-		let mut requests = self.in_flight_requests.lock().await;
 
 		for attempt in 0..MAX_TRIES {
 			let request_id = protocol::util::generate_request_id();
 
 			// Check if this ID is already in use
-			if !requests.contains(&request_id) {
+			if self.in_flight_requests.get(&request_id).await.is_none() {
 				// Insert the ID and return it
-				requests.insert(request_id);
+				self.in_flight_requests.insert(request_id, ()).await;
 				return Ok(request_id);
 			}
 
