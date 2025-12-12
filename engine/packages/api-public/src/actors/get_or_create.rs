@@ -4,39 +4,12 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
-use rivet_types::actors::CrashPolicy;
-use rivet_util::Id;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
+use rivet_api_types::actors::get_or_create::{
+	GetOrCreateQuery, GetOrCreateRequest, GetOrCreateResponse,
+};
+use rivet_api_util::request_remote_datacenter;
 
-use crate::actors::utils;
 use crate::ctx::ApiCtx;
-
-#[derive(Debug, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct GetOrCreateQuery {
-	pub namespace: String,
-}
-
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = ActorsGetOrCreateRequest)]
-pub struct GetOrCreateRequest {
-	pub datacenter: Option<String>,
-	pub name: String,
-	pub key: String,
-	pub input: Option<String>,
-	pub runner_name_selector: String,
-	pub crash_policy: CrashPolicy,
-}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = ActorsGetOrCreateResponse)]
-pub struct GetOrCreateResponse {
-	pub actor: rivet_types::actors::Actor,
-	pub created: bool,
-}
 
 /// ## Datacenter Round Trips
 ///
@@ -91,7 +64,6 @@ async fn get_or_create_inner(
 ) -> Result<GetOrCreateResponse> {
 	ctx.skip_auth();
 
-	// Resolve namespace
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
 			name: query.namespace.clone(),
@@ -99,25 +71,6 @@ async fn get_or_create_inner(
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	// Check if actor already exists for the key
-	// The get_for_key op uses global consistency and handles datacenter routing
-	let existing = ctx
-		.op(pegboard::ops::actor::get_for_key::Input {
-			namespace_id: namespace.namespace_id,
-			name: body.name.clone(),
-			key: body.key.clone(),
-		})
-		.await?;
-
-	if let Some(actor) = existing.actor {
-		// Actor exists, return it
-		return Ok(GetOrCreateResponse {
-			actor,
-			created: false,
-		});
-	}
-
-	// Actor doesn't exist for any key, create it
 	let target_dc_label = super::utils::find_dc_for_actor_creation(
 		&ctx,
 		namespace.namespace_id,
@@ -127,44 +80,21 @@ async fn get_or_create_inner(
 	)
 	.await?;
 
-	let actor_id = Id::new_v1(target_dc_label);
+	let query = GetOrCreateQuery {
+		namespace: query.namespace,
+	};
 
-	match ctx
-		.op(pegboard::ops::actor::create::Input {
-			actor_id,
-			namespace_id: namespace.namespace_id,
-			name: body.name.clone(),
-			key: Some(body.key.clone()),
-			runner_name_selector: body.runner_name_selector,
-			input: body.input.clone(),
-			crash_policy: body.crash_policy,
-			forward_request: true,
-			datacenter_name: body.datacenter.clone(),
-		})
+	if target_dc_label == ctx.config().dc_label() {
+		rivet_api_peer::actors::get_or_create::get_or_create(ctx.into(), (), query, body).await
+	} else {
+		request_remote_datacenter::<GetOrCreateResponse>(
+			ctx.config(),
+			target_dc_label,
+			"/actors",
+			axum::http::Method::PUT,
+			Some(&query),
+			Some(&body),
+		)
 		.await
-	{
-		Ok(res) => Ok(GetOrCreateResponse {
-			actor: res.actor,
-			created: true,
-		}),
-		Err(err) => {
-			// Check if this is a DuplicateKey error and extract the existing actor ID
-			if let Some(existing_actor_id) = utils::extract_duplicate_key_error(&err) {
-				tracing::info!(
-					?existing_actor_id,
-					"received duplicate key error, returning existing actor id"
-				);
-				let actor =
-					utils::fetch_actor_by_id(&ctx, existing_actor_id, query.namespace.clone())
-						.await?;
-				return Ok(GetOrCreateResponse {
-					actor,
-					created: false,
-				});
-			}
-
-			// Re-throw the original error if it's not a DuplicateKey
-			Err(err)
-		}
 	}
 }
