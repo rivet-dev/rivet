@@ -12,16 +12,6 @@ npm run dev
 ```
 
 
-## Durable Streams Dev UI
-
-To inspect streams and debug message flow, install and run the Durable Streams CLI:
-
-```sh
-npx durable-streams ui --url http://127.0.0.1:8787
-```
-
-This opens a web UI to browse streams, view messages, and monitor real-time activity. See the [Durable Streams CLI documentation](https://github.com/durable-streams/durable-streams?tab=readme-ov-file#option-2-cli) for more options.
-
 ## Features
 
 - **Durable message delivery**: Prompts and responses flow through durable streams, ensuring reliable delivery even if components restart
