@@ -54,15 +54,10 @@ kubectl apply -f 02-engine-configmap.yaml
 kubectl apply -f 03-rivet-engine-deployment.yaml
 kubectl apply -f 04-rivet-engine-service.yaml
 kubectl apply -f 05-rivet-engine-hpa.yaml
-kubectl apply -f 06-rivet-engine-singleton-deployment.yaml
 
 # Wait for engine to be ready
 echo "Waiting for engine to be ready..."
 kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=rivet-engine --timeout=300s
-
-# Wait for singleton to be ready
-echo "Waiting for singleton to be ready..."
-kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=rivet-engine-singleton --timeout=300s
 
 echo ""
 echo "Deployment complete."
