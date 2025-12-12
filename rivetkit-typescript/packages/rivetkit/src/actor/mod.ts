@@ -4,6 +4,7 @@ import {
 	type ActorConfigInput,
 	ActorConfigSchema,
 	ActorTypes,
+	action,
 } from "./config";
 import type { AnyDatabaseProvider } from "./database";
 import { ActorDefinition } from "./definition";
@@ -71,6 +72,7 @@ export type {
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
 export type { ActorKey } from "@/manager/protocol/query";
+export { action, handler } from "./config";
 export type * from "./config";
 export type { AnyConn, Conn } from "./conn/mod";
 export type { ActionContext } from "./contexts/action";
@@ -95,3 +97,4 @@ export {
 	createActorRouter,
 } from "./router";
 export { routeWebSocket } from "./router-websocket-endpoints";
+export type { AnyDatabaseProvider } from "./database";

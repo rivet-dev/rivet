@@ -345,20 +345,22 @@ export class StateManager<S, CP, CS, I> {
 			this.#actor.isReady() &&
 			!this.#isInOnStateChange
 		) {
-			try {
-				this.#isInOnStateChange = true;
-				this.#config.onStateChange(
-					this.#actor.actorContext,
-					this.#persistRaw.state,
-				);
-			} catch (error) {
-				this.#actor.rLog.error({
-					msg: "error in `_onStateChange`",
-					error: stringifyError(error),
+			this.#isInOnStateChange = true;
+			// Run with concurrency handling (async, runs in background)
+			this.#actor.concurrencyManager
+				.executeHook(
+					this.#config.onStateChange,
+					(handler) => handler(this.#actor.actorContext, this.#persistRaw.state),
+				)
+				.catch((error) => {
+					this.#actor.rLog.error({
+						msg: "error in `onStateChange`",
+						error: stringifyError(error),
+					});
+				})
+				.finally(() => {
+					this.#isInOnStateChange = false;
 				});
-			} finally {
-				this.#isInOnStateChange = false;
-			}
 		}
 	}
 
