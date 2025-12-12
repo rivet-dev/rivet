@@ -143,8 +143,8 @@ tracing::info!(?x, "foo");
 tracing::info!("foo {x}");
 ```
 
-- Log messages should be lowercase unless mentioning specific code symbols
-- Example: `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`
+- Log messages should use lowercase for descriptive text, but keep code symbols (like struct names) capitalized
+- Example: `tracing::info!("inserted UserRow")` (lowercase verb, capitalized struct name) instead of `tracing::info!("Inserted UserRow")` (both capitalized)
 
 ## Testing Guidelines
 
