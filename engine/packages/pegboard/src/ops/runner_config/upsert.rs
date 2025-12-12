@@ -169,12 +169,27 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		.dispatch()
 		.await?;
 	} else if input.config.affects_pool() {
-		ctx.signal(crate::workflows::runner_pool::Bump {})
+		let res = ctx
+			.signal(crate::workflows::runner_pool::Bump {})
 			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", input.name.clone())
+			.graceful_not_found()
 			.send()
 			.await?;
+
+		// Backfill
+		if res.is_none() {
+			ctx.workflow(crate::workflows::runner_pool::Input {
+				namespace_id: input.namespace_id,
+				runner_name: input.name.clone(),
+			})
+			.tag("namespace_id", input.namespace_id)
+			.tag("runner_name", input.name.clone())
+			.unique()
+			.dispatch()
+			.await?;
+		}
 	}
 
 	Ok(res.endpoint_config_changed)
