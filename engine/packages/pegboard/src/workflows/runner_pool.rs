@@ -38,6 +38,14 @@ pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Resul
 			})
 			.await?
 			else {
+				// Drain all
+				for runner in &state.runners {
+					ctx.signal(serverless::receiver::Drain {})
+						.to_workflow_id(runner.receiver_wf_id)
+						.send()
+						.await?;
+				}
+
 				return Ok(Loop::Break(()));
 			};
 
@@ -96,12 +104,22 @@ pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Resul
 			}
 
 			// Wait for Bump or serverless signals until we tick again
-			for sig in ctx.listen_n::<Main>(1024).await? {
+			for sig in ctx.listen_n::<Main>(512).await? {
 				match sig {
 					Main::OutboundConnDrainStarted(sig) => {
-						state
-							.runners
-							.retain(|r| r.receiver_wf_id != sig.receiver_wf_id);
+						let (new, drain_started) =
+							std::mem::take(&mut state.runners)
+								.into_iter()
+								.partition::<Vec<_>, _>(|r| r.receiver_wf_id != sig.receiver_wf_id);
+						state.runners = new;
+
+						for runner in drain_started {
+							// TODO: Spawn sub wf to process these so this is not blocking the loop
+							ctx.signal(serverless::receiver::Drain {})
+								.to_workflow_id(runner.receiver_wf_id)
+								.send()
+								.await?;
+						}
 					}
 					Main::Bump(_) => {}
 				}
@@ -190,6 +208,12 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 		+ (adjusted_desired_slots as u32).div_ceil(slots_per_runner))
 	.max(min_runners)
 	.min(max_runners)
+	.min(
+		ctx.config()
+			.pegboard()
+			.pool_desired_max_override
+			.unwrap_or(u32::MAX),
+	)
 	.try_into()?;
 
 	// Compute consistent hash of serverless details

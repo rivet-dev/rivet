@@ -24,7 +24,7 @@ pub type DatabaseHandle = Arc<dyn Database + Sync>;
 #[async_trait::async_trait]
 pub trait Database: Send {
 	/// Create a new DB instance.
-	async fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>>
+	async fn new(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<Arc<Self>>
 	where
 		Self: Sized;
 

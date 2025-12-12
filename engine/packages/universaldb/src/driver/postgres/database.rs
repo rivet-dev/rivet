@@ -16,12 +16,12 @@ use crate::{
 	driver::{BoxFut, DatabaseDriver, Erased},
 	error::DatabaseError,
 	options::DatabaseOption,
+	transaction::TXN_TIMEOUT,
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
 
 use super::transaction::PostgresTransactionDriver;
 
-const TXN_TIMEOUT: Duration = Duration::from_secs(5);
 const GC_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct PostgresDatabaseDriver {

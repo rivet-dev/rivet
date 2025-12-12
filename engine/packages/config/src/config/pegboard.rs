@@ -75,6 +75,9 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub serverless_backoff_max_exponent: Option<usize>,
+
+	/// Global pool desired max.
+	pub pool_desired_max_override: Option<u32>,
 }
 
 impl Pegboard {

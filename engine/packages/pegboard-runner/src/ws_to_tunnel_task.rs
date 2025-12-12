@@ -142,6 +142,8 @@ async fn handle_message_mk2(
 		}
 	};
 
+	tracing::debug!(?msg, "received message from runner");
+
 	match msg {
 		protocol::mk2::ToServer::ToServerPong(pong) => {
 			let now = util::timestamp::now();

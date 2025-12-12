@@ -2,10 +2,11 @@ use std::{
 	collections::HashMap,
 	ops::Deref,
 	result::Result::{Err, Ok},
+	time::Duration,
 };
 
 use anyhow::{Context, Result, ensure};
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::{StreamExt, TryStreamExt, stream::FuturesUnordered};
 use rivet_util::Id;
 use tracing::Instrument;
 use universaldb::utils::{FormalChunkedKey, FormalKey, IsolationLevel::*, end_of_key_range};
@@ -15,6 +16,7 @@ use universaldb::{
 	tuple::{PackResult, TupleDepth, TupleUnpack},
 	value::Value,
 };
+use uuid::Uuid;
 
 use super::{DatabaseKv, keys, update_metric};
 use crate::{
@@ -32,6 +34,8 @@ use crate::{
 		location::Location,
 	},
 };
+
+const EARLY_TXN_TIMEOUT: Duration = Duration::from_secs(3);
 
 impl DatabaseKv {
 	#[tracing::instrument(skip_all)]
@@ -688,7 +692,10 @@ impl DatabaseDebug for DatabaseKv {
 							continue;
 						}
 
-						ensure!(!has_output, "cannot wake a completed workflow");
+						if has_output {
+							tracing::warn!("cannot wake a completed workflow");
+							continue;
+						}
 
 						tx.write(
 							&keys::wake::WorkflowWakeConditionKey::new(
@@ -1192,6 +1199,196 @@ impl DatabaseDebug for DatabaseKv {
 			})
 			.await
 			.map_err(Into::into)
+	}
+
+	#[tracing::instrument(skip_all)]
+	async fn revive_workflows(
+		&self,
+		names: &[&str],
+		error_like: &[&str],
+		dry_run: bool,
+		parallelization: u128,
+	) -> Result<usize> {
+		ensure!(parallelization > 0);
+		ensure!(parallelization < 1024);
+
+		let chunk_size = u128::MAX / parallelization;
+		let mut futs = FuturesUnordered::new();
+
+		for i in 0..parallelization {
+			let start = i * chunk_size;
+			futs.push(self.revive_workflows_inner(
+				names,
+				error_like,
+				dry_run,
+				start,
+				start + chunk_size,
+			));
+		}
+
+		let mut total = 0;
+		while let Some(res) = futs.next().await {
+			total += res?;
+		}
+
+		tracing::info!(?total, "workflows revived");
+
+		Ok(total)
+	}
+}
+
+impl DatabaseKv {
+	pub async fn revive_workflows_inner(
+		&self,
+		names: &[&str],
+		error_like: &[&str],
+		dry_run: bool,
+		start: u128,
+		end: u128,
+	) -> Result<usize> {
+		let mut total = 0;
+		let mut current_workflow_id = Some(Id::v1(Uuid::from_u128(start), self.config.dc_label()));
+		let end_workflow_id = Id::v1(Uuid::from_u128(end), self.config.dc_label());
+
+		loop {
+			let (new_current_workflow_id, workflow_ids) = self.pools
+				.udb()?
+				.run(|tx| {
+					async move {
+						let mut workflow_ids = Vec::new();
+
+						let key_end = keys::workflow::DataSubspaceKey::new_with_workflow_id(end_workflow_id);
+						let end = self.subspace.subspace(&key_end).range().1;
+
+						let start = if let Some(current_workflow_id) = current_workflow_id {
+							let key_start = keys::workflow::DataSubspaceKey::new_with_workflow_id(current_workflow_id);
+							let mut bytes = self.subspace.subspace(&key_start).range().0;
+
+							if let Some(b) = bytes.last_mut() {
+								*b = 255;
+							}
+
+							bytes
+						} else {
+							let entire_subspace_key = keys::workflow::DataSubspaceKey::new();
+
+							self.subspace.subspace(&entire_subspace_key).range().0
+						};
+
+						let mut stream = tx.get_ranges_keyvalues(
+							RangeOption {
+								mode: StreamingMode::WantAll,
+								..(start, end).into()
+							},
+							Snapshot,
+						);
+
+						let mut workflows_processed = 0;
+						let mut current_workflow_id = None;
+						let mut name_matches = false;
+						let mut state_matches = true;
+						let mut error_matches = error_like.is_empty();
+
+						let fut = async {
+							while let Some(entry) = stream.try_next().await? {
+								let workflow_id = *self.subspace.unpack::<JustId>(entry.key())?;
+
+								if let Some(curr) = current_workflow_id {
+									if workflow_id != curr {
+										// Save if matches query
+										if name_matches && state_matches && error_matches {
+											workflow_ids.push(curr);
+										}
+
+										workflows_processed += 1;
+
+										// Reset state
+										name_matches = false;
+										state_matches = true;
+										error_matches = error_like.is_empty();
+									}
+								}
+
+								current_workflow_id = Some(workflow_id);
+
+								if let Ok(name_key) =
+									self.subspace.unpack::<keys::workflow::NameKey>(entry.key())
+								{
+									let workflow_name = name_key.deserialize(entry.value())?;
+
+									name_matches = names.iter().any(|name| &workflow_name == name);
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::OutputChunkKey>(entry.key())
+								{
+									state_matches = false;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::WorkerIdKey>(entry.key())
+								{
+									state_matches = false;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::HasWakeConditionKey>(entry.key())
+								{
+									state_matches = false;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::SilenceTsKey>(entry.key())
+								{
+									state_matches = false;
+								} else if let Ok(error_key) = self
+									.subspace
+									.unpack::<keys::workflow::ErrorKey>(entry.key())
+								{
+									let error = error_key.deserialize(entry.value())?.to_lowercase();
+
+									error_matches = error_like.is_empty() || error_like.iter().any(|err| error.contains(err));
+								}
+							}
+
+							if let (Some(workflow_id), true) = (
+								current_workflow_id,
+								name_matches && state_matches && error_matches,
+							) {
+								workflow_ids.push(workflow_id);
+								current_workflow_id = None;
+							}
+
+							if current_workflow_id.is_some() {
+								workflows_processed += 1;
+							}
+
+							anyhow::Ok(())
+						};
+
+						match tokio::time::timeout(EARLY_TXN_TIMEOUT, fut).await {
+							Ok(res) => res?,
+							Err(_) => tracing::debug!("timed out reading workflows"),
+						}
+
+						tracing::info!(?workflows_processed, matching_workflows=?workflow_ids.len(), "batch processed workflows");
+
+						Ok((current_workflow_id, workflow_ids))
+					}
+				})
+				.instrument(tracing::info_span!("find_dead_workflows_tx"))
+				.await?;
+
+			current_workflow_id = new_current_workflow_id;
+			total += workflow_ids.len();
+
+			if !dry_run {
+				self.wake_workflows(workflow_ids).await?;
+			}
+
+			if current_workflow_id.is_none() {
+				tracing::info!("reached end of workflows");
+				break;
+			}
+		}
+
+		Ok(total)
 	}
 }
 

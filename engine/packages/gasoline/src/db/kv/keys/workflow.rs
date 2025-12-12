@@ -1106,11 +1106,19 @@ impl<'de> TupleUnpack<'de> for WorkerIdKey {
 	}
 }
 
-pub struct DataSubspaceKey {}
+pub struct DataSubspaceKey {
+	workflow_id: Option<Id>,
+}
 
 impl DataSubspaceKey {
 	pub fn new() -> Self {
-		DataSubspaceKey {}
+		DataSubspaceKey { workflow_id: None }
+	}
+
+	pub fn new_with_workflow_id(workflow_id: Id) -> Self {
+		DataSubspaceKey {
+			workflow_id: Some(workflow_id),
+		}
 	}
 }
 
@@ -1120,8 +1128,16 @@ impl TuplePack for DataSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
 		let t = (WORKFLOW, DATA);
-		t.pack(w, tuple_depth)
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(workflow_id) = &self.workflow_id {
+			offset += workflow_id.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
 	}
 }
 

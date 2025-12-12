@@ -98,7 +98,6 @@ async fn update_state_and_db(
 			let runner_id = state.runner_id.clone();
 			let namespace_id = state.namespace_id.clone();
 			let runner_name_selector = state.runner_name_selector.clone();
-			let for_serverless = state.for_serverless.clone();
 			let allocated_serverless_slot = state.allocated_serverless_slot.clone();
 			let name = state.name.clone();
 			let create_ts = state.create_ts.clone();
@@ -109,28 +108,15 @@ async fn update_state_and_db(
 
 				tx.write(&keys::actor::DestroyTsKey::new(input.actor_id), destroy_ts)?;
 
-				if let Some(runner_id) = runner_id {
-					clear_slot(
-						input.actor_id,
-						namespace_id,
-						&runner_name_selector,
-						runner_id,
-						for_serverless,
-						&tx,
-					)
-					.await?;
-				} else if allocated_serverless_slot {
-					// Clear the serverless slot even if we do not have a runner id. This happens when the
-					// actor is destroyed while pending allocation
-					tx.atomic_op(
-						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
-							namespace_id,
-							runner_name_selector.clone(),
-						),
-						&(-1i64).to_le_bytes(),
-						MutationType::Add,
-					);
-				}
+				clear_slot(
+					input.actor_id,
+					namespace_id,
+					&runner_name_selector,
+					runner_id,
+					allocated_serverless_slot,
+					&tx,
+				)
+				.await?;
 
 				// Update namespace indexes
 				tx.delete(&keys::ns::ActiveActorKey::new(
@@ -209,84 +195,89 @@ pub(crate) async fn clear_slot(
 	actor_id: Id,
 	namespace_id: Id,
 	runner_name_selector: &str,
-	runner_id: Id,
-	for_serverless: bool,
+	runner_id: Option<Id>,
+	allocated_serverless_slot: bool,
 	tx: &universaldb::Transaction,
 ) -> Result<()> {
 	let tx = tx.with_subspace(keys::subspace());
 
-	tx.delete(&keys::actor::RunnerIdKey::new(actor_id));
+	// Only clear slot if we have a runner id
+	if let Some(runner_id) = runner_id {
+		tx.delete(&keys::actor::RunnerIdKey::new(actor_id));
 
-	// This is cleared when the state changes as well as when the actor is destroyed to ensure
-	// consistency during rescheduling and forced deletion.
-	tx.delete(&keys::runner::ActorKey::new(runner_id, actor_id));
+		// This is cleared when the state changes as well as when the actor is destroyed to ensure
+		// consistency during rescheduling and forced deletion.
+		tx.delete(&keys::runner::ActorKey::new(runner_id, actor_id));
 
-	let runner_workflow_id_key = keys::runner::WorkflowIdKey::new(runner_id);
-	let runner_version_key = keys::runner::VersionKey::new(runner_id);
-	let runner_remaining_slots_key = keys::runner::RemainingSlotsKey::new(runner_id);
-	let runner_total_slots_key = keys::runner::TotalSlotsKey::new(runner_id);
-	let runner_last_ping_ts_key = keys::runner::LastPingTsKey::new(runner_id);
-	let runner_protocol_version_key = keys::runner::ProtocolVersionKey::new(runner_id);
+		let runner_workflow_id_key = keys::runner::WorkflowIdKey::new(runner_id);
+		let runner_version_key = keys::runner::VersionKey::new(runner_id);
+		let runner_remaining_slots_key = keys::runner::RemainingSlotsKey::new(runner_id);
+		let runner_total_slots_key = keys::runner::TotalSlotsKey::new(runner_id);
+		let runner_last_ping_ts_key = keys::runner::LastPingTsKey::new(runner_id);
+		let runner_protocol_version_key = keys::runner::ProtocolVersionKey::new(runner_id);
 
-	let (
-		runner_workflow_id,
-		runner_version,
-		runner_remaining_slots,
-		runner_total_slots,
-		runner_last_ping_ts,
-		runner_protocol_version,
-	) = tokio::try_join!(
-		tx.read(&runner_workflow_id_key, Serializable),
-		tx.read(&runner_version_key, Serializable),
-		tx.read(&runner_remaining_slots_key, Serializable),
-		tx.read(&runner_total_slots_key, Serializable),
-		tx.read(&runner_last_ping_ts_key, Serializable),
-		tx.read_opt(&runner_protocol_version_key, Serializable),
-	)?;
+		let (
+			runner_workflow_id,
+			runner_version,
+			runner_remaining_slots,
+			runner_total_slots,
+			runner_last_ping_ts,
+			runner_protocol_version,
+		) = tokio::try_join!(
+			tx.read(&runner_workflow_id_key, Serializable),
+			tx.read(&runner_version_key, Serializable),
+			tx.read(&runner_remaining_slots_key, Serializable),
+			tx.read(&runner_total_slots_key, Serializable),
+			tx.read(&runner_last_ping_ts_key, Serializable),
+			tx.read_opt(&runner_protocol_version_key, Serializable),
+		)?;
 
-	let old_runner_remaining_millislots = (runner_remaining_slots * 1000) / runner_total_slots;
-	let new_runner_remaining_slots = runner_remaining_slots + 1;
+		let old_runner_remaining_millislots = (runner_remaining_slots * 1000) / runner_total_slots;
+		let new_runner_remaining_slots = runner_remaining_slots + 1;
 
-	// Write new remaining slots
-	tx.write(&runner_remaining_slots_key, new_runner_remaining_slots)?;
+		// Write new remaining slots
+		tx.write(&runner_remaining_slots_key, new_runner_remaining_slots)?;
 
-	let old_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
-		namespace_id,
-		runner_name_selector.to_string(),
-		runner_version,
-		old_runner_remaining_millislots,
-		runner_last_ping_ts,
-		runner_id,
-	);
-
-	// Only update allocation idx if it existed before
-	if tx.exists(&old_runner_alloc_key, Serializable).await? {
-		// Clear old key
-		tx.delete(&old_runner_alloc_key);
-
-		let new_remaining_millislots = (new_runner_remaining_slots * 1000) / runner_total_slots;
-		let new_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
+		let old_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
 			namespace_id,
 			runner_name_selector.to_string(),
 			runner_version,
-			new_remaining_millislots,
+			old_runner_remaining_millislots,
 			runner_last_ping_ts,
 			runner_id,
 		);
 
-		tx.write(
-			&new_runner_alloc_key,
-			rivet_data::converted::RunnerAllocIdxKeyData {
-				workflow_id: runner_workflow_id,
-				remaining_slots: new_runner_remaining_slots,
-				total_slots: runner_total_slots,
-				// We default here because its not important for mk1 protocol runners
-				protocol_version: runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION),
-			},
-		)?;
+		// Only update allocation idx if it existed before
+		if tx.exists(&old_runner_alloc_key, Serializable).await? {
+			// Clear old key
+			tx.delete(&old_runner_alloc_key);
+
+			let new_remaining_millislots = (new_runner_remaining_slots * 1000) / runner_total_slots;
+			let new_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
+				namespace_id,
+				runner_name_selector.to_string(),
+				runner_version,
+				new_remaining_millislots,
+				runner_last_ping_ts,
+				runner_id,
+			);
+
+			tx.write(
+				&new_runner_alloc_key,
+				rivet_data::converted::RunnerAllocIdxKeyData {
+					workflow_id: runner_workflow_id,
+					remaining_slots: new_runner_remaining_slots,
+					total_slots: runner_total_slots,
+					// We default here because its not important for mk1 protocol runners
+					protocol_version: runner_protocol_version.unwrap_or(PROTOCOL_MK1_VERSION),
+				},
+			)?;
+		}
 	}
 
-	if for_serverless {
+	if allocated_serverless_slot {
+		// Clear the serverless slot even if we do not have a runner id. This happens when the
+		// actor is destroyed while pending allocation
 		tx.atomic_op(
 			&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 				namespace_id,

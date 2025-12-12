@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
@@ -14,6 +16,7 @@ use crate::{keys, metrics, workflows::actor::Allocate};
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 500;
+const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -965,6 +968,7 @@ pub(crate) async fn allocate_pending_actors(
 	let (allocations, pending_actor_count) = ctx
 		.udb()?
 		.run(|tx| async move {
+			let start = Instant::now();
 			let tx = tx.with_subspace(keys::subspace());
 			let mut allocations = Vec::new();
 
@@ -987,6 +991,11 @@ pub(crate) async fn allocate_pending_actors(
 			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
 			'queue_loop: loop {
+				if start.elapsed() > EARLY_TXN_TIMEOUT {
+					tracing::warn!("timed out processing pending actors queue");
+					break;
+				}
+
 				let Some(queue_entry) = queue_stream.try_next().await? else {
 					break;
 				};
@@ -1013,6 +1022,11 @@ pub(crate) async fn allocate_pending_actors(
 				let mut highest_version = None;
 
 				loop {
+					if start.elapsed() > EARLY_TXN_TIMEOUT {
+						tracing::warn!("timed out processing pending actors queue");
+						break 'queue_loop;
+					}
+
 					let Some(entry) = stream.try_next().await? else {
 						break;
 					};

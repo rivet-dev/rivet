@@ -55,8 +55,9 @@ impl TestCtx {
 		let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())
 			.expect("failed to create cache");
 
-		let db = db::DatabaseKv::from_pools(pools.clone()).await?;
-		let debug_db = db::DatabaseKv::from_pools(pools.clone()).await? as Arc<dyn DatabaseDebug>;
+		let db = db::DatabaseKv::new(config.clone(), pools.clone()).await?;
+		let debug_db =
+			db::DatabaseKv::new(config.clone(), pools.clone()).await? as Arc<dyn DatabaseDebug>;
 
 		let service_name = format!("{}-test--{}", rivet_env::service_name(), "gasoline_test");
 		let ray_id = Id::new_v1(config.dc_label());

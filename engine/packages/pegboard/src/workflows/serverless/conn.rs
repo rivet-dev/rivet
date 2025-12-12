@@ -162,7 +162,20 @@ async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<Out
 	loop {
 		match outbound_req_inner(ctx, input, &mut term_signal, &mut drain_sub).await {
 			// If the outbound req exited successfully, continue with no backoff
-			Ok(OutboundReqOutput::Continue) => {}
+			Ok(OutboundReqOutput::Continue) => {
+				if let Err(err) = ctx
+					.signal(runner_pool::Bump {})
+					// This is ok because bumps are not stateful
+					.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
+					.to_workflow_id(input.pool_wf_id)
+					.send()
+					.await
+				{
+					tracing::debug!(?err, "failed to send bump signal");
+
+					return Ok(OutboundReqOutput::Draining { drain_sent: false });
+				}
+			}
 			Ok(OutboundReqOutput::Draining { drain_sent }) => {
 				return Ok(OutboundReqOutput::Draining { drain_sent });
 			}
@@ -279,8 +292,6 @@ async fn outbound_req_inner(
 			match event {
 				Ok(sse::Event::Open) => {}
 				Ok(sse::Event::Message(msg)) => {
-					tracing::debug!(%msg.data, "received outbound req message");
-
 					if runner_id.is_none() {
 						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
 						let payload =
@@ -396,8 +407,6 @@ async fn finish_non_critical_draining(
 			match event {
 				Ok(sse::Event::Open) => {}
 				Ok(sse::Event::Message(msg)) => {
-					tracing::debug!(%msg.data, ?runner_id, "received outbound req message");
-
 					// If runner_id is none at this point it means we did not send the stopping signal yet, so
 					// send it now
 					if runner_id.is_none() {
@@ -457,7 +466,7 @@ async fn drain_runner(ctx: &ActivityCtx, runner_id: Id) -> Result<()> {
 		})
 		// This is ok, because runner_id changes every retry of outbound_req
 		.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
-		.to_workflow::<crate::workflows::runner::Workflow>()
+		.to_workflow::<crate::workflows::runner2::Workflow>()
 		.tag("runner_id", runner_id)
 		.graceful_not_found()
 		.send()

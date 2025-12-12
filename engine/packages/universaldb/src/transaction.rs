@@ -1,4 +1,4 @@
-use std::{future::Future, ops::Deref, pin::Pin, sync::Arc};
+use std::{future::Future, ops::Deref, pin::Pin, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 
@@ -14,6 +14,8 @@ use crate::{
 	},
 	value::{Slice, Value, Values},
 };
+
+pub const TXN_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct Transaction {
