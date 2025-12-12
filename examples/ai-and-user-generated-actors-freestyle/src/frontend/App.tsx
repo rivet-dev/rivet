@@ -29,7 +29,7 @@ export function App() {
 	const [dashboardUrl, setDashboardUrl] = useState<string | null>(null);
 	const [freestyleUrl, setFreestyleUrl] = useState<string | null>(null);
 
-	const handleEditorMount: OnMount = (editor, monaco) => {
+	const handleEditorMount: OnMount = (_editor, monaco) => {
 		// Disable TypeScript diagnostics since template code isn't valid standalone
 		monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
 			noSemanticValidation: true,
