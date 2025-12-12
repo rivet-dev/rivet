@@ -23,7 +23,7 @@ pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 pub struct ActorPathInfo {
 	pub actor_id: String,
 	pub token: Option<String>,
-	pub remaining_path: String,
+	pub stripped_path: String,
 }
 
 /// Creates the main routing function that handles all incoming requests
@@ -62,7 +62,8 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 							&shared_state,
 							&actor_path_info.actor_id,
 							actor_path_info.token.as_deref(),
-							&actor_path_info.remaining_path,
+							path,
+							&actor_path_info.stripped_path,
 							headers,
 							is_websocket,
 						)
@@ -240,6 +241,6 @@ pub fn parse_actor_path(path: &str) -> Option<ActorPathInfo> {
 	Some(ActorPathInfo {
 		actor_id,
 		token,
-		remaining_path,
+		stripped_path: remaining_path,
 	})
 }
