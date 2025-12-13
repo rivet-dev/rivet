@@ -109,7 +109,7 @@ export default async function Page({ params }: Props) {
 	vercelDeployUrl.searchParams.set('demo-url', `https://www.rivet.dev/templates/${template.name}`);
 
 	return (
-		<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-white/20 selection:text-white">
+		<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
 			{/* Header with Image */}
 			<div className={`relative w-full pb-12 ${template.noFrontend ? 'pt-48' : 'pt-24'}`}>
 				<div className="mx-auto max-w-7xl px-6">
