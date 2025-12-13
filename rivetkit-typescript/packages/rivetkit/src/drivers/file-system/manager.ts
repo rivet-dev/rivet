@@ -315,6 +315,10 @@ export class FileSystemManagerDriver implements ManagerDriver {
 					name: actor.name,
 					key: actor.key as string[],
 					createTs: Number(actor.createdAt),
+					startTs: actor.startTs !== null ? Number(actor.startTs) : null,
+					connectableTs: actor.connectableTs !== null ? Number(actor.connectableTs) : null,
+					sleepTs: actor.sleepTs !== null ? Number(actor.sleepTs) : null,
+					destroyTs: actor.destroyTs !== null ? Number(actor.destroyTs) : null,
 				});
 			}
 		}
