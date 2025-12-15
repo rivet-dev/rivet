@@ -55,8 +55,8 @@ importers:
   engine:
     dependencies:
       '@vbare/compiler':
-        specifier: ^0.0.3
-        version: 0.0.3(@bare-ts/lib@0.4.0)
+        specifier: ^0.0.4
+        version: 0.0.4(@bare-ts/lib@0.4.0)
 
   engine/docker/template:
     dependencies:
@@ -2333,6 +2333,9 @@ importers:
       uuid:
         specifier: ^12.0.0
         version: 12.0.0
+      vbare:
+        specifier: ^0.0.4
+        version: 0.0.4
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -7696,8 +7699,8 @@ packages:
     peerDependencies:
       '@urql/core': ^5.0.0
 
-  '@vbare/compiler@0.0.3':
-    resolution: {integrity: sha512-Dhz0iwYjIhyGAPsNpiqDmDqgwLXfEonjFJLVQ0m/s4Tt9CsTjY0WV3KiQtJi5BdPt9481HR+0uwExH36FuuR2A==}
+  '@vbare/compiler@0.0.4':
+    resolution: {integrity: sha512-nYCMTwkTLG3HnN4YxBTQbMWV9EI57Mr0k5P7a9RDtYyziaEV+0wxism1yntmei/KwN2QjqyT9VopNmlkM2LSgQ==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -14081,6 +14084,10 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
+  vbare@0.0.4:
+    resolution: {integrity: sha512-QsxSVw76NqYUWYPVcQmOnQPX8buIVjgn+yqldTHlWISulBTB9TJ9rnzZceDu+GZmycOtzsmuPbPN1YNxvK12fg==}
+    engines: {node: '>=18.0.0'}
+
   vfile-location@5.0.3:
     resolution: {integrity: sha512-5yXvWDEgqeiYiBe1lbxYF7UMAIm/IcopxMHrMQDq3nvKcjPKIhZklUKL+AE7J7uApI4kwe2snsK+eI6UTj9EHg==}
 
@@ -20272,7 +20279,7 @@ snapshots:
       '@urql/core': 5.2.0
       wonka: 6.3.5
 
-  '@vbare/compiler@0.0.3(@bare-ts/lib@0.4.0)':
+  '@vbare/compiler@0.0.4(@bare-ts/lib@0.4.0)':
     dependencies:
       '@bare-ts/tools': 0.16.1(@bare-ts/lib@0.4.0)
       commander: 11.1.0
@@ -28473,6 +28480,8 @@ snapshots:
   validator@13.15.15: {}
 
   vary@1.1.2: {}
+
+  vbare@0.0.4: {}
 
   vfile-location@5.0.3:
     dependencies:
