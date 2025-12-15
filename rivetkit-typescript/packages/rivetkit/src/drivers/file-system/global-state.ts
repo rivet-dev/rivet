@@ -263,6 +263,10 @@ export class FileSystemGlobalState {
 			key,
 			createdAt: BigInt(Date.now()),
 			kvStorage,
+			startTs: null,
+			connectableTs: null,
+			sleepTs: null,
+			destroyTs: null,
 		};
 		entry.lifecycleState = ActorLifecycleState.AWAKE;
 
@@ -369,6 +373,10 @@ export class FileSystemGlobalState {
 				key: key as readonly string[],
 				createdAt: BigInt(Date.now()),
 				kvStorage,
+				startTs: null,
+				connectableTs: null,
+				sleepTs: null,
+				destroyTs: null,
 			};
 			await this.writeActor(actorId, entry.generation, entry.state);
 		}
@@ -396,6 +404,15 @@ export class FileSystemGlobalState {
 		if (actor.startPromise?.promise)
 			await actor.startPromise.promise.catch();
 
+		// Update state with sleep timestamp
+		if (actor.state) {
+			actor.state = {
+				...actor.state,
+				sleepTs: BigInt(Date.now()),
+			};
+			await this.writeActor(actorId, actor.generation, actor.state);
+		}
+
 		// Stop actor
 		invariant(actor.actor, "actor should be loaded");
 		await actor.actor.onStop("sleep");
@@ -419,6 +436,15 @@ export class FileSystemGlobalState {
 		if (actor.loadPromise) await actor.loadPromise.catch();
 		if (actor.startPromise?.promise)
 			await actor.startPromise.promise.catch();
+
+		// Update state with destroy timestamp
+		if (actor.state) {
+			actor.state = {
+				...actor.state,
+				destroyTs: BigInt(Date.now()),
+			};
+			await this.writeActor(actorId, actor.generation, actor.state);
+		}
 
 		// Stop actor if it's running
 		if (actor.actor) {
@@ -621,6 +647,10 @@ export class FileSystemGlobalState {
 				key: state.key,
 				createdAt: state.createdAt,
 				kvStorage: state.kvStorage,
+				startTs: state.startTs,
+				connectableTs: state.connectableTs,
+				sleepTs: state.sleepTs,
+				destroyTs: state.destroyTs,
 			};
 
 			// Perform atomic write
@@ -737,6 +767,16 @@ export class FileSystemGlobalState {
 				entry.state.key as string[],
 				"unknown",
 			);
+
+			// Update state with start timestamp
+			// NOTE: connectableTs is always in sync with startTs since actors become connectable immediately after starting
+			const now = BigInt(Date.now());
+			entry.state = {
+				...entry.state,
+				startTs: now,
+				connectableTs: now,
+			};
+			await this.writeActor(actorId, entry.generation, entry.state);
 
 			// Finish
 			entry.startPromise.resolve();
