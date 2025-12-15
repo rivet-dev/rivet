@@ -731,9 +731,9 @@ function createApiActor(
 		namespace_id: "default", // Assert default namespace
 		runner_name_selector: runnerName,
 		create_ts: actor.createTs ?? Date.now(),
-		connectable_ts: null,
-		destroy_ts: null,
-		sleep_ts: null,
-		start_ts: null,
+		connectable_ts: actor.connectableTs ?? null,
+		destroy_ts: actor.destroyTs ?? null,
+		sleep_ts: actor.sleepTs ?? null,
+		start_ts: actor.startTs ?? null,
 	};
 }

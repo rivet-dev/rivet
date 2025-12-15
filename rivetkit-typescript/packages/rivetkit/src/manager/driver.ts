@@ -105,4 +105,8 @@ export interface ActorOutput {
 	name: string;
 	key: ActorKey;
 	createTs?: number;
+	startTs?: number | null;
+	connectableTs?: number | null;
+	sleepTs?: number | null;
+	destroyTs?: number | null;
 }
