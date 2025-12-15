@@ -2039,13 +2039,13 @@ impl ProxyService {
 										|| !is_retryable_ws_error(&err)
 									{
 										tracing::debug!(
+											?err,
 											?attempts,
 											?max_attempts,
-											"WebSocket failed"
+											"websocket failed"
 										);
 
 										// Close WebSocket with error
-										tracing::warn!(?err, "closing websocket with error");
 										ws_handle
 											.send(to_hyper_close(Some(err_to_close_frame(
 												err, ray_id,
@@ -2342,6 +2342,17 @@ impl ProxyService {
 											"failed sending websocket error proxy"
 										);
 									}
+
+									// Flush to ensure close frame is sent
+									if let Err(err) = ws_handle.flush().await {
+										tracing::debug!(
+											?err,
+											"failed flushing websocket in error proxy"
+										);
+									}
+
+									// Keep TCP connection open briefly to allow client to process close
+									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 								}
 								.instrument(
 									tracing::info_span!("ws_error_proxy_task", ?request_ids.ray_id),
