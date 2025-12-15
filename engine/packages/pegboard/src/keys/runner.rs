@@ -865,13 +865,15 @@ impl<'de> TupleUnpack<'de> for MetadataChunkKey {
 pub struct ActorLastCommandIdxKey {
 	runner_id: Id,
 	actor_id: Id,
+	generation: u32,
 }
 
 impl ActorLastCommandIdxKey {
-	pub fn new(runner_id: Id, actor_id: Id) -> Self {
+	pub fn new(runner_id: Id, actor_id: Id, generation: u32) -> Self {
 		ActorLastCommandIdxKey {
 			runner_id,
 			actor_id,
+			generation,
 		}
 	}
 }
@@ -902,6 +904,7 @@ impl TuplePack for ActorLastCommandIdxKey {
 			ACTOR,
 			LAST_COMMAND_IDX,
 			self.actor_id,
+			self.generation,
 		);
 		t.pack(w, tuple_depth)
 	}
@@ -909,11 +912,12 @@ impl TuplePack for ActorLastCommandIdxKey {
 
 impl<'de> TupleUnpack<'de> for ActorLastCommandIdxKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, runner_id, _, _, actor_id)) =
-			<(usize, usize, Id, usize, usize, Id)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, runner_id, _, _, actor_id, generation)) =
+			<(usize, usize, Id, usize, usize, Id, u32)>::unpack(input, tuple_depth)?;
 		let v = ActorLastCommandIdxKey {
 			runner_id,
 			actor_id,
+			generation,
 		};
 
 		Ok((input, v))
@@ -924,14 +928,16 @@ impl<'de> TupleUnpack<'de> for ActorLastCommandIdxKey {
 pub struct ActorCommandKey {
 	pub runner_id: Id,
 	pub actor_id: Id,
+	pub generation: u32,
 	pub index: i64,
 }
 
 impl ActorCommandKey {
-	pub fn new(runner_id: Id, actor_id: Id, index: i64) -> Self {
+	pub fn new(runner_id: Id, actor_id: Id, generation: u32, index: i64) -> Self {
 		ActorCommandKey {
 			runner_id,
 			actor_id,
+			generation,
 			index,
 		}
 	}
@@ -940,12 +946,21 @@ impl ActorCommandKey {
 		ActorCommandSubspaceKey::new(runner_id)
 	}
 
-	pub fn subspace_with_actor(runner_id: Id, actor_id: Id) -> ActorCommandSubspaceKey {
-		ActorCommandSubspaceKey::new_with_actor(runner_id, actor_id)
+	pub fn subspace_with_actor(
+		runner_id: Id,
+		actor_id: Id,
+		generation: u32,
+	) -> ActorCommandSubspaceKey {
+		ActorCommandSubspaceKey::new_with_actor(runner_id, actor_id, generation)
 	}
 
-	pub fn subspace_with_index(runner_id: Id, actor_id: Id, index: i64) -> ActorCommandSubspaceKey {
-		ActorCommandSubspaceKey::new_with_index(runner_id, actor_id, index)
+	pub fn subspace_with_index(
+		runner_id: Id,
+		actor_id: Id,
+		generation: u32,
+		index: i64,
+	) -> ActorCommandSubspaceKey {
+		ActorCommandSubspaceKey::new_with_index(runner_id, actor_id, generation, index)
 	}
 }
 
@@ -977,6 +992,7 @@ impl TuplePack for ActorCommandKey {
 			ACTOR,
 			COMMAND,
 			self.actor_id,
+			self.generation,
 			self.index,
 		);
 		t.pack(w, tuple_depth)
@@ -985,11 +1001,12 @@ impl TuplePack for ActorCommandKey {
 
 impl<'de> TupleUnpack<'de> for ActorCommandKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, runner_id, _, _, actor_id, index)) =
-			<(usize, usize, Id, usize, usize, Id, i64)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, runner_id, _, _, actor_id, generation, index)) =
+			<(usize, usize, Id, usize, usize, Id, u32, i64)>::unpack(input, tuple_depth)?;
 		let v = ActorCommandKey {
 			runner_id,
 			actor_id,
+			generation,
 			index,
 		};
 
@@ -1000,6 +1017,7 @@ impl<'de> TupleUnpack<'de> for ActorCommandKey {
 pub struct ActorCommandSubspaceKey {
 	runner_id: Id,
 	actor_id: Option<Id>,
+	generation: Option<u32>,
 	index: Option<i64>,
 }
 
@@ -1008,22 +1026,25 @@ impl ActorCommandSubspaceKey {
 		ActorCommandSubspaceKey {
 			runner_id,
 			actor_id: None,
+			generation: None,
 			index: None,
 		}
 	}
 
-	pub fn new_with_actor(runner_id: Id, actor_id: Id) -> Self {
+	pub fn new_with_actor(runner_id: Id, actor_id: Id, generation: u32) -> Self {
 		ActorCommandSubspaceKey {
 			runner_id,
 			actor_id: Some(actor_id),
+			generation: Some(generation),
 			index: None,
 		}
 	}
 
-	pub fn new_with_index(runner_id: Id, actor_id: Id, index: i64) -> Self {
+	pub fn new_with_index(runner_id: Id, actor_id: Id, generation: u32, index: i64) -> Self {
 		ActorCommandSubspaceKey {
 			runner_id,
 			actor_id: Some(actor_id),
+			generation: Some(generation),
 			index: Some(index),
 		}
 	}
@@ -1043,8 +1064,12 @@ impl TuplePack for ActorCommandSubspaceKey {
 		if let Some(actor_id) = &self.actor_id {
 			offset += actor_id.pack(w, tuple_depth)?;
 
-			if let Some(index) = &self.index {
-				offset += index.pack(w, tuple_depth)?;
+			if let Some(v) = &self.generation {
+				offset += v.pack(w, tuple_depth)?;
+
+				if let Some(index) = &self.index {
+					offset += index.pack(w, tuple_depth)?;
+				}
 			}
 		}
 
