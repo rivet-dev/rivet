@@ -18,23 +18,26 @@ pub struct Input {
 // reads
 #[workflow]
 pub async fn epoxy_purger(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
-	ctx.repeat(|ctx| {
-		let replica_id = input.replica_id;
+	ctx.lupe()
+		// Txn sizes can quickly get large in this workflow, need to commit loop more often
+		.commit_interval(1)
+		.run(|ctx, _| {
+			let replica_id = input.replica_id;
 
-		async move {
-			let signals = ctx.listen_n::<Purge>(1024).await?;
+			async move {
+				let signals = ctx.listen_n::<Purge>(256).await?;
 
-			ctx.activity(PurgeInput {
-				replica_id,
-				keys: signals.into_iter().flat_map(|sig| sig.keys).collect(),
-			})
-			.await?;
+				ctx.activity(PurgeInput {
+					replica_id,
+					keys: signals.into_iter().flat_map(|sig| sig.keys).collect(),
+				})
+				.await?;
 
-			Ok(Loop::<()>::Continue)
-		}
-		.boxed()
-	})
-	.await?;
+				Ok(Loop::<()>::Continue)
+			}
+			.boxed()
+		})
+		.await?;
 
 	Ok(())
 }
