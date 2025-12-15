@@ -26,7 +26,7 @@ use crate::{
 		History,
 		cursor::{Cursor, HistoryResult},
 		event::SleepState,
-		location::{Coordinate, Location},
+		location::Location,
 		removed::Removed,
 	},
 	listen::Listen,
@@ -42,8 +42,6 @@ use crate::{
 const DB_ACTION_RETRY: Duration = Duration::from_millis(150);
 /// Most db action retries
 const MAX_DB_ACTION_RETRIES: usize = 5;
-/// How often to commit loop event data to db and mark previous loop history to forgotten
-const LOOP_ITERS_PER_COMMIT: usize = 20;
 
 // NOTE: Cloneable because of inner arcs
 #[derive(Clone)]
@@ -794,8 +792,7 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
-		self.loop_inner((), |ctx, _| cb(ctx))
-			.in_current_span()
+		builder::lupe::LoopBuilder::run(builder::lupe::LoopBuilder::new(self, ()), |ctx, _| cb(ctx))
 			.await
 	}
 
@@ -807,232 +804,11 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx, &'a mut S) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
-		self.loop_inner(state, cb).in_current_span().await
+		builder::lupe::LoopBuilder::new(self, state).run(cb).await
 	}
 
-	async fn loop_inner<S, F, T>(&mut self, state: S, mut cb: F) -> Result<T>
-	where
-		S: Serialize + DeserializeOwned,
-		F: for<'a> FnMut(&'a mut WorkflowCtx, &'a mut S) -> AsyncResult<'a, Loop<T>>,
-		T: Serialize + DeserializeOwned,
-	{
-		self.check_stop()?;
-
-		let history_res = self.cursor.compare_loop(self.version)?;
-		let loop_location = self.cursor.current_location_for(&history_res);
-
-		// Loop existed before
-		let (mut iteration, mut state, output, mut loop_event_init_fut) =
-			if let HistoryResult::Event(loop_event) = history_res {
-				let state = loop_event.parse_state()?;
-				let output = loop_event.parse_output()?;
-
-				(loop_event.iteration, state, output, None)
-			} else {
-				let state_val = serde_json::value::to_raw_value(&state)
-					.map_err(WorkflowError::SerializeLoopOutput)?;
-
-				// Clone data to move into future
-				let loop_location = loop_location.clone();
-				let db2 = self.db.clone();
-				let workflow_id = self.workflow_id;
-				let name = self.name.clone();
-				let version = self.version;
-				let nested_loop_location = self.loop_location().cloned();
-
-				// This future is deferred until later for parallelization
-				let loop_event_init_fut = async move {
-					db2.upsert_workflow_loop_event(
-						workflow_id,
-						&name,
-						&loop_location,
-						version,
-						0,
-						&state_val,
-						None,
-						nested_loop_location.as_ref(),
-					)
-					.await
-				};
-
-				(0, state, None, Some(loop_event_init_fut))
-			};
-
-		// Create a branch for the loop event
-		let mut loop_branch =
-			self.branch_inner(self.input.clone(), self.version, loop_location.clone());
-
-		// Loop complete
-		let output = if let Some(output) = output {
-			tracing::debug!("replaying loop output");
-
-			output
-		}
-		// Run loop
-		else {
-			tracing::debug!("running loop");
-
-			// Used to defer loop upsertion for parallelization
-			let mut loop_event_upsert_fut = None;
-
-			loop {
-				self.check_stop()?;
-
-				let start_instant = Instant::now();
-
-				// Create a new branch for each iteration of the loop at location {...loop location, iteration idx}
-				let mut iteration_branch = loop_branch.branch_inner(
-					self.input.clone(),
-					self.version,
-					loop_branch
-						.cursor
-						.root()
-						.join(Coordinate::simple(iteration + 1)),
-				);
-				let iteration_branch_root = iteration_branch.cursor.root().clone();
-
-				// Set branch loop location to the current loop
-				iteration_branch.loop_location = Some(loop_location.clone());
-
-				let i = iteration;
-
-				// Async block for instrumentation purposes
-				let (dt2, res) = async {
-					let start_instant2 = Instant::now();
-					let db2 = self.db.clone();
-
-					// NOTE: Great care has been taken to optimize this function. This join allows multiple
-					// txns to run simultaneously instead of in series but is hard to read.
-					//
-					// 1. First (but not necessarily chronologically first because its parallelized), we
-					//    commit the loop event. This only happens on the first iteration of the loop
-					// 2. Second, we commit the branch event for the current iteration
-					// 3. Third, we run the user's loop code
-					// 4. Last, if we have to upsert the loop event, we save the future and process it in the
-					//    next iteration of the loop as part of this join
-					let (loop_event_commit_res, loop_event_upsert_res, branch_commit_res, loop_res) = tokio::join!(
-						async {
-							if let Some(loop_event_init_fut) = loop_event_init_fut.take() {
-								loop_event_init_fut.await
-							} else {
-								Ok(())
-							}
-						},
-						async {
-							if let Some(loop_event_upsert_fut) = loop_event_upsert_fut.take() {
-								loop_event_upsert_fut.await
-							} else {
-								Ok(())
-							}
-						},
-						async {
-							// Insert event if iteration is not a replay
-							if !loop_branch.cursor.compare_loop_branch(iteration)? {
-								db2.commit_workflow_branch_event(
-									self.workflow_id,
-									&iteration_branch_root,
-									self.version,
-									Some(&loop_location),
-								)
-								.await
-							} else {
-								Ok(())
-							}
-						},
-						cb(&mut iteration_branch, &mut state),
-					);
-
-					loop_event_commit_res?;
-					loop_event_upsert_res?;
-					branch_commit_res?;
-
-					// Run loop
-					match loop_res? {
-						Loop::Continue => {
-							let dt2 = start_instant2.elapsed().as_secs_f64();
-							iteration += 1;
-
-							// Commit workflow state to db
-							if iteration % LOOP_ITERS_PER_COMMIT == 0 {
-								let state_val = serde_json::value::to_raw_value(&state)
-									.map_err(WorkflowError::SerializeLoopOutput)?;
-
-								// Clone data to move into future
-								let loop_location = loop_location.clone();
-								let db2 = self.db.clone();
-								let workflow_id = self.workflow_id;
-								let name = self.name.clone();
-								let version = self.version;
-								let nested_loop_location = self.loop_location().cloned();
-
-								// Defer upsertion to next iteration so it runs in parallel
-								loop_event_upsert_fut = Some(async move {
-									db2.upsert_workflow_loop_event(
-										workflow_id,
-										&name,
-										&loop_location,
-										version,
-										iteration,
-										&state_val,
-										None,
-										nested_loop_location.as_ref(),
-									)
-									.await
-								});
-							}
-
-							anyhow::Ok((dt2, None))
-						}
-						Loop::Break(res) => {
-							let dt2 = start_instant2.elapsed().as_secs_f64();
-							iteration += 1;
-
-							let state_val = serde_json::value::to_raw_value(&state)
-								.map_err(WorkflowError::SerializeLoopOutput)?;
-							let output_val = serde_json::value::to_raw_value(&res)
-								.map_err(WorkflowError::SerializeLoopOutput)?;
-
-							// Commit loop output and final state to db. Note that we don't defer this because
-							// there will be no more loop iterations afterwards.
-							self.db
-								.upsert_workflow_loop_event(
-									self.workflow_id,
-									&self.name,
-									&loop_location,
-									self.version,
-									iteration,
-									&state_val,
-									Some(&output_val),
-									self.loop_location(),
-								)
-								.await?;
-
-							Ok((dt2, Some(res)))
-						}
-					}
-				}
-				.instrument(tracing::info_span!("iteration", iteration=%i))
-				.await?;
-
-				// Validate no leftover events
-				iteration_branch.cursor.check_clear()?;
-
-				let dt = start_instant.elapsed().as_secs_f64();
-				metrics::LOOP_ITERATION_DURATION.record(
-					dt - dt2,
-					&[KeyValue::new("workflow_name", self.name.clone())],
-				);
-
-				if let Some(res) = res {
-					break res;
-				}
-			}
-		};
-
-		// Move to next event
-		self.cursor.update(&loop_location);
-
-		Ok(output)
+	pub fn lupe(&mut self) -> builder::lupe::LoopBuilder<'_, ()> {
+		builder::lupe::LoopBuilder::new(self, ())
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -1437,6 +1213,10 @@ impl WorkflowCtx {
 
 	pub(crate) fn loop_location(&self) -> Option<&Location> {
 		self.loop_location.as_ref()
+	}
+
+	pub(crate) fn set_loop_location(&mut self, loop_location: Location) {
+		self.loop_location = Some(loop_location);
 	}
 
 	pub(crate) fn db(&self) -> &DatabaseHandle {

@@ -870,6 +870,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("dispatch_workflow_tx"))
 			.await
+			.context("failed to dispatch workflow")
 			.map_err(WorkflowError::Udb)?;
 
 		self.bump(BumpSubSubject::Worker);
@@ -971,6 +972,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("get_workflow_tx"))
 			.await
+			.context("failed to get workflows")
 			.map_err(WorkflowError::Udb)
 	}
 
@@ -992,6 +994,7 @@ impl Database for DatabaseKv {
 			.run(|tx| async move { self.find_workflow_inner(workflow_name, tags, &tx).await })
 			.custom_instrument(tracing::info_span!("find_workflow_tx"))
 			.await
+			.context("failed to find workflow")
 			.map_err(WorkflowError::Udb)?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -1840,6 +1843,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("complete_workflows_tx"))
 			.await
+			.context("failed to complete workflow")
 			.map_err(WorkflowError::Udb)?;
 
 		// Wake worker again in case some other workflow was waiting for this one to complete
@@ -1994,6 +1998,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_tx"))
 			.await
+			.context("failed to commit workflow")
 			.map_err(WorkflowError::Udb)?;
 
 		// Always wake the worker immediately again. This is an IMPORTANT implementation detail to prevent
@@ -2202,6 +2207,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("pull_next_signals_tx"))
 			.await
+			.context("failed to pull signals")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(signals)
@@ -2301,6 +2307,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("get_sub_workflow_tx"))
 			.await
+			.context("failed to get sub workflow")
 			.map_err(WorkflowError::Udb)
 	}
 
@@ -2322,6 +2329,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("publish_signal_tx"))
 			.await
+			.context("failed to publish signal")
 			.map_err(WorkflowError::Udb)?;
 
 		self.bump(BumpSubSubject::SignalPublish {
@@ -2377,6 +2385,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("publish_signal_from_workflow_tx"))
 			.await
+			.context("failed to publish signal from workflow")
 			.map_err(WorkflowError::Udb)?;
 
 		self.bump(BumpSubSubject::SignalPublish { to_workflow_id });
@@ -2434,6 +2443,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("dispatch_sub_workflow_tx"))
 			.await
+			.context("failed to dispatch sub workflow")
 			.map_err(WorkflowError::Udb)?;
 
 		self.bump(BumpSubSubject::Worker);
@@ -2523,6 +2533,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("update_workflow_tags_tx"))
 			.await
+			.context("failed to update workflow tags")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2557,6 +2568,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("update_workflow_state_tx"))
 			.await
+			.context("failed to update workflow state")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2594,6 +2606,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_activity_event_tx"))
 			.await
+			.context("failed to commit activity event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2630,6 +2643,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_message_send_event_tx"))
 			.await
+			.context("failed to commit message send event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2769,6 +2783,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("upsert_loop_event_tx"))
 			.await
+			.context("failed to upsert loop event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2802,6 +2817,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_sleep_event_tx"))
 			.await
+			.context("failed to commit sleep event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2830,6 +2846,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("update_workflow_sleep_state_tx"))
 			.await
+			.context("failed to update sleep state")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2860,6 +2877,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_branch_event_tx"))
 			.await
+			.context("failed to commit branch event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2893,6 +2911,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_removed_event_tx"))
 			.await
+			.context("failed to commit removed event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
@@ -2925,6 +2944,7 @@ impl Database for DatabaseKv {
 				"commit_workflow_version_check_event_tx"
 			))
 			.await
+			.context("failed to commit version check event")
 			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
