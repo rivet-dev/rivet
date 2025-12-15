@@ -115,7 +115,7 @@ export function stringifyToClientTunnelMessageKind(
 export function stringifyCommand(command: protocol.Command): string {
 	switch (command.tag) {
 		case "CommandStartActor": {
-			const { generation, config, hibernatingRequests } =
+			const { config, hibernatingRequests } =
 				command.val;
 			const keyStr = config.key === null ? "null" : `"${config.key}"`;
 			const inputStr =
@@ -126,11 +126,10 @@ export function stringifyCommand(command: protocol.Command): string {
 				hibernatingRequests.length > 0
 					? `[${hibernatingRequests.map((hr) => `{gatewayId: ${idToStr(hr.gatewayId)}, requestId: ${idToStr(hr.requestId)}}`).join(", ")}]`
 					: "[]";
-			return `CommandStartActor{generation: ${generation}, config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}}`;
+			return `CommandStartActor{config: {name: "${config.name}", key: ${keyStr}, createTs: ${stringifyBigInt(config.createTs)}, input: ${inputStr}}, hibernatingRequests: ${hibernatingRequestsStr}}`;
 		}
 		case "CommandStopActor": {
-			const { generation } = command.val;
-			return `CommandStopActor{generation: ${generation}}`;
+			return `CommandStopActor`;
 		}
 	}
 }
@@ -142,7 +141,7 @@ export function stringifyCommand(command: protocol.Command): string {
 export function stringifyCommandWrapper(
 	wrapper: protocol.CommandWrapper,
 ): string {
-	return `CommandWrapper{actorId: "${wrapper.checkpoint.actorId}", index: ${stringifyBigInt(wrapper.checkpoint.index)}, inner: ${stringifyCommand(wrapper.inner)}}`;
+	return `CommandWrapper{actorId: "${wrapper.checkpoint.actorId}", generation: "${wrapper.checkpoint.generation}", index: ${stringifyBigInt(wrapper.checkpoint.index)}, inner: ${stringifyCommand(wrapper.inner)}}`;
 }
 
 /**
@@ -152,17 +151,17 @@ export function stringifyCommandWrapper(
 export function stringifyEvent(event: protocol.Event): string {
 	switch (event.tag) {
 		case "EventActorIntent": {
-			const { actorId, generation, intent } = event.val;
+			const { intent } = event.val;
 			const intentStr =
 				intent.tag === "ActorIntentSleep"
 					? "Sleep"
 					: intent.tag === "ActorIntentStop"
 						? "Stop"
 						: "Unknown";
-			return `EventActorIntent{actorId: "${actorId}", generation: ${generation}, intent: ${intentStr}}`;
+			return `EventActorIntent{intent: ${intentStr}}`;
 		}
 		case "EventActorStateUpdate": {
-			const { actorId, generation, state } = event.val;
+			const { state } = event.val;
 			let stateStr: string;
 			if (state.tag === "ActorStateRunning") {
 				stateStr = "Running";
@@ -173,13 +172,13 @@ export function stringifyEvent(event: protocol.Event): string {
 			} else {
 				stateStr = "Unknown";
 			}
-			return `EventActorStateUpdate{actorId: "${actorId}", generation: ${generation}, state: ${stateStr}}`;
+			return `EventActorStateUpdate{state: ${stateStr}}`;
 		}
 		case "EventActorSetAlarm": {
-			const { actorId, generation, alarmTs } = event.val;
+			const { alarmTs } = event.val;
 			const alarmTsStr =
 				alarmTs === null ? "null" : stringifyBigInt(alarmTs);
-			return `EventActorSetAlarm{actorId: "${actorId}", generation: ${generation}, alarmTs: ${alarmTsStr}}`;
+			return `EventActorSetAlarm{alarmTs: ${alarmTsStr}}`;
 		}
 	}
 }
@@ -189,7 +188,7 @@ export function stringifyEvent(event: protocol.Event): string {
  * Handles ArrayBuffers, BigInts, and Maps that can't be JSON.stringified
  */
 export function stringifyEventWrapper(wrapper: protocol.EventWrapper): string {
-	return `EventWrapper{actorId: ${wrapper.checkpoint.actorId}, index: ${stringifyBigInt(wrapper.checkpoint.index)}, inner: ${stringifyEvent(wrapper.inner)}}`;
+	return `EventWrapper{actorId: ${wrapper.checkpoint.actorId}, generation: "${wrapper.checkpoint.generation}", index: ${stringifyBigInt(wrapper.checkpoint.index)}, inner: ${stringifyEvent(wrapper.inner)}}`;
 }
 
 /**

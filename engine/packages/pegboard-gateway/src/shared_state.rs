@@ -199,7 +199,7 @@ impl SharedState {
 				.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)?
 		} else {
 			let message = protocol::ToRunner::ToClientTunnelMessage(
-				versioned::to_client_tunnel_message_v4_to_v3(payload),
+				versioned::to_client_tunnel_message_mk2_to_mk1(payload),
 			);
 			versioned::ToRunner::wrap_latest(message)
 				.serialize_with_embedded_version(PROTOCOL_MK1_VERSION)?

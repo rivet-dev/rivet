@@ -4,23 +4,6 @@ use rivet_types::{
 	runner_configs::{RunnerConfig, RunnerConfigKind},
 };
 
-pub fn event_actor_id(event: &protocol::mk2::Event) -> &str {
-	match event {
-		protocol::mk2::Event::EventActorIntent(protocol::mk2::EventActorIntent {
-			actor_id,
-			..
-		}) => actor_id,
-		protocol::mk2::Event::EventActorStateUpdate(protocol::mk2::EventActorStateUpdate {
-			actor_id,
-			..
-		}) => actor_id,
-		protocol::mk2::Event::EventActorSetAlarm(protocol::mk2::EventActorSetAlarm {
-			actor_id,
-			..
-		}) => actor_id,
-	}
-}
-
 pub fn event_actor_id_mk1(event: &protocol::Event) -> &str {
 	match event {
 		protocol::Event::EventActorIntent(protocol::EventActorIntent { actor_id, .. }) => actor_id,
@@ -31,23 +14,6 @@ pub fn event_actor_id_mk1(event: &protocol::Event) -> &str {
 		protocol::Event::EventActorSetAlarm(protocol::EventActorSetAlarm { actor_id, .. }) => {
 			actor_id
 		}
-	}
-}
-
-pub fn event_generation(event: &protocol::mk2::Event) -> u32 {
-	match event {
-		protocol::mk2::Event::EventActorIntent(protocol::mk2::EventActorIntent {
-			generation,
-			..
-		}) => *generation,
-		protocol::mk2::Event::EventActorStateUpdate(protocol::mk2::EventActorStateUpdate {
-			generation,
-			..
-		}) => *generation,
-		protocol::mk2::Event::EventActorSetAlarm(protocol::mk2::EventActorSetAlarm {
-			generation,
-			..
-		}) => *generation,
 	}
 }
 

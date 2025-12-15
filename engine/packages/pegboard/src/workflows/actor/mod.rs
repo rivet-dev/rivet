@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_runner_protocol as protocol;
@@ -64,8 +62,7 @@ pub struct State {
 	// Null if not allocated
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
-	#[serde(default)]
-	pub runner_states: HashMap<Id, RunnerState>,
+	pub runner_state: Option<RunnerState>,
 }
 
 impl State {
@@ -101,7 +98,7 @@ impl State {
 
 			runner_id: None,
 			runner_workflow_id: None,
-			runner_states: HashMap::new(),
+			runner_state: None,
 		}
 	}
 }
@@ -460,20 +457,23 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 							// Fetch the last event index for the current runner
 							let last_event_idx =
-								state.runner_states.entry(runner_id).or_default().last_event_idx;
+								state.runner_state.get_or_insert_default().last_event_idx;
 
 							// Filter already received events and events from previous generations
 							let generation = state.generation;
 							let new_events = sig.events
 								.iter()
 								.filter(|event| {
-									event.checkpoint.index > last_event_idx &&
-									crate::utils::event_generation(&event.inner) == generation
+									event.checkpoint.generation == generation &&
+									event.checkpoint.index > last_event_idx
 								});
+							let mut new_event_count = 0;
 							let new_last_event_idx =
 								new_events.clone().last().map(|event| event.checkpoint.index);
 
 							for event in new_events {
+								new_event_count += 1;
+
 								match &event.inner {
 									protocol::mk2::Event::EventActorIntent(
 										protocol::mk2::EventActorIntent { intent, .. },
@@ -496,12 +496,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 												ctx.activity(runtime::InsertAndSendCommandsInput {
 													actor_id: input.actor_id,
+													generation: state.generation,
 													runner_id,
-													commands: vec![protocol::mk2::Command::CommandStopActor(
-														protocol::mk2::CommandStopActor {
-															generation: state.generation,
-														},
-													)],
+													commands: vec![protocol::mk2::Command::CommandStopActor],
 												})
 												.await?;
 											}
@@ -524,12 +521,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 												ctx.activity(runtime::InsertAndSendCommandsInput {
 													actor_id: input.actor_id,
+													generation: state.generation,
 													runner_id,
-													commands: vec![protocol::mk2::Command::CommandStopActor(
-														protocol::mk2::CommandStopActor {
-															generation: state.generation,
-														},
-													)],
+													commands: vec![protocol::mk2::Command::CommandStopActor],
 												})
 												.await?;
 											}
@@ -579,10 +573,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								}
 							}
 
-							if let Some(new_last_event_idx) = new_last_event_idx {
-								// Reborrow for mutability guarantees
-								let runner_state = state.runner_states.entry(runner_id).or_default();
+							let diff = sig.events.len().saturating_sub(new_event_count);
+							if diff != 0 {
+								tracing::warn!(count=%diff, "ignored events due to generation/index filter");
+							}
 
+							if let (Some(runner_state), Some(new_last_event_idx)) = (state.runner_state.as_mut(), new_last_event_idx) {
 								runner_state.last_event_idx = runner_state.last_event_idx.max(new_last_event_idx);
 
 								// Ack events in batch
@@ -598,6 +594,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 												last_event_checkpoints: vec![
 													protocol::mk2::ActorCheckpoint {
 														actor_id: input.actor_id.to_string(),
+														generation: state.generation,
 														index: runner_state.last_event_ack_idx,
 													},
 												],
@@ -705,12 +702,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								if protocol::is_mk2(runner_protocol_version) {
 									ctx.activity(runtime::InsertAndSendCommandsInput {
 										actor_id: input.actor_id,
+										generation: state.generation,
 										runner_id,
-										commands: vec![protocol::mk2::Command::CommandStopActor(
-											protocol::mk2::CommandStopActor {
-												generation: state.generation,
-											},
-										)],
+										commands: vec![protocol::mk2::Command::CommandStopActor],
 									})
 									.await?;
 								} else {
@@ -736,12 +730,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								if protocol::is_mk2(runner_protocol_version) {
 									ctx.activity(runtime::InsertAndSendCommandsInput {
 										actor_id: input.actor_id,
+										generation: state.generation,
 										runner_id,
-										commands: vec![protocol::mk2::Command::CommandStopActor(
-											protocol::mk2::CommandStopActor {
-												generation: state.generation,
-											},
-										)],
+										commands: vec![protocol::mk2::Command::CommandStopActor],
 									})
 									.await?;
 								} else {
@@ -825,6 +816,7 @@ async fn handle_stopped(
 	let old_runner_id = state.runner_id.take();
 	let old_runner_workflow_id = state.runner_workflow_id.take();
 	let old_runner_protocol_version = state.runner_protocol_version.take();
+	state.runner_state = None;
 
 	let deallocate_res = ctx
 		.activity(runtime::DeallocateInput {
@@ -899,12 +891,9 @@ async fn handle_stopped(
 		if protocol::is_mk2(old_runner_protocol_version) {
 			ctx.activity(runtime::InsertAndSendCommandsInput {
 				actor_id: input.actor_id,
+				generation: state.generation,
 				runner_id: old_runner_id,
-				commands: vec![protocol::mk2::Command::CommandStopActor(
-					protocol::mk2::CommandStopActor {
-						generation: state.generation,
-					},
-				)],
+				commands: vec![protocol::mk2::Command::CommandStopActor],
 			})
 			.await?;
 		} else {
@@ -1009,20 +998,7 @@ async fn handle_stopped(
 		.send()
 		.await?;
 
-	let res = ctx
-		.activity(runtime::CheckRunnersInput {
-			seen_runners: state
-				.runner_states
-				.iter()
-				.map(|(runner_id, _)| *runner_id)
-				.collect(),
-		})
-		.await?;
-
-	// Clean up state
-	for runner_id in res.remove_runners {
-		state.runner_states.remove(&runner_id);
-	}
+	ctx.removed::<Activity<runtime::CheckRunnersStub>>().await?;
 
 	Ok(StoppedResult::Continue)
 }

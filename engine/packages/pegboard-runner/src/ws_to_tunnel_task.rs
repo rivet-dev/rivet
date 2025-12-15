@@ -5,7 +5,6 @@ use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
-use pegboard::utils::event_actor_id;
 use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
@@ -411,7 +410,7 @@ async fn handle_message_mk2(
 		// Forward to actor wf
 		protocol::mk2::ToServer::ToServerEvents(events) => {
 			for event in events {
-				event_demuxer.ingest(Id::parse(event_actor_id(&event.inner))?, event);
+				event_demuxer.ingest(Id::parse(&event.checkpoint.actor_id)?, event);
 			}
 		}
 		protocol::mk2::ToServer::ToServerAckCommands(ack) => {
@@ -776,12 +775,14 @@ async fn ack_commands(
 						&pegboard::keys::runner::ActorCommandKey::subspace_with_actor(
 							runner_id,
 							Id::parse(&checkpoint.actor_id)?,
+							checkpoint.generation,
 						),
 					);
 					let end = end_of_key_range(&tx.pack(
 						&pegboard::keys::runner::ActorCommandKey::subspace_with_index(
 							runner_id,
 							Id::parse(&checkpoint.actor_id)?,
+							checkpoint.generation,
 							checkpoint.index,
 						),
 					));

@@ -612,18 +612,21 @@ export function writeActorConfig(bc: bare.ByteCursor, x: ActorConfig): void {
 
 export type ActorCheckpoint = {
     readonly actorId: Id
+    readonly generation: u32
     readonly index: i64
 }
 
 export function readActorCheckpoint(bc: bare.ByteCursor): ActorCheckpoint {
     return {
         actorId: readId(bc),
+        generation: bare.readU32(bc),
         index: bare.readI64(bc),
     }
 }
 
 export function writeActorCheckpoint(bc: bare.ByteCursor, x: ActorCheckpoint): void {
     writeId(bc, x.actorId)
+    bare.writeU32(bc, x.generation)
     bare.writeI64(bc, x.index)
 }
 
@@ -725,42 +728,30 @@ export function writeActorState(bc: bare.ByteCursor, x: ActorState): void {
  * MARK: Events
  */
 export type EventActorIntent = {
-    readonly actorId: Id
-    readonly generation: u32
     readonly intent: ActorIntent
 }
 
 export function readEventActorIntent(bc: bare.ByteCursor): EventActorIntent {
     return {
-        actorId: readId(bc),
-        generation: bare.readU32(bc),
         intent: readActorIntent(bc),
     }
 }
 
 export function writeEventActorIntent(bc: bare.ByteCursor, x: EventActorIntent): void {
-    writeId(bc, x.actorId)
-    bare.writeU32(bc, x.generation)
     writeActorIntent(bc, x.intent)
 }
 
 export type EventActorStateUpdate = {
-    readonly actorId: Id
-    readonly generation: u32
     readonly state: ActorState
 }
 
 export function readEventActorStateUpdate(bc: bare.ByteCursor): EventActorStateUpdate {
     return {
-        actorId: readId(bc),
-        generation: bare.readU32(bc),
         state: readActorState(bc),
     }
 }
 
 export function writeEventActorStateUpdate(bc: bare.ByteCursor, x: EventActorStateUpdate): void {
-    writeId(bc, x.actorId)
-    bare.writeU32(bc, x.generation)
     writeActorState(bc, x.state)
 }
 
@@ -776,22 +767,16 @@ function write7(bc: bare.ByteCursor, x: i64 | null): void {
 }
 
 export type EventActorSetAlarm = {
-    readonly actorId: Id
-    readonly generation: u32
     readonly alarmTs: i64 | null
 }
 
 export function readEventActorSetAlarm(bc: bare.ByteCursor): EventActorSetAlarm {
     return {
-        actorId: readId(bc),
-        generation: bare.readU32(bc),
         alarmTs: read7(bc),
     }
 }
 
 export function writeEventActorSetAlarm(bc: bare.ByteCursor, x: EventActorSetAlarm): void {
-    writeId(bc, x.actorId)
-    bare.writeU32(bc, x.generation)
     write7(bc, x.alarmTs)
 }
 
@@ -891,38 +876,23 @@ function write8(bc: bare.ByteCursor, x: readonly HibernatingRequest[]): void {
 }
 
 export type CommandStartActor = {
-    readonly generation: u32
     readonly config: ActorConfig
     readonly hibernatingRequests: readonly HibernatingRequest[]
 }
 
 export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
     return {
-        generation: bare.readU32(bc),
         config: readActorConfig(bc),
         hibernatingRequests: read8(bc),
     }
 }
 
 export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor): void {
-    bare.writeU32(bc, x.generation)
     writeActorConfig(bc, x.config)
     write8(bc, x.hibernatingRequests)
 }
 
-export type CommandStopActor = {
-    readonly generation: u32
-}
-
-export function readCommandStopActor(bc: bare.ByteCursor): CommandStopActor {
-    return {
-        generation: bare.readU32(bc),
-    }
-}
-
-export function writeCommandStopActor(bc: bare.ByteCursor, x: CommandStopActor): void {
-    bare.writeU32(bc, x.generation)
-}
+export type CommandStopActor = null
 
 export type Command =
     | { readonly tag: "CommandStartActor"; readonly val: CommandStartActor }
@@ -935,7 +905,7 @@ export function readCommand(bc: bare.ByteCursor): Command {
         case 0:
             return { tag: "CommandStartActor", val: readCommandStartActor(bc) }
         case 1:
-            return { tag: "CommandStopActor", val: readCommandStopActor(bc) }
+            return { tag: "CommandStopActor", val: null }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -952,7 +922,6 @@ export function writeCommand(bc: bare.ByteCursor, x: Command): void {
         }
         case "CommandStopActor": {
             bare.writeU8(bc, 1)
-            writeCommandStopActor(bc, x.val)
             break
         }
     }
@@ -989,7 +958,7 @@ export function readActorCommandKeyData(bc: bare.ByteCursor): ActorCommandKeyDat
         case 0:
             return { tag: "CommandStartActor", val: readCommandStartActor(bc) }
         case 1:
-            return { tag: "CommandStopActor", val: readCommandStopActor(bc) }
+            return { tag: "CommandStopActor", val: null }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -1006,7 +975,6 @@ export function writeActorCommandKeyData(bc: bare.ByteCursor, x: ActorCommandKey
         }
         case "CommandStopActor": {
             bare.writeU8(bc, 1)
-            writeCommandStopActor(bc, x.val)
             break
         }
     }
