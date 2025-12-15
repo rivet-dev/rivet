@@ -827,7 +827,7 @@ dependencies = [
 
 [[package]]
 name = "clickhouse-inserter"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "clickhouse-user-query"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "clickhouse",
  "serde",
@@ -1476,7 +1476,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "epoxy"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -1514,7 +1514,7 @@ dependencies = [
 
 [[package]]
 name = "epoxy-protocol"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "rivet-util",
@@ -1795,7 +1795,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "gasoline-macros"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2889,7 +2889,7 @@ dependencies = [
 
 [[package]]
 name = "namespace"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -3404,7 +3404,7 @@ checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "pegboard"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3440,7 +3440,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-actor-kv"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -3464,7 +3464,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-gateway"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3497,7 +3497,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-runner"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4198,7 +4198,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-builder"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4241,7 +4241,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-peer"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4272,7 +4272,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-public"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4305,7 +4305,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-types"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4320,7 +4320,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-api-util"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4340,7 +4340,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-bootstrap"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "epoxy",
  "gasoline",
@@ -4356,7 +4356,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4397,14 +4397,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache-result"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "rivet-util",
 ]
 
 [[package]]
 name = "rivet-config"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "config",
@@ -4423,7 +4423,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-data"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4437,7 +4437,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-dump-openapi"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "rivet-api-public",
  "serde_json",
@@ -4446,7 +4446,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-engine"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4510,7 +4510,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-env"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "lazy_static",
@@ -4520,7 +4520,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "indoc",
@@ -4532,7 +4532,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-error-macros"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "indoc",
  "proc-macro2",
@@ -4543,7 +4543,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4588,7 +4588,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard-core"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4634,7 +4634,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-logs"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4648,7 +4648,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -4666,7 +4666,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-pools"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4699,7 +4699,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runner-protocol"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4716,7 +4716,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runtime"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -4756,7 +4756,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-service-manager"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4773,7 +4773,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-telemetry"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "rivet-config",
@@ -4797,7 +4797,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-deps"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4815,7 +4815,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-test-deps-docker"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "portpicker",
@@ -4846,7 +4846,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-tracing-utils"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "futures-util",
  "lazy_static",
@@ -4856,7 +4856,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-types"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "gasoline",
@@ -4873,7 +4873,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-ups-protocol"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4886,7 +4886,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4918,7 +4918,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-id"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -4929,7 +4929,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-workflow-worker"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "epoxy",
@@ -6688,7 +6688,7 @@ checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "universaldb"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6717,7 +6717,7 @@ dependencies = [
 
 [[package]]
 name = "universalpubsub"
-version = "2.0.26"
+version = "2.0.28"
 dependencies = [
  "anyhow",
  "async-nats",
