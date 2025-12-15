@@ -1447,10 +1447,21 @@ impl Database for DatabaseKv {
 															partial_key.location,
 														),
 													);
+
+													let loc = previous_event.location.clone();
 													events_by_location
 														.entry(previous_event.location.root())
 														.or_default()
-														.push(Event::try_from(previous_event)?);
+														.push(
+															Event::try_from(previous_event)
+																.map_err(|err| {
+																	WorkflowError::FailedBuildingWorkflowHistory {
+																		workflow_id: wf.workflow_id,
+																		location: loc,
+																		err: err.into(),
+																	}
+																})?,
+														);
 												}
 											}
 
@@ -1589,10 +1600,20 @@ impl Database for DatabaseKv {
 										}
 										// Insert final event
 										if !current_event.location.is_empty() {
+											let loc = current_event.location.clone();
+
 											events_by_location
 												.entry(current_event.location.root())
 												.or_default()
-												.push(Event::try_from(current_event)?);
+												.push(Event::try_from(current_event).map_err(
+													|err| {
+														WorkflowError::FailedBuildingWorkflowHistory {
+															workflow_id: wf.workflow_id,
+															location: loc,
+															err: err.into(),
+														}
+													},
+												)?);
 										}
 
 										Ok(events_by_location)
