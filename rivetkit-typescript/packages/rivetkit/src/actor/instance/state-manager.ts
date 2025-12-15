@@ -4,6 +4,7 @@ import { isCborSerializable, stringifyError } from "@/common/utils";
 import {
 	ACTOR_VERSIONED,
 	CONN_VERSIONED,
+	CURRENT_VERSION as ACTOR_PERSIST_CURRENT_VERSION,
 } from "@/schemas/actor-persist/versioned";
 import { promiseWithResolvers, SinglePromiseQueue } from "@/utils";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";
@@ -134,7 +135,10 @@ export class StateManager<S, CP, CS, I> {
 			await this.#actorDriver.kvBatchPut(this.#actor.id, [
 				[
 					KEYS.PERSIST_DATA,
-					ACTOR_VERSIONED.serializeWithEmbeddedVersion(bareData),
+					ACTOR_VERSIONED.serializeWithEmbeddedVersion(
+						bareData,
+						ACTOR_PERSIST_CURRENT_VERSION,
+					),
 				],
 			]);
 		}
@@ -403,6 +407,7 @@ export class StateManager<S, CP, CS, I> {
 							KEYS.PERSIST_DATA,
 							ACTOR_VERSIONED.serializeWithEmbeddedVersion(
 								bareData,
+								ACTOR_PERSIST_CURRENT_VERSION,
 							),
 						]);
 					}
@@ -450,6 +455,7 @@ export class StateManager<S, CP, CS, I> {
 						const connData =
 							CONN_VERSIONED.serializeWithEmbeddedVersion(
 								bareData,
+								ACTOR_PERSIST_CURRENT_VERSION,
 							);
 
 						entries.push([makeConnKey(connId), connData]);

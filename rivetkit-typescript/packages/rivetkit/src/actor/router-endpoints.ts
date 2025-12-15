@@ -16,6 +16,7 @@ import { stringifyError } from "@/common/utils";
 import type { RunnerConfig } from "@/registry/run-config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
@@ -120,6 +121,7 @@ export async function handleAction(
 		encoding,
 		output,
 		HTTP_ACTION_RESPONSE_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
 		HttpActionResponseSchema,
 		// JSON: output is the raw value (will be serialized by jsonStringifyCompat)
 		(value): HttpActionResponseJson => ({ output: value }),

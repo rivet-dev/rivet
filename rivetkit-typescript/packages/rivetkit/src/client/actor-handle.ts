@@ -12,6 +12,7 @@ import {
 import type { ActorQuery } from "@/manager/protocol/query";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
@@ -128,7 +129,9 @@ export class ActorHandleRaw {
 					actorId,
 				),
 				signal: opts?.signal,
+				requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
 				requestVersionedDataHandler: HTTP_ACTION_REQUEST_VERSIONED,
+				responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
 				responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
 				requestZodSchema: HttpActionRequestSchema,
 				responseZodSchema: HttpActionResponseSchema,

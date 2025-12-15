@@ -2,7 +2,10 @@ import { HibernatingWebSocketMetadata } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import invariant from "invariant";
 import { CONN_VERSIONED } from "@/schemas/actor-persist/versioned";
-import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
+import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
+	TO_CLIENT_VERSIONED,
+} from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { arrayBuffersEqual, stringifyError } from "@/utils";
 import type { ConnDriver } from "../conn/driver";
@@ -204,6 +207,7 @@ export class ConnectionManager<
 				new CachedSerializer(
 					initData,
 					TO_CLIENT_VERSIONED,
+					CLIENT_PROTOCOL_CURRENT_VERSION,
 					ToClientSchema,
 					// JSON: identity conversion (no nested data to encode)
 					(value) => ({

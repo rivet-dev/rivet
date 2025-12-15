@@ -2,7 +2,7 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { z } from "zod";
 import { assertUnreachable } from "@/common/utils";
-import type { VersionedDataHandler } from "@/common/versioned-data";
+import type { VersionedDataHandler } from "vbare";
 import type { Encoding } from "@/mod";
 import { jsonParseCompat, jsonStringifyCompat } from "./actor/protocol/serde";
 
@@ -57,6 +57,7 @@ export function serializeWithEncoding<TBare, TJson, T = TBare>(
 	encoding: Encoding,
 	value: T,
 	versionedDataHandler: VersionedDataHandler<TBare> | undefined,
+	version: number | undefined,
 	zodSchema: z.ZodType<TJson>,
 	toJson: (value: T) => TJson,
 	toBare: (value: T) => TBare,
@@ -75,8 +76,14 @@ export function serializeWithEncoding<TBare, TJson, T = TBare>(
 				"VersionedDataHandler is required for 'bare' encoding",
 			);
 		}
+		if (version === undefined) {
+			throw new Error("version is required for 'bare' encoding");
+		}
 		const bareValue = toBare(value);
-		return versionedDataHandler.serializeWithEmbeddedVersion(bareValue);
+		return versionedDataHandler.serializeWithEmbeddedVersion(
+			bareValue,
+			version,
+		);
 	} else {
 		assertUnreachable(encoding);
 	}
