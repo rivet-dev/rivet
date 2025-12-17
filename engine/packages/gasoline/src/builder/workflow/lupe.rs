@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use anyhow::Result;
-use rivet_metrics::KeyValue;
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::Instrument;
 
@@ -264,10 +263,9 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 				iteration_branch.cursor().check_clear()?;
 
 				let dt = start_instant.elapsed().as_secs_f64();
-				metrics::LOOP_ITERATION_DURATION.record(
-					dt - dt2,
-					&[KeyValue::new("workflow_name", ctx.name().to_string())],
-				);
+				metrics::LOOP_ITERATION_DURATION
+					.with_label_values(&[&ctx.name().to_string()])
+					.observe(dt - dt2);
 
 				if let Some(res) = res {
 					break res;

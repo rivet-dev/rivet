@@ -1,19 +1,18 @@
-use rivet_metrics::{
-	MICRO_BUCKETS,
-	otel::{global::*, metrics::*},
-};
+use rivet_metrics::{MICRO_BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
-	static ref METER: Meter = meter("rivet-pegboard");
+	pub static ref ACTOR_PENDING_ALLOCATION: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"pegboard_actor_pending_allocation",
+		"Total actors waiting for availability.",
+		&["namespace_id", "runner_name"],
+		*REGISTRY
+	).unwrap();
 
-	/// Expected attributes: "namespace_id", "runner_name"
-	pub static ref ACTOR_PENDING_ALLOCATION: Gauge<f64> = METER.f64_gauge("rivet_pegboard_actor_pending_allocation")
-		.with_description("Total actors waiting for availability.")
-		.build();
-
-	/// Expected attributes: "did_reserve"
-	pub static ref ACTOR_ALLOCATE_DURATION: Histogram<f64> = METER.f64_histogram("rivet_pegboard_actor_allocate_duration")
-		.with_description("Total duration to reserve resources for an actor.")
-		.with_boundaries(MICRO_BUCKETS.to_vec())
-		.build();
+	pub static ref ACTOR_ALLOCATE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"pegboard_actor_allocate_duration",
+		"Total duration to reserve resources for an actor.",
+		&["did_reserve"],
+		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 }

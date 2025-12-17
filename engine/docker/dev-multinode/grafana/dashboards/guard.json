@@ -1,1274 +1,1099 @@
 {
-	"annotations": {
-		"list": [
-			{
-				"builtIn": 1,
-				"datasource": {
-					"type": "grafana",
-					"uid": "-- Grafana --"
-				},
-				"enable": true,
-				"hide": true,
-				"iconColor": "rgba(0, 211, 255, 1)",
-				"name": "Annotations & Alerts",
-				"type": "dashboard"
-			}
-		]
-	},
-	"editable": true,
-	"fiscalYearStartMonth": 0,
-	"graphTooltip": 1,
-	"id": 7,
-	"links": [],
-	"panels": [
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 0,
-				"y": 0
-			},
-			"id": 1,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter}}",
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        sum(Value) as value\n    FROM otel.otel_metrics_gauge\n    WHERE MetricName = 'rivet_guard_route_cache_count'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND $__timeFilter(TimeUnix)\n    GROUP BY time, label\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Route Cache Size",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 8,
-				"y": 0
-			},
-			"id": 2,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter}}",
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        sum(Value) as value\n    FROM otel.otel_metrics_gauge\n    WHERE MetricName = 'rivet_guard_rate_limiter_count'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND $__timeFilter(TimeUnix)\n    GROUP BY time, label\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Rate Limiters",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 16,
-				"y": 0
-			},
-			"id": 3,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter}}",
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        sum(Value) as value\n    FROM otel.otel_metrics_gauge\n    WHERE MetricName = 'rivet_guard_in_flight_counter_count'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND $__timeFilter(TimeUnix)\n    GROUP BY time, label\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "In-Flight Counters",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 0,
-				"y": 8
-			},
-			"id": 4,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter}}",
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    4 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        max(Value) as value\n    FROM otel.otel_metrics_sum\n    WHERE MetricName = 'rivet_guard_tcp_connection_pending'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n        AND TimeUnix <= $__toTime_ms()\n    GROUP BY time, label\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Active TCP Connections",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 8,
-				"y": 8
-			},
-			"id": 5,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        datacenter as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_guard_tcp_connection_total'\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "TCP Connection Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 16,
-				"y": 8
-			},
-			"id": 6,
-			"interval": "15s",
-			"options": {
-				"calculate": false,
-				"calculation": {
-					"xBuckets": {
-						"mode": "size"
-					}
-				},
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"max": "60",
-					"min": 0,
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_guard_tcp_connection_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
-					"refId": "A"
-				}
-			],
-			"title": "TCP Connection Duration",
-			"transformations": [
-				{
-					"id": "groupingToMatrix",
-					"options": {
-						"columnField": "bucket",
-						"emptyValue": "null",
-						"rowField": "Time",
-						"valueField": "count"
-					}
-				},
-				{
-					"id": "convertFieldType",
-					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\bucket"
-							}
-						],
-						"fields": {}
-					}
-				}
-			],
-			"type": "heatmap"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 5,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 0,
-				"y": 16
-			},
-			"id": 7,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter}}",
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    4 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        max(Value) as value\n    FROM otel.otel_metrics_sum\n    WHERE MetricName = 'rivet_guard_proxy_request_pending'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n        AND TimeUnix <= $__toTime_ms()\n    GROUP BY time, label\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Active Proxy Requests",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 8,
-				"y": 16
-			},
-			"id": 8,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        datacenter as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_guard_proxy_request_total'\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Proxy Request Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 16,
-				"y": 16
-			},
-			"id": 9,
-			"interval": "15s",
-			"options": {
-				"calculate": false,
-				"calculation": {
-					"xBuckets": {
-						"mode": "size"
-					}
-				},
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"max": "60",
-					"min": 0,
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_guard_proxy_request_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
-					"refId": "A"
-				}
-			],
-			"title": "Proxy Request Duration",
-			"transformations": [
-				{
-					"id": "groupingToMatrix",
-					"options": {
-						"columnField": "bucket",
-						"emptyValue": "null",
-						"rowField": "Time",
-						"valueField": "count"
-					}
-				},
-				{
-					"id": "convertFieldType",
-					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\bucket"
-							}
-						],
-						"fields": {}
-					}
-				}
-			],
-			"type": "heatmap"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 24
-			},
-			"id": 10,
-			"interval": "15s",
-			"options": {
-				"calculate": false,
-				"calculation": {
-					"xBuckets": {
-						"mode": "size"
-					}
-				},
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"max": "60",
-					"min": 0,
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_guard_resolve_route_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
-					"refId": "A"
-				}
-			],
-			"title": "Resolve Route Duration",
-			"transformations": [
-				{
-					"id": "groupingToMatrix",
-					"options": {
-						"columnField": "bucket",
-						"emptyValue": "null",
-						"rowField": "Time",
-						"valueField": "count"
-					}
-				},
-				{
-					"id": "convertFieldType",
-					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\bucket"
-							}
-						],
-						"fields": {}
-					}
-				}
-			],
-			"type": "heatmap"
-		}
-	],
-	"preload": false,
-	"refresh": "30s",
-	"schemaVersion": 40,
-	"tags": [],
-	"templating": {
-		"list": [
-			{
-				"current": {
-					"text": "All",
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
-				"includeAll": true,
-				"label": "project",
-				"multi": true,
-				"name": "project",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": "All",
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
-				"includeAll": true,
-				"label": "datacenter",
-				"multi": true,
-				"name": "datacenter",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			}
-		]
-	},
-	"time": {
-		"from": "now-30m",
-		"to": "now"
-	},
-	"timepicker": {},
-	"timezone": "",
-	"title": "Guard",
-	"uid": "cen785ige8fswd",
-	"version": 1,
-	"weekStart": ""
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 115,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_route_cache_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Route Cache Size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_rate_limiter_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Rate Limiters",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_in_flight_counter_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "In-Flight Counters",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Active TCP Connections",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "req/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rate(rivet_guard_tcp_connection_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval]))",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "TCP Connection Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "id": 1,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_guard_tcp_connection_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "TCP Connection Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 16
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_proxy_request_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Active Proxy Requests",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "req/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 16
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rivet_datacenter, instance) (rate(rivet_guard_proxy_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval]))",
+          "instant": false,
+          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "id": 9,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_guard_proxy_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy Request Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
+      "id": 6,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_guard_resolve_route_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Resolve Route Duration",
+      "type": "heatmap"
+    }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 40,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_project)",
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_project)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+        "includeAll": true,
+        "label": "Datacenter",
+        "multi": true,
+        "name": "datacenter",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "definition": "label_values(rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},instance)",
+        "description": "",
+        "includeAll": true,
+        "label": "Instance",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Rivet Guard",
+  "uid": "cen785ige8fswd",
+  "version": 1,
+  "weekStart": ""
 }

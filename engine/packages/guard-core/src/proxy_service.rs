@@ -10,7 +10,6 @@ use rand;
 use rivet_api_builder::{ErrorResponse, RawErrorResponse};
 use rivet_api_builder::{RequestIds, X_RIVET_RAY_ID};
 use rivet_error::{INTERNAL_ERROR, RivetError};
-use rivet_metrics::KeyValue;
 use rivet_util::Id;
 use serde_json;
 
@@ -275,7 +274,7 @@ impl RouteCache {
 	async fn insert(&self, key: u64, result: RouteConfig) {
 		self.cache.insert(key, result).await;
 
-		metrics::ROUTE_CACHE_COUNT.record(self.cache.entry_count(), &[]);
+		metrics::ROUTE_CACHE_COUNT.set(self.cache.entry_count() as i64);
 	}
 }
 
@@ -584,7 +583,7 @@ impl ProxyState {
 			self.rate_limiters
 				.insert(cache_key, new_limiter.clone())
 				.await;
-			metrics::RATE_LIMITER_COUNT.record(self.rate_limiters.entry_count(), &[]);
+			metrics::RATE_LIMITER_COUNT.set(self.rate_limiters.entry_count() as i64);
 			new_limiter
 		};
 
@@ -623,7 +622,7 @@ impl ProxyState {
 				self.in_flight_counters
 					.insert(cache_key, new_counter.clone())
 					.await;
-				metrics::IN_FLIGHT_COUNTER_COUNT.record(self.in_flight_counters.entry_count(), &[]);
+				metrics::IN_FLIGHT_COUNTER_COUNT.set(self.in_flight_counters.entry_count() as i64);
 				new_counter
 			};
 
@@ -766,7 +765,7 @@ impl ProxyService {
 			.await;
 
 		let duration_secs = start_time.elapsed().as_secs_f64();
-		metrics::RESOLVE_ROUTE_DURATION.record(duration_secs, &[]);
+		metrics::RESOLVE_ROUTE_DURATION.observe(duration_secs);
 
 		// Resolve target
 		let target = target_res?;
@@ -827,8 +826,8 @@ impl ProxyService {
 		};
 
 		// Increment metrics
-		metrics::PROXY_REQUEST_PENDING.add(1, &[]);
-		metrics::PROXY_REQUEST_TOTAL.add(1, &[]);
+		metrics::PROXY_REQUEST_PENDING.inc();
+		metrics::PROXY_REQUEST_TOTAL.inc();
 
 		// Update request context with target info
 		if let Some(actor_id) = actor_id {
@@ -851,9 +850,10 @@ impl ProxyService {
 		// Record metrics
 		let duration_secs = start_time.elapsed().as_secs_f64();
 		metrics::PROXY_REQUEST_DURATION
-			.record(duration_secs, &[KeyValue::new("status", status.clone())]);
+			.with_label_values(&[status])
+			.observe(duration_secs);
 
-		metrics::PROXY_REQUEST_PENDING.add(-1, &[]);
+		metrics::PROXY_REQUEST_PENDING.dec();
 
 		// Release in-flight counter and request ID when done
 		let state_clone = self.state.clone();
@@ -2299,7 +2299,8 @@ impl ProxyService {
 				tracing::error!(?err, "Request failed");
 
 				metrics::PROXY_REQUEST_ERROR
-					.add(1, &[KeyValue::new("error_type", err.to_string())]);
+					.with_label_values(&[&err.to_string()])
+					.inc();
 
 				// If we receive an error during a websocket request, we attempt to open the websocket anyway
 				// so we can send the error via websocket instead of http. Most websocket clients don't handle
@@ -2688,7 +2689,7 @@ fn err_to_close_frame(err: anyhow::Error, ray_id: Option<Id>) -> CloseFrame {
 	};
 
 	match code {
-		CloseCode::Normal => tracing::info!("websocket closed"),
+		CloseCode::Normal => tracing::debug!("websocket closed"),
 		_ => tracing::error!(?err, "websocket failed"),
 	}
 

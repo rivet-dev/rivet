@@ -2,7 +2,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use futures_util::StreamExt;
-use rivet_metrics::KeyValue;
 use rivet_util::Id;
 
 /// Time to delay a workflow from retrying after an error
@@ -92,8 +91,11 @@ where
 
 	// Record metrics
 	crate::metrics::OPERATION_PENDING
-		.add(1, &[KeyValue::new("operation_name", I::Operation::NAME)]);
-	crate::metrics::OPERATION_TOTAL.add(1, &[KeyValue::new("operation_name", I::Operation::NAME)]);
+		.with_label_values(&[I::Operation::NAME])
+		.inc();
+	crate::metrics::OPERATION_TOTAL
+		.with_label_values(&[I::Operation::NAME])
+		.inc();
 
 	let start_instant = Instant::now();
 
@@ -118,13 +120,9 @@ where
 			Ok(Err(err)) => {
 				let error_code_str = err.to_string();
 
-				crate::metrics::OPERATION_ERRORS.add(
-					1,
-					&[
-						KeyValue::new("operation_name", I::Operation::NAME),
-						KeyValue::new("error", error_code_str.clone()),
-					],
-				);
+				crate::metrics::OPERATION_ERRORS
+					.with_label_values(&[I::Operation::NAME, error_code_str.as_str()])
+					.inc();
 
 				error_code_str
 			}
@@ -135,14 +133,11 @@ where
 		// Other request metrics
 		let dt = start_instant.elapsed().as_secs_f64();
 		crate::metrics::OPERATION_PENDING
-			.add(-1, &[KeyValue::new("operation_name", I::Operation::NAME)]);
-		crate::metrics::OPERATION_DURATION.record(
-			dt,
-			&[
-				KeyValue::new("operation_name", I::Operation::NAME),
-				KeyValue::new("error", error_code_str.clone()),
-			],
-		);
+			.with_label_values(&[I::Operation::NAME])
+			.dec();
+		crate::metrics::OPERATION_DURATION
+			.with_label_values(&[I::Operation::NAME, error_code_str.as_str()])
+			.observe(dt);
 	}
 
 	let res = res?;

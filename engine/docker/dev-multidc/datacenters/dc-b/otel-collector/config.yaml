@@ -1,0 +1,77 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: rivet-engine-dc-b-0
+          scrape_interval: 15s
+          static_configs:
+            - targets:
+                - rivet-engine-dc-b:6430
+processors:
+  resource:
+    attributes:
+      - key: rivet.project
+        value: dev
+        action: upsert
+      - key: rivet.datacenter
+        value: dc-b
+        action: upsert
+  batch:
+    timeout: 5s
+    send_batch_size: 10000
+exporters:
+  clickhouse:
+    endpoint: http://clickhouse:9300
+    database: otel
+    username: default
+    password: ${env:CLICKHOUSE_PASSWORD}
+    async_insert: true
+    ttl: 72h
+    compress: lz4
+    create_schema: true
+    logs_table_name: otel_logs
+    traces_table_name: otel_traces
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+service:
+  pipelines:
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - resource
+        - batch
+      exporters:
+        - clickhouse
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - resource
+        - batch
+      exporters:
+        - clickhouse
+    metrics:
+      receivers:
+        - prometheus
+      processors:
+        - resource
+        - batch
+      exporters:
+        - prometheusremotewrite

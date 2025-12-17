@@ -7,8 +7,6 @@ use moka::future::{Cache, CacheBuilder};
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::Instrument;
 
-use rivet_metrics::KeyValue;
-
 use crate::{errors::Error, metrics};
 
 /// Type alias for cache values stored as bytes
@@ -268,11 +266,13 @@ impl InMemoryDriver {
 		keys: Vec<String>,
 	) -> Result<(), Error> {
 		let cache = self.cache.clone();
-		let base_key = base_key.to_string();
 
-		metrics::CACHE_PURGE_REQUEST_TOTAL.add(1, &[KeyValue::new("key", base_key.clone())]);
+		metrics::CACHE_PURGE_REQUEST_TOTAL
+			.with_label_values(&[base_key])
+			.inc();
 		metrics::CACHE_PURGE_VALUE_TOTAL
-			.add(keys.len() as u64, &[KeyValue::new("key", base_key.clone())]);
+			.with_label_values(&[base_key])
+			.inc_by(keys.len() as u64);
 
 		// Async block for metrics
 		async {

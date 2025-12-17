@@ -34,6 +34,33 @@ services:
       interval: 2s
       timeout: 10s
       retries: 10
+  prometheus:
+    restart: unless-stopped
+    image: prom/prometheus:latest
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-remote-write-receiver'
+    ports:
+      - '9090:9090'
+    networks:
+      - rivet-network-to-core
+      - rivet-core-network
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--spider'
+        - '-q'
+        - http://127.0.0.1:9090/-/healthy
+      interval: 5s
+      timeout: 3s
+      retries: 3
   grafana:
     image: grafana/grafana:11.5.2
     volumes:
@@ -49,6 +76,8 @@ services:
       - rivet-core-network
     depends_on:
       clickhouse:
+        condition: service_healthy
+      prometheus:
         condition: service_healthy
   postgres:
     restart: unless-stopped
@@ -80,7 +109,8 @@ services:
         BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
-    command: sleep infinity
+    entrypoint: sleep
+    command: infinity
     stop_grace_period: 0s
     depends_on:
       postgres:
@@ -116,33 +146,24 @@ services:
     depends_on:
       vector-server:
         condition: service_started
-  otel-collector-server:
+  otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
     command: '--config=/etc/otel/config.yaml'
     volumes:
-      - ./otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+      - ./otel-collector/config.yaml:/etc/otel/config.yaml:ro
     environment:
       - CLICKHOUSE_PASSWORD=default
     depends_on:
       clickhouse:
+        condition: service_healthy
+      prometheus:
         condition: service_healthy
     networks:
       - rivet-network
       - rivet-network-to-core
     ports:
       - '4317:4317'
-  otel-collector-client:
-    image: otel/opentelemetry-collector-contrib:latest
-    restart: unless-stopped
-    command: '--config=/etc/otel/config.yaml'
-    volumes:
-      - ./otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
-    depends_on:
-      otel-collector-server:
-        condition: service_started
-    networks:
-      - rivet-network
   rivet-engine:
     build:
       context: ../../..
@@ -156,12 +177,12 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client:4317
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector:4317
     stop_grace_period: 0s
     depends_on:
       vector-client:
         condition: service_started
-      otel-collector-client:
+      otel-collector:
         condition: service_started
       postgres:
         condition: service_healthy
@@ -211,6 +232,7 @@ networks:
     driver: bridge
 volumes:
   clickhouse-data: null
+  prometheus-data: null
   grafana-data: null
   postgres-data: null
   vector-server-data-default: null

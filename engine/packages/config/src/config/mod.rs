@@ -11,6 +11,7 @@ pub mod clickhouse;
 pub mod db;
 pub mod guard;
 pub mod logs;
+pub mod metrics;
 pub mod pegboard;
 pub mod pubsub;
 pub mod runtime;
@@ -26,6 +27,7 @@ pub use clickhouse::*;
 pub use db::Database;
 pub use guard::*;
 pub use logs::*;
+pub use metrics::*;
 pub use pegboard::*;
 pub use pubsub::PubSub;
 pub use runtime::*;
@@ -105,6 +107,9 @@ pub struct Root {
 
 	#[serde(default)]
 	pub runtime: Runtime,
+
+	#[serde(default)]
+	pub metrics: Metrics,
 }
 
 impl Default for Root {
@@ -124,6 +129,7 @@ impl Default for Root {
 			vector_http: None,
 			telemetry: Default::default(),
 			runtime: Default::default(),
+			metrics: Default::default(),
 		}
 	}
 }

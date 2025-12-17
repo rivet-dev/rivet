@@ -6,6 +6,8 @@ import type { TemplateContext } from "../../context";
 export function generateCoreGrafana(context: TemplateContext) {
 	const clickhouseHost =
 		context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
+	const prometheusHost =
+		context.config.networkMode === "host" ? "127.0.0.1" : "prometheus";
 	// Grafana configuration
 	const grafanaIni = `[server]
 http_port = 3000
@@ -23,10 +25,21 @@ org_role = Admin
 default_home_dashboard_path = /var/lib/grafana/dashboards/api.json
 `;
 
-	// Datasource configuration for ClickHouse
+	// Datasource configuration for ClickHouse and Prometheus
 	const datasourcesConfig = {
 		apiVersion: 1,
 		datasources: [
+			{
+				name: "Prometheus",
+				uid: "prometheus",
+				type: "prometheus",
+				access: "proxy",
+				url: `http://${prometheusHost}:9090`,
+				isDefault: true,
+				jsonData: {
+					timeInterval: "15s",
+				},
+			},
 			{
 				name: "ClickHouse",
 				uid: "clickhouse",
