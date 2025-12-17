@@ -170,9 +170,17 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref LOOP_COMMIT_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_loop_commit_duration",
+		"Total duration of a single loop commit.",
+		&["workflow_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
 	pub static ref LOOP_ITERATION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"gasoline_loop_iteration_duration",
-		"Total duration of a single loop iteration (excluding its body).",
+		"Total duration of a single loop iteration.",
 		&["workflow_name"],
 		BUCKETS.to_vec(),
 		*REGISTRY
