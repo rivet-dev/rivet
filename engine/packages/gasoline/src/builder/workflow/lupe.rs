@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use serde::{Serialize, de::DeserializeOwned};
@@ -117,11 +117,10 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 
 			// Used to defer loop upsertion for parallelization
 			let mut loop_event_upsert_fut = None;
+			let mut iteration_dt = Duration::ZERO;
 
 			loop {
 				ctx.check_stop()?;
-
-				let start_instant = Instant::now();
 
 				// Create a new branch for each iteration of the loop at location {...loop location, iteration idx}
 				let mut iteration_branch = loop_branch.branch_inner(
@@ -140,8 +139,7 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 				let i = iteration;
 
 				// Async block for instrumentation purposes
-				let (dt2, res) = async {
-					let start_instant2 = Instant::now();
+				let res = async {
 					let db2 = ctx.db().clone();
 
 					// NOTE: Great care has been taken to optimize this function. This join allows multiple
@@ -151,9 +149,14 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 					//    commit the loop event. This only happens on the first iteration of the loop
 					// 2. Second, we commit the branch event for the current iteration
 					// 3. Third, we run the user's loop code
-					// 4. Last, if we have to upsert the loop event, we save the future and process it in the
+					// 4. Last, if we have to upsert the loop event, we save the future and poll it in the
 					//    next iteration of the loop as part of this join
-					let (loop_event_commit_res, loop_event_upsert_res, branch_commit_res, loop_res) = tokio::join!(
+					let (
+						loop_event_commit_res,
+						loop_event_upsert_res,
+						branch_commit_res,
+						(loop_res, cb_dt),
+					) = tokio::join!(
 						async {
 							if let Some(loop_event_init_fut) = loop_event_init_fut.take() {
 								loop_event_init_fut.await
@@ -163,10 +166,14 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 						},
 						async {
 							if let Some(loop_event_upsert_fut) = loop_event_upsert_fut.take() {
-								loop_event_upsert_fut.await
-							} else {
-								Ok(())
+								let start_instant = Instant::now();
+								loop_event_upsert_fut.await?;
+								metrics::LOOP_COMMIT_DURATION
+									.with_label_values(&[&ctx.name().to_string()])
+									.observe(start_instant.elapsed().as_secs_f64());
 							}
+
+							anyhow::Ok(())
 						},
 						async {
 							// Insert event if iteration is not a replay
@@ -177,22 +184,35 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 									ctx.version(),
 									Some(&loop_location),
 								)
-								.await
-							} else {
-								Ok(())
+								.await?;
+
+								// Only record iteration duration if its not a replay
+								metrics::LOOP_ITERATION_DURATION
+									.with_label_values(&[&ctx.name().to_string()])
+									.observe(iteration_dt.as_secs_f64());
 							}
+
+							anyhow::Ok(())
 						},
-						cb(&mut iteration_branch, &mut state),
+						async {
+							let iteration_start_instant = Instant::now();
+
+							(
+								cb(&mut iteration_branch, &mut state).await,
+								iteration_start_instant.elapsed(),
+							)
+						}
 					);
 
 					loop_event_commit_res?;
 					loop_event_upsert_res?;
 					branch_commit_res?;
 
+					iteration_dt = cb_dt;
+
 					// Run loop
 					match loop_res? {
 						Loop::Continue => {
-							let dt2 = start_instant2.elapsed().as_secs_f64();
 							iteration += 1;
 
 							// Commit workflow state to db
@@ -226,10 +246,9 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 								});
 							}
 
-							anyhow::Ok((dt2, None))
+							anyhow::Ok(None)
 						}
 						Loop::Break(res) => {
-							let dt2 = start_instant2.elapsed().as_secs_f64();
 							iteration += 1;
 
 							let state_val = serde_json::value::to_raw_value(&state)
@@ -252,7 +271,7 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 								)
 								.await?;
 
-							Ok((dt2, Some(res)))
+							Ok(Some(res))
 						}
 					}
 				}
@@ -261,11 +280,6 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 
 				// Validate no leftover events
 				iteration_branch.cursor().check_clear()?;
-
-				let dt = start_instant.elapsed().as_secs_f64();
-				metrics::LOOP_ITERATION_DURATION
-					.with_label_values(&[&ctx.name().to_string()])
-					.observe(dt - dt2);
 
 				if let Some(res) = res {
 					break res;

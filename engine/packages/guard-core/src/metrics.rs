@@ -18,6 +18,11 @@ lazy_static! {
 		"Number of active in-flight counters",
 		*REGISTRY
 	).unwrap();
+	pub static ref IN_FLIGHT_REQUEST_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"guard_in_flight_request_count",
+		"Number of active in-flight requests",
+		*REGISTRY
+	).unwrap();
 
 	// MARK: TCP
 	pub static ref TCP_CONNECTION_TOTAL: IntCounter = register_int_counter_with_registry!(

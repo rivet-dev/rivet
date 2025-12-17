@@ -24,7 +24,7 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 	pub static ref API_REQUEST_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
-		"api_request_errors",
+		"api_request_errors_total",
 		"All errors made to this request.",
 		&["method", "path", "status", "error_code"],
 		*REGISTRY,
