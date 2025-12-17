@@ -65,6 +65,32 @@ export function generateDockerCompose(context: TemplateContext) {
 	};
 	volumes["clickhouse-data"] = null;
 
+	// Prometheus
+	services["prometheus"] = {
+		restart: "unless-stopped",
+		image: "prom/prometheus:latest",
+		volumes: [
+			"prometheus-data:/prometheus",
+			`./${context.getCoreServicePath("prometheus")}/prometheus.yml:/etc/prometheus/prometheus.yml`,
+		],
+		command: [
+			"--config.file=/etc/prometheus/prometheus.yml",
+			"--storage.tsdb.path=/prometheus",
+			"--web.console.libraries=/usr/share/prometheus/console_libraries",
+			"--web.console.templates=/usr/share/prometheus/consoles",
+			"--web.enable-remote-write-receiver",
+		],
+		ports: ["9090:9090"],
+		networks: [...allDcToCoreNetworkNames, CORE_NETWORK_NAME],
+		healthcheck: {
+			test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"],
+			interval: "5s",
+			timeout: "3s",
+			retries: 3,
+		},
+	};
+	volumes["prometheus-data"] = null;
+
 	// Grafana
 	services["grafana"] = {
 		image: "grafana/grafana:11.5.2",
@@ -79,6 +105,7 @@ export function generateDockerCompose(context: TemplateContext) {
 		networks: [CORE_NETWORK_NAME],
 		depends_on: {
 			clickhouse: { condition: "service_healthy" },
+			prometheus: { condition: "service_healthy" },
 		},
 	};
 	volumes["grafana-data"] = null;
@@ -100,12 +127,8 @@ export function generateDockerCompose(context: TemplateContext) {
 			"vector-client",
 			datacenter.name,
 		);
-		const otelCollectorServerServiceName = context.getServiceName(
-			"otel-collector-server",
-			datacenter.name,
-		);
-		const otelCollectorClientServiceName = context.getServiceName(
-			"otel-collector-client",
+		const otelCollectorServiceName = context.getServiceName(
+			"otel-collector",
 			datacenter.name,
 		);
 		const postgresServiceName = context.getServiceName(
@@ -180,7 +203,8 @@ export function generateDockerCompose(context: TemplateContext) {
 			},
 			platform: "linux/amd64",
 			restart: "unless-stopped",
-			command: "sleep infinity",
+			entrypoint: "sleep",
+			command: "infinity",
 			stop_grace_period: "0s",
 			depends_on: {
 				//[natsServiceName]: { condition: "service_healthy" },
@@ -226,34 +250,20 @@ export function generateDockerCompose(context: TemplateContext) {
 		};
 		volumes[`vector-client-data-${datacenter.name}`] = null;
 
-		services[otelCollectorServerServiceName] = {
+		services[otelCollectorServiceName] = {
 			image: "otel/opentelemetry-collector-contrib:latest",
 			restart: "unless-stopped",
 			command: "--config=/etc/otel/config.yaml",
 			volumes: [
-				`./${context.getDatacenterServicePath("otel-collector-server", datacenter.name)}/config.yaml:/etc/otel/config.yaml:ro`,
+				`./${context.getDatacenterServicePath("otel-collector", datacenter.name)}/config.yaml:/etc/otel/config.yaml:ro`,
 			],
 			environment: ["CLICKHOUSE_PASSWORD=default"],
 			depends_on: {
 				clickhouse: { condition: "service_healthy" },
+				prometheus: { condition: "service_healthy" },
 			},
 			networks: [dcNetworkName, dcToCoreNetworkName],
-			ports: ["4317:4317"],
-		};
-
-		services[otelCollectorClientServiceName] = {
-			image: "otel/opentelemetry-collector-contrib:latest",
-			restart: "unless-stopped",
-			command: "--config=/etc/otel/config.yaml",
-			volumes: [
-				`./${context.getDatacenterServicePath("otel-collector-client", datacenter.name)}/config.yaml:/etc/otel/config.yaml:ro`,
-			],
-			depends_on: {
-				[otelCollectorServerServiceName]: {
-					condition: "service_started",
-				},
-			},
-			networks: [dcNetworkName],
+			ports: isPrimary ? ["4317:4317"] : undefined,
 		};
 
 		for (let i = 0; i < datacenter.engines; i++) {
@@ -278,7 +288,7 @@ export function generateDockerCompose(context: TemplateContext) {
 					"RUST_LOG_ANSI_COLOR=1",
 					"RIVET_OTEL_ENABLED=1",
 					"RIVET_OTEL_SAMPLER_RATIO=1",
-					`RIVET_OTEL_GRPC_ENDPOINT=http://${context.getServiceHost("otel-collector-client", datacenter.name)}:4317`,
+					`RIVET_OTEL_GRPC_ENDPOINT=http://${context.getServiceHost("otel-collector", datacenter.name)}:4317`,
 					// "RUST_LOG=debug,hyper=info",
 				],
 				stop_grace_period: "0s",
@@ -287,7 +297,7 @@ export function generateDockerCompose(context: TemplateContext) {
 					[vectorClientServiceName]: {
 						condition: "service_started",
 					},
-					[otelCollectorClientServiceName]: {
+					[otelCollectorServiceName]: {
 						condition: "service_started",
 					},
 					[postgresServiceName]: { condition: "service_healthy" },

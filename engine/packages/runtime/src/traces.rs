@@ -4,7 +4,7 @@ use console_subscriber;
 use opentelemetry::trace::{TraceContextExt, TracerProvider};
 use rivet_metrics::OtelProviderGuard;
 use std::sync::OnceLock;
-use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
+use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, reload, util::SubscriberInitExt};
 
 type ReloadHandle = reload::Handle<EnvFilter, tracing_subscriber::Registry>;
@@ -22,24 +22,20 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	let registry = tracing_subscriber::registry();
 
 	// Build and apply otel layers to the registry if otel is enabled
-	let (otel_trace_layer, otel_metric_layer) = match otel_providers {
+	let otel_trace_layer = match otel_providers {
 		Some(providers) => {
 			let tracer = providers.tracer_provider.tracer("tracing-otel-subscriber");
 
 			let otel_trace_layer = OpenTelemetryLayer::new(tracer)
 				.with_filter(build_filter_from_env_var("RUST_TRACE"));
 
-			let otel_metric_layer = MetricsLayer::new(providers.meter_provider.clone())
-				.with_filter(build_filter_from_env_var("RUST_TRACE"));
-
-			(Some(otel_trace_layer), Some(otel_metric_layer))
+			Some(otel_trace_layer)
 		}
-		None => (None, None),
+		None => None,
 	};
 
 	let registry = registry
 		.with(reload_layer)
-		.with(otel_metric_layer)
 		.with(otel_trace_layer)
 		.with(sentry::integrations::tracing::layer())
 		.with(SentryOtelLayer);

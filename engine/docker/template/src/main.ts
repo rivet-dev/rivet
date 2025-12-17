@@ -9,8 +9,8 @@ import { generateGitAttributes } from "./git";
 import { generateReadme } from "./readme";
 import { generateCoreClickhouse } from "./services/core/clickhouse";
 import { generateCoreGrafana } from "./services/core/grafana";
-import { generateDatacenterOtelCollectorClient } from "./services/edge/otel-collector-client";
-import { generateDatacenterOtelCollectorServer } from "./services/edge/otel-collector-server";
+import { generateCorePrometheus } from "./services/core/prometheus";
+import { generateDatacenterOtelCollector } from "./services/edge/otel-collector";
 import { generateDatacenterPostgres } from "./services/edge/postgres";
 import { generateDatacenterRivetEngine } from "./services/edge/rivet-engine";
 import { generateRunner } from "./services/edge/runner";
@@ -35,6 +35,7 @@ function generateTemplate(templateName: string, config: TemplateConfig) {
 	// Generate core services
 	generateCoreClickhouse(context);
 	generateCoreGrafana(context);
+	generateCorePrometheus(context);
 
 	// Generate datacenter-specific configurations
 	for (const datacenter of config.datacenters) {
@@ -42,8 +43,7 @@ function generateTemplate(templateName: string, config: TemplateConfig) {
 		generateDatacenterRivetEngine(context, datacenter);
 		generateDatacenterVectorServer(context, datacenter.name);
 		generateDatacenterVectorClient(context, datacenter.name);
-		generateDatacenterOtelCollectorServer(context, datacenter.name);
-		generateDatacenterOtelCollectorClient(context, datacenter.name);
+		generateDatacenterOtelCollector(context, datacenter);
 	}
 
 	generateRunner(context);

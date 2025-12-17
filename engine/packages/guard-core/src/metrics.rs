@@ -1,64 +1,72 @@
 use lazy_static::lazy_static;
-use rivet_metrics::{
-	BUCKETS,
-	otel::{global::*, metrics::*},
-};
+use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static! {
-	static ref METER: Meter = meter("rivet-guard");
-
 	// MARK: Internal
-	/// Has no expected attributes
-	pub static ref ROUTE_CACHE_COUNT: Gauge<u64> = METER.u64_gauge("rivet_guard_route_cache_count")
-		.with_description("Number of entries in the route cache")
-		.build();
-	/// Has no expected attributes
-	pub static ref RATE_LIMITER_COUNT: Gauge<u64> = METER.u64_gauge("rivet_guard_rate_limiter_count")
-		.with_description("Number of active rate limiters")
-		.build();
-	/// Has no expected attributes
-	pub static ref IN_FLIGHT_COUNTER_COUNT: Gauge<u64> = METER.u64_gauge("rivet_guard_in_flight_counter_count")
-		.with_description("Number of active in-flight counters")
-		.build();
+	pub static ref ROUTE_CACHE_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"guard_route_cache_count",
+		"Number of entries in the route cache",
+		*REGISTRY
+	).unwrap();
+	pub static ref RATE_LIMITER_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"guard_rate_limiter_count",
+		"Number of active rate limiters",
+		*REGISTRY
+	).unwrap();
+	pub static ref IN_FLIGHT_COUNTER_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"guard_in_flight_counter_count",
+		"Number of active in-flight counters",
+		*REGISTRY
+	).unwrap();
 
 	// MARK: TCP
-	/// Has no expected attributes
-	pub static ref TCP_CONNECTION_TOTAL: Counter<u64> = METER.u64_counter("rivet_guard_tcp_connection_total")
-		.with_description("Total number of TCP connections ever")
-		.build();
-	/// Has no expected attributes
-	pub static ref TCP_CONNECTION_PENDING: UpDownCounter<i64> = METER.i64_up_down_counter("rivet_guard_tcp_connection_pending")
-		.with_description("Total number of open TCP connections")
-		.build();
-	/// Has no expected attributes
-	pub static ref TCP_CONNECTION_DURATION: Histogram<f64> = METER.f64_histogram("rivet_guard_tcp_connection_duration")
-		.with_description("TCP connection duration in seconds")
-		.with_boundaries(BUCKETS.to_vec())
-		.build();
+	pub static ref TCP_CONNECTION_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"guard_tcp_connection_total",
+		"Total number of TCP connections ever",
+		*REGISTRY
+	).unwrap();
+	pub static ref TCP_CONNECTION_PENDING: IntGauge = register_int_gauge_with_registry!(
+		"guard_tcp_connection_pending",
+		"Total number of open TCP connections",
+		*REGISTRY
+	).unwrap();
+	pub static ref TCP_CONNECTION_DURATION: Histogram = register_histogram_with_registry!(
+		"guard_tcp_connection_duration",
+		"TCP connection duration in seconds",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 
 	// MARK: Pre-proxy
-	/// Has no expected attributes
-	pub static ref RESOLVE_ROUTE_DURATION: Histogram<f64> = METER.f64_histogram("rivet_guard_resolve_route_duration")
-		.with_description("Time to resolve request route in seconds")
-		.with_boundaries(BUCKETS.to_vec())
-		.build();
+	pub static ref RESOLVE_ROUTE_DURATION: Histogram = register_histogram_with_registry!(
+		"guard_resolve_route_duration",
+		"Time to resolve request route in seconds",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 
 	// MARK: Proxy requests
-	/// Has no expected attributes
-	pub static ref PROXY_REQUEST_TOTAL: Counter<u64> = METER.u64_counter("rivet_guard_proxy_request_total")
-		.with_description("Total number of requests to actor")
-		.build();
-	/// Has no expected attributes
-	pub static ref PROXY_REQUEST_PENDING: UpDownCounter<i64> = METER.i64_up_down_counter("rivet_guard_proxy_request_pending")
-		.with_description("Number of pending requests to actor")
-		.build();
-	/// Expected attributes: "status"
-	pub static ref PROXY_REQUEST_DURATION: Histogram<f64> = METER.f64_histogram("rivet_guard_proxy_request_duration")
-		.with_description("Request duration in seconds")
-		.with_boundaries(BUCKETS.to_vec())
-		.build();
-	/// Expected attributes: "error_type"
-	pub static ref PROXY_REQUEST_ERROR: Counter<u64> = METER.u64_counter("rivet_guard_proxy_request_errors_total")
-		.with_description("Total number of errors when proxying requests to actor")
-		.build();
+	pub static ref PROXY_REQUEST_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"guard_proxy_request_total",
+		"Total number of requests to actor",
+		*REGISTRY
+	).unwrap();
+	pub static ref PROXY_REQUEST_PENDING: IntGauge = register_int_gauge_with_registry!(
+		"guard_proxy_request_pending",
+		"Number of pending requests to actor",
+		*REGISTRY
+	).unwrap();
+	pub static ref PROXY_REQUEST_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"guard_proxy_request_duration",
+		"Request duration in seconds",
+		&["status"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref PROXY_REQUEST_ERROR: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_proxy_request_errors_total",
+		"Total number of errors when proxying requests to actor",
+		&["error_type"],
+		*REGISTRY
+	).unwrap();
 }

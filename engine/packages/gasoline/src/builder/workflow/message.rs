@@ -1,7 +1,6 @@
 use std::{fmt::Display, time::Instant};
 
 use anyhow::Result;
-use rivet_metrics::KeyValue;
 use serde::Serialize;
 
 use crate::{
@@ -123,20 +122,12 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 			}
 
 			let dt = start_instant.elapsed().as_secs_f64();
-			metrics::MESSAGE_SEND_DURATION.record(
-				dt,
-				&[
-					KeyValue::new("workflow_name", self.ctx.name().to_string()),
-					KeyValue::new("message_name", M::NAME),
-				],
-			);
-			metrics::MESSAGE_PUBLISHED.add(
-				1,
-				&[
-					KeyValue::new("workflow_name", self.ctx.name().to_string()),
-					KeyValue::new("message_name", M::NAME),
-				],
-			);
+			metrics::MESSAGE_SEND_DURATION
+				.with_label_values(&[self.ctx.name(), M::NAME])
+				.observe(dt);
+			metrics::MESSAGE_PUBLISHED
+				.with_label_values(&[self.ctx.name(), M::NAME])
+				.inc();
 		}
 
 		// Move to next event
