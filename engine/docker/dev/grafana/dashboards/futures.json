@@ -1,230 +1,243 @@
 {
-	"annotations": {
-		"list": [
-			{
-				"builtIn": 1,
-				"datasource": {
-					"type": "grafana",
-					"uid": "-- Grafana --"
-				},
-				"enable": true,
-				"hide": true,
-				"iconColor": "rgba(0, 211, 255, 1)",
-				"name": "Annotations & Alerts",
-				"type": "dashboard"
-			}
-		]
-	},
-	"editable": true,
-	"fiscalYearStartMonth": 0,
-	"graphTooltip": 0,
-	"id": 3,
-	"links": [],
-	"panels": [
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 0
-			},
-			"id": 1,
-			"interval": "15s",
-			"options": {
-				"calculate": false,
-				"calculation": {
-					"xBuckets": {
-						"mode": "size"
-					}
-				},
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"max": "60",
-					"min": 0,
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_instrumented_future_duration'\n            -- AND ResourceAttributes['rivet.project'] IN array($project)\n            -- AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['name'] IN array($name)\n            AND Attributes['location'] IN array($location)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
-					"refId": "A"
-				}
-			],
-			"title": "Instrumented Future Duration",
-			"transformations": [
-				{
-					"id": "groupingToMatrix",
-					"options": {
-						"columnField": "bucket",
-						"emptyValue": "zero",
-						"rowField": "Time",
-						"valueField": "count"
-					}
-				},
-				{
-					"id": "convertFieldType",
-					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\bucket"
-							}
-						],
-						"fields": {}
-					}
-				}
-			],
-			"type": "heatmap"
-		}
-	],
-	"preload": false,
-	"refresh": "30s",
-	"schemaVersion": 40,
-	"tags": [],
-	"templating": {
-		"list": [
-			{
-				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
-				"description": "",
-				"includeAll": true,
-				"label": "project",
-				"multi": true,
-				"name": "project",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": "All",
-					"value": "$__all"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
-				"includeAll": true,
-				"label": "datacenter",
-				"multi": true,
-				"name": "datacenter",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT Attributes['name'] FROM otel.otel_metrics_histogram WHERE ServiceName = 'rivet' AND MetricName = 'rivet_instrumented_future_duration' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY Attributes['name']",
-				"includeAll": true,
-				"label": "name",
-				"multi": true,
-				"name": "name",
-				"options": [],
-				"query": "SELECT DISTINCT Attributes['name'] FROM otel.otel_metrics_histogram WHERE ServiceName = 'rivet' AND MetricName = 'rivet_instrumented_future_duration' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY Attributes['name']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT Attributes['location'] FROM otel.otel_metrics_histogram WHERE ServiceName = 'rivet' AND MetricName = 'rivet_instrumented_future_duration' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY Attributes['location']",
-				"includeAll": true,
-				"label": "location",
-				"multi": true,
-				"name": "location",
-				"options": [],
-				"query": "SELECT DISTINCT Attributes['location'] FROM otel.otel_metrics_histogram WHERE ServiceName = 'rivet' AND MetricName = 'rivet_instrumented_future_duration' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY Attributes['location']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			}
-		]
-	},
-	"time": {
-		"from": "now-15m",
-		"to": "now"
-	},
-	"timepicker": {},
-	"timezone": "browser",
-	"title": "Futures",
-	"uid": "ef353ektqu4g0e",
-	"version": 1,
-	"weekStart": ""
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "interval": "15s",
+      "options": {
+        "calculate": false,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size"
+          }
+        },
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "max": "60",
+          "min": 0,
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_instrumented_future_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",name=~\"$name\",location=~\"$location\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Instrumented Future Duration",
+      "type": "heatmap"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 40,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_project)",
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_project)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+        "includeAll": true,
+        "label": "Datacenter",
+        "multi": true,
+        "name": "datacenter",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(rivet_instrumented_future_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},name)",
+        "includeAll": true,
+        "label": "Name",
+        "multi": true,
+        "name": "name",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_instrumented_future_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},name)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        }
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(rivet_instrumented_future_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},location)",
+        "includeAll": true,
+        "label": "Location",
+        "multi": true,
+        "name": "location",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_instrumented_future_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},location)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Futures",
+  "version": 0,
+  "weekStart": ""
 }

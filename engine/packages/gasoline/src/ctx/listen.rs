@@ -1,4 +1,3 @@
-use rivet_metrics::KeyValue;
 use std::ops::Deref;
 
 use crate::{
@@ -71,13 +70,9 @@ impl<'a> ListenCtx<'a> {
 		let now = rivet_util::timestamp::now();
 		for signal in &signals {
 			let recv_lag = (now as f64 - signal.create_ts as f64) / 1000.0;
-			metrics::SIGNAL_RECV_LAG.record(
-				recv_lag,
-				&[
-					KeyValue::new("workflow_name", self.ctx.name().to_string()),
-					KeyValue::new("signal_name", signal.signal_name.clone()),
-				],
-			);
+			metrics::SIGNAL_RECV_LAG
+				.with_label_values(&[self.ctx.name(), signal.signal_name.as_str()])
+				.observe(recv_lag);
 
 			if recv_lag > 3.0 {
 				// We print an error here so the trace of this workflow does not get dropped

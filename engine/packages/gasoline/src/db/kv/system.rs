@@ -95,7 +95,7 @@ impl SystemInfo {
 				.unwrap_or(0.0)
 		};
 
-		crate::metrics::CPU_USAGE.record(total as f64, &[]);
+		crate::metrics::CPU_USAGE.observe(total as f64);
 
 		total / cpu_max
 	}

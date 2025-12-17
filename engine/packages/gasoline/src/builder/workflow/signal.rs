@@ -1,7 +1,6 @@
 use std::{fmt::Display, time::Instant};
 
 use anyhow::Result;
-use rivet_metrics::KeyValue;
 use rivet_util::Id;
 use serde::Serialize;
 
@@ -256,20 +255,12 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 			}
 
 			let dt = start_instant.elapsed().as_secs_f64();
-			metrics::SIGNAL_SEND_DURATION.record(
-				dt,
-				&[
-					KeyValue::new("workflow_name", self.ctx.name().to_string()),
-					KeyValue::new("signal_name", T::NAME),
-				],
-			);
-			metrics::SIGNAL_PUBLISHED.add(
-				1,
-				&[
-					KeyValue::new("workflow_name", self.ctx.name().to_string()),
-					KeyValue::new("signal_name", T::NAME),
-				],
-			);
+			metrics::SIGNAL_SEND_DURATION
+				.with_label_values(&[self.ctx.name(), T::NAME])
+				.observe(dt);
+			metrics::SIGNAL_PUBLISHED
+				.with_label_values(&[self.ctx.name(), T::NAME])
+				.inc();
 
 			signal_id
 		};

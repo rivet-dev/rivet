@@ -36,6 +36,35 @@ services:
       interval: 2s
       timeout: 10s
       retries: 10
+  prometheus:
+    restart: unless-stopped
+    image: prom/prometheus:latest
+    volumes:
+      - prometheus-data:/prometheus
+      - ./core/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-remote-write-receiver'
+    ports:
+      - '9090:9090'
+    networks:
+      - rivet-network-dc-a-to-core
+      - rivet-network-dc-b-to-core
+      - rivet-network-dc-c-to-core
+      - rivet-core-network
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--spider'
+        - '-q'
+        - http://127.0.0.1:9090/-/healthy
+      interval: 5s
+      timeout: 3s
+      retries: 3
   grafana:
     image: grafana/grafana:11.5.2
     volumes:
@@ -51,6 +80,8 @@ services:
       - rivet-core-network
     depends_on:
       clickhouse:
+        condition: service_healthy
+      prometheus:
         condition: service_healthy
   postgres-dc-a:
     restart: unless-stopped
@@ -83,7 +114,8 @@ services:
         BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
-    command: sleep infinity
+    entrypoint: sleep
+    command: infinity
     stop_grace_period: 0s
     depends_on:
       postgres-dc-a:
@@ -121,35 +153,24 @@ services:
     depends_on:
       vector-server-dc-a:
         condition: service_started
-  otel-collector-server-dc-a:
+  otel-collector-dc-a:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
     command: '--config=/etc/otel/config.yaml'
     volumes:
-      - >-
-        ./datacenters/dc-a/otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+      - ./datacenters/dc-a/otel-collector/config.yaml:/etc/otel/config.yaml:ro
     environment:
       - CLICKHOUSE_PASSWORD=default
     depends_on:
       clickhouse:
+        condition: service_healthy
+      prometheus:
         condition: service_healthy
     networks:
       - rivet-network-dc-a
       - rivet-network-dc-a-to-core
     ports:
       - '4317:4317'
-  otel-collector-client-dc-a:
-    image: otel/opentelemetry-collector-contrib:latest
-    restart: unless-stopped
-    command: '--config=/etc/otel/config.yaml'
-    volumes:
-      - >-
-        ./datacenters/dc-a/otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
-    depends_on:
-      otel-collector-server-dc-a:
-        condition: service_started
-    networks:
-      - rivet-network-dc-a
   rivet-engine-dc-a:
     build:
       context: ../../..
@@ -163,12 +184,12 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client-dc-a:4317
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-a:4317
     stop_grace_period: 0s
     depends_on:
       vector-client-dc-a:
         condition: service_started
-      otel-collector-client-dc-a:
+      otel-collector-dc-a:
         condition: service_started
       postgres-dc-a:
         condition: service_healthy
@@ -238,7 +259,8 @@ services:
         BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
-    command: sleep infinity
+    entrypoint: sleep
+    command: infinity
     stop_grace_period: 0s
     depends_on:
       postgres-dc-b:
@@ -276,35 +298,22 @@ services:
     depends_on:
       vector-server-dc-b:
         condition: service_started
-  otel-collector-server-dc-b:
+  otel-collector-dc-b:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
     command: '--config=/etc/otel/config.yaml'
     volumes:
-      - >-
-        ./datacenters/dc-b/otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+      - ./datacenters/dc-b/otel-collector/config.yaml:/etc/otel/config.yaml:ro
     environment:
       - CLICKHOUSE_PASSWORD=default
     depends_on:
       clickhouse:
         condition: service_healthy
+      prometheus:
+        condition: service_healthy
     networks:
       - rivet-network-dc-b
       - rivet-network-dc-b-to-core
-    ports:
-      - '4317:4317'
-  otel-collector-client-dc-b:
-    image: otel/opentelemetry-collector-contrib:latest
-    restart: unless-stopped
-    command: '--config=/etc/otel/config.yaml'
-    volumes:
-      - >-
-        ./datacenters/dc-b/otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
-    depends_on:
-      otel-collector-server-dc-b:
-        condition: service_started
-    networks:
-      - rivet-network-dc-b
   rivet-engine-dc-b:
     build:
       context: ../../..
@@ -318,12 +327,12 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client-dc-b:4317
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-b:4317
     stop_grace_period: 0s
     depends_on:
       vector-client-dc-b:
         condition: service_started
-      otel-collector-client-dc-b:
+      otel-collector-dc-b:
         condition: service_started
       postgres-dc-b:
         condition: service_healthy
@@ -389,7 +398,8 @@ services:
         BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
-    command: sleep infinity
+    entrypoint: sleep
+    command: infinity
     stop_grace_period: 0s
     depends_on:
       postgres-dc-c:
@@ -427,35 +437,22 @@ services:
     depends_on:
       vector-server-dc-c:
         condition: service_started
-  otel-collector-server-dc-c:
+  otel-collector-dc-c:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
     command: '--config=/etc/otel/config.yaml'
     volumes:
-      - >-
-        ./datacenters/dc-c/otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+      - ./datacenters/dc-c/otel-collector/config.yaml:/etc/otel/config.yaml:ro
     environment:
       - CLICKHOUSE_PASSWORD=default
     depends_on:
       clickhouse:
         condition: service_healthy
+      prometheus:
+        condition: service_healthy
     networks:
       - rivet-network-dc-c
       - rivet-network-dc-c-to-core
-    ports:
-      - '4317:4317'
-  otel-collector-client-dc-c:
-    image: otel/opentelemetry-collector-contrib:latest
-    restart: unless-stopped
-    command: '--config=/etc/otel/config.yaml'
-    volumes:
-      - >-
-        ./datacenters/dc-c/otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
-    depends_on:
-      otel-collector-server-dc-c:
-        condition: service_started
-    networks:
-      - rivet-network-dc-c
   rivet-engine-dc-c:
     build:
       context: ../../..
@@ -469,12 +466,12 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
-      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client-dc-c:4317
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-c:4317
     stop_grace_period: 0s
     depends_on:
       vector-client-dc-c:
         condition: service_started
-      otel-collector-client-dc-c:
+      otel-collector-dc-c:
         condition: service_started
       postgres-dc-c:
         condition: service_healthy
@@ -534,6 +531,7 @@ networks:
     driver: bridge
 volumes:
   clickhouse-data: null
+  prometheus-data: null
   grafana-data: null
   postgres-data-dc-a: null
   vector-server-data-dc-a: null

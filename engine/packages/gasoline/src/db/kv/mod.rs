@@ -23,8 +23,6 @@ use universaldb::{
 	value::Value,
 };
 
-use rivet_metrics::KeyValue;
-
 use super::{BumpSubSubject, Database, PulledWorkflowData, SignalData, WorkflowData};
 use crate::{
 	error::{WorkflowError, WorkflowResult},
@@ -686,10 +684,9 @@ impl Database for DatabaseKv {
 			for (key, count) in entries {
 				match key.metric {
 					keys::metric::GaugeMetric::WorkflowActive(workflow_name) => {
-						metrics::WORKFLOW_ACTIVE.record(
-							count as u64,
-							&[KeyValue::new("workflow_name", workflow_name.clone())],
-						);
+						metrics::WORKFLOW_ACTIVE
+							.with_label_values(&[workflow_name.as_str()])
+							.set(count as i64);
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -701,10 +698,9 @@ impl Database for DatabaseKv {
 						}
 					}
 					keys::metric::GaugeMetric::WorkflowSleeping(workflow_name) => {
-						metrics::WORKFLOW_SLEEPING.record(
-							count as u64,
-							&[KeyValue::new("workflow_name", workflow_name.clone())],
-						);
+						metrics::WORKFLOW_SLEEPING
+							.with_label_values(&[workflow_name.as_str()])
+							.set(count as i64);
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -716,13 +712,9 @@ impl Database for DatabaseKv {
 						}
 					}
 					keys::metric::GaugeMetric::WorkflowDead(workflow_name, error) => {
-						metrics::WORKFLOW_DEAD.record(
-							count as u64,
-							&[
-								KeyValue::new("workflow_name", workflow_name.clone()),
-								KeyValue::new("error", error),
-							],
-						);
+						metrics::WORKFLOW_DEAD
+							.with_label_values(&[workflow_name.as_str(), error.as_str()])
+							.set(count as i64);
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -745,16 +737,16 @@ impl Database for DatabaseKv {
 					}
 					keys::metric::GaugeMetric::SignalPending(signal_name) => {
 						metrics::SIGNAL_PENDING
-							.record(count as u64, &[KeyValue::new("signal_name", signal_name)]);
+							.with_label_values(&[signal_name.as_str()])
+							.set(count as i64);
 					}
 				}
 			}
 
 			for (workflow_name, count) in total_workflow_counts {
-				metrics::WORKFLOW_TOTAL.record(
-					count as u64,
-					&[KeyValue::new("workflow_name", workflow_name.clone())],
-				);
+				metrics::WORKFLOW_TOTAL
+					.with_label_values(&[workflow_name.as_str()])
+					.set(count as i64);
 			}
 
 			// Clear lock
@@ -778,10 +770,9 @@ impl Database for DatabaseKv {
 
 	#[tracing::instrument(skip_all)]
 	async fn update_worker_ping(&self, worker_id: Id) -> WorkflowResult<()> {
-		metrics::WORKER_LAST_PING.record(
-			rivet_util::timestamp::now() as u64,
-			&[KeyValue::new("worker_id", worker_id.to_string())],
-		);
+		metrics::WORKER_LAST_PING
+			.with_label_values(&[&worker_id.to_string()])
+			.set(rivet_util::timestamp::now());
 
 		self.pools
 			.udb()
@@ -998,10 +989,9 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::Udb)?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::FIND_WORKFLOWS_DURATION.record(
-			dt,
-			&[KeyValue::new("workflow_name", workflow_name.to_string())],
-		);
+		metrics::FIND_WORKFLOWS_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
 
 		Ok(workflow_id)
 	}
@@ -1055,7 +1045,7 @@ impl Database for DatabaseKv {
 						calc_pull_ratio((cpu_usage_ratio * 1000.0) as u64, 500, 1000, 800, 50);
 
 					// Record load shedding ratio metric
-					metrics::LOAD_SHEDDING_RATIO.record(load_shed_ratio_x1000 as f64 / 1000.0, &[]);
+					metrics::LOAD_SHEDDING_RATIO.observe(load_shed_ratio_x1000 as f64 / 1000.0);
 
 					let active_worker_subspace_start = tx.pack(
 						&keys::worker::ActiveWorkerIdxKey::subspace(active_workers_after),
@@ -1331,9 +1321,11 @@ impl Database for DatabaseKv {
 		let worker_id_str = worker_id.to_string();
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::LAST_PULL_WORKFLOWS_DURATION
-			.record(dt, &[KeyValue::new("worker_id", worker_id_str.clone())]);
+			.with_label_values(&[worker_id_str.as_str()])
+			.set(dt);
 		metrics::PULL_WORKFLOWS_DURATION
-			.record(dt, &[KeyValue::new("worker_id", worker_id_str.clone())]);
+			.with_label_values(&[worker_id_str.as_str()])
+			.observe(dt);
 
 		if leased_workflows.is_empty() {
 			return Ok(Vec::new());
@@ -1675,15 +1667,17 @@ impl Database for DatabaseKv {
 		let dt2 = start_instant2.elapsed().as_secs_f64();
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::LAST_PULL_WORKFLOWS_FULL_DURATION
-			.record(dt, &[KeyValue::new("worker_id", worker_id_str.clone())]);
+			.with_label_values(&[worker_id_str.as_str()])
+			.set(dt);
 		metrics::PULL_WORKFLOWS_FULL_DURATION
-			.record(dt, &[KeyValue::new("worker_id", worker_id_str.clone())]);
-		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION.record(
-			dt2 as u64,
-			&[KeyValue::new("worker_id", worker_id_str.clone())],
-		);
+			.with_label_values(&[worker_id_str.as_str()])
+			.observe(dt);
+		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[worker_id_str.as_str()])
+			.set(dt2);
 		metrics::PULL_WORKFLOWS_HISTORY_DURATION
-			.record(dt2, &[KeyValue::new("worker_id", worker_id_str.clone())]);
+			.with_label_values(&[worker_id_str.as_str()])
+			.observe(dt2);
 
 		Ok(pulled_workflows)
 	}
@@ -1853,10 +1847,9 @@ impl Database for DatabaseKv {
 		}
 
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::COMPLETE_WORKFLOW_DURATION.record(
-			dt,
-			&[KeyValue::new("workflow_name", workflow_name.to_string())],
-		);
+		metrics::COMPLETE_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
 
 		Ok(())
 	}
@@ -2021,10 +2014,9 @@ impl Database for DatabaseKv {
 		self.bump(BumpSubSubject::Worker);
 
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::COMMIT_WORKFLOW_DURATION.record(
-			dt,
-			&[KeyValue::new("workflow_name", workflow_name.to_string())],
-		);
+		metrics::COMMIT_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
 
 		Ok(())
 	}

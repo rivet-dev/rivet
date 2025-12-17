@@ -5,7 +5,6 @@ use crate::{
 	range_option::RangeOption,
 	tuple::{self, PackResult, TuplePack, TupleUnpack},
 };
-use rivet_metrics::KeyValue;
 
 use crate::metrics;
 
@@ -45,7 +44,9 @@ impl Subspace {
 	/// Returns the key encoding the specified Tuple with the prefix of this Subspace
 	/// prepended.
 	pub fn pack<T: TuplePack>(&self, t: &T) -> Vec<u8> {
-		metrics::KEY_PACK_COUNT.add(1, &[KeyValue::new("type", std::any::type_name::<T>())]);
+		metrics::KEY_PACK_COUNT
+			.with_label_values(&[std::any::type_name::<T>()])
+			.inc();
 
 		self.inner.pack(t)
 	}
@@ -53,7 +54,9 @@ impl Subspace {
 	/// Returns the key encoding the specified Tuple with the prefix of this Subspace
 	/// prepended, with a versionstamp.
 	pub fn pack_with_versionstamp<T: TuplePack>(&self, t: &T) -> Vec<u8> {
-		metrics::KEY_PACK_COUNT.add(1, &[KeyValue::new("type", std::any::type_name::<T>())]);
+		metrics::KEY_PACK_COUNT
+			.with_label_values(&[std::any::type_name::<T>()])
+			.inc();
 
 		self.inner.pack_with_versionstamp(t)
 	}
@@ -62,7 +65,9 @@ impl Subspace {
 	/// removed.  `unpack` will return an error if the key is not in this Subspace or does not
 	/// encode a well-formed Tuple.
 	pub fn unpack<'de, T: TupleUnpack<'de>>(&self, key: &'de [u8]) -> PackResult<T> {
-		metrics::KEY_UNPACK_COUNT.add(1, &[KeyValue::new("type", std::any::type_name::<T>())]);
+		metrics::KEY_UNPACK_COUNT
+			.with_label_values(&[std::any::type_name::<T>()])
+			.inc();
 
 		self.inner.unpack(key)
 	}

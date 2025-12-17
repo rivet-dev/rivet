@@ -10,7 +10,6 @@ use axum::{
 };
 use hyper::header::HeaderName;
 use opentelemetry::trace::TraceContextExt;
-use rivet_metrics::KeyValue;
 use tower_http::trace::TraceLayer;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -99,20 +98,12 @@ pub async fn http_logging_middleware(
 	);
 
 	// Metrics
-	metrics::API_REQUEST_PENDING.add(
-		1,
-		&[
-			KeyValue::new("method", method.to_string()),
-			KeyValue::new("path", path.clone()),
-		],
-	);
-	metrics::API_REQUEST_TOTAL.add(
-		1,
-		&[
-			KeyValue::new("method", method.to_string()),
-			KeyValue::new("path", path.clone()),
-		],
-	);
+	metrics::API_REQUEST_PENDING
+		.with_label_values(&[method.as_str(), path.as_str()])
+		.inc();
+	metrics::API_REQUEST_TOTAL
+		.with_label_values(&[method.as_str(), path.as_str()])
+		.inc();
 
 	// Clone values for the async block
 	let method_clone = method.clone();
@@ -186,7 +177,7 @@ pub async fn http_logging_middleware(
 		);
 
 		// Update metrics
-		metrics::API_REQUEST_PENDING.add(-1, &[KeyValue::new("method", method_clone.to_string()), KeyValue::new("path", path_clone.clone())]);
+		metrics::API_REQUEST_PENDING.with_label_values(&[method_clone.as_str(), path_clone.as_str()]).dec();
 
 		let error_code: String = if status.is_success() {
 			String::new()
@@ -195,26 +186,14 @@ pub async fn http_logging_middleware(
 		} else {
 			String::new()
 		};
-		metrics::API_REQUEST_DURATION.record(
-			duration,
-			&[
-				KeyValue::new("method", method_clone.to_string()),
-				KeyValue::new("path", path_clone.clone()),
-				KeyValue::new("status", status.to_string()),
-				KeyValue::new("error_code", error_code.clone()),
-			],
-		);
+ 			metrics::API_REQUEST_DURATION
+			.with_label_values(&[method_clone.as_str(), path_clone.as_str(), status.as_str(), error_code.as_str()])
+			.observe(duration);
 
 		if !status.is_success() {
-			metrics::API_REQUEST_ERRORS.add(
-				1,
-				&[
-					KeyValue::new("method", method_clone.to_string()),
-					KeyValue::new("path", path_clone.clone()),
-					KeyValue::new("status", status.to_string()),
-					KeyValue::new("error_code", error_code),
-				],
-			);
+			metrics::API_REQUEST_ERRORS
+			.with_label_values(&[method_clone.as_str(), path_clone.as_str(), status.as_str(), error_code.as_str()])
+			.inc();
 		}
 
 		response

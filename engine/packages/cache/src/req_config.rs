@@ -6,7 +6,6 @@ use tracing::Instrument;
 
 use super::*;
 use crate::{errors::Error, metrics};
-use rivet_metrics::KeyValue;
 
 /// Config specifying how cached values will behave.
 #[derive(Clone)]
@@ -127,9 +126,12 @@ impl RequestConfig {
 			return Ok(Vec::new());
 		}
 
-		metrics::CACHE_REQUEST_TOTAL.add(1, &[KeyValue::new("key", base_key.clone())]);
+		metrics::CACHE_REQUEST_TOTAL
+			.with_label_values(&[base_key.as_str()])
+			.inc();
 		metrics::CACHE_VALUE_TOTAL
-			.add(keys.len() as u64, &[KeyValue::new("key", base_key.clone())]);
+			.with_label_values(&[base_key.as_str()])
+			.inc_by(keys.len() as u64);
 
 		// Build context.
 		//
@@ -179,10 +181,9 @@ impl RequestConfig {
 					let remaining_keys = ctx.unresolved_keys();
 					let unresolved_len = remaining_keys.len();
 
-					metrics::CACHE_VALUE_MISS_TOTAL.add(
-						unresolved_len as u64,
-						&[KeyValue::new("key", base_key.clone())],
-					);
+					metrics::CACHE_VALUE_MISS_TOTAL
+						.with_label_values(&[base_key.as_str()])
+						.inc_by(unresolved_len as u64);
 
 					ctx = getter(ctx, remaining_keys).await.map_err(Error::Getter)?;
 
@@ -245,10 +246,9 @@ impl RequestConfig {
 					}
 				}
 
-				metrics::CACHE_VALUE_EMPTY_TOTAL.add(
-					ctx.unresolved_keys().len() as u64,
-					&[KeyValue::new("key", base_key.clone())],
-				);
+				metrics::CACHE_VALUE_EMPTY_TOTAL
+					.with_label_values(&[base_key])
+					.inc_by(ctx.unresolved_keys().len() as u64);
 
 				Ok(ctx.into_values())
 			}
@@ -258,7 +258,9 @@ impl RequestConfig {
 					"failed to read batch keys from cache, falling back to getter"
 				);
 
-				metrics::CACHE_REQUEST_ERRORS.add(1, &[KeyValue::new("key", base_key.clone())]);
+				metrics::CACHE_REQUEST_ERRORS
+					.with_label_values(&[base_key])
+					.inc();
 
 				// Fall back to the getter since we can't fetch the value from
 				// the cache

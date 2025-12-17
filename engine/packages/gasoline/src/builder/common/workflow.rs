@@ -1,7 +1,6 @@
 use std::{fmt::Display, marker::PhantomData, time::Instant};
 
 use anyhow::Result;
-use rivet_metrics::KeyValue;
 use rivet_util::Id;
 use serde::Serialize;
 use tracing::Instrument;
@@ -142,20 +141,12 @@ where
 
 		if workflow_id == actual_workflow_id {
 			let dt = start_instant.elapsed().as_secs_f64();
-			metrics::WORKFLOW_DISPATCH_DURATION.record(
-				dt,
-				&[
-					KeyValue::new("workflow_name", ""),
-					KeyValue::new("sub_workflow_name", workflow_name),
-				],
-			);
-			metrics::WORKFLOW_DISPATCHED.add(
-				1,
-				&[
-					KeyValue::new("workflow_name", ""),
-					KeyValue::new("sub_workflow_name", workflow_name),
-				],
-			);
+			metrics::WORKFLOW_DISPATCH_DURATION
+				.with_label_values(&["", workflow_name])
+				.observe(dt);
+			metrics::WORKFLOW_DISPATCHED
+				.with_label_values(&["", workflow_name])
+				.inc();
 		}
 
 		Ok(actual_workflow_id)

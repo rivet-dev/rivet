@@ -4,7 +4,6 @@ use base64::prelude::BASE64_STANDARD;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
-use rivet_metrics::KeyValue;
 use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
@@ -454,13 +453,11 @@ async fn allocate_actor_v2(
 		.await?;
 
 	let dt = start_instant.elapsed().as_secs_f64();
-	metrics::ACTOR_ALLOCATE_DURATION.record(
-		dt,
-		&[KeyValue::new(
-			"did_reserve",
-			matches!(res.status, AllocateActorStatus::Allocated { .. }).to_string(),
-		)],
-	);
+	metrics::ACTOR_ALLOCATE_DURATION
+		.with_label_values(&[
+			matches!(res.status, AllocateActorStatus::Allocated { .. }).to_string()
+		])
+		.observe(dt);
 
 	state.for_serverless = res.serverless;
 	state.allocated_serverless_slot = res.serverless;

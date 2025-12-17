@@ -13,8 +13,6 @@ use tokio::sync::{Mutex, watch};
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use rivet_metrics::KeyValue;
-
 use crate::{
 	activity::{Activity, ActivityInput},
 	builder::{WorkflowRepr, workflow as builder},
@@ -214,21 +212,17 @@ impl WorkflowCtx {
 				// finish. This workflow will be retried when the sub workflow completes
 				let wake_sub_workflow = err.sub_workflow();
 
+				let err_str = err.to_string();
+
 				if err.is_recoverable() && !err.is_retryable() {
 					tracing::debug!(?err, "workflow sleeping");
 				} else {
 					tracing::error!(?err, "workflow error");
 
-					metrics::WORKFLOW_ERRORS.add(
-						1,
-						&[
-							KeyValue::new("workflow_name", self.name.clone()),
-							KeyValue::new("error", err.to_string()),
-						],
-					);
+					metrics::WORKFLOW_ERRORS
+						.with_label_values(&[self.name.as_str(), err_str.as_str()])
+						.inc();
 				}
-
-				let err_str = err.to_string();
 
 				let mut retries = 0;
 				let mut interval = tokio::time::interval(DB_ACTION_RETRY);
@@ -342,14 +336,9 @@ impl WorkflowCtx {
 					},
 				)?;
 
-				metrics::ACTIVITY_DURATION.record(
-					dt,
-					&[
-						KeyValue::new("workflow_name", self.name.clone()),
-						KeyValue::new("activity_name", A::NAME),
-						KeyValue::new("error_code", ""),
-					],
-				);
+				metrics::ACTIVITY_DURATION
+					.with_label_values(&[self.name.as_str(), A::NAME, ""])
+					.observe(dt);
 
 				Ok(output)
 			}
@@ -381,23 +370,13 @@ impl WorkflowCtx {
 					.unwrap_or_default();
 
 				if !is_recoverable {
-					metrics::ACTIVITY_ERRORS.add(
-						1,
-						&[
-							KeyValue::new("workflow_name", self.name.clone()),
-							KeyValue::new("activity_name", A::NAME),
-							KeyValue::new("error_code", err_str.clone()),
-						],
-					);
+					metrics::ACTIVITY_ERRORS
+						.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+						.inc();
 				}
-				metrics::ACTIVITY_DURATION.record(
-					dt,
-					&[
-						KeyValue::new("workflow_name", self.name.clone()),
-						KeyValue::new("activity_name", A::NAME),
-						KeyValue::new("error_code", err_str.clone()),
-					],
-				);
+				metrics::ACTIVITY_DURATION
+					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+					.observe(dt);
 
 				Err(WorkflowError::ActivityFailure(A::NAME, err, 0))
 			}
@@ -421,22 +400,12 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				metrics::ACTIVITY_ERRORS.add(
-					1,
-					&[
-						KeyValue::new("workflow_name", self.name.clone()),
-						KeyValue::new("activity_name", A::NAME),
-						KeyValue::new("error_code", err_str.clone()),
-					],
-				);
-				metrics::ACTIVITY_DURATION.record(
-					dt,
-					&[
-						KeyValue::new("workflow_name", self.name.clone()),
-						KeyValue::new("activity_name", A::NAME),
-						KeyValue::new("error_code", err_str.clone()),
-					],
-				);
+				metrics::ACTIVITY_ERRORS
+					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+					.inc();
+				metrics::ACTIVITY_DURATION
+					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+					.observe(dt);
 
 				Err(err)
 			}
