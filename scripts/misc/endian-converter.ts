@@ -26,18 +26,26 @@ console.log('='.repeat(50));
 const beBuf = Buffer.allocUnsafe(8);
 beBuf.writeBigUInt64BE(num);
 console.log('\nOriginal (Big Endian):');
-console.log(`  Decimal: ${num}`);
+console.log(`  Decimal (u64): ${num}`);
 console.log(`  Hex: 0x${num.toString(16).padStart(16, '0')}`);
 console.log(`  Bytes: ${Array.from(beBuf).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+
+// Show as signed integer
+const beI64 = beBuf.readBigInt64BE();
+console.log(`  Decimal (i64): ${beI64}`);
 
 // Convert to little endian
 const leBuf = Buffer.allocUnsafe(8);
 leBuf.writeBigUInt64LE(num);
-const littleEndianValue = leBuf.readBigUInt64BE(); // Read the LE bytes as if they were BE
+
+const leU64 = leBuf.readBigUInt64BE();
+const leI64 = leBuf.readBigInt64BE();
 
 console.log('\nConverted (Little Endian):');
-console.log(`  Decimal: ${littleEndianValue}`);
-console.log(`  Hex: 0x${littleEndianValue.toString(16).padStart(16, '0')}`);
+console.log(`  Decimal (u64): ${leU64}`);
+console.log(`  Decimal (i64): ${leI64}`);
+console.log(`  Hex: 0x${leU64.toString(16).padStart(16, '0')}`);
 console.log(`  Bytes: ${Array.from(leBuf).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+
 
 console.log('\n' + '='.repeat(50) + '\n');

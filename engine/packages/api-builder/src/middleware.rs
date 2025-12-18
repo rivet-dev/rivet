@@ -14,7 +14,7 @@ use tower_http::trace::TraceLayer;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::{ErrorExt, RequestIds, metrics};
+use crate::{ErrorExt, RequestIds, RouterName, metrics};
 
 pub const X_RIVET_RAY_ID: HeaderName = HeaderName::from_static("x-rivet-ray-id");
 
@@ -29,6 +29,7 @@ pub fn create_trace_layer()
 /// HTTP request logging and metrics middleware
 pub async fn http_logging_middleware(
 	State(config): State<rivet_config::Config>,
+	State(RouterName(router_name)): State<RouterName>,
 	mut req: Request<Body>,
 	next: Next,
 ) -> Result<Response, StatusCode> {
@@ -99,10 +100,10 @@ pub async fn http_logging_middleware(
 
 	// Metrics
 	metrics::API_REQUEST_PENDING
-		.with_label_values(&[method.as_str(), path.as_str()])
+		.with_label_values(&[router_name, method.as_str(), path.as_str()])
 		.inc();
 	metrics::API_REQUEST_TOTAL
-		.with_label_values(&[method.as_str(), path.as_str()])
+		.with_label_values(&[router_name, method.as_str(), path.as_str()])
 		.inc();
 
 	// Clone values for the async block
@@ -177,9 +178,9 @@ pub async fn http_logging_middleware(
 		);
 
 		// Update metrics
-		metrics::API_REQUEST_PENDING.with_label_values(&[method_clone.as_str(), path_clone.as_str()]).dec();
+		metrics::API_REQUEST_PENDING.with_label_values(&[router_name, method_clone.as_str(), path_clone.as_str()]).dec();
 
-		let error_code: String = if status.is_success() {
+		let error_str: String = if status.is_success() {
 			String::new()
 		} else if let Some(err) = &error {
 			format!("{}.{}", err.group, err.code)
@@ -187,12 +188,12 @@ pub async fn http_logging_middleware(
 			String::new()
 		};
  			metrics::API_REQUEST_DURATION
-			.with_label_values(&[method_clone.as_str(), path_clone.as_str(), status.as_str(), error_code.as_str()])
+			.with_label_values(&[router_name, method_clone.as_str(), path_clone.as_str(), status.as_str(), error_str.as_str()])
 			.observe(duration);
 
 		if !status.is_success() {
 			metrics::API_REQUEST_ERRORS
-			.with_label_values(&[method_clone.as_str(), path_clone.as_str(), status.as_str(), error_code.as_str()])
+			.with_label_values(&[router_name, method_clone.as_str(), path_clone.as_str(), status.as_str(), error_str.as_str()])
 			.inc();
 		}
 

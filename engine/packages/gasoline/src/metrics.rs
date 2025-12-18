@@ -104,14 +104,14 @@ lazy_static::lazy_static! {
 	pub static ref ACTIVITY_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"gasoline_activity_duration",
 		"Total duration of an activity.",
-		&["workflow_name", "activity_name", "error_code"],
+		&["workflow_name", "activity_name", "error"],
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 	pub static ref ACTIVITY_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
 		"gasoline_activity_errors",
 		"All errors made in an activity.",
-		&["workflow_name", "activity_name", "error_code"],
+		&["workflow_name", "activity_name", "error"],
 		*REGISTRY
 	).unwrap();
 

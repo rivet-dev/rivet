@@ -133,7 +133,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_gasoline_operation_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error_code!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_gasoline_operation_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -548,7 +548,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\r\n        sum(rate(rivet_gasoline_operation_duration_sum{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error_code!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) by (operation_name) /\r\n    sum(rate(rivet_gasoline_operation_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error_code!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) by (operation_name)\r\n) > 0",
+          "expr": "(\r\n        sum(rate(rivet_gasoline_operation_duration_sum{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) by (operation_name) /\r\n    sum(rate(rivet_gasoline_operation_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) by (operation_name)\r\n) > 0",
           "format": "heatmap",
           "legendFormat": "{{operation_name}}",
           "range": true,
@@ -649,7 +649,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \r\n  sum(rate(rivet_gasoline_operation_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error_code!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) \r\n  by (le, operation_name)\r\n) > 0\r\n",
+          "expr": "histogram_quantile(0.95, \r\n  sum(rate(rivet_gasoline_operation_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) \r\n  by (le, operation_name)\r\n) > 0\r\n",
           "format": "heatmap",
           "legendFormat": "{{operation_name}}",
           "range": true,
@@ -750,7 +750,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \r\n  sum(rate(rivet_gasoline_operation_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error_code!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) \r\n  by (le, operation_name)\r\n) > 0",
+          "expr": "histogram_quantile(0.99, \r\n  sum(rate(rivet_gasoline_operation_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",error!=\"1004\",operation_name=~\"$operation_name\"} [$__rate_interval])) \r\n  by (le, operation_name)\r\n) > 0",
           "format": "heatmap",
           "legendFormat": "{{operation_name}}",
           "range": true,
