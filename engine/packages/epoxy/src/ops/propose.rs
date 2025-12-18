@@ -348,6 +348,8 @@ async fn purge_optimistic_cache(ctx: OperationCtx, keys: Vec<String>) -> Result<
 			.dispatch()
 			.await?;
 		ctx.signal(crate::workflows::purger::Purge { keys: keys.clone() })
+			// This is ok because double purging is idempotent
+			.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 			.to_workflow_id(workflow_id)
 			.send()
 			.await?;
