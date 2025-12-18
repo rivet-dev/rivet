@@ -127,7 +127,7 @@ features = ["uuid"]
 
 [workspace.dependencies.axum]
 version = "0.8"
-features = ["http2"]
+features = ["http2", "macros"]
 
 [workspace.dependencies.axum-extra]
 version = "0.10.1"
