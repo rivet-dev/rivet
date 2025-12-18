@@ -2,6 +2,11 @@
 	"name": "@rivetkit/engine-runner",
 	"version": "2.0.28",
 	"type": "module",
+	"files": [
+		"dist",
+		"src",
+		"package.json"
+	],
 	"exports": {
 		"import": {
 			"types": "./dist/mod.d.ts",
