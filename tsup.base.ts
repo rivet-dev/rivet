@@ -23,4 +23,6 @@ export default {
 	skipNodeModulesBundle: true,
 	publicDir: true,
 	external: [/^node:.*/],
+	// Required to replace `import.meta.ur.` with CJS shims
+	shims: true,
 } satisfies Options;
