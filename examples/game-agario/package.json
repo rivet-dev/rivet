@@ -1,0 +1,42 @@
+{
+	"name": "game-agario",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:frontend": "vite",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
+		"@vitejs/plugin-react": "^4.2.0",
+		"concurrently": "^8.2.2",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2",
+		"vite": "^5.0.0",
+		"@rivetkit/react": "workspace:*",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*"
+	},
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"react",
+			"typescript"
+		],
+		"tags": [
+			"real-time",
+			"game"
+		],
+		"priority": 100,
+		"frontendPort": 5174
+	},
+	"license": "MIT"
+}

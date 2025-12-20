@@ -880,6 +880,86 @@ importers:
         specifier: ^5.5.2
         version: 5.9.2
 
+  examples/game-agario:
+    dependencies:
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/react
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.1
+      '@types/react':
+        specifier: ^19
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.2(@types/react@19.2.2)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.0
+        version: 4.7.0(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0))
+      concurrently:
+        specifier: ^8.2.2
+        version: 8.2.2
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
+
+  examples/game-pong:
+    dependencies:
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/react
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.1
+      '@types/react':
+        specifier: ^19
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.2(@types/react@19.2.2)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.0
+        version: 4.7.0(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0))
+      concurrently:
+        specifier: ^8.2.2
+        version: 8.2.2
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
+
   examples/hono:
     dependencies:
       '@hono/node-server':
