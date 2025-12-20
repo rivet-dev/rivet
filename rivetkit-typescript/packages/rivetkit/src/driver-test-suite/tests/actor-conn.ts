@@ -302,5 +302,204 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				);
 			});
 		});
+
+		describe("Connection State", () => {
+			test("isConnected should be false before connection opens", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate([
+					"test-isconnected-initial",
+				]);
+				const connection = handle.connect();
+
+				// isConnected should be false initially (connection not yet established)
+				expect(connection.isConnected).toBe(false);
+
+				// Wait for connection to be established
+				await vi.waitFor(() => {
+					expect(connection.isConnected).toBe(true);
+				});
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("onOpen should be called when connection opens", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate(["test-onopen"]);
+				const connection = handle.connect();
+
+				// Track open events
+				let openCount = 0;
+				connection.onOpen(() => {
+					openCount++;
+				});
+
+				// Wait for connection to open
+				await vi.waitFor(() => {
+					expect(openCount).toBe(1);
+				});
+
+				// Verify isConnected is true
+				expect(connection.isConnected).toBe(true);
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("onClose should be called when connection closes via dispose", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate(["test-onclose"]);
+				const connection = handle.connect();
+
+				// Track close events
+				let closeCount = 0;
+				connection.onClose(() => {
+					closeCount++;
+				});
+
+				// Wait for connection to open first
+				await vi.waitFor(() => {
+					expect(connection.isConnected).toBe(true);
+				});
+
+				// Dispose connection
+				await connection.dispose();
+
+				// Verify onClose was called
+				expect(closeCount).toBe(1);
+
+				// Verify isConnected is false
+				expect(connection.isConnected).toBe(false);
+			});
+
+			test("should be able to unsubscribe from onOpen", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate([
+					"test-onopen-unsub",
+				]);
+				const connection = handle.connect();
+
+				// Track open events
+				let openCount = 0;
+				const unsubscribe = connection.onOpen(() => {
+					openCount++;
+				});
+
+				// Unsubscribe immediately
+				unsubscribe();
+
+				// Wait a bit for connection to potentially open
+				await vi.waitFor(() => {
+					expect(connection.isConnected).toBe(true);
+				});
+
+				// Open callback should not have been called since we unsubscribed
+				expect(openCount).toBe(0);
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("should be able to unsubscribe from onClose", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate([
+					"test-onclose-unsub",
+				]);
+				const connection = handle.connect();
+
+				// Track close events
+				let closeCount = 0;
+				const unsubscribe = connection.onClose(() => {
+					closeCount++;
+				});
+
+				// Wait for connection to open
+				await vi.waitFor(() => {
+					expect(connection.isConnected).toBe(true);
+				});
+
+				// Unsubscribe before closing
+				unsubscribe();
+
+				// Dispose connection
+				await connection.dispose();
+
+				// Close callback should not have been called since we unsubscribed
+				expect(closeCount).toBe(0);
+			});
+
+			test("multiple onOpen handlers should all be called", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate([
+					"test-multi-onopen",
+				]);
+				const connection = handle.connect();
+
+				// Track open events from multiple handlers
+				let handler1Called = false;
+				let handler2Called = false;
+
+				connection.onOpen(() => {
+					handler1Called = true;
+				});
+				connection.onOpen(() => {
+					handler2Called = true;
+				});
+
+				// Wait for connection to open
+				await vi.waitFor(() => {
+					expect(handler1Called).toBe(true);
+					expect(handler2Called).toBe(true);
+				});
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("multiple onClose handlers should all be called", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create actor and get connection
+				const handle = client.counter.getOrCreate([
+					"test-multi-onclose",
+				]);
+				const connection = handle.connect();
+
+				// Track close events from multiple handlers
+				let handler1Called = false;
+				let handler2Called = false;
+
+				connection.onClose(() => {
+					handler1Called = true;
+				});
+				connection.onClose(() => {
+					handler2Called = true;
+				});
+
+				// Wait for connection to open first
+				await vi.waitFor(() => {
+					expect(connection.isConnected).toBe(true);
+				});
+
+				// Dispose connection
+				await connection.dispose();
+
+				// Verify both handlers were called
+				expect(handler1Called).toBe(true);
+				expect(handler2Called).toBe(true);
+			});
+		});
 	});
 }

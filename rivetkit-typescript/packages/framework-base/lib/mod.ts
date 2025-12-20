@@ -197,6 +197,41 @@ export function createRivetKit<
 
 					const connection = handle.connect();
 
+					// Subscribe to connection state changes
+					connection.onOpen(() => {
+						store.setState((prev) => {
+							// Only update if this is still the active connection
+							if (prev.actors[key]?.connection !== connection) return prev;
+							return {
+								...prev,
+								actors: {
+									...prev.actors,
+									[key]: {
+										...prev.actors[key],
+										isConnected: true,
+									},
+								},
+							};
+						});
+					});
+
+					connection.onClose(() => {
+						store.setState((prev) => {
+							// Only update if this is still the active connection
+							if (prev.actors[key]?.connection !== connection) return prev;
+							return {
+								...prev,
+								actors: {
+									...prev.actors,
+									[key]: {
+										...prev.actors[key],
+										isConnected: false,
+									},
+								},
+							};
+						});
+					});
+
 					await handle.resolve(
 						/*{ signal: AbortSignal.timeout(0) }*/
 					);
@@ -207,7 +242,7 @@ export function createRivetKit<
 								...prev.actors,
 								[key]: {
 									...prev.actors[key],
-									isConnected: true,
+									isConnected: connection.isConnected,
 									isConnecting: false,
 									handle: handle as ActorHandle<
 										Actors[ActorName]

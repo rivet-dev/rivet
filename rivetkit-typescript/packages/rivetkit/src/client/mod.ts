@@ -21,7 +21,11 @@ export {
 } from "@/client/errors";
 export type { CreateRequest } from "@/manager/protocol/query";
 export type { ActorActionFunction } from "./actor-common";
-export type { ActorConn, EventUnsubscribe } from "./actor-conn";
+export type {
+	ActorConn,
+	ConnectionStateCallback,
+	EventUnsubscribe,
+} from "./actor-conn";
 export { ActorConnRaw } from "./actor-conn";
 export type { ActorHandle } from "./actor-handle";
 export { ActorHandleRaw } from "./actor-handle";
