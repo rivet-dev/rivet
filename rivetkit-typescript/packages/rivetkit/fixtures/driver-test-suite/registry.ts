@@ -12,6 +12,7 @@ import {
 	promiseActor,
 	syncActionActor,
 } from "./action-types";
+import { dbActorRaw } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { counterWithParams } from "./conn-params";
 import { connStateActor } from "./conn-state";
@@ -42,6 +43,7 @@ import {
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
 } from "./sleep";
+import { statelessActor } from "./stateless";
 import {
 	driverCtxActor,
 	dynamicVarActor,
@@ -117,5 +119,9 @@ export const registry = setup({
 		// From large-payloads.ts
 		largePayloadActor,
 		largePayloadConnActor,
+		// From actor-db-raw.ts
+		dbActorRaw,
+		// From stateless.ts
+		statelessActor,
 	},
 });
