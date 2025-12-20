@@ -72,9 +72,11 @@ export type {
 } from "@/common/websocket-interface";
 export type { ActorKey } from "@/manager/protocol/query";
 export type * from "./config";
+export type { InitContext } from "./config";
 export type { AnyConn, Conn } from "./conn/mod";
 export type { ActionContext } from "./contexts/action";
 export type { ActorContext } from "./contexts/actor";
+export type { ConnContext } from "./contexts/conn";
 export type { ConnInitContext } from "./contexts/conn-init";
 export type { CreateConnStateContext } from "./contexts/create-conn-state";
 export type { OnBeforeConnectContext } from "./contexts/on-before-connect";
