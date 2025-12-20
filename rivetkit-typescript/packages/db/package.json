@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/db",
-	"version": "2.0.29-rc.1",
+	"version": "2.0.29",
 	"description": "Database providers and adapters for RivetKit actors",
 	"license": "Apache-2.0",
 	"sideEffects": [
