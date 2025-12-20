@@ -7,7 +7,9 @@
 			"@/*": ["./src/*"],
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
-			"rivetkit/utils": ["./src/utils.ts"]
+			"rivetkit/utils": ["./src/utils.ts"],
+			"rivetkit/db": ["./src/db/mod.ts"],
+			"rivetkit/db/drizzle": ["./src/db/drizzle/mod.ts"]
 		}
 	},
 	"include": [

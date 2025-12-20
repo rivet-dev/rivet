@@ -1,4 +1,4 @@
-import { defineConfig } from "@rivetkit/db/drizzle";
+import { defineConfig } from "rivetkit/db/drizzle";
 
 export default defineConfig({
 	out: "./drizzle",

@@ -1,0 +1,34 @@
+{
+	"name": "example-sqlite-drizzle",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "tsx --watch src/server.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"rivetkit": "workspace:*",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.18.2",
+		"@hono/node-ws": "^1.1.1",
+		"drizzle-kit": "^0.31.2",
+		"drizzle-orm": "^0.44.2"
+	},
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": [
+			"drizzle",
+			"typescript"
+		],
+		"tags": [
+			"database"
+		],
+		"noFrontend": true
+	},
+	"license": "MIT"
+}

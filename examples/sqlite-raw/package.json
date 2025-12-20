@@ -1,11 +1,13 @@
 {
-	"name": "example-sqlite",
+	"name": "example-sqlite-raw",
 	"version": "2.0.21",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/server.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"build": "tsc",
+		"client": "tsx scripts/client.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
@@ -13,15 +15,11 @@
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
 	},
-	"dependencies": {
-		"@rivetkit/db": "workspace:*",
-		"drizzle-kit": "^0.31.2",
-		"drizzle-orm": "^0.44.2"
-	},
+	"dependencies": {},
 	"stableVersion": "0.8.0",
 	"template": {
 		"technologies": [
-			"drizzle",
+			"sqlite",
 			"typescript"
 		],
 		"tags": [

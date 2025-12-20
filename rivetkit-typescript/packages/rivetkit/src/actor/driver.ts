@@ -3,8 +3,13 @@ import type { AnyClient } from "@/client/client";
 import type { ManagerDriver } from "@/manager/driver";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
-import { type AnyConn, Conn } from "./conn/mod";
+import type {
+	RawDatabaseClient,
+} from "@/db/config";
+import type { SqliteVfs } from "@/db/vfs/mod";
+import { type AnyConn } from "./conn/mod";
 import type { AnyActorInstance } from "./instance/mod";
+import { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 
 export type ActorDriverBuilder = (
 	registryConfig: RegistryConfig,
@@ -48,10 +53,30 @@ export interface ActorDriver {
 
 	// Database
 	/**
+	 * Override the default raw database client for the actor.
+	 * If not provided, rivetkit will construct a KV-backed SQLite client.
 	 * @experimental
-	 * This is an experimental API that may change in the future.
 	 */
-	getDatabase(actorId: string): Promise<unknown | undefined>;
+	overrideRawDatabaseClient?(
+		actorId: string,
+	): Promise<RawDatabaseClient | undefined>;
+
+	/**
+	 * Override the default Drizzle database client for the actor.
+	 * If not provided, rivetkit will construct a KV-backed Drizzle client.
+	 * @experimental
+	 */
+	overrideDrizzleDatabaseClient?(
+		actorId: string,
+	): Promise<BaseSQLiteDatabase<any,any,any,any> | undefined>;
+
+	/**
+	 * SQLite VFS instance for creating KV-backed databases.
+	 * Each driver should create its own instance to avoid concurrency issues.
+	 * If not provided, the db() provider will throw an error.
+	 * @experimental
+	 */
+	sqliteVfs?: SqliteVfs;
 
 	/**
 	 * Requests the actor to go to sleep.
