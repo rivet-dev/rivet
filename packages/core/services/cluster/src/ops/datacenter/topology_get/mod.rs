@@ -211,7 +211,7 @@ pub async fn cluster_datacenter_topology_get(
 			Ok((hardware_specs, prometheus_metrics))
 		},
 		async {
-			if ctx.config().server()?.nomad.is_some() {
+			if false {
 				// Request is not paginated
 				let nomad_config = nomad_util::new_build_config(ctx.config())?;
 				allocations_api::get_allocations(
@@ -235,7 +235,7 @@ pub async fn cluster_datacenter_topology_get(
 			}
 		},
 		async {
-			if ctx.config().server()?.nomad.is_some() {
+			if false {
 				// Request is not paginated
 				let nomad_config = nomad_util::new_build_config(ctx.config())?;
 				nodes_api::get_nodes(
