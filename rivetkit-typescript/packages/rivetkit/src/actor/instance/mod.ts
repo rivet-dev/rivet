@@ -1141,6 +1141,21 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	async #callOnDestroy() {
+		// Clean up database first
+		if ("db" in this.#config && this.#config.db && this.#db) {
+			try {
+				this.#rLog.debug({ msg: "cleaning up database" });
+				await this.#config.db.onDestroy?.(this.#db);
+				this.#rLog.debug({ msg: "database cleanup completed" });
+			} catch (error) {
+				this.#rLog.error({
+					msg: "error cleaning up database",
+					error: stringifyError(error),
+				});
+			}
+		}
+
+		// Then call user's onDestroy
 		if (this.#config.onDestroy) {
 			const onDestroy = this.#config.onDestroy;
 			try {
@@ -1248,13 +1263,48 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #setupDatabase() {
 		if ("db" in this.#config && this.#config.db) {
-			const client = await this.#config.db.createClient({
-				getDatabase: () => this.driver.getDatabase(this.#actorId),
-			});
-			this.#rLog.info({ msg: "database migration starting" });
-			await this.#config.db.onMigrate?.(client);
-			this.#rLog.info({ msg: "database migration complete" });
-			this.#db = client;
+			try {
+				const client = await this.#config.db.createClient({
+					actorId: this.#actorId,
+					overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
+						? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
+						: undefined,
+					overrideDrizzleDatabaseClient: this.driver
+						.overrideDrizzleDatabaseClient
+						? () => this.driver.overrideDrizzleDatabaseClient!(this.#actorId)
+						: undefined,
+					kv: {
+						batchPut: (entries) =>
+							this.driver.kvBatchPut(this.#actorId, entries),
+						batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
+						batchDelete: (keys) =>
+							this.driver.kvBatchDelete(this.#actorId, keys),
+					},
+					sqliteVfs: this.driver.sqliteVfs,
+				});
+				this.#rLog.info({ msg: "database migration starting" });
+				await this.#config.db.onMigrate?.(client);
+				this.#rLog.info({ msg: "database migration complete" });
+				this.#db = client;
+			} catch (error) {
+				// Ensure error is properly formatted
+				if (error instanceof Error) {
+					this.#rLog.error({
+						msg: "database setup failed",
+						error: stringifyError(error),
+					});
+					throw error;
+				}
+				const wrappedError = new Error(
+					`Database setup failed: ${String(error)}`,
+				);
+				this.#rLog.error({
+					msg: "database setup failed with non-Error object",
+					error: String(error),
+					errorType: typeof error,
+				});
+				throw wrappedError;
+			}
 		}
 	}
 
