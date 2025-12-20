@@ -79,6 +79,13 @@ export type EventUnsubscribe = () => void;
  */
 export type ActorErrorCallback = (error: errors.ActorError) => void;
 
+/**
+ * A callback for connection state changes.
+ *
+ * @typedef {Function} ConnectionStateCallback
+ */
+export type ConnectionStateCallback = () => void;
+
 export interface SendHttpMessageOpts {
 	ephemeral: boolean;
 	signal?: AbortSignal;
@@ -119,6 +126,10 @@ export class ActorConnRaw {
 	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
 
 	#errorHandlers = new Set<ActorErrorCallback>();
+	#openHandlers = new Set<ConnectionStateCallback>();
+	#closeHandlers = new Set<ConnectionStateCallback>();
+
+	#isConnected = false;
 
 	#actionIdCounter = 0;
 
@@ -355,11 +366,26 @@ enc
 			connectionId: this.#connectionId,
 		});
 
+		// Update connection state
+		this.#isConnected = true;
+
 		// Resolve open promise
 		if (this.#onOpenPromise) {
 			this.#onOpenPromise.resolve(undefined);
 		} else {
 			logger().warn({ msg: "#onOpenPromise is undefined" });
+		}
+
+		// Notify open handlers
+		for (const handler of [...this.#openHandlers]) {
+			try {
+				handler();
+			} catch (err) {
+				logger().error({
+					msg: "error in open handler",
+					error: stringifyError(err),
+				});
+			}
 		}
 
 		// Resubscribe to all active events
@@ -502,6 +528,23 @@ enc
 		// These properties will be undefined
 		const closeEvent = event as CloseEvent;
 		const wasClean = closeEvent.wasClean;
+
+		// Update connection state and notify handlers
+		const wasConnected = this.#isConnected;
+		this.#isConnected = false;
+
+		if (wasConnected) {
+			for (const handler of [...this.#closeHandlers]) {
+				try {
+					handler();
+				} catch (err) {
+					logger().error({
+						msg: "error in close handler",
+						error: stringifyError(err),
+					});
+				}
+			}
+		}
 
 		// Reject open promise
 		if (this.#onOpenPromise) {
@@ -705,6 +748,50 @@ enc
 		// Return unsubscribe function
 		return () => {
 			this.#errorHandlers.delete(callback);
+		};
+	}
+
+	/**
+	 * Returns whether the connection is currently open.
+	 *
+	 * @returns {boolean} - True if the connection is open, false otherwise.
+	 */
+	get isConnected(): boolean {
+		return this.#isConnected;
+	}
+
+	/**
+	 * Subscribes to connection open events.
+	 *
+	 * This is called when the WebSocket connection is established and the Init message is received.
+	 *
+	 * @param {ConnectionStateCallback} callback - The callback function to execute when the connection opens.
+	 * @returns {() => void} - A function to unsubscribe from the open handler.
+	 */
+	onOpen(callback: ConnectionStateCallback): () => void {
+		this.#openHandlers.add(callback);
+
+		// Return unsubscribe function
+		return () => {
+			this.#openHandlers.delete(callback);
+		};
+	}
+
+	/**
+	 * Subscribes to connection close events.
+	 *
+	 * This is called when the WebSocket connection is closed. The connection will automatically
+	 * attempt to reconnect unless disposed.
+	 *
+	 * @param {ConnectionStateCallback} callback - The callback function to execute when the connection closes.
+	 * @returns {() => void} - A function to unsubscribe from the close handler.
+	 */
+	onClose(callback: ConnectionStateCallback): () => void {
+		this.#closeHandlers.add(callback);
+
+		// Return unsubscribe function
+		return () => {
+			this.#closeHandlers.delete(callback);
 		};
 	}
 
