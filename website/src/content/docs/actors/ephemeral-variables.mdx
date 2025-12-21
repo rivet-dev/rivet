@@ -42,14 +42,14 @@ This value will be cloned for every new actor using `structuredClone`.
 Create actor state dynamically on each actors' start:
 
 ```typescript
-import { actor, ActorInitContext } from "rivetkit";
+import { actor, InitContext } from "rivetkit";
 
 // Define vars with initialization logic
 const counter = actor({
   state: { count: 0 },
   
   // Define vars using a creation function
-  createVars: (c: ActorInitContext, driver: any) => {
+  createVars: (c: InitContext, driver: any) => {
     return { 
       lastAccessTime: Date.now(),
       emitter: createNanoEvents()
@@ -63,7 +63,7 @@ const counter = actor({
 ```
 
 <Note>
-If accepting arguments to `createVars`, you **must** define the types: `createVars(c: ActorInitContext, driver: any)`
+If accepting arguments to `createVars`, you **must** define the types: `createVars(c: InitContext, driver: any)`
 
 Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
 </Note>
@@ -134,14 +134,14 @@ The `createVars` function receives a second parameter that provides access to dr
 For example, the Redis driver exposes access to the Redis instance:
 
 ```typescript
-import { actor, ActorInitContext } from "rivetkit";
+import { actor, InitContext } from "rivetkit";
 import { DriverContext } from "@rivetkit/redis";
 
 const myActor = actor({
   state: { count: 0 },
   
   // The second parameter provides driver-specific context
-  createVars: (ctx: ActorInitContext, driver: DriverContext) => ({ driver }),
+  createVars: (ctx: InitContext, driver: DriverContext) => ({ driver }),
   
   actions: {
     accessDriverFeatures: (c) => {

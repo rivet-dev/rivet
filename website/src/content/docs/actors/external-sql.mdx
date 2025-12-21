@@ -36,7 +36,7 @@ Here's a basic example of a user actor that creates a database record on start a
 
 <CodeGroup>
 ```typescript {{ "title": "registry.ts" }}
-import { actor, setup, ActorInitContext } from "rivetkit";
+import { actor, setup, InitContext } from "rivetkit";
 import { Pool } from "pg";
 
 interface ActorInput {
@@ -55,7 +55,7 @@ const pool = new Pool({
 
 // Create the user actor
 export const userActor = actor({
-  createState: (c: ActorInitContext, input: ActorInput) => ({
+  createState: (c: InitContext, input: ActorInput) => ({
     requestCount: 0,
     username: input.username,
     email: input.email,
@@ -143,7 +143,7 @@ Here's the same user actor pattern using Drizzle ORM for more type-safe database
 
 <CodeGroup>
 ```typescript {{ "title": "registry.ts" }}
-import { actor, setup, ActorInitContext } from "rivetkit";
+import { actor, setup, InitContext } from "rivetkit";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
@@ -172,7 +172,7 @@ const db = drizzle(pool);
 
 // Create the user actor
 export const userActor = actor({
-  createState: (c: ActorInitContext, input: ActorInput) => ({
+  createState: (c: InitContext, input: ActorInput) => ({
     requestCount: 0,
     username: input.username,
     email: input.email,

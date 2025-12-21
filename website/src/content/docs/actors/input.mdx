@@ -38,7 +38,7 @@ interface ChatRoomInput {
 }
 
 const chatRoom = actor({
-  createState: (c: ActorInitContext, input: ChatRoomInput) => ({
+  createState: (c: InitContext, input: ChatRoomInput) => ({
     name: input?.roomName ?? "Unnamed Room",
     isPrivate: input?.isPrivate ?? false,
     maxUsers: input?.maxUsers ?? 50,
@@ -81,7 +81,7 @@ const GameInputSchema = z.object({
 });
 
 const game = actor({
-  createState: (c: ActorInitContext, inputRaw: z.infer<typeof GameInputSchema>) => {
+  createState: (c: InitContext, inputRaw: z.infer<typeof GameInputSchema>) => {
     // Validate input
     const input = GameInputSchema.parse(inputRaw);
     
@@ -147,7 +147,7 @@ interface GameInput {
 }
 
 const game = actor({
-  createState: (c: ActorInitContext,  input: GameInput) => ({
+  createState: (c: InitContext,  input: GameInput) => ({
     gameMode: input.gameMode,
     maxPlayers: input.maxPlayers,
     difficulty: input.difficulty ?? "medium",
@@ -165,7 +165,7 @@ If you need to access input data in actions, store it in the actor's state:
 
 ```typescript
 const game = actor({
-  createState: (c: ActorInitContext, input: GameInput) => ({
+  createState: (c: InitContext, input: GameInput) => ({
     // Store input configuration in state
     config: {
       gameMode: input.gameMode,

@@ -58,7 +58,7 @@ const counter = actor({
 To accept a custom input parameters for the initial state, use:
 
 ```typescript
-import { actor, ActorInitContext } from "rivetkit";
+import { actor, InitContext } from "rivetkit";
 
 interface CounterInput {
 	startingCount: number;
@@ -67,7 +67,7 @@ interface CounterInput {
 // State with initialization logic
 const counter = actor({
   // Define state using a creation function
-  createState: (c: ActorInitContext, input: CounterInput) => {
+  createState: (c: InitContext, input: CounterInput) => {
     return { count: input.startingCount };
   },
   
@@ -80,7 +80,7 @@ const counter = actor({
 Read more about [input parameters](/docs/actors/input) here.
 
 <Note>
-If accepting arguments to `createState`, you **must** define the types: `createSTate(c: ActorInitContext, input: MyType)`
+If accepting arguments to `createState`, you **must** define the types: `createSTate(c: InitContext, input: MyType)`
 
 Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
 </Note>
