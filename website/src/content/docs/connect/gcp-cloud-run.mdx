@@ -18,7 +18,7 @@ Run your backend on Cloud Run with a lightweight container image and one command
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used when deploying. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -58,7 +58,7 @@ gcloud run deploy backend \
   --region us-central1 \
   --allow-unauthenticated \
   --min-instances 1 \
-  --set-env-vars RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev,RIVET_NAMESPACE=your-namespace-id,RIVET_TOKEN=your-token
+  --set-env-vars RIVET_ENDPOINT=https://api-us-west-1.rivet.dev,RIVET_NAMESPACE=your-namespace-id,RIVET_TOKEN=your-token
 ```
 
 <Note>You do not need to expose a container port. Rivet tunnels traffic directly to your backend.</Note>

@@ -18,7 +18,7 @@ Run your backend on Amazon ECS with Fargate using a simple container image and s
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the task definition. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -68,7 +68,7 @@ Create `backend-task.json` describing the ECS task. Update the ARNs, subnets, an
       "name": "backend",
       "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/backend:latest",
       "environment": [
-        { "name": "RIVET_API_ENDPOINT", "value": "https://api-us-west-1.rivet.dev" },
+        { "name": "RIVET_ENDPOINT", "value": "https://api-us-west-1.rivet.dev" },
         { "name": "RIVET_NAMESPACE", "value": "your-namespace-id" },
         { "name": "RIVET_TOKEN", "value": "your-token" }
       ]

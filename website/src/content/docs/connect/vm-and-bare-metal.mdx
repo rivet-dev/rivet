@@ -22,7 +22,7 @@ Place the files somewhere readable by the service user, such as `/opt/backend`.
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the next step. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -42,7 +42,7 @@ Type=simple
 WorkingDirectory=/opt/backend
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
-Environment=RIVET_API_ENDPOINT=https://api.rivet.dev
+Environment=RIVET_ENDPOINT=https://api.rivet.dev
 Environment=RIVET_NAMESPACE=your-namespace-id
 Environment=RIVET_TOKEN=your-token
 

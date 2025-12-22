@@ -17,7 +17,7 @@ Run your backend on any Kubernetes cluster with a simple container image and dep
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in later manifests. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -59,7 +59,7 @@ metadata:
   name: backend-secrets
 type: Opaque
 stringData:
-  RIVET_API_ENDPOINT: https://api-us-west-1.rivet.dev
+  RIVET_ENDPOINT: https://api-us-west-1.rivet.dev
   RIVET_NAMESPACE: your-namespace-id
   RIVET_TOKEN: your-token
 ```
