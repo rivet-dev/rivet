@@ -245,6 +245,40 @@ const counter = actor({
 
 Actions have a single return value. To stream realtime data in response to an action, use [events](/docs/actors/events).
 
+## Canceling Long-Running Actions
+
+For operations that should be cancelable on-demand, create your own `AbortController` and chain it with `c.abortSignal` for automatic cleanup on actor shutdown.
+
+```typescript
+import { actor } from "rivetkit";
+
+const chatActor = actor({
+  createVars: () => ({ controller: null as AbortController | null }),
+
+  actions: {
+    generate: async (c, prompt: string) => {
+      const controller = new AbortController();
+      c.vars.controller = controller;
+      c.abortSignal.addEventListener("abort", () => controller.abort());
+
+      const response = await fetch("https://api.example.com/generate", {
+        method: "POST",
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal
+      });
+
+      return await response.json();
+    },
+
+    cancel: (c) => {
+      c.vars.controller?.abort();
+    }
+  }
+});
+```
+
+See [Actor Shutdown Abort Signal](/docs/actors/lifecycle#actor-shutdown-abort-signal) for automatically canceling operations when the actor stops.
+
 ## Using `ActionContext` Externally
 
 When writing complex logic for actions, you may want to extract parts of your implementation into separate helper functions. When doing this, you'll need a way to properly type the context parameter.
