@@ -616,6 +616,29 @@ const gameRoom = actor({
 });
 ```
 
+### Actor Shutdown Abort Signal
+
+The `c.abortSignal` provides an `AbortSignal` that fires when the actor is stopping. Use this to cancel ongoing operations when the actor sleeps or is destroyed.
+
+```typescript
+import { actor } from "rivetkit";
+
+const chatActor = actor({
+  actions: {
+    generate: async (c, prompt: string) => {
+      const response = await fetch("https://api.example.com/generate", {
+        method: "POST",
+        body: JSON.stringify({ prompt }),
+        signal: c.abortSignal
+      });
+
+      return await response.json();
+    }
+  }
+});
+```
+
+See [Canceling Long-Running Actions](/docs/actors/actions#canceling-long-running-actions) for manually canceling operations on-demand.
 
 ### Using `ActorContext` Type Externally
 
