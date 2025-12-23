@@ -30,7 +30,7 @@ import {
 	deserializeWithEncoding,
 	serializeWithEncoding,
 } from "@/serde";
-import { bufferToArrayBuffer } from "@/utils";
+import { bufferToArrayBuffer, getEnvUniversal } from "@/utils";
 import { createHttpDriver } from "./conn/drivers/http";
 import { createRawRequestDriver } from "./conn/drivers/raw-request";
 import type { ActorDriver } from "./driver";
@@ -198,9 +198,15 @@ export function getRequestEncoding(req: HonoRequest): Encoding {
 	return result.data;
 }
 
+/**
+ * Determines whether internal errors should be exposed to the client.
+ * Returns true if RIVET_EXPOSE_ERRORS=1 or NODE_ENV=development.
+ */
 export function getRequestExposeInternalError(_req: Request): boolean {
-	// Unipmlemented
-	return false;
+	return (
+		getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1" ||
+		getEnvUniversal("NODE_ENV") === "development"
+	);
 }
 
 export function getRequestQuery(c: HonoContext): unknown {
