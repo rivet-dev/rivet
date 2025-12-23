@@ -58,7 +58,7 @@ const counter = actor({
 To accept a custom input parameters for the initial state, use:
 
 ```typescript
-import { actor, InitContext } from "rivetkit";
+import { actor, CreateContext } from "rivetkit";
 
 interface CounterInput {
 	startingCount: number;
@@ -67,7 +67,7 @@ interface CounterInput {
 // State with initialization logic
 const counter = actor({
   // Define state using a creation function
-  createState: (c: InitContext, input: CounterInput) => {
+  createState: (c: CreateContext, input: CounterInput) => {
     return { count: input.startingCount };
   },
   
@@ -80,9 +80,9 @@ const counter = actor({
 Read more about [input parameters](/docs/actors/input) here.
 
 <Note>
-If accepting arguments to `createState`, you **must** define the types: `createSTate(c: InitContext, input: MyType)`
+If accepting arguments to `createState`, you **must** define the types: `createState(c: CreateContext, input: MyType)`
 
-Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
+Otherwise, the return type will not be inferred and `c.state` will be of type `unknown`.
 </Note>
 
 </Tab>
@@ -192,6 +192,6 @@ State is currently constrained to the following types:
 
 ## API Reference
 
-- [`InitContext`](/typedoc/types/rivetkit.mod.InitContext.html) - Context available during actor initialization
+- [`CreateContext`](/typedoc/types/rivetkit.mod.CreateContext.html) - Context available during actor state creation
 - [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context available throughout actor lifecycle
 - [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining actors with state
