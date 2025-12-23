@@ -54,13 +54,16 @@ You can configure logging behavior using environment variables:
 
 | Variable | Description | Values | Default |
 | -------- | ----------- | ------ | ------- |
-| `LOG_LEVEL` | Sets the minimum log level to display | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` | `warn` |
-| `LOG_TARGET` | Include the module name that logged the message | `1` to enable, `0` to disable | `0` |
-| `LOG_TIMESTAMP` | Include timestamp in log output | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_LEVEL` | Sets the minimum log level to display | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` | `warn` |
+| `RIVETKIT_LOG_TARGET` | Include the module name that logged the message | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_TIMESTAMP` | Include timestamp in log output | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_MESSAGE` | Enable detailed message logging for debugging | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_ERROR_STACK` | Include stack traces in error output | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_HEADERS` | Log HTTP headers in requests | `1` to enable, `0` to disable | `0` |
 
 Example:
 ```bash
-LOG_LEVEL=debug LOG_TARGET=1 LOG_TIMESTAMP=1 node server.js
+RIVETKIT_LOG_LEVEL=debug RIVETKIT_LOG_TARGET=1 RIVETKIT_LOG_TIMESTAMP=1 node server.js
 ```
 
 ### Log Level

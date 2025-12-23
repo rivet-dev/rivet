@@ -11,11 +11,11 @@ export default {
 		},
 		env: {
 			// Enable logging
-			LOG_LEVEL: "DEBUG",
-			LOG_TARGET: "1",
-			LOG_TIMESTAMP: "1",
-			_RIVETKIT_ERROR_STACK: "1",
-			_RIVETKIT_LOG_MESSAGE: "1",
+			RIVETKIT_LOG_LEVEL: "DEBUG",
+			RIVETKIT_LOG_TARGET: "1",
+			RIVETKIT_LOG_TIMESTAMP: "1",
+			RIVETKIT_LOG_ERROR_STACK: "1",
+			RIVETKIT_LOG_MESSAGE: "1",
 		},
 	},
 } satisfies ViteUserConfig;
