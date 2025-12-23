@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
-import type { ActorContext } from "@/actor/contexts/actor";
-import type { ActorContextOf, ActorDefinition } from "@/actor/definition";
+import type { ActorContext, ActorContextOf } from "@/actor/contexts";
+import type { ActorDefinition } from "@/actor/definition";
 
 describe("ActorDefinition", () => {
 	describe("ActorContextOf type utility", () => {

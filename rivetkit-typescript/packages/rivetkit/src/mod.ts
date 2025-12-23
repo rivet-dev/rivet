@@ -1,4 +1,5 @@
 export * from "@/actor/mod";
+export type * from "@/actor/contexts";
 export {
 	type AnyClient,
 	type Client,

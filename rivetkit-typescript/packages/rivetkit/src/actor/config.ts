@@ -1,23 +1,24 @@
 import { z } from "zod";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { Conn } from "./conn/mod";
-import type { ActionContext } from "./contexts/action";
-import type { ActorContext } from "./contexts/actor";
-import type { CreateConnStateContext } from "./contexts/create-conn-state";
-import type { OnBeforeConnectContext } from "./contexts/on-before-connect";
-import type { OnConnectContext } from "./contexts/on-connect";
-import type { RequestContext } from "./contexts/request";
-import type { WebSocketContext } from "./contexts/websocket";
+import type {
+	ActionContext,
+	ActorContext,
+	BeforeActionResponseContext,
+	BeforeConnectContext,
+	ConnectContext,
+	CreateConnStateContext,
+	CreateContext,
+	CreateVarsContext,
+	DestroyContext,
+	DisconnectContext,
+	RequestContext,
+	SleepContext,
+	StateChangeContext,
+	WakeContext,
+	WebSocketContext,
+} from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
-
-export type InitContext = ActorContext<
-	undefined,
-	undefined,
-	undefined,
-	undefined,
-	undefined,
-	undefined
->;
 
 export interface ActorTypes<
 	TState,
@@ -131,11 +132,11 @@ export const ActorConfigSchema = z
 // This must have only one or the other or else TState will not be able to be inferred
 //
 // Data returned from this handler will be available on `c.state`.
-type CreateState<TState, TConnParams, TConnState, TVars, TInput, TDatabase> =
+type CreateState<TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider> =
 	| { state: TState }
 	| {
 			createState: (
-				c: InitContext,
+				c: CreateContext<TState, TInput, TDatabase>,
 				input: TInput,
 			) => TState | Promise<TState>;
 	  }
@@ -169,7 +170,14 @@ type CreateConnState<
 /**
  * @experimental
  */
-type CreateVars<TState, TConnParams, TConnState, TVars, TInput, TDatabase> =
+type CreateVars<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+> =
 	| {
 			/**
 			 * @experimental
@@ -181,7 +189,7 @@ type CreateVars<TState, TConnParams, TConnState, TVars, TInput, TDatabase> =
 			 * @experimental
 			 */
 			createVars: (
-				c: InitContext,
+				c: CreateVarsContext<TState, TInput, TDatabase>,
 				driverCtx: any,
 			) => TVars | Promise<TVars>;
 	  }
@@ -241,14 +249,7 @@ interface BaseActorConfig<
 	 * This is called before any other lifecycle hooks.
 	 */
 	onCreate?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
+		c: CreateContext<TState, TInput, TDatabase>,
 		input: TInput,
 	) => void | Promise<void>;
 
@@ -256,7 +257,7 @@ interface BaseActorConfig<
 	 * Called when the actor is destroyed.
 	 */
 	onDestroy?: (
-		c: ActorContext<
+		c: DestroyContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -275,7 +276,7 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise that resolves when startup is complete
 	 */
 	onWake?: (
-		c: ActorContext<
+		c: WakeContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -296,7 +297,7 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise that resolves when shutdown is complete
 	 */
 	onSleep?: (
-		c: ActorContext<
+		c: SleepContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -318,7 +319,7 @@ interface BaseActorConfig<
 	 * @param newState The updated state
 	 */
 	onStateChange?: (
-		c: ActorContext<
+		c: StateChangeContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -340,7 +341,7 @@ interface BaseActorConfig<
 	 * @throws Throw an error to reject the connection
 	 */
 	onBeforeConnect?: (
-		c: OnBeforeConnectContext<TState, TVars, TInput, TDatabase>,
+		c: BeforeConnectContext<TState, TVars, TInput, TDatabase>,
 		params: TConnParams,
 	) => void | Promise<void>;
 
@@ -354,7 +355,7 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise that resolves when connection handling is complete
 	 */
 	onConnect?: (
-		c: OnConnectContext<
+		c: ConnectContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -375,7 +376,7 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise that resolves when disconnect handling is complete
 	 */
 	onDisconnect?: (
-		c: ActorContext<
+		c: DisconnectContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -399,7 +400,7 @@ interface BaseActorConfig<
 	 * @returns The modified output to send to the client
 	 */
 	onBeforeActionResponse?: <Out>(
-		c: ActorContext<
+		c: BeforeActionResponseContext<
 			TState,
 			TConnParams,
 			TConnState,
