@@ -1,7 +1,8 @@
 import type { Next } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import * as errors from "@/actor/errors";
-import { EXTRA_ERROR_LOG, getEnvUniversal, VERSION } from "@/utils";
+import { EXTRA_ERROR_LOG, VERSION } from "@/utils";
+import { isErrorStackEnabled } from "./log-config";
 import type { Logger } from "./log";
 
 export function assertUnreachable(x: never): never {
@@ -298,10 +299,7 @@ export function deconstructError(
 
 export function stringifyError(error: unknown): string {
 	if (error instanceof Error) {
-		if (
-			typeof process !== "undefined" &&
-			getEnvUniversal("_RIVETKIT_ERROR_STACK") === "1"
-		) {
+		if (typeof process !== "undefined" && isErrorStackEnabled()) {
 			return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
 		} else {
 			return `${error.name}: ${error.message}`;

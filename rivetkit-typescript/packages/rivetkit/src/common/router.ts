@@ -17,8 +17,9 @@ import {
 	HttpResponseErrorSchema,
 } from "@/schemas/client-protocol-zod/mod";
 import { encodingIsBinary, serializeWithEncoding } from "@/serde";
-import { bufferToArrayBuffer, getEnvUniversal, VERSION } from "@/utils";
+import { bufferToArrayBuffer, VERSION } from "@/utils";
 import { getLogger, type Logger } from "./log";
+import { isLogHeadersEnabled } from "./log-config";
 import { deconstructError, stringifyError } from "./utils";
 
 export function logger() {
@@ -43,7 +44,7 @@ export function loggerMiddleware(logger: Logger) {
 			reqSize: c.req.header("content-length"),
 			resSize: c.res.headers.get("content-length"),
 			userAgent: c.req.header("user-agent"),
-			...(getEnvUniversal("_RIVET_LOG_HEADERS")
+			...(isLogHeadersEnabled()
 				? { allHeaders: JSON.stringify(c.req.header()) }
 				: {}),
 		});

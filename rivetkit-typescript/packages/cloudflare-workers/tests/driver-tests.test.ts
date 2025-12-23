@@ -207,8 +207,8 @@ async function setupProject(projectPath: string) {
 			LOG_LEVEL: "DEBUG",
 			LOG_TARGET: "1",
 			LOG_TIMESTAMP: "1",
-			_RIVETKIT_ERROR_STACK: "1",
-			_RIVETKIT_LOG_MESSAGE: "1",
+			LOG_ERROR_STACK: "1",
+			LOG_MESSAGE: "1",
 		},
 	};
 	await fs.writeFile(
