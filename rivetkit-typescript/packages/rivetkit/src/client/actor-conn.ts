@@ -16,6 +16,7 @@ import type {
 	UniversalEventSource,
 	UniversalMessageEvent,
 } from "@/common/eventsource-interface";
+import { isLogMessageEnabled } from "@/common/log-config";
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { ManagerDriver } from "@/driver-helpers/mod";
@@ -39,7 +40,6 @@ import {
 } from "@/serde";
 import {
 	bufferToArrayBuffer,
-	getEnvUniversal,
 	httpUserAgent,
 	promiseWithResolvers,
 } from "@/utils";
@@ -418,7 +418,7 @@ enc
 
 		const response = await this.#parseMessage(data as ConnMessage);
 		logger().trace(
-			getEnvUniversal("_RIVETKIT_LOG_MESSAGE")
+			isLogMessageEnabled()
 				? {
 						msg: "parsed message",
 						message:

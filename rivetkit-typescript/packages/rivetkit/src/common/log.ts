@@ -5,13 +5,17 @@ import {
 	stdTimeFunctions,
 } from "pino";
 import { z } from "zod";
-import { getEnvUniversal } from "@/utils";
 import {
 	castToLogValue,
 	formatTimestamp,
 	LOGGER_CONFIG,
 	stringify,
 } from "./logfmt";
+import {
+	getLogLevelEnv,
+	isLogTargetEnabled,
+	isLogTimestampEnabled,
+} from "./log-config";
 
 export type { Logger } from "pino";
 
@@ -43,9 +47,7 @@ export function getPinoLevel(logLevel?: LogLevel): LevelWithSilent {
 		return configuredLogLevel;
 	}
 
-	const raw = (getEnvUniversal("LOG_LEVEL") || "warn")
-		.toString()
-		.toLowerCase();
+	const raw = (getLogLevelEnv() || "warn").toString().toLowerCase();
 
 	const parsed = LogLevelSchema.safeParse(raw);
 	if (parsed.success) {
@@ -57,7 +59,7 @@ export function getPinoLevel(logLevel?: LogLevel): LevelWithSilent {
 }
 
 export function getIncludeTarget(): boolean {
-	return getEnvUniversal("LOG_TARGET") === "1";
+	return isLogTargetEnabled();
 }
 
 /**
@@ -73,7 +75,7 @@ function customWrite(level: string, o: any) {
 	const entries: any = {};
 
 	// Add timestamp if enabled
-	if (getEnvUniversal("LOG_TIMESTAMP") === "1" && o.time) {
+	if (isLogTimestampEnabled() && o.time) {
 		const date = typeof o.time === "number" ? new Date(o.time) : new Date();
 		entries.ts = formatTimestamp(date);
 	}
@@ -131,10 +133,9 @@ export async function configureDefaultLogger(
 				return { level: number };
 			},
 		},
-		timestamp:
-			getEnvUniversal("LOG_TIMESTAMP") === "1"
-				? stdTimeFunctions.epochTime
-				: false,
+		timestamp: isLogTimestampEnabled()
+			? stdTimeFunctions.epochTime
+			: false,
 		browser: {
 			write: {
 				fatal: customWrite.bind(null, "fatal"),
@@ -158,10 +159,7 @@ export async function configureDefaultLogger(
 					60: "fatal",
 				};
 				const levelName = levelMap[level] || "info";
-				const time =
-					getEnvUniversal("LOG_TIMESTAMP") === "1"
-						? Date.now()
-						: undefined;
+				const time = isLogTimestampEnabled() ? Date.now() : undefined;
 
 				// Get bindings from the logger instance (child logger fields)
 				const bindings = (this as any).bindings?.() || {};
