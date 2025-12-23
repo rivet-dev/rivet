@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
 import type { AnyConn } from "@/actor/conn/mod";
-import { ActionContext } from "@/actor/contexts/action";
+import { ActionContext } from "@/actor/contexts";
 import * as errors from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";

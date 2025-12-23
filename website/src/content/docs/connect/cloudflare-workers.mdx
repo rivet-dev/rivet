@@ -96,14 +96,14 @@ const myActor = actor({
 The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
 
 ```typescript
-import { actor, InitContext } from "rivetkit";
+import { actor, CreateVarsContext } from "rivetkit";
 import type { DriverContext } from "@rivetkit/cloudflare-workers";
 
 const myActor = actor({
   state: { count: 0 },
-  
+
   // Save the Cloudflare driver context
-  createVars: (ctx: InitContext, driver: DriverContext) => ({ 
+  createVars: (ctx: CreateVarsContext, driver: DriverContext) => ({
     state: driver.state,
   }),
   

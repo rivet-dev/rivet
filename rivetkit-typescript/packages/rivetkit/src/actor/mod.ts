@@ -72,23 +72,8 @@ export type {
 } from "@/common/websocket-interface";
 export type { ActorKey } from "@/manager/protocol/query";
 export type * from "./config";
-export type { InitContext } from "./config";
 export type { AnyConn, Conn } from "./conn/mod";
-export type { ActionContext } from "./contexts/action";
-export type { ActorContext } from "./contexts/actor";
-export type { ConnContext } from "./contexts/conn";
-export type { ConnInitContext } from "./contexts/conn-init";
-export type { CreateConnStateContext } from "./contexts/create-conn-state";
-export type { OnBeforeConnectContext } from "./contexts/on-before-connect";
-export type { OnConnectContext } from "./contexts/on-connect";
-export type { RequestContext } from "./contexts/request";
-export type { WebSocketContext } from "./contexts/websocket";
-export type {
-	ActionContextOf,
-	ActorContextOf,
-	ActorDefinition,
-	AnyActorDefinition,
-} from "./definition";
+export type { ActorDefinition, AnyActorDefinition } from "./definition";
 export { lookupInRegistry } from "./definition";
 export { UserError, type UserErrorOptions } from "./errors";
 export type { AnyActorInstance } from "./instance/mod";

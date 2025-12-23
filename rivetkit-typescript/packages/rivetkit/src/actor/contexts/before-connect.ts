@@ -3,17 +3,16 @@ import type { ActorDefinition, AnyActorDefinition } from "../definition";
 import { ConnInitContext } from "./base/conn-init";
 
 /**
- * Context for the createConnState lifecycle hook.
- * Called to initialize connection-specific state when a connection is created.
+ * Context for the onBeforeConnect lifecycle hook.
  */
-export class CreateConnStateContext<
+export class BeforeConnectContext<
 	TState,
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
 > extends ConnInitContext<TState, TVars, TInput, TDatabase> {}
 
-export type CreateConnStateContextOf<AD extends AnyActorDefinition> =
+export type BeforeConnectContextOf<AD extends AnyActorDefinition> =
 	AD extends ActorDefinition<
 		infer S,
 		any,
@@ -23,5 +22,5 @@ export type CreateConnStateContextOf<AD extends AnyActorDefinition> =
 		infer DB extends AnyDatabaseProvider,
 		any
 	>
-		? CreateConnStateContext<S, V, I, DB>
+		? BeforeConnectContext<S, V, I, DB>
 		: never;

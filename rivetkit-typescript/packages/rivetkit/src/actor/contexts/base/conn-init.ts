@@ -1,5 +1,9 @@
-import type { AnyDatabaseProvider } from "../database";
-import type { ActorInstance } from "../instance/mod";
+import type { AnyDatabaseProvider } from "../../database";
+import type {
+	ActorDefinition,
+	AnyActorDefinition,
+} from "../../definition";
+import type { ActorInstance } from "../../instance/mod";
 import { ActorContext } from "./actor";
 
 /**
@@ -11,7 +15,7 @@ export abstract class ConnInitContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-> extends ActorContext<TState, undefined, undefined, TVars, TInput, TDatabase> {
+> extends ActorContext<TState, never, never, TVars, TInput, TDatabase> {
 	/**
 	 * The incoming request that initiated the connection.
 	 * May be undefined for connections initiated without a direct HTTP request.
@@ -25,7 +29,20 @@ export abstract class ConnInitContext<
 		actor: ActorInstance<TState, any, any, TVars, TInput, TDatabase>,
 		request: Request | undefined,
 	) {
-		super(actor);
+		super(actor as any);
 		this.request = request;
 	}
 }
+
+export type ConnInitContextOf<AD extends AnyActorDefinition> =
+	AD extends ActorDefinition<
+		infer S,
+		any,
+		any,
+		infer V,
+		infer I,
+		infer DB extends AnyDatabaseProvider,
+		any
+	>
+		? ConnInitContext<S, V, I, DB>
+		: never;

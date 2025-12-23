@@ -157,7 +157,7 @@ There are two ways to define the initial state for connections:
 
 ### `onBeforeConnect`
 
-[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
+[API Reference](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html)
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
@@ -204,7 +204,7 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
+[API Reference](/typedoc/interfaces/rivetkit.mod.ConnectContext.html)
 
 Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
 
@@ -336,6 +336,6 @@ This ensures the underlying network connections close cleanly before continuing.
 - [`Conn`](/typedoc/interfaces/rivetkit.mod.Conn.html) - Connection interface
 - [`ConnInitContext`](/typedoc/interfaces/rivetkit.mod.ConnInitContext.html) - Connection initialization context
 - [`CreateConnStateContext`](/typedoc/interfaces/rivetkit.mod.CreateConnStateContext.html) - Context for creating connection state
-- [`OnBeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html) - Pre-connection lifecycle hook context
-- [`OnConnectContext`](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html) - Post-connection lifecycle hook context
+- [`BeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html) - Pre-connection lifecycle hook context
+- [`ConnectContext`](/typedoc/interfaces/rivetkit.mod.ConnectContext.html) - Post-connection lifecycle hook context
 - [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Typed connection from client side
