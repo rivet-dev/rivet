@@ -3,6 +3,7 @@ import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
 import { combineUrlPath } from "@/utils";
 import { logger } from "./log";
+import { RunnerConfig } from "@/registry/run-config";
 
 // Error class for Engine API errors
 export class EngineApiError extends Error {
@@ -16,8 +17,11 @@ export class EngineApiError extends Error {
 	}
 }
 
-export function getEndpoint(config: ClientConfig) {
-	return config.endpoint ?? "http://127.0.0.1:6420";
+export function getEndpoint(config: ClientConfig | RunnerConfig) {
+	// TODO: Split this fn up in to 2 (one for client one for runner)
+	const defaultPort =
+		"defaultServerPort" in config ? config.defaultServerPort : 6420;
+	return config.endpoint ?? `http://127.0.0.1:${defaultPort}`;
 }
 
 // Helper function for making API calls
