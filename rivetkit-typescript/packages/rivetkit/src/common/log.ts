@@ -43,9 +43,7 @@ export function getPinoLevel(logLevel?: LogLevel): LevelWithSilent {
 		return configuredLogLevel;
 	}
 
-	const raw = (getLogLevel() || "warn")
-		.toString()
-		.toLowerCase();
+	const raw = (getLogLevel() || "warn").toString().toLowerCase();
 
 	const parsed = LogLevelSchema.safeParse(raw);
 	if (parsed.success) {
@@ -129,10 +127,7 @@ export function configureDefaultLogger(logLevel?: LogLevel) {
 				return { level: number };
 			},
 		},
-		timestamp:
-			getLogTimestamp()
-				? stdTimeFunctions.epochTime
-				: false,
+		timestamp: getLogTimestamp() ? stdTimeFunctions.epochTime : false,
 		browser: {
 			write: {
 				fatal: customWrite.bind(null, "fatal"),
@@ -156,10 +151,7 @@ export function configureDefaultLogger(logLevel?: LogLevel) {
 					60: "fatal",
 				};
 				const levelName = levelMap[level] || "info";
-				const time =
-					getLogTimestamp()
-						? Date.now()
-						: undefined;
+				const time = getLogTimestamp() ? Date.now() : undefined;
 
 				// Get bindings from the logger instance (child logger fields)
 				const bindings = (this as any).bindings?.() || {};

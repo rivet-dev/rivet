@@ -27,24 +27,24 @@ export const getRivetRunnerKind = (): string | undefined =>
 	getEnvUniversal("RIVET_RUNNER_KIND");
 
 // RivetKit configuration
-export const getRivetkitLogMessage = (): boolean =>
-	!!getEnvUniversal("_RIVETKIT_LOG_MESSAGE");
 export const getRivetkitInspectorToken = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_INSPECTOR_TOKEN");
 export const getRivetkitInspectorDisable = (): boolean =>
-	!!getEnvUniversal("RIVETKIT_INSPECTOR_DISABLE");
-export const getRivetkitErrorStack = (): boolean =>
-	getEnvUniversal("_RIVETKIT_ERROR_STACK") === "1";
+	getEnvUniversal("RIVETKIT_INSPECTOR_DISABLE") === "1";
 
 // Logging configuration
 export const getLogLevel = (): string | undefined =>
-	getEnvUniversal("LOG_LEVEL");
+	getEnvUniversal("RIVETKIT_LOG_LEVEL");
 export const getLogTarget = (): boolean =>
-	getEnvUniversal("LOG_TARGET") === "1";
+	getEnvUniversal("RIVETKIT_LOG_TARGET") === "1";
 export const getLogTimestamp = (): boolean =>
-	getEnvUniversal("LOG_TIMESTAMP") === "1";
-export const getRivetLogHeaders = (): boolean =>
-	!!getEnvUniversal("_RIVET_LOG_HEADERS");
+	getEnvUniversal("RIVETKIT_LOG_TIMESTAMP") === "1";
+export const getLogMessage = (): boolean =>
+	getEnvUniversal("RIVETKIT_LOG_MESSAGE") === "1";
+export const getLogErrorStack = (): boolean =>
+	getEnvUniversal("RIVETKIT_LOG_ERROR_STACK") === "1";
+export const getLogHeaders = (): boolean =>
+	getEnvUniversal("RIVETKIT_LOG_HEADERS") === "1";
 
 // Environment configuration
 export const getNodeEnv = (): string | undefined => getEnvUniversal("NODE_ENV");
