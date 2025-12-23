@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ActorNotFound, InvalidRequest, Unsupported } from "@/actor/errors";
 import { serializeActorKey } from "@/actor/keys";
 import type { Client, Encoding } from "@/client/mod";
+import { createClientWithDriver } from "@/client/client";
 import {
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
@@ -123,12 +124,13 @@ export function createManagerRouter(
 	);
 
 	if (runConfig.runnerKind === "serverless") {
+		// IMPORTANT: Do not pass `client` to addServerlessRoutes since we need
+		// to create a new client on demand when we construct the new config
 		addServerlessRoutes(
 			driverConfig,
 			registryConfig,
 			runConfig,
 			managerDriver,
-			client,
 			router,
 		);
 	} else if (runConfig.runnerKind === "normal") {
@@ -149,7 +151,6 @@ function addServerlessRoutes(
 	registryConfig: RegistryConfig,
 	runConfig: RunnerConfig,
 	managerDriver: ManagerDriver,
-	client: AnyClient,
 	router: OpenAPIHono,
 ) {
 	// GET /
@@ -203,7 +204,14 @@ function addServerlessRoutes(
 			newRunConfig.runnerKey = undefined;
 		}
 
-		// Create new actor driver with updated config
+		// Create new client with updated endpoint for serverless actors
+		//
+		// The original client was created with the default endpoint (127.0.0.1:6420)
+		// since the endpoint is only known when the serverless /start request comes in.
+		// We need to create a new client here with the correct endpoint.
+		const client = createClientWithDriver(managerDriver, newRunConfig);
+
+		// Create new actor driver with updated config and client
 		const actorDriver = driverConfig.actor(
 			registryConfig,
 			newRunConfig,
