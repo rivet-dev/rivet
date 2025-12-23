@@ -15,7 +15,7 @@ import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { EXTRA_ERROR_LOG } from "@/utils";
-import type { ActorConfig, InitContext } from "../config";
+import type { ActorConfig } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -28,10 +28,12 @@ import {
 	convertConnFromBarePersistedConn,
 	type PersistedConn,
 } from "../conn/persisted";
-import { ActionContext } from "../contexts/action";
-import { ActorContext } from "../contexts/actor";
-import { RequestContext } from "../contexts/request";
-import { WebSocketContext } from "../contexts/websocket";
+import {
+	ActionContext,
+	ActorContext,
+	RequestContext,
+	WebSocketContext,
+} from "../contexts";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
@@ -826,7 +828,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Call onCreate lifecycle
 		if (this.#config.onCreate) {
-			await this.#config.onCreate(this.actorContext, persistData.input!);
+			await this.#config.onCreate(
+				this.actorContext as any,
+				persistData.input!,
+			);
 		}
 	}
 
@@ -892,7 +897,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		let vars: V | undefined;
 		if ("createVars" in this.#config) {
 			const dataOrPromise = this.#config.createVars(
-				this.actorContext as unknown as InitContext,
+				this.actorContext as any,
 				this.driver.getContext(this.#actorId),
 			);
 			if (dataOrPromise instanceof Promise) {

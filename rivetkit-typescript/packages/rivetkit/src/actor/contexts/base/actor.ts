@@ -2,10 +2,11 @@ import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import type { Logger } from "@/common/log";
 import type { Registry } from "@/registry";
-import type { Conn, ConnId } from "../conn/mod";
-import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
-import type { ActorInstance, SaveStateOptions } from "../instance/mod";
-import type { Schedule } from "../schedule";
+import type { Conn, ConnId } from "../../conn/mod";
+import type { AnyDatabaseProvider, InferDatabaseClient } from "../../database";
+import type { ActorDefinition, AnyActorDefinition } from "../../definition";
+import type { ActorInstance, SaveStateOptions } from "../../instance/mod";
+import type { Schedule } from "../../schedule";
 
 /**
  * ActorContext class that provides access to actor methods and state
@@ -42,16 +43,23 @@ export class ActorContext<
 
 	/**
 	 * Get the actor state
+	 *
+	 * @remarks
+	 * This property is not available in `createState` since the state hasn't been created yet.
 	 */
-	get state(): TState {
-		return this.#actor.state;
+	get state(): TState extends never ? never : TState {
+		return this.#actor.state as TState extends never ? never : TState;
 	}
 
 	/**
 	 * Get the actor variables
+	 *
+	 * @remarks
+	 * This property is not available in `createVars` since the variables haven't been created yet.
+	 * Variables are only available if you define `vars` or `createVars` in your actor config.
 	 */
-	get vars(): TVars {
-		return this.#actor.vars;
+	get vars(): TVars extends never ? never : TVars {
+		return this.#actor.vars as TVars extends never ? never : TVars;
 	}
 
 	/**
@@ -125,11 +133,16 @@ export class ActorContext<
 
 	/**
 	 * Gets the database.
+	 *
 	 * @experimental
+	 * @remarks
+	 * This property is only available if you define a `db` provider in your actor config.
 	 * @throws {DatabaseNotEnabled} If the database is not enabled.
 	 */
-	get db(): InferDatabaseClient<TDatabase> {
-		return this.#actor.db;
+	get db(): TDatabase extends never ? never : InferDatabaseClient<TDatabase> {
+		return this.#actor.db as TDatabase extends never
+			? never
+			: InferDatabaseClient<TDatabase>;
 	}
 
 	/**
@@ -177,3 +190,16 @@ export class ActorContext<
 		this.#actor.startDestroy();
 	}
 }
+
+export type ActorContextOf<AD extends AnyActorDefinition> =
+	AD extends ActorDefinition<
+		infer S,
+		infer CP,
+		infer CS,
+		infer V,
+		infer I,
+		infer DB extends AnyDatabaseProvider,
+		any
+	>
+		? ActorContext<S, CP, CS, V, I, DB>
+		: never;

@@ -255,8 +255,8 @@ export const sitemap = [
 								href: "/docs/actors/ai-and-user-generated-actors",
 							},
 							{
-								title: "Helper Types",
-								href: "/docs/actors/helper-types",
+								title: "Types",
+								href: "/docs/actors/types",
 								//icon: faCode,
 							},
 							{
