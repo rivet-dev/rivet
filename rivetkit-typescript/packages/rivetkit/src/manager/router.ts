@@ -165,9 +165,7 @@ export function buildManagerRouter(
 						} else {
 							// If no name is provided, try all registered actor types
 							// Actor IDs are globally unique, so we'll find it in one of them
-							for (const actorName of Object.keys(
-								config.use,
-							)) {
+							for (const actorName of Object.keys(config.use)) {
 								const actorOutput =
 									await managerDriver.getForId({
 										c,
@@ -437,7 +435,9 @@ export function buildManagerRouter(
 						params,
 					);
 
-					return await createTestWebSocketProxy(clientToProxyWsPromise);
+					return await createTestWebSocketProxy(
+						clientToProxyWsPromise,
+					);
 				})(c, noopNext());
 			});
 
@@ -555,10 +555,7 @@ export function buildManagerRouter(
 			handleMetadataRequest(c, config, { normal: {} }, undefined),
 		);
 
-		managerDriver.modifyManagerRouter?.(
-			config,
-			router as unknown as Hono,
-		);
+		managerDriver.modifyManagerRouter?.(config, router as unknown as Hono);
 	});
 }
 
