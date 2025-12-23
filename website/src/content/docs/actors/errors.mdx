@@ -327,7 +327,42 @@ try {
 </Tab>
 </Tabs>
 
-The original error message and stack trace are logged server-side for debugging. Check your server logs to see the full error details.
+### Server-Side Logging
+
+**All internal errors are logged server-side with full details.** When an internal error occurs, the complete error message, stack trace, and context are written to your server logs. This is where you should look first when debugging internal errors in production.
+
+The client receives only a generic "Internal error" message for security, but you can find the full error details in your server logs including:
+
+- Complete error message
+- Stack trace
+- Request context (actor ID, action name, connection ID, etc.)
+- Timestamp
+
+**Always check your server logs to see the actual error details when debugging internal errors.**
+
+### Exposing Errors to Clients (Development Only)
+
+**Warning:** Only enable error exposure in development environments. In production, this will leak sensitive internal details to clients.
+
+For faster debugging during development, you can automatically expose internal error details to clients. This is enabled when:
+
+- `NODE_ENV=development` - Automatically enabled in development mode
+- `RIVET_EXPOSE_ERRORS=1` - Explicitly enable error exposure
+
+With error exposure enabled, clients will see the full error message instead of the generic "Internal error" response:
+
+```typescript
+// With NODE_ENV=development or RIVET_EXPOSE_ERRORS=1
+try {
+  await paymentActor.processPayment(100);
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.message);
+    // "Payment API returned 402: Insufficient funds"
+    // Instead of: "Internal error. Read the server logs for more details."
+  }
+}
+```
 
 ## API Reference
 

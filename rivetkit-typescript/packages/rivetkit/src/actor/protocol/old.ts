@@ -21,7 +21,11 @@ import {
 	ToServerSchema,
 } from "@/schemas/client-protocol-zod/mod";
 import { deserializeWithEncoding } from "@/serde";
-import { assertUnreachable, bufferToArrayBuffer } from "../../utils";
+import {
+	assertUnreachable,
+	bufferToArrayBuffer,
+	getEnvUniversal,
+} from "../../utils";
 import { CONN_SEND_MESSAGE_SYMBOL, type Conn } from "../conn/mod";
 import { ActionContext } from "../contexts";
 import type { ActorInstance } from "../instance/mod";
@@ -284,6 +288,8 @@ export async function processMessage<
 				actionId,
 				actionName,
 			},
+			getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1" ||
+				getEnvUniversal("NODE_ENV") === "development",
 		);
 
 		actor.rLog.debug({
