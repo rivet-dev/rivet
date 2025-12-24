@@ -1,5 +1,7 @@
 use gas::prelude::*;
 
+mod backfill;
+
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
 	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = StandaloneCtx::new(
@@ -19,6 +21,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 			setup_epoxy_coordinator(&ctx).await
 		},
 		create_default_namespace(&ctx),
+		backfill::run(&ctx),
 	)?;
 
 	Ok(())

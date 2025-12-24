@@ -60,3 +60,13 @@ pub struct MustUseRegionalHost {
 	pub datacenter: String,
 	pub valid_hosts: String,
 }
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"actor_runner_failed",
+	"Actor's runner pool is experiencing errors."
+)]
+pub struct ActorRunnerFailed {
+	pub actor_id: Id,
+}

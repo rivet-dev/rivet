@@ -10,6 +10,12 @@ use crate::{errors, shared_state::SharedState};
 
 const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Time to wait before starting pool error checks
+const RUNNER_POOL_ERROR_CHECK_DELAY: Duration = Duration::from_secs(1);
+/// Interval between pool error checks
+const RUNNER_POOL_ERROR_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 
 /// Route requests to actor services using path-based routing
@@ -232,6 +238,14 @@ async fn route_request_inner(
 
 		let mut wake_retries = 0;
 
+		// Create pool error check future
+		let pool_error_check_fut = check_runner_pool_error_loop(
+			ctx,
+			actor.namespace_id,
+			actor.runner_name_selector.as_deref(),
+		);
+		tokio::pin!(pool_error_check_fut);
+
 		// Wait for ready, fail, or destroy
 		loop {
 			tokio::select! {
@@ -272,6 +286,11 @@ async fn route_request_inner(
 					res?;
 					return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
 				}
+				res = &mut pool_error_check_fut => {
+					if res? {
+						return Err(errors::ActorRunnerFailed { actor_id }.build());
+					}
+				}
 				// Ready timeout
 				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
 					return Err(errors::ActorReadyTimeout { actor_id }.build());
@@ -293,4 +312,41 @@ async fn route_request_inner(
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(
 		gateway,
 	))))
+}
+
+/// Waits for initial delay, then periodically checks for runner pool errors.
+///
+/// Returns `true` if the pool has an active error, `false` otherwise.
+///
+/// This is used to short circuit waiting for the actor to schedule by checking if the underlying
+/// pool is unhealthy. The initial delay is intended to give the actor time to allocate cleanly in
+/// case the pool status is flapping.
+async fn check_runner_pool_error_loop(
+	ctx: &StandaloneCtx,
+	namespace_id: Id,
+	runner_name: Option<&str>,
+) -> Result<bool> {
+	// Skip pool error check for actors that have not backfilled yet
+	let Some(runner_name) = runner_name else {
+		std::future::pending::<()>().await;
+		unreachable!()
+	};
+
+	tokio::time::sleep(RUNNER_POOL_ERROR_CHECK_DELAY).await;
+
+	loop {
+		let errors = ctx
+			.op(pegboard::ops::runner_config::get_error::Input {
+				runners: vec![(namespace_id, runner_name.to_string())],
+			})
+			.await?;
+
+		if let Some(entry) = errors.into_iter().next() {
+			tracing::debug!(?entry.error, "runner pool has active error, failing fast");
+			return Ok(true);
+		}
+
+		// Wait before next check
+		tokio::time::sleep(RUNNER_POOL_ERROR_CHECK_INTERVAL).await;
+	}
 }

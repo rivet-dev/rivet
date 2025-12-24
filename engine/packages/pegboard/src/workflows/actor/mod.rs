@@ -63,6 +63,47 @@ pub struct State {
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
 	pub runner_state: Option<RunnerState>,
+
+	/// Reason for actor failure, set when actor fails to start.
+	#[serde(default)]
+	pub failure_reason: Option<FailureReason>,
+}
+
+/// Persistent reason why an actor failed to start or run.
+/// Distinct from `errors::Actor` which represents user-facing API errors.
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureReason {
+	NoCapacity,
+	/// Runner did not respond with expected events (GC timeout).
+	RunnerNoResponse {
+		runner_id: Id,
+	},
+	/// Runner connection was lost (no recent ping, network issue, or crash).
+	RunnerConnectionLost {
+		runner_id: Id,
+	},
+	/// Runner was draining but actor didn't stop in time.
+	RunnerDrainingTimeout {
+		runner_id: Id,
+	},
+	Crashed {
+		message: Option<String>,
+	},
+}
+
+impl FailureReason {
+	/// Used to determine the category of this error.
+	///
+	/// Actor errors will not override runner errors.
+	pub fn is_runner_failure(&self) -> bool {
+		match self {
+			FailureReason::NoCapacity | FailureReason::Crashed { .. } => false,
+			FailureReason::RunnerNoResponse { .. }
+			| FailureReason::RunnerConnectionLost { .. }
+			| FailureReason::RunnerDrainingTimeout { .. } => true,
+		}
+	}
 }
 
 impl State {
@@ -99,6 +140,8 @@ impl State {
 			runner_id: None,
 			runner_workflow_id: None,
 			runner_state: None,
+
+			failure_reason: None,
 		}
 	}
 }
@@ -285,6 +328,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							generation: state.generation,
 							force_reschedule: false,
 							reset_rescheduling: false,
+							reason: Some(LostReason::RunnerNoResponse),
 						})]
 					} else {
 						signals
@@ -415,7 +459,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											.await?;
 									}
 									protocol::ActorState::ActorStateStopped(
-										protocol::ActorStateStopped { code, .. },
+										protocol::ActorStateStopped { code, message },
 									) => {
 										if let StoppedResult::Destroy = handle_stopped(
 											ctx,
@@ -425,7 +469,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 												code: match code {
 													protocol::StopCode::Ok => protocol::mk2::StopCode::Ok,
 													protocol::StopCode::Error => protocol::mk2::StopCode::Error,
-												}
+												},
+												message,
 											},
 										)
 										.await?
@@ -549,13 +594,16 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 												.await?;
 										}
 										protocol::mk2::ActorState::ActorStateStopped(
-											protocol::mk2::ActorStateStopped { code, .. },
+											protocol::mk2::ActorStateStopped { code, message },
 										) => {
 											if let StoppedResult::Destroy = handle_stopped(
 												ctx,
 												&input,
 												state,
-												StoppedVariant::Normal { code: code.clone() },
+												StoppedVariant::Normal {
+													code: code.clone(),
+													message: message.clone(),
+												},
 											)
 											.await?
 											{
@@ -656,12 +704,34 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								state.reschedule_state = Default::default();
 							}
 
+							// Build failure reason from lost reason
+							let failure_reason = if let Some(runner_id) = state.runner_id {
+                                 match &sig.reason {
+									Some(LostReason::RunnerNoResponse) => {
+										Some(FailureReason::RunnerNoResponse { runner_id })
+									}
+									Some(LostReason::RunnerConnectionLost) => {
+										Some(FailureReason::RunnerConnectionLost { runner_id })
+									}
+									Some(LostReason::RunnerDrainingTimeout) => {
+										Some(FailureReason::RunnerDrainingTimeout { runner_id })
+									}
+									// Draining is expected, no error needed
+									Some(LostReason::RunnerDraining) => None,
+									// Legacy signal without reason
+									None => None,
+                                }
+                            } else {
+								None
+                            };
+
 							if let StoppedResult::Destroy = handle_stopped(
 								ctx,
 								&input,
 								state,
 								StoppedVariant::Lost {
 									force_reschedule: sig.force_reschedule,
+									failure_reason,
 								},
 							)
 							.await?
@@ -781,8 +851,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 #[derive(Debug)]
 enum StoppedVariant {
-	Normal { code: protocol::mk2::StopCode },
-	Lost { force_reschedule: bool },
+	Normal {
+		code: protocol::mk2::StopCode,
+		message: Option<String>,
+	},
+	Lost {
+		force_reschedule: bool,
+		failure_reason: Option<FailureReason>,
+	},
 }
 
 enum StoppedResult {
@@ -799,7 +875,7 @@ async fn handle_stopped(
 	tracing::debug!(?variant, "actor stopped");
 
 	let force_reschedule = match &variant {
-		StoppedVariant::Normal { code } => {
+		StoppedVariant::Normal { code, .. } => {
 			// Reset retry count on successful exit
 			if let protocol::mk2::StopCode::Ok = code {
 				state.reschedule_state = Default::default();
@@ -807,8 +883,23 @@ async fn handle_stopped(
 
 			false
 		}
-		StoppedVariant::Lost { force_reschedule } => *force_reschedule,
+		StoppedVariant::Lost {
+			force_reschedule, ..
+		} => *force_reschedule,
 	};
+
+	// Set runner failure reason if actor was lost unexpectedly.
+	// This is set early (before crash policy handling) because it applies to all crash policies.
+	if let StoppedVariant::Lost {
+		failure_reason: Some(failure_reason),
+		..
+	} = &variant
+	{
+		ctx.activity(runtime::SetFailureReasonInput {
+			failure_reason: failure_reason.clone(),
+		})
+		.await?;
+	}
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
@@ -938,7 +1029,8 @@ async fn handle_stopped(
 			&& matches!(
 				variant,
 				StoppedVariant::Normal {
-					code: protocol::mk2::StopCode::Ok
+					code: protocol::mk2::StopCode::Ok,
+					..
 				}
 			);
 
@@ -960,6 +1052,21 @@ async fn handle_stopped(
 				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
 
 				state.sleeping = true;
+
+				// Set Crashed failure reason for actual crashes.
+				// Runner failure reasons are already set at the start of handle_stopped.
+				if let StoppedVariant::Normal { code, message } = &variant {
+					ensure!(
+						*code != protocol::mk2::StopCode::Ok,
+						"expected non-Ok stop code in crash handler, got Ok"
+					);
+					ctx.activity(runtime::SetFailureReasonInput {
+						failure_reason: FailureReason::Crashed {
+							message: message.clone(),
+						},
+					})
+					.await?;
+				}
 
 				ctx.activity(runtime::SetSleepingInput {
 					actor_id: input.actor_id,
@@ -1042,6 +1149,20 @@ pub struct Wake {
 	pub allocation_override: AllocationOverride,
 }
 
+/// Reason why an actor was lost.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LostReason {
+	/// Runner did not respond with expected events (GC timeout).
+	RunnerNoResponse,
+	/// Runner is gracefully draining.
+	RunnerDraining,
+	/// Runner connection was lost (no recent ping, network issue, or crash).
+	RunnerConnectionLost,
+	/// Runner was draining but actor didn't stop in time.
+	RunnerDrainingTimeout,
+}
+
 #[derive(Debug)]
 #[signal("pegboard_actor_lost")]
 pub struct Lost {
@@ -1051,6 +1172,10 @@ pub struct Lost {
 	/// Resets the rescheduling retry count to 0.
 	#[serde(default)]
 	pub reset_rescheduling: bool,
+	/// Why the actor was lost. If not provided, no failure reason is set
+	/// (legacy signals before this field was added).
+	#[serde(default)]
+	pub reason: Option<LostReason>,
 }
 
 #[derive(Debug)]

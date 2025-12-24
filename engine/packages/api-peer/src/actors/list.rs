@@ -43,7 +43,10 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 
 		// Fetch actors by their IDs
 		let get_res = ctx
-			.op(pegboard::ops::actor::get::Input { actor_ids })
+			.op(pegboard::ops::actor::get::Input {
+				actor_ids,
+				fetch_error: true,
+			})
 			.await?;
 
 		// Filter actors by namespace
@@ -90,6 +93,7 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 					.map(|c| c.parse::<i64>())
 					.transpose()?,
 				limit: query.limit.unwrap_or(100),
+				fetch_error: true,
 			})
 			.await?;
 

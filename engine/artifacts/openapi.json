@@ -964,6 +964,17 @@
             "format": "int64",
             "description": "Denotes when the actor was destroyed."
           },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActorError",
+                "description": "Error details if the actor failed to start."
+              }
+            ]
+          },
           "key": {
             "type": [
               "string",
@@ -1012,6 +1023,114 @@
             "description": "Denotes when the actor was first made connectable. Null if never."
           }
         }
+      },
+      "ActorError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Runner pool-related errors",
+            "required": [
+              "runner_pool_error"
+            ],
+            "properties": {
+              "runner_pool_error": {
+                "$ref": "#/components/schemas/RunnerPoolError",
+                "description": "Runner pool-related errors"
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "No runners available matching the runner name",
+            "enum": [
+              "no_capacity"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "Runner was allocated but never started the actor (GC timeout)",
+            "required": [
+              "runner_no_response"
+            ],
+            "properties": {
+              "runner_no_response": {
+                "type": "object",
+                "description": "Runner was allocated but never started the actor (GC timeout)",
+                "required": [
+                  "runner_id"
+                ],
+                "properties": {
+                  "runner_id": {
+                    "$ref": "#/components/schemas/RivetId"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Runner connection was lost (no recent ping, network issue, or crash)",
+            "required": [
+              "runner_connection_lost"
+            ],
+            "properties": {
+              "runner_connection_lost": {
+                "type": "object",
+                "description": "Runner connection was lost (no recent ping, network issue, or crash)",
+                "required": [
+                  "runner_id"
+                ],
+                "properties": {
+                  "runner_id": {
+                    "$ref": "#/components/schemas/RivetId"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Runner was draining but actor didn't stop in time",
+            "required": [
+              "runner_draining_timeout"
+            ],
+            "properties": {
+              "runner_draining_timeout": {
+                "type": "object",
+                "description": "Runner was draining but actor didn't stop in time",
+                "required": [
+                  "runner_id"
+                ],
+                "properties": {
+                  "runner_id": {
+                    "$ref": "#/components/schemas/RivetId"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Actor exited with an error and is now sleeping",
+            "required": [
+              "crashed"
+            ],
+            "properties": {
+              "crashed": {
+                "type": "object",
+                "description": "Actor exited with an error and is now sleeping",
+                "properties": {
+                  "message": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "ActorName": {
         "type": "object",
@@ -1635,6 +1754,28 @@
           }
         ]
       },
+      "RunnerConfigResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RunnerConfig"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "runner_pool_error": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RunnerPoolError"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
       "RunnerConfigVariant": {
         "type": "string",
         "enum": [
@@ -1676,7 +1817,7 @@
           "datacenters": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/RunnerConfig"
+              "$ref": "#/components/schemas/RunnerConfigResponse"
             },
             "propertyNames": {
               "type": "string"
@@ -1887,6 +2028,100 @@
             "type": "boolean"
           }
         }
+      },
+      "RunnerPoolError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Serverless: SSE returned non-200 status code (e.g., 404, 500)",
+            "required": [
+              "serverless_http_error"
+            ],
+            "properties": {
+              "serverless_http_error": {
+                "type": "object",
+                "description": "Serverless: SSE returned non-200 status code (e.g., 404, 500)",
+                "required": [
+                  "status_code",
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "status_code": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "Serverless: SSE stream ended unexpectedly before runner initialized",
+            "enum": [
+              "serverless_stream_ended_early"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "Serverless: SSE connection or network error",
+            "required": [
+              "serverless_connection_error"
+            ],
+            "properties": {
+              "serverless_connection_error": {
+                "type": "object",
+                "description": "Serverless: SSE connection or network error",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "Serverless: Runner sent invalid base64 in SSE message",
+            "enum": [
+              "serverless_invalid_base64"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "Serverless: Runner sent invalid protocol payload",
+            "required": [
+              "serverless_invalid_payload"
+            ],
+            "properties": {
+              "serverless_invalid_payload": {
+                "type": "object",
+                "description": "Serverless: Runner sent invalid protocol payload",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "Internal error",
+            "enum": [
+              "internal_error"
+            ]
+          }
+        ]
       },
       "RunnersListNamesResponse": {
         "type": "object",

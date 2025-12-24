@@ -11,6 +11,8 @@ use rivet_types::{
 	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
 	runner_configs::RunnerConfigKind,
 };
+
+use super::FailureReason;
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
@@ -938,12 +940,24 @@ pub async fn spawn_actor(
 							runner_protocol_version,
 						})
 					} else {
+						ctx.activity(SetFailureReasonInput {
+							failure_reason: FailureReason::NoCapacity,
+						})
+						.await?;
+
 						Ok(SpawnActorOutput::Sleep)
 					}
 				}
 			}
 		}
-		AllocateActorStatus::Sleep => Ok(SpawnActorOutput::Sleep),
+		AllocateActorStatus::Sleep => {
+			ctx.activity(SetFailureReasonInput {
+				failure_reason: FailureReason::NoCapacity,
+			})
+			.await?;
+
+			Ok(SpawnActorOutput::Sleep)
+		}
 	}
 }
 
@@ -1297,4 +1311,31 @@ pub struct CheckRunnersStubInput {}
 #[activity(CheckRunnersStub)]
 pub async fn check_runners(ctx: &ActivityCtx, input: &CheckRunnersStubInput) -> Result<()> {
 	unreachable!();
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct SetFailureReasonInput {
+	pub failure_reason: FailureReason,
+}
+
+/// Sets the failure reason on the actor workflow state.
+#[activity(SetFailureReason)]
+pub async fn set_failure_reason(ctx: &ActivityCtx, input: &SetFailureReasonInput) -> Result<()> {
+	let mut state = ctx.state::<State>()?;
+
+	// Runner-related errors are never overwritten, as they represent the root cause of the failure
+	// and should not be masked by subsequent errors like `Crashed`.
+	if let Some(existing) = &state.failure_reason
+		&& existing.is_runner_failure()
+	{
+		tracing::debug!(
+			?existing,
+			new=?input.failure_reason,
+			"preserving existing runner failure error"
+		);
+		return Ok(());
+	}
+
+	state.failure_reason = Some(input.failure_reason.clone());
+	Ok(())
 }

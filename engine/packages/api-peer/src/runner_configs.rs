@@ -1,9 +1,13 @@
 use anyhow::Result;
 use namespace::utils::runner_config_variant;
 use rivet_api_builder::ApiCtx;
-use rivet_api_types::{pagination::Pagination, runner_configs::list::*};
+use rivet_api_types::{
+	pagination::Pagination,
+	runner_configs::{RunnerConfigResponse, list::*},
+};
 use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use utoipa::{IntoParams, ToSchema};
 
 #[tracing::instrument(skip_all)]
@@ -24,7 +28,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 	]
 	.concat();
 
-	if !runner_names.is_empty() {
+	let runner_configs = if !runner_names.is_empty() {
 		let runner_configs = ctx
 			.op(pegboard::ops::runner_config::get::Input {
 				runners: runner_names
@@ -35,14 +39,13 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 			})
 			.await?;
 
-		Ok(ListResponse {
-			// TODO: Implement ComposeSchema for FakeMap so we don't have to reallocate
-			runner_configs: runner_configs
+		(
+			runner_configs
 				.into_iter()
 				.map(|c| (c.name, c.config))
-				.collect(),
-			pagination: Pagination { cursor: None },
-		})
+				.collect::<Vec<_>>(),
+			None,
+		)
 	} else {
 		// Parse variant from cursor if needed
 		let (variant, after_name) = if let Some(cursor) = query.cursor {
@@ -75,12 +78,47 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 			.last()
 			.map(|(name, config)| format!("{}:{}", runner_config_variant(&config), name));
 
-		Ok(ListResponse {
-			// TODO: Implement ComposeSchema for FakeMap so we don't have to reallocate
-			runner_configs: runner_configs.into_iter().collect(),
-			pagination: Pagination { cursor },
+		(runner_configs, cursor)
+	};
+
+	// Fetch pool errors
+	let runner_pool_errors: HashMap<String, _> = if !runner_configs.0.is_empty() {
+		let runners = runner_configs
+			.0
+			.iter()
+			.map(|(name, _)| (namespace.namespace_id, name.clone()))
+			.collect();
+		ctx.op(pegboard::ops::runner_config::get_error::Input { runners })
+			.await?
+			.into_iter()
+			.map(|e| (e.runner_name, e.error))
+			.collect()
+	} else {
+		HashMap::new()
+	};
+
+	// Build response with pool errors
+	let runner_configs_with_errors: HashMap<String, RunnerConfigResponse> = runner_configs
+		.0
+		.into_iter()
+		.map(|(name, config)| {
+			let runner_pool_error = runner_pool_errors.get(&name).cloned();
+			(
+				name,
+				RunnerConfigResponse {
+					config,
+					runner_pool_error,
+				},
+			)
 		})
-	}
+		.collect();
+
+	Ok(ListResponse {
+		runner_configs: runner_configs_with_errors,
+		pagination: Pagination {
+			cursor: runner_configs.1,
+		},
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]

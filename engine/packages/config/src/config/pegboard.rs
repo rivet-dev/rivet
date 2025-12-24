@@ -78,6 +78,14 @@ pub struct Pegboard {
 
 	/// Global pool desired max.
 	pub pool_desired_max_override: Option<u32>,
+
+	/// Number of consecutive successes required to clear an active runner pool error.
+	///
+	/// This prevents a single success from clearing an error during flapping conditions.
+	/// Higher values provide more stability but slower recovery from transient errors.
+	///
+	/// **Experimental**
+	pub runner_pool_consecutive_successes_to_clear_error: Option<u32>,
 }
 
 impl Pegboard {
@@ -125,5 +133,10 @@ impl Pegboard {
 
 	pub fn serverless_backoff_max_exponent(&self) -> usize {
 		self.serverless_backoff_max_exponent.unwrap_or(8)
+	}
+
+	pub fn runner_pool_error_consecutive_successes_to_clear(&self) -> u32 {
+		self.runner_pool_consecutive_successes_to_clear_error
+			.unwrap_or(3)
 	}
 }

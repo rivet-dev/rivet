@@ -94,6 +94,7 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 	let actors_res = ctx
 		.op(crate::ops::actor::get::Input {
 			actor_ids: vec![input.actor_id],
+			fetch_error: false,
 		})
 		.await?;
 

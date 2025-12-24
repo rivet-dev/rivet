@@ -98,6 +98,10 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				&keys::actor::NamespaceIdKey::new(input.actor_id),
 				input.namespace_id,
 			)?;
+			tx.write(
+				&keys::actor::RunnerNameSelectorKey::new(input.actor_id),
+				input.runner_name_selector.clone(),
+			)?;
 
 			Ok(())
 		})

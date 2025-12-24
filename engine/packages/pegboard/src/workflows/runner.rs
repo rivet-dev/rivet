@@ -252,6 +252,8 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								// regardless of its crash policy
 								force_reschedule: true,
 								reset_rescheduling: true,
+								// NOTE: Legacy workflow, disregard
+								reason: None,
 							})
 							.to_workflow::<crate::workflows::actor::Workflow>()
 							.tag("actor_id", actor_id)
@@ -345,6 +347,8 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 				generation,
 				force_reschedule: false,
 				reset_rescheduling: false,
+				// NOTE: This is a legacy workflow
+				reason: None,
 			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
 			.tag("actor_id", actor_id)

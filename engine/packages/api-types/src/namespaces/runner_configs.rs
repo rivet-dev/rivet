@@ -50,6 +50,7 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				runners_margin: runners_margin.unwrap_or_default(),
 			},
 		};
+
 		rivet_types::runner_configs::RunnerConfig { kind, metadata }
 	}
 }
