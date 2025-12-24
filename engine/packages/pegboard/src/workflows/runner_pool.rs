@@ -4,7 +4,7 @@ use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_types::{keys, runner_configs::RunnerConfigKind};
 
-use super::serverless;
+use super::{runner_pool_error_tracker, serverless};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -25,6 +25,18 @@ struct RunnerState {
 
 #[workflow]
 pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+	// Dispatch error tracker workflow with unique() semantics.
+	// This ensures only one error tracker exists per runner pool.
+	ctx.workflow(runner_pool_error_tracker::Input {
+		namespace_id: input.namespace_id,
+		runner_name: input.runner_name.clone(),
+	})
+	.tag("namespace_id", input.namespace_id)
+	.tag("runner_name", &input.runner_name)
+	.unique()
+	.dispatch()
+	.await?;
+
 	ctx.loope(LifecycleState::default(), |ctx, state| {
 		let input = input.clone();
 		async move {

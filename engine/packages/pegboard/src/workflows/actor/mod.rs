@@ -63,6 +63,20 @@ pub struct State {
 	pub runner_id: Option<Id>,
 	pub runner_workflow_id: Option<Id>,
 	pub runner_state: Option<RunnerState>,
+
+	/// Reason for actor failure, set when actor fails to start.
+	#[serde(default)]
+	pub failure_reason: Option<FailureReason>,
+}
+
+/// Persistent reason why an actor failed to start or run.
+/// Distinct from `errors::Actor` which represents user-facing API errors.
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureReason {
+	NoCapacity,
+	RunnerNoResponse { runner_id: Id },
+	Crashed { message: Option<String> },
 }
 
 impl State {
@@ -99,6 +113,8 @@ impl State {
 			runner_id: None,
 			runner_workflow_id: None,
 			runner_state: None,
+
+			failure_reason: None,
 		}
 	}
 }
@@ -280,6 +296,11 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					if signals.is_empty() {
 						tracing::warn!(actor_id=?input.actor_id, "actor lost");
 
+						let runner_id = state.runner_id.context("should have runner id when has gc timeout")?;
+
+						ctx.activity(runtime::SetFailureReasonInput { failure_reason: FailureReason::RunnerNoResponse { runner_id } })
+							.await?;
+
 						// Fake signal
 						vec![Main::Lost(Lost {
 							generation: state.generation,
@@ -415,7 +436,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											.await?;
 									}
 									protocol::ActorState::ActorStateStopped(
-										protocol::ActorStateStopped { code, .. },
+										protocol::ActorStateStopped { code, message },
 									) => {
 										if let StoppedResult::Destroy = handle_stopped(
 											ctx,
@@ -425,7 +446,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 												code: match code {
 													protocol::StopCode::Ok => protocol::mk2::StopCode::Ok,
 													protocol::StopCode::Error => protocol::mk2::StopCode::Error,
-												}
+												},
+												message,
 											},
 										)
 										.await?
@@ -549,13 +571,16 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 												.await?;
 										}
 										protocol::mk2::ActorState::ActorStateStopped(
-											protocol::mk2::ActorStateStopped { code, .. },
+											protocol::mk2::ActorStateStopped { code, message },
 										) => {
 											if let StoppedResult::Destroy = handle_stopped(
 												ctx,
 												&input,
 												state,
-												StoppedVariant::Normal { code: code.clone() },
+												StoppedVariant::Normal {
+													code: code.clone(),
+													message: message.clone(),
+												},
 											)
 											.await?
 											{
@@ -781,8 +806,13 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 #[derive(Debug)]
 enum StoppedVariant {
-	Normal { code: protocol::mk2::StopCode },
-	Lost { force_reschedule: bool },
+	Normal {
+		code: protocol::mk2::StopCode,
+		message: Option<String>,
+	},
+	Lost {
+		force_reschedule: bool,
+	},
 }
 
 enum StoppedResult {
@@ -799,7 +829,7 @@ async fn handle_stopped(
 	tracing::debug!(?variant, "actor stopped");
 
 	let force_reschedule = match &variant {
-		StoppedVariant::Normal { code } => {
+		StoppedVariant::Normal { code, .. } => {
 			// Reset retry count on successful exit
 			if let protocol::mk2::StopCode::Ok = code {
 				state.reschedule_state = Default::default();
@@ -941,7 +971,8 @@ async fn handle_stopped(
 			&& matches!(
 				variant,
 				StoppedVariant::Normal {
-					code: protocol::mk2::StopCode::Ok
+					code: protocol::mk2::StopCode::Ok,
+					..
 				}
 			);
 
@@ -963,6 +994,15 @@ async fn handle_stopped(
 				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
 
 				state.sleeping = true;
+
+				let message = match &variant {
+					StoppedVariant::Normal { message, .. } => message.clone(),
+					StoppedVariant::Lost { .. } => None,
+				};
+				ctx.activity(runtime::SetFailureReasonInput {
+					failure_reason: FailureReason::Crashed { message },
+				})
+				.await?;
 
 				ctx.activity(runtime::SetSleepingInput {
 					actor_id: input.actor_id,

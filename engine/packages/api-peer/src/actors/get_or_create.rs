@@ -26,6 +26,7 @@ pub async fn get_or_create(
 			namespace_id: namespace.namespace_id,
 			name: body.name.clone(),
 			key: body.key.clone(),
+			fetch_error: true,
 		})
 		.await?;
 
@@ -74,6 +75,7 @@ pub async fn get_or_create(
 				let res = ctx
 					.op(pegboard::ops::actor::get::Input {
 						actor_ids: vec![existing_actor_id],
+						fetch_error: true,
 					})
 					.await?;
 

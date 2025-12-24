@@ -134,4 +134,5 @@ define_keys! {
 	(106, PROTOCOL_VERSION, "protocol_version"),
 	(107, LAST_COMMAND_IDX, "last_command_idx"),
 	(108, COMMAND, "command"),
+	(109, RUNNER_NAME_SELECTOR, "runner_name_selector"),
 }

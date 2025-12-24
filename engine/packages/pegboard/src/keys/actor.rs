@@ -314,6 +314,50 @@ impl<'de> TupleUnpack<'de> for NamespaceIdKey {
 }
 
 #[derive(Debug)]
+pub struct RunnerNameSelectorKey {
+	actor_id: Id,
+}
+
+impl RunnerNameSelectorKey {
+	pub fn new(actor_id: Id) -> Self {
+		RunnerNameSelectorKey { actor_id }
+	}
+}
+
+impl FormalKey for RunnerNameSelectorKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(String::from_utf8(raw.to_vec())?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for RunnerNameSelectorKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, RUNNER_NAME_SELECTOR);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for RunnerNameSelectorKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = RunnerNameSelectorKey { actor_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
 pub struct HibernatingRequestKey {
 	actor_id: Id,
 	last_ping_ts: i64,

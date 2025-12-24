@@ -133,6 +133,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 			actorId,
 			name,
 			key,
+			error: actor.error ?? undefined,
 		};
 	}
 

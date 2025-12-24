@@ -3,33 +3,29 @@ use gas::prelude::*;
 use rivet_service_manager::{Service, ServiceKind};
 use std::time::Duration;
 
-use super::api;
-
 pub struct TestOpts {
-	pub datacenter_count: usize,
+	pub datacenters: usize,
 	pub timeout_secs: u64,
 }
 
 impl TestOpts {
-	pub fn new(datacenter_count: usize) -> Self {
+	pub fn new(datacenters: usize) -> Self {
 		Self {
-			datacenter_count,
-			..Default::default()
+			datacenters,
+			timeout_secs: 10,
 		}
 	}
 
-	pub fn new_with_timeout(datacenter_count: usize, timeout_secs: u64) -> Self {
-		Self {
-			datacenter_count,
-			timeout_secs,
-		}
+	pub fn with_timeout(mut self, timeout_secs: u64) -> Self {
+		self.timeout_secs = timeout_secs;
+		self
 	}
 }
 
 impl Default for TestOpts {
 	fn default() -> Self {
 		Self {
-			datacenter_count: 1,
+			datacenters: 1,
 			timeout_secs: 10,
 		}
 	}
@@ -49,6 +45,11 @@ pub struct TestDatacenter {
 }
 
 impl TestCtx {
+	/// Creates a test context with multiple datacenters
+	pub async fn new_multi(dc_count: usize) -> Result<Self> {
+		Self::new_with_opts(TestOpts::new(dc_count)).await
+	}
+
 	/// Creates a test context with custom options
 	pub async fn new_with_opts(opts: TestOpts) -> Result<Self> {
 		// Set up logging
@@ -59,11 +60,8 @@ impl TestCtx {
 			.try_init();
 
 		// Initialize test dependencies for all DCs
-		assert!(
-			opts.datacenter_count >= 1,
-			"datacenter_count must be at least 1"
-		);
-		let dc_count = opts.datacenter_count;
+		assert!(opts.datacenters >= 1, "datacenters must be at least 1");
+		let dc_count = opts.datacenters;
 		tracing::info!("setting up test dependencies for {} DCs", dc_count);
 		let dc_labels: Vec<u16> = (1..=dc_count as u16).collect();
 		let test_deps_list = rivet_test_deps::TestDeps::new_multi(&dc_labels)
@@ -105,7 +103,7 @@ impl TestCtx {
 						true,
 					),
 					Service::new(
-						"workflow_worker",
+						"workflow-worker",
 						ServiceKind::Standalone,
 						|config, pools| Box::pin(rivet_workflow_worker::start(config, pools)),
 						true,
@@ -124,11 +122,10 @@ impl TestCtx {
 
 		// Wait for ports to open
 		tracing::info!(dc_label, "waiting for services to be ready");
-		wait_for_ports(&[
-			("api-peer", test_deps.api_peer_port()),
-			("guard", test_deps.guard_port()),
-		])
-		.await;
+		tokio::join!(
+			wait_for_port("api-peer", test_deps.api_peer_port()),
+			wait_for_port("guard", test_deps.guard_port()),
+		);
 
 		// Create workflow context for assertions
 		let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
@@ -188,24 +185,24 @@ impl TestDatacenter {
 	}
 }
 
-pub async fn wait_for_port(service_name: &str, port: u16, timeout: Duration) -> Result<()> {
+pub async fn wait_for_port(service_name: &str, port: u16) {
 	let addr = format!("127.0.0.1:{}", port);
 	let start = std::time::Instant::now();
+	let timeout = Duration::from_secs(30);
 
 	tracing::info!("waiting for {} on port {}", service_name, port);
 
 	loop {
 		match tokio::net::TcpStream::connect(&addr).await {
 			std::result::Result::Ok(_) => {
-				return Ok(());
+				tracing::info!("{} is ready on port {}", service_name, port);
+				return;
 			}
 			std::result::Result::Err(e) => {
 				if start.elapsed() > timeout {
-					bail!(
-						"timeout waiting for {} on port {}: {:?}",
-						service_name,
-						port,
-						e
+					panic!(
+						"Timeout waiting for {} on port {} after {:?}: {}",
+						service_name, port, timeout, e
 					);
 				}
 				// Check less frequently to avoid spamming
@@ -213,40 +210,4 @@ pub async fn wait_for_port(service_name: &str, port: u16, timeout: Duration) -> 
 			}
 		}
 	}
-}
-
-pub async fn wait_for_ports(services: &[(&str, u16)]) {
-	let timeout = Duration::from_secs(30);
-	let start = std::time::Instant::now();
-
-	tracing::info!(
-		services = ?services.iter().map(|(name, port)| format!("{}:{}", name, port)).collect::<Vec<_>>(),
-		"waiting for services to be ready"
-	);
-
-	// Create tasks for each port
-	let tasks: Vec<_> = services
-		.iter()
-		.map(|(service_name, port)| wait_for_port(*service_name, *port, timeout))
-		.collect();
-
-	// Wait for all ports concurrently
-	let results = futures_util::future::join_all(tasks).await;
-
-	// Check for failures
-	let failures: Vec<_> = results
-		.into_iter()
-		.filter_map(|r| r.err())
-		.map(|e| format!("{:?}", e))
-		.collect();
-
-	if !failures.is_empty() {
-		panic!(
-			"Timeout waiting for services after {:?}. Failed services: {:}",
-			timeout,
-			failures.join("\n"),
-		);
-	}
-
-	tracing::info!("all services are ready");
 }

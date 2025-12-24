@@ -21,8 +21,12 @@ pub mod url;
 /// Slices a string without panicking on char boundaries. Defaults to the left side of the char if a slice
 // is invalid. Will still panic if start > end.
 pub fn safe_slice(s: &str, start: usize, end: usize) -> &str {
+	if s.is_empty() {
+		return s;
+	}
+
 	let mut new_start = 0;
-	let mut new_end = s.len();
+	let mut new_end = s.len().saturating_sub(1);
 
 	for (i, _) in s.char_indices() {
 		if i <= start {

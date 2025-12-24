@@ -8,6 +8,7 @@ pub struct Input {
 	pub namespace_id: Id,
 	pub name: String,
 	pub key: String,
+	pub fetch_error: bool,
 }
 
 #[derive(Debug)]
@@ -42,6 +43,7 @@ pub async fn pegboard_actor_get_for_key(ctx: &OperationCtx, input: &Input) -> Re
 				include_destroyed: false,
 				created_before: None,
 				limit: 1,
+				fetch_error: input.fetch_error,
 			})
 			.await?;
 
