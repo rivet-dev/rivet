@@ -1,27 +1,38 @@
-use std::time::Duration;
+use std::str::FromStr;
 
 use serde_json::json;
 
+use super::TestDatacenter;
+
 // Namespace helpers
-pub async fn setup_test_namespace(guard_port: u16) -> (String, rivet_util::Id) {
+pub async fn setup_test_namespace(leader_dc: &TestDatacenter) -> (String, rivet_util::Id) {
 	let random_suffix = rand::random::<u16>();
 	let namespace_name = format!("test-{random_suffix}");
-	let namespace_id = super::create_namespace(&namespace_name, guard_port).await;
-	(namespace_name, namespace_id)
+	let res = super::api::public::namespaces_create(
+		leader_dc.guard_port(),
+		rivet_api_peer::namespaces::CreateRequest {
+			name: namespace_name,
+			display_name: "Test Namespace".to_string(),
+		},
+	)
+	.await
+	.expect("failed to setup test namespace");
+	(res.namespace.name, res.namespace.namespace_id)
 }
 
 // Setup namespace with runner
 pub async fn setup_test_namespace_with_runner(
 	dc: &super::TestDatacenter,
 ) -> (String, rivet_util::Id, super::runner::TestRunner) {
-	let (namespace_name, namespace_id) = setup_test_namespace(dc.guard_port()).await;
+	let (namespace_name, namespace_id) = setup_test_namespace(dc).await;
 
-	let runner = super::runner::TestRunner::new(
-		dc.guard_port(),
+	let runner = setup_runner(
+		dc,
 		&namespace_name,
 		&format!("key-{:012x}", rand::random::<u64>()),
 		1,
 		20,
+		None,
 	)
 	.await;
 
@@ -34,9 +45,17 @@ pub async fn setup_runner(
 	key: &str,
 	version: u32,
 	total_slots: u32,
+	runner_name: Option<String>,
 ) -> super::runner::TestRunner {
-	super::runner::TestRunner::new(dc.guard_port(), &namespace_name, key, version, total_slots)
-		.await
+	super::runner::TestRunner::new(
+		dc.guard_port(),
+		&namespace_name,
+		key,
+		version,
+		total_slots,
+		runner_name,
+	)
+	.await
 }
 
 pub async fn cleanup_test_namespace(namespace_id: rivet_util::Id, _guard_port: u16) {
@@ -71,76 +90,44 @@ pub fn generate_special_chars_string() -> String {
 	"test-!@#$%^&*()_+-=[]{}|;':\",./<>?".to_string()
 }
 
-// Wait helpers
-pub async fn wait_for_actor_propagation(actor_id: &str, timeout_secs: u64) {
-	tracing::info!(?actor_id, ?timeout_secs, "waiting for actor propagation");
-	tokio::time::sleep(Duration::from_secs(timeout_secs)).await;
-}
-
-pub async fn wait_for_eventual_consistency() {
-	tracing::info!("waiting for eventual consistency");
-	tokio::time::sleep(Duration::from_millis(500)).await;
-}
-
 // Actor verification helpers
 pub async fn assert_actor_exists(
+	port: u16,
 	actor_id: &str,
 	namespace: &str,
-	guard_port: u16,
-) -> serde_json::Value {
-	let response = super::get_actor(actor_id, Some(namespace), guard_port).await;
-	assert!(
-		response.status().is_success(),
-		"Actor {} should exist in namespace {}",
-		actor_id,
-		namespace
-	);
-	response
-		.json()
-		.await
-		.expect("Failed to parse actor response")
+) -> rivet_types::actors::Actor {
+	let res = super::try_get_actor(port, actor_id, namespace).await;
+	let Some(actor) = res.expect("Failed to try_get_actor") else {
+		panic!("Actor {} should exist in namespace {}", actor_id, namespace,);
+	};
+	actor
 }
 
-pub async fn assert_actor_not_exists(actor_id: &str, guard_port: u16) {
-	let response = super::get_actor(actor_id, None, guard_port).await;
-	assert_eq!(
-		response.status(),
-		400,
-		"Actor {} should not exist (expecting 400 for Actor::NotFound)",
+pub async fn assert_actor_not_exists(port: u16, actor_id: &str, namespace: &str) {
+	let res = super::try_get_actor(port, actor_id, namespace).await;
+	if let Some(actor) = res.expect("Failed to try_get_actor") {
+		panic!(
+			"Actor {} should not exist in namespace {}",
+			actor_id, namespace,
+		);
+	};
+}
+
+pub async fn assert_actor_is_destroyed(port: u16, actor_id: &str, namespace: &str) {
+	let actor = assert_actor_exists(port, actor_id, namespace).await;
+	assert!(
+		actor.destroy_ts.is_some(),
+		"Actor {} should have destroy_ts set",
 		actor_id
 	);
 }
 
-pub async fn assert_actor_returns_bad_request(actor_id: &str, guard_port: u16) {
-	let response = super::get_actor(actor_id, None, guard_port).await;
-	assert_eq!(
-		response.status(),
-		400,
-		"Actor {} should return 400 BAD_REQUEST",
-		actor_id
-	);
-}
-
-pub async fn assert_actor_is_destroyed(actor_id: &str, namespace: Option<&str>, guard_port: u16) {
-	let response = super::get_actor(actor_id, namespace, guard_port).await;
+pub async fn assert_actor_is_alive(port: u16, actor_id: &str, namespace: &str) {
+	let actor = assert_actor_exists(port, actor_id, namespace).await;
 	assert!(
-		response.status().is_success(),
-		"Actor {} should still be retrievable after destroy",
+		actor.destroy_ts.is_none(),
+		"Actor {} should not have destroy_ts set",
 		actor_id
-	);
-
-	let body: serde_json::Value = response
-		.json()
-		.await
-		.expect("Failed to parse actor response");
-
-	tracing::info!(?body, ?actor_id, "assert_actor_is_destroyed response body");
-
-	assert!(
-		body["actor"]["destroy_ts"].as_i64().is_some(),
-		"Actor {} should have destroy_ts set. Response: {:?}",
-		actor_id,
-		body
 	);
 }
 
@@ -169,7 +156,7 @@ pub async fn assert_actor_in_runner(
 			actor_ids: vec![actor_id],
 		})
 		.await
-		.unwrap();
+		.expect("actor::get_runners operation failed");
 	let runner_id = actors_res.actors.first().map(|x| x.runner_id.to_string());
 
 	assert_eq!(
@@ -179,48 +166,32 @@ pub async fn assert_actor_in_runner(
 	);
 }
 
-pub fn assert_actors_equal(actor1: &serde_json::Value, actor2: &serde_json::Value) {
+pub fn assert_actors_equal(
+	actor1: &rivet_types::actors::Actor,
+	actor2: &rivet_types::actors::Actor,
+) {
+	assert_eq!(actor1.actor_id, actor2.actor_id, "Actor IDs should match");
 	assert_eq!(
-		actor1["actor"]["actor_id"], actor2["actor"]["actor_id"],
-		"Actor IDs should match"
-	);
-	assert_eq!(
-		actor1["actor"]["namespace_id"], actor2["actor"]["namespace_id"],
+		actor1.namespace_id, actor2.namespace_id,
 		"Namespace IDs should match"
 	);
-	assert_eq!(
-		actor1["actor"]["name"], actor2["actor"]["name"],
-		"Actor names should match"
-	);
-}
-
-// Response assertion helpers
-pub async fn assert_created_response(response: &serde_json::Value, expected_created: bool) {
-	let created = response["created"]
-		.as_bool()
-		.expect("Missing created field in response");
-	assert_eq!(
-		created, expected_created,
-		"Expected created to be {}",
-		expected_created
-	);
-}
-
-pub fn assert_pagination_response(response: &serde_json::Value) {
-	assert!(
-		response.get("actors").is_some() || response.get("names").is_some(),
-		"Response should have actors or names array"
-	);
-	// cursor is optional in pagination responses
+	assert_eq!(actor1.name, actor2.name, "Actor names should match");
 }
 
 // Datacenter helpers
-pub fn get_test_datacenter_names(_ctx: &super::TestCtx) -> Vec<String> {
-	vec!["dc-1".to_string(), "dc-2".to_string()] // Adjust based on actual DC names
+pub fn get_test_datacenter_name(label: u16) -> String {
+	format!("dc-{}", label)
 }
 
 pub async fn setup_multi_datacenter_test() -> super::TestCtx {
 	super::TestCtx::new_multi(2)
 		.await
 		.expect("Failed to setup multi-datacenter test")
+}
+
+pub fn convert_strings_to_ids(actor_ids: Vec<String>) -> Vec<rivet_util::Id> {
+	actor_ids
+		.iter()
+		.map(|x| rivet_util::Id::from_str(&x).expect("failed to convert actor ids to string"))
+		.collect::<Vec<_>>()
 }

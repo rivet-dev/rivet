@@ -1,41 +1,13 @@
 use anyhow::{Context, Result};
 use axum::response::{IntoResponse, Response};
-use gas::prelude::*;
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
 };
-use rivet_api_types::pagination::Pagination;
+use rivet_api_types::{actors::list::*, pagination::Pagination};
 use rivet_api_util::fanout_to_datacenters;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 
 use crate::{actors::utils::fetch_actors_by_ids, ctx::ApiCtx, errors};
-
-#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct ListQuery {
-	pub namespace: String,
-	pub name: Option<String>,
-	pub key: Option<String>,
-	/// Deprecated.
-	#[serde(default)]
-	pub actor_ids: Option<String>,
-	#[serde(default)]
-	pub actor_id: Vec<Id>,
-	pub include_destroyed: Option<bool>,
-	pub limit: Option<usize>,
-	pub cursor: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = ActorsListResponse)]
-pub struct ListResponse {
-	pub actors: Vec<rivet_types::actors::Actor>,
-	pub pagination: Pagination,
-}
 
 /// ## Datacenter Round Trips
 ///
@@ -80,7 +52,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 
 	// Parse query
 	let actor_ids = [
-		query.actor_id,
+		query.actor_id.clone(),
 		query
 			.actor_ids
 			.as_ref()
@@ -128,14 +100,24 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 		// Fetch actors
-		let actors = fetch_actors_by_ids(
+		let mut actors = fetch_actors_by_ids(
 			&ctx,
 			actor_ids,
 			query.namespace.clone(),
 			query.include_destroyed,
-			query.limit,
+			None, // Don't apply limit in fetch, we'll apply it after cursor filtering
 		)
 		.await?;
+
+		// Apply cursor filtering if provided
+		if let Some(cursor_str) = &query.cursor {
+			let cursor_ts: i64 = cursor_str.parse().context("invalid cursor format")?;
+			actors.retain(|actor| actor.create_ts < cursor_ts);
+		}
+
+		// Apply limit after cursor filtering
+		let limit = query.limit.unwrap_or(100);
+		actors.truncate(limit);
 
 		let cursor = actors.last().map(|x| x.create_ts.to_string());
 
@@ -201,41 +183,25 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 			.build());
 		}
 
-		// Prepare peer query for local handler
-		let peer_query = rivet_api_types::actors::list::ListQuery {
-			namespace: query.namespace.clone(),
-			name: Some(query.name.as_ref().unwrap().clone()),
-			key: query.key.clone(),
-			actor_ids: None,
-			actor_id: Vec::new(),
-			include_destroyed: query.include_destroyed,
-			limit: query.limit,
-			cursor: query.cursor.clone(),
-		};
+		let limit = query.limit.unwrap_or(100);
 
 		// Fanout to all datacenters
-		let mut actors = fanout_to_datacenters::<
-			rivet_api_types::actors::list::ListResponse,
-			_,
-			_,
-			_,
-			_,
-			Vec<rivet_types::actors::Actor>,
-		>(
-			ctx.into(),
-			"/actors",
-			peer_query,
-			|ctx, query| async move { rivet_api_peer::actors::list::list(ctx, (), query).await },
-			|_, res, agg| agg.extend(res.actors),
-		)
-		.await?;
+		let mut actors =
+			fanout_to_datacenters::<ListResponse, _, _, _, _, Vec<rivet_types::actors::Actor>>(
+				ctx.into(),
+				"/actors",
+				query,
+				|ctx, query| async move { rivet_api_peer::actors::list::list(ctx, (), query).await },
+				|_, res, agg| agg.extend(res.actors),
+			)
+			.await?;
 
 		// Sort by create ts desc
 		actors.sort_by_cached_key(|x| std::cmp::Reverse(x.create_ts));
 
 		// Shorten array since returning all actors from all regions could end up returning `regions *
 		// limit` results, which is a lot.
-		actors.truncate(query.limit.unwrap_or(100));
+		actors.truncate(limit);
 
 		let cursor = actors.last().map(|x| x.create_ts.to_string());
 
