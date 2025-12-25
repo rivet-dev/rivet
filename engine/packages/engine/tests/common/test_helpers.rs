@@ -226,6 +226,31 @@ pub fn convert_strings_to_ids(actor_ids: Vec<String>) -> Vec<rivet_util::Id> {
 		.collect::<Vec<_>>()
 }
 
+pub async fn create_actor(
+	port: u16,
+	namespace: &str,
+	name: &str,
+	runner_name: &str,
+	crash_policy: rivet_types::actors::CrashPolicy,
+) -> super::api_types::actors::create::CreateResponse {
+	super::api::public::actors_create(
+		port,
+		super::api_types::actors::create::CreateQuery {
+			namespace: namespace.to_string(),
+		},
+		super::api_types::actors::create::CreateRequest {
+			datacenter: None,
+			name: name.to_string(),
+			key: None,
+			input: None,
+			runner_name_selector: runner_name.to_string(),
+			crash_policy,
+		},
+	)
+	.await
+	.expect("failed to create actor")
+}
+
 pub fn generate_dummy_rivet_id(dc: &super::TestDatacenter) -> rivet_util::Id {
 	rivet_util::Id::new_v1(dc.config.dc_label())
 }
