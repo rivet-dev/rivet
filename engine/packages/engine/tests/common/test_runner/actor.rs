@@ -1,6 +1,6 @@
 use anyhow::*;
 use async_trait::async_trait;
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
@@ -47,33 +47,25 @@ impl ActorConfig {
 impl ActorConfig {
 	/// Send a sleep intent
 	pub fn send_sleep_intent(&self) {
-		let event = protocol::make_actor_intent(
-			&self.actor_id,
-			self.generation,
-			rp::ActorIntent::ActorIntentSleep,
-		);
+		let event = protocol::make_actor_intent(rp::ActorIntent::ActorIntentSleep);
 		self.send_event(event);
 	}
 
 	/// Send a stop intent
 	pub fn send_stop_intent(&self) {
-		let event = protocol::make_actor_intent(
-			&self.actor_id,
-			self.generation,
-			rp::ActorIntent::ActorIntentStop,
-		);
+		let event = protocol::make_actor_intent(rp::ActorIntent::ActorIntentStop);
 		self.send_event(event);
 	}
 
 	/// Set an alarm to wake at specified timestamp (milliseconds)
 	pub fn send_set_alarm(&self, alarm_ts: i64) {
-		let event = protocol::make_set_alarm(&self.actor_id, self.generation, Some(alarm_ts));
+		let event = protocol::make_set_alarm(Some(alarm_ts));
 		self.send_event(event);
 	}
 
 	/// Clear the alarm
 	pub fn send_clear_alarm(&self) {
-		let event = protocol::make_set_alarm(&self.actor_id, self.generation, None);
+		let event = protocol::make_set_alarm(None);
 		self.send_event(event);
 	}
 

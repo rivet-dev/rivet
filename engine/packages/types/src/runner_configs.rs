@@ -9,6 +9,8 @@ pub struct RunnerConfig {
 	pub kind: RunnerConfigKind,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<serde_json::Value>,
+	#[serde(default = "default_drain_on_version_upgrade")]
+	pub drain_on_version_upgrade: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -27,14 +29,23 @@ pub enum RunnerConfigKind {
 	},
 }
 
-impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v2::RunnerConfig {
+fn default_drain_on_version_upgrade() -> bool {
+	false
+}
+
+impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v3::RunnerConfig {
 	fn from(value: RunnerConfig) -> Self {
-		let RunnerConfig { kind, metadata } = value;
-		rivet_data::generated::namespace_runner_config_v2::RunnerConfig {
+		let RunnerConfig {
+			kind,
+			metadata,
+			drain_on_version_upgrade,
+		} = value;
+		rivet_data::generated::namespace_runner_config_v3::RunnerConfig {
 			metadata: metadata.and_then(|value| serde_json::to_string(&value).ok()),
+			drain_on_version_upgrade,
 			kind: match kind {
 				RunnerConfigKind::Normal {} => {
-					rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Normal
+					rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Normal
 				}
 				RunnerConfigKind::Serverless {
 					url,
@@ -45,8 +56,8 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v2::R
 					max_runners,
 					runners_margin,
 				} => {
-					rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Serverless(
-						rivet_data::generated::namespace_runner_config_v2::Serverless {
+					rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Serverless(
+						rivet_data::generated::namespace_runner_config_v3::Serverless {
 							url,
 							headers: headers.into(),
 							request_lifespan,
@@ -62,17 +73,21 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v2::R
 	}
 }
 
-impl From<rivet_data::generated::namespace_runner_config_v2::RunnerConfig> for RunnerConfig {
-	fn from(value: rivet_data::generated::namespace_runner_config_v2::RunnerConfig) -> Self {
-		let rivet_data::generated::namespace_runner_config_v2::RunnerConfig { metadata, kind } =
-			value;
+impl From<rivet_data::generated::namespace_runner_config_v3::RunnerConfig> for RunnerConfig {
+	fn from(value: rivet_data::generated::namespace_runner_config_v3::RunnerConfig) -> Self {
+		let rivet_data::generated::namespace_runner_config_v3::RunnerConfig {
+			metadata,
+			kind,
+			drain_on_version_upgrade,
+		} = value;
 		RunnerConfig {
 			metadata: metadata.and_then(|raw| serde_json::from_str(&raw).ok()),
+			drain_on_version_upgrade,
 			kind: match kind {
-				rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Normal => {
+				rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Normal => {
 					RunnerConfigKind::Normal {}
 				}
-				rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Serverless(
+				rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Serverless(
 					o,
 				) => RunnerConfigKind::Serverless {
 					url: o.url,

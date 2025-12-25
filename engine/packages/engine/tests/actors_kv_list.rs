@@ -1,7 +1,7 @@
 use anyhow::*;
 use async_trait::async_trait;
 use common::test_runner::*;
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 use std::sync::{Arc, Mutex};
 
 mod common;

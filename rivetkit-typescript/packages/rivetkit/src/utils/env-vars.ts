@@ -25,6 +25,10 @@ export const getRivetRunEngineVersion = (): string | undefined =>
 	getEnvUniversal("RIVET_RUN_ENGINE_VERSION");
 export const getRivetRunnerKind = (): string | undefined =>
 	getEnvUniversal("RIVET_RUNNER_KIND");
+export const getRivetRunnerVersion = (): number | undefined => {
+	const value = getEnvUniversal("RIVET_RUNNER_VERSION");
+	return value !== undefined ? parseInt(value, 10) : undefined;
+};
 
 // RivetKit configuration
 export const getRivetkitInspectorToken = (): string | undefined =>

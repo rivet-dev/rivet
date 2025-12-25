@@ -41,6 +41,7 @@ fn list_runner_configs_single_runner() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -95,6 +96,7 @@ fn list_runner_configs_multiple_runners() {
 				rivet_api_types::namespaces::runner_configs::RunnerConfig {
 					kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 					metadata: None,
+					drain_on_version_upgrade: true,
 				},
 			);
 
@@ -147,6 +149,7 @@ fn list_runner_configs_multiple_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 		datacenters.insert(
@@ -154,6 +157,7 @@ fn list_runner_configs_multiple_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -210,6 +214,7 @@ fn list_runner_configs_filter_by_name() {
 				rivet_api_types::namespaces::runner_configs::RunnerConfig {
 					kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 					metadata: None,
+					drain_on_version_upgrade: true,
 				},
 			);
 
@@ -260,6 +265,7 @@ fn list_runner_configs_filter_by_variant_normal() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -320,6 +326,7 @@ fn list_runner_configs_filter_by_variant_serverless() {
 					runners_margin: Some(2),
 				},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -453,6 +460,7 @@ fn list_runner_configs_validates_returned_data() {
 					runners_margin: Some(3),
 				},
 				metadata: Some(serde_json::json!({"key": "value"})),
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -499,6 +507,7 @@ fn list_runner_configs_validates_returned_data() {
 			min_runners,
 			max_runners,
 			runners_margin,
+			..
 		} = &dc_config.config.kind
 		{
 			assert_eq!(url, "http://localhost:9000");
@@ -530,6 +539,7 @@ fn list_runner_configs_mixed_variants() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -565,6 +575,7 @@ fn list_runner_configs_mixed_variants() {
 					runners_margin: Some(2),
 				},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
