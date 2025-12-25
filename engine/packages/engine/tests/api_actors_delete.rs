@@ -116,14 +116,12 @@ fn delete_actor_current_datacenter() {
 		)
 		.await
 		.expect("failed to create actor");
-		let actor_id = res.actor.actor_id.to_string();
+		let actor_id = res.actor.actor_id;
 
 		// Delete the actor
 		common::api::public::actors_delete(
 			ctx.leader_dc().guard_port(),
-			common::api_types::actors::delete::DeletePath {
-				actor_id: actor_id.parse().expect("failed to parse actor_id"),
-			},
+			common::api_types::actors::delete::DeletePath { actor_id: actor_id },
 			common::api_types::actors::delete::DeleteQuery {
 				namespace: Some(namespace.clone()),
 			},
@@ -132,8 +130,12 @@ fn delete_actor_current_datacenter() {
 		.expect("failed to delete actor");
 
 		// Verify actor is destroyed
-		common::assert_actor_is_destroyed(ctx.leader_dc().guard_port(), &actor_id, &namespace)
-			.await;
+		common::assert_actor_is_destroyed(
+			ctx.leader_dc().guard_port(),
+			&actor_id.to_string(),
+			&namespace,
+		)
+		.await;
 	});
 }
 

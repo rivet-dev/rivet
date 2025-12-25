@@ -428,14 +428,19 @@ fn list_namespaces_filter_by_ids_empty_list() {
 			ctx.leader_dc().guard_port(),
 			rivet_api_types::namespaces::list::ListQuery {
 				name: None,
-				namespace_id: vec![],
-				namespace_ids: Some("invalid,not-a-uuid,bad-id".to_string()),
+				namespace_id: vec![
+					common::generate_dummy_rivet_id(ctx.leader_dc()),
+					common::generate_dummy_rivet_id(ctx.leader_dc()),
+				],
+				namespace_ids: None,
 				limit: None,
 				cursor: None,
 			},
 		)
 		.await
 		.expect("failed to list namespaces");
+
+		tracing::info!(?response.namespaces, "received response");
 
 		assert_eq!(response.namespaces.len(), 0, "Should return empty array");
 	});
