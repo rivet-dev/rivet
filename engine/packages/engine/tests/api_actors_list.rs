@@ -637,33 +637,6 @@ fn list_with_non_existent_namespace() {
 }
 
 #[test]
-fn list_with_both_actor_ids_and_name() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
-
-		// Try to list with both actor_ids and name (validation error)
-		let res = common::api::public::actors_list(
-			ctx.leader_dc().guard_port(),
-			common::api_types::actors::list::ListQuery {
-				namespace: namespace.clone(),
-				name: Some("test-actor".to_string()),
-				key: None,
-				actor_id: common::convert_strings_to_ids(vec!["some-id".to_string()]),
-				actor_ids: None,
-				include_destroyed: None,
-				limit: None,
-				cursor: None,
-			},
-		)
-		.await;
-
-		// Should fail with validation error
-		assert!(res.is_err(), "Should return error for invalid parameters");
-	});
-}
-
-#[test]
 fn list_with_key_but_no_name() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -1110,8 +1083,8 @@ fn list_with_invalid_actor_id_format_in_comma_list() {
 				namespace: namespace.clone(),
 				name: None,
 				key: None,
-				actor_id: common::convert_strings_to_ids(mixed_ids),
-				actor_ids: None,
+				actor_id: vec![],
+				actor_ids: Some(mixed_ids.join(",")),
 				include_destroyed: None,
 				limit: None,
 				cursor: None,

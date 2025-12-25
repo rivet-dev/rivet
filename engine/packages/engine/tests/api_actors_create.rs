@@ -17,7 +17,7 @@ fn create_actor_valid_namespace() {
 				name: "test-actor".to_string(),
 				key: None,
 				input: None,
-				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+				runner_name_selector: runner.name().to_string(),
 				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
 			},
 		)
@@ -26,6 +26,9 @@ fn create_actor_valid_namespace() {
 		let actor_id = res.actor.actor_id.to_string();
 
 		common::assert_actor_exists(ctx.leader_dc().guard_port(), &actor_id, &namespace).await;
+
+		// TODO: Hook into engine instead of sleep
+		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 		assert!(
 			runner.has_actor(&actor_id).await,

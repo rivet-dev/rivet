@@ -13,7 +13,8 @@ use tokio::signal::windows::ctrl_c as windows_ctrl_c;
 
 const FORCE_CLOSE_THRESHOLD: usize = 3;
 
-static HANDLER_CELL: OnceCell<(watch::Receiver<bool>, JoinHandle<()>)> = OnceCell::const_new();
+static HANDLER_CELL: OnceCell<(watch::Receiver<bool>, Option<JoinHandle<()>>)> =
+	OnceCell::const_new();
 
 /// Cross-platform termination signal wrapper that handles:
 /// - Unix: SIGTERM and SIGINT
@@ -88,9 +89,22 @@ impl TermSignal {
 					.expect("failed initializing termination signal handler");
 				let rx = term_signal.tx.subscribe();
 
-				let join_handle = tokio::spawn(term_signal.run());
+				let tokio_join_handle =
+					if std::env::var("RIVET_TEST_RUNTIME") == Ok("1".to_string()) {
+						std::thread::spawn(|| {
+							let runtime = tokio::runtime::Builder::new_current_thread()
+								.enable_all()
+								.build()
+								.expect("failed to start term signal handler runtime for tests");
 
-				std::future::ready((rx, join_handle))
+							runtime.block_on(term_signal.run());
+						});
+						None
+					} else {
+						Some(tokio::spawn(term_signal.run()))
+					};
+
+				std::future::ready((rx, tokio_join_handle))
 			})
 			.await
 			.0
@@ -101,13 +115,19 @@ impl TermSignal {
 
 	/// Returns true if the user should abort any graceful attempt to shutdown and shutdown immediately.
 	pub async fn recv(&mut self) -> bool {
-		let _ = self.0.changed().await;
+		let change = self.0.changed().await;
+		tracing::info!(?change, "hello?");
+
 		*self.0.borrow()
+		// let _ = std::future::pending::<()>().await;
+		// false
 	}
 
 	pub fn stop() {
-		if let Some((_, join_handle)) = HANDLER_CELL.get() {
-			join_handle.abort();
+		if let Some((_, tokio_join_handle)) = HANDLER_CELL.get() {
+			if let Some(tokio_join_handle) = tokio_join_handle {
+				tokio_join_handle.abort();
+			}
 		}
 	}
 }

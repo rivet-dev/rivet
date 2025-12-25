@@ -55,6 +55,7 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 axum.workspace = true
 base64.workspace = true
 chrono.workspace = true
