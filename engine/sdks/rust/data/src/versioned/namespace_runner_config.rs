@@ -114,7 +114,7 @@ impl NamespaceRunnerConfig {
 						),
 					))
 				}
-				namespace_runner_config_v2::RunnerConfigKind::Normal => {
+				namespace_runner_config_v2::RunnerConfigKind::Normal(_) => {
 					bail!("namespace runner config v1 does not support normal runner config")
 				}
 			}
