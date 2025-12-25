@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong - Game Physics Example</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0f0f1a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        .game-container {
+            max-width: 850px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 0;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+        .subtitle {
+            color: #888;
+            margin-top: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* Menu styles */
+        .menu {
+            margin: 60px 0;
+        }
+        .play-button {
+            padding: 20px 60px;
+            font-size: 24px;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.4);
+        }
+        .play-button:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 0 50px rgba(74, 222, 128, 0.6);
+        }
+        .play-button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Searching styles */
+        .searching {
+            margin: 60px 0;
+        }
+        .searching p {
+            font-size: 18px;
+            color: #ccc;
+            margin: 20px 0;
+        }
+        .searching button {
+            padding: 10px 30px;
+            font-size: 16px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .searching button:hover {
+            background: #444;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #4ade80;
+            border-radius: 50%;
+            margin: 0 auto;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Game info bar */
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .player-indicator {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .player-indicator.left {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+        .player-indicator.right {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+        }
+        .player-indicator.spectator {
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+        }
+        .game-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .game-buttons button {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .game-buttons button:hover:not(:disabled) {
+            background: #444;
+        }
+        .game-buttons button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Canvas */
+        .game-canvas {
+            border: 2px solid #333;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.2);
+        }
+
+        /* Instructions */
+        .instructions {
+            margin-top: 20px;
+            color: #888;
+        }
+        .instructions p {
+            margin: 8px 0;
+        }
+        kbd {
+            background: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            border: 1px solid #444;
+        }
+        .connection-status {
+            margin-top: 15px;
+            padding: 8px 16px;
+            background: rgba(74, 222, 128, 0.1);
+            border-radius: 20px;
+            display: inline-block;
+            color: #4ade80;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+</body>
+</html>
