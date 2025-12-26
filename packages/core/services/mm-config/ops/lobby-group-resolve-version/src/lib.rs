@@ -42,7 +42,7 @@ async fn handle(
 						FROM db_mm_config.lobby_groups
 						WHERE lobby_group_id = ANY($1)
 						",
-						lobby_group_ids,
+						lobby_group_ids.clone(),
 					)
 					.await?
 					.into_iter();

@@ -22,10 +22,23 @@ lazy_static::lazy_static! {
 		&["action", "context_name", "location"],
 		*REGISTRY,
 	).unwrap();
+	pub static ref SQL_QUERY_FAIL_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sql_query_fail_total",
+		"Total number of failed queries.",
+		&["action", "context_name", "location", "error_type"],
+		*REGISTRY,
+	).unwrap();
 	pub static ref SQL_QUERY_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"sql_query_duration",
 		"Total duration of sql query.",
 		&["action", "context_name", "location"],
+		BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
+	pub static ref SQL_QUERY_FAIL_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sql_query_fail_duration",
+		"Duration of failed sql queries (includes timeouts).",
+		&["action", "context_name", "location", "error_type"],
 		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();

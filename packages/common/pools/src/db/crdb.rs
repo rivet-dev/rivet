@@ -18,47 +18,37 @@ pub async fn setup(config: Config) -> Result<CrdbPool, Error> {
 	}
 
 	let pool = sqlx::postgres::PgPoolOptions::new()
-		// The default connection timeout is too high
-		.acquire_timeout(Duration::from_secs(60))
+		// Reduced from 30s to allow retries within API timeout (50s).
+		// With 10s acquire + 8s query = 18s per attempt, allowing 2-3 retries.
+		.acquire_timeout(Duration::from_secs(10))
 		// Increase lifetime to mitigate: https://github.com/launchbadge/sqlx/issues/2854
 		//
 		// See max lifetime https://www.cockroachlabs.com/docs/stable/connection-pooling#set-the-maximum-lifetime-of-connections
-		.max_lifetime(Duration::from_secs(15 * 60))
+		//
+		// Reduce this to < 10 minutes since GCP has a 10 minute idle TCP timeout that causes
+		// problems. Unsure if idle_timeout is actually working correctly, so we're being cautious
+		// here.
+		.max_lifetime(Duration::from_secs(8 * 60))
 		.max_lifetime_jitter(Duration::from_secs(90))
-		// Remove connections after a while in order to reduce load
-		// on CRDB after bursts
-		.idle_timeout(Some(Duration::from_secs(10 * 60)))
+		// Remove connections after a while in order to reduce load on CRDB after bursts.
+		//
+		// IMPORTANT: Must be less than 10 minutes due to GCP's connection tracking timeout.
+		// See https://cloud.google.com/compute/docs/troubleshooting/general-tips
+		.idle_timeout(Some(Duration::from_secs(5 * 60)))
 		// Open connections immediately on startup
 		.min_connections(crdb.min_connections)
 		// Raise the cap, since this is effectively the amount of
 		// simultaneous requests we can handle. See
 		// https://www.cockroachlabs.com/docs/stable/connection-pooling.html
 		.max_connections(crdb.max_connections)
-		// NOTE: This is disabled until we can ensure that TCP connections stop getting dropped
-		// on AWS.
-		// // Speeds up requests at the expense of potential
-		// // failures. See `before_acquire`.
-		// .test_before_acquire(false)
-		// // Ping once per minute to validate the connection is still alive
-		// .before_acquire(|conn, meta| {
-		// 	Box::pin(async move {
-		// 		if meta.idle_for.as_secs() < 60 {
-		// 			Ok(true)
-		// 		} else {
-		// 			match sqlx::Connection::ping(conn).await {
-		// 				Ok(_) => Ok(true),
-		// 				Err(err) => {
-		// 					// See https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-troubleshooting.html#nat-gateway-troubleshooting-timeout
-		// 					tracing::warn!(
-		// 						?err,
-		// 						"crdb ping failed, potential idle tcp connection drop"
-		// 					);
-		// 					Ok(false)
-		// 				}
-		// 			}
-		// 		}
-		// 	})
-		// })
+		// Ping connections before use to validate they're still alive.
+		// This catches stale connections that may have been dropped by load balancers
+		// or firewalls (e.g., GCP's 10-minute idle timeout, AWS NAT gateway timeout).
+		.test_before_acquire(true)
+		// NOTE: Server-side statement_timeout is not reliable for cross-cloud connections
+		// because if the network is dead, CockroachDB can't send the timeout error back.
+		// Instead, we use client-side timeout (tokio::time::timeout) in the SQL macros.
+		// See QUERY_TIMEOUT_SECS in sql_query_macros.rs.
 		.connect_with(opts)
 		.await
 		.map_err(Error::BuildSqlx)?;

@@ -43,7 +43,7 @@ async fn handle(
 					WHERE version_id = ANY($1)
 					ORDER BY create_ts DESC
 					",
-					version_ids,
+					version_ids.clone(),
 				)
 				.await?;
 

@@ -22,6 +22,7 @@ async fn handle(
 					let ctx = ctx.clone();
 					let game_id = game_id;
 					async move {
+						let name_id_list: Vec<_> = name_ids.iter().map(|(_, name_id)| name_id.clone()).collect();
 						let namespaces = sql_fetch_all!(
 							[ctx, (String, Uuid)]
 							"
@@ -30,7 +31,7 @@ async fn handle(
 							WHERE game_id = $1 AND name_id = ANY($2)
 							",
 							game_id,
-							name_ids.into_iter().map(|(_, name_id)| name_id).collect::<Vec<_>>(),
+							name_id_list,
 						)
 						.await?;
 

@@ -2,11 +2,46 @@
 pub const QUERY_RETRY_MS: usize = 100;
 /// Maximum times a query is retried.
 pub const MAX_QUERY_RETRIES: usize = 6;
+/// Client-side query timeout in seconds.
+/// Reduced from 25s to 8s to allow multiple retries within 50s API timeout.
+/// With 8s query + 10s pool acquire = 18s per attempt, allowing 2-3 retries.
+pub const QUERY_TIMEOUT_SECS: u64 = 8;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
 	#[error("max sql retries, last error: {0}")]
 	MaxSqlRetries(sqlx::Error),
+	#[error("query timeout after {0}s")]
+	QueryTimeout(u64),
+}
+
+/// Classifies sqlx errors into a short string for metrics labeling.
+pub fn classify_sqlx_error(err: &sqlx::Error) -> &'static str {
+	use sqlx::Error::*;
+	match err {
+		Configuration(_) => "configuration",
+		Database(_) => "database",
+		Io(io_err) => {
+			// Check for client-side query timeout
+			if io_err.kind() == std::io::ErrorKind::TimedOut {
+				"query_timeout"
+			} else {
+				"io"
+			}
+		}
+		Tls(_) => "tls",
+		Protocol(_) => "protocol",
+		RowNotFound => "row_not_found",
+		TypeNotFound { .. } => "type_not_found",
+		ColumnIndexOutOfBounds { .. } => "column_index_out_of_bounds",
+		ColumnNotFound(_) => "column_not_found",
+		ColumnDecode { .. } => "column_decode",
+		Decode(_) => "decode",
+		PoolTimedOut => "pool_timeout",
+		PoolClosed => "pool_closed",
+		WorkerCrashed => "worker_crashed",
+		_ => "unknown",
+	}
 }
 
 lazy_static::lazy_static! {
@@ -83,6 +118,63 @@ macro_rules! __sql_query_metrics_finish {
 	}};
 }
 
+#[macro_export]
+macro_rules! __sql_query_metrics_fail {
+	($ctx:expr, $action:expr, $start_timer:ident, $err:expr) => {{
+		let ctx = &$ctx;
+
+		let duration = $start_timer.elapsed().as_secs_f64();
+		let error_type = $crate::utils::sql_query_macros::classify_sqlx_error($err);
+
+		// Log failed query with detailed error info
+		let location = concat!(file!(), ":", line!(), ":", column!());
+
+		// Extract detailed error info for IO errors
+		let error_details = match $err {
+			sqlx::Error::Io(io_err) => {
+				format!(
+					"kind={:?}, message={}",
+					io_err.kind(),
+					io_err
+				)
+			}
+			sqlx::Error::Tls(tls_err) => {
+				format!("tls_error={}", tls_err)
+			}
+			sqlx::Error::Protocol(msg) => {
+				format!("protocol_error={}", msg)
+			}
+			sqlx::Error::Database(db_err) => {
+				format!(
+					"code={:?}, message={}",
+					db_err.code(),
+					db_err.message()
+				)
+			}
+			other => format!("{}", other),
+		};
+
+		tracing::warn!(
+			%location,
+			dt = ?duration,
+			action = stringify!($action),
+			%error_type,
+			%error_details,
+			"sql query failed"
+		);
+
+		// Count failed query
+		rivet_pools::metrics::SQL_QUERY_FAIL_TOTAL
+			.with_label_values(&[stringify!($action), ctx.name(), location, error_type])
+			.inc();
+
+		// Record failed query duration
+		rivet_pools::metrics::SQL_QUERY_FAIL_DURATION
+			.with_label_values(&[stringify!($action), ctx.name(), location, error_type])
+			.observe(duration);
+	}};
+}
+
 // MARK: Helpers
 /// Acquire a connection from the pool with a rate limiting mechanism to reuse existing connecting
 /// if possible.
@@ -143,10 +235,8 @@ macro_rules! __sql_query {
 		async {
 			use sqlx::Acquire;
 
-			// Acquire connection
 			$crate::__sql_query_metrics_acquire!(_acquire);
 			let driver = $driver;
-			let mut conn = $crate::__sql_acquire!($ctx, driver);
 
 			$crate::__sql_query_metrics_start!($ctx, execute, _acquire, _start);
 
@@ -158,14 +248,40 @@ macro_rules! __sql_query {
 			);
 			let mut i = 0;
 
-			// Retry loop
+			// Retry loop - acquires fresh connection on each attempt so
+			// test_before_acquire can validate the connection is alive
 			let res = loop {
+				let mut conn = $crate::__sql_acquire!($ctx, driver);
+
 				let query = sqlx::query($crate::__opt_indoc!($sql))
 				$(
-					.bind($bind)
+					.bind(Clone::clone(&$bind))
 				)*;
 
-				match query.execute(&mut *conn).await {
+				// Wrap query in client-side timeout to catch hung connections
+				let query_result = tokio::time::timeout(
+					std::time::Duration::from_secs($crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS),
+					query.execute(&mut *conn)
+				).await;
+
+				// Convert timeout to IO error so retry logic can handle it
+				let query_result = match query_result {
+					Ok(result) => result,
+					Err(_elapsed) => {
+						tracing::warn!(
+							timeout_secs = $crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS,
+							"sql query client-side timeout"
+						);
+						Err(sqlx::Error::Io(std::io::Error::new(
+							std::io::ErrorKind::TimedOut,
+							$crate::utils::sql_query_macros::Error::QueryTimeout(
+								$crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS
+							),
+						)))
+					}
+				};
+
+				match query_result {
 					Err(err) => {
 						i += 1;
 						if i > $crate::utils::sql_query_macros::MAX_QUERY_RETRIES {
@@ -184,7 +300,31 @@ macro_rules! __sql_query {
 							// Retry other errors with a backoff
 							Database(_) | Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
 							| WorkerCrashed => {
-								tracing::warn!(?err, "query retry ({i}/{})", $crate::utils::sql_query_macros::MAX_QUERY_RETRIES);
+								// Extract detailed error info for retry logging
+								let retry_error_details = match &err {
+									Io(io_err) => format!(
+										"io_kind={:?}, io_message={}",
+										io_err.kind(),
+										io_err
+									),
+									Tls(tls_err) => format!("tls_error={}", tls_err),
+									Protocol(msg) => format!("protocol_error={}", msg),
+									Database(db_err) => format!(
+										"db_code={:?}, db_message={}",
+										db_err.code(),
+										db_err.message()
+									),
+									PoolTimedOut => "pool_timed_out".to_string(),
+									PoolClosed => "pool_closed".to_string(),
+									WorkerCrashed => "worker_crashed".to_string(),
+									_ => format!("{}", err),
+								};
+								tracing::warn!(
+									%retry_error_details,
+									attempt = i,
+									max_attempts = $crate::utils::sql_query_macros::MAX_QUERY_RETRIES,
+									"sql query retry"
+								);
 								backoff.tick().await;
 							}
 							// Throw error
@@ -195,7 +335,14 @@ macro_rules! __sql_query {
 				}
 			};
 
-			$crate::__sql_query_metrics_finish!($ctx, execute, _start);
+			match &res {
+				Ok(_) => {
+					$crate::__sql_query_metrics_finish!($ctx, execute, _start);
+				}
+				Err(err) => {
+					$crate::__sql_query_metrics_fail!($ctx, execute, _start, err);
+				}
+			}
 
 			res.map_err(Into::<GlobalError>::into)
 		}
@@ -208,13 +355,42 @@ macro_rules! __sql_query {
 				.bind($bind)
 			)*;
 
-			// Execute query
+			// Execute query with timeout (no retry for transactions)
 			$crate::__sql_query_metrics_acquire!(_acquire);
 			$crate::__sql_query_metrics_start!($ctx, execute, _acquire, _start);
-			let res = query.execute(&mut **$tx).await.map_err(Into::<GlobalError>::into);
-			$crate::__sql_query_metrics_finish!($ctx, execute, _start);
 
-			res
+			// Wrap in timeout to prevent indefinite hangs
+			let query_result = tokio::time::timeout(
+				std::time::Duration::from_secs($crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS),
+				query.execute(&mut **$tx)
+			).await;
+
+			let res = match query_result {
+				Ok(result) => result,
+				Err(_elapsed) => {
+					tracing::warn!(
+						timeout_secs = $crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS,
+						"sql query (tx) client-side timeout"
+					);
+					Err(sqlx::Error::Io(std::io::Error::new(
+						std::io::ErrorKind::TimedOut,
+						$crate::utils::sql_query_macros::Error::QueryTimeout(
+							$crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS
+						),
+					)))
+				}
+			};
+
+			match &res {
+				Ok(_) => {
+					$crate::__sql_query_metrics_finish!($ctx, execute, _start);
+				}
+				Err(err) => {
+					$crate::__sql_query_metrics_fail!($ctx, execute, _start, err);
+				}
+			}
+
+			res.map_err(Into::<GlobalError>::into)
 		}
 		.instrument(tracing::info_span!("sql_query"))
 	};
@@ -229,25 +405,121 @@ macro_rules! __sql_query_as {
 		async {
 			use sqlx::Acquire;
 
-			let query = sqlx::query_as::<_, $rv>($crate::__opt_indoc!($sql))
-			$(
-				.bind($bind)
-			)*;
-
-			// Acquire connection
 			$crate::__sql_query_metrics_acquire!(_acquire);
 			let driver = $driver;
-			let mut conn = $crate::__sql_acquire!($ctx, driver);
 
-			// Execute query
 			$crate::__sql_query_metrics_start!($ctx, $action, _acquire, _start);
-			let res = query.$action(&mut *conn).await.map_err(Into::<GlobalError>::into);
-			$crate::__sql_query_metrics_finish!($ctx, $action, _start);
 
-			res
+			let mut backoff = $crate::__rivet_util::Backoff::new(
+				4,
+				None,
+				$crate::utils::sql_query_macros::QUERY_RETRY_MS,
+				50
+			);
+			let mut i = 0;
+
+			// Retry loop - acquires fresh connection on each attempt so
+			// test_before_acquire can validate the connection is alive
+			let res = loop {
+				let mut conn = $crate::__sql_acquire!($ctx, driver);
+
+				let query = sqlx::query_as::<_, $rv>($crate::__opt_indoc!($sql))
+				$(
+					.bind(Clone::clone(&$bind))
+				)*;
+
+				// Wrap query in client-side timeout to catch hung connections
+				let query_result = tokio::time::timeout(
+					std::time::Duration::from_secs($crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS),
+					query.$action(&mut *conn)
+				).await;
+
+				// Convert timeout to IO error so retry logic can handle it
+				let query_result = match query_result {
+					Ok(result) => result,
+					Err(_elapsed) => {
+						tracing::warn!(
+							timeout_secs = $crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS,
+							"sql query client-side timeout"
+						);
+						Err(sqlx::Error::Io(std::io::Error::new(
+							std::io::ErrorKind::TimedOut,
+							$crate::utils::sql_query_macros::Error::QueryTimeout(
+								$crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS
+							),
+						)))
+					}
+				};
+
+				match query_result {
+					Err(err) => {
+						i += 1;
+						if i > $crate::utils::sql_query_macros::MAX_QUERY_RETRIES {
+							break Err(
+								sqlx::Error::Io(
+									std::io::Error::new(
+										std::io::ErrorKind::Other,
+										$crate::utils::sql_query_macros::Error::MaxSqlRetries(err),
+									)
+								)
+							);
+						}
+
+						use sqlx::Error::*;
+						match &err {
+							// Retry transient errors with a backoff
+							Database(_) | Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
+							| WorkerCrashed => {
+								// Extract detailed error info for retry logging
+								let retry_error_details = match &err {
+									Io(io_err) => format!(
+										"io_kind={:?}, io_message={}",
+										io_err.kind(),
+										io_err
+									),
+									Tls(tls_err) => format!("tls_error={}", tls_err),
+									Protocol(msg) => format!("protocol_error={}", msg),
+									Database(db_err) => format!(
+										"db_code={:?}, db_message={}",
+										db_err.code(),
+										db_err.message()
+									),
+									PoolTimedOut => "pool_timed_out".to_string(),
+									PoolClosed => "pool_closed".to_string(),
+									WorkerCrashed => "worker_crashed".to_string(),
+									_ => format!("{}", err),
+								};
+								tracing::warn!(
+									%retry_error_details,
+									attempt = i,
+									max_attempts = $crate::utils::sql_query_macros::MAX_QUERY_RETRIES,
+									"sql query retry"
+								);
+								backoff.tick().await;
+							}
+							// Throw error immediately for non-transient errors
+							_ => break Err(err),
+						}
+					}
+					x => break x,
+				}
+			};
+
+			match &res {
+				Ok(_) => {
+					$crate::__sql_query_metrics_finish!($ctx, $action, _start);
+				}
+				Err(err) => {
+					$crate::__sql_query_metrics_fail!($ctx, $action, _start, err);
+				}
+			}
+
+			res.map_err(Into::<GlobalError>::into)
 		}
 		.instrument(tracing::info_span!("sql_query_as"))
 	};
+	// Transaction branch - NO retry logic (transactions should not retry mid-transaction)
+	// But we DO add timeout to prevent indefinite hangs
 	([$ctx:expr, $rv:ty, $action:ident, @tx $tx:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
 			let query = sqlx::query_as::<_, $rv>($crate::__opt_indoc!($sql))
@@ -255,13 +527,42 @@ macro_rules! __sql_query_as {
 				.bind($bind)
 			)*;
 
-			// Execute query
+			// Execute query with timeout (no retry for transactions)
 			$crate::__sql_query_metrics_acquire!(_acquire);
 			$crate::__sql_query_metrics_start!($ctx, $action, _acquire, _start);
-			let res = query.$action(&mut **$tx).await.map_err(Into::<GlobalError>::into);
-			$crate::__sql_query_metrics_finish!($ctx, $action, _start);
 
-			res
+			// Wrap in timeout to prevent indefinite hangs
+			let query_result = tokio::time::timeout(
+				std::time::Duration::from_secs($crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS),
+				query.$action(&mut **$tx)
+			).await;
+
+			let res = match query_result {
+				Ok(result) => result,
+				Err(_elapsed) => {
+					tracing::warn!(
+						timeout_secs = $crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS,
+						"sql query_as (tx) client-side timeout"
+					);
+					Err(sqlx::Error::Io(std::io::Error::new(
+						std::io::ErrorKind::TimedOut,
+						$crate::utils::sql_query_macros::Error::QueryTimeout(
+							$crate::utils::sql_query_macros::QUERY_TIMEOUT_SECS
+						),
+					)))
+				}
+			};
+
+			match &res {
+				Ok(_) => {
+					$crate::__sql_query_metrics_finish!($ctx, $action, _start);
+				}
+				Err(err) => {
+					$crate::__sql_query_metrics_fail!($ctx, $action, _start, err);
+				}
+			}
+
+			res.map_err(Into::<GlobalError>::into)
 		}
 		.instrument(tracing::info_span!("sql_query_as"))
 	};

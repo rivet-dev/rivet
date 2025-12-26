@@ -49,7 +49,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 			WHERE
 				workflow_id = ANY($1)
 			",
-			workflow_ids,
+			workflow_ids.clone(),
 		)
 		.await?;
 
@@ -493,7 +493,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 			FROM db_workflow.tagged_signals
 			WHERE signal_id = ANY($1)
 			",
-			signal_ids,
+			signal_ids.clone(),
 		)
 		.await?;
 

@@ -60,7 +60,7 @@ async fn handle(
 						FROM db_upload.uploads
 						WHERE upload_id = ANY($1)
 						",
-						upload_ids,
+						upload_ids.clone(),
 					)
 					.await?;
 
