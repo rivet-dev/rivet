@@ -10,7 +10,9 @@ type Serverless struct {
 	runners_margin: u32
 }
 
-type Normal void
+type Normal struct {
+	drain_on_version_upgrade: optional<bool>
+}
 
 type RunnerConfigKind union {
 	Serverless |

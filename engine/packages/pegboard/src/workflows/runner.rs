@@ -13,6 +13,7 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{keys, metrics, workflows::actor::Allocate};
+use rivet_types::runner_configs::RunnerConfigKind;
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 500;
@@ -132,6 +133,23 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									create_ts: ctx.create_ts(),
 								})
 								.await?;
+
+								// Drain older runner versions if configured
+								let older_runners = ctx
+									.activity(DrainOlderVersionsInput {
+										namespace_id: input.namespace_id,
+										name: input.name.clone(),
+										version: input.version,
+									})
+									.await?;
+								for workflow_id in older_runners {
+									ctx.signal(Stop {
+										reset_actor_rescheduling: false,
+									})
+									.to_workflow_id(workflow_id)
+									.send()
+									.await?;
+								}
 							}
 
 							// Check for pending actors (which happen when there is not enough runner capacity)
@@ -1157,6 +1175,75 @@ async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerIn
 		.await?;
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct DrainOlderVersionsInput {
+	namespace_id: Id,
+	name: String,
+	version: u32,
+}
+
+/// If drain_on_version_upgrade is enabled for this runner config, find all runners with older
+/// versions and return their workflow IDs so they can be stopped.
+#[activity(DrainOlderVersions)]
+async fn drain_older_versions(
+	ctx: &ActivityCtx,
+	input: &DrainOlderVersionsInput,
+) -> Result<Vec<Id>> {
+	// Fetch runner config
+	let config = ctx
+		.op(crate::ops::runner_config::get::Input {
+			runners: vec![(input.namespace_id, input.name.clone())],
+			bypass_cache: false,
+		})
+		.await?;
+
+	// Check if drain_on_version_upgrade is enabled
+	let Some(config) = config.into_iter().next() else {
+		return Ok(vec![]);
+	};
+	let RunnerConfigKind::Normal {
+		drain_on_version_upgrade,
+	} = config.config.kind
+	else {
+		return Ok(vec![]);
+	};
+	if !drain_on_version_upgrade.unwrap_or(false) {
+		return Ok(vec![]);
+	}
+
+	// Scan RunnerAllocIdxKey for older versions
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+			let mut older_runners = Vec::new();
+
+			let runner_alloc_subspace = keys::subspace().subspace(
+				&keys::ns::RunnerAllocIdxKey::subspace(input.namespace_id, input.name.clone()),
+			);
+
+			let mut stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
+					mode: StreamingMode::WantAll,
+					..(&runner_alloc_subspace).into()
+				},
+				Snapshot,
+			);
+
+			while let Some(entry) = stream.try_next().await? {
+				let (key, data) = tx.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
+
+				// Only collect runners with older versions
+				if key.version < input.version {
+					older_runners.push(data.workflow_id);
+				}
+			}
+
+			Ok(older_runners)
+		})
+		.custom_instrument(tracing::info_span!("drain_older_versions_tx"))
+		.await
 }
 
 #[signal("pegboard_runner_check_queue")]

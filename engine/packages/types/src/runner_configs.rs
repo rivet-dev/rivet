@@ -14,7 +14,10 @@ pub struct RunnerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerConfigKind {
-	Normal {},
+	Normal {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		drain_on_version_upgrade: Option<bool>,
+	},
 	Serverless {
 		url: String,
 		headers: HashMap<String, String>,
@@ -33,9 +36,13 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v2::R
 		rivet_data::generated::namespace_runner_config_v2::RunnerConfig {
 			metadata: metadata.and_then(|value| serde_json::to_string(&value).ok()),
 			kind: match kind {
-				RunnerConfigKind::Normal {} => {
-					rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Normal
-				}
+				RunnerConfigKind::Normal {
+					drain_on_version_upgrade,
+				} => rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Normal(
+					rivet_data::generated::namespace_runner_config_v2::Normal {
+						drain_on_version_upgrade,
+					},
+				),
 				RunnerConfigKind::Serverless {
 					url,
 					headers,
@@ -69,8 +76,10 @@ impl From<rivet_data::generated::namespace_runner_config_v2::RunnerConfig> for R
 		RunnerConfig {
 			metadata: metadata.and_then(|raw| serde_json::from_str(&raw).ok()),
 			kind: match kind {
-				rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Normal => {
-					RunnerConfigKind::Normal {}
+				rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Normal(o) => {
+					RunnerConfigKind::Normal {
+						drain_on_version_upgrade: o.drain_on_version_upgrade,
+					}
 				}
 				rivet_data::generated::namespace_runner_config_v2::RunnerConfigKind::Serverless(
 					o,

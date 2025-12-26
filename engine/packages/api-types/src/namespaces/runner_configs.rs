@@ -14,7 +14,10 @@ pub struct RunnerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerConfigKind {
-	Normal {},
+	Normal {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		drain_on_version_upgrade: Option<bool>,
+	},
 	Serverless {
 		url: String,
 		headers: Option<HashMap<String, String>>,
@@ -31,7 +34,11 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 	fn into(self) -> rivet_types::runner_configs::RunnerConfig {
 		let RunnerConfig { kind, metadata } = self;
 		let kind = match kind {
-			RunnerConfigKind::Normal {} => rivet_types::runner_configs::RunnerConfigKind::Normal {},
+			RunnerConfigKind::Normal {
+				drain_on_version_upgrade,
+			} => rivet_types::runner_configs::RunnerConfigKind::Normal {
+				drain_on_version_upgrade,
+			},
 			RunnerConfigKind::Serverless {
 				url,
 				headers,
