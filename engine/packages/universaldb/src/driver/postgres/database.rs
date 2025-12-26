@@ -1,4 +1,5 @@
 use std::{
+	path::PathBuf,
 	sync::{
 		Arc,
 		atomic::{AtomicI32, Ordering},
@@ -8,8 +9,9 @@ use std::{
 
 use anyhow::{Context, Result};
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
+use rivet_postgres_util::build_tls_config;
 use tokio::task::JoinHandle;
-use tokio_postgres::NoTls;
+use tokio_postgres_rustls::MakeRustlsConnect;
 
 use crate::{
 	RetryableTransaction, Transaction,
@@ -24,31 +26,67 @@ use super::transaction::PostgresTransactionDriver;
 
 const GC_INTERVAL: Duration = Duration::from_secs(5);
 
+#[derive(Clone, Debug)]
+pub struct PostgresConfig {
+	pub connection_string: String,
+	pub unstable_disable_lock_customization: bool,
+	pub ssl_root_cert_path: Option<PathBuf>,
+	pub ssl_client_cert_path: Option<PathBuf>,
+	pub ssl_client_key_path: Option<PathBuf>,
+}
+
+impl PostgresConfig {
+	/// Create a new PostgreSQL configuration with sane defaults
+	pub fn new(connection_string: String) -> Self {
+		Self {
+			connection_string,
+			unstable_disable_lock_customization: false,
+			ssl_root_cert_path: None,
+			ssl_client_cert_path: None,
+			ssl_client_key_path: None,
+		}
+	}
+}
+
 pub struct PostgresDatabaseDriver {
 	pool: Arc<Pool>,
 	max_retries: AtomicI32,
 	gc_handle: JoinHandle<()>,
+	unstable_disable_lock_customization: bool,
 }
 
 impl PostgresDatabaseDriver {
-	pub async fn new(connection_string: String) -> Result<Self> {
-		tracing::debug!(connection_string = ?connection_string, "Creating PostgresDatabaseDriver");
+	/// Create a new PostgreSQL driver with custom configuration
+	pub async fn new_with_config(config: PostgresConfig) -> Result<Self> {
+		tracing::debug!(
+			connection_string = ?config.connection_string,
+			unstable_disable_lock_customization = config.unstable_disable_lock_customization,
+			"creating PostgresDatabaseDriver"
+		);
 
 		// Create deadpool config from connection string
-		let mut config = Config::new();
-		config.url = Some(connection_string);
-		config.pool = Some(PoolConfig {
+		let mut pool_config = Config::new();
+		pool_config.url = Some(config.connection_string.clone());
+		pool_config.pool = Some(PoolConfig {
 			max_size: 64,
 			..Default::default()
 		});
-		config.manager = Some(ManagerConfig {
+		pool_config.manager = Some(ManagerConfig {
 			recycling_method: RecyclingMethod::Fast,
 		});
 
-		tracing::debug!("Creating Postgres pool");
-		// Create the pool
-		let pool = config
-			.create_pool(Some(Runtime::Tokio1), NoTls)
+		tracing::debug!("creating Postgres pool");
+
+		let tls_config = build_tls_config(
+			config.ssl_root_cert_path.as_ref(),
+			config.ssl_client_cert_path.as_ref(),
+			config.ssl_client_key_path.as_ref(),
+		)?;
+
+		let tls = MakeRustlsConnect::new(tls_config);
+
+		let pool = pool_config
+			.create_pool(Some(Runtime::Tokio1), tls)
 			.context("failed to create postgres connection pool")?;
 
 		tracing::debug!("Getting Postgres connection from pool");
@@ -164,16 +202,20 @@ impl PostgresDatabaseDriver {
 			pool: Arc::new(pool),
 			max_retries: AtomicI32::new(100),
 			gc_handle,
+			unstable_disable_lock_customization: config.unstable_disable_lock_customization,
 		})
 	}
 }
 
 impl DatabaseDriver for PostgresDatabaseDriver {
 	fn create_trx(&self) -> Result<Transaction> {
-		// Pass the connection pool to the transaction driver
-		Ok(Transaction::new(Arc::new(PostgresTransactionDriver::new(
-			self.pool.clone(),
-		))))
+		// Pass the connection pool and config to the transaction driver
+		Ok(Transaction::new(Arc::new(
+			PostgresTransactionDriver::with_config(
+				self.pool.clone(),
+				self.unstable_disable_lock_customization,
+			),
+		)))
 	}
 
 	fn run<'a>(

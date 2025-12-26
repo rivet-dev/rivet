@@ -71,10 +71,25 @@ pub async fn setup(config: Config, client_name: String) -> Result<UpsPool> {
 		}
 		config::PubSub::PostgresNotify(pg) => {
 			tracing::debug!("creating postgres pubsub driver");
+
+			let (ssl_root_cert_path, ssl_client_cert_path, ssl_client_key_path) =
+				if let Some(ssl) = &pg.ssl {
+					(
+						ssl.root_cert_path.clone(),
+						ssl.client_cert_path.clone(),
+						ssl.client_key_path.clone(),
+					)
+				} else {
+					(None, None, None)
+				};
+
 			Arc::new(
 				ups::driver::postgres::PostgresDriver::connect(
 					pg.url.read().clone(),
 					pg.memory_optimization,
+					ssl_root_cert_path,
+					ssl_client_cert_path,
+					ssl_client_key_path,
 				)
 				.await?,
 			) as ups::PubSubDriverHandle

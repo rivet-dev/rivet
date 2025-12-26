@@ -4,12 +4,17 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use futures_util::future::poll_fn;
+use rivet_postgres_util::build_tls_config;
 use rivet_util::backoff::Backoff;
-use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::Arc;
+use std::{
+	collections::HashMap,
+	hash::{DefaultHasher, Hash, Hasher},
+	path::PathBuf,
+	sync::Arc,
+};
 use tokio::sync::{Mutex, broadcast};
-use tokio_postgres::{AsyncMessage, NoTls};
+use tokio_postgres::AsyncMessage;
+use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::Instrument;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
@@ -56,7 +61,13 @@ pub struct PostgresDriver {
 
 impl PostgresDriver {
 	#[tracing::instrument(skip(conn_str), fields(memory_optimization))]
-	pub async fn connect(conn_str: String, memory_optimization: bool) -> Result<Self> {
+	pub async fn connect(
+		conn_str: String,
+		memory_optimization: bool,
+		ssl_root_cert_path: Option<PathBuf>,
+		ssl_client_cert_path: Option<PathBuf>,
+		ssl_client_key_path: Option<PathBuf>,
+	) -> Result<Self> {
 		tracing::debug!(?memory_optimization, "connecting to postgres");
 		// Create deadpool config from connection string
 		let mut config = Config::new();
@@ -71,8 +82,18 @@ impl PostgresDriver {
 
 		// Create the pool
 		tracing::debug!("creating postgres pool");
+
+		// Build TLS configuration with optional custom certificates
+		let tls_config = build_tls_config(
+			ssl_root_cert_path.as_ref(),
+			ssl_client_cert_path.as_ref(),
+			ssl_client_key_path.as_ref(),
+		)?;
+
+		let tls = MakeRustlsConnect::new(tls_config);
+
 		let pool = config
-			.create_pool(Some(Runtime::Tokio1), NoTls)
+			.create_pool(Some(Runtime::Tokio1), tls)
 			.context("failed to create postgres pool")?;
 		tracing::debug!("postgres pool created successfully");
 
@@ -89,6 +110,9 @@ impl PostgresDriver {
 			subscriptions.clone(),
 			client.clone(),
 			ready_tx,
+			ssl_root_cert_path.clone(),
+			ssl_client_cert_path.clone(),
+			ssl_client_key_path.clone(),
 		));
 
 		let driver = Self {
@@ -110,11 +134,29 @@ impl PostgresDriver {
 		subscriptions: Arc<Mutex<HashMap<String, Subscription>>>,
 		client: Arc<Mutex<Option<Arc<tokio_postgres::Client>>>>,
 		ready_tx: tokio::sync::watch::Sender<bool>,
+		ssl_root_cert_path: Option<PathBuf>,
+		ssl_client_cert_path: Option<PathBuf>,
+		ssl_client_key_path: Option<PathBuf>,
 	) {
 		let mut backoff = Backoff::default();
 
+		// Build TLS configuration with optional custom certificates
+		let tls_config = match build_tls_config(
+			ssl_root_cert_path.as_ref(),
+			ssl_client_cert_path.as_ref(),
+			ssl_client_key_path.as_ref(),
+		) {
+			std::result::Result::Ok(config) => config,
+			std::result::Result::Err(e) => {
+				tracing::error!(?e, "failed to build TLS config");
+				return;
+			}
+		};
+
+		let tls = MakeRustlsConnect::new(tls_config);
+
 		loop {
-			match tokio_postgres::connect(&conn_str, tokio_postgres::NoTls).await {
+			match tokio_postgres::connect(&conn_str, tls.clone()).await {
 				Result::Ok((new_client, conn)) => {
 					tracing::debug!("postgres listen connection established");
 					// Reset backoff on successful connection
@@ -183,13 +225,12 @@ impl PostgresDriver {
 	}
 
 	/// Polls the connection for notifications until it closes or errors
-	async fn poll_connection(
-		mut conn: tokio_postgres::Connection<
-			tokio_postgres::Socket,
-			tokio_postgres::tls::NoTlsStream,
-		>,
+	async fn poll_connection<T>(
+		mut conn: tokio_postgres::Connection<tokio_postgres::Socket, T>,
 		subscriptions: Arc<Mutex<HashMap<String, Subscription>>>,
-	) {
+	) where
+		T: tokio_postgres::tls::TlsStream + Unpin,
+	{
 		loop {
 			match poll_fn(|cx| conn.poll_message(cx)).await {
 				Some(std::result::Result::Ok(AsyncMessage::Notification(note))) => {

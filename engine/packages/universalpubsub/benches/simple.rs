@@ -665,9 +665,17 @@ async fn setup_pg_pair() -> Result<(PubSub, PubSub)> {
 		unreachable!()
 	};
 	let url = pg.url.read().clone();
-	let driver_pub =
-		universalpubsub::driver::postgres::PostgresDriver::connect(url.clone(), false).await?;
-	let driver_sub = universalpubsub::driver::postgres::PostgresDriver::connect(url, false).await?;
+	let driver_pub = universalpubsub::driver::postgres::PostgresDriver::connect(
+		url.clone(),
+		false,
+		None,
+		None,
+		None,
+	)
+	.await?;
+	let driver_sub =
+		universalpubsub::driver::postgres::PostgresDriver::connect(url, false, None, None, None)
+			.await?;
 	Ok((
 		PubSub::new_with_memory_optimization(Arc::new(driver_pub), false),
 		PubSub::new_with_memory_optimization(Arc::new(driver_sub), false),
@@ -685,7 +693,9 @@ async fn setup_pg_single() -> Result<(PubSub, PubSub)> {
 		unreachable!()
 	};
 	let url = pg.url.read().clone();
-	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, false).await?;
+	let driver =
+		universalpubsub::driver::postgres::PostgresDriver::connect(url, false, None, None, None)
+			.await?;
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 	Ok((pubsub.clone(), pubsub))
 }
@@ -701,9 +711,17 @@ async fn setup_pg_pair_mem() -> Result<(PubSub, PubSub)> {
 		unreachable!()
 	};
 	let url = pg.url.read().clone();
-	let driver_pub =
-		universalpubsub::driver::postgres::PostgresDriver::connect(url.clone(), true).await?;
-	let driver_sub = universalpubsub::driver::postgres::PostgresDriver::connect(url, true).await?;
+	let driver_pub = universalpubsub::driver::postgres::PostgresDriver::connect(
+		url.clone(),
+		true,
+		None,
+		None,
+		None,
+	)
+	.await?;
+	let driver_sub =
+		universalpubsub::driver::postgres::PostgresDriver::connect(url, true, None, None, None)
+			.await?;
 	Ok((
 		PubSub::new_with_memory_optimization(Arc::new(driver_pub), true),
 		PubSub::new_with_memory_optimization(Arc::new(driver_sub), true),
@@ -721,7 +739,9 @@ async fn setup_pg_single_mem() -> Result<(PubSub, PubSub)> {
 		unreachable!()
 	};
 	let url = pg.url.read().clone();
-	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, true).await?;
+	let driver =
+		universalpubsub::driver::postgres::PostgresDriver::connect(url, true, None, None, None)
+			.await?;
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
 	Ok((pubsub.clone(), pubsub))
 }

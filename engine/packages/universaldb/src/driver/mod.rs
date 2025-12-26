@@ -11,7 +11,7 @@ use crate::{
 	value::{Slice, Value, Values},
 };
 
-mod postgres;
+pub mod postgres;
 pub mod rocksdb;
 
 pub use postgres::PostgresDatabaseDriver;

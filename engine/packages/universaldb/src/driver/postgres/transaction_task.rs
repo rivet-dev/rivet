@@ -60,11 +60,20 @@ pub enum TransactionCommand {
 pub struct TransactionTask {
 	pool: Pool,
 	receiver: mpsc::Receiver<TransactionCommand>,
+	unstable_disable_lock_customization: bool,
 }
 
 impl TransactionTask {
-	pub fn new(pool: Pool, receiver: mpsc::Receiver<TransactionCommand>) -> Self {
-		Self { pool, receiver }
+	pub fn new(
+		pool: Pool,
+		receiver: mpsc::Receiver<TransactionCommand>,
+		unstable_disable_lock_customization: bool,
+	) -> Self {
+		Self {
+			pool,
+			receiver,
+			unstable_disable_lock_customization,
+		}
 	}
 
 	pub async fn run(mut self) {
@@ -337,11 +346,20 @@ impl TransactionTask {
 		// 	.await
 		// 	.map_err(map_postgres_error)?;
 
-		let (_, _, version_res) = tokio::join!(
-			tx.execute("SET LOCAL lock_timeout = '0'", &[],),
-			tx.execute("SET LOCAL deadlock_timeout = '10ms'", &[],),
-			tx.query_one("SELECT nextval('global_version_seq')", &[]),
-		);
+		let version_res = if self.unstable_disable_lock_customization {
+			// Don't customize lock settings - just get the version
+			tx.query_one("SELECT nextval('global_version_seq')", &[])
+				.await
+		} else {
+			// Apply lock customization (default behavior)
+			let (_, _, version_res) = tokio::join!(
+				tx.execute("SET LOCAL lock_timeout = '0'", &[],),
+				tx.execute("SET LOCAL deadlock_timeout = '10ms'", &[],),
+				tx.query_one("SELECT nextval('global_version_seq')", &[]),
+			);
+
+			version_res
+		};
 
 		let commit_version = version_res
 			.context("failed to get postgres txn commit_version")?

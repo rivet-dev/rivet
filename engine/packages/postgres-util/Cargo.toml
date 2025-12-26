@@ -1,0 +1,13 @@
+[package]
+name = "rivet-postgres-util"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+tracing.workspace = true
+webpki-roots.workspace = true
