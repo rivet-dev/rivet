@@ -366,13 +366,16 @@ async function waitForEngineHealth(): Promise<void> {
 
 	for (let i = 0; i < maxRetries; i++) {
 		try {
-			const response = await fetch(`${ENGINE_ENDPOINT}/health`);
+			const response = await fetch(`${ENGINE_ENDPOINT}/health`, {
+				signal: AbortSignal.timeout(1000),
+			});
 			if (response.ok) {
 				logger().debug({ msg: "engine health check passed" });
 				return;
 			}
 		} catch (error) {
 			// Expected to fail while engine is starting up
+			logger().debug({ msg: "engine health check failed", error });
 			if (i === maxRetries - 1) {
 				throw new Error(
 					`engine health check failed after ${maxRetries} retries: ${error}`,
