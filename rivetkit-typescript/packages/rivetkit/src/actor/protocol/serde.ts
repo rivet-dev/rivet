@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
+import type { VersionedDataHandler } from "vbare";
 import { z } from "zod";
 import * as errors from "@/actor/errors";
-import type { VersionedDataHandler } from "vbare";
 import { serializeWithEncoding } from "@/serde";
 import { loggerWithoutContext } from "../log";
 import { assertUnreachable } from "../utils";

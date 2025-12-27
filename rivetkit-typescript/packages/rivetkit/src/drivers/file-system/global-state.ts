@@ -585,11 +585,10 @@ export class FileSystemGlobalState {
 					actorId,
 					timestamp: BigInt(timestamp),
 				};
-				const data =
-					ACTOR_ALARM_VERSIONED.serializeWithEmbeddedVersion(
-						alarmData,
-						FILE_SYSTEM_DRIVER_CURRENT_VERSION,
-					);
+				const data = ACTOR_ALARM_VERSIONED.serializeWithEmbeddedVersion(
+					alarmData,
+					FILE_SYSTEM_DRIVER_CURRENT_VERSION,
+				);
 				const fs = getNodeFs();
 				await fs.writeFile(tempPath, data);
 

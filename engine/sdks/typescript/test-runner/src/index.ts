@@ -158,7 +158,7 @@ async function startRunner(
 		onConnected: () => {
 			runnerStarted.resolve(runner);
 		},
-		onDisconnected: () => { },
+		onDisconnected: () => {},
 		onShutdown: () => {
 			runnerStopped.resolve(runner);
 		},
@@ -260,7 +260,7 @@ async function startRunner(
 		hibernatableWebSocket: {
 			canHibernate() {
 				return true;
-			}
+			},
 		},
 	};
 

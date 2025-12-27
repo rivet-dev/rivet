@@ -1,7 +1,6 @@
 import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { toJsonSchema } from "./schema-utils";
 import { ClientConfigSchema } from "@/client/config";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import type {
@@ -18,6 +17,7 @@ import {
 } from "@/mod";
 import { type RunnerConfig, RunnerConfigSchema } from "@/registry/run-config";
 import { VERSION } from "@/utils";
+import { toJsonSchema } from "./schema-utils";
 
 async function main() {
 	const registryConfig: RegistryConfig = RegistryConfigSchema.parse({

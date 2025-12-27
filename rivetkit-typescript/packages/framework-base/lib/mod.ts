@@ -201,7 +201,8 @@ export function createRivetKit<
 					connection.onOpen(() => {
 						store.setState((prev) => {
 							// Only update if this is still the active connection
-							if (prev.actors[key]?.connection !== connection) return prev;
+							if (prev.actors[key]?.connection !== connection)
+								return prev;
 							return {
 								...prev,
 								actors: {
@@ -218,7 +219,8 @@ export function createRivetKit<
 					connection.onClose(() => {
 						store.setState((prev) => {
 							// Only update if this is still the active connection
-							if (prev.actors[key]?.connection !== connection) return prev;
+							if (prev.actors[key]?.connection !== connection)
+								return prev;
 							return {
 								...prev,
 								actors: {

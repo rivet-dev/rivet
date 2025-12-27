@@ -1,6 +1,6 @@
-import { setupTest } from "rivetkit/test";
-import { expect, test, vi, beforeAll, afterAll } from "vitest";
 import { DurableStreamTestServer } from "@durable-streams/server";
+import { setupTest } from "rivetkit/test";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 
 // Start a real durable streams test server
 let streamsServer: DurableStreamTestServer;

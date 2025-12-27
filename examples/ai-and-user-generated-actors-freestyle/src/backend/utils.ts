@@ -1,10 +1,10 @@
-import { RivetClient } from "@rivetkit/engine-api-full";
-import { FreestyleSandboxes } from "freestyle-sandboxes";
-import { prepareDirForDeploymentSync } from "freestyle-sandboxes/utils";
-import { writeFile, cp } from "node:fs/promises";
+import { cp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { RivetClient } from "@rivetkit/engine-api-full";
 import { $ } from "execa";
+import { FreestyleSandboxes } from "freestyle-sandboxes";
+import { prepareDirForDeploymentSync } from "freestyle-sandboxes/utils";
 
 export type LogCallback = (message: string) => Promise<void>;
 
@@ -42,7 +42,10 @@ export async function setupRepo(config: {
 
 	await cp(templateDir, tmpDir, { recursive: true });
 
-	await writeFile(join(tmpDir, "src/backend/registry.ts"), config.registryCode);
+	await writeFile(
+		join(tmpDir, "src/backend/registry.ts"),
+		config.registryCode,
+	);
 	await writeFile(join(tmpDir, "src/frontend/App.tsx"), config.appCode);
 
 	return tmpDir;
@@ -58,7 +61,10 @@ export async function buildFrontend(
 	await $({ cwd: projectDir })`pnpm install --no-frozen-lockfile`;
 
 	await log("Building frontend");
-	await $({ cwd: projectDir, env: { ...process.env, ...envVars } })`pnpm run build:frontend`;
+	await $({
+		cwd: projectDir,
+		env: { ...process.env, ...envVars },
+	})`pnpm run build:frontend`;
 }
 
 /**
