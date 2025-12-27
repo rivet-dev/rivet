@@ -429,6 +429,8 @@ enc
 
 	/** Called by the onopen event from drivers. */
 	#handleOnOpen() {
+		invariant(!this.#disposed, "handleOnOpen called after dispose");
+
 		logger().debug({
 			msg: "socket open",
 			messageQueueLength: this.#messageQueue.length,
@@ -881,7 +883,11 @@ enc
 		opts?: SendHttpMessageOpts,
 	) {
 		if (this.#disposed) {
-			throw new errors.ActorConnDisposed();
+			if (opts?.ephemeral) {
+				return;
+			} else {
+				throw new errors.ActorConnDisposed();
+			}
 		}
 
 		let queueMessage = false;
