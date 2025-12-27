@@ -406,23 +406,17 @@ export const sitemap = [
 		href: "/docs/self-hosting",
 		sidebar: [
 			{
-				title: "Overview",
-				href: "/docs/self-hosting",
-				// icon: faSquareInfo,
-			},
-			{
-				title: "Install",
-				href: "/docs/self-hosting/install",
-				// icon: faDownload,
-			},
-			{
-				title: "Actors",
-				collapsible: true,
+				title: "General",
 				pages: [
 					{
-						title: "Connect Backend",
-						href: "/docs/self-hosting/connect-backend",
-						// icon: faNetworkWired,
+						title: "Overview",
+						href: "/docs/self-hosting",
+						// icon: faSquareInfo,
+					},
+					{
+						title: "Install",
+						href: "/docs/self-hosting/install",
+						// icon: faDownload,
 					},
 					{
 						title: "Configuration",
@@ -430,20 +424,20 @@ export const sitemap = [
 						// icon: faGear,
 					},
 					{
+						title: "Connect Backend",
+						href: "/docs/self-hosting/connect-backend",
+						// icon: faNetworkWired,
+					},
+					{
 						title: "Multi-Region",
 						href: "/docs/self-hosting/multi-region",
 						// icon: faGlobe,
 					},
-				],
+				]
 			},
 			{
 				title: "Platforms",
-				collapsible: true,
 				pages: [
-					{
-						title: "Railway",
-						href: "/docs/self-hosting/railway",
-					},
 					{
 						title: "Docker Container",
 						href: "/docs/self-hosting/docker-container",
@@ -455,6 +449,10 @@ export const sitemap = [
 					{
 						title: "Kubernetes",
 						href: "/docs/self-hosting/kubernetes",
+					},
+					{
+						title: "Railway",
+						href: "/docs/self-hosting/railway",
 					},
 				],
 			},

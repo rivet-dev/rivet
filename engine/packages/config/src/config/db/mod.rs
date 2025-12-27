@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::secret::Secret;
+pub mod postgres;
+
+pub use postgres::{Postgres, PostgresSsl};
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -15,23 +17,6 @@ pub enum Database {
 impl Default for Database {
 	fn default() -> Self {
 		Self::FileSystem(FileSystem::default())
-	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Postgres {
-	/// URL to connect to Postgres with
-	///
-	/// See: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url
-	pub url: Secret<String>,
-}
-
-impl Default for Postgres {
-	fn default() -> Self {
-		Self {
-			url: Secret::new("postgresql://postgres:postgres@127.0.0.1:5432/postgres".into()),
-		}
 	}
 }
 
