@@ -279,3 +279,17 @@ export const EXTRA_ERROR_LOG = {
 	support: "https://rivet.dev/discord",
 	version: VERSION,
 };
+
+export type Runtime = "deno" | "bun" | "node";
+
+export function detectRuntime(): Runtime {
+	const userAgent =
+		typeof navigator !== "undefined" ? navigator.userAgent : "";
+	if (userAgent.includes("Deno")) {
+		return "deno";
+	}
+	if (userAgent.includes("Bun")) {
+		return "bun";
+	}
+	return "node";
+}
