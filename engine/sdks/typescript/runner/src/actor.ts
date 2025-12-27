@@ -85,8 +85,8 @@ export class RunnerActor {
 			gatewayId,
 			requestId,
 			request: {
-				resolve: () => { },
-				reject: () => { },
+				resolve: () => {},
+				reject: () => {},
 				actorId: this.actorId,
 				gatewayId: gatewayId,
 				requestId: requestId,
@@ -122,8 +122,8 @@ export class RunnerActor {
 			gatewayId,
 			requestId,
 			request: {
-				resolve: () => { },
-				reject: () => { },
+				resolve: () => {},
+				reject: () => {},
 				actorId: this.actorId,
 				gatewayId: gatewayId,
 				requestId: requestId,

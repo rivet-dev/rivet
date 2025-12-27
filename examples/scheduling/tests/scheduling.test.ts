@@ -180,7 +180,6 @@ describe("reminder scheduling", () => {
 		expect(completed?.completedAt).toBeDefined();
 	});
 
-
 	test("updates stats correctly", async (ctx) => {
 		const { client } = await setupTest(ctx, registry);
 		const reminderClient = client.reminderActor.getOrCreate("test-stats");

@@ -1,6 +1,5 @@
 import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
-import { toJsonSchema } from "./schema-utils";
 import {
 	ActionRequestSchema,
 	ActionResponseSchema,
@@ -12,6 +11,7 @@ import {
 	ToServerSchema,
 } from "@/schemas/client-protocol-zod/mod";
 import { VERSION } from "@/utils";
+import { toJsonSchema } from "./schema-utils";
 
 // Helper function to fix $ref paths from #/definitions to #/components/schemas
 function fixRefs(obj: any): any {
@@ -79,7 +79,9 @@ function main() {
 	const actionResponseJsonSchema = toJsonSchema(ActionResponseSchema);
 	const eventJsonSchema = toJsonSchema(EventSchema);
 	const actionRequestJsonSchema = toJsonSchema(ActionRequestSchema);
-	const subscriptionRequestJsonSchema = toJsonSchema(SubscriptionRequestSchema);
+	const subscriptionRequestJsonSchema = toJsonSchema(
+		SubscriptionRequestSchema,
+	);
 
 	// Build AsyncAPI v3.0.0 specification
 	const asyncApiSpec = {

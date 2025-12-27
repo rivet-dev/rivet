@@ -348,7 +348,11 @@ export const createProjectContext = ({
 			onSuccess?: (data: Rivet.CreateApiTokenResponse) => void;
 		}) {
 			return {
-				mutationKey: [{ organization, project }, "api-tokens", "create"],
+				mutationKey: [
+					{ organization, project },
+					"api-tokens",
+					"create",
+				],
 				mutationFn: async (data: {
 					name: string;
 					expiresAt?: string;
@@ -365,7 +369,11 @@ export const createProjectContext = ({
 		},
 		revokeApiTokenMutationOptions(opts?: { onSuccess?: () => void }) {
 			return {
-				mutationKey: [{ organization, project }, "api-tokens", "revoke"],
+				mutationKey: [
+					{ organization, project },
+					"api-tokens",
+					"revoke",
+				],
 				mutationFn: async (data: { apiTokenId: string }) => {
 					const response = await client.apiTokens.revoke(
 						project,

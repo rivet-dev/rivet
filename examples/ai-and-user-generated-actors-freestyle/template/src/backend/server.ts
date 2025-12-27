@@ -1,6 +1,5 @@
 import { Hono } from "hono";
-import { upgradeWebSocket } from "hono/deno";
-import { serveStatic } from "hono/deno";
+import { serveStatic, upgradeWebSocket } from "hono/deno";
 import { registry } from "./registry.ts";
 
 globalThis.addEventListener("unhandledrejection", (event) => {

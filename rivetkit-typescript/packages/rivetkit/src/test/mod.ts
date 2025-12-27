@@ -3,12 +3,12 @@ import { serve as honoServe } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import invariant from "invariant";
 import { type TestContext, vi } from "vitest";
+import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import { configureInspectorAccessToken } from "@/inspector/utils";
 import { createManagerRouter } from "@/manager/router";
 import { createClientWithDriver, type Registry, type RunConfig } from "@/mod";
-import { ClientConfigSchema } from "@/client/config";
 import { RunnerConfigSchema } from "@/registry/run-config";
 import { logger } from "./log";
 

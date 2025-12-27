@@ -1,13 +1,16 @@
 import { RivetClient } from "@rivetkit/engine-api-full";
 import {
-	deployToFreestyle,
 	configureRivetServerless,
-	generateNamespaceName,
 	type DeployRequest,
+	deployToFreestyle,
+	generateNamespaceName,
 	type LogCallback,
 } from "./utils";
 
-export async function deployWithRivetSelfHosted(req: DeployRequest, log: LogCallback) {
+export async function deployWithRivetSelfHosted(
+	req: DeployRequest,
+	log: LogCallback,
+) {
 	if (!("selfHosted" in req.kind)) {
 		throw new Error("Expected self-hosted deployment request");
 	}

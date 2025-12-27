@@ -45,8 +45,8 @@ const v2ToV3 = (v2Data: v2.PersistedActor): v3.Actor => {
 // Converter from v3 to v2
 const v3ToV2 = (v3Data: v3.Actor): v2.PersistedActor => {
 	// Transform scheduled events from flat structure back to nested structure
-	const scheduledEvents: v2.PersistedScheduleEvent[] = v3Data.scheduledEvents.map(
-		(event) => ({
+	const scheduledEvents: v2.PersistedScheduleEvent[] =
+		v3Data.scheduledEvents.map((event) => ({
 			eventId: event.eventId,
 			timestamp: event.timestamp,
 			kind: {
@@ -56,8 +56,7 @@ const v3ToV2 = (v3Data: v3.Actor): v2.PersistedActor => {
 					args: event.args,
 				},
 			},
-		}),
-	);
+		}));
 
 	return {
 		input: v3Data.input,

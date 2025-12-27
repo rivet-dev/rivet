@@ -115,8 +115,7 @@ export function stringifyToClientTunnelMessageKind(
 export function stringifyCommand(command: protocol.Command): string {
 	switch (command.tag) {
 		case "CommandStartActor": {
-			const { config, hibernatingRequests } =
-				command.val;
+			const { config, hibernatingRequests } = command.val;
 			const keyStr = config.key === null ? "null" : `"${config.key}"`;
 			const inputStr =
 				config.input === null
@@ -253,9 +252,10 @@ export function stringifyToClient(message: protocol.ToClient): string {
 			const metadataStr = `{runnerLostThreshold: ${stringifyBigInt(metadata.runnerLostThreshold)}}`;
 			return `ToClientInit{runnerId: "${runnerId}", metadata: ${metadataStr}}`;
 		}
-		case "ToClientPing":
+		case "ToClientPing": {
 			const { ts } = message.val;
 			return `ToClientPing{ts: ${stringifyBigInt(ts)}}`;
+		}
 		case "ToClientCommands": {
 			const commands = message.val;
 			return `ToClientCommands{count: ${commands.length}, commands: [${commands.map((c) => stringifyCommandWrapper(c)).join(", ")}]}`;

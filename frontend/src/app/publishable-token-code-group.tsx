@@ -1,4 +1,10 @@
-import { faChevronRight, faNextjs, faNodeJs, faReact, Icon } from "@rivet-gg/icons";
+import {
+	faChevronRight,
+	faNextjs,
+	faNodeJs,
+	faReact,
+	Icon,
+} from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { hasProvider } from "@/app/data-providers/engine-data-provider";
 import { CodeFrame, CodeGroup, CodePreview, DocsSheet } from "@/components";

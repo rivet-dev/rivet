@@ -1,19 +1,26 @@
 import { RivetClient as CloudClient } from "@rivet-gg/cloud";
 import { RivetClient } from "@rivetkit/engine-api-full";
 import {
-	deployToFreestyle,
 	configureRivetServerless,
-	generateNamespaceName,
 	type DeployRequest,
+	deployToFreestyle,
+	generateNamespaceName,
 	type LogCallback,
 } from "./utils";
 
-export async function deployWithRivetCloud(req: DeployRequest, log: LogCallback) {
+export async function deployWithRivetCloud(
+	req: DeployRequest,
+	log: LogCallback,
+) {
 	if (!("cloud" in req.kind)) {
 		throw new Error("Expected cloud deployment request");
 	}
 
-	const { cloudEndpoint: apiUrl, cloudToken: apiToken, engineEndpoint: endpoint } = req.kind.cloud;
+	const {
+		cloudEndpoint: apiUrl,
+		cloudToken: apiToken,
+		engineEndpoint: endpoint,
+	} = req.kind.cloud;
 	const { freestyleDomain, freestyleApiKey } = req;
 
 	const cloudRivet = new CloudClient({
@@ -26,23 +33,17 @@ export async function deployWithRivetCloud(req: DeployRequest, log: LogCallback)
 	const namespaceName = generateNamespaceName();
 
 	await log(`Creating namespace ${namespaceName}`);
-	const { namespace } = await cloudRivet.namespaces.create(
-		project,
-		{
-			name: namespaceName,
-			displayName: namespaceName.substring(0, 16),
-			org: organization,
-		},
-	);
+	const { namespace } = await cloudRivet.namespaces.create(project, {
+		name: namespaceName,
+		displayName: namespaceName.substring(0, 16),
+		org: organization,
+	});
 
-	const { token: runnerToken } = await cloudRivet.namespaces.createSecretToken(
-		project,
-		namespace.name,
-		{
+	const { token: runnerToken } =
+		await cloudRivet.namespaces.createSecretToken(project, namespace.name, {
 			name: `${namespaceName}-runner-token`,
 			org: organization,
-		},
-	);
+		});
 
 	const { token: publishableToken } =
 		await cloudRivet.namespaces.createPublishableToken(
@@ -53,13 +54,10 @@ export async function deployWithRivetCloud(req: DeployRequest, log: LogCallback)
 			},
 		);
 
-	const { token: accessToken } = await cloudRivet.namespaces.createAccessToken(
-		project,
-		namespace.name,
-		{
+	const { token: accessToken } =
+		await cloudRivet.namespaces.createAccessToken(project, namespace.name, {
 			org: organization,
-		},
-	);
+		});
 
 	const datacenter = req.datacenter || "us-west-1";
 

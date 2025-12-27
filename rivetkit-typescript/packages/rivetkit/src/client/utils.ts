@@ -1,9 +1,9 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
+import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/common/utils";
-import type { VersionedDataHandler } from "vbare";
 import type { HttpResponseError } from "@/schemas/client-protocol/mod";
 import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/schemas/client-protocol/versioned";
 import {

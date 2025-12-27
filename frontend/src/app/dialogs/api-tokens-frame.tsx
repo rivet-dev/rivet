@@ -2,6 +2,7 @@ import { faPlus, faQuestionCircle, faTrash, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
+import { useDialog } from "@/app/use-dialog";
 import {
 	Button,
 	type DialogContentProps,
@@ -15,7 +16,6 @@ import {
 	TableRow,
 } from "@/components";
 import { queryClient } from "@/queries/global";
-import { useDialog } from "@/app/use-dialog";
 
 interface ApiTokensFrameContentProps extends DialogContentProps {}
 
@@ -35,7 +35,7 @@ export default function ApiTokensFrameContent({
 		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
-						<div>Cloud API Tokens</div>
+					<div>Cloud API Tokens</div>
 					<HelpDropdown>
 						<Button variant="ghost" size="icon">
 							<Icon icon={faQuestionCircle} />
@@ -43,8 +43,8 @@ export default function ApiTokensFrameContent({
 					</HelpDropdown>
 				</Frame.Title>
 				<Frame.Description>
-					Cloud API tokens provide programmatic access to the Rivet Cloud API. Keep
-					them secure and never share them publicly.
+					Cloud API tokens provide programmatic access to the Rivet
+					Cloud API. Keep them secure and never share them publicly.
 				</Frame.Description>
 			</Frame.Header>
 			<Frame.Content>
@@ -68,8 +68,12 @@ export default function ApiTokensFrameContent({
 						<TableBody>
 							{data?.apiTokens.length === 0 ? (
 								<TableRow>
-									<TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-										No Cloud API tokens yet. Create one to get started.
+									<TableCell
+										colSpan={5}
+										className="text-center py-8 text-muted-foreground"
+									>
+										No Cloud API tokens yet. Create one to
+										get started.
 									</TableCell>
 								</TableRow>
 							) : (
@@ -162,7 +166,9 @@ function ApiTokenRow({ apiToken, dataProvider }: ApiTokenRowProps) {
 					</Button>
 				)}
 				{apiToken.revoked && (
-					<span className="text-muted-foreground text-sm">Revoked</span>
+					<span className="text-muted-foreground text-sm">
+						Revoked
+					</span>
 				)}
 			</TableCell>
 		</TableRow>
