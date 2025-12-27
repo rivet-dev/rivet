@@ -1,35 +1,47 @@
+import imgArch from "./images/architecture.png";
+import imgByocVsSelfHost from "./images/byoc-vs-self-host.png";
+
 # Self-Hosting Overview
 
-Rivet consists of several core components that work together to provide a complete actor orchestration platform. The Rivet Engine is the core of self-hosting and is used for orchestrating actors at scale:
+Self-hosting Rivet gives you complete control over the actor orchestration platform and infrastructure.
 
-<Warning>
-	Self-hosting is not required to deploy Rivet applciations in your own cloud. Please see the [deploy documentation](/docs/deploy) if trying to deploy a Rivet application.
-</Warning>
+## Self-Host vs BYOC
 
-## Core Components
+<Image alt="Rivet BYOC vs self-hosting" src={imgByocVsSelfHost} />
 
-- **Your Backend** - Your application server that handles user requests and includes a runner component that executes actor code
-- **Rivet Engine** - Main orchestration service that manages actor lifecycle, routes messages, and provides APIs
-- **Storage** - Persistence layer for actor state and messaging infrastructure for real-time communication
+Rivet supports both BYOC (Bring Your Own Cloud) and self-hosting to fit your deployment needs.
+
+| | Self-Hosting | BYOC with Rivet Cloud |
+|---|---|---|
+| **You Manage** | Full stack (your backend, engine, Rivet Engine, database) | Only your backend |
+| **Complexity** | Higher (full stack deployment) | Lower (connect and deploy) |
+| **Cost** | Higher operational overhead | Usually lower usage-based cost |
+| **Supports Serverless** | Requires extra infrastructure | Yes |
+| **Air-Gapped Deployments** | Yes | No |
+| **Best For** | Air-gapped environments, strict compliance, custom security policies | All other production deployments |
+| **Support** | [Contact sales](/sales) or community | Community, Slack, and email (varies by plan) |
+| **Documentation** | Continue below | [See connect guides](/docs/connect) |
 
 ## Architecture
+#
+<Image alt="Rivet self-hosting architecture" src={imgArch} />
 
-```txt {{"title":"Architecture"}}
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│Your Backend │◀───▶│Rivet Engine │◀───▶│   Storage   │
-│ (w/ runner) │     │             │     │  (DB/File)  │
-└─────────────┘     └─────────────┘     └─────────────┘
-```
+Rivet has 3 core components:
+
+- **Your Backend**: Your application server that handles user requests and includes a runner component that executes actor code
+- **Rivet Engine**: Main orchestration service that manages actor lifecycle, routes messages, and provides APIs
+- **Storage**: Persistence layer for actor state and messaging infrastructure for real-time communication
+
 
 ## Storage Backends
 
 Rivet supports multiple storage backends:
-- **File System** - Default, suitable for single-node deployments
-- **PostgreSQL** - Recommended for production
-- **FoundationDB** - Enterprise option for massive scale
+
+- **File System**: Suitable for single-node deployments
+- **PostgreSQL**: Recommended for production
+- **FoundationDB**: For massive scale ([requires enterprise](/sales))
 
 ## Deployment Platforms
-
 
 Deploy Rivet on your preferred platform:
 

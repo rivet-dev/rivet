@@ -95,9 +95,10 @@ async fn test_postgres_driver_with_memory_reconnect() {
 	};
 	let url = pg.url.read().clone();
 
-	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, true)
-		.await
-		.unwrap();
+	let driver =
+		universalpubsub::driver::postgres::PostgresDriver::connect(url, true, None, None, None)
+			.await
+			.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
 
 	test_all_inner(&pubsub, &docker).await;
@@ -118,9 +119,10 @@ async fn test_postgres_driver_without_memory_reconnect() {
 	};
 	let url = pg.url.read().clone();
 
-	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, false)
-		.await
-		.unwrap();
+	let driver =
+		universalpubsub::driver::postgres::PostgresDriver::connect(url, false, None, None, None)
+			.await
+			.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
 	test_all_inner(&pubsub, &docker).await;

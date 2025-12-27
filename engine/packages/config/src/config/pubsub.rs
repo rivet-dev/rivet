@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::secret::Secret;
 
+use super::db::PostgresSsl;
+
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum PubSub {
@@ -18,13 +20,21 @@ impl Default for PubSub {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Postgres {
 	/// URL to connect to Postgres with
+	///
+	/// Supports standard PostgreSQL connection parameters including `sslmode`.
+	/// Supported sslmode values: `disable`, `prefer` (default), `require`.
+	/// To verify server certificates, use `sslmode=require` with `ssl.root_cert_path`.
 	///
 	/// See: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url
 	pub url: Secret<String>,
 	#[serde(default = "default_mem_opt")]
 	pub memory_optimization: bool,
+	/// SSL configuration options
+	#[serde(default)]
+	pub ssl: Option<PostgresSsl>,
 }
 
 impl Default for Postgres {
@@ -32,6 +42,7 @@ impl Default for Postgres {
 		Self {
 			url: Secret::new("postgresql://postgres:postgres@127.0.0.1:5432/postgres".into()),
 			memory_optimization: true,
+			ssl: None,
 		}
 	}
 }

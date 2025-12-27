@@ -37,9 +37,11 @@ async fn test_postgres_driver() {
 	// Get the connection string from the secret
 	let connection_string = postgres_config.url.read().clone();
 
-	let driver = universaldb::driver::PostgresDatabaseDriver::new(connection_string)
-		.await
-		.unwrap();
+	let driver = universaldb::driver::PostgresDatabaseDriver::new_with_config(
+		universaldb::driver::postgres::PostgresConfig::new(connection_string),
+	)
+	.await
+	.unwrap();
 	let db = Database::new(Arc::new(driver));
 
 	run_all_tests(db).await

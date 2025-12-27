@@ -1759,14 +1759,14 @@ Create actor state dynamically on each actors' start:
 const counter = actor(,
   
   // Define vars using a creation function
-  createVars: (c: ActorInitContext, driver: any) => ;
+  createVars: (c: InitContext, driver: any) => ;
   },
   
   actions: 
 });
 ```
 
-If accepting arguments to `createVars`, you **must** define the types: `createVars(c: ActorInitContext, driver: any)`
+If accepting arguments to `createVars`, you **must** define the types: `createVars(c: InitContext, driver: any)`
 
 Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
 
@@ -1815,7 +1815,7 @@ For example, the Redis driver exposes access to the Redis instance:
 const myActor = actor(,
   
   // The second parameter provides driver-specific context
-  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  createVars: (ctx: InitContext, driver: DriverContext) => (),
   
   actions: 
   }
@@ -4032,7 +4032,7 @@ const counter = actor(;
 
 Read more about [input parameters](/docs/actors/input) here.
 
-If accepting arguments to `createState`, you **must** define the types: `createSTate(c: ActorInitContext, input: MyType)`
+If accepting arguments to `createState`, you **must** define the types: `createSTate(c: InitContext, input: MyType)`
 
 Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
 
@@ -4737,7 +4737,7 @@ Run your backend on Amazon ECS with Fargate using a simple container image and s
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the task definition. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -4880,7 +4880,7 @@ The Cloudflare Workers driver provides access to the Durable Object state and en
 const myActor = actor(,
   
   // Save the Cloudflare driver context
-  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  createVars: (ctx: InitContext, driver: DriverContext) => (),
   
   actions: ,
   }
@@ -4999,7 +4999,7 @@ Run your backend on Cloud Run with a lightweight container image and one command
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used when deploying. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -5030,7 +5030,7 @@ gcloud run deploy backend \
   --region us-central1 \
   --allow-unauthenticated \
   --min-instances 1 \
-  --set-env-vars RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev,RIVET_NAMESPACE=your-namespace-id,RIVET_TOKEN=your-token
+  --set-env-vars RIVET_ENDPOINT=https://api-us-west-1.rivet.dev,RIVET_NAMESPACE=your-namespace-id,RIVET_TOKEN=your-token
 ```
 
 You do not need to expose a container port. Rivet tunnels traffic directly to your backend.
@@ -5071,7 +5071,7 @@ Run your backend on any Kubernetes cluster with a simple container image and dep
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in later manifests. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -5104,7 +5104,7 @@ metadata:
   name: backend-secrets
 type: Opaque
 stringData:
-  RIVET_API_ENDPOINT: https://api-us-west-1.rivet.dev
+  RIVET_ENDPOINT: https://api-us-west-1.rivet.dev
   RIVET_NAMESPACE: your-namespace-id
   RIVET_TOKEN: your-token
 ```
@@ -5255,7 +5255,7 @@ Place the files somewhere readable by the service user, such as `/opt/backend`.
 Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the next step. They should look something like this:
 
 ```bash
-RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
 RIVET_TOKEN=your-token
 ```
@@ -5272,7 +5272,7 @@ Type=simple
 WorkingDirectory=/opt/backend
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
-Environment=RIVET_API_ENDPOINT=https://api.rivet.dev
+Environment=RIVET_ENDPOINT=https://api.rivet.dev
 Environment=RIVET_NAMESPACE=your-namespace-id
 Environment=RIVET_TOKEN=your-token
 
@@ -6020,30 +6020,61 @@ Get started with Rivet in minutes. Choose your preferred framework or runtime to
 
 # Configuration
 
-Rivet Engine can be configured through environment variables or configuration files. The configuration system is defined in `packages/common/config/`.
+Rivet Engine can be configured through environment variables or configuration files.
 
-## Configuration Loading
+## Configuration
 
-Rivet supports multiple configuration sources:
+Rivet supports JSON, JSON5, JSONC, YAML, YML, and environment variable configurations.
 
-1. **Default Values**: All configurations have sensible defaults
-2. **File-based Configuration**: JSON, JSON5, JSONC, YAML, and YML files
-3. **Environment Variables**: Using `RIVET__` prefix with `__` as separator (e.g., `RIVET__database__postgres__url`)
-4. **Multi-path Loading**: Can load from multiple configuration files
-5. **System Paths**: Platform-specific system configuration directories:
-   - Linux: `/etc/rivet/`
-   - macOS: `/Library/Application Support/rivet/`
-   - Windows: `C:\ProgramData\rivet\`
+**Environment Variables**
+
+Use the `RIVET__` prefix with `__` as separator to configure properties in the config. For example: set the `RIVET__database__postgres__url` environment variable for `database.postgres.url`.
+
+**Configuration Paths**
+
+Configuration files are automatically discovered in platform-specific directories:
+
+- Linux: `/etc/rivet/config.json`
+- macOS: `/Library/Application Support/rivet/config.json`
+- Windows: `C:\ProgramData\rivet\config.json`
+
+**Multiple Files**
+
+Multiple configuration files in the same directory are loaded and merged together. For example: `/etc/rivet/config.json` and `/etc/rivet/database.json` will be merged together.
+
+**Override Configuration Path**
+
+You can override the default configuration path using the `--config` flag:
+
+```bash
+# Load from a specific file
+rivet-engine --config /path/to/config.json
+
+# Load from a directory
+rivet-engine --config /etc/rivet
+
+# Load multiple paths (merged in order)
+rivet-engine --config /etc/rivet/base.json --config /etc/rivet/override.json
+```
 
 ## Definition
 
 ```typescript
 interface RivetConfig ;
+
+  // HTTP/HTTPS traffic handling service
+  guard?: ;
     };
   };
 
+  // Public API service configuration
+  api_public?: ;
+
   // Private API service configuration
   api_peer?: ;
+
+  // Actor orchestration configuration (experimental)
+  pegboard?: ;
 
   // Logging configuration
   logs?: ;
@@ -6052,17 +6083,19 @@ interface RivetConfig ;
   topology?: ;
 
   // Database backend configuration
-  database?: 
+  database?:
     | ;
+        };
       }
     | ;
       };
 
   // Message pub/sub system
-  pubsub?: 
+  pubsub?:
     | ;
       }
     | ;
+        };
       }
     | ;
       };
@@ -6077,8 +6110,146 @@ interface RivetConfig ;
 
   // Vector HTTP endpoint (optional)
   vector_http?: ;
+
+  // Telemetry configuration
+  telemetry?: ;
+
+  // Runtime configuration
+  runtime?: ;
 }
 ```
+
+## PostgreSQL Configuration
+
+### Managed Postgres Compatibility
+
+Some hosted PostgreSQL platforms require additional configuration due to platform-specific restrictions.
+
+Use direct connection (not connection pooler).
+
+```json }
+
+  }
+}
+```
+
+```bash }
+RIVET__database__postgres__url="postgresql://pscale_api_.:@.pg.psdb.cloud:5432/postgres?sslmode=require"
+RIVET__database__postgres__unstable_disable_lock_customization=true
+```
+
+For better performance, set `deadlock_timeout = 10ms` in the PlanetScale dashboard at **Clusters** → **Parameters** → **Query Tuning**.
+
+Use direct connection on port `5432` (not connection pooler).
+
+#### Without SSL
+
+```json }
+
+  }
+}
+```
+
+```bash }
+RIVET__database__postgres__url="postgresql://postgres:@db..supabase.co:5432/postgres?sslmode=disable"
+RIVET__database__postgres__unstable_disable_lock_customization=true
+```
+
+#### With SSL
+
+Download the root certificate from your Supabase dashboard and specify its path. See [Supabase SSL Enforcement](https://supabase.com/docs/guides/platform/ssl-enforcement) for details.
+
+```json }
+
+    }
+  }
+}
+```
+
+```bash }
+RIVET__database__postgres__url="postgresql://postgres:@db..supabase.co:5432/postgres?sslmode=require"
+RIVET__database__postgres__unstable_disable_lock_customization=true
+RIVET__database__postgres__ssl__root_cert_path="/path/to/supabase-ca.crt"
+```
+
+### SSL/TLS Support
+
+To enable SSL for Postgres, add `sslmode=require` to your PostgreSQL connection URL:
+
+```json }
+
+  }
+}
+```
+
+```bash }
+RIVET__database__postgres__url="postgresql://user:password@host.example.com:5432/database?sslmode=require"
+```
+
+The `sslmode` parameter controls TLS usage:
+
+- `disable`: Do not use TLS
+- `prefer`: Use TLS if available, otherwise connect without TLS (default)
+- `require`: Require TLS connection (fails if TLS is not available)
+
+To verify the server certificate against a CA or verify the hostname, use custom SSL certificates (see below).
+
+#### Custom SSL Certificates
+
+For databases using custom certificate authorities (e.g., Supabase) or requiring client certificate authentication, you can specify certificate paths in the configuration:
+
+```json }
+
+    }
+  }
+}
+```
+
+```bash }
+RIVET__database__postgres__url="postgresql://user:password@host:5432/database?sslmode=require"
+RIVET__database__postgres__ssl__root_cert_path="/path/to/root-ca.crt"
+RIVET__database__postgres__ssl__client_cert_path="/path/to/client.crt"
+RIVET__database__postgres__ssl__client_key_path="/path/to/client.key"
+```
+
+| Parameter | Description | PostgreSQL Equivalent |
+|-----------|-------------|----------------------|
+| `root_cert_path` | Path to the root certificate file for verifying the server's certificate | `sslrootcert` |
+| `client_cert_path` | Path to the client certificate file for client certificate authentication | `sslcert` |
+| `client_key_path` | Path to the client private key file for client certificate authentication | `sslkey` |
+
+All SSL paths are optional. If not specified, Rivet uses the default system root certificates from Mozilla's root certificate store.
+
+### Do Not Use Connection Poolers
+
+Rivet requires direct PostgreSQL connections for session-level features and does not support connection poolers.
+
+Do not use:
+
+- PgBouncer
+- Supavisor
+- AWS RDS Proxy
+
+### Troubleshooting
+
+#### Permission Denied Errors
+
+If you see errors like:
+
+```
+ERROR: permission denied to set parameter "deadlock_timeout"
+ERROR: current transaction is aborted, commands ignored until end of transaction block
+```
+
+Add `unstable_disable_lock_customization: true` to your configuration:
+
+```json
+
+  }
+}
+```
+
+This disables Rivet's attempt to set `lock_timeout = 0` and `deadlock_timeout = 10ms`. Since `lock_timeout` defaults to `0` in PostgreSQL, skipping these settings is safe. Deadlock detection will use the default `1s` timeout instead of `10ms`.
 ## Connecting Your Backend to Rivet Engine
 
 # Connecting Your Backend to Rivet Engine
@@ -6391,31 +6562,39 @@ docker run -d \
 
 # Self-Hosting Overview
 
-Rivet consists of several core components that work together to provide a complete actor orchestration platform. The Rivet Engine is the core of self-hosting and is used for orchestrating actors at scale:
+Self-hosting Rivet gives you complete control over the actor orchestration platform and infrastructure.
 
-	Self-hosting is not required to deploy Rivet applciations in your own cloud. Please see the [deploy documentation](/docs/deploy) if trying to deploy a Rivet application.
+## Self-Host vs BYOC
 
-## Core Components
+Rivet supports both BYOC (Bring Your Own Cloud) and self-hosting to fit your deployment needs.
 
-- **Your Backend** - Your application server that handles user requests and includes a runner component that executes actor code
-- **Rivet Engine** - Main orchestration service that manages actor lifecycle, routes messages, and provides APIs
-- **Storage** - Persistence layer for actor state and messaging infrastructure for real-time communication
+| | Self-Hosting | BYOC with Rivet Cloud |
+|---|---|---|
+| **You Manage** | Full stack (your backend, engine, Rivet Engine, database) | Only your backend |
+| **Complexity** | Higher (full stack deployment) | Lower (connect and deploy) |
+| **Cost** | Higher operational overhead | Usually lower usage-based cost |
+| **Supports Serverless** | Requires extra infrastructure | Yes |
+| **Air-Gapped Deployments** | Yes | No |
+| **Best For** | Air-gapped environments, strict compliance, custom security policies | All other production deployments |
+| **Support** | [Contact sales](/sales) or community | Community, Slack, and email (varies by plan) |
+| **Documentation** | Continue below | [See connect guides](/docs/connect) |
 
 ## Architecture
+#
 
-```txt }
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│Your Backend │◀───▶│Rivet Engine │◀───▶│   Storage   │
-│ (w/ runner) │     │             │     │  (DB/File)  │
-└─────────────┘     └─────────────┘     └─────────────┘
-```
+Rivet has 3 core components:
+
+- **Your Backend**: Your application server that handles user requests and includes a runner component that executes actor code
+- **Rivet Engine**: Main orchestration service that manages actor lifecycle, routes messages, and provides APIs
+- **Storage**: Persistence layer for actor state and messaging infrastructure for real-time communication
 
 ## Storage Backends
 
 Rivet supports multiple storage backends:
-- **File System** - Default, suitable for single-node deployments
-- **PostgreSQL** - Recommended for production
-- **FoundationDB** - Enterprise option for massive scale
+
+- **File System**: Suitable for single-node deployments
+- **PostgreSQL**: Recommended for production
+- **FoundationDB**: For massive scale ([requires enterprise](/sales))
 
 ## Deployment Platforms
 
