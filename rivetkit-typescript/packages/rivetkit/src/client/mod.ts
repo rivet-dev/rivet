@@ -25,8 +25,9 @@ export type {
 	ActorConn,
 	ConnectionStateCallback,
 	EventUnsubscribe,
+	StatusChangeCallback,
 } from "./actor-conn";
-export { ActorConnRaw } from "./actor-conn";
+export { ActorConnRaw, ActorConnStatus } from "./actor-conn";
 export type { ActorHandle } from "./actor-handle";
 export { ActorHandleRaw } from "./actor-handle";
 export type {

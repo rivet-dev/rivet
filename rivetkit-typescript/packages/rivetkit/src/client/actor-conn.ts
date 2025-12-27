@@ -54,6 +54,21 @@ import {
 	sendHttpRequest,
 } from "./utils";
 
+/**
+ * Connection status for an actor connection.
+ *
+ * - `Idle`: Not connected, no auto-reconnect (initial state, after dispose, or disabled)
+ * - `Connecting`: Attempting to establish connection
+ * - `Connected`: Connection is active
+ * - `Disconnected`: Connection was lost, will auto-reconnect
+ */
+export enum ActorConnStatus {
+	Idle = 0,
+	Connecting = 1,
+	Connected = 2,
+	Disconnected = 3,
+}
+
 interface ActionInFlight {
 	name: string;
 	resolve: (response: { id: bigint; output: unknown }) => void;
@@ -86,6 +101,13 @@ export type ActorErrorCallback = (error: errors.ActorError) => void;
  */
 export type ConnectionStateCallback = () => void;
 
+/**
+ * A callback for connection status changes.
+ *
+ * @typedef {Function} StatusChangeCallback
+ */
+export type StatusChangeCallback = (status: ActorConnStatus) => void;
+
 export interface SendHttpMessageOpts {
 	ephemeral: boolean;
 	signal?: AbortSignal;
@@ -104,10 +126,10 @@ export class ActorConnRaw {
 	/* Will be aborted on dispose. */
 	#abortController = new AbortController();
 
-	#connecting = false;
+	#connStatus: ActorConnStatus = ActorConnStatus.Idle;
 
 	#actorId?: string;
-	#connectionId?: string;
+	#connId?: string;
 
 	#messageQueue: Array<{
 		body:
@@ -128,8 +150,7 @@ export class ActorConnRaw {
 	#errorHandlers = new Set<ActorErrorCallback>();
 	#openHandlers = new Set<ConnectionStateCallback>();
 	#closeHandlers = new Set<ConnectionStateCallback>();
-
-	#isConnected = false;
+	#statusChangeHandlers = new Set<StatusChangeCallback>();
 
 	#actionIdCounter = 0;
 
@@ -249,8 +270,58 @@ enc
 		this.#connectWithRetry();
 	}
 
+	#setConnStatus(status: ActorConnStatus) {
+		const prevStatus = this.#connStatus;
+		if (prevStatus === status) return;
+		this.#connStatus = status;
+
+		// Notify status change handlers
+		for (const handler of [...this.#statusChangeHandlers]) {
+			try {
+				handler(status);
+			} catch (err) {
+				logger().error({
+					msg: "error in status change handler",
+					error: stringifyError(err),
+				});
+			}
+		}
+
+		// Notify open handlers
+		if (status === ActorConnStatus.Connected) {
+			for (const handler of [...this.#openHandlers]) {
+				try {
+					handler();
+				} catch (err) {
+					logger().error({
+						msg: "error in open handler",
+						error: stringifyError(err),
+					});
+				}
+			}
+		}
+
+		// Notify close handlers (only if transitioning from Connected to Disconnected or Idle)
+		if (
+			(status === ActorConnStatus.Disconnected ||
+				status === ActorConnStatus.Idle) &&
+			prevStatus === ActorConnStatus.Connected
+		) {
+			for (const handler of [...this.#closeHandlers]) {
+				try {
+					handler();
+				} catch (err) {
+					logger().error({
+						msg: "error in close handler",
+						error: stringifyError(err),
+					});
+				}
+			}
+		}
+	}
+
 	async #connectWithRetry() {
-		this.#connecting = true;
+		this.#setConnStatus(ActorConnStatus.Connecting);
 
 		// Attempt to reconnect indefinitely
 		try {
@@ -280,8 +351,6 @@ enc
 				throw err;
 			}
 		}
-
-		this.#connecting = false;
 	}
 
 	async #connectAndWait() {
@@ -315,7 +384,7 @@ enc
 		);
 		logger().debug({
 			msg: "opened websocket",
-			connectionId: this.#connectionId,
+			connId: this.#connId,
 			readyState: ws.readyState,
 			messageQueueLength: this.#messageQueue.length,
 		});
@@ -323,7 +392,7 @@ enc
 		ws.addEventListener("open", () => {
 			logger().debug({
 				msg: "client websocket open",
-				connectionId: this.#connectionId,
+				connId: this.#connId,
 			});
 		});
 		ws.addEventListener("message", async (ev) => {
@@ -363,29 +432,17 @@ enc
 		logger().debug({
 			msg: "socket open",
 			messageQueueLength: this.#messageQueue.length,
-			connectionId: this.#connectionId,
+			connId: this.#connId,
 		});
 
-		// Update connection state
-		this.#isConnected = true;
+		// Update connection state (this also notifies handlers)
+		this.#setConnStatus(ActorConnStatus.Connected);
 
 		// Resolve open promise
 		if (this.#onOpenPromise) {
 			this.#onOpenPromise.resolve(undefined);
 		} else {
 			logger().warn({ msg: "#onOpenPromise is undefined" });
-		}
-
-		// Notify open handlers
-		for (const handler of [...this.#openHandlers]) {
-			try {
-				handler();
-			} catch (err) {
-				logger().error({
-					msg: "error in open handler",
-					error: stringifyError(err),
-				});
-			}
 		}
 
 		// Resubscribe to all active events
@@ -431,11 +488,11 @@ enc
 		if (response.body.tag === "Init") {
 			// Store connection info
 			this.#actorId = response.body.val.actorId;
-			this.#connectionId = response.body.val.connectionId;
+			this.#connId = response.body.val.connectionId;
 			logger().trace({
 				msg: "received init message",
 				actorId: this.#actorId,
-				connectionId: this.#connectionId,
+				connId: this.#connId,
 			});
 			this.#handleOnOpen();
 		} else if (response.body.tag === "Error") {
@@ -529,22 +586,9 @@ enc
 		const closeEvent = event as CloseEvent;
 		const wasClean = closeEvent.wasClean;
 
-		// Update connection state and notify handlers
-		const wasConnected = this.#isConnected;
-		this.#isConnected = false;
-
-		if (wasConnected) {
-			for (const handler of [...this.#closeHandlers]) {
-				try {
-					handler();
-				} catch (err) {
-					logger().error({
-						msg: "error in close handler",
-						error: stringifyError(err),
-					});
-				}
-			}
-		}
+		// Update connection state (this also notifies handlers)
+		const wasConnected = this.#connStatus === ActorConnStatus.Connected;
+		this.#setConnStatus(ActorConnStatus.Disconnected);
 
 		// Reject open promise
 		if (this.#onOpenPromise) {
@@ -560,7 +604,7 @@ enc
 			code: closeEvent.code,
 			reason: closeEvent.reason,
 			wasClean: wasClean,
-			connectionId: this.#connectionId,
+			connId: this.#connId,
 			messageQueueLength: this.#messageQueue.length,
 			actionsInFlight: this.#actionsInFlight.size,
 		});
@@ -570,7 +614,7 @@ enc
 			logger().debug({
 				msg: "rejecting in-flight actions after disconnect",
 				count: this.#actionsInFlight.size,
-				connectionId: this.#connectionId,
+				connId: this.#connId,
 				wasClean,
 			});
 
@@ -586,11 +630,11 @@ enc
 
 		this.#websocket = undefined;
 
-		// Automatically reconnect. Skip if already attempting to connect.
-		if (!this.#disposed && !this.#connecting) {
+		// Automatically reconnect if we were connected. Skip if already attempting to connect.
+		if (!this.#disposed && wasConnected) {
 			logger().debug({
 				msg: "triggering reconnect",
-				connectionId: this.#connectionId,
+				connId: this.#connId,
 				messageQueueLength: this.#messageQueue.length,
 			});
 			// TODO: Fetch actor to check if it's destroyed
@@ -752,12 +796,22 @@ enc
 	}
 
 	/**
+	 * Returns the current connection status.
+	 *
+	 * @returns {ActorConnStatus} - The current connection status.
+	 */
+	get connStatus(): ActorConnStatus {
+		return this.#connStatus;
+	}
+
+	/**
 	 * Returns whether the connection is currently open.
 	 *
+	 * @deprecated Use `connStatus` instead.
 	 * @returns {boolean} - True if the connection is open, false otherwise.
 	 */
 	get isConnected(): boolean {
-		return this.#isConnected;
+		return this.#connStatus === ActorConnStatus.Connected;
 	}
 
 	/**
@@ -795,6 +849,23 @@ enc
 		};
 	}
 
+	/**
+	 * Subscribes to connection status changes.
+	 *
+	 * This is called whenever the connection status changes between Disconnected, Connecting, and Connected.
+	 *
+	 * @param {StatusChangeCallback} callback - The callback function to execute when the status changes.
+	 * @returns {() => void} - A function to unsubscribe from the status change handler.
+	 */
+	onStatusChange(callback: StatusChangeCallback): () => void {
+		this.#statusChangeHandlers.add(callback);
+
+		// Return unsubscribe function
+		return () => {
+			this.#statusChangeHandlers.delete(callback);
+		};
+	}
+
 	#sendMessage(
 		message: {
 			body:
@@ -827,7 +898,7 @@ enc
 							: readyState === 2
 								? "CLOSING"
 								: "CLOSED",
-				connectionId: this.#connectionId,
+				connId: this.#connId,
 				messageType: (message.body as any).tag,
 				actionName: (message.body as any).val?.name,
 			});
@@ -870,7 +941,7 @@ enc
 					logger().warn({
 						msg: "failed to send message, added to queue",
 						error,
-						connectionId: this.#connectionId,
+						connId: this.#connId,
 					});
 
 					// Assuming the socket is disconnected and will be reconnected soon
@@ -894,7 +965,7 @@ enc
 			logger().debug({
 				msg: "queued connection message",
 				queueLength: this.#messageQueue.length,
-				connectionId: this.#connectionId,
+				connId: this.#connId,
 				messageType: (message.body as any).tag,
 				actionName: (message.body as any).val?.name,
 			});
@@ -993,8 +1064,17 @@ enc
 	 * Get the connection ID (for testing purposes).
 	 * @internal
 	 */
+	get connId(): string | undefined {
+		return this.#connId;
+	}
+
+	/**
+	 * Get the connection ID (for testing purposes).
+	 * @internal
+	 * @deprecated Use `connId` instead.
+	 */
 	get connectionId(): string | undefined {
-		return this.#connectionId;
+		return this.#connId;
 	}
 
 	/**
@@ -1012,6 +1092,9 @@ enc
 		this.#disposed = true;
 
 		logger().debug({ msg: "disposing actor conn" });
+
+		// Set status to Idle (intentionally closed, no auto-reconnect)
+		this.#setConnStatus(ActorConnStatus.Idle);
 
 		// Clear interval so NodeJS process can exit
 		clearInterval(this.#keepNodeAliveInterval);

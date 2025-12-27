@@ -30,8 +30,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 ) {
 	const { getOrCreateActor } = createVanillaRivetKit<
 		Registry,
-		ExtractActorsFromRegistry<Registry>,
-		keyof ExtractActorsFromRegistry<Registry>
+		ExtractActorsFromRegistry<Registry>
 	>(client, opts);
 
 	/**
@@ -93,7 +92,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 				return actorState.connection.on(eventName, eventHandler);
 			}, [
 				actorState.connection,
-				actorState.isConnected,
+				actorState.connStatus,
 				actorState.hash,
 				eventName,
 			]);
