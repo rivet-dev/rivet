@@ -1,19 +1,14 @@
 import { createClient } from "rivetkit/client";
 import type { registry } from "../src/registry.js";
 
-// Get endpoint from environment variable or default to localhost
-const endpoint = process.env.RIVETKIT_ENDPOINT ?? "http://localhost:8080";
-console.log("🔗 Using endpoint:", endpoint);
-
-// Create RivetKit client
-const client = createClient<typeof registry>(endpoint);
+const client = createClient<typeof registry>();
 
 async function main() {
 	console.log("🚀 Rivet Client Demo");
 
 	try {
 		// Create counter instance
-		const counter = client.counter.getOrCreate("demo");
+		const counter = client.counter.getOrCreate("demo").connect();
 
 		// Increment counter
 		console.log("Incrementing counter 'demo'...");
