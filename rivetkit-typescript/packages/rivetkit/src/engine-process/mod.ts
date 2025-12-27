@@ -52,10 +52,10 @@ export async function ensureEngineProcess(
 	// Check if the engine is already running on the port
 	if (await isEngineRunning()) {
 		try {
-			await waitForEngineHealth();
+			const health = await waitForEngineHealth();
 			logger().debug({
 				msg: "engine already running and healthy",
-				version: options.version,
+				version: health.version,
 			});
 			return;
 		} catch (error) {
@@ -315,11 +315,7 @@ async function checkIfEngineAlreadyRunningOnPort(
 	}
 
 	if (response.ok) {
-		const health = (await response.json()) as {
-			status?: string;
-			runtime?: string;
-			version?: string;
-		};
+		const health = (await response.json()) as EngineHealthResponse;
 
 		// Check what's running on this port
 		if (health.runtime === "engine") {
@@ -359,7 +355,13 @@ async function fileExists(filePath: string): Promise<boolean> {
 const HEALTH_MAX_WAIT = 10_000;
 const HEALTH_INTERVAL = 100;
 
-async function waitForEngineHealth(): Promise<void> {
+interface EngineHealthResponse {
+	status?: string;
+	runtime?: string;
+	version?: string;
+}
+
+async function waitForEngineHealth(): Promise<EngineHealthResponse> {
 	const maxRetries = Math.ceil(HEALTH_MAX_WAIT / HEALTH_INTERVAL);
 
 	logger().debug({ msg: "waiting for engine health check" });
@@ -370,8 +372,9 @@ async function waitForEngineHealth(): Promise<void> {
 				signal: AbortSignal.timeout(1000),
 			});
 			if (response.ok) {
+				const health = (await response.json()) as EngineHealthResponse;
 				logger().debug({ msg: "engine health check passed" });
-				return;
+				return health;
 			}
 		} catch (error) {
 			// Expected to fail while engine is starting up
