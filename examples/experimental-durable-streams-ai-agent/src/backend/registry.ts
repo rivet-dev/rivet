@@ -48,7 +48,10 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 	try {
 		// NOTE: promptStream.json does not provide offsets, have to manually
 		// parse
-		c.log.info({ msg: "starting read loop", offset: c.state.promptStreamOffset });
+		c.log.info({
+			msg: "starting read loop",
+			offset: c.state.promptStreamOffset,
+		});
 		const streamIter = promptStream.read({
 			offset: c.state.promptStreamOffset,
 			live: "long-poll",
@@ -77,16 +80,26 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 				try {
 					prompts = JSON.parse(line);
 				} catch (e) {
-					c.log.error({ msg: "failed to parse json", line, error: e });
+					c.log.error({
+						msg: "failed to parse json",
+						line,
+						error: e,
+					});
 					continue;
 				}
 
 				if (!Array.isArray(prompts)) {
-					throw new Error(`Expected array of prompts, got: ${typeof prompts}`);
+					throw new Error(
+						`Expected array of prompts, got: ${typeof prompts}`,
+					);
 				}
 
 				for (const prompt of prompts) {
-					c.log.info({ msg: "parsed prompt", promptId: prompt.id, content: prompt.content });
+					c.log.info({
+						msg: "parsed prompt",
+						promptId: prompt.id,
+						content: prompt.content,
+					});
 
 					// Skip if prompt is invalid
 					if (!prompt.id) {
@@ -94,15 +107,25 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 						continue;
 					}
 
-					c.log.info({ msg: "processing prompt", promptId: prompt.id });
+					c.log.info({
+						msg: "processing prompt",
+						promptId: prompt.id,
+					});
 					await processPrompt(c, prompt, responseStream);
-					c.log.info({ msg: "finished processing prompt", promptId: prompt.id });
+					c.log.info({
+						msg: "finished processing prompt",
+						promptId: prompt.id,
+					});
 				}
 			}
 		}
 		c.log.info({ msg: "read loop ended" });
 	} catch (error) {
-		c.log.error({ msg: "error in consumeStream", error, aborted: c.abortSignal.aborted });
+		c.log.error({
+			msg: "error in consumeStream",
+			error,
+			aborted: c.abortSignal.aborted,
+		});
 		if (!c.abortSignal.aborted) {
 			c.log.error({ msg: "error consuming prompts", error });
 		}
@@ -151,7 +174,11 @@ async function processPrompt(
 		});
 	}
 
-	c.log.info({ msg: "finished consuming textStream", chunkCount, fullResponseLength: fullResponse.length });
+	c.log.info({
+		msg: "finished consuming textStream",
+		chunkCount,
+		fullResponseLength: fullResponse.length,
+	});
 
 	if (streamError !== null) {
 		const errorChunk: ResponseChunk = {

@@ -1,6 +1,7 @@
-import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { useState } from "react";
+import * as CreateApiTokenForm from "@/app/forms/create-api-token-form";
 import {
 	Button,
 	type DialogContentProps,
@@ -10,7 +11,6 @@ import {
 	Label,
 } from "@/components";
 import { queryClient } from "@/queries/global";
-import * as CreateApiTokenForm from "@/app/forms/create-api-token-form";
 
 interface CreateApiTokenFrameContentProps extends DialogContentProps {}
 
@@ -81,8 +81,8 @@ export default function CreateApiTokenFrameContent({
 						<Label>Your Cloud API Token</Label>
 						<DiscreteInput value={createdToken} />
 						<p className="text-sm text-destructive font-medium">
-							This is the only time you'll see this token. Copy it now
-							and store it securely.
+							This is the only time you'll see this token. Copy it
+							now and store it securely.
 						</p>
 					</div>
 				</Frame.Content>
@@ -100,7 +100,9 @@ export default function CreateApiTokenFrameContent({
 			onSubmit={async (values) => {
 				await mutateAsync({
 					name: values.name,
-					expiresAt: values.expiresIn ? convertDurationToExpiresAt(values.expiresIn) : undefined,
+					expiresAt: values.expiresIn
+						? convertDurationToExpiresAt(values.expiresIn)
+						: undefined,
 				});
 			}}
 			defaultValues={{ name: "", expiresIn: "1y" }}

@@ -1,6 +1,18 @@
-import { faChevronRight, faCopy, faNodeJs, faPlus, faQuestionCircle, faTrash, Icon } from "@rivet-gg/icons";
+import {
+	faChevronRight,
+	faCopy,
+	faNodeJs,
+	faPlus,
+	faQuestionCircle,
+	faTrash,
+	Icon,
+} from "@rivet-gg/icons";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useParams, useRouteContext } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	useParams,
+	useRouteContext,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -88,7 +100,8 @@ function PublishableToken() {
 				<H3>Client Token</H3>
 			</div>
 			<p className="mb-6 text-muted-foreground">
-				Connect to your actors using the Rivet client token. This can be used either on your frontend or backend.
+				Connect to your actors using the Rivet client token. This can be
+				used either on your frontend or backend.
 			</p>
 			<div className="space-y-8">
 				{isLoading ? (
@@ -165,10 +178,16 @@ registry.start();`;
 				<div className="space-y-2">
 					<Label>Environment Variables</Label>
 					<div className="gap-1 items-center grid grid-cols-2">
-						<Label asChild className="text-muted-foreground text-xs mb-1">
+						<Label
+							asChild
+							className="text-muted-foreground text-xs mb-1"
+						>
 							<p>Key</p>
 						</Label>
-						<Label asChild className="text-muted-foreground text-xs mb-1">
+						<Label
+							asChild
+							className="text-muted-foreground text-xs mb-1"
+						>
 							<p>Value</p>
 						</Label>
 						<DiscreteInput
@@ -236,7 +255,10 @@ RIVET_TOKEN=${token || ""}`;
 								>
 									<span className="cursor-pointer hover:underline">
 										See JavaScript Documentation{" "}
-										<Icon icon={faChevronRight} className="text-xs" />
+										<Icon
+											icon={faChevronRight}
+											className="text-xs"
+										/>
 									</span>
 								</DocsSheet>
 							}
@@ -246,7 +268,7 @@ RIVET_TOKEN=${token || ""}`;
 								language="typescript"
 								code={codeSnippet}
 							/>
-						</CodeFrame>
+						</CodeFrame>,
 					]}
 				</CodeGroup>
 			</div>
@@ -287,8 +309,8 @@ function CloudApiTokens() {
 				</Button>
 			</div>
 			<p className="mb-6 text-muted-foreground">
-				Cloud API tokens provide programmatic access to the Rivet Cloud API. Keep
-				them secure and never share them publicly.
+				Cloud API tokens provide programmatic access to the Rivet Cloud
+				API. Keep them secure and never share them publicly.
 			</p>
 			<div className="border rounded-md">
 				{isLoading ? (
@@ -315,7 +337,8 @@ function CloudApiTokens() {
 										colSpan={5}
 										className="text-center py-8 text-muted-foreground"
 									>
-										No Cloud API tokens yet. Create one to get started.
+										No Cloud API tokens yet. Create one to
+										get started.
 									</TableCell>
 								</TableRow>
 							) : (
@@ -538,7 +561,9 @@ function ApiTokenRow({ apiToken, dataProvider }: ApiTokenRowProps) {
 					</Button>
 				)}
 				{apiToken.revoked && (
-					<span className="text-muted-foreground text-sm">Revoked</span>
+					<span className="text-muted-foreground text-sm">
+						Revoked
+					</span>
 				)}
 			</TableCell>
 		</TableRow>

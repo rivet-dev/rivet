@@ -2,9 +2,9 @@ import { idToStr } from "@rivetkit/engine-runner";
 import onChange from "@rivetkit/on-change";
 import { isCborSerializable, stringifyError } from "@/common/utils";
 import {
+	CURRENT_VERSION as ACTOR_PERSIST_CURRENT_VERSION,
 	ACTOR_VERSIONED,
 	CONN_VERSIONED,
-	CURRENT_VERSION as ACTOR_PERSIST_CURRENT_VERSION,
 } from "@/schemas/actor-persist/versioned";
 import { promiseWithResolvers, SinglePromiseQueue } from "@/utils";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";

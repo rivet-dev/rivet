@@ -991,7 +991,8 @@ export class Runner {
 					commandWrapper.checkpoint.actorId,
 					commandWrapper.checkpoint.generation,
 				);
-				if (actor) actor.lastCommandIdx = commandWrapper.checkpoint.index;
+				if (actor)
+					actor.lastCommandIdx = commandWrapper.checkpoint.index;
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
 				// Spawn background promise
 				this.#handleCommandStopActor(commandWrapper).catch((err) => {
@@ -1008,13 +1009,13 @@ export class Runner {
 	}
 
 	#handleAckEvents(ack: protocol.ToClientAckEvents) {
-		let originalTotalEvents = Array.from(this.#actors).reduce(
+		const originalTotalEvents = Array.from(this.#actors).reduce(
 			(s, [_, actor]) => s + actor.eventHistory.length,
 			0,
 		);
 
 		for (const [_, actor] of this.#actors) {
-			let checkpoint = ack.lastEventCheckpoints.find(
+			const checkpoint = ack.lastEventCheckpoints.find(
 				(x) => x.actorId == actor.actorId,
 			);
 
@@ -1046,7 +1047,7 @@ export class Runner {
 
 		actor.recordEvent(eventWrapper);
 
-		let totalEvents = Array.from(this.#actors).reduce(
+		const totalEvents = Array.from(this.#actors).reduce(
 			(s, [_, actor]) => s + actor.eventHistory.length,
 			0,
 		);

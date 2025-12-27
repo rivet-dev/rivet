@@ -837,7 +837,7 @@ enc
 						this.#encoding,
 						message,
 						TO_SERVER_VERSIONED,
-					CLIENT_PROTOCOL_CURRENT_VERSION,
+						CLIENT_PROTOCOL_CURRENT_VERSION,
 						ToServerSchema,
 						// JSON: args is the raw value
 						(msg): ToServerJson => msg as ToServerJson,

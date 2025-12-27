@@ -36,8 +36,9 @@ export interface ActorTypes<
 }
 
 // Helper for validating function types - accepts generic for specific function signatures
-const zFunction = <T extends (...args: any[]) => any = (...args: unknown[]) => unknown>() =>
-	z.custom<T>((val) => typeof val === "function");
+const zFunction = <
+	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,
+>() => z.custom<T>((val) => typeof val === "function");
 
 // This schema is used to validate the input at runtime. The generic types are defined below in `ActorConfig`.
 //

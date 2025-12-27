@@ -64,9 +64,9 @@ function SecretToken() {
 	const { data: regions = [] } = useInfiniteQuery(
 		dataProvider.regionsQueryOptions(),
 	);
-	const [selectedDatacenter, setSelectedDatacenter] = useState<string | undefined>(
-		undefined,
-	);
+	const [selectedDatacenter, setSelectedDatacenter] = useState<
+		string | undefined
+	>(undefined);
 
 	// Set default datacenter when regions are loaded
 	useEffect(() => {
@@ -104,8 +104,9 @@ registry.start();`;
 					<DiscreteInput value={token || ""} />
 				)}
 				<p className="text-sm text-muted-foreground">
-					Only use in secure server environments. Grants full access to
-					your namespace. Used to connect your Runners to your namespace.
+					Only use in secure server environments. Grants full access
+					to your namespace. Used to connect your Runners to your
+					namespace.
 				</p>
 			</div>
 			<div className="space-y-2">

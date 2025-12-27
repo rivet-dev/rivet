@@ -1,7 +1,7 @@
-import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
-import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import { logger } from "hono/logger";
+import { streamSSE } from "hono/streaming";
 import { deployWithRivetCloud } from "./deploy-with-rivet-cloud";
 import { deployWithRivetSelfHosted } from "./deploy-with-rivet-self-hosted";
 import type { DeployRequest, LogCallback } from "./utils";
@@ -34,7 +34,8 @@ app.post("/api/deploy", async (c) => {
 			});
 		} catch (error) {
 			console.error("Deployment error:", error);
-			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
 
 			await stream.writeSSE({
 				data: errorMessage,
@@ -45,12 +46,12 @@ app.post("/api/deploy", async (c) => {
 });
 
 // Global error handlers
-process.on('unhandledRejection', (reason, promise) => {
-	console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on("unhandledRejection", (reason, promise) => {
+	console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-process.on('uncaughtException', (error) => {
-	console.error('Uncaught Exception:', error);
+process.on("uncaughtException", (error) => {
+	console.error("Uncaught Exception:", error);
 	process.exit(1);
 });
 

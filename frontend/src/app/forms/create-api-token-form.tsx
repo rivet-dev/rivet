@@ -84,7 +84,10 @@ export const ExpiresIn = ({ className }: { className?: string }) => {
 						</FormControl>
 						<SelectContent>
 							{EXPIRATION_OPTIONS.map((option) => (
-								<SelectItem key={option.value} value={option.value}>
+								<SelectItem
+									key={option.value}
+									value={option.value}
+								>
 									{option.label}
 								</SelectItem>
 							))}
