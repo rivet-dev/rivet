@@ -1,13 +1,16 @@
 import { Derived, Effect, Store, type Updater } from "@tanstack/store";
 import type { AnyActorDefinition, Registry } from "rivetkit";
-import type {
-	ActorConn,
-	ActorHandle,
-	Client,
-	ExtractActorsFromRegistry,
+import {
+	type ActorConn,
+	ActorConnStatus,
+	type ActorHandle,
+	type Client,
+	type ExtractActorsFromRegistry,
 } from "rivetkit/client";
 
 export type AnyActorRegistry = Registry<any>;
+
+export { ActorConnStatus };
 
 interface ActorStateReference<AD extends AnyActorDefinition> {
 	/**
@@ -28,17 +31,9 @@ interface ActorStateReference<AD extends AnyActorDefinition> {
 	 */
 	connection: ActorConn<AD> | null;
 	/**
-	 * Whether the actor is enabled.
+	 * The connection status of the actor.
 	 */
-	isConnected?: boolean;
-	/**
-	 * Whether the actor is currently connecting, indicating that a connection attempt is in progress.
-	 */
-	isConnecting?: boolean;
-	/**
-	 * Whether there was an error connecting to the actor.
-	 */
-	isError?: boolean;
+	connStatus: ActorConnStatus;
 	/**
 	 * The error that occurred while trying to connect to the actor, if any.
 	 */
@@ -138,255 +133,329 @@ export interface CreateRivetKitOptions<Registry extends AnyActorRegistry> {
 	hashFunction?: (opts: ActorOptions<Registry, any>) => string;
 }
 
+type ActorCache<
+	Registry extends AnyActorRegistry,
+	Actors extends ExtractActorsFromRegistry<Registry>,
+> = Map<
+	string,
+	{
+		state: Derived<
+			InternalRivetKitStore<Registry, Actors>["actors"][string]
+		>;
+		key: string;
+		mount: () => () => void;
+		setState: (
+			set: Updater<
+				InternalRivetKitStore<Registry, Actors>["actors"][string]
+			>,
+		) => void;
+		create: () => void;
+		refCount: number;
+	}
+>;
+
 export function createRivetKit<
 	Registry extends AnyActorRegistry,
 	Actors extends ExtractActorsFromRegistry<Registry>,
-	ActorNames extends keyof Actors,
->(client: Client<Registry>, opts: CreateRivetKitOptions<Registry> = {}) {
+>(client: Client<Registry>, createOpts: CreateRivetKitOptions<Registry> = {}) {
 	type RivetKitStore = InternalRivetKitStore<Registry, Actors>;
 
 	const store = new Store<RivetKitStore>({
 		actors: {},
 	});
 
-	const hash = opts.hashFunction || defaultHashFunction;
+	const cache: ActorCache<Registry, Actors> = new Map();
 
-	const cache = new Map<
-		string,
-		{
-			state: Derived<RivetKitStore["actors"][string]>;
-			key: string;
-			mount: () => void;
-			setState: (set: Updater<RivetKitStore["actors"][string]>) => void;
-			create: () => void;
-		}
-	>();
+	return {
+		getOrCreateActor: <ActorName extends keyof Actors>(
+			actorOpts: ActorOptions<Registry, ActorName>,
+		) => getOrCreateActor(client, createOpts, store, cache, actorOpts),
+		store,
+	};
+}
 
-	function getOrCreateActor<ActorName extends ActorNames>(
-		opts: ActorOptions<Registry, ActorName>,
-	) {
-		const key = hash(opts);
-		const cached = cache.get(key);
-		if (cached) {
-			return {
-				...cached,
-				state: cached.state as ActorsStateDerived<Registry, ActorName>,
-			};
-		}
+function getOrCreateActor<
+	Registry extends AnyActorRegistry,
+	Actors extends ExtractActorsFromRegistry<Registry>,
+	ActorName extends keyof Actors,
+>(
+	client: Client<Registry>,
+	createOpts: CreateRivetKitOptions<Registry>,
+	store: Store<InternalRivetKitStore<Registry, Actors>>,
+	cache: ActorCache<Registry, Actors>,
+	actorOpts: ActorOptions<Registry, ActorName>,
+) {
+	type RivetKitStore = InternalRivetKitStore<Registry, Actors>;
 
-		const derived = new Derived({
-			fn: ({ currDepVals: [store] }) => {
-				return store.actors[key];
-			},
-			deps: [store],
-		});
+	const hash = createOpts.hashFunction || defaultHashFunction;
 
-		function create() {
-			async function createActorConnection() {
-				const actor = store.state.actors[key];
-				try {
-					const handle = client.getOrCreate(
-						actor.opts.name as string,
-						actor.opts.key,
-						{
-							params: actor.opts.params,
-							createInRegion: actor.opts.createInRegion,
-							createWithInput: actor.opts.createWithInput,
+	const key = hash(actorOpts);
+	const cached = cache.get(key);
+	if (cached) {
+		return {
+			...cached,
+			state: cached.state as ActorsStateDerived<Registry, ActorName>,
+		};
+	}
+
+	const derived = new Derived({
+		fn: ({ currDepVals: [store] }) => {
+			return store.actors[key];
+		},
+		deps: [store],
+	});
+
+	// Connect to actor
+	const effect = new Effect({
+		fn: () => {
+			const actor = store.state.actors[key];
+
+			// Dispose connection if disabled
+			if (!actor.opts.enabled && actor.connection) {
+				actor.connection.dispose();
+
+				// Clear state references
+				store.setState((prev) => ({
+					...prev,
+					actors: {
+						...prev.actors,
+						[key]: {
+							...prev.actors[key],
+							connection: null,
+							handle: null,
 						},
-					);
-
-					const connection = handle.connect();
-
-					// Subscribe to connection state changes
-					connection.onOpen(() => {
-						store.setState((prev) => {
-							// Only update if this is still the active connection
-							if (prev.actors[key]?.connection !== connection)
-								return prev;
-							return {
-								...prev,
-								actors: {
-									...prev.actors,
-									[key]: {
-										...prev.actors[key],
-										isConnected: true,
-									},
-								},
-							};
-						});
-					});
-
-					connection.onClose(() => {
-						store.setState((prev) => {
-							// Only update if this is still the active connection
-							if (prev.actors[key]?.connection !== connection)
-								return prev;
-							return {
-								...prev,
-								actors: {
-									...prev.actors,
-									[key]: {
-										...prev.actors[key],
-										isConnected: false,
-									},
-								},
-							};
-						});
-					});
-
-					await handle.resolve(
-						/*{ signal: AbortSignal.timeout(0) }*/
-					);
-					store.setState((prev) => {
-						return {
-							...prev,
-							actors: {
-								...prev.actors,
-								[key]: {
-									...prev.actors[key],
-									isConnected: connection.isConnected,
-									isConnecting: false,
-									handle: handle as ActorHandle<
-										Actors[ActorName]
-									>,
-									connection: connection as ActorConn<
-										Actors[ActorName]
-									>,
-									isError: false,
-									error: null,
-								},
-							},
-						};
-					});
-				} catch (error) {
-					store.setState((prev) => {
-						return {
-							...prev,
-							actors: {
-								...prev.actors,
-								[key]: {
-									...prev.actors[key],
-									isError: true,
-									isConnecting: false,
-									error: error as Error,
-								},
-							},
-						};
-					});
-				}
+					},
+				}));
+				return;
 			}
 
-			store.setState((prev) => {
-				prev.actors[key].isConnecting = true;
-				prev.actors[key].isError = false;
-				prev.actors[key].error = null;
-				createActorConnection();
-				return prev;
-			});
+			// Create actor connection
+			//
+			// actor-conn.ts automatically handles reconnect, this is only
+			// required if being called for the first time if enabled
+			if (
+				actor.connStatus === ActorConnStatus.Idle &&
+				actor.opts.enabled
+			) {
+				create<Registry, Actors, ActorName>(client, store, key);
+			}
+		},
+		deps: [derived],
+	});
+
+	store.setState((prev) => {
+		if (prev.actors[key]) {
+			return prev;
 		}
-
-		// connect effect
-		const effect = new Effect({
-			fn: () => {
-				// check if prev state is different from current state
-				// do a shallow comparison
-				const actor = store.state.actors[key];
-
-				const isSame =
-					JSON.stringify(store.prevState.actors[key].opts) ===
-					JSON.stringify(store.state.actors[key].opts);
-
-				if (
-					isSame &&
-					!actor.isConnected &&
-					!actor.isConnecting &&
-					!actor.isError &&
-					actor.opts.enabled
-				) {
-					create();
-				}
+		return {
+			...prev,
+			actors: {
+				...prev.actors,
+				[key]: {
+					hash: key,
+					connStatus: ActorConnStatus.Idle,
+					connection: null,
+					handle: null,
+					error: null,
+					opts: actorOpts,
+				},
 			},
-			deps: [derived],
-		});
+		};
+	});
 
+	function setState(updater: Updater<RivetKitStore["actors"][string]>) {
 		store.setState((prev) => {
-			if (prev.actors[key]) {
-				return prev;
+			const actor = prev.actors[key];
+			if (!actor) {
+				throw new Error(`Actor with key "${key}" does not exist.`);
+			}
+
+			let newState: RivetKitStore["actors"][string];
+
+			if (typeof updater === "function") {
+				newState = updater(actor);
+			} else {
+				// If updater is a direct value, we assume it replaces the entire actor state
+				newState = updater;
 			}
 			return {
 				...prev,
 				actors: {
 					...prev.actors,
-					[key]: {
-						hash: key,
-						isConnected: false,
-						isConnecting: false,
-						connection: null,
-						handle: null,
-						isError: false,
-						error: null,
-						opts,
-					},
+					[key]: newState,
 				},
 			};
 		});
+	}
 
-		function setState(updater: Updater<RivetKitStore["actors"][string]>) {
+	// Track subscriptions for ref counting
+	let unsubscribeDerived: (() => void) | null = null;
+	let unsubscribeEffect: (() => void) | null = null;
+
+	const mount = () => {
+		const cached = cache.get(key);
+		if (!cached) {
+			throw new Error(`Actor with key "${key}" not found in cache`);
+		}
+
+		// Increment ref count
+		cached.refCount++;
+
+		// Mount derived/effect on first reference
+		if (cached.refCount === 1) {
+			unsubscribeDerived = derived.mount();
+			unsubscribeEffect = effect.mount();
+		}
+
+		return () => {
+			// Decrement ref count
+			cached.refCount--;
+
+			// Only cleanup when last reference is removed
+			if (cached.refCount === 0) {
+				// Unsubscribe from derived/effect
+				unsubscribeDerived?.();
+				unsubscribeEffect?.();
+				unsubscribeDerived = null;
+				unsubscribeEffect = null;
+
+				// Dispose connection
+				const actor = store.state.actors[key];
+				if (actor?.connection) {
+					actor.connection.dispose();
+				}
+
+				// Remove from store and cache
+				store.setState((prev) => {
+					const { [key]: _, ...rest } = prev.actors;
+					return { ...prev, actors: rest };
+				});
+				cache.delete(key);
+			}
+		};
+	};
+
+	cache.set(key, {
+		state: derived,
+		key,
+		mount,
+		setState,
+		create: create.bind(undefined, client, store, key),
+		refCount: 0,
+	});
+
+	return {
+		mount,
+		setState,
+		state: derived as ActorsStateDerived<Registry, ActorName>,
+		create,
+		key,
+	};
+}
+
+function create<
+	Registry extends AnyActorRegistry,
+	Actors extends ExtractActorsFromRegistry<Registry>,
+	ActorName extends keyof Actors,
+>(
+	client: Client<Registry>,
+	store: Store<InternalRivetKitStore<Registry, Actors>>,
+	key: string,
+) {
+	// Save actor to map
+	store.setState((prev) => ({
+		...prev,
+		actors: {
+			...prev.actors,
+			[key]: {
+				...prev.actors[key],
+				connStatus: ActorConnStatus.Connecting,
+				error: null,
+			},
+		},
+	}));
+
+	const actor = store.state.actors[key];
+	try {
+		const handle = client.getOrCreate(
+			actor.opts.name as string,
+			actor.opts.key,
+			{
+				params: actor.opts.params,
+				createInRegion: actor.opts.createInRegion,
+				createWithInput: actor.opts.createWithInput,
+			},
+		);
+
+		const connection = handle.connect();
+
+		// Subscribe to connection state changes
+		connection.onStatusChange((status) => {
 			store.setState((prev) => {
-				const actor = prev.actors[key];
-				if (!actor) {
-					throw new Error(`Actor with key "${key}" does not exist.`);
-				}
-
-				let newState: RivetKitStore["actors"][string];
-
-				if (typeof updater === "function") {
-					newState = updater(actor);
-				} else {
-					// If updater is a direct value, we assume it replaces the entire actor state
-					newState = updater;
-				}
+				// Only update if this is still the active connection
+				if (prev.actors[key]?.connection !== connection) return prev;
 				return {
 					...prev,
 					actors: {
 						...prev.actors,
-						[key]: newState,
+						[key]: {
+							...prev.actors[key],
+							connStatus: status,
+							// Only clear error when successfully connected
+							...(status === ActorConnStatus.Connected
+								? { error: null }
+								: {}),
+						},
 					},
 				};
 			});
-		}
-
-		const mount = () => {
-			const unsubscribeDerived = derived.mount();
-			const unsubscribeEffect = effect.mount();
-
-			return () => {
-				unsubscribeDerived();
-				unsubscribeEffect();
-			};
-		};
-
-		cache.set(key, {
-			state: derived,
-			key,
-			mount,
-			setState,
-			create,
 		});
 
-		return {
-			mount,
-			setState,
-			state: derived as ActorsStateDerived<Registry, ActorName>,
-			create,
-			key,
-		};
-	}
+		// onError is followed by onClose which will set connStatus to Disconnected
+		connection.onError((error) => {
+			store.setState((prev) => {
+				// Only update if this is still the active connection
+				if (prev.actors[key]?.connection !== connection) return prev;
+				return {
+					...prev,
+					actors: {
+						...prev.actors,
+						[key]: {
+							...prev.actors[key],
+							error,
+						},
+					},
+				};
+			});
+		});
 
-	return {
-		getOrCreateActor,
-		store,
-	};
+		store.setState((prev) => ({
+			...prev,
+			actors: {
+				...prev.actors,
+				[key]: {
+					...prev.actors[key],
+					handle: handle as ActorHandle<Actors[ActorName]>,
+					connection: connection as ActorConn<Actors[ActorName]>,
+				},
+			},
+		}));
+	} catch (error) {
+		console.error("Failed to create actor connection", error);
+		store.setState((prev) => ({
+			...prev,
+			actors: {
+				...prev.actors,
+				[key]: {
+					...prev.actors[key],
+					// Use Disconnected so Effect won't auto-retry
+					// User must re-enable or take action to retry
+					connStatus: ActorConnStatus.Disconnected,
+					error: error as Error,
+				},
+			},
+		}));
+	}
 }
 
 function defaultHashFunction({ name, key, params }: AnyActorOptions) {
