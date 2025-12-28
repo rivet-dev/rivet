@@ -58,8 +58,8 @@ const actor = useActor({
 
 Actor object with the following properties:
 - `connection`: The actor connection for calling actions, or `null` if not connected
-- `isConnected`: Boolean indicating if the actor is connected
-- `state`: Current actor state (if available)
+- `connStatus`: The connection status (`"idle"`, `"connecting"`, `"connected"`, or `"disconnected"`)
+- `error`: Error object if the connection failed, or `null`
 - `useEvent(eventName, handler)`: Method to subscribe to actor events
 
 ### `actor.useEvent(eventName, handler)`
@@ -140,8 +140,8 @@ function ConditionalActor() {
       <button onClick={() => setEnabled(!enabled)}>
         {enabled ? "Disconnect" : "Connect"}
       </button>
-      {enabled && counter.isConnected && (
-        <p>Count: {counter.state?.count}</p>
+      {counter.connStatus === "connected" && (
+        <p>Connected!</p>
       )}
     </div>
   );

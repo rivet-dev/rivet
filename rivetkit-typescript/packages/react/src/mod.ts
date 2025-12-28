@@ -13,7 +13,7 @@ import {
 } from "rivetkit/client";
 
 export { ActorConnDisposed, createClient } from "rivetkit/client";
-export { ActorConnStatus } from "@rivetkit/framework-base";
+export type { ActorConnStatus } from "@rivetkit/framework-base";
 
 export function createRivetKit<Registry extends AnyActorRegistry>(
 	clientInput: Parameters<typeof createClient>[0],

@@ -3,7 +3,7 @@ import equal from "fast-deep-equal";
 import type { AnyActorDefinition, Registry } from "rivetkit";
 import {
 	type ActorConn,
-	ActorConnStatus,
+	type ActorConnStatus,
 	type ActorHandle,
 	type Client,
 	type ExtractActorsFromRegistry,
@@ -11,7 +11,7 @@ import {
 
 export type AnyActorRegistry = Registry<any>;
 
-export { ActorConnStatus };
+export type { ActorConnStatus };
 
 interface ActorStateReference<AD extends AnyActorDefinition> {
 	/**
@@ -125,6 +125,8 @@ export type ActorsStateDerived<
 		connection: ActorConn<
 			ExtractActorsFromRegistry<Registry>[WorkerName]
 		> | null;
+		/** @deprecated Use `connStatus === "connected"` instead */
+		isConnected: boolean;
 	}
 >;
 
@@ -134,15 +136,21 @@ export interface CreateRivetKitOptions<Registry extends AnyActorRegistry> {
 	hashFunction?: (opts: ActorOptions<Registry, any>) => string;
 }
 
+type ComputedActorState<
+	Registry extends AnyActorRegistry,
+	Actors extends ExtractActorsFromRegistry<Registry>,
+> = InternalRivetKitStore<Registry, Actors>["actors"][string] & {
+	/** @deprecated Use `connStatus === "connected"` instead */
+	isConnected: boolean;
+};
+
 type ActorCache<
 	Registry extends AnyActorRegistry,
 	Actors extends ExtractActorsFromRegistry<Registry>,
 > = Map<
 	string,
 	{
-		state: Derived<
-			InternalRivetKitStore<Registry, Actors>["actors"][string]
-		>;
+		state: Derived<ComputedActorState<Registry, Actors>>;
 		key: string;
 		mount: () => () => void;
 		create: () => void;
@@ -222,7 +230,7 @@ function getOrCreateActor<
 				...prev.actors,
 				[key]: {
 					hash: key,
-					connStatus: ActorConnStatus.Idle,
+					connStatus: "idle",
 					connection: null,
 					handle: null,
 					error: null,
@@ -247,7 +255,12 @@ function getOrCreateActor<
 
 	const derived = new Derived({
 		fn: ({ currDepVals: [store] }) => {
-			return store.actors[key];
+			const actor = store.actors[key];
+			return {
+				...actor,
+				/** @deprecated Use `connStatus === "connected"` instead */
+				isConnected: actor.connStatus === "connected",
+			};
 		},
 		deps: [store],
 	});
@@ -272,7 +285,7 @@ function getOrCreateActor<
 				updateActor(store, key, {
 					connection: null,
 					handle: null,
-					connStatus: ActorConnStatus.Idle,
+					connStatus: "idle",
 				});
 				return;
 			}
@@ -280,7 +293,7 @@ function getOrCreateActor<
 			// Reconnect when re-enabled after being disabled
 			// Defer to avoid "Cannot update a component while rendering" React error
 			if (
-				actor.connStatus === ActorConnStatus.Idle &&
+				actor.connStatus === "idle" &&
 				actor.opts.enabled
 			) {
 				queueMicrotask(() => {
@@ -288,7 +301,7 @@ function getOrCreateActor<
 					const currentActor = store.state.actors[key];
 					if (
 						currentActor &&
-						currentActor.connStatus === ActorConnStatus.Idle &&
+						currentActor.connStatus === "idle" &&
 						currentActor.opts.enabled
 					) {
 						create<Registry, Actors, ActorName>(client, store, key);
@@ -331,7 +344,7 @@ function getOrCreateActor<
 			if (
 				actor &&
 				actor.opts.enabled &&
-				actor.connStatus === ActorConnStatus.Idle
+				actor.connStatus === "idle"
 			) {
 				create<Registry, Actors, ActorName>(client, store, key);
 			}
@@ -406,7 +419,7 @@ function create<
 
 	// Save actor to map
 	updateActor(store, key, {
-		connStatus: ActorConnStatus.Connecting,
+		connStatus: "connecting",
 		error: null,
 	});
 
@@ -444,7 +457,7 @@ function create<
 							...prev.actors[key],
 							connStatus: status,
 							// Only clear error when successfully connected
-							...(status === ActorConnStatus.Connected
+							...(status === "connected"
 								? { error: null }
 								: {}),
 						},
@@ -475,7 +488,7 @@ function create<
 		// Use Disconnected so Effect won't auto-retry
 		// User must re-enable or take action to retry
 		updateActor(store, key, {
-			connStatus: ActorConnStatus.Disconnected,
+			connStatus: "disconnected",
 			error: error as Error,
 		});
 	}
