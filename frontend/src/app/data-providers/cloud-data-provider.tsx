@@ -16,6 +16,7 @@ import {
 	createNamespaceContext as createEngineNamespaceContext,
 	type Namespace,
 } from "./engine-data-provider";
+import { no404Retry } from "./utilities";
 
 function createClient({ clerk }: { clerk: Clerk }) {
 	return new RivetClient({
@@ -156,6 +157,7 @@ export const createOrganizationContext = ({
 				return data.project;
 			},
 			enabled: !!opts.project,
+			...no404Retry(),
 		});
 
 	const namespaceQueryOptions = (opts: {
@@ -176,6 +178,7 @@ export const createOrganizationContext = ({
 				);
 				return data.namespace;
 			},
+			...no404Retry(),
 		});
 	};
 
