@@ -18,6 +18,7 @@ import {
 	Frame,
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
+import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
 import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
@@ -140,9 +141,7 @@ function FormStepper({
 
 const useVercelTemplateLink = () => {
 	const dataProvider = useEngineCompatDataProvider();
-	const { data: token } = useQuery(
-		dataProvider.engineAdminTokenQueryOptions(),
-	);
+	const token = usePublishableToken();
 	const endpoint = useSelectedDatacenter();
 
 	return useMemo(() => {
