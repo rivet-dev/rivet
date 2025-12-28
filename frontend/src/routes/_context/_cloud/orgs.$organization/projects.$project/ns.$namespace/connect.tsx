@@ -14,6 +14,7 @@ import {
 } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
+	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import {
@@ -27,6 +28,10 @@ import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
 	Button,
 	DocsSheet,
 	DropdownMenu,
@@ -36,9 +41,11 @@ import {
 	H1,
 	H2,
 	H3,
+	Ping,
 	Skeleton,
+	WithTooltip,
 } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { useEndpoint, usePublishableToken } from "@/queries/accessors";
 
 export const Route = createFileRoute(
@@ -317,7 +324,7 @@ export function RouteComponent() {
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg overflow-auto @container">
 			<div className=" ">
 				<div className="mb-4 pt-2 max-w-5xl mx-auto">
-					<div className="flex justify-between items-center px-10 py-4 ">
+					<div className="flex justify-between items-center px-6 py-4 ">
 						<H1>Overview</H1>
 						<HelpDropdown>
 							<Button
@@ -328,7 +335,7 @@ export function RouteComponent() {
 							</Button>
 						</HelpDropdown>
 					</div>
-					<p className="max-w-5xl mb-6 px-10 text-muted-foreground">
+					<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
 						Connect your RivetKit application to Rivet Cloud. Use
 						your cloud of choice to run Rivet Actors.
 					</p>
@@ -340,6 +347,7 @@ export function RouteComponent() {
 					<ConnectYourFrontend />
 					<Providers />
 					<Runners />
+					<DatacentersStatus />
 				</div>
 			</div>
 		</div>
@@ -578,5 +586,62 @@ function OneClickDeployRailwayButton() {
 				Railway
 			</RouterLink>
 		</Button>
+	);
+}
+
+function DatacentersStatus() {
+	const dataProvider = useEngineCompatDataProvider();
+
+	usePrefetchInfiniteQuery({
+		...dataProvider.regionsQueryOptions(),
+		maxPages: Infinity,
+	});
+
+	const { data } = useInfiniteQuery(dataProvider.regionsQueryOptions());
+
+	return (
+		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 @6xl:px-0">
+			<Accordion type="single" collapsible>
+				<AccordionItem value="advanced">
+					<AccordionTrigger className="text-muted-foreground hover:text-foreground">
+						Advanced
+					</AccordionTrigger>
+					<AccordionContent className="@6xl:border @6xl:rounded-lg bg-muted/10 p-4">
+						<WithTooltip
+							trigger={
+								<p className="inline-block">
+									{data?.length} datacenters are currently
+									active and available.
+								</p>
+							}
+							content={
+								<div className="max-w-sm">
+									<ul className="list-outside list-disc">
+										{data?.map((region) => (
+											<li
+												key={region.id}
+												className="flex items-center"
+											>
+												<div className="inline-flex gap-2 items-center h-full">
+													<ActorRegion
+														showLabel
+														regionId={region.id}
+													/>{" "}
+													({region.name})
+													<Ping
+														variant="success"
+														className="relative left-0 right-0 top-0"
+													/>
+												</div>
+											</li>
+										))}
+									</ul>
+								</div>
+							}
+						/>
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
+		</div>
 	);
 }
