@@ -15,11 +15,9 @@ import {
 import {
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
-	useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
 	createFileRoute,
-	Link,
 	notFound,
 	Link as RouterLink,
 	useParams,
@@ -36,18 +34,13 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-	getConfig,
 	H1,
 	H2,
 	H3,
 	Skeleton,
 } from "@/components";
-import {
-	useCloudNamespaceDataProvider,
-	useEngineCompatDataProvider,
-	useEngineNamespaceDataProvider,
-} from "@/components/actors";
-import { cloudEnv } from "@/lib/env";
+import { useEngineCompatDataProvider } from "@/components/actors";
+import { useEndpoint, usePublishableToken } from "@/queries/accessors";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
@@ -415,40 +408,6 @@ function Runners() {
 		</div>
 	);
 }
-
-function usePublishableToken() {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-			return useSuspenseQuery(
-				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
-			).data;
-		})
-		.with("engine", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-			return useSuspenseQuery(
-				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
-			).data;
-		})
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
-}
-
-const useEndpoint = () => {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			return cloudEnv().VITE_APP_API_URL;
-		})
-		.with("engine", () => {
-			return getConfig().apiUrl;
-		})
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
-};
 
 function ConnectYourFrontend() {
 	const token = usePublishableToken();

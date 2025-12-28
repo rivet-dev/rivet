@@ -21,8 +21,8 @@ import {
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
+import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
-import { usePublishableToken } from "../env-variables";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
 const { stepper } = ConnectVercelForm;
