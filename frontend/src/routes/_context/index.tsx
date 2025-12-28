@@ -29,7 +29,10 @@ export const Route = createFileRoute("/_context/")({
 
 					const firstNamespace = result.pages[0]?.namespaces[0];
 					if (!firstNamespace) {
-						return;
+						throw redirect({
+							to: "/ns/$namespace",
+							params: { namespace: "default" },
+						});
 					}
 					throw redirect({
 						to: "/ns/$namespace",
