@@ -1,7 +1,4 @@
-import {
-	useInfiniteQuery,
-	useSuspenseInfiniteQuery,
-} from "@tanstack/react-query";
+import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
@@ -22,7 +19,6 @@ import { CrashPolicySelect } from "../crash-policy-select";
 import { useEngineCompatDataProvider } from "../data-provider";
 import { CrashPolicy as CrashPolicyEnum } from "../queries";
 import { RegionSelect } from "../region-select";
-import { ConnectedRunnerSelect } from "../runner-select";
 
 const jsonValid = z.custom<string>(
 	(value) => {
@@ -274,8 +270,9 @@ export const PrefillDatacenter = () => {
 		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
 		select: (data) => {
 			return Object.keys(
-				Object.values(data.pages[0].runnerConfigs)[0].datacenters,
-			)[0];
+				Object.values(data.pages[0].runnerConfigs || {})?.[0]
+					?.datacenters || {},
+			)?.[0];
 		},
 	});
 
