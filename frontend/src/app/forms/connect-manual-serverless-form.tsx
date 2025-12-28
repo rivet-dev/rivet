@@ -499,7 +499,10 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 								correct.
 							</p>
 							{isRivetHealthCheckFailureResponse(error) ? (
-								<HealthCheckFailure error={error} />
+								<HealthCheckFailure
+									error={error}
+									provider={provider}
+								/>
 							) : null}
 							<p>
 								Endpoint{" "}
@@ -538,8 +541,10 @@ function isRivetHealthCheckFailureResponse(
 
 function HealthCheckFailure({
 	error,
+	provider,
 }: {
 	error: Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
+	provider: string;
 }) {
 	if (!("error" in error)) {
 		return null;
@@ -549,6 +554,35 @@ function HealthCheckFailure({
 	}
 
 	return match(error.error)
+		.with(
+			{
+				nonSuccessStatus: P.when((status) => status.statusCode === 401),
+			},
+			(e) => {
+				return (
+					<div className="space-y-1">
+						<p>
+							Health check failed with status{" "}
+							{e.nonSuccessStatus.statusCode}
+						</p>
+						{provider.toLowerCase() === "vercel" ? (
+							<p>
+								Use your Vercel domain (for example,
+								https://my-app.vercel.app) instead of a
+								deployment URL, because Rivet cannot access
+								deployment URLs.
+							</p>
+						) : (
+							<p>
+								Please ensure your endpoint is correct and that
+								any required authentication headers are
+								included.
+							</p>
+						)}
+					</div>
+				);
+			},
+		)
 		.with({ nonSuccessStatus: P.any }, (e) => {
 			return (
 				<p>
