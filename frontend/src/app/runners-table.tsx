@@ -175,6 +175,25 @@ function CreateTs({ createTs }: { createTs: number }) {
 }
 
 function RunnerStatusBadge(runner: Rivet.Runner) {
+	// check if the last ping ts was higher than 15 seconds ago
+	const now = Date.now();
+	if (now - runner.lastPingTs > 15000) {
+		return (
+			<WithTooltip
+				content={`Last ping ${formatDistance(runner.lastPingTs, now, {
+					addSuffix: true,
+				})}`}
+				trigger={
+					<div className="text-center relative size-8">
+						<Icon
+							icon={faSignalAlt}
+							className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+						/>
+					</div>
+				}
+			/>
+		);
+	}
 	if (runner.lastRtt <= 50) {
 		return (
 			<WithTooltip
