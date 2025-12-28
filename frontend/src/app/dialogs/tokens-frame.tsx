@@ -80,7 +80,7 @@ function SecretToken() {
 	const endpoint = match(__APP_TYPE__)
 		.with("cloud", () => {
 			const region = regions.find((r) => r.id === selectedDatacenter);
-			return region?.endpoint || cloudEnv().VITE_APP_API_URL;
+			return region?.url || cloudEnv().VITE_APP_API_URL;
 		})
 		.with("engine", () => getConfig().apiUrl)
 		.otherwise(() => {

@@ -42,6 +42,7 @@ import {
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { RegionSelect } from "@/components/actors/region-select";
 import { cloudEnv } from "@/lib/env";
+import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 
 export const Route = createFileRoute(
@@ -81,9 +82,7 @@ function RouteComponent() {
 
 function PublishableToken() {
 	const dataProvider = useEngineCompatDataProvider();
-	const { data: token, isLoading } = useQuery(
-		dataProvider.publishableTokenQueryOptions(),
-	);
+	const token = usePublishableToken();
 
 	const namespace = dataProvider.engineNamespace;
 
@@ -104,18 +103,15 @@ function PublishableToken() {
 				used either on your frontend or backend.
 			</p>
 			<div className="space-y-8">
-				{isLoading ? (
-					<Skeleton className="w-full h-10" />
-				) : (
-					<DiscreteInput value={token || ""} show />
-				)}
-				{token && (
+				<DiscreteInput value={token || ""} show />
+
+				{token ? (
 					<PublishableTokenCodeGroup
 						token={token}
 						endpoint={endpoint}
 						namespace={namespace}
 					/>
-				)}
+				) : null}
 			</div>
 		</div>
 	);
@@ -133,6 +129,8 @@ function SecretToken() {
 		string | undefined
 	>(undefined);
 
+	console.log(regions, selectedDatacenter);
+
 	// Set default datacenter when regions are loaded
 	useEffect(() => {
 		if (regions.length > 0 && !selectedDatacenter) {
@@ -145,7 +143,7 @@ function SecretToken() {
 	const endpoint = match(__APP_TYPE__)
 		.with("cloud", () => {
 			const region = regions.find((r) => r.id === selectedDatacenter);
-			return region?.endpoint || cloudEnv().VITE_APP_API_URL;
+			return region?.url || cloudEnv().VITE_APP_API_URL;
 		})
 		.with("engine", () => getConfig().apiUrl)
 		.otherwise(() => {
