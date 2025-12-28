@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
+import { SidebarToggle } from "@/app/sidebar-toggle";
 import { useDialog } from "@/app/use-dialog";
 import {
 	Badge,
@@ -25,6 +26,7 @@ import {
 	CodeFrame,
 	CodeGroup,
 	CodePreview,
+	cn,
 	DiscreteInput,
 	DocsSheet,
 	getConfig,
@@ -41,6 +43,7 @@ import {
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { RegionSelect } from "@/components/actors/region-select";
+import { useRootLayout } from "@/components/actors/root-layout-context";
 import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
@@ -52,10 +55,18 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
+	const { isSidebarCollapsed } = useRootLayout();
+
 	return (
-		<div className="bg-card h-full border my-2 mr-2 rounded-lg overflow-auto @container">
+		<div
+			className={cn(
+				" h-full overflow-auto @container",
+				!isSidebarCollapsed && "bg-card border my-2 mr-2 rounded-lg",
+			)}
+		>
 			<div className="max-w-5xl mx-auto">
 				<div className="mt-2 flex justify-between items-center px-10 py-4">
+					<SidebarToggle className="absolute left-4" />
 					<H1>Tokens</H1>
 					<HelpDropdown>
 						<Button
