@@ -89,6 +89,7 @@ function FormStepper({
 			{...stepper}
 			showAllSteps
 			initialStep="deploy"
+			mode="all"
 			content={{
 				"initial-info": () => <StepInitialInfo />,
 				deploy: () => <StepDeploy />,
