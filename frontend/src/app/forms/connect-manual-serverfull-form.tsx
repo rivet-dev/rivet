@@ -65,15 +65,27 @@ export const ConnectionCheck = function ConnectionCheck({
 		maxPages: Infinity,
 	});
 
+	const { data: runnerConfigs } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		refetchInterval: 1000,
+		maxPages: Infinity,
+	});
+
 	const { watch } = useFormContext();
 
 	const datacenter: string = watch("datacenter");
 	const runnerName: string = watch("runnerName");
 
-	const success = !!queryData?.find(
-		(runner) =>
-			runner.datacenter === datacenter && runner.name === runnerName,
-	);
+	const success =
+		!!queryData?.find(
+			(runner) =>
+				runner.datacenter === datacenter && runner.name === runnerName,
+		) ||
+		!!runnerConfigs?.find(
+			([id, config]) =>
+				Object.keys(config.datacenters || {}).includes(datacenter) &&
+				id === runnerName,
+		);
 
 	const {
 		field: { onChange },
