@@ -1,12 +1,7 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import { Button, CopyButton, DiscreteInput } from "@/components";
-import {
-	useEngineCompatDataProvider,
-	useEngineNamespaceDataProvider,
-} from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { Label } from "@/components/ui/label";
+import { usePublishableToken } from "@/queries/accessors";
 
 export function EnvVariables({
 	prefix,
@@ -145,28 +140,4 @@ function RivetNamespaceEnv({ prefix }: { prefix?: string }) {
 			/>
 		</>
 	);
-}
-
-export function usePublishableToken() {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: guarded by the build flag
-			const routeContext = useRouteContext({
-				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
-				select: (ctx) => ctx.dataProvider,
-			});
-			// biome-ignore lint/correctness/useHookAtTopLevel: guarded by the build flag
-			return useSuspenseQuery(routeContext.publishableTokenQueryOptions())
-				.data;
-		})
-		.with("engine", () => {
-			// biome-ignore lint/correctness/useHookAtTopLevel: guarded by the build flag
-			return useSuspenseQuery(
-				// biome-ignore lint/correctness/useHookAtTopLevel: guarded by the build flag
-				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
-			).data;
-		})
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
 }

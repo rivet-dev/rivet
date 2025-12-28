@@ -328,6 +328,8 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: <explanation>
+				return {} as PaginatedRegionsResponse;
 			},
 			getNextPageParam: () => null,
 			select: (data) => data.pages.flatMap((page) => page.regions),

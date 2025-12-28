@@ -466,7 +466,7 @@ export const createNamespaceContext = ({
 						{ org: parent.organization },
 					);
 					const t = await f;
-					return t.token;
+					return t.token as string;
 				},
 			});
 		},
