@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
 	FormProvider,
 	type UseFormProps,
@@ -8,7 +8,7 @@ import {
 	useForm,
 	useFormContext,
 } from "react-hook-form";
-import type * as z from "zod";
+import * as z from "zod";
 import { Button } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
 import { HelpDropdown } from "../help-dropdown";
@@ -83,9 +83,24 @@ function Content<const Steps extends Step[]>({
 	...formProps
 }: StepperFormProps<Steps>) {
 	const stepper = useStepper({ initialStep });
+
+	const mergedSchema = useMemo(() => {
+		const schemas = stepper.all.map((step) => step.schema);
+		if (schemas.length === 0) return null;
+		return schemas
+			.slice(1)
+			.reduce(
+				(acc, schema) => z.intersection(acc, schema),
+				schemas[0] as z.ZodTypeAny,
+			);
+	}, [stepper.all]);
+
+	const resolverSchema =
+		showAllSteps && mergedSchema ? mergedSchema : stepper.current.schema;
+
 	const form = useForm<z.infer<JoinStepSchemas<Steps>>>({
 		defaultValues,
-		resolver: zodResolver(stepper.current.schema),
+		resolver: zodResolver(resolverSchema),
 		...formProps,
 	});
 
