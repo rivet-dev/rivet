@@ -12,7 +12,7 @@ import {
 	type ExtractActorsFromRegistry,
 } from "rivetkit/client";
 
-export { createClient } from "rivetkit/client";
+export { ActorConnDisposed, createClient } from "rivetkit/client";
 export { ActorConnStatus } from "@rivetkit/framework-base";
 
 export function createRivetKit<Registry extends AnyActorRegistry>(

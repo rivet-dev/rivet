@@ -320,37 +320,36 @@ enc
 		}
 	}
 
-	async #connectWithRetry() {
+	#connectWithRetry() {
 		this.#setConnStatus(ActorConnStatus.Connecting);
 
 		// Attempt to reconnect indefinitely
-		try {
-			await pRetry(this.#connectAndWait.bind(this), {
-				forever: true,
-				minTimeout: 250,
-				maxTimeout: 30_000,
+		// This is intentionally not awaited - connection happens in background
+		pRetry(this.#connectAndWait.bind(this), {
+			forever: true,
+			minTimeout: 250,
+			maxTimeout: 30_000,
 
-				onFailedAttempt: (error) => {
-					logger().warn({
-						msg: "failed to reconnect",
-						attempt: error.attemptNumber,
-						error: stringifyError(error),
-					});
-				},
+			onFailedAttempt: (error) => {
+				logger().warn({
+					msg: "failed to reconnect",
+					attempt: error.attemptNumber,
+					error: stringifyError(error),
+				});
+			},
 
-				// Cancel retry if aborted
-				signal: this.#abortController.signal,
-			});
-		} catch (err) {
+			// Cancel retry if aborted
+			signal: this.#abortController.signal,
+		}).catch((err) => {
 			if ((err as Error).name === "AbortError") {
-				// Ignore abortions
 				logger().info({ msg: "connection retry aborted" });
-				return;
 			} else {
-				// Unknown error
-				throw err;
+				logger().error({
+					msg: "unexpected error in connection retry",
+					error: stringifyError(err),
+				});
 			}
-		}
+		});
 	}
 
 	async #connectAndWait() {
@@ -587,73 +586,54 @@ enc
 
 	/** Called by the onclose event from drivers. */
 	#handleOnClose(event: Event | CloseEvent) {
-		// TODO: Handle queue
-		// TODO: Reconnect with backoff
-
 		// We can't use `event instanceof CloseEvent` because it's not defined in NodeJS
-		//
-		// These properties will be undefined
 		const closeEvent = event as CloseEvent;
 		const wasClean = closeEvent.wasClean;
-
-		// Update connection state (this also notifies handlers)
 		const wasConnected = this.#connStatus === ActorConnStatus.Connected;
-		this.#setConnStatus(ActorConnStatus.Disconnected);
-
-		// Reject open promise
-		if (this.#onOpenPromise) {
-			this.#onOpenPromise.reject(
-				new Error(
-					`websocket closed with code ${closeEvent.code}: ${closeEvent.reason}`,
-				),
-			);
-		}
 
 		logger().info({
 			msg: "socket closed",
 			code: closeEvent.code,
 			reason: closeEvent.reason,
-			wasClean: wasClean,
+			wasClean,
+			disposed: this.#disposed,
 			connId: this.#connId,
-			messageQueueLength: this.#messageQueue.length,
-			actionsInFlight: this.#actionsInFlight.size,
 		});
-
-		// Reject all in-flight actions
-		if (this.#actionsInFlight.size > 0) {
-			logger().debug({
-				msg: "rejecting in-flight actions after disconnect",
-				count: this.#actionsInFlight.size,
-				connId: this.#connId,
-				wasClean,
-			});
-
-			const disconnectError = new Error(
-				`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${closeEvent.reason})`,
-			);
-
-			for (const actionInfo of this.#actionsInFlight.values()) {
-				actionInfo.reject(disconnectError);
-			}
-			this.#actionsInFlight.clear();
-		}
 
 		this.#websocket = undefined;
 
-		// Automatically reconnect if we were connected. Skip if already attempting to connect.
-		if (!this.#disposed && wasConnected) {
-			logger().debug({
-				msg: "triggering reconnect",
-				connId: this.#connId,
-				messageQueueLength: this.#messageQueue.length,
-			});
-			// TODO: Fetch actor to check if it's destroyed
-			// TODO: Add backoff for reconnect
-			// TODO: Add a way of preserving connection ID for connection state
+		if (this.#disposed) {
+			// Use ActorConnDisposed error and prevent unhandled rejection
+			this.#rejectPendingPromises(new errors.ActorConnDisposed(), true);
+		} else {
+			this.#setConnStatus(ActorConnStatus.Disconnected);
+			this.#rejectPendingPromises(
+				new Error(
+					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${closeEvent.reason})`,
+				),
+				false,
+			);
 
-			// Attempt to connect again
-			this.#connectWithRetry();
+			// Automatically reconnect if we were connected
+			if (wasConnected) {
+				logger().debug({ msg: "triggering reconnect", connId: this.#connId });
+				this.#connectWithRetry();
+			}
 		}
+	}
+
+	#rejectPendingPromises(error: Error, suppressUnhandled: boolean) {
+		if (this.#onOpenPromise) {
+			if (suppressUnhandled) {
+				this.#onOpenPromise.promise.catch(() => {});
+			}
+			this.#onOpenPromise.reject(error);
+		}
+
+		for (const actionInfo of this.#actionsInFlight.values()) {
+			actionInfo.reject(error);
+		}
+		this.#actionsInFlight.clear();
 	}
 
 	/** Called by the onerror event from drivers. */
@@ -1113,32 +1093,23 @@ enc
 		// Clear interval so NodeJS process can exit
 		clearInterval(this.#keepNodeAliveInterval);
 
-		// Abort
+		// Abort retry loop
 		this.#abortController.abort();
 
 		// Remove from registry
 		this.#client[ACTOR_CONNS_SYMBOL].delete(this);
 
-		// Disconnect websocket cleanly
+		// Close websocket (#handleOnClose will reject pending promises)
 		if (this.#websocket) {
-			logger().debug("closing ws");
-
 			const ws = this.#websocket;
-			// Check if WebSocket is already closed or closing
-			if (
-				ws.readyState === 2 /* CLOSING */ ||
-				ws.readyState === 3 /* CLOSED */
-			) {
-				logger().debug({ msg: "ws already closed or closing" });
-			} else {
+			if (ws.readyState !== 2 /* CLOSING */ && ws.readyState !== 3 /* CLOSED */) {
 				const { promise, resolve } = promiseWithResolvers();
-				ws.addEventListener("close", () => {
-					logger().debug({ msg: "ws closed" });
-					resolve(undefined);
-				});
-				ws.close(1000, "Normal closure");
+				ws.addEventListener("close", () => resolve(undefined));
+				ws.close(1000, "Disposed");
 				await promise;
 			}
+		} else {
+			this.#rejectPendingPromises(new errors.ActorConnDisposed(), true);
 		}
 		this.#websocket = undefined;
 	}
