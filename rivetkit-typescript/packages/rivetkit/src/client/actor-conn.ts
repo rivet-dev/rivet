@@ -57,17 +57,12 @@ import {
 /**
  * Connection status for an actor connection.
  *
- * - `Idle`: Not connected, no auto-reconnect (initial state, after dispose, or disabled)
- * - `Connecting`: Attempting to establish connection
- * - `Connected`: Connection is active
- * - `Disconnected`: Connection was lost, will auto-reconnect
+ * - `"idle"`: Not connected, no auto-reconnect (initial state, after dispose, or disabled)
+ * - `"connecting"`: Attempting to establish connection
+ * - `"connected"`: Connection is active
+ * - `"disconnected"`: Connection was lost, will auto-reconnect
  */
-export enum ActorConnStatus {
-	Idle = 0,
-	Connecting = 1,
-	Connected = 2,
-	Disconnected = 3,
-}
+export type ActorConnStatus = "idle" | "connecting" | "connected" | "disconnected";
 
 interface ActionInFlight {
 	name: string;
@@ -126,7 +121,7 @@ export class ActorConnRaw {
 	/* Will be aborted on dispose. */
 	#abortController = new AbortController();
 
-	#connStatus: ActorConnStatus = ActorConnStatus.Idle;
+	#connStatus: ActorConnStatus = "idle";
 
 	#actorId?: string;
 	#connId?: string;
@@ -288,7 +283,7 @@ enc
 		}
 
 		// Notify open handlers
-		if (status === ActorConnStatus.Connected) {
+		if (status === "connected") {
 			for (const handler of [...this.#openHandlers]) {
 				try {
 					handler();
@@ -303,9 +298,9 @@ enc
 
 		// Notify close handlers (only if transitioning from Connected to Disconnected or Idle)
 		if (
-			(status === ActorConnStatus.Disconnected ||
-				status === ActorConnStatus.Idle) &&
-			prevStatus === ActorConnStatus.Connected
+			(status === "disconnected" ||
+				status === "idle") &&
+			prevStatus === "connected"
 		) {
 			for (const handler of [...this.#closeHandlers]) {
 				try {
@@ -321,7 +316,7 @@ enc
 	}
 
 	#connectWithRetry() {
-		this.#setConnStatus(ActorConnStatus.Connecting);
+		this.#setConnStatus("connecting");
 
 		// Attempt to reconnect indefinitely
 		// This is intentionally not awaited - connection happens in background
@@ -445,7 +440,7 @@ enc
 		});
 
 		// Update connection state (this also notifies handlers)
-		this.#setConnStatus(ActorConnStatus.Connected);
+		this.#setConnStatus("connected");
 
 		// Resolve open promise
 		if (this.#onOpenPromise) {
@@ -589,7 +584,7 @@ enc
 		// We can't use `event instanceof CloseEvent` because it's not defined in NodeJS
 		const closeEvent = event as CloseEvent;
 		const wasClean = closeEvent.wasClean;
-		const wasConnected = this.#connStatus === ActorConnStatus.Connected;
+		const wasConnected = this.#connStatus === "connected";
 
 		logger().info({
 			msg: "socket closed",
@@ -606,7 +601,7 @@ enc
 			// Use ActorConnDisposed error and prevent unhandled rejection
 			this.#rejectPendingPromises(new errors.ActorConnDisposed(), true);
 		} else {
-			this.#setConnStatus(ActorConnStatus.Disconnected);
+			this.#setConnStatus("disconnected");
 			this.#rejectPendingPromises(
 				new Error(
 					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${closeEvent.reason})`,
@@ -801,7 +796,7 @@ enc
 	 * @returns {boolean} - True if the connection is open, false otherwise.
 	 */
 	get isConnected(): boolean {
-		return this.#connStatus === ActorConnStatus.Connected;
+		return this.#connStatus === "connected";
 	}
 
 	/**
@@ -1088,7 +1083,7 @@ enc
 		logger().debug({ msg: "disposing actor conn" });
 
 		// Set status to Idle (intentionally closed, no auto-reconnect)
-		this.#setConnStatus(ActorConnStatus.Idle);
+		this.#setConnStatus("idle");
 
 		// Clear interval so NodeJS process can exit
 		clearInterval(this.#keepNodeAliveInterval);

@@ -99,7 +99,6 @@ async function serveDeno(
 	const port = runConfig.defaultServerPort;
 
 	// Use Deno.serve
-	// @ts-expect-error - Deno global
 	Deno.serve({ port }, app.fetch);
 	logger().info({ msg: "server listening", port });
 
