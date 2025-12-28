@@ -5,20 +5,29 @@ import { useState } from "react";
 
 export function TalkToAnEngineerForm() {
 	const [isSubmitted, setIsSubmitted] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
+		if (isSubmitting) return;
+
+		setIsSubmitting(true);
+
 		const formData = new FormData(event.currentTarget);
 
 		const data = Object.fromEntries(formData.entries().toArray());
 
 		console.log(data);
 
-		posthog.capture("survey sent", {
-			$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
-			...data,
-		});
-		setIsSubmitted(true);
+		try {
+			posthog.capture("survey sent", {
+				$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
+				...data,
+			});
+			setIsSubmitted(true);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	if (isSubmitted) {
@@ -62,6 +71,7 @@ export function TalkToAnEngineerForm() {
 							name="$survey_response_0417ebe5-969d-41a9-8150-f702c42681ff"
 							type="email"
 							autoComplete="email"
+							required
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
 						/>
 					</div>
@@ -79,6 +89,7 @@ export function TalkToAnEngineerForm() {
 							name="$survey_response_74c3d31a-880f-4e89-8cac-e03ad3422cce"
 							type="text"
 							autoComplete="organization"
+							required
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
 						/>
 					</div>
@@ -95,6 +106,7 @@ export function TalkToAnEngineerForm() {
 							id="role"
 							name="$survey_response_8bbdb054-6679-4d05-9685-f9f50d7b080b"
 							type="text"
+							required
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
 							placeholder="e.g., CTO, Lead Engineer, Software Developer"
 						/>
@@ -112,6 +124,7 @@ export function TalkToAnEngineerForm() {
 							id="current-stack"
 							name="$survey_response_f585f0b9-f680-4b28-87f7-0d8f08fd0b14"
 							rows={3}
+							required
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
 							placeholder="Tell us about your current technology stack and infrastructure"
 						/>
@@ -129,6 +142,7 @@ export function TalkToAnEngineerForm() {
 							id="what-to-talk-about"
 							name="$survey_response_3cdc5e4a-81f2-46e5-976b-15f8c2c8986f"
 							rows={4}
+							required
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
 							placeholder="Describe your technical challenges, questions, or what you'd like to discuss with our engineer"
 						/>
@@ -156,6 +170,7 @@ export function TalkToAnEngineerForm() {
 				<button
 					type="submit"
 					className="w-full inline-flex items-center justify-center px-6 py-3 text-base font-medium rounded-xl transition-all duration-200 active:scale-[0.97] bg-[#FF5C00]/90 hover:bg-[#FF5C00] hover:brightness-110 text-white"
+					disabled={isSubmitting}
 				>
 					Let's talk
 				</button>
