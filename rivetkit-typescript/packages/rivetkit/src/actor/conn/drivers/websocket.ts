@@ -2,6 +2,8 @@ import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
+import type { RunnerConfig } from "@/registry/run-config";
+import * as errors from "@/actor/errors";
 import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
 
@@ -11,6 +13,7 @@ export function createWebSocketDriver(
 	hibernatable: ConnDriver["hibernatable"],
 	encoding: Encoding,
 	closePromise: Promise<void>,
+	runConfig: RunnerConfig,
 ): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
 	loggerWithoutContext().debug({
 		msg: "createWebSocketDriver creating driver",
@@ -56,6 +59,18 @@ export function createWebSocketDriver(
 						(serialized as any).byteLength ||
 						(serialized as any).length,
 				});
+
+				// Check outgoing message size
+				const messageSize =
+					(serialized as any).byteLength || (serialized as any).length;
+				if (messageSize > runConfig.maxOutgoingMessageSize) {
+					actor.rLog.error({
+						msg: "outgoing message exceeds maxOutgoingMessageSize",
+						messageSize,
+						maxOutgoingMessageSize: runConfig.maxOutgoingMessageSize,
+					});
+					throw new errors.OutgoingMessageTooLong();
+				}
 
 				// Convert Uint8Array to ArrayBuffer for proper transmission
 				if (serialized instanceof Uint8Array) {

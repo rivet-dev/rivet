@@ -27,6 +27,12 @@ pub async fn task(
 				if let Some(msg) = res {
 					match msg {
 						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg) => {
+							tracing::trace!(
+								request_id=%protocol::util::id_to_string(&request_id),
+								data_len=ws_msg.data.len(),
+								binary=ws_msg.binary,
+								"forwarding websocket message to client"
+							);
 							let msg = if ws_msg.binary {
 								Message::Binary(ws_msg.data.into())
 							} else {

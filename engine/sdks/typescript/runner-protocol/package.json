@@ -24,7 +24,7 @@
 	},
 	"types": "dist/index.d.ts",
 	"dependencies": {
-		"@bare-ts/lib": "^0.4.0"
+		"@rivetkit/bare-ts": "^0.6.1"
 	},
 	"devDependencies": {
 		"@types/node": "^20.19.13",

@@ -136,5 +136,68 @@ export function runActionFeaturesTests(driverTestConfig: DriverTestConfig) {
 				expect(results).toContain("delayed");
 			});
 		});
+
+		describe("Large Payloads", () => {
+			test("should handle large request within size limit", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const instance = client.largePayloadActor.getOrCreate();
+
+				// Create a large payload that's under the default 64KB limit
+				// Each item is roughly 60 bytes, so 800 items ≈ 48KB
+				const items: string[] = [];
+				for (let i = 0; i < 800; i++) {
+					items.push(`Item ${i} with some additional text to increase size`);
+				}
+
+				const result = await instance.processLargeRequest({ items });
+
+				expect(result.itemCount).toBe(800);
+				expect(result.firstItem).toBe("Item 0 with some additional text to increase size");
+				expect(result.lastItem).toBe("Item 799 with some additional text to increase size");
+			});
+
+			test("should reject request exceeding maxIncomingMessageSize", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const instance = client.largePayloadActor.getOrCreate();
+
+				// Create a payload that exceeds the default 64KB limit
+				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
+				const items: string[] = [];
+				for (let i = 0; i < 1500; i++) {
+					items.push(`Item ${i} with some additional text to increase size`);
+				}
+
+				await expect(
+					instance.processLargeRequest({ items })
+				).rejects.toThrow();
+			});
+
+			test("should handle large response", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const instance = client.largePayloadActor.getOrCreate();
+
+				// Request a large response (800 items ≈ 48KB)
+				const result = await instance.getLargeResponse(800);
+
+				expect(result.items).toHaveLength(800);
+				expect(result.items[0]).toBe("Item 0 with some additional text to increase size");
+				expect(result.items[799]).toBe("Item 799 with some additional text to increase size");
+			});
+
+			test("should reject response exceeding maxOutgoingMessageSize", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const instance = client.largePayloadActor.getOrCreate();
+
+				// Request a response that exceeds the default 64KB limit
+				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
+				await expect(
+					instance.getLargeResponse(1500)
+				).rejects.toThrow();
+			});
+		});
 	});
 }

@@ -95,6 +95,7 @@ export async function routeWebSocket(
 					: undefined,
 				encoding,
 				closePromiseResolvers.promise,
+				runConfig,
 			);
 			handler = handleWebSocketConnect.bind(undefined, setWebSocket);
 			connDriver = driver;
@@ -224,6 +225,10 @@ export async function handleWebSocketConnect(
 					});
 				})
 				.catch((error) => {
+					// Close connection on parse errors (including incoming message too large).
+					// This is fail-fast behavior: we cannot send an error response for a
+					// message we couldn't parse (no actionId), and skipping the message
+					// could cause request/response ordering corruption.
 					const { code } = deconstructError(
 						error,
 						actor.rLog,

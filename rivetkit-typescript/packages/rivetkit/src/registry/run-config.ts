@@ -26,6 +26,9 @@ const RunnerConfigSchemaUnmerged = z
 		maxIncomingMessageSize: z.number().optional().default(65_536),
 
 		/** @experimental */
+		maxOutgoingMessageSize: z.number().optional().default(1_048_576),
+
+		/** @experimental */
 		inspector: InspectorConfigSchema,
 
 		/** @experimental */

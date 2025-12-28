@@ -16,6 +16,7 @@ import {
 	type Conn,
 } from "../conn/mod";
 import type { AnyDatabaseProvider } from "../database";
+import * as errors from "../errors";
 import { CachedSerializer } from "../protocol/serde";
 import type { ActorInstance } from "./mod";
 
@@ -207,6 +208,12 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					connection[CONN_SEND_MESSAGE_SYMBOL](toClientSerializer);
 					sentCount++;
 				} catch (error) {
+					// Propagate message size errors to the call site so developers
+					// can handle them
+					if (error instanceof errors.OutgoingMessageTooLong) {
+						throw error;
+					}
+					// Log other errors (e.g., closed connections) and continue
 					this.#actor.rLog.error({
 						msg: "failed to send event to connection",
 						eventName: name,

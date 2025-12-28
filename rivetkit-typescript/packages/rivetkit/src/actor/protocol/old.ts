@@ -84,7 +84,7 @@ export async function parseMessage(
 	// Validate value length
 	const length = getValueLength(value);
 	if (length > opts.maxIncomingMessageSize) {
-		throw new errors.MessageTooLong();
+		throw new errors.IncomingMessageTooLong();
 	}
 
 	// Convert value
