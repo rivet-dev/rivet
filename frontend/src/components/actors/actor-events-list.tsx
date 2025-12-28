@@ -45,27 +45,30 @@ export function ActorEventsList({
 		);
 	}
 
-	const filteredEvents = data?.events.filter?.((event) => {
-		const constraints = [];
+	const filteredEvents =
+		data?.events?.filter?.((event) => {
+			const constraints = [];
 
-		if ("name" in event) {
-			constraints.push(
-				event.name.toLowerCase().includes(search.toLowerCase()),
-			);
-		}
-		if ("eventName" in event) {
-			constraints.push(
-				event.eventName.toLowerCase().includes(search.toLowerCase()),
-			);
-		}
-		if (filter.length > 0) {
-			const type = event.type.includes("subscribe")
-				? "subscription"
-				: event.type;
-			constraints.push(filter.includes(type));
-		}
-		return constraints.every(Boolean);
-	});
+			if ("name" in event) {
+				constraints.push(
+					event.name.toLowerCase().includes(search.toLowerCase()),
+				);
+			}
+			if ("eventName" in event) {
+				constraints.push(
+					event.eventName
+						.toLowerCase()
+						.includes(search.toLowerCase()),
+				);
+			}
+			if (filter.length > 0) {
+				const type = event.type.includes("subscribe")
+					? "subscription"
+					: event.type;
+				constraints.push(filter.includes(type));
+			}
+			return constraints.every(Boolean);
+		}) ?? [];
 
 	if (filteredEvents?.length === 0) {
 		return <Info>No events found.</Info>;
