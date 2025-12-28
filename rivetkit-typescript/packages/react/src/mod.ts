@@ -13,6 +13,7 @@ import {
 } from "rivetkit/client";
 
 export { createClient } from "rivetkit/client";
+export { ActorConnStatus } from "@rivetkit/framework-base";
 
 export function createRivetKit<Registry extends AnyActorRegistry>(
 	clientInput: Parameters<typeof createClient>[0],
@@ -43,17 +44,8 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 	function useActor<
 		ActorName extends keyof ExtractActorsFromRegistry<Registry>,
 	>(opts: ActorOptions<Registry, ActorName>) {
-		const { mount, setState, state } = getOrCreateActor<ActorName>(opts);
-
-		useEffect(() => {
-			setState((prev) => {
-				prev.opts = {
-					...opts,
-					enabled: opts.enabled ?? true,
-				};
-				return prev;
-			});
-		}, [opts, setState]);
+		// getOrCreateActor syncs opts to store on every call
+		const { mount, state } = getOrCreateActor<ActorName>(opts);
 
 		useEffect(() => {
 			return mount();
