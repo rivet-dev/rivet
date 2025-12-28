@@ -27,12 +27,14 @@ import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
+import { SidebarToggle } from "@/app/sidebar-toggle";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 	Button,
+	cn,
 	DocsSheet,
 	DropdownMenu,
 	DropdownMenuContent,
@@ -46,6 +48,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
+import { useRootLayout } from "@/components/actors/root-layout-context";
 import { useEndpoint, usePublishableToken } from "@/queries/accessors";
 
 export const Route = createFileRoute(
@@ -90,11 +93,20 @@ export function RouteComponent() {
 	const hasRunnerConfigs =
 		runnerConfigsCount !== undefined && runnerConfigsCount > 0;
 
+	const { isSidebarCollapsed } = useRootLayout();
+
 	if (isLoading) {
 		return (
-			<div className="bg-card h-full border my-2 mr-2 rounded-lg overflow-auto">
+			<div
+				className={cn(
+					"h-full overflow-auto",
+					!isSidebarCollapsed &&
+						"border my-2 bg-card rounded-lg mr-2",
+				)}
+			>
 				<div className=" max-w-5xl mx-auto">
 					<div className="mt-2 flex justify-between items-center px-6 py-4 ">
+						<SidebarToggle className="absolute left-4" />
 						<H1>Overview</H1>
 						<HelpDropdown>
 							<Button
@@ -321,10 +333,16 @@ export function RouteComponent() {
 	}
 
 	return (
-		<div className="bg-card h-full border my-2 mr-2 rounded-lg overflow-auto @container">
+		<div
+			className={cn(
+				" h-full overflow-auto @container transition-colors",
+				!isSidebarCollapsed && "border my-2 bg-card rounded-lg mr-2",
+			)}
+		>
 			<div className=" ">
 				<div className="mb-4 pt-2 max-w-5xl mx-auto">
 					<div className="flex justify-between items-center px-6 py-4 ">
+						<SidebarToggle className="absolute left-4" />
 						<H1>Overview</H1>
 						<HelpDropdown>
 							<Button
