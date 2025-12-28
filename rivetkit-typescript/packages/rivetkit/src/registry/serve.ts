@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
+import { detectRuntime, stringifyError } from "../utils";
 import { logger } from "./log";
 import type { RunnerConfig } from "./run-config";
-import { detectRuntime, stringifyError } from "../utils";
 
 export async function crossPlatformServe(
 	runConfig: RunnerConfig,
@@ -99,7 +99,7 @@ async function serveDeno(
 	const port = runConfig.defaultServerPort;
 
 	// Use Deno.serve
-	// @ts-ignore - Deno global
+	// @ts-expect-error - Deno global
 	Deno.serve({ port }, app.fetch);
 	logger().info({ msg: "server listening", port });
 
@@ -132,7 +132,7 @@ async function serveBun(
 	const port = runConfig.defaultServerPort;
 
 	// Use Bun.serve
-	// @ts-ignore - Bun global
+	// @ts-expect-error - Bun global
 	Bun.serve({
 		fetch: app.fetch,
 		port,

@@ -429,7 +429,15 @@ enc
 
 	/** Called by the onopen event from drivers. */
 	#handleOnOpen() {
-		invariant(!this.#disposed, "handleOnOpen called after dispose");
+		// Connection was disposed before Init message arrived - close the websocket to avoid leak
+		if (this.#disposed) {
+			logger().debug({ msg: "handleOnOpen called after dispose, closing websocket" });
+			if (this.#websocket) {
+				this.#websocket.close(1000, "Disposed");
+				this.#websocket = undefined;
+			}
+			return;
+		}
 
 		logger().debug({
 			msg: "socket open",

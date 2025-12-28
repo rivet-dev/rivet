@@ -1,452 +1,505 @@
 {
-	"asyncapi": "3.0.0",
-	"info": {
-		"title": "RivetKit WebSocket Protocol",
-		"version": "2.0.28",
-		"description": "WebSocket protocol for bidirectional communication between RivetKit clients and actors"
-	},
-	"channels": {
-		"/gateway/{actorId}/connect": {
-			"address": "/gateway/{actorId}/connect",
-			"parameters": {
-				"actorId": {
-					"description": "The unique identifier for the actor instance"
-				}
-			},
-			"messages": {
-				"toClient": {
-					"$ref": "#/components/messages/ToClient"
-				},
-				"toServer": {
-					"$ref": "#/components/messages/ToServer"
-				}
-			}
-		}
-	},
-	"operations": {
-		"sendToClient": {
-			"action": "send",
-			"channel": {
-				"$ref": "#/channels/~1gateway~1{actorId}~1connect"
-			},
-			"messages": [
-				{
-					"$ref": "#/channels/~1gateway~1{actorId}~1connect/messages/toClient"
-				}
-			],
-			"summary": "Send messages from server to client",
-			"description": "Messages sent from the RivetKit actor to connected clients"
-		},
-		"receiveFromClient": {
-			"action": "receive",
-			"channel": {
-				"$ref": "#/channels/~1gateway~1{actorId}~1connect"
-			},
-			"messages": [
-				{
-					"$ref": "#/channels/~1gateway~1{actorId}~1connect/messages/toServer"
-				}
-			],
-			"summary": "Receive messages from client",
-			"description": "Messages received by the RivetKit actor from connected clients"
-		}
-	},
-	"components": {
-		"messages": {
-			"ToClient": {
-				"name": "ToClient",
-				"title": "Message To Client",
-				"summary": "A message sent from the server to the client",
-				"contentType": "application/json",
-				"payload": {
-					"type": "object",
-					"properties": {
-						"body": {
-							"oneOf": [
-								{
-									"type": "object",
-									"properties": {
-										"tag": {
-											"type": "string",
-											"const": "Init"
-										},
-										"val": {
-											"type": "object",
-											"properties": {
-												"actorId": {
-													"type": "string"
-												},
-												"connectionId": {
-													"type": "string"
-												}
-											},
-											"required": [
-												"actorId",
-												"connectionId"
-											],
-											"additionalProperties": false
-										}
-									},
-									"required": ["tag", "val"],
-									"additionalProperties": false
-								},
-								{
-									"type": "object",
-									"properties": {
-										"tag": {
-											"type": "string",
-											"const": "Error"
-										},
-										"val": {
-											"type": "object",
-											"properties": {
-												"group": {
-													"type": "string"
-												},
-												"code": {
-													"type": "string"
-												},
-												"message": {
-													"type": "string"
-												},
-												"metadata": {},
-												"actionId": {
-													"anyOf": [
-														{
-															"type": "integer",
-															"format": "int64"
-														},
-														{
-															"type": "null"
-														}
-													]
-												}
-											},
-											"required": [
-												"group",
-												"code",
-												"message",
-												"actionId"
-											],
-											"additionalProperties": false
-										}
-									},
-									"required": ["tag", "val"],
-									"additionalProperties": false
-								},
-								{
-									"type": "object",
-									"properties": {
-										"tag": {
-											"type": "string",
-											"const": "ActionResponse"
-										},
-										"val": {
-											"type": "object",
-											"properties": {
-												"id": {
-													"type": "integer",
-													"format": "int64"
-												},
-												"output": {}
-											},
-											"required": ["id", "output"],
-											"additionalProperties": false
-										}
-									},
-									"required": ["tag", "val"],
-									"additionalProperties": false
-								},
-								{
-									"type": "object",
-									"properties": {
-										"tag": {
-											"type": "string",
-											"const": "Event"
-										},
-										"val": {
-											"type": "object",
-											"properties": {
-												"name": {
-													"type": "string"
-												},
-												"args": {}
-											},
-											"required": ["name", "args"],
-											"additionalProperties": false
-										}
-									},
-									"required": ["tag", "val"],
-									"additionalProperties": false
-								}
-							]
-						}
-					},
-					"required": ["body"],
-					"additionalProperties": false
-				},
-				"examples": [
-					{
-						"name": "Init message",
-						"summary": "Initial connection message",
-						"payload": {
-							"body": {
-								"tag": "Init",
-								"val": {
-									"actorId": "actor_123",
-									"connectionId": "conn_456"
-								}
-							}
-						}
-					},
-					{
-						"name": "Error message",
-						"summary": "Error response",
-						"payload": {
-							"body": {
-								"tag": "Error",
-								"val": {
-									"group": "auth",
-									"code": "unauthorized",
-									"message": "Authentication failed",
-									"actionId": null
-								}
-							}
-						}
-					},
-					{
-						"name": "Action response",
-						"summary": "Response to an action request",
-						"payload": {
-							"body": {
-								"tag": "ActionResponse",
-								"val": {
-									"id": "123",
-									"output": {
-										"result": "success"
-									}
-								}
-							}
-						}
-					},
-					{
-						"name": "Event",
-						"summary": "Event broadcast to subscribed clients",
-						"payload": {
-							"body": {
-								"tag": "Event",
-								"val": {
-									"name": "stateChanged",
-									"args": {
-										"newState": "active"
-									}
-								}
-							}
-						}
-					}
-				]
-			},
-			"ToServer": {
-				"name": "ToServer",
-				"title": "Message To Server",
-				"summary": "A message sent from the client to the server",
-				"contentType": "application/json",
-				"payload": {
-					"type": "object",
-					"properties": {
-						"body": {
-							"oneOf": [
-								{
-									"type": "object",
-									"properties": {
-										"tag": {
-											"type": "string",
-											"const": "ActionRequest"
-										},
-										"val": {
-											"type": "object",
-											"properties": {
-												"id": {
-													"type": "integer",
-													"format": "int64"
-												},
-												"name": {
-													"type": "string"
-												},
-												"args": {}
-											},
-											"required": ["id", "name", "args"],
-											"additionalProperties": false
-										}
-									},
-									"required": ["tag", "val"],
-									"additionalProperties": false
-								},
-								{
-									"type": "object",
-									"properties": {
-										"tag": {
-											"type": "string",
-											"const": "SubscriptionRequest"
-										},
-										"val": {
-											"type": "object",
-											"properties": {
-												"eventName": {
-													"type": "string"
-												},
-												"subscribe": {
-													"type": "boolean"
-												}
-											},
-											"required": [
-												"eventName",
-												"subscribe"
-											],
-											"additionalProperties": false
-										}
-									},
-									"required": ["tag", "val"],
-									"additionalProperties": false
-								}
-							]
-						}
-					},
-					"required": ["body"],
-					"additionalProperties": false
-				},
-				"examples": [
-					{
-						"name": "Action request",
-						"summary": "Request to execute an action",
-						"payload": {
-							"body": {
-								"tag": "ActionRequest",
-								"val": {
-									"id": "123",
-									"name": "updateState",
-									"args": {
-										"key": "value"
-									}
-								}
-							}
-						}
-					},
-					{
-						"name": "Subscription request",
-						"summary": "Request to subscribe/unsubscribe from an event",
-						"payload": {
-							"body": {
-								"tag": "SubscriptionRequest",
-								"val": {
-									"eventName": "stateChanged",
-									"subscribe": true
-								}
-							}
-						}
-					}
-				]
-			}
-		},
-		"schemas": {
-			"Init": {
-				"type": "object",
-				"properties": {
-					"actorId": {
-						"type": "string"
-					},
-					"connectionId": {
-						"type": "string"
-					}
-				},
-				"required": ["actorId", "connectionId"],
-				"additionalProperties": false,
-				"description": "Initial connection message sent from server to client"
-			},
-			"Error": {
-				"type": "object",
-				"properties": {
-					"group": {
-						"type": "string"
-					},
-					"code": {
-						"type": "string"
-					},
-					"message": {
-						"type": "string"
-					},
-					"metadata": {},
-					"actionId": {
-						"anyOf": [
-							{
-								"type": "integer",
-								"format": "int64"
-							},
-							{
-								"type": "null"
-							}
-						]
-					}
-				},
-				"required": ["group", "code", "message", "actionId"],
-				"additionalProperties": false,
-				"description": "Error message sent from server to client"
-			},
-			"ActionResponse": {
-				"type": "object",
-				"properties": {
-					"id": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"output": {}
-				},
-				"required": ["id", "output"],
-				"additionalProperties": false,
-				"description": "Response to an action request"
-			},
-			"Event": {
-				"type": "object",
-				"properties": {
-					"name": {
-						"type": "string"
-					},
-					"args": {}
-				},
-				"required": ["name", "args"],
-				"additionalProperties": false,
-				"description": "Event broadcast to subscribed clients"
-			},
-			"ActionRequest": {
-				"type": "object",
-				"properties": {
-					"id": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"name": {
-						"type": "string"
-					},
-					"args": {}
-				},
-				"required": ["id", "name", "args"],
-				"additionalProperties": false,
-				"description": "Request to execute an action on the actor"
-			},
-			"SubscriptionRequest": {
-				"type": "object",
-				"properties": {
-					"eventName": {
-						"type": "string"
-					},
-					"subscribe": {
-						"type": "boolean"
-					}
-				},
-				"required": ["eventName", "subscribe"],
-				"additionalProperties": false,
-				"description": "Request to subscribe or unsubscribe from an event"
-			}
-		}
-	}
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "RivetKit WebSocket Protocol",
+    "version": "2.0.30",
+    "description": "WebSocket protocol for bidirectional communication between RivetKit clients and actors"
+  },
+  "channels": {
+    "/gateway/{actorId}/connect": {
+      "address": "/gateway/{actorId}/connect",
+      "parameters": {
+        "actorId": {
+          "description": "The unique identifier for the actor instance"
+        }
+      },
+      "messages": {
+        "toClient": {
+          "$ref": "#/components/messages/ToClient"
+        },
+        "toServer": {
+          "$ref": "#/components/messages/ToServer"
+        }
+      }
+    }
+  },
+  "operations": {
+    "sendToClient": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/~1gateway~1{actorId}~1connect"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/~1gateway~1{actorId}~1connect/messages/toClient"
+        }
+      ],
+      "summary": "Send messages from server to client",
+      "description": "Messages sent from the RivetKit actor to connected clients"
+    },
+    "receiveFromClient": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/~1gateway~1{actorId}~1connect"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/~1gateway~1{actorId}~1connect/messages/toServer"
+        }
+      ],
+      "summary": "Receive messages from client",
+      "description": "Messages received by the RivetKit actor from connected clients"
+    }
+  },
+  "components": {
+    "messages": {
+      "ToClient": {
+        "name": "ToClient",
+        "title": "Message To Client",
+        "summary": "A message sent from the server to the client",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "const": "Init"
+                    },
+                    "val": {
+                      "type": "object",
+                      "properties": {
+                        "actorId": {
+                          "type": "string"
+                        },
+                        "connectionId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "actorId",
+                        "connectionId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "val"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "const": "Error"
+                    },
+                    "val": {
+                      "type": "object",
+                      "properties": {
+                        "group": {
+                          "type": "string"
+                        },
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "metadata": {},
+                        "actionId": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "format": "int64"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "group",
+                        "code",
+                        "message",
+                        "actionId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "val"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "const": "ActionResponse"
+                    },
+                    "val": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "format": "int64"
+                        },
+                        "output": {}
+                      },
+                      "required": [
+                        "id",
+                        "output"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "val"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "const": "Event"
+                    },
+                    "val": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "args": {}
+                      },
+                      "required": [
+                        "name",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "val"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "examples": [
+          {
+            "name": "Init message",
+            "summary": "Initial connection message",
+            "payload": {
+              "body": {
+                "tag": "Init",
+                "val": {
+                  "actorId": "actor_123",
+                  "connectionId": "conn_456"
+                }
+              }
+            }
+          },
+          {
+            "name": "Error message",
+            "summary": "Error response",
+            "payload": {
+              "body": {
+                "tag": "Error",
+                "val": {
+                  "group": "auth",
+                  "code": "unauthorized",
+                  "message": "Authentication failed",
+                  "actionId": null
+                }
+              }
+            }
+          },
+          {
+            "name": "Action response",
+            "summary": "Response to an action request",
+            "payload": {
+              "body": {
+                "tag": "ActionResponse",
+                "val": {
+                  "id": "123",
+                  "output": {
+                    "result": "success"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "name": "Event",
+            "summary": "Event broadcast to subscribed clients",
+            "payload": {
+              "body": {
+                "tag": "Event",
+                "val": {
+                  "name": "stateChanged",
+                  "args": {
+                    "newState": "active"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ToServer": {
+        "name": "ToServer",
+        "title": "Message To Server",
+        "summary": "A message sent from the client to the server",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "const": "ActionRequest"
+                    },
+                    "val": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "format": "int64"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "args": {}
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "val"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "const": "SubscriptionRequest"
+                    },
+                    "val": {
+                      "type": "object",
+                      "properties": {
+                        "eventName": {
+                          "type": "string"
+                        },
+                        "subscribe": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "eventName",
+                        "subscribe"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "val"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "examples": [
+          {
+            "name": "Action request",
+            "summary": "Request to execute an action",
+            "payload": {
+              "body": {
+                "tag": "ActionRequest",
+                "val": {
+                  "id": "123",
+                  "name": "updateState",
+                  "args": {
+                    "key": "value"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "name": "Subscription request",
+            "summary": "Request to subscribe/unsubscribe from an event",
+            "payload": {
+              "body": {
+                "tag": "SubscriptionRequest",
+                "val": {
+                  "eventName": "stateChanged",
+                  "subscribe": true
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "schemas": {
+      "Init": {
+        "type": "object",
+        "properties": {
+          "actorId": {
+            "type": "string"
+          },
+          "connectionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actorId",
+          "connectionId"
+        ],
+        "additionalProperties": false,
+        "description": "Initial connection message sent from server to client"
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "metadata": {},
+          "actionId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "group",
+          "code",
+          "message",
+          "actionId"
+        ],
+        "additionalProperties": false,
+        "description": "Error message sent from server to client"
+      },
+      "ActionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "output": {}
+        },
+        "required": [
+          "id",
+          "output"
+        ],
+        "additionalProperties": false,
+        "description": "Response to an action request"
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {}
+        },
+        "required": [
+          "name",
+          "args"
+        ],
+        "additionalProperties": false,
+        "description": "Event broadcast to subscribed clients"
+      },
+      "ActionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "args": {}
+        },
+        "required": [
+          "id",
+          "name",
+          "args"
+        ],
+        "additionalProperties": false,
+        "description": "Request to execute an action on the actor"
+      },
+      "SubscriptionRequest": {
+        "type": "object",
+        "properties": {
+          "eventName": {
+            "type": "string"
+          },
+          "subscribe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "eventName",
+          "subscribe"
+        ],
+        "additionalProperties": false,
+        "description": "Request to subscribe or unsubscribe from an event"
+      }
+    }
+  }
 }
