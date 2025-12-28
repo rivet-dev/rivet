@@ -1,4 +1,4 @@
-import { Derived, Effect, Store, type Updater } from "@tanstack/store";
+import { Derived, Effect, Store } from "@tanstack/store";
 import type { AnyActorDefinition, Registry } from "rivetkit";
 import {
 	type ActorConn,
@@ -144,13 +144,9 @@ type ActorCache<
 		>;
 		key: string;
 		mount: () => () => void;
-		setState: (
-			set: Updater<
-				InternalRivetKitStore<Registry, Actors>["actors"][string]
-			>,
-		) => void;
 		create: () => void;
 		refCount: number;
+		cleanupTimeout: ReturnType<typeof setTimeout> | null;
 	}
 >;
 
@@ -174,6 +170,7 @@ export function createRivetKit<
 	};
 }
 
+// See README.md for lifecycle documentation.
 function getOrCreateActor<
 	Registry extends AnyActorRegistry,
 	Actors extends ExtractActorsFromRegistry<Registry>,
@@ -185,11 +182,42 @@ function getOrCreateActor<
 	cache: ActorCache<Registry, Actors>,
 	actorOpts: ActorOptions<Registry, ActorName>,
 ) {
-	type RivetKitStore = InternalRivetKitStore<Registry, Actors>;
-
 	const hash = createOpts.hashFunction || defaultHashFunction;
 
-	const key = hash(actorOpts);
+	const normalizedOpts = {
+		...actorOpts,
+		enabled: actorOpts.enabled ?? true,
+	};
+
+	const key = hash(normalizedOpts);
+
+	// Sync opts to store on every call (even for cached entries)
+	const existing = store.state.actors[key];
+	if (!existing) {
+		store.setState((prev) => ({
+			...prev,
+			actors: {
+				...prev.actors,
+				[key]: {
+					hash: key,
+					connStatus: ActorConnStatus.Idle,
+					connection: null,
+					handle: null,
+					error: null,
+					opts: normalizedOpts,
+				},
+			},
+		}));
+	} else if (!optsEqual(existing.opts, normalizedOpts)) {
+		store.setState((prev) => ({
+			...prev,
+			actors: {
+				...prev.actors,
+				[key]: { ...prev.actors[key], opts: normalizedOpts },
+			},
+		}));
+	}
+
 	const cached = cache.get(key);
 	if (cached) {
 		return {
@@ -205,16 +233,23 @@ function getOrCreateActor<
 		deps: [store],
 	});
 
-	// Connect to actor
+	// Handle enabled/disabled state changes.
+	// Initial connection is triggered directly in mount() since Effect
+	// only runs on state changes, not on mount.
 	const effect = new Effect({
 		fn: () => {
 			const actor = store.state.actors[key];
+			if (!actor) {
+				throw new Error(
+					`Actor with key "${key}" not found in store. This indicates a bug in cleanup logic.`,
+				);
+			}
 
 			// Dispose connection if disabled
 			if (!actor.opts.enabled && actor.connection) {
 				actor.connection.dispose();
 
-				// Clear state references
+				// Reset state so re-enabling will reconnect
 				store.setState((prev) => ({
 					...prev,
 					actors: {
@@ -223,16 +258,14 @@ function getOrCreateActor<
 							...prev.actors[key],
 							connection: null,
 							handle: null,
+							connStatus: ActorConnStatus.Idle,
 						},
 					},
 				}));
 				return;
 			}
 
-			// Create actor connection
-			//
-			// actor-conn.ts automatically handles reconnect, this is only
-			// required if being called for the first time if enabled
+			// Reconnect when re-enabled after being disabled
 			if (
 				actor.connStatus === ActorConnStatus.Idle &&
 				actor.opts.enabled
@@ -243,51 +276,6 @@ function getOrCreateActor<
 		deps: [derived],
 	});
 
-	store.setState((prev) => {
-		if (prev.actors[key]) {
-			return prev;
-		}
-		return {
-			...prev,
-			actors: {
-				...prev.actors,
-				[key]: {
-					hash: key,
-					connStatus: ActorConnStatus.Idle,
-					connection: null,
-					handle: null,
-					error: null,
-					opts: actorOpts,
-				},
-			},
-		};
-	});
-
-	function setState(updater: Updater<RivetKitStore["actors"][string]>) {
-		store.setState((prev) => {
-			const actor = prev.actors[key];
-			if (!actor) {
-				throw new Error(`Actor with key "${key}" does not exist.`);
-			}
-
-			let newState: RivetKitStore["actors"][string];
-
-			if (typeof updater === "function") {
-				newState = updater(actor);
-			} else {
-				// If updater is a direct value, we assume it replaces the entire actor state
-				newState = updater;
-			}
-			return {
-				...prev,
-				actors: {
-					...prev.actors,
-					[key]: newState,
-				},
-			};
-		});
-	}
-
 	// Track subscriptions for ref counting
 	let unsubscribeDerived: (() => void) | null = null;
 	let unsubscribeEffect: (() => void) | null = null;
@@ -295,42 +283,68 @@ function getOrCreateActor<
 	const mount = () => {
 		const cached = cache.get(key);
 		if (!cached) {
-			throw new Error(`Actor with key "${key}" not found in cache`);
+			throw new Error(
+				`Actor with key "${key}" not found in cache. This indicates a bug in cleanup logic.`,
+			);
+		}
+
+		// Cancel pending cleanup
+		if (cached.cleanupTimeout !== null) {
+			clearTimeout(cached.cleanupTimeout);
+			cached.cleanupTimeout = null;
 		}
 
 		// Increment ref count
 		cached.refCount++;
 
-		// Mount derived/effect on first reference
+		// Mount derived/effect on first reference (or re-mount after cleanup)
 		if (cached.refCount === 1) {
 			unsubscribeDerived = derived.mount();
 			unsubscribeEffect = effect.mount();
+
+			// Effect doesn't run immediately on mount, only on state changes.
+			// Trigger initial connection if actor is enabled and idle.
+			const actor = store.state.actors[key];
+			if (
+				actor &&
+				actor.opts.enabled &&
+				actor.connStatus === ActorConnStatus.Idle
+			) {
+				create<Registry, Actors, ActorName>(client, store, key);
+			}
 		}
 
 		return () => {
 			// Decrement ref count
 			cached.refCount--;
 
-			// Only cleanup when last reference is removed
 			if (cached.refCount === 0) {
-				// Unsubscribe from derived/effect
-				unsubscribeDerived?.();
-				unsubscribeEffect?.();
-				unsubscribeDerived = null;
-				unsubscribeEffect = null;
+				// Deferred cleanup prevents needless reconnection when:
+				// - React Strict Mode's unmount/remount cycle
+				// - useActor hook moves between components in the same render cycle
+				cached.cleanupTimeout = setTimeout(() => {
+					cached.cleanupTimeout = null;
+					if (cached.refCount > 0) return;
 
-				// Dispose connection
-				const actor = store.state.actors[key];
-				if (actor?.connection) {
-					actor.connection.dispose();
-				}
+					// Unsubscribe from derived/effect
+					unsubscribeDerived?.();
+					unsubscribeEffect?.();
+					unsubscribeDerived = null;
+					unsubscribeEffect = null;
 
-				// Remove from store and cache
-				store.setState((prev) => {
-					const { [key]: _, ...rest } = prev.actors;
-					return { ...prev, actors: rest };
-				});
-				cache.delete(key);
+					// Dispose connection
+					const actor = store.state.actors[key];
+					if (actor?.connection) {
+						actor.connection.dispose();
+					}
+
+					// Remove from store and cache
+					store.setState((prev) => {
+						const { [key]: _, ...rest } = prev.actors;
+						return { ...prev, actors: rest };
+					});
+					cache.delete(key);
+				}, 0);
 			}
 		};
 	};
@@ -339,16 +353,14 @@ function getOrCreateActor<
 		state: derived,
 		key,
 		mount,
-		setState,
 		create: create.bind(undefined, client, store, key),
 		refCount: 0,
+		cleanupTimeout: null,
 	});
 
 	return {
 		mount,
-		setState,
 		state: derived as ActorsStateDerived<Registry, ActorName>,
-		create,
 		key,
 	};
 }
@@ -362,6 +374,13 @@ function create<
 	store: Store<InternalRivetKitStore<Registry, Actors>>,
 	key: string,
 ) {
+	const actor = store.state.actors[key];
+	if (!actor) {
+		throw new Error(
+			`Actor with key "${key}" not found in store. This indicates a bug in cleanup logic.`,
+		);
+	}
+
 	// Save actor to map
 	store.setState((prev) => ({
 		...prev,
@@ -375,7 +394,6 @@ function create<
 		},
 	}));
 
-	const actor = store.state.actors[key];
 	try {
 		const handle = client.getOrCreate(
 			actor.opts.name as string,
@@ -389,11 +407,26 @@ function create<
 
 		const connection = handle.connect();
 
+		// Store connection BEFORE registering callbacks to avoid race condition
+		// where status change fires before connection is stored
+		store.setState((prev) => ({
+			...prev,
+			actors: {
+				...prev.actors,
+				[key]: {
+					...prev.actors[key],
+					handle: handle as ActorHandle<Actors[ActorName]>,
+					connection: connection as ActorConn<Actors[ActorName]>,
+				},
+			},
+		}));
+
 		// Subscribe to connection state changes
 		connection.onStatusChange((status) => {
 			store.setState((prev) => {
 				// Only update if this is still the active connection
-				if (prev.actors[key]?.connection !== connection) return prev;
+				const isActiveConnection = prev.actors[key]?.connection === connection;
+				if (!isActiveConnection) return prev;
 				return {
 					...prev,
 					actors: {
@@ -428,18 +461,6 @@ function create<
 				};
 			});
 		});
-
-		store.setState((prev) => ({
-			...prev,
-			actors: {
-				...prev.actors,
-				[key]: {
-					...prev.actors[key],
-					handle: handle as ActorHandle<Actors[ActorName]>,
-					connection: connection as ActorConn<Actors[ActorName]>,
-				},
-			},
-		}));
 	} catch (error) {
 		console.error("Failed to create actor connection", error);
 		store.setState((prev) => ({
@@ -460,4 +481,15 @@ function create<
 
 function defaultHashFunction({ name, key, params }: AnyActorOptions) {
 	return JSON.stringify({ name, key, params });
+}
+
+function optsEqual(a: AnyActorOptions, b: AnyActorOptions) {
+	return (
+		a.name === b.name &&
+		JSON.stringify(a.key) === JSON.stringify(b.key) &&
+		JSON.stringify(a.params) === JSON.stringify(b.params) &&
+		a.createInRegion === b.createInRegion &&
+		JSON.stringify(a.createWithInput) === JSON.stringify(b.createWithInput) &&
+		a.enabled === b.enabled
+	);
 }
