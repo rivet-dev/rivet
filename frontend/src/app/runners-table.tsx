@@ -1,4 +1,5 @@
 import {
+	faEllipsisH,
 	faPlus,
 	faSignalAlt,
 	faSignalAlt2,
@@ -8,11 +9,15 @@ import {
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistance } from "date-fns";
 import {
 	Button,
 	DiscreteCopyButton,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
 	Skeleton,
 	Table,
 	TableBody,
@@ -50,6 +55,7 @@ export function RunnersTable({
 					<TableHead>Datacenter</TableHead>
 					<TableHead>Slots</TableHead>
 					<TableHead>Created</TableHead>
+					<TableHead />
 				</TableRow>
 			</TableHeader>
 			<TableBody>
@@ -126,6 +132,8 @@ function RowSkeleton() {
 }
 
 function Row(runner: Rivet.Runner) {
+	const navigate = useNavigate();
+	
 	return (
 		<TableRow key={runner.runnerId}>
 			<TableCell className="size-8">
@@ -154,6 +162,33 @@ function Row(runner: Rivet.Runner) {
 
 			<TableCell>
 				<CreateTs createTs={runner.createTs} />
+			</TableCell>
+			
+			<TableCell>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button aria-haspopup="true" size="icon" variant="ghost">
+							<Icon className="size-4" icon={faEllipsisH} />
+							<span className="sr-only">Toggle menu</span>
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							onSelect={() => {
+								navigate({
+									to: ".",
+									search: (prev) => ({
+										...prev,
+										modal: "show-runner-metadata",
+										runnerId: runner.runnerId,
+									}),
+								});
+							}}
+						>
+							Show metadata
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</TableCell>
 		</TableRow>
 	);

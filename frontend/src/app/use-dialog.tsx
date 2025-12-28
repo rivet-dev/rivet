@@ -38,6 +38,9 @@ export const useDialog = {
 	DeleteConfig: createDialogHook(
 		() => import("@/app/dialogs/confirm-delete-config-frame"),
 	),
+	ShowRunnerMetadata: createDialogHook(
+		() => import("@/app/dialogs/show-runner-metadata-frame"),
+	),
 	Billing: createDialogHook(() => import("@/app/dialogs/billing-frame")),
 	ProvideEngineCredentials: createDialogHook(
 		() => import("@/app/dialogs/provide-engine-credentials-frame"),

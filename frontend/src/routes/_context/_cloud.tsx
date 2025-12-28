@@ -47,6 +47,7 @@ function CloudModals() {
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
+	const ShowRunnerMetadataDialog = useDialog.ShowRunnerMetadata.Dialog;
 
 	return (
 		<>
@@ -278,6 +279,25 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ShowRunnerMetadataDialog
+				runnerId={search.runnerId}
+				dialogProps={{
+					open: search.modal === "show-runner-metadata",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+									runnerId: undefined,
 								}),
 							});
 						}
