@@ -4,8 +4,5 @@
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
-	"packageManager": "pnpm@10.13.1",
-	"dependencies": {
-		"@vbare/compiler": "^0.0.4"
-	}
+	"packageManager": "pnpm@10.13.1"
 }

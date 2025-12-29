@@ -52,11 +52,7 @@ importers:
         specifier: ^8.8.5
         version: 8.8.5
 
-  engine:
-    dependencies:
-      '@vbare/compiler':
-        specifier: ^0.0.4
-        version: 0.0.4(@bare-ts/lib@0.6.0)
+  engine: {}
 
   engine/docker/template:
     dependencies:
@@ -2291,15 +2287,15 @@ importers:
 
   rivetkit-typescript/packages/rivetkit:
     dependencies:
-      '@bare-ts/lib':
-        specifier: ~0.3.0
-        version: 0.3.0
       '@hono/standard-validator':
         specifier: ^0.1.3
         version: 0.1.5(@standard-schema/spec@1.0.0)(hono@4.9.8)
       '@hono/zod-openapi':
         specifier: ^1.1.5
         version: 1.1.5(hono@4.9.8)(zod@4.1.13)
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.1
+        version: 0.6.1
       '@rivetkit/engine-runner':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/runner
@@ -2339,7 +2335,7 @@ importers:
     devDependencies:
       '@bare-ts/tools':
         specifier: ^0.13.0
-        version: 0.13.0(@bare-ts/lib@0.3.0)
+        version: 0.13.0(@bare-ts/lib@0.6.0)
       '@biomejs/biome':
         specifier: ^2.2.3
         version: 2.2.3
@@ -3306,10 +3302,6 @@ packages:
     resolution: {integrity: sha512-qQ5m48eI/MFLQ5PxQj4PFaprjyCTLI37ElWMmNs0K8Lk3dVeOdNpB3ks8jc7yM5CDmVC73eMVk/trk3fgmrUpA==}
     engines: {node: '>=6.9.0'}
 
-  '@bare-ts/lib@0.3.0':
-    resolution: {integrity: sha512-0JlIu0R26CTMdEnmmKIuFvAS9Cd554MvH4BjI6iL+74TDYBCHhaCWIDJXU6+VuYPu0+/JDLV/KXQstK9Sxn+9A==}
-    engines: {node: '>= 12'}
-
   '@bare-ts/lib@0.6.0':
     resolution: {integrity: sha512-nDBIPEa8hXte1UH69W541JNouzLPThKhVf/s3IeB/zBrLyPXlAlbcsMwEAiIJaxa4CntkCJqW6tWy0BU9urAZA==}
     engines: {node: ^14.18.0 || >=16.0.0}
@@ -3324,13 +3316,6 @@ packages:
   '@bare-ts/tools@0.15.0':
     resolution: {integrity: sha512-YMDrsZjyzW0rFMya0CgNDwR8O0rH1QdbZG1jZblwvt0dCCxbAseapnc3BZ5h1/bkJ9mYdPTedge0S7UaQzZKmg==}
     engines: {node: '>=16.9.0'}
-    hasBin: true
-    peerDependencies:
-      '@bare-ts/lib': '>=0.3.0 <=0.4.0'
-
-  '@bare-ts/tools@0.16.1':
-    resolution: {integrity: sha512-eKXTnVqzuKDxr1ozKsFSZfM1wcN4g/iMRnG9GB2fA8oyUcHxwokJC50CANfuSLe6rLnjhZ8Ave1Y2TnZqUqGcQ==}
-    engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
       '@bare-ts/lib': '>=0.3.0 <=0.4.0'
@@ -7706,11 +7691,6 @@ packages:
     resolution: {integrity: sha512-TQMCz2pFJMfpNxmSfX1VSfTjwUIFx/mL+p1bnfM1xjjdla7Z+KnGMW/EhFbpckp3LyWAH4PgOsMwOMnIN+MBFg==}
     peerDependencies:
       '@urql/core': ^5.0.0
-
-  '@vbare/compiler@0.0.4':
-    resolution: {integrity: sha512-nYCMTwkTLG3HnN4YxBTQbMWV9EI57Mr0k5P7a9RDtYyziaEV+0wxism1yntmei/KwN2QjqyT9VopNmlkM2LSgQ==}
-    engines: {node: '>=18.0.0'}
-    hasBin: true
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -15515,23 +15495,17 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@bare-ts/lib@0.3.0': {}
-
   '@bare-ts/lib@0.6.0': {}
 
-  '@bare-ts/tools@0.13.0(@bare-ts/lib@0.3.0)':
+  '@bare-ts/tools@0.13.0(@bare-ts/lib@0.6.0)':
     dependencies:
-      '@bare-ts/lib': 0.3.0
+      '@bare-ts/lib': 0.6.0
       commander: 10.0.0
 
   '@bare-ts/tools@0.15.0(@bare-ts/lib@0.6.0)':
     dependencies:
       '@bare-ts/lib': 0.6.0
       commander: 11.1.0
-
-  '@bare-ts/tools@0.16.1(@bare-ts/lib@0.6.0)':
-    dependencies:
-      '@bare-ts/lib': 0.6.0
 
   '@base-org/account@2.0.1(@types/react@19.2.2)(react@19.1.1)(typescript@5.9.2)(use-sync-external-store@1.6.0(react@19.1.1))(zod@3.25.76)':
     dependencies:
@@ -20247,13 +20221,6 @@ snapshots:
     dependencies:
       '@urql/core': 5.2.0
       wonka: 6.3.5
-
-  '@vbare/compiler@0.0.4(@bare-ts/lib@0.6.0)':
-    dependencies:
-      '@bare-ts/tools': 0.16.1(@bare-ts/lib@0.6.0)
-      commander: 11.1.0
-    transitivePeerDependencies:
-      - '@bare-ts/lib'
 
   '@vitejs/plugin-react@4.7.0(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0))':
     dependencies:

@@ -1,5 +1,17 @@
 #!/usr/bin/env -S tsx
 
+/**
+ * BARE schema compiler for TypeScript
+ *
+ * This script compiles .bare schema files to TypeScript using @bare-ts/tools,
+ * then post-processes the output to:
+ * 1. Replace @bare-ts/lib import with @rivetkit/bare-ts
+ * 2. Replace Node.js assert import with a custom assert function
+ *
+ * IMPORTANT: Keep the post-processing logic in sync with:
+ * engine/sdks/rust/runner-protocol/build.rs
+ */
+
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type Config, transform } from "@bare-ts/tools";
@@ -67,6 +79,7 @@ export async function compileSchema(options: CompileOptions): Promise<void> {
 	let result = transform(schema, defaultConfig);
 
 	result = postProcessAssert(result);
+	result = postProcessBareImport(result);
 
 	await fs.writeFile(outputPath, result);
 }
@@ -91,4 +104,11 @@ function postProcessAssert(code: string): string {
 	return code;
 }
 
-export { type Config, transform } from "@bare-ts/tools";
+/**
+ * Replace @bare-ts/lib import with patched @rivetkit/bare-ts
+ */
+function postProcessBareImport(code: string): string {
+	return code.replace(/@bare-ts\/lib/g, "@rivetkit/bare-ts");
+}
+
+export type { Config } from "@bare-ts/tools";
