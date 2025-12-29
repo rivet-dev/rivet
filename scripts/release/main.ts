@@ -121,45 +121,26 @@ async function shouldTagAsLatest(newVersion: string): Promise<boolean> {
 	return semver.gt(newVersion, latestGitVersion);
 }
 
-async function validateReuseVersion(version: string): Promise<void> {
-	console.log(`Validating that version ${version} exists...`);
+async function validateVersionNotPublished(version: string): Promise<void> {
+	console.log(`Validating that version ${version} has not already been published...`);
 
-	// Fetch tags to ensure we have the latest
-	// Use --force to overwrite local tags that conflict with remote
-	console.log(`Fetching tags...`);
-	await $({ stdio: "inherit" })`git fetch --tags --force`;
-
-	// Get short commit from version tag
-	let shortCommit: string;
-	try {
-		const result = await $`git rev-parse v${version}`;
-		const fullCommit = result.stdout.trim();
-		shortCommit = fullCommit.slice(0, 7);
-		console.log(`✅ Found tag v${version} (commit ${shortCommit})`);
-	} catch (error) {
+	const allVersions = await getAllGitVersions();
+	if (allVersions.includes(version)) {
 		throw new Error(
-			`Version ${version} does not exist in git. Make sure the tag v${version} exists in the remote repository.`,
+			`Version ${version} has already been published. Tag v${version} already exists.`,
 		);
 	}
 
-	// Check Docker images exist
-	console.log(`Checking Docker images for ${shortCommit}...`);
-	try {
-		await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-amd64`;
-		await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-arm64`;
-		console.log("✅ Docker images exist");
-	} catch (error) {
-		throw new Error(
-			`Docker images for version ${version} (commit ${shortCommit}) do not exist. Error: ${error}`,
-		);
-	}
+	console.log(`✅ Version ${version} has not been published yet`);
+}
 
-	// Check S3 artifacts exist
-	console.log(`Checking S3 artifacts for ${shortCommit}...`);
-	const endpointUrl =
-		"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
+interface EngineArtifactsResult {
+	exists: boolean;
+	shortCommit?: string;
+	error?: string;
+}
 
-	// Get credentials
+async function getAwsCredentials(): Promise<{ awsAccessKeyId: string; awsSecretAccessKey: string }> {
 	let awsAccessKeyId = process.env.R2_RELEASES_ACCESS_KEY_ID;
 	if (!awsAccessKeyId) {
 		const result =
@@ -172,28 +153,110 @@ async function validateReuseVersion(version: string): Promise<void> {
 			await $`op read "op://Engineering/rivet-releases R2 Upload/password"`;
 		awsSecretAccessKey = result.stdout.trim();
 	}
+	return { awsAccessKeyId, awsSecretAccessKey };
+}
 
-	const awsEnv = {
-		AWS_ACCESS_KEY_ID: awsAccessKeyId,
-		AWS_SECRET_ACCESS_KEY: awsSecretAccessKey,
-		AWS_DEFAULT_REGION: "auto",
-	};
-
-	const commitPrefix = `engine/${shortCommit}/`;
-	const listResult = await $({
-		env: awsEnv,
-		shell: true,
-		stdio: ["pipe", "pipe", "inherit"],
-	})`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
-	const files = JSON.parse(listResult.stdout);
-
-	if (!Array.isArray(files?.Contents) || files.Contents.length === 0) {
-		throw new Error(
-			`No S3 artifacts found for version ${version} (commit ${shortCommit}) under ${commitPrefix}`,
-		);
+async function checkEngineArtifactsExist(version: string, verbose = false): Promise<EngineArtifactsResult> {
+	// Get short commit from version tag
+	let shortCommit: string;
+	try {
+		const result = await $`git rev-parse v${version}`;
+		const fullCommit = result.stdout.trim();
+		shortCommit = fullCommit.slice(0, 7);
+		if (verbose) console.log(`✅ Found tag v${version} (commit ${shortCommit})`);
+	} catch (error) {
+		return { exists: false, error: `Tag v${version} does not exist` };
 	}
 
-	console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
+	// Check Docker images exist
+	if (verbose) console.log(`Checking Docker images for ${shortCommit}...`);
+	try {
+		await $`docker manifest inspect rivetkit/engine:slim-${shortCommit}-amd64`;
+		await $`docker manifest inspect rivetkit/engine:slim-${shortCommit}-arm64`;
+		if (verbose) console.log("✅ Docker images exist");
+	} catch (error) {
+		return { exists: false, shortCommit, error: `Docker images for commit ${shortCommit} do not exist` };
+	}
+
+	// Check S3 artifacts exist
+	if (verbose) console.log(`Checking S3 artifacts for ${shortCommit}...`);
+	const endpointUrl =
+		"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
+
+	try {
+		const { awsAccessKeyId, awsSecretAccessKey } = await getAwsCredentials();
+
+		const awsEnv = {
+			AWS_ACCESS_KEY_ID: awsAccessKeyId,
+			AWS_SECRET_ACCESS_KEY: awsSecretAccessKey,
+			AWS_DEFAULT_REGION: "auto",
+		};
+
+		const commitPrefix = `engine/${shortCommit}/`;
+		const listResult = await $({
+			env: awsEnv,
+			shell: true,
+			stdio: ["pipe", "pipe", "pipe"],
+		})`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
+		const files = JSON.parse(listResult.stdout);
+
+		if (!Array.isArray(files?.Contents) || files.Contents.length === 0) {
+			return { exists: false, shortCommit, error: `No S3 artifacts found under ${commitPrefix}` };
+		}
+
+		if (verbose) console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
+		return { exists: true, shortCommit };
+	} catch (error) {
+		return { exists: false, shortCommit, error: `Failed to check S3 artifacts: ${error}` };
+	}
+}
+
+async function findLatestEngineVersion(): Promise<string> {
+	console.log("Finding latest version with engine artifacts...");
+
+	// Fetch tags to ensure we have the latest
+	console.log("Fetching tags...");
+	try {
+		await $`git fetch --tags --force --quiet`;
+	} catch (fetchError) {
+		console.warn("Warning: Could not fetch remote tags, using local tags only");
+	}
+
+	const allVersions = await getAllGitVersions();
+	if (allVersions.length === 0) {
+		throw new Error("No version tags found in repository");
+	}
+
+	console.log(`Checking ${allVersions.length} versions for engine artifacts...`);
+
+	for (const version of allVersions) {
+		process.stdout.write(`  Checking v${version}... `);
+		const result = await checkEngineArtifactsExist(version, false);
+		if (result.exists) {
+			console.log(`✅ found (commit ${result.shortCommit})`);
+			return version;
+		} else {
+			console.log(`❌ ${result.error}`);
+		}
+	}
+
+	throw new Error("No versions found with complete engine artifacts (Docker images and S3 artifacts)");
+}
+
+async function validateReuseVersion(version: string): Promise<void> {
+	console.log(`Validating that version ${version} exists...`);
+
+	// Fetch tags to ensure we have the latest
+	// Use --force to overwrite local tags that conflict with remote
+	console.log(`Fetching tags...`);
+	await $({ stdio: "inherit" })`git fetch --tags --force`;
+
+	const result = await checkEngineArtifactsExist(version, true);
+	if (!result.exists) {
+		throw new Error(
+			`Engine artifacts for version ${version} do not exist: ${result.error}`,
+		);
+	}
 }
 
 async function runTypeCheck(opts: ReleaseOpts) {
@@ -263,6 +326,7 @@ async function getVersionFromArgs(opts: {
 // Available steps
 const STEPS = [
 	"confirm-release",
+	"validate-version-not-published",
 	"update-version",
 	"generate-fern",
 	"git-commit",
@@ -293,6 +357,7 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 	// locally. CI cannot push commits.
 	"setup-local": [
 		"confirm-release",
+		"validate-version-not-published",
 		"update-version",
 		"generate-fern",
 		"git-commit",
@@ -327,6 +392,10 @@ async function main() {
 		.option(
 			"--reuse-engine-version <version>",
 			"Reuse artifacts and Docker images from a previous version instead of building",
+		)
+		.option(
+			"--reuse-engine",
+			"Automatically find and reuse the most recent version with engine artifacts",
 		)
 		.option("--latest", "Tag version as the latest version", true)
 		.option("--no-latest", "Do not tag version as the latest version")
@@ -412,6 +481,17 @@ async function main() {
 		console.log(`Auto-determined latest flag: ${isLatest} (version: ${version})`);
 	}
 
+	// Handle --reuse-engine and --reuse-engine-version
+	if (opts.reuseEngine && opts.reuseEngineVersion) {
+		throw new Error("Cannot use both --reuse-engine and --reuse-engine-version together");
+	}
+
+	let reuseEngineVersion: string | undefined = opts.reuseEngineVersion;
+	if (opts.reuseEngine) {
+		reuseEngineVersion = await findLatestEngineVersion();
+		console.log(`Using engine version: ${reuseEngineVersion}`);
+	}
+
 	// Setup opts
 	let commit: string;
 	if (opts.overrideCommit) {
@@ -428,7 +508,7 @@ async function main() {
 		version: version,
 		latest: isLatest,
 		commit,
-		reuseEngineVersion: opts.reuseEngineVersion,
+		reuseEngineVersion,
 	};
 
 	if (releaseOpts.commit.length == 40) {
@@ -495,6 +575,11 @@ async function main() {
 		}
 
 		console.log("✅ Release confirmed");
+	}
+
+	if (shouldRunStep("validate-version-not-published")) {
+		console.log("==> Validating Version Not Published");
+		await validateVersionNotPublished(releaseOpts.version);
 	}
 
 	if (shouldRunStep("update-version")) {
