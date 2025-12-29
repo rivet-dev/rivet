@@ -22,6 +22,7 @@ import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { hibernationActor } from "./hibernation";
 import { inlineClientActor } from "./inline-client";
+import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
 import { counterWithLifecycle } from "./lifecycle";
 import { metadataActor } from "./metadata";
 import {
@@ -113,5 +114,8 @@ export const registry = setup({
 		destroyObserver,
 		// From hibernation.ts
 		hibernationActor,
+		// From large-payloads.ts
+		largePayloadActor,
+		largePayloadConnActor,
 	},
 });

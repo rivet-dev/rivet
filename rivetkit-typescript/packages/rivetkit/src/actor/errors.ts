@@ -133,12 +133,23 @@ export class InvalidEncoding extends ActorError {
 	}
 }
 
-export class MessageTooLong extends ActorError {
+export class IncomingMessageTooLong extends ActorError {
 	constructor() {
 		super(
 			"message",
-			"too_long",
-			"Message too long. This can be configured with: `registry.start({ maxIncomingMessageSize: ... })`",
+			"incoming_too_long",
+			"Incoming message too long. This can be configured with: `registry.start({ maxIncomingMessageSize: ... })`",
+			{ public: true },
+		);
+	}
+}
+
+export class OutgoingMessageTooLong extends ActorError {
+	constructor() {
+		super(
+			"message",
+			"outgoing_too_long",
+			"Outgoing message too long. This can be configured with: `registry.start({ maxOutgoingMessageSize: ... })`",
 			{ public: true },
 		);
 	}

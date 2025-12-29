@@ -802,10 +802,21 @@ async fn handle_tunnel_message_mk2(
 ) -> Result<()> {
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
+
+	// Extract inner data length before consuming msg
+	let inner_data_len = tunnel_message_inner_data_len(&msg.message_kind);
+
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::mk2::ToGateway::ToServerTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
 			.context("failed to serialize tunnel message for gateway")?;
+
+	tracing::trace!(
+		inner_data_len = inner_data_len,
+		serialized_len = msg_serialized.len(),
+		"publishing tunnel message to gateway"
+	);
+
 	ctx.ups()
 		.context("failed to get UPS instance for tunnel message")?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
@@ -818,6 +829,22 @@ async fn handle_tunnel_message_mk2(
 		})?;
 
 	Ok(())
+}
+
+/// Returns the length of the inner data payload for a tunnel message kind.
+fn tunnel_message_inner_data_len(kind: &protocol::mk2::ToServerTunnelMessageKind) -> usize {
+	use protocol::mk2::ToServerTunnelMessageKind;
+	match kind {
+		ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			resp.body.as_ref().map_or(0, |b| b.len())
+		}
+		ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.body.len(),
+		ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => msg.data.len(),
+		ToServerTunnelMessageKind::ToServerResponseAbort
+		| ToServerTunnelMessageKind::ToServerWebSocketOpen(_)
+		| ToServerTunnelMessageKind::ToServerWebSocketMessageAck(_)
+		| ToServerTunnelMessageKind::ToServerWebSocketClose(_) => 0,
+	}
 }
 
 #[tracing::instrument(skip_all)]

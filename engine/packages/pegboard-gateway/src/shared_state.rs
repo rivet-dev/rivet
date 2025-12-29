@@ -345,10 +345,17 @@ impl SharedState {
 					};
 
 					// Send message to the request handler to emulate the real network action
+					let inner_size = match &msg.message_kind {
+						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessage(
+							ws_msg,
+						) => ws_msg.data.len(),
+						_ => 0,
+					};
 					tracing::debug!(
 						gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
 						request_id=%protocol::util::id_to_string(&message_id.request_id),
 						message_index=message_id.message_index,
+						inner_size,
 						"forwarding message to request handler"
 					);
 					let _ = in_flight.msg_tx.send(msg.message_kind.clone()).await;
