@@ -78,52 +78,50 @@ export async function compileSchema(options: CompileOptions): Promise<void> {
 
 	let result = transform(schema, defaultConfig);
 
-	result = postProcessAssert(result);
-	result = postProcessBareImport(result);
+	result = postProcess(result);
 
 	await fs.writeFile(outputPath, result);
 }
+
+const POST_PROCESS_MARKER = "// @generated - post-processed by compile-bare.ts\n";
 
 const ASSERT_FUNCTION = `
 function assert(condition: boolean, message?: string): asserts condition {
     if (!condition) throw new Error(message ?? "Assertion failed")
 }
-
 `;
 
 /**
- * Remove Node.js assert import and inject a custom assert function
+ * Post-process the generated TypeScript file to:
+ * 1. Replace @bare-ts/lib import with @rivetkit/bare-ts
+ * 2. Replace Node.js assert import with a custom assert function
+ *
+ * IMPORTANT: Keep this in sync with engine/sdks/rust/runner-protocol/build.rs
  */
-function postProcessAssert(code: string): string {
+function postProcess(code: string): string {
+	// Skip if already post-processed
+	if (code.startsWith(POST_PROCESS_MARKER)) {
+		return code;
+	}
+
+	// Replace @bare-ts/lib with @rivetkit/bare-ts
+	code = code.replace(/@bare-ts\/lib/g, "@rivetkit/bare-ts");
+
 	// Remove Node.js assert import
 	code = code.replace(/^import assert from "assert"/m, "");
 
-	// Inject new assert function
-	code += `\n${ASSERT_FUNCTION}`;
+	// Add marker and assert function
+	code = POST_PROCESS_MARKER + code + `\n${ASSERT_FUNCTION}`;
 
 	// Validate post-processing succeeded
+	if (code.includes("@bare-ts/lib")) {
+		throw new Error("Failed to replace @bare-ts/lib import");
+	}
 	if (code.includes("import assert from")) {
 		throw new Error("Failed to remove Node.js assert import");
 	}
-	if (!code.includes("function assert(condition: boolean")) {
-		throw new Error("Assert function not found in output");
-	}
 
 	return code;
-}
-
-/**
- * Replace @bare-ts/lib import with patched @rivetkit/bare-ts
- */
-function postProcessBareImport(code: string): string {
-	const result = code.replace(/@bare-ts\/lib/g, "@rivetkit/bare-ts");
-
-	// Validate post-processing succeeded
-	if (result.includes("@bare-ts/lib")) {
-		throw new Error("Failed to replace @bare-ts/lib import");
-	}
-
-	return result;
 }
 
 export type { Config } from "@bare-ts/tools";
