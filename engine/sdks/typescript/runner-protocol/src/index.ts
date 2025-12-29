@@ -1,5 +1,5 @@
 import assert from "node:assert"
-import * as bare from "@rivetkit/bare-ts"
+import * as bare from "@bare-ts/lib"
 
 const DEFAULT_CONFIG = /* @__PURE__ */ bare.Config({})
 

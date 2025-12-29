@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/icons",
-	"version": "2.0.31",
+	"version": "2.0.32",
 	"sideEffects": false,
 	"files": [
 		"scripts",
