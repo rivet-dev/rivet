@@ -50,16 +50,6 @@ export interface ReleaseOpts {
 	reuseEngineVersion?: string;
 }
 
-async function getCurrentVersion(): Promise<string> {
-	// Get version from the main rivetkit package
-	const packageJsonPath = path.resolve(
-		ROOT_DIR,
-		"rivetkit-typescript/packages/rivetkit/package.json",
-	);
-	const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
-	return packageJson.version;
-}
-
 async function getAllGitVersions(): Promise<string[]> {
 	try {
 		// Fetch tags to ensure we have the latest
@@ -244,18 +234,23 @@ async function getVersionFromArgs(opts: {
 		);
 	}
 
-	// Get current version and calculate new one
-	const currentVersion = await getCurrentVersion();
-	console.log(`Current version: ${currentVersion}`);
+	// Get latest version from git tags and calculate new one
+	const latestVersion = await getLatestGitVersion();
+	if (!latestVersion) {
+		throw new Error(
+			"No existing version tags found. Use --version to set an explicit version.",
+		);
+	}
+	console.log(`Latest git version: ${latestVersion}`);
 
 	let newVersion: string | null = null;
 
 	if (opts.major) {
-		newVersion = semver.inc(currentVersion, "major");
+		newVersion = semver.inc(latestVersion, "major");
 	} else if (opts.minor) {
-		newVersion = semver.inc(currentVersion, "minor");
+		newVersion = semver.inc(latestVersion, "minor");
 	} else if (opts.patch) {
-		newVersion = semver.inc(currentVersion, "patch");
+		newVersion = semver.inc(latestVersion, "patch");
 	}
 
 	if (!newVersion) {
