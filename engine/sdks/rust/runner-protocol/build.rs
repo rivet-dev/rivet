@@ -114,6 +114,20 @@ function assert(condition: boolean, message?: string): asserts condition {
 "#;
 		let content = format!("{}\n{}", content, assert_function);
 
+		// Validate post-processing succeeded
+		assert!(
+			!content.contains("@bare-ts/lib"),
+			"Failed to replace @bare-ts/lib import"
+		);
+		assert!(
+			!content.contains("import assert from"),
+			"Failed to remove Node.js assert import"
+		);
+		assert!(
+			content.contains("function assert(condition: boolean"),
+			"Assert function not found in output"
+		);
+
 		fs::write(path, content).expect("Failed to write post-processed TypeScript file");
 	}
 }
