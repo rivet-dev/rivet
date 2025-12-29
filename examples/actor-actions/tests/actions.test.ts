@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/backend/registry";
+import { registry } from "../src/registry";
 
 describe("company and employee actors", () => {
 	test("create company actor with input and get profile", async (ctx) => {

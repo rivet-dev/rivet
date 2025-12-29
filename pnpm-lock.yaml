@@ -244,10 +244,19 @@ importers:
 
   examples/actor-actions:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.19.7
+        version: 1.19.7(hono@4.11.3)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
+      '@hono/vite-build':
+        specifier: ^1.8.0
+        version: 1.8.0(hono@4.11.3)
+      '@hono/vite-dev-server':
+        specifier: ^0.23.0
+        version: 0.23.0(hono@4.11.3)(miniflare@4.20251011.0)(wrangler@4.44.0(@cloudflare/workers-types@4.20251014.0))
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -266,6 +275,9 @@ importers:
       concurrently:
         specifier: ^8.2.2
         version: 8.2.2
+      hono:
+        specifier: ^4.11.3
+        version: 4.11.3
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -350,7 +362,7 @@ importers:
         version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221
       '@rivetkit/engine-api-full':
         specifier: latest
-        version: 2.0.30
+        version: 2.0.32
       dotenv:
         specifier: ^17.2.2
         version: 17.2.3
@@ -1979,7 +1991,7 @@ importers:
         version: 3.13.12(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -4871,6 +4883,12 @@ packages:
     peerDependencies:
       hono: ^4
 
+  '@hono/node-server@1.19.7':
+    resolution: {integrity: sha512-vUcD0uauS7EU2caukW8z5lJKtoGMokxNbJtBiwHgpqxEXokaHCBkQUmCHhjFB1VUTWdqj25QoMkMKzgjq+uhrw==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: ^4
+
   '@hono/node-ws@1.2.0':
     resolution: {integrity: sha512-OBPQ8OSHBw29mj00wT/xGYtB6HY54j0fNSdVZ7gZM3TUeq0So11GXaWtFf1xWxQNfumKIsj0wRuLKWfVsO5GgQ==}
     engines: {node: '>=18.14.1'}
@@ -4883,6 +4901,25 @@ packages:
     peerDependencies:
       '@standard-schema/spec': 1.0.0
       hono: '>=3.9.0'
+
+  '@hono/vite-build@1.8.0':
+    resolution: {integrity: sha512-T/w0Tuv8VV6FgjNnw2aW6LXtRfc5tOhaO54tKCRv4Zqc1tP3w6JyqTFtzJFFDvmY0xTxHS+Pj+ZPLhzFsdiFzQ==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: '*'
+
+  '@hono/vite-dev-server@0.23.0':
+    resolution: {integrity: sha512-tHV86xToed9Up0j/dubQW2PDP4aYNFDSfQrjcV6Ra7bqCGrxhtg/zZBmbgSco3aTxKOEPzDXKK+6seAAfsbIXw==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: '*'
+      miniflare: '*'
+      wrangler: '*'
+    peerDependenciesMeta:
+      miniflare:
+        optional: true
+      wrangler:
+        optional: true
 
   '@hono/zod-openapi@1.1.5':
     resolution: {integrity: sha512-EAnY6ad4yt/MUKHx716BEGGOXSl5d0/FOLozOYB/pmSEFq07qrzefKFtBEMAgd3hlpJXjH+4lwgTtlAo+BGBgQ==}
@@ -6566,8 +6603,8 @@ packages:
     resolution: {integrity: sha512-LYDaHEaZdH7YPgEG20OxOgTugqJPSUbH79wwcNKGyyDmrL5lu5D86jdb4T3Na5ZvenYe3xIjIc6JudAHAqbwaA==}
     engines: {node: ^14.18.0 || >=16.0.0}
 
-  '@rivetkit/engine-api-full@2.0.30':
-    resolution: {integrity: sha512-YVoGnXv2WAsc30GnJGEDV7LZVANfHEluuPWuo7TjBjs4799q+WwkhlzA84mlqjbbCYMNy12Ep5bsuae4/sJVgA==}
+  '@rivetkit/engine-api-full@2.0.32':
+    resolution: {integrity: sha512-NjI36eqg4tF1O5LoxrHDvR/Zg5w55ML3/2DUkhP87SyRX6vbZuZ+Pbb/CysfWHt1Myft4uM5jJzeKBk8UffOOg==}
 
   '@rivetkit/fast-json-patch@3.1.2':
     resolution: {integrity: sha512-CtA50xgsSSzICQduF/NDShPRzvucnNvsW/lQO0WgMTT1XAj9Lfae4pm7r3llFwilgG+9iq76Hv1LUqNy72v6yw==}
@@ -10283,6 +10320,10 @@ packages:
 
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
+
+  hono@4.11.3:
+    resolution: {integrity: sha512-PmQi306+M/ct/m5s66Hrg+adPnkD5jiO6IjA7WhWw0gSBSo1EcRegwuI1deZ+wd5pzCGynCcn2DprnE4/yEV4w==}
+    engines: {node: '>=16.9.0'}
 
   hono@4.9.8:
     resolution: {integrity: sha512-JW8Bb4RFWD9iOKxg5PbUarBYGM99IcxFl2FPBo2gSJO11jjUDqlP1Bmfyqt8Z/dGhIQ63PMA9LdcLefXyIasyg==}
@@ -16955,6 +16996,10 @@ snapshots:
     dependencies:
       hono: 4.9.8
 
+  '@hono/node-server@1.19.7(hono@4.11.3)':
+    dependencies:
+      hono: 4.11.3
+
   '@hono/node-ws@1.2.0(@hono/node-server@1.19.1(hono@4.9.8))(hono@4.9.8)':
     dependencies:
       '@hono/node-server': 1.19.1(hono@4.9.8)
@@ -16968,6 +17013,19 @@ snapshots:
     dependencies:
       '@standard-schema/spec': 1.0.0
       hono: 4.9.8
+
+  '@hono/vite-build@1.8.0(hono@4.11.3)':
+    dependencies:
+      hono: 4.11.3
+
+  '@hono/vite-dev-server@0.23.0(hono@4.11.3)(miniflare@4.20251011.0)(wrangler@4.44.0(@cloudflare/workers-types@4.20251014.0))':
+    dependencies:
+      '@hono/node-server': 1.19.7(hono@4.11.3)
+      hono: 4.11.3
+      minimatch: 9.0.5
+    optionalDependencies:
+      miniflare: 4.20251011.0
+      wrangler: 4.44.0(@cloudflare/workers-types@4.20251014.0)
 
   '@hono/zod-openapi@1.1.5(hono@4.9.8)(zod@4.1.13)':
     dependencies:
@@ -18885,7 +18943,7 @@ snapshots:
     dependencies:
       '@biomejs/cli-darwin-arm64': 2.3.10
 
-  '@rivetkit/engine-api-full@2.0.30':
+  '@rivetkit/engine-api-full@2.0.32':
     dependencies:
       form-data: 4.0.5
       js-base64: 3.7.8
@@ -20085,16 +20143,6 @@ snapshots:
     dependencies:
       '@codemirror/autocomplete': 6.19.0
       '@codemirror/commands': 6.8.1
-      '@codemirror/language': 6.11.3
-      '@codemirror/lint': 6.9.0
-      '@codemirror/search': 6.5.11
-      '@codemirror/state': 6.5.2
-      '@codemirror/view': 6.38.2
-
-  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
-    dependencies:
-      '@codemirror/autocomplete': 6.19.0
-      '@codemirror/commands': 6.9.0
       '@codemirror/language': 6.11.3
       '@codemirror/lint': 6.9.0
       '@codemirror/search': 6.5.11
@@ -22282,7 +22330,7 @@ snapshots:
       eslint: 9.39.1(jiti@1.21.7)
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-react: 7.37.5(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-react-hooks: 7.0.1(eslint@9.39.1(jiti@1.21.7))
@@ -22315,7 +22363,7 @@ snapshots:
       tinyglobby: 0.2.15
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7))
     transitivePeerDependencies:
       - supports-color
 
@@ -22330,7 +22378,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -23498,6 +23546,8 @@ snapshots:
   hoist-non-react-statics@3.3.2:
     dependencies:
       react-is: 16.13.1
+
+  hono@4.11.3: {}
 
   hono@4.9.8: {}
 
