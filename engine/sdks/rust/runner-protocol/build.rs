@@ -62,6 +62,8 @@ mod typescript {
 			panic!("Failed to create SDK directory: {}", e);
 		}
 
+		let output_path = src_dir.join("index.ts");
+
 		let output = Command::new(
 			workspace_root
 				.parent()
@@ -73,7 +75,7 @@ mod typescript {
 		.arg("ts")
 		.arg(highest_version_path)
 		.arg("-o")
-		.arg(src_dir.join("index.ts"))
+		.arg(&output_path)
 		.output()
 		.expect("Failed to execute bare compiler for TypeScript");
 
@@ -83,6 +85,36 @@ mod typescript {
 				String::from_utf8_lossy(&output.stderr),
 			);
 		}
+
+		// Post-process the generated TypeScript file
+		// IMPORTANT: Keep this in sync with rivetkit-typescript/packages/rivetkit/scripts/compile-bare.ts
+		post_process_generated_ts(&output_path);
+	}
+
+	/// Post-process the generated TypeScript file to:
+	/// 1. Replace @bare-ts/lib import with @rivetkit/bare-ts
+	/// 2. Replace Node.js assert import with a custom assert function
+	///
+	/// IMPORTANT: Keep this in sync with rivetkit-typescript/packages/rivetkit/scripts/compile-bare.ts
+	fn post_process_generated_ts(path: &Path) {
+		let content = fs::read_to_string(path).expect("Failed to read generated TypeScript file");
+
+		// Replace @bare-ts/lib with @rivetkit/bare-ts
+		let content = content.replace("@bare-ts/lib", "@rivetkit/bare-ts");
+
+		// Replace Node.js assert import with custom assert function
+		let content = content.replace("import assert from \"assert\"", "");
+		let content = content.replace("import assert from \"node:assert\"", "");
+
+		// Append custom assert function
+		let assert_function = r#"
+function assert(condition: boolean, message?: string): asserts condition {
+    if (!condition) throw new Error(message ?? "Assertion failed")
+}
+"#;
+		let content = format!("{}\n{}", content, assert_function);
+
+		fs::write(path, content).expect("Failed to write post-processed TypeScript file");
 	}
 }
 
