@@ -2155,3 +2155,8 @@ export function decodeToServerlessServer(bytes: Uint8Array): ToServerlessServer 
 function assert(condition: boolean, message?: string): asserts condition {
     if (!condition) throw new Error(message ?? "Assertion failed")
 }
+
+
+function assert(condition: boolean, message?: string): asserts condition {
+    if (!condition) throw new Error(message ?? "Assertion failed")
+}
