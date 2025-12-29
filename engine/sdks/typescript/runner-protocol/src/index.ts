@@ -1,3 +1,4 @@
+// @generated - post-processed by build.rs
 
 import * as bare from "@rivetkit/bare-ts"
 
@@ -2149,11 +2150,6 @@ export function decodeToServerlessServer(bytes: Uint8Array): ToServerlessServer 
         throw new bare.BareError(bc.offset, "remaining bytes")
     }
     return result
-}
-
-
-function assert(condition: boolean, message?: string): asserts condition {
-    if (!condition) throw new Error(message ?? "Assertion failed")
 }
 
 
