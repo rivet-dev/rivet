@@ -192,10 +192,10 @@ export function runActionFeaturesTests(driverTestConfig: DriverTestConfig) {
 
 				const instance = client.largePayloadActor.getOrCreate();
 
-				// Request a response that exceeds the default 64KB limit
-				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
+				// Request a response that exceeds the default 1MB limit
+				// Each item is roughly 60 bytes, so 20000 items ≈ 1.2MB
 				await expect(
-					instance.getLargeResponse(1500)
+					instance.getLargeResponse(20000)
 				).rejects.toThrow();
 			});
 		});
