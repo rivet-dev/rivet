@@ -101,6 +101,14 @@ function postProcessAssert(code: string): string {
 	// Inject new assert function
 	code += `\n${ASSERT_FUNCTION}`;
 
+	// Validate post-processing succeeded
+	if (code.includes("import assert from")) {
+		throw new Error("Failed to remove Node.js assert import");
+	}
+	if (!code.includes("function assert(condition: boolean")) {
+		throw new Error("Assert function not found in output");
+	}
+
 	return code;
 }
 
@@ -108,7 +116,14 @@ function postProcessAssert(code: string): string {
  * Replace @bare-ts/lib import with patched @rivetkit/bare-ts
  */
 function postProcessBareImport(code: string): string {
-	return code.replace(/@bare-ts\/lib/g, "@rivetkit/bare-ts");
+	const result = code.replace(/@bare-ts\/lib/g, "@rivetkit/bare-ts");
+
+	// Validate post-processing succeeded
+	if (result.includes("@bare-ts/lib")) {
+		throw new Error("Failed to replace @bare-ts/lib import");
+	}
+
+	return result;
 }
 
 export type { Config } from "@bare-ts/tools";
