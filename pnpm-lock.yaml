@@ -26,7 +26,7 @@ importers:
     devDependencies:
       '@bare-ts/tools':
         specifier: 0.15.0
-        version: 0.15.0(@bare-ts/lib@0.4.0)
+        version: 0.15.0(@bare-ts/lib@0.6.0)
       '@biomejs/biome':
         specifier: ^2.2.3
         version: 2.2.3
@@ -56,7 +56,7 @@ importers:
     dependencies:
       '@vbare/compiler':
         specifier: ^0.0.4
-        version: 0.0.4(@bare-ts/lib@0.4.0)
+        version: 0.0.4(@bare-ts/lib@0.6.0)
 
   engine/docker/template:
     dependencies:
@@ -162,9 +162,9 @@ importers:
 
   engine/sdks/typescript/runner-protocol:
     dependencies:
-      '@bare-ts/lib':
-        specifier: ^0.4.0
-        version: 0.4.0
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.1
+        version: 0.6.1
     devDependencies:
       '@types/node':
         specifier: ^20.19.13
@@ -3310,8 +3310,8 @@ packages:
     resolution: {integrity: sha512-0JlIu0R26CTMdEnmmKIuFvAS9Cd554MvH4BjI6iL+74TDYBCHhaCWIDJXU6+VuYPu0+/JDLV/KXQstK9Sxn+9A==}
     engines: {node: '>= 12'}
 
-  '@bare-ts/lib@0.4.0':
-    resolution: {integrity: sha512-uTb12lcDkvwwwGb/4atNy/+2Xuksx88tlxKuwnDuxmsOFVo4R/WsE+fmAf2nWtzHDi7m6NDw8Ke9j+XlNBLoJg==}
+  '@bare-ts/lib@0.6.0':
+    resolution: {integrity: sha512-nDBIPEa8hXte1UH69W541JNouzLPThKhVf/s3IeB/zBrLyPXlAlbcsMwEAiIJaxa4CntkCJqW6tWy0BU9urAZA==}
     engines: {node: ^14.18.0 || >=16.0.0}
 
   '@bare-ts/tools@0.13.0':
@@ -3356,6 +3356,12 @@ packages:
 
   '@biomejs/cli-darwin-arm64@2.2.3':
     resolution: {integrity: sha512-OrqQVBpadB5eqzinXN4+Q6honBz+tTlKVCsbEuEpljK8ASSItzIRZUA02mTikl3H/1nO2BMPFiJ0nkEZNy3B1w==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@biomejs/cli-darwin-arm64@2.3.10':
+    resolution: {integrity: sha512-M6xUjtCVnNGFfK7HMNKa593nb7fwNm43fq1Mt71kpLpb+4mE7odO8W/oWVDyBVO4ackhresy1ZYO7OJcVo/B7w==}
     engines: {node: '>=14.21.3'}
     cpu: [arm64]
     os: [darwin]
@@ -6570,6 +6576,10 @@ packages:
   '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2':
     resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2}
     version: 0.0.0
+
+  '@rivetkit/bare-ts@0.6.1':
+    resolution: {integrity: sha512-LYDaHEaZdH7YPgEG20OxOgTugqJPSUbH79wwcNKGyyDmrL5lu5D86jdb4T3Na5ZvenYe3xIjIc6JudAHAqbwaA==}
+    engines: {node: ^14.18.0 || >=16.0.0}
 
   '@rivetkit/engine-api-full@2.0.30':
     resolution: {integrity: sha512-YVoGnXv2WAsc30GnJGEDV7LZVANfHEluuPWuo7TjBjs4799q+WwkhlzA84mlqjbbCYMNy12Ep5bsuae4/sJVgA==}
@@ -15507,21 +15517,21 @@ snapshots:
 
   '@bare-ts/lib@0.3.0': {}
 
-  '@bare-ts/lib@0.4.0': {}
+  '@bare-ts/lib@0.6.0': {}
 
   '@bare-ts/tools@0.13.0(@bare-ts/lib@0.3.0)':
     dependencies:
       '@bare-ts/lib': 0.3.0
       commander: 10.0.0
 
-  '@bare-ts/tools@0.15.0(@bare-ts/lib@0.4.0)':
+  '@bare-ts/tools@0.15.0(@bare-ts/lib@0.6.0)':
     dependencies:
-      '@bare-ts/lib': 0.4.0
+      '@bare-ts/lib': 0.6.0
       commander: 11.1.0
 
-  '@bare-ts/tools@0.16.1(@bare-ts/lib@0.4.0)':
+  '@bare-ts/tools@0.16.1(@bare-ts/lib@0.6.0)':
     dependencies:
-      '@bare-ts/lib': 0.4.0
+      '@bare-ts/lib': 0.6.0
 
   '@base-org/account@2.0.1(@types/react@19.2.2)(react@19.1.1)(typescript@5.9.2)(use-sync-external-store@1.6.0(react@19.1.1))(zod@3.25.76)':
     dependencies:
@@ -15570,6 +15580,8 @@ snapshots:
 
   '@biomejs/cli-darwin-arm64@2.2.3':
     optional: true
+
+  '@biomejs/cli-darwin-arm64@2.3.10': {}
 
   '@biomejs/cli-darwin-x64@1.9.4':
     optional: true
@@ -18895,6 +18907,10 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
+  '@rivetkit/bare-ts@0.6.1':
+    dependencies:
+      '@biomejs/cli-darwin-arm64': 2.3.10
+
   '@rivetkit/engine-api-full@2.0.30':
     dependencies:
       form-data: 4.0.5
@@ -20232,9 +20248,9 @@ snapshots:
       '@urql/core': 5.2.0
       wonka: 6.3.5
 
-  '@vbare/compiler@0.0.4(@bare-ts/lib@0.4.0)':
+  '@vbare/compiler@0.0.4(@bare-ts/lib@0.6.0)':
     dependencies:
-      '@bare-ts/tools': 0.16.1(@bare-ts/lib@0.4.0)
+      '@bare-ts/tools': 0.16.1(@bare-ts/lib@0.6.0)
       commander: 11.1.0
     transitivePeerDependencies:
       - '@bare-ts/lib'

@@ -501,5 +501,96 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				expect(handler2Called).toBe(true);
 			});
 		});
+
+		describe("Large Payloads", () => {
+			test("should handle large request within size limit", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const handle = client.largePayloadConnActor.getOrCreate([
+					"test-large-request",
+				]);
+				const connection = handle.connect();
+
+				// Create a large payload that's under the default 64KB limit
+				// Each item is roughly 60 bytes, so 800 items ≈ 48KB
+				const items: string[] = [];
+				for (let i = 0; i < 800; i++) {
+					items.push(`Item ${i} with some additional text to increase size`);
+				}
+
+				const result = await connection.processLargeRequest({ items });
+
+				expect(result.itemCount).toBe(800);
+				expect(result.firstItem).toBe("Item 0 with some additional text to increase size");
+				expect(result.lastItem).toBe("Item 799 with some additional text to increase size");
+
+				// Verify connection state was updated
+				const lastRequestSize = await connection.getLastRequestSize();
+				expect(lastRequestSize).toBe(800);
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("should reject request exceeding maxIncomingMessageSize", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const handle = client.largePayloadConnActor.getOrCreate([
+					"test-large-request-exceed",
+				]);
+				const connection = handle.connect();
+
+				// Create a payload that exceeds the default 64KB limit
+				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
+				const items: string[] = [];
+				for (let i = 0; i < 1500; i++) {
+					items.push(`Item ${i} with some additional text to increase size`);
+				}
+
+				await expect(
+					connection.processLargeRequest({ items })
+				).rejects.toThrow();
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("should handle large response", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const handle = client.largePayloadConnActor.getOrCreate([
+					"test-large-response",
+				]);
+				const connection = handle.connect();
+
+				// Request a large response (800 items ≈ 48KB)
+				const result = await connection.getLargeResponse(800);
+
+				expect(result.items).toHaveLength(800);
+				expect(result.items[0]).toBe("Item 0 with some additional text to increase size");
+				expect(result.items[799]).toBe("Item 799 with some additional text to increase size");
+
+				// Clean up
+				await connection.dispose();
+			});
+
+			test("should reject response exceeding maxOutgoingMessageSize", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const handle = client.largePayloadConnActor.getOrCreate([
+					"test-large-response-exceed",
+				]);
+				const connection = handle.connect();
+
+				// Request a response that exceeds the default 64KB limit
+				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
+				await expect(
+					connection.getLargeResponse(1500)
+				).rejects.toThrow();
+
+				// Clean up
+				await connection.dispose();
+			});
+		});
 	});
 }

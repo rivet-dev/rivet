@@ -66,7 +66,7 @@ export interface FetchOpts {
  */
 export async function handleAction(
 	c: HonoContext,
-	_runConfig: RunnerConfig,
+	runConfig: RunnerConfig,
 	actorDriver: ActorDriver,
 	actionName: string,
 	actorId: string,
@@ -76,6 +76,12 @@ export async function handleAction(
 
 	// Validate incoming request
 	const arrayBuffer = await c.req.arrayBuffer();
+
+	// Check message size
+	if (arrayBuffer.byteLength > runConfig.maxIncomingMessageSize) {
+		throw new errors.IncomingMessageTooLong();
+	}
+
 	const request = deserializeWithEncoding(
 		encoding,
 		new Uint8Array(arrayBuffer),
@@ -130,6 +136,12 @@ export async function handleAction(
 			output: bufferToArrayBuffer(cbor.encode(value)),
 		}),
 	);
+
+	// Check outgoing message size
+	const messageSize = serialized instanceof Uint8Array ? serialized.byteLength : serialized.length;
+	if (messageSize > runConfig.maxOutgoingMessageSize) {
+		throw new errors.OutgoingMessageTooLong();
+	}
 
 	// TODO: Remove any, Hono is being a dumbass
 	return c.body(serialized as Uint8Array as any, 200, {
