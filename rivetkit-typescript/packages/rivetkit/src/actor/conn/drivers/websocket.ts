@@ -2,10 +2,11 @@ import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
-import type { RunnerConfig } from "@/registry/run-config";
 import * as errors from "@/actor/errors";
 import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
+import { BaseConfig } from "@/registry/config/base";
+import { RunnerConfig } from "@/registry/config/runner";
 
 export type ConnDriverWebSocketState = Record<never, never>;
 
@@ -13,7 +14,7 @@ export function createWebSocketDriver(
 	hibernatable: ConnDriver["hibernatable"],
 	encoding: Encoding,
 	closePromise: Promise<void>,
-	runConfig: RunnerConfig,
+	runConfig: BaseConfig,
 ): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
 	loggerWithoutContext().debug({
 		msg: "createWebSocketDriver creating driver",

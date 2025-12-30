@@ -23,7 +23,6 @@ import {
 	createActorInspectorRouter,
 } from "@/inspector/actor";
 import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
-import type { RunnerConfig } from "@/registry/run-config";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
@@ -31,6 +30,8 @@ import {
 	parseWebSocketProtocols,
 	routeWebSocket,
 } from "./router-websocket-endpoints";
+import { RunnerConfig } from "@/registry/config/runner";
+import { GetUpgradeWebSocket } from "@/utils";
 
 export type { ActionOpts, ActionOutput, ConnsMessageOpts };
 
@@ -42,10 +43,16 @@ export type ActorRouter = Hono<{ Bindings: ActorRouterBindings }>;
 
 /**
  * Creates a router that runs on the partitioned instance.
+ *
+ * You only need to pass `getUpgradeWebSocket` if this router is exposed
+ * directly publicly. Usually WebSockets are routed manually in the
+ * ManagerDriver instead of via Hono. The only platform that uses this
+ * currently is Cloudflare Workers.
  */
 export function createActorRouter(
 	runConfig: RunnerConfig,
 	actorDriver: ActorDriver,
+	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	isTest: boolean,
 ): ActorRouter {
 	const router = new Hono<{ Bindings: ActorRouterBindings }>({
@@ -105,40 +112,44 @@ export function createActorRouter(
 	// All WebSockets use a separate underlying router in routeWebSocket since
 	// WebSockets also need to be routed from ManagerDriver.proxyWebSocket and
 	// ManagerDriver.openWebSocket.
-	router.on(
-		"GET",
-		[PATH_CONNECT, `${PATH_WEBSOCKET_PREFIX}*`, PATH_INSPECTOR_CONNECT],
-		async (c) => {
-			const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
-			if (upgradeWebSocket) {
-				return upgradeWebSocket(async (c) => {
-					const protocols = c.req.header("sec-websocket-protocol");
-					const { encoding, connParams } =
-						parseWebSocketProtocols(protocols);
+	if (getUpgradeWebSocket) {
+		router.on(
+			"GET",
+			[PATH_CONNECT, `${PATH_WEBSOCKET_PREFIX}*`, PATH_INSPECTOR_CONNECT],
+			async (c) => {
+				const upgradeWebSocket = getUpgradeWebSocket();
+				if (upgradeWebSocket) {
+					return upgradeWebSocket(async (c) => {
+						const protocols = c.req.header(
+							"sec-websocket-protocol",
+						);
+						const { encoding, connParams } =
+							parseWebSocketProtocols(protocols);
 
-					return await routeWebSocket(
-						c.req.raw,
-						c.req.path,
-						c.req.header(),
-						runConfig,
-						actorDriver,
-						c.env.actorId,
-						encoding,
-						connParams,
-						undefined,
-						undefined,
-						false,
-						false,
+						return await routeWebSocket(
+							c.req.raw,
+							c.req.path,
+							c.req.header(),
+							runConfig,
+							actorDriver,
+							c.env.actorId,
+							encoding,
+							connParams,
+							undefined,
+							undefined,
+							false,
+							false,
+						);
+					})(c, noopNext());
+				} else {
+					return c.text(
+						"WebSockets are not enabled for this driver.",
+						400,
 					);
-				})(c, noopNext());
-			} else {
-				return c.text(
-					"WebSockets are not enabled for this driver.",
-					400,
-				);
-			}
-		},
-	);
+				}
+			},
+		);
+	}
 
 	router.post("/action/:action", async (c) => {
 		const actionName = c.req.param("action");

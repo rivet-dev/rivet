@@ -5,14 +5,7 @@ import { describe } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
 import type { Encoding } from "@/client/mod";
 import { configureInspectorAccessToken } from "@/inspector/utils";
-import { createManagerRouter } from "@/manager/router";
-import {
-	createClientWithDriver,
-	type DriverConfig,
-	type Registry,
-	type RunConfig,
-} from "@/mod";
-import { RunnerConfigSchema } from "@/registry/run-config";
+import { createClientWithDriver, type Registry } from "@/mod";
 import { getPort } from "@/test/mod";
 import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
@@ -33,6 +26,9 @@ import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runRequestAccessTests } from "./tests/request-access";
+import { DriverConfig } from "@/registry/config/base";
+import { RunnerConfig, RunnerConfigSchema } from "@/registry/config/runner";
+import { buildManagerRouter } from "@/manager/router";
 
 export interface SkipTests {
 	schedule?: boolean;
@@ -205,7 +201,7 @@ export async function createTestRuntime(
 		// Build driver config
 		// biome-ignore lint/style/useConst: Assigned later
 		let upgradeWebSocket: any;
-		const config: RunConfig = RunnerConfigSchema.parse({
+		const config: RunnerConfig = RunnerConfigSchema.parse({
 			driver,
 			getUpgradeWebSocket: () => upgradeWebSocket!,
 			inspector: {
@@ -215,23 +211,24 @@ export async function createTestRuntime(
 		});
 
 		// Create router
-		const managerDriver = driver.manager(registry.config, config);
-		const client = createClientWithDriver(
-			managerDriver,
-			ClientConfigSchema.parse({}),
-		);
+		const managerDriver = driver.manager?.(registry.config, config);
+		invariant(managerDriver, "missing manager driver");
+		// const client = createClientWithDriver(
+		// 	managerDriver,
+		// 	ClientConfigSchema.parse({}),
+		// );
 		configureInspectorAccessToken(config, managerDriver);
-		const { router } = createManagerRouter(
+		const { router } = buildManagerRouter(
 			registry.config,
 			config,
 			managerDriver,
-			driver,
-			client,
+			undefined,
 		);
 
 		// Inject WebSocket
 		const nodeWebSocket = createNodeWebSocket({ app: router });
 		upgradeWebSocket = nodeWebSocket.upgradeWebSocket;
+		managerDriver.setGetUpgradeWebSocket(() => upgradeWebSocket);
 
 		// Start server
 		const port = await getPort();

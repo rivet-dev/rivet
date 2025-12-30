@@ -17,7 +17,6 @@ import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
-import type { RunnerConfig } from "@/registry/run-config";
 import { promiseWithResolvers } from "@/utils";
 import type { ConnDriver } from "./conn/driver";
 import { createRawWebSocketDriver } from "./conn/drivers/raw-websocket";
@@ -26,6 +25,8 @@ import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
 import { parseMessage } from "./protocol/old";
 import { getRequestExposeInternalError } from "./router-endpoints";
+import { BaseConfig } from "@/registry/config/base";
+import { RunnerConfig } from "@/registry/config/runner";
 
 // TODO: Merge with ConnectWebSocketOutput interface
 export interface UpgradeWebSocketArgs {
@@ -39,7 +40,7 @@ export interface UpgradeWebSocketArgs {
 }
 
 interface WebSocketHandlerOpts {
-	runConfig: RunnerConfig;
+	runConfig: BaseConfig;
 	request: Request | undefined;
 	encoding: Encoding;
 	actor: AnyActorInstance;
@@ -57,7 +58,7 @@ export async function routeWebSocket(
 	request: Request | undefined,
 	requestPath: string,
 	requestHeaders: Record<string, string>,
-	runConfig: RunnerConfig,
+	runConfig: BaseConfig,
 	actorDriver: ActorDriver,
 	actorId: string,
 	encoding: Encoding,

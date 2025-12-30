@@ -39,8 +39,7 @@ import {
 	getInitialActorKvState,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
-import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
+import { buildActorNames, type RegistryConfig } from "@/registry/config/registry";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
 	type LongTimeoutHandle,
@@ -49,6 +48,7 @@ import {
 	stringifyError,
 } from "@/utils";
 import { logger } from "./log";
+import { RunnerConfig } from "@/registry/config/runner";
 
 const RUNNER_SSE_PING_INTERVAL = 1000;
 
@@ -129,13 +129,15 @@ export class EngineActorDriver implements ActorDriver {
 		// HACK: Override inspector token (which are likely to be
 		// removed later on) with token from x-rivet-token header
 		const token = runConfig.token;
-		if (token && runConfig.inspector && runConfig.inspector.enabled) {
-			runConfig.inspector.token = () => token;
-		}
+		// TODO:
+		// if (token && runConfig.inspector && runConfig.inspector.enabled) {
+		// 	runConfig.inspector.token = () => token;
+		// }
 
 		this.#actorRouter = createActorRouter(
 			runConfig,
 			this,
+			undefined,
 			registryConfig.test.enabled,
 		);
 

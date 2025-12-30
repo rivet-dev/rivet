@@ -1,12 +1,14 @@
 import type { Env, Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
 import type { ManagerInspector } from "@/inspector/manager";
-import type { RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
+import type { RegistryConfig } from "@/registry/config/registry";
+import { BaseConfig } from "@/registry/config/base";
+import { RunnerConfig } from "@/registry/config/runner";
+import { GetUpgradeWebSocket } from "@/utils";
 
 export type ManagerDriverBuilder = (
 	registryConfig: RegistryConfig,
-	runConfig: RunnerConfig,
+	runConfig: BaseConfig,
 ) => ManagerDriver;
 
 export interface ManagerDriver {
@@ -58,10 +60,15 @@ export interface ManagerDriver {
 	 * @returns creates or returns existing inspector access token
 	 */
 	getOrCreateInspectorAccessToken: () => string;
+
+	/**
+	 * Allows lazily setting getUpgradeWebSocket after the manager router has
+	 * been initialized.
+	 **/
+	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void;
 }
 
 export interface ManagerDisplayInformation {
-	name: string;
 	properties: Record<string, string>;
 }
 

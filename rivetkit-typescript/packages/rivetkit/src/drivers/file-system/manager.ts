@@ -20,23 +20,21 @@ import type {
 import { ManagerInspector } from "@/inspector/manager";
 import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
-import type {
-	DriverConfig,
-	Encoding,
-	RegistryConfig,
-	RunConfig,
-	UniversalWebSocket,
-} from "@/mod";
+import type { Encoding, RegistryConfig, UniversalWebSocket } from "@/mod";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
 import { generateActorId } from "./utils";
+import { BaseConfig, DriverConfig } from "@/registry/config/base";
+import { RunnerConfig } from "@/registry/config/runner";
+import { GetUpgradeWebSocket } from "@/utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
 	#registryConfig: RegistryConfig;
-	#runConfig: RunConfig;
+	#runConfig: BaseConfig;
 	#state: FileSystemGlobalState;
 	#driverConfig: DriverConfig;
+	#getUpgradeWebSocket: GetUpgradeWebSocket | undefined;
 
 	#actorDriver: ActorDriver;
 	#actorRouter: ActorRouter;
@@ -45,7 +43,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	constructor(
 		registryConfig: RegistryConfig,
-		runConfig: RunConfig,
+		runConfig: BaseConfig,
 		state: FileSystemGlobalState,
 		driverConfig: DriverConfig,
 	) {
@@ -122,19 +120,29 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		}
 
 		// Actors run on the same node as the manager, so we create a dummy actor router that we route requests to
-		const inlineClient = createClientWithDriver(
-			this,
-			ClientConfigSchema.parse({}),
-		);
+		const inlineClient = createClientWithDriver(this);
+
+		// TODO: Add a helper fn for this
+		// Build runner config for the actors
+		const actorRunnerConfig: RunnerConfig = {
+			...runConfig,
+			// Default fields that are not enforced in file system driver
+			serveManager: runConfig.serveManager ?? true,
+			totalSlots: 100_000,
+			runnerName: "default",
+			runnerKey: undefined,
+		};
+
 		this.#actorDriver = this.#driverConfig.actor(
 			registryConfig,
-			runConfig,
+			actorRunnerConfig,
 			this,
 			inlineClient,
 		);
 		this.#actorRouter = createActorRouter(
-			this.#runConfig,
+			actorRunnerConfig,
 			this.#actorDriver,
+			undefined,
 			registryConfig.test.enabled,
 		);
 	}
@@ -200,7 +208,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<Response> {
-		const upgradeWebSocket = this.#runConfig.getUpgradeWebSocket?.();
+		const upgradeWebSocket = this.#getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
 
 		// Handle raw WebSocket paths
@@ -349,7 +357,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	displayInformation(): ManagerDisplayInformation {
 		return {
-			name: this.#state.persist ? "File System" : "Memory",
 			properties: {
 				...(this.#state.persist
 					? { Data: this.#state.storagePath }
@@ -368,5 +375,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	getOrCreateInspectorAccessToken() {
 		return this.#state.getOrCreateInspectorAccessToken();
+	}
+
+	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
+		this.#getUpgradeWebSocket = getUpgradeWebSocket;
 	}
 }

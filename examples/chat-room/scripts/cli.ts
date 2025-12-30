@@ -1,12 +1,12 @@
 import prompts from "prompts";
 import { createClient } from "rivetkit/client";
-import type { registry } from "../backend/registry";
+import type { registry } from "../src/actors";
 
 async function main() {
 	const { username, room } = await initPrompt();
 
 	// Create type-aware client
-	const client = createClient<typeof registry>("http://localhost:6420");
+	const client = createClient<typeof registry>("http://localhost:3000/api/rivet");
 
 	// connect to chat room
 	const chatRoom = client.chatRoom.getOrCreate([room]).connect();

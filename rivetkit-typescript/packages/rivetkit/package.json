@@ -171,6 +171,7 @@
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"cbor-x": "^1.6.0",
+		"get-port": "^7.1.0",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
 		"nanoevents": "^9.1.0",

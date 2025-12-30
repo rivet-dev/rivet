@@ -1,8 +1,6 @@
 import invariant from "invariant";
-import { type Client, createClientWithDriver } from "@/client/client";
-import type { ClientConfig } from "@/client/config";
+import { createClientWithDriver } from "@/client/client";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
-import type { ActorDriver } from "@/driver-helpers/mod";
 import { chooseDefaultDriver } from "@/drivers/default";
 import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
 import {
@@ -10,38 +8,53 @@ import {
 	getInspectorUrl,
 	isInspectorEnabled,
 } from "@/inspector/utils";
-import { createManagerRouter } from "@/manager/router";
-import {
-	getDatacenters,
-	type RunnerConfigRequest,
-	updateRunnerConfig,
-} from "@/remote-manager-driver/api-endpoints";
-import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import pkg from "../../package.json" with { type: "json" };
 import {
 	type RegistryActors,
 	type RegistryConfig,
 	type RegistryConfigInput,
 	RegistryConfigSchema,
-} from "./config";
-import { logger } from "./log";
+} from "./config/registry";
+import { type BaseConfig, type DriverConfig } from "./config/base";
 import {
-	type DriverConfig,
 	type RunnerConfig,
 	type RunnerConfigInput,
 	RunnerConfigSchema,
-} from "./run-config";
-import { crossPlatformServe } from "./serve";
+} from "./config/runner";
+import {
+	type ServerlessConfig,
+	type ServerlessConfigInput,
+	ServerlessConfigSchema,
+} from "./config/serverless";
+import {
+	type LegacyRunnerConfig,
+	type LegacyRunnerConfigInput,
+	LegacyRunnerConfigSchema,
+} from "./config/legacy-runner";
+import { logger } from "./log";
+import { buildServerlessRouter } from "@/serverless/router";
+import { buildManagerRouter } from "@/manager/router";
+import { crossPlatformServe, findFreePort } from "./serve";
+import { GetUpgradeWebSocket } from "@/utils";
+import { configureServerlessRunner } from "@/serverless/configure";
+import type { Client } from "@/client/client";
+import { createClient } from "@/client/mod";
+import { isDev } from "@/utils/env-vars";
 
-export type ServerlessActorDriverBuilder = (
-	updateConfig: (config: RunnerConfig) => void,
-) => ActorDriver;
+export type FetchHandler = (
+	request: Request,
+	...args: any
+) => Response | Promise<Response>;
 
-interface ServerOutput<A extends Registry<any>> {
+export interface ServerlessHandler {
+	fetch: FetchHandler;
+}
+
+export interface LegacyStartServerOutput<A extends Registry<any>> {
 	/** Client to communicate with the actors. */
 	client: Client<A>;
 	/** Fetch handler to manually route requests to the Rivet manager API. */
-	fetch: (request: Request, ...args: any) => Response | Promise<Response>;
+	fetch: FetchHandler;
 }
 
 export class Registry<A extends RegistryActors> {
@@ -55,11 +68,193 @@ export class Registry<A extends RegistryActors> {
 		this.#config = config;
 	}
 
+	public handler(inputConfig: ServerlessConfigInput = {}): ServerlessHandler {
+		const config = ServerlessConfigSchema.parse(inputConfig);
+
+		const { driver } = this.#start(config, { serverless: config });
+
+		const { router } = buildServerlessRouter(driver, this.#config, config);
+		return { fetch: router.fetch };
+	}
+
+	public startRunner(inputConfig: RunnerConfigInput = {}) {
+		const config = RunnerConfigSchema.parse(inputConfig);
+
+		this.#start(config, { runner: config });
+	}
+
+	#start(
+		baseConfig: BaseConfig,
+		config: { serverless?: ServerlessConfig; runner?: RunnerConfig },
+	): { driver: DriverConfig } {
+		// Promise for any async operations we need to wait to complete
+		const readyPromises: Promise<unknown>[] = [];
+
+		// Configure logger
+		if (baseConfig.logging?.baseLogger) {
+			// Use provided base logger
+			configureBaseLogger(baseConfig.logging.baseLogger);
+		} else {
+			// Configure default logger with log level from config getPinoLevel
+			// will handle env variable priority
+			configureDefaultLogger(baseConfig.logging?.level);
+		}
+
+		// Handle spawnEngine before choosing driver
+		// Start engine
+		invariant(
+			!(config.serverless?.spawnEngine && baseConfig.serveManager),
+			"cannot specify spawnEngine and serveManager together",
+		);
+
+		if (config.serverless?.spawnEngine) {
+			logger().debug({
+				msg: "run engine requested",
+				version: config.serverless.engineVersion,
+			});
+
+			// Set config to point to the engine
+			invariant(
+				baseConfig.endpoint === undefined,
+				"cannot specify endpoint with spawnEngine",
+			);
+			baseConfig.endpoint = ENGINE_ENDPOINT;
+
+			// Start the engine
+			const engineProcessPromise = ensureEngineProcess({
+				version: config.serverless.engineVersion,
+			});
+
+			// Chain ready promise
+			readyPromises.push(engineProcessPromise);
+		}
+
+		// Choose the driver based on configuration (after endpoint may have been set by spawnEngine)
+		const driver = chooseDefaultDriver(baseConfig);
+
+		// Create manager driver (always needed for actor driver + inline client)
+		const managerDriver = driver.manager(this.#config, baseConfig);
+		configureInspectorAccessToken(baseConfig, managerDriver);
+
+		if (baseConfig.serveManager) {
+			// Configure getUpgradeWebSocket lazily so we can assign it in crossPlatformServe
+			let upgradeWebSocket: any;
+			const getUpgradeWebSocket: GetUpgradeWebSocket = () =>
+				upgradeWebSocket;
+			managerDriver.setGetUpgradeWebSocket(getUpgradeWebSocket);
+
+			// Build router
+			const { router: managerRouter } = buildManagerRouter(
+				this.#config,
+				baseConfig,
+				managerDriver,
+				getUpgradeWebSocket,
+			);
+
+			// Serve manager
+			const serverPromise = (async () => {
+				const managerPort = await findFreePort(baseConfig.managerPort);
+				baseConfig.managerPort = managerPort;
+
+				const out = await crossPlatformServe(baseConfig, managerRouter);
+				upgradeWebSocket = out.upgradeWebSocket;
+			})();
+			readyPromises.push(serverPromise);
+		}
+
+		// Log and print welcome after all ready promises complete
+		// biome-ignore lint/nursery/noFloatingPromises: bg promise
+		Promise.all(readyPromises).then(async () => {
+			// Auto-start actor driver for drivers that require it.
+			//
+			// This is only enabled for runner config since serverless will
+			// auto-start the actor driver on `GET /start`.
+			if (config.runner && driver.autoStartActorDriver) {
+				logger().debug("starting actor driver");
+				const inlineClient =
+					createClientWithDriver<this>(managerDriver);
+				driver.actor(
+					this.#config,
+					config.runner,
+					managerDriver,
+					inlineClient,
+				);
+			}
+
+			// Log starting
+			const driverLog = managerDriver.extraStartupLog?.() ?? {};
+			logger().info({
+				msg: "rivetkit ready",
+				driver: driver.name,
+				definitions: Object.keys(this.#config.use).length,
+				...driverLog,
+			});
+			const inspectorUrl = getInspectorUrl(baseConfig);
+			if (
+				inspectorUrl &&
+				isInspectorEnabled(baseConfig, "manager") &&
+				managerDriver.inspector
+			) {
+				logger().info({
+					msg: "inspector ready",
+					url: inspectorUrl,
+				});
+			}
+
+			// Print welcome information
+			if (!baseConfig.noWelcome) {
+				console.log();
+				console.log(
+					`  RivetKit ${pkg.version} (${driver.displayName})`,
+				);
+				// Only show endpoint if manager is running or engine is spawned
+				const shouldShowEndpoint = baseConfig.serveManager || config.serverless?.spawnEngine;
+				if (config.serverless?.advertiseEndpoint && shouldShowEndpoint) {
+					console.log(
+						`  - Endpoint:     ${config.serverless?.advertiseEndpoint}`,
+					);
+				}
+				if (config.serverless?.spawnEngine) {
+					const padding = " ".repeat(
+						Math.max(0, 13 - "Engine".length),
+					);
+					console.log(
+						`  - Engine:${padding}v${config.serverless.engineVersion}`,
+					);
+				}
+				const displayInfo = managerDriver.displayInformation();
+				for (const [k, v] of Object.entries(displayInfo.properties)) {
+					const padding = " ".repeat(Math.max(0, 13 - k.length));
+					console.log(`  - ${k}:${padding}${v}`);
+				}
+				if (
+					inspectorUrl &&
+					isInspectorEnabled(baseConfig, "manager") &&
+					managerDriver.inspector
+				) {
+					console.log(`  - Inspector:    ${inspectorUrl}`);
+				}
+				console.log();
+			}
+
+			// Configure serverless runner if enabled when actor driver is disabled
+			if (config.serverless?.configureRunnerPool) {
+				await configureServerlessRunner(config.serverless);
+			}
+		});
+
+		return { driver };
+	}
+
 	/**
 	 * Runs the registry for a server.
+	 *
+	 * @deprecated Use {@link Registry.startRunner} for long-running servers or {@link Registry.handler} for serverless deployments.
 	 */
-	public start(inputConfig?: RunnerConfigInput): ServerOutput<this> {
-		const config = RunnerConfigSchema.parse(inputConfig);
+	public start(
+		inputConfig?: LegacyRunnerConfigInput,
+	): LegacyStartServerOutput<this> {
+		const config = LegacyRunnerConfigSchema.parse(inputConfig);
 
 		// Validate autoConfigureServerless is only used with serverless runner
 		if (
@@ -71,274 +266,137 @@ export class Registry<A extends RegistryActors> {
 			);
 		}
 
-		// Promise for any async operations we need to wait to complete
-		const readyPromises: Promise<unknown>[] = [];
-
-		// Disable health check if using serverless
-		//
-		// This is because the endpoint will not be configured until we receive
-		// a serverless runner request, so we do not know what to health check
-		if (config.runnerKind === "serverless") {
-			logger().debug("disabling health check since using serverless");
-			config.disableMetadataLookup = true;
-		}
-
 		// Auto-configure serverless runner if not in prod
-		if (
-			process.env.NODE_ENV !== "production" &&
-			config.runnerKind === "serverless"
-		) {
+		const isDevEnv = isDev();
+		if (isDevEnv && config.runnerKind === "serverless") {
 			if (inputConfig?.runEngine === undefined) config.runEngine = true;
 			if (inputConfig?.autoConfigureServerless === undefined)
 				config.autoConfigureServerless = true;
 		}
 
-		// Start engine
-		if (config.runEngine) {
-			logger().debug({
-				msg: "run engine requested",
-				version: config.runEngineVersion,
-			});
-
-			// Set config to point to the engine
-			invariant(
-				config.endpoint === undefined,
-				"cannot specify 'endpoint' with 'runEngine'",
-			);
-			config.endpoint = ENGINE_ENDPOINT;
-			config.disableActorDriver = true;
-
-			// Start the engine
-			const engineProcessPromise = ensureEngineProcess({
-				version: config.runEngineVersion,
-			});
-
-			// Chain ready promise
-			readyPromises.push(engineProcessPromise);
-		}
-
-		// Configure for serverless
+		// Convert to new config format and call appropriate handler
 		if (config.runnerKind === "serverless") {
-			config.defaultServerPort = 8080;
-			config.overrideServerAddress = config.endpoint;
-			config.disableActorDriver = true;
-		}
-
-		// Configure logger
-		if (config.logging?.baseLogger) {
-			// Use provided base logger
-			configureBaseLogger(config.logging.baseLogger);
+			return this.#legacyStartServerless(config, inputConfig);
 		} else {
-			// Configure default logger with log level from config
-			// getPinoLevel will handle env variable priority
-			configureDefaultLogger(config.logging?.level);
+			return this.#legacyStartNormal(config);
 		}
-
-		// Choose the driver based on configuration
-		const driver = chooseDefaultDriver(config);
-
-		// Set defaults based on the driver
-		if (driver.name === "engine") {
-			config.inspector.enabled = { manager: false, actor: true };
-
-			// We need to leave the default server enabled for dev
-			if (config.runnerKind !== "serverless") {
-				config.disableDefaultServer = true;
-			}
-		}
-		if (driver.name === "cloudflare-workers") {
-			config.inspector.enabled = { manager: false, actor: true };
-			config.disableDefaultServer = true;
-			config.disableActorDriver = true;
-			config.noWelcome = true;
-		}
-
-		// Configure getUpgradeWebSocket lazily so we can assign it in crossPlatformServe
-		let upgradeWebSocket: any;
-		if (!config.getUpgradeWebSocket) {
-			config.getUpgradeWebSocket = () => upgradeWebSocket!;
-		}
-
-		// Create router
-		const managerDriver = driver.manager(this.#config, config);
-		configureInspectorAccessToken(config, managerDriver);
-
-		// Create client
-		const client = createClientWithDriver<this>(managerDriver, config);
-
-		const driverLog = managerDriver.extraStartupLog?.() ?? {};
-		logger().info({
-			msg: "rivetkit ready",
-			driver: driver.name,
-			definitions: Object.keys(this.#config.use).length,
-			...driverLog,
-		});
-		if (isInspectorEnabled(config, "manager") && managerDriver.inspector) {
-			logger().info({
-				msg: "inspector ready",
-				url: getInspectorUrl(config),
-			});
-		}
-
-		// Print welcome information
-		if (!config.noWelcome) {
-			const displayInfo = managerDriver.displayInformation();
-			console.log();
-			console.log(`  RivetKit ${pkg.version} (${displayInfo.name})`);
-			if (!config.disableDefaultServer) {
-				console.log(`  - Endpoint:     ${getEndpoint(config)}`);
-			} else if (config.overrideServerAddress) {
-				console.log(
-					`  - Endpoint:     ${config.overrideServerAddress}`,
-				);
-			}
-			if (config.runEngine) {
-				const padding = " ".repeat(Math.max(0, 13 - "Engine".length));
-				console.log(`  - Engine:${padding}v${config.runEngineVersion}`);
-			}
-			for (const [k, v] of Object.entries(displayInfo.properties)) {
-				const padding = " ".repeat(Math.max(0, 13 - k.length));
-				console.log(`  - ${k}:${padding}${v}`);
-			}
-			if (
-				isInspectorEnabled(config, "manager") &&
-				managerDriver.inspector
-			) {
-				console.log(`  - Inspector:    ${getInspectorUrl(config)}`);
-			}
-			console.log();
-		}
-
-		const { router: hono } = createManagerRouter(
-			this.#config,
-			config,
-			managerDriver,
-			driver,
-			client,
-		);
-
-		// Start server
-		if (!config.disableDefaultServer) {
-			const serverPromise = (async () => {
-				const out = await crossPlatformServe(config, hono);
-				upgradeWebSocket = out.upgradeWebSocket;
-			})();
-			readyPromises.push(serverPromise);
-		}
-
-		// HACK: We need to find a better way to let the driver itself decide when to start the actor driver
-		// Create runner
-		//
-		// Even though we do not use the returned ActorDriver, this is required to start the code that will handle incoming actors
-		if (!config.disableActorDriver) {
-			Promise.all(readyPromises).then(async () => {
-				logger().debug("starting actor driver");
-				driver.actor(this.#config, config, managerDriver, client);
-			});
-		}
-
-		// Configure serverless runner if enabled when actor driver is disabled
-		if (
-			config.runnerKind === "serverless" &&
-			config.autoConfigureServerless
-		) {
-			Promise.all(readyPromises).then(async () => {
-				await configureServerlessRunner(config);
-			});
-		}
-
-		return {
-			client,
-			fetch: hono.fetch.bind(hono),
-		};
 	}
-}
 
-async function configureServerlessRunner(config: RunnerConfig): Promise<void> {
-	logger().debug("configuring serverless runner");
+	#legacyStartServerless(
+		config: LegacyRunnerConfig,
+		inputConfig: LegacyRunnerConfigInput | undefined,
+	): LegacyStartServerOutput<this> {
+		// Convert legacy autoConfigureServerless to new configureRunnerPool format
+		let configureRunnerPool: ServerlessConfigInput["configureRunnerPool"];
+		if (config.autoConfigureServerless) {
+			// Derive URL from overrideServerAddress or default to localhost
+			const defaultUrl =
+				config.overrideServerAddress ?? "http://localhost:8080";
 
-	try {
-		// Ensure we have required config values
-		if (!config.runnerName) {
-			throw new Error(
-				"runnerName is required for serverless configuration",
-			);
+			if (typeof config.autoConfigureServerless === "boolean") {
+				// Legacy boolean: use default url
+				configureRunnerPool = { url: defaultUrl };
+			} else {
+				// Legacy object: merge with url fallback
+				configureRunnerPool = {
+					...config.autoConfigureServerless,
+					url: config.autoConfigureServerless.url ?? defaultUrl,
+				};
+			}
 		}
-		if (!config.namespace) {
-			throw new Error(
-				"namespace is required for serverless configuration",
-			);
-		}
-		if (!config.endpoint) {
-			throw new Error(
-				"endpoint is required for serverless configuration",
-			);
-		}
 
-		// Prepare the configuration
-		const customConfig =
-			typeof config.autoConfigureServerless === "object"
-				? config.autoConfigureServerless
-				: {};
-
-		// Create a ClientConfig from RunnerConfig for API calls
-		const clientConfig: ClientConfig = {
+		// Convert legacy config to serverless config
+		const serverlessConfig: ServerlessConfigInput = {
+			driver: config.driver as any,
+			maxIncomingMessageSize: config.maxIncomingMessageSize,
+			maxOutgoingMessageSize: config.maxOutgoingMessageSize,
+			noWelcome: config.noWelcome,
+			logging: config.logging,
 			endpoint: config.endpoint,
 			token: config.token,
 			namespace: config.namespace,
-			runnerName: config.runnerName,
-			encoding: config.encoding,
 			headers: config.headers,
-			getUpgradeWebSocket: config.getUpgradeWebSocket,
-			disableMetadataLookup: true, // We don't need health check for this operation
+			managerBasePath: config.basePath,
+			managerPort: 8080, // Legacy serverless used port 8080
+			inspector: config.inspector,
+			// Map legacy fields to new fields
+			spawnEngine: config.runEngine,
+			engineVersion: config.runEngineVersion,
+			advertiseEndpoint: config.overrideServerAddress,
+			configureRunnerPool,
+			// totalSlots is not used in serverless - it's managed by the engine
 		};
 
-		// Fetch all datacenters
-		logger().debug({
-			msg: "fetching datacenters",
+		const handler = this.handler(serverlessConfig);
+
+		// Create client for the legacy return value
+		// For serverless, we don't have an endpoint until /start is called,
+		// so we create a placeholder client
+		const client = createClient<this>({
 			endpoint: config.endpoint,
-		});
-		const dcsRes = await getDatacenters(clientConfig);
-
-		// Build the request body
-		logger().debug({
-			msg: "configuring serverless runner",
-			runnerName: config.runnerName,
+			token: config.token,
 			namespace: config.namespace,
+			headers: config.headers,
 		});
-		const serverlessConfig = {
-			serverless: {
-				url:
-					customConfig.url ||
-					`http://localhost:${config.defaultServerPort}`,
-				headers: customConfig.headers || {},
-				max_runners: customConfig.maxRunners ?? 100,
-				min_runners: customConfig.minRunners ?? 0,
-				request_lifespan: customConfig.requestLifespan ?? 15 * 60,
-				runners_margin: customConfig.runnersMargin ?? 0,
-				slots_per_runner:
-					customConfig.slotsPerRunner ?? config.totalSlots ?? 1000,
-			},
-			metadata: customConfig.metadata ?? {},
+
+		return {
+			client,
+			fetch: handler.fetch,
 		};
-		await updateRunnerConfig(clientConfig, config.runnerName, {
-			datacenters: Object.fromEntries(
-				dcsRes.datacenters.map((dc) => [dc.name, serverlessConfig]),
-			),
-		});
+	}
 
-		logger().info({
-			msg: "serverless runner configured successfully",
-			runnerName: config.runnerName,
+	#legacyStartNormal(
+		config: LegacyRunnerConfig,
+	): LegacyStartServerOutput<this> {
+		// Convert legacy config to runner config
+		const runnerConfig: RunnerConfigInput = {
+			driver: config.driver as any,
+			maxIncomingMessageSize: config.maxIncomingMessageSize,
+			maxOutgoingMessageSize: config.maxOutgoingMessageSize,
+			noWelcome: config.noWelcome,
+			logging: config.logging,
+			endpoint: config.endpoint,
+			token: config.token,
 			namespace: config.namespace,
-		});
-	} catch (error) {
-		logger().error({
-			msg: "failed to configure serverless runner, validate endpoint is configured correctly then restart this process",
-			error,
+			headers: config.headers,
+			managerBasePath: config.basePath,
+			managerPort: config.defaultServerPort,
+			inspector: config.inspector,
+			// Map legacy serveManager logic
+			// disableDefaultServer=true means serveManager=false
+			serveManager: !config.disableDefaultServer,
+		};
+
+		// Start the runner
+		this.startRunner(runnerConfig);
+
+		// Create client for the legacy return value
+		const client = createClient<this>({
+			endpoint: config.endpoint,
+			token: config.token,
+			namespace: config.namespace,
+			headers: config.headers,
 		});
 
-		// Don't throw, allow the runner to continue
+		// For normal runner, we need to build a manager router to get the fetch handler
+		// Parse the config to get the fully resolved config
+		const parsedConfig = RunnerConfigSchema.parse(runnerConfig);
+		const driver = chooseDefaultDriver(parsedConfig);
+		const managerDriver = driver.manager(this.#config, parsedConfig);
+
+		// Configure getUpgradeWebSocket as undefined for this legacy path
+		// since it's only used when actually serving
+		const { router } = buildManagerRouter(
+			this.#config,
+			parsedConfig,
+			managerDriver,
+			undefined, // getUpgradeWebSocket
+		);
+
+		return {
+			client,
+			fetch: router.fetch,
+		};
 	}
 }
 
@@ -349,11 +407,5 @@ export function setup<A extends RegistryActors>(
 	return new Registry(config);
 }
 
-export type {
-	RegistryConfig,
-	RegistryActors,
-	RunnerConfig as RunConfig,
-	RunnerConfigInput as RunConfigInput,
-	DriverConfig,
-};
+export type { RegistryConfig, RegistryActors };
 export { RegistryConfigSchema };

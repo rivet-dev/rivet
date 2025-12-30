@@ -1,5 +1,3 @@
-//! These configs configs hold anything that's not platform-specific about running actors.
-
 import { z } from "zod";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 

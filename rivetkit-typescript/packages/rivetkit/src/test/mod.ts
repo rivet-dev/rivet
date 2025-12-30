@@ -7,10 +7,10 @@ import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import { configureInspectorAccessToken } from "@/inspector/utils";
-import { createManagerRouter } from "@/manager/router";
-import { createClientWithDriver, type Registry, type RunConfig } from "@/mod";
-import { RunnerConfigSchema } from "@/registry/run-config";
+import { createClientWithDriver, type Registry } from "@/mod";
 import { logger } from "./log";
+import { RunnerConfig, RunnerConfigSchema } from "@/registry/config/runner";
+import { buildManagerRouter } from "@/manager/router";
 
 export interface SetupTestResult<A extends Registry<any>> {
 	client: Client<A>;
@@ -33,7 +33,7 @@ export async function setupTest<A extends Registry<any>>(
 	// Build driver config
 	// biome-ignore lint/style/useConst: Assigned later
 	let upgradeWebSocket: any;
-	const config: RunConfig = RunnerConfigSchema.parse({
+	const config: RunnerConfig = RunnerConfigSchema.parse({
 		driver,
 		getUpgradeWebSocket: () => upgradeWebSocket!,
 		inspector: {
@@ -43,18 +43,18 @@ export async function setupTest<A extends Registry<any>>(
 	});
 
 	// Create router
-	const managerDriver = driver.manager(registry.config, config);
-	const internalClient = createClientWithDriver(
-		managerDriver,
-		ClientConfigSchema.parse({}),
-	);
+	const managerDriver = driver.manager?.(registry.config, config);
+	invariant(managerDriver, "missing manager driver");
+	// const internalClient = createClientWithDriver(
+	// 	managerDriver,
+	// 	ClientConfigSchema.parse({}),
+	// );
 	configureInspectorAccessToken(config, managerDriver);
-	const { router } = createManagerRouter(
+	const { router } = buildManagerRouter(
 		registry.config,
 		config,
 		managerDriver,
-		driver,
-		internalClient,
+		undefined,
 	);
 
 	// Inject WebSocket

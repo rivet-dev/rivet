@@ -1,8 +1,12 @@
 import { z } from "zod";
-import { getEnvUniversal } from "@/utils";
+import {
+	getRivetkitInspectorToken,
+	isDev,
+	getRivetkitInspectorDisable,
+} from "@/utils/env-vars";
 
 const defaultTokenFn = () => {
-	const envToken = getEnvUniversal("RIVETKIT_INSPECTOR_TOKEN");
+	const envToken = getRivetkitInspectorToken();
 
 	if (envToken) {
 		return envToken;
@@ -13,8 +17,8 @@ const defaultTokenFn = () => {
 
 const defaultEnabled = () => {
 	return (
-		getEnvUniversal("NODE_ENV") !== "production" ||
-		!getEnvUniversal("RIVETKIT_INSPECTOR_DISABLE")
+		isDev() ||
+		!getRivetkitInspectorDisable()
 	);
 };
 

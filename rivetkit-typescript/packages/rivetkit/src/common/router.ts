@@ -5,8 +5,10 @@ import {
 	getRequestEncoding,
 	getRequestExposeInternalError,
 } from "@/actor/router-endpoints";
-import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
+import {
+	buildActorNames,
+	type RegistryConfig,
+} from "@/registry/config/registry";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -17,7 +19,8 @@ import {
 	HttpResponseErrorSchema,
 } from "@/schemas/client-protocol-zod/mod";
 import { encodingIsBinary, serializeWithEncoding } from "@/serde";
-import { bufferToArrayBuffer, getEnvUniversal, VERSION } from "@/utils";
+import { bufferToArrayBuffer, VERSION } from "@/utils";
+import { getRivetLogHeaders } from "@/utils/env-vars";
 import { getLogger, type Logger } from "./log";
 import { deconstructError, stringifyError } from "./utils";
 
@@ -43,7 +46,7 @@ export function loggerMiddleware(logger: Logger) {
 			reqSize: c.req.header("content-length"),
 			resSize: c.res.headers.get("content-length"),
 			userAgent: c.req.header("user-agent"),
-			...(getEnvUniversal("_RIVET_LOG_HEADERS")
+			...(getRivetLogHeaders()
 				? { allHeaders: JSON.stringify(c.req.header()) }
 				: {}),
 		});
@@ -103,6 +106,10 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 	return c.body(output as any, { status: statusCode });
 }
 
+export type MetadataRunnerKind =
+	| { serverless: Record<never, never> }
+	| { normal: Record<never, never> };
+
 /**
  * Metadata response interface for the /metadata endpoint
  */
@@ -110,9 +117,7 @@ export interface MetadataResponse {
 	runtime: string;
 	version: string;
 	runner?: {
-		kind:
-			| { serverless: Record<never, never> }
-			| { normal: Record<never, never> };
+		kind: MetadataRunnerKind;
 	};
 	actorNames: ReturnType<typeof buildActorNames>;
 	/**
@@ -130,22 +135,17 @@ export interface MetadataResponse {
 export function handleMetadataRequest(
 	c: HonoContext,
 	registryConfig: RegistryConfig,
-	runConfig: RunnerConfig,
+	runnerKind: MetadataRunnerKind,
+	clientEndpoint: string | undefined,
 ) {
 	const response: MetadataResponse = {
 		runtime: "rivetkit",
 		version: VERSION,
 		runner: {
-			kind:
-				runConfig.runnerKind === "serverless"
-					? { serverless: {} }
-					: { normal: {} },
+			kind: runnerKind,
 		},
 		actorNames: buildActorNames(registryConfig),
-		// If server address is changed, return a different client endpoint.
-		// Otherwise, return null indicating the client should use the current
-		// endpoint it's already configured with.
-		clientEndpoint: runConfig.overrideServerAddress,
+		clientEndpoint,
 	};
 
 	return c.json(response);

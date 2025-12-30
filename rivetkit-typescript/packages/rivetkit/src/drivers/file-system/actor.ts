@@ -4,8 +4,9 @@ import type {
 	AnyActorInstance,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
-import type { RegistryConfig, RunConfig } from "@/mod";
+import type { RegistryConfig } from "@/mod";
 import type { FileSystemGlobalState } from "./global-state";
+import { RunnerConfig } from "@/registry/config/runner";
 
 export type ActorDriverContext = Record<never, never>;
 
@@ -14,14 +15,14 @@ export type ActorDriverContext = Record<never, never>;
  */
 export class FileSystemActorDriver implements ActorDriver {
 	#registryConfig: RegistryConfig;
-	#runConfig: RunConfig;
+	#runConfig: RunnerConfig;
 	#managerDriver: ManagerDriver;
 	#inlineClient: AnyClient;
 	#state: FileSystemGlobalState;
 
 	constructor(
 		registryConfig: RegistryConfig,
-		runConfig: RunConfig,
+		runConfig: RunnerConfig,
 		managerDriver: ManagerDriver,
 		inlineClient: AnyClient,
 		state: FileSystemGlobalState,

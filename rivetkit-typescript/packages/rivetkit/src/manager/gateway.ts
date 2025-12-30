@@ -11,10 +11,11 @@ import {
 	WS_PROTOCOL_TARGET,
 } from "@/common/actor-router-consts";
 import type { UniversalWebSocket } from "@/mod";
-import type { RunnerConfig } from "@/registry/run-config";
-import { promiseWithResolvers } from "@/utils";
+import { GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
+import { BaseConfig } from "@/registry/config/base";
+import { RunnerConfig } from "@/registry/config/runner";
 
 interface ActorPathInfo {
 	actorId: string;
@@ -26,12 +27,13 @@ interface ActorPathInfo {
  * Handle path-based WebSocket routing
  */
 async function handleWebSocketGatewayPathBased(
-	runConfig: RunnerConfig,
+	runConfig: BaseConfig,
 	managerDriver: ManagerDriver,
 	c: HonoContext,
 	actorPathInfo: ActorPathInfo,
+	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 ): Promise<Response> {
-	const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
+	const upgradeWebSocket = getUpgradeWebSocket?.();
 	if (!upgradeWebSocket) {
 		throw new WebSocketsNotEnabled();
 	}
@@ -127,8 +129,9 @@ async function handleHttpGatewayPathBased(
  * - HTTP requests: Uses x-rivet-target and x-rivet-actor headers for routing
  */
 export async function actorGateway(
-	runConfig: RunnerConfig,
+	runConfig: BaseConfig,
 	managerDriver: ManagerDriver,
+	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	c: HonoContext,
 	next: Next,
 ) {
@@ -139,8 +142,8 @@ export async function actorGateway(
 
 	// Strip basePath from the request path
 	let strippedPath = c.req.path;
-	if (runConfig.basePath && strippedPath.startsWith(runConfig.basePath)) {
-		strippedPath = strippedPath.slice(runConfig.basePath.length);
+	if (runConfig.managerBasePath && strippedPath.startsWith(runConfig.managerBasePath)) {
+		strippedPath = strippedPath.slice(runConfig.managerBasePath.length);
 		// Ensure the path starts with /
 		if (!strippedPath.startsWith("/")) {
 			strippedPath = "/" + strippedPath;
@@ -169,6 +172,7 @@ export async function actorGateway(
 				managerDriver,
 				c,
 				actorPathInfo,
+				getUpgradeWebSocket,
 			);
 		}
 
@@ -186,6 +190,7 @@ export async function actorGateway(
 		return await handleWebSocketGateway(
 			runConfig,
 			managerDriver,
+			getUpgradeWebSocket,
 			c,
 			strippedPath,
 		);
@@ -199,12 +204,13 @@ export async function actorGateway(
  * Handle WebSocket requests using sec-websocket-protocol for routing
  */
 async function handleWebSocketGateway(
-	runConfig: RunnerConfig,
+	runConfig: BaseConfig,
 	managerDriver: ManagerDriver,
+	getUpgradeWebSocket: GetUpgradeWebSocket|undefined,
 	c: HonoContext,
 	strippedPath: string,
 ) {
-	const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
+	const upgradeWebSocket = getUpgradeWebSocket?.();
 	if (!upgradeWebSocket) {
 		throw new WebSocketsNotEnabled();
 	}

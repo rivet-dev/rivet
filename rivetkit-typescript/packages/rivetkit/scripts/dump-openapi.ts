@@ -8,22 +8,23 @@ import type {
 	ListActorsInput,
 	ManagerDriver,
 } from "@/manager/driver";
-import { createManagerRouter } from "@/manager/router";
 import {
 	createClientWithDriver,
 	type RegistryConfig,
 	RegistryConfigSchema,
 	setup,
 } from "@/mod";
-import { type RunnerConfig, RunnerConfigSchema } from "@/registry/run-config";
+import { LegacyRunnerConfigSchema } from "@/registry/config/legacy-runner";
 import { VERSION } from "@/utils";
 import { toJsonSchema } from "./schema-utils";
+import { buildManagerRouter } from "@/manager/router";
+import { RunnerConfig, RunnerConfigSchema } from "@/registry/config/runner";
 
 async function main() {
 	const registryConfig: RegistryConfig = RegistryConfigSchema.parse({
 		use: {},
 	});
-	const registry = setup(registryConfig);
+	// const registry = setup(registryConfig);
 
 	const driverConfig: RunnerConfig = RunnerConfigSchema.parse({
 		driver: createFileSystemOrMemoryDriver(false),
@@ -45,19 +46,19 @@ async function main() {
 		proxyWebSocket: unimplemented,
 		displayInformation: unimplemented,
 		getOrCreateInspectorAccessToken: unimplemented,
+		setGetUpgradeWebSocket: unimplemented,
 	};
 
-	const client = createClientWithDriver(
-		managerDriver,
-		ClientConfigSchema.parse({}),
-	);
-
-	const { openapi: managerOpenapi } = createManagerRouter(
+	// const client = createClientWithDriver(
+	// 	managerDriver,
+	// 	ClientConfigSchema.parse({}),
+	// );
+	//
+	const { openapi: managerOpenapi } = buildManagerRouter(
 		registryConfig,
 		driverConfig,
 		managerDriver,
-		driverConfig.driver!,
-		client,
+		undefined,
 	);
 
 	// Get OpenAPI document

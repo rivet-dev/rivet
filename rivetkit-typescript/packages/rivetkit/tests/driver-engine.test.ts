@@ -2,7 +2,13 @@ import { join } from "node:path";
 import { createClientWithDriver } from "@/client/client";
 import { createTestRuntime, runDriverTests } from "@/driver-test-suite/mod";
 import { createEngineDriver } from "@/drivers/engine/mod";
-import { RunnerConfigSchema } from "@/registry/run-config";
+import { LegacyRunnerConfigSchema } from "@/registry/config/legacy-runner";
+import invariant from "invariant";
+import { RunnerConfigSchema } from "@/registry/config/runner";
+import {
+	ClientConfigSchema,
+	convertBaseConfigToClientConfig,
+} from "@/client/config";
 
 runDriverTests({
 	// Use real timers for engine-runner tests
@@ -50,13 +56,14 @@ runDriverTests({
 					token,
 					getUpgradeWebSocket: () => undefined,
 				});
-				const managerDriver = driverConfig.manager(
+				const managerDriver = driverConfig.manager?.(
 					registry.config,
 					runConfig,
 				);
+				invariant(managerDriver, "missing manager driver");
 				const inlineClient = createClientWithDriver(
 					managerDriver,
-					runConfig,
+					convertBaseConfigToClientConfig(runConfig),
 				);
 				const actorDriver = driverConfig.actor(
 					registry.config,

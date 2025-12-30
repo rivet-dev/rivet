@@ -13,7 +13,6 @@ import {
 	WS_PROTOCOL_ENCODING,
 } from "@/common/actor-router-consts";
 import { stringifyError } from "@/common/utils";
-import type { RunnerConfig } from "@/registry/run-config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -36,6 +35,7 @@ import { createHttpDriver } from "./conn/drivers/http";
 import { createRawRequestDriver } from "./conn/drivers/raw-request";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
+import { RunnerConfig } from "@/registry/config/runner";
 
 export interface ActionOpts {
 	req?: HonoRequest;

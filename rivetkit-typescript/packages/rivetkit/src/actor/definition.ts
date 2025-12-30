@@ -1,4 +1,4 @@
-import type { RegistryConfig } from "@/registry/config";
+import type { RegistryConfig } from "@/registry/config/registry";
 import type { Actions, ActorConfig } from "./config";
 import type { ActionContext } from "./contexts/action";
 import type { ActorContext } from "./contexts/actor";

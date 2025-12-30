@@ -6,8 +6,7 @@ import type { ActorKey } from "@/actor/mod";
 import { generateRandomString } from "@/actor/utils";
 import type { AnyClient } from "@/client/client";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
-import type { RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
+import type { RegistryConfig } from "@/registry/config/registry";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
 	ACTOR_ALARM_VERSIONED,
@@ -34,6 +33,7 @@ import {
 	ensureDirectoryExistsSync,
 	getStoragePath,
 } from "./utils";
+import { RunnerConfig } from "@/registry/config/runner";
 
 // Actor handler to track running instances
 
