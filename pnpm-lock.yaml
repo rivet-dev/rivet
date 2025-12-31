@@ -159,8 +159,8 @@ importers:
   engine/sdks/typescript/runner-protocol:
     dependencies:
       '@rivetkit/bare-ts':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.6.2
+        version: 0.6.2
     devDependencies:
       '@types/node':
         specifier: ^20.19.13
@@ -2294,8 +2294,8 @@ importers:
         specifier: ^1.1.5
         version: 1.1.5(hono@4.9.8)(zod@4.1.13)
       '@rivetkit/bare-ts':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.6.2
+        version: 0.6.2
       '@rivetkit/engine-runner':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/runner
@@ -3341,12 +3341,6 @@ packages:
 
   '@biomejs/cli-darwin-arm64@2.2.3':
     resolution: {integrity: sha512-OrqQVBpadB5eqzinXN4+Q6honBz+tTlKVCsbEuEpljK8ASSItzIRZUA02mTikl3H/1nO2BMPFiJ0nkEZNy3B1w==}
-    engines: {node: '>=14.21.3'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@biomejs/cli-darwin-arm64@2.3.10':
-    resolution: {integrity: sha512-M6xUjtCVnNGFfK7HMNKa593nb7fwNm43fq1Mt71kpLpb+4mE7odO8W/oWVDyBVO4ackhresy1ZYO7OJcVo/B7w==}
     engines: {node: '>=14.21.3'}
     cpu: [arm64]
     os: [darwin]
@@ -6562,8 +6556,8 @@ packages:
     resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2}
     version: 0.0.0
 
-  '@rivetkit/bare-ts@0.6.1':
-    resolution: {integrity: sha512-LYDaHEaZdH7YPgEG20OxOgTugqJPSUbH79wwcNKGyyDmrL5lu5D86jdb4T3Na5ZvenYe3xIjIc6JudAHAqbwaA==}
+  '@rivetkit/bare-ts@0.6.2':
+    resolution: {integrity: sha512-3qndQUQXLdwafMEqfhz24hUtDPcsf1Bu3q52Kb8MqeH8JUh3h6R4HYW3ZJXiQsLcyYyFM68PuIwlLRlg1xDEpg==}
     engines: {node: ^14.18.0 || >=16.0.0}
 
   '@rivetkit/engine-api-full@2.0.30':
@@ -15555,8 +15549,6 @@ snapshots:
   '@biomejs/cli-darwin-arm64@2.2.3':
     optional: true
 
-  '@biomejs/cli-darwin-arm64@2.3.10': {}
-
   '@biomejs/cli-darwin-x64@1.9.4':
     optional: true
 
@@ -18881,9 +18873,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivetkit/bare-ts@0.6.1':
-    dependencies:
-      '@biomejs/cli-darwin-arm64': 2.3.10
+  '@rivetkit/bare-ts@0.6.2': {}
 
   '@rivetkit/engine-api-full@2.0.30':
     dependencies:
