@@ -50,6 +50,9 @@ export class InlineWebSocketAdapter implements UniversalWebSocket {
 			readyState: 1,
 		});
 
+		// Set __adapter on WSContext so handleRawWebSocket.onMessage can route messages back
+		(this.#wsContext as any).__adapter = this;
+
 		// Initialize the connection
 		//
 		// Defer initialization to allow event listeners to be attached first
@@ -206,6 +209,12 @@ export class InlineWebSocketAdapter implements UniversalWebSocket {
 			this.#fireError(err);
 			this.close(1011, "Internal error during initialization");
 		}
+	}
+	/**
+	 * Handle message from actor (called via __adapter from handleRawWebSocket.onMessage)
+	 */
+	_handleMessage(event: MessageEvent) {
+	  this.#handleMessage(event.data);
 	}
 
 	/**
