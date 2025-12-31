@@ -20,18 +20,16 @@ import type {
 import { ManagerInspector } from "@/inspector/manager";
 import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
-import type { Encoding, RegistryConfig, UniversalWebSocket } from "@/mod";
+import type { Encoding, UniversalWebSocket } from "@/mod";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
 import { generateActorId } from "./utils";
-import { BaseConfig, DriverConfig } from "@/registry/config/base";
-import { RunnerConfig } from "@/registry/config/runner";
+import { RegistryConfig, DriverConfig } from "@/registry/config";
 import { GetUpgradeWebSocket } from "@/utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
-	#registryConfig: RegistryConfig;
-	#runConfig: BaseConfig;
+	#config: RegistryConfig;
 	#state: FileSystemGlobalState;
 	#driverConfig: DriverConfig;
 	#getUpgradeWebSocket: GetUpgradeWebSocket | undefined;
@@ -42,17 +40,15 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	inspector?: ManagerInspector;
 
 	constructor(
-		registryConfig: RegistryConfig,
-		runConfig: BaseConfig,
+		config: RegistryConfig,
 		state: FileSystemGlobalState,
 		driverConfig: DriverConfig,
 	) {
-		this.#registryConfig = registryConfig;
-		this.#runConfig = runConfig;
+		this.#config = config;
 		this.#state = state;
 		this.#driverConfig = driverConfig;
 
-		if (runConfig.inspector.enabled) {
+		if (this.#config.inspector.enabled) {
 			const startedAt = new Date().toISOString();
 			function transformActor(actorState: schema.ActorState): Actor {
 				return {
@@ -97,7 +93,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 						}
 					},
 					getBuilds: async () => {
-						return Object.keys(this.#registryConfig.use).map(
+						return Object.keys(this.#config.use).map(
 							(name) => ({
 								name,
 							}),
@@ -122,28 +118,16 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		// Actors run on the same node as the manager, so we create a dummy actor router that we route requests to
 		const inlineClient = createClientWithDriver(this);
 
-		// TODO: Add a helper fn for this
-		// Build runner config for the actors
-		const actorRunnerConfig: RunnerConfig = {
-			...runConfig,
-			// Default fields that are not enforced in file system driver
-			serveManager: runConfig.serveManager ?? true,
-			totalSlots: 100_000,
-			runnerName: "default",
-			runnerKey: undefined,
-		};
-
 		this.#actorDriver = this.#driverConfig.actor(
-			registryConfig,
-			actorRunnerConfig,
+			config,
 			this,
 			inlineClient,
 		);
 		this.#actorRouter = createActorRouter(
-			actorRunnerConfig,
+			this.#config,
 			this.#actorDriver,
 			undefined,
-			registryConfig.test.enabled,
+			config.test.enabled,
 		);
 	}
 
@@ -178,7 +162,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			fakeRequest,
 			pathOnly,
 			{},
-			this.#runConfig,
+			this.#config,
 			this.#actorDriver,
 			actorId,
 			encoding,
@@ -221,7 +205,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			c.req.raw,
 			normalizedPath,
 			c.req.header(),
-			this.#runConfig,
+			this.#config,
 			this.#actorDriver,
 			actorId,
 			encoding,

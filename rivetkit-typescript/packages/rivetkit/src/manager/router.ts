@@ -34,10 +34,7 @@ import {
 	ActorsListResponseSchema,
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
-import {
-	buildActorNames,
-	type RegistryConfig,
-} from "@/registry/config/registry";
+import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
 import { logger } from "./log";
@@ -46,26 +43,24 @@ import {
 	buildOpenApiRequestBody,
 	buildOpenApiResponses,
 } from "@/utils/router";
-import { BaseConfig } from "@/registry/config/base";
 import { GetUpgradeWebSocket } from "@/utils";
 
 export function buildManagerRouter(
-	registryConfig: RegistryConfig,
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 ) {
-	return createRouter(runConfig.managerBasePath, (router) => {
+	return createRouter(config.managerBasePath, (router) => {
 		// TODO(kacper): Remove this in favor of standard manager API
 		// Inspector
-		if (isInspectorEnabled(runConfig, "manager")) {
+		if (isInspectorEnabled(config, "manager")) {
 			if (!managerDriver.inspector) {
 				throw new Unsupported("inspector");
 			}
 			router.route(
 				"/inspect",
 				new Hono<{ Variables: { inspector: any } }>()
-					.use(secureInspector(runConfig))
+					.use(secureInspector(config))
 					.use((c, next) => {
 						c.set("inspector", managerDriver.inspector!);
 						return next();
@@ -79,7 +74,7 @@ export function buildManagerRouter(
 			"*",
 			actorGateway.bind(
 				undefined,
-				runConfig,
+				config,
 				managerDriver,
 				getUpgradeWebSocket,
 			),
@@ -171,7 +166,7 @@ export function buildManagerRouter(
 							// If no name is provided, try all registered actor types
 							// Actor IDs are globally unique, so we'll find it in one of them
 							for (const actorName of Object.keys(
-								registryConfig.use,
+								config.use,
 							)) {
 								const actorOutput =
 									await managerDriver.getForId({
@@ -235,7 +230,7 @@ export function buildManagerRouter(
 			});
 
 			router.openapi(route, async (c) => {
-				const names = buildActorNames(registryConfig);
+				const names = buildActorNames(config);
 				return c.json<ActorsListNamesResponse>({
 					names,
 				});
@@ -347,7 +342,7 @@ export function buildManagerRouter(
 		// 	});
 		// }
 
-		if (registryConfig.test.enabled) {
+		if (config.test.enabled) {
 			// Add HTTP endpoint to test the inline client
 			//
 			// We have to do this in a router since this needs to run in the same server as the RivetKit registry. Some test contexts to not run in the same server.
@@ -557,11 +552,11 @@ export function buildManagerRouter(
 		router.get("/health", (c) => handleHealthRequest(c));
 
 		router.get("/metadata", (c) =>
-			handleMetadataRequest(c, registryConfig, { normal: {} }, undefined),
+			handleMetadataRequest(c, config, { normal: {} }, undefined),
 		);
 
 		managerDriver.modifyManagerRouter?.(
-			registryConfig,
+			config,
 			router as unknown as Hono,
 		);
 	});

@@ -2,28 +2,28 @@ import { UserError } from "@/actor/errors";
 import { loggerWithoutContext } from "@/actor/log";
 import { createEngineDriver } from "@/drivers/engine/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import { DriverConfig, BaseConfig } from "@/registry/config/base";
+import { DriverConfig, RegistryConfig } from "@/registry/config";
 
 /**
  * Chooses the appropriate driver based on the run configuration.
  */
 export function chooseDefaultDriver(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 ): DriverConfig {
-	if (runConfig.endpoint && runConfig.driver) {
+	if (config.endpoint && config.driver) {
 		throw new UserError(
 			"Cannot specify both 'endpoint' and 'driver' in configuration",
 		);
 	}
 
-	if (runConfig.driver) {
-		return runConfig.driver;
+	if (config.driver) {
+		return config.driver;
 	}
 
-	if (runConfig.endpoint || runConfig.token) {
+	if (config.endpoint || config.token) {
 		loggerWithoutContext().debug({
 			msg: "using rivet engine driver",
-			endpoint: runConfig.endpoint,
+			endpoint: config.endpoint,
 		});
 		return createEngineDriver();
 	}

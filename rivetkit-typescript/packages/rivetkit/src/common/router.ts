@@ -8,7 +8,7 @@ import {
 import {
 	buildActorNames,
 	type RegistryConfig,
-} from "@/registry/config/registry";
+} from "@/registry/config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -134,7 +134,7 @@ export interface MetadataResponse {
 
 export function handleMetadataRequest(
 	c: HonoContext,
-	registryConfig: RegistryConfig,
+	config: RegistryConfig,
 	runnerKind: MetadataRunnerKind,
 	clientEndpoint: string | undefined,
 ) {
@@ -144,7 +144,7 @@ export function handleMetadataRequest(
 		runner: {
 			kind: runnerKind,
 		},
-		actorNames: buildActorNames(registryConfig),
+		actorNames: buildActorNames(config),
 		clientEndpoint,
 	};
 

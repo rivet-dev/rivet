@@ -30,7 +30,7 @@ import {
 	parseWebSocketProtocols,
 	routeWebSocket,
 } from "./router-websocket-endpoints";
-import { RunnerConfig } from "@/registry/config/runner";
+import { RegistryConfig } from "@/registry/config";
 import { GetUpgradeWebSocket } from "@/utils";
 
 export type { ActionOpts, ActionOutput, ConnsMessageOpts };
@@ -50,7 +50,7 @@ export type ActorRouter = Hono<{ Bindings: ActorRouterBindings }>;
  * currently is Cloudflare Workers.
  */
 export function createActorRouter(
-	runConfig: RunnerConfig,
+	config: RegistryConfig,
 	actorDriver: ActorDriver,
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	isTest: boolean,
@@ -130,7 +130,7 @@ export function createActorRouter(
 							c.req.raw,
 							c.req.path,
 							c.req.header(),
-							runConfig,
+							config,
 							actorDriver,
 							c.env.actorId,
 							encoding,
@@ -156,7 +156,7 @@ export function createActorRouter(
 
 		return handleAction(
 			c,
-			runConfig,
+			config,
 			actorDriver,
 			actionName,
 			c.env.actorId,
@@ -192,13 +192,13 @@ export function createActorRouter(
 		);
 	});
 
-	if (isInspectorEnabled(runConfig, "actor")) {
+	if (isInspectorEnabled(config, "actor")) {
 		router.route(
 			"/inspect",
 			new Hono<
 				ActorInspectorRouterEnv & { Bindings: ActorRouterBindings }
 			>()
-				.use(secureInspector(runConfig), async (c, next) => {
+				.use(secureInspector(config), async (c, next) => {
 					const inspector = (
 						await actorDriver.loadActor(c.env.actorId)
 					).inspector;

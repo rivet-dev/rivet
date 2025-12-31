@@ -26,8 +26,8 @@ import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runRequestAccessTests } from "./tests/request-access";
-import { DriverConfig } from "@/registry/config/base";
-import { RunnerConfig, RunnerConfigSchema } from "@/registry/config/runner";
+import { DriverConfig } from "@/registry/config";
+import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 import { buildManagerRouter } from "@/manager/router";
 
 export interface SkipTests {
@@ -173,6 +173,10 @@ export async function createTestRuntime(
 	// TODO: Find a cleaner way of flagging an registry as test mode (ideally not in the config itself)
 	// Force enable test
 	registry.config.test.enabled = true;
+	registry.config.inspector = {
+		enabled: true,
+		token: () => "token",
+	};
 
 	// Build drivers
 	const {
@@ -201,28 +205,19 @@ export async function createTestRuntime(
 		// Build driver config
 		// biome-ignore lint/style/useConst: Assigned later
 		let upgradeWebSocket: any;
-		const config: RunnerConfig = RunnerConfigSchema.parse({
-			driver,
-			getUpgradeWebSocket: () => upgradeWebSocket!,
-			inspector: {
-				enabled: true,
-				token: () => "token",
-			},
-		});
 
 		// Create router
-		const managerDriver = driver.manager?.(registry.config, config);
+		const managerDriver = driver.manager?.(registry.config);
 		invariant(managerDriver, "missing manager driver");
 		// const client = createClientWithDriver(
 		// 	managerDriver,
 		// 	ClientConfigSchema.parse({}),
 		// );
-		configureInspectorAccessToken(config, managerDriver);
+		configureInspectorAccessToken(registry.config, managerDriver);
 		const { router } = buildManagerRouter(
 			registry.config,
-			config,
 			managerDriver,
-			undefined,
+			() => upgradeWebSocket,
 		);
 
 		// Inject WebSocket

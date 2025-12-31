@@ -1,4 +1,4 @@
-import type { RegistryConfig } from "@/registry/config/registry";
+import type { RegistryConfig } from "@/registry/config";
 import type { Actions, ActorConfig } from "./config";
 import type { ActionContext } from "./contexts/action";
 import type { ActorContext } from "./contexts/actor";
@@ -72,11 +72,11 @@ export class ActorDefinition<
 }
 
 export function lookupInRegistry(
-	registryConfig: RegistryConfig,
+	config: RegistryConfig,
 	name: string,
 ): AnyActorDefinition {
 	// Build actor
-	const definition = registryConfig.use[name];
+	const definition = config.use[name];
 	if (!definition) throw new Error(`no actor in registry for name ${name}`);
 	return definition;
 }

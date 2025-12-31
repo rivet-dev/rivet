@@ -5,8 +5,7 @@ import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
 import * as errors from "@/actor/errors";
 import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
-import { BaseConfig } from "@/registry/config/base";
-import { RunnerConfig } from "@/registry/config/runner";
+import { RegistryConfig } from "@/registry/config";
 
 export type ConnDriverWebSocketState = Record<never, never>;
 
@@ -14,7 +13,7 @@ export function createWebSocketDriver(
 	hibernatable: ConnDriver["hibernatable"],
 	encoding: Encoding,
 	closePromise: Promise<void>,
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 ): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
 	loggerWithoutContext().debug({
 		msg: "createWebSocketDriver creating driver",
@@ -64,11 +63,11 @@ export function createWebSocketDriver(
 				// Check outgoing message size
 				const messageSize =
 					(serialized as any).byteLength || (serialized as any).length;
-				if (messageSize > runConfig.maxOutgoingMessageSize) {
+				if (messageSize > config.maxOutgoingMessageSize) {
 					actor.rLog.error({
 						msg: "outgoing message exceeds maxOutgoingMessageSize",
 						messageSize,
-						maxOutgoingMessageSize: runConfig.maxOutgoingMessageSize,
+						maxOutgoingMessageSize: config.maxOutgoingMessageSize,
 					});
 					throw new errors.OutgoingMessageTooLong();
 				}

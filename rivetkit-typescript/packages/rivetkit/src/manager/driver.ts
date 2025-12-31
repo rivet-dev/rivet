@@ -1,14 +1,11 @@
 import type { Env, Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
 import type { ManagerInspector } from "@/inspector/manager";
-import type { RegistryConfig } from "@/registry/config/registry";
-import { BaseConfig } from "@/registry/config/base";
-import { RunnerConfig } from "@/registry/config/runner";
+import { RegistryConfig } from "@/registry/config";
 import { GetUpgradeWebSocket } from "@/utils";
 
 export type ManagerDriverBuilder = (
-	registryConfig: RegistryConfig,
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 ) => ManagerDriver;
 
 export interface ManagerDriver {
@@ -43,7 +40,7 @@ export interface ManagerDriver {
 	extraStartupLog?: () => Record<string, unknown>;
 
 	modifyManagerRouter?: (
-		registryConfig: RegistryConfig,
+		config: RegistryConfig,
 		router: Hono,
 	) => void;
 

@@ -8,31 +8,22 @@ import type {
 	ListActorsInput,
 	ManagerDriver,
 } from "@/manager/driver";
-import {
-	createClientWithDriver,
-	type RegistryConfig,
-	RegistryConfigSchema,
-	setup,
-} from "@/mod";
 import { LegacyRunnerConfigSchema } from "@/registry/config/legacy-runner";
 import { VERSION } from "@/utils";
 import { toJsonSchema } from "./schema-utils";
 import { buildManagerRouter } from "@/manager/router";
-import { RunnerConfig, RunnerConfigSchema } from "@/registry/config/runner";
+import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 
 async function main() {
-	const registryConfig: RegistryConfig = RegistryConfigSchema.parse({
+	const config: RegistryConfig = RegistryConfigSchema.parse({
 		use: {},
-	});
-	// const registry = setup(registryConfig);
-
-	const driverConfig: RunnerConfig = RunnerConfigSchema.parse({
 		driver: createFileSystemOrMemoryDriver(false),
 		getUpgradeWebSocket: () => () => unimplemented(),
 		inspector: {
 			enabled: false,
 		},
 	});
+	// const registry = setup(registryConfig);
 
 	const managerDriver: ManagerDriver = {
 		getForId: unimplemented,
@@ -55,8 +46,7 @@ async function main() {
 	// );
 	//
 	const { openapi: managerOpenapi } = buildManagerRouter(
-		registryConfig,
-		driverConfig,
+		config,
 		managerDriver,
 		undefined,
 	);

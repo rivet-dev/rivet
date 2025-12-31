@@ -39,7 +39,7 @@ import {
 	getInitialActorKvState,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
-import { buildActorNames, type RegistryConfig } from "@/registry/config/registry";
+import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
 	type LongTimeoutHandle,
@@ -48,7 +48,6 @@ import {
 	stringifyError,
 } from "@/utils";
 import { logger } from "./log";
-import { RunnerConfig } from "@/registry/config/runner";
 
 const RUNNER_SSE_PING_INTERVAL = 1000;
 
@@ -74,8 +73,7 @@ interface ActorHandler {
 export type DriverContext = {};
 
 export class EngineActorDriver implements ActorDriver {
-	#registryConfig: RegistryConfig;
-	#runConfig: RunnerConfig;
+	#config: RegistryConfig;
 	#managerDriver: ManagerDriver;
 	#inlineClient: Client<any>;
 	#runner: Runner;
@@ -116,44 +114,42 @@ export class EngineActorDriver implements ActorDriver {
 	>();
 
 	constructor(
-		registryConfig: RegistryConfig,
-		runConfig: RunnerConfig,
+		config: RegistryConfig,
 		managerDriver: ManagerDriver,
 		inlineClient: Client<any>,
 	) {
-		this.#registryConfig = registryConfig;
-		this.#runConfig = runConfig;
+		this.#config = config;
 		this.#managerDriver = managerDriver;
 		this.#inlineClient = inlineClient;
 
 		// HACK: Override inspector token (which are likely to be
 		// removed later on) with token from x-rivet-token header
-		const token = runConfig.token;
+		const token = config.token;
 		// TODO:
 		// if (token && runConfig.inspector && runConfig.inspector.enabled) {
 		// 	runConfig.inspector.token = () => token;
 		// }
 
 		this.#actorRouter = createActorRouter(
-			runConfig,
+			config,
 			this,
 			undefined,
-			registryConfig.test.enabled,
+			config.test.enabled,
 		);
 
 		// Create runner configuration
 		const engineRunnerConfig: EngineRunnerConfig = {
 			version: this.#version,
-			endpoint: getEndpoint(runConfig),
+			endpoint: getEndpoint(config),
 			token,
-			namespace: runConfig.namespace,
-			totalSlots: runConfig.totalSlots,
-			runnerName: runConfig.runnerName,
-			runnerKey: runConfig.runnerKey ?? crypto.randomUUID(),
+			namespace: config.namespace,
+			totalSlots: config.runner.totalSlots,
+			runnerName: config.runner.runnerName,
+			runnerKey: config.runner.runnerKey ?? crypto.randomUUID(),
 			metadata: {
-				inspectorToken: this.#runConfig.inspector.token(),
+				inspectorToken: this.#config.inspector.token(),
 			},
-			prepopulateActorNames: buildActorNames(registryConfig),
+			prepopulateActorNames: buildActorNames(config),
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
@@ -177,9 +173,9 @@ export class EngineActorDriver implements ActorDriver {
 		this.#runner.start();
 		logger().debug({
 			msg: "engine runner started",
-			endpoint: runConfig.endpoint,
-			namespace: runConfig.namespace,
-			runnerName: runConfig.runnerName,
+			endpoint: config.endpoint,
+			namespace: config.namespace,
+			runnerName: config.runner.runnerName,
 		});
 	}
 
@@ -453,7 +449,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Create actor instance
 		const definition = lookupInRegistry(
-			this.#registryConfig,
+			this.#config,
 			actorConfig.name,
 		);
 		handler.actor = definition.instantiate();
@@ -566,7 +562,7 @@ export class EngineActorDriver implements ActorDriver {
 				request,
 				requestPath,
 				requestHeaders,
-				this.#runConfig,
+				this.#config,
 				this,
 				actorId,
 				encoding,
@@ -791,7 +787,7 @@ export class EngineActorDriver implements ActorDriver {
 		) {
 			// Find actor config
 			const definition = lookupInRegistry(
-				this.#registryConfig,
+				this.#config,
 				actorInstance.config.name,
 			);
 

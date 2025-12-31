@@ -1,4 +1,4 @@
-import type { Registry } from "@/registry/mod";
+import type { Registry } from "@/registry";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import {
 	type Client,

@@ -2,7 +2,7 @@ import { importNodeDependencies } from "@/utils/node";
 import { FileSystemActorDriver } from "./actor";
 import { FileSystemGlobalState } from "./global-state";
 import { FileSystemManagerDriver } from "./manager";
-import { DriverConfig } from "@/registry/config/base";
+import { DriverConfig } from "@/registry/config";
 
 export { FileSystemActorDriver } from "./actor";
 export { FileSystemGlobalState } from "./global-state";
@@ -19,25 +19,22 @@ export function createFileSystemOrMemoryDriver(
 	const driverConfig: DriverConfig = {
 		name: persist ? "file-system" : "memory",
 		displayName: persist ? "File System" : "Memory",
-		manager: (registryConfig, runConfig) =>
+		manager: (config) =>
 			new FileSystemManagerDriver(
-				registryConfig,
-				runConfig,
+				config,
 				state,
 				driverConfig,
 			),
-		actor: (registryConfig, runConfig, managerDriver, inlineClient) => {
+		actor: (config, managerDriver, inlineClient) => {
 			const actorDriver = new FileSystemActorDriver(
-				registryConfig,
-				runConfig,
+				config,
 				managerDriver,
 				inlineClient,
 				state,
 			);
 
 			state.onRunnerStart(
-				registryConfig,
-				runConfig,
+				config,
 				inlineClient,
 				actorDriver,
 			);

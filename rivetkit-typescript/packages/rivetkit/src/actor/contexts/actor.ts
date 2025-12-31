@@ -1,7 +1,7 @@
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import type { Logger } from "@/common/log";
-import type { Registry } from "@/registry/mod";
+import type { Registry } from "@/registry";
 import type { Conn, ConnId } from "../conn/mod";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
 import type { ActorInstance, SaveStateOptions } from "../instance/mod";

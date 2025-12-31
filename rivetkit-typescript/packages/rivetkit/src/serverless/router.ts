@@ -2,22 +2,19 @@ import invariant from "invariant";
 import { InvalidRequest } from "@/actor/errors";
 import { createRouter } from "@/utils/router";
 import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
-import { type RegistryConfig } from "@/registry/config/registry";
 import { logger } from "./log";
 import { ServerlessStartHeadersSchema } from "@/manager/router-schema";
-import { DriverConfig } from "@/registry/config/base";
-import { RunnerConfig } from "@/registry/config/runner";
-import { ServerlessConfig } from "@/registry/config/serverless";
+import { DriverConfig } from "@/registry/config";
+import { RegistryConfig } from "@/registry/config";
 import { createClient } from "@/client/mod";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import { ClientConfigSchema } from "@/client/config";
 
 export function buildServerlessRouter(
 	driverConfig: DriverConfig,
-	registryConfig: RegistryConfig,
-	serverlessConfig: ServerlessConfig,
+	config: RegistryConfig,
 ) {
-	return createRouter(serverlessConfig.basePath, (router) => {
+	return createRouter(config.serverless.basePath, (router) => {
 		// GET /
 		router.get("/", (c) => {
 			return c.text(
@@ -53,15 +50,18 @@ export function buildServerlessRouter(
 			});
 
 			// Convert config to runner config
-			const newRunnerConfig: RunnerConfig = {
-				...serverlessConfig,
+			const newConfig: RegistryConfig = {
+				...config,
 				endpoint: endpoint,
 				namespace: namespace,
 				token: token,
-				totalSlots: totalSlots,
-				runnerName: runnerName,
-				// Not supported on serverless
-				runnerKey: undefined,
+				runner: {
+					...config.runner,
+					totalSlots: totalSlots,
+					runnerName: runnerName,
+					// Not supported on serverless
+					runnerKey: undefined,
+				},
 			};
 
 			// Create manager driver on demand based on the properties provided
@@ -72,7 +72,7 @@ export function buildServerlessRouter(
 					namespace,
 					token,
 					runnerName,
-					headers: serverlessConfig.headers,
+					headers: config.headers,
 				}),
 			);
 
@@ -87,8 +87,7 @@ export function buildServerlessRouter(
 
 			// Create new actor driver with updated config
 			const actorDriver = driverConfig.actor(
-				registryConfig,
-				newRunnerConfig,
+				newConfig,
 				managerDriver,
 				client,
 			);
@@ -105,9 +104,9 @@ export function buildServerlessRouter(
 		router.get("/metadata", (c) =>
 			handleMetadataRequest(
 				c,
-				registryConfig,
+				config,
 				{ serverless: {} },
-				serverlessConfig.advertiseEndpoint,
+				config.serverless.advertiseEndpoint,
 			),
 		);
 	});

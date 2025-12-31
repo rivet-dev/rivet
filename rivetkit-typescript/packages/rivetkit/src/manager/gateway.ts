@@ -14,8 +14,7 @@ import type { UniversalWebSocket } from "@/mod";
 import { GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
-import { BaseConfig } from "@/registry/config/base";
-import { RunnerConfig } from "@/registry/config/runner";
+import { RegistryConfig } from "@/registry/config";
 
 interface ActorPathInfo {
 	actorId: string;
@@ -27,7 +26,7 @@ interface ActorPathInfo {
  * Handle path-based WebSocket routing
  */
 async function handleWebSocketGatewayPathBased(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	c: HonoContext,
 	actorPathInfo: ActorPathInfo,
@@ -129,7 +128,7 @@ async function handleHttpGatewayPathBased(
  * - HTTP requests: Uses x-rivet-target and x-rivet-actor headers for routing
  */
 export async function actorGateway(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	c: HonoContext,
@@ -142,8 +141,8 @@ export async function actorGateway(
 
 	// Strip basePath from the request path
 	let strippedPath = c.req.path;
-	if (runConfig.managerBasePath && strippedPath.startsWith(runConfig.managerBasePath)) {
-		strippedPath = strippedPath.slice(runConfig.managerBasePath.length);
+	if (config.managerBasePath && strippedPath.startsWith(config.managerBasePath)) {
+		strippedPath = strippedPath.slice(config.managerBasePath.length);
 		// Ensure the path starts with /
 		if (!strippedPath.startsWith("/")) {
 			strippedPath = "/" + strippedPath;
@@ -168,7 +167,7 @@ export async function actorGateway(
 
 		if (isWebSocket) {
 			return await handleWebSocketGatewayPathBased(
-				runConfig,
+				config,
 				managerDriver,
 				c,
 				actorPathInfo,
@@ -188,7 +187,7 @@ export async function actorGateway(
 	// Check if this is a WebSocket upgrade request
 	if (c.req.header("upgrade") === "websocket") {
 		return await handleWebSocketGateway(
-			runConfig,
+			config,
 			managerDriver,
 			getUpgradeWebSocket,
 			c,
@@ -204,7 +203,7 @@ export async function actorGateway(
  * Handle WebSocket requests using sec-websocket-protocol for routing
  */
 async function handleWebSocketGateway(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	getUpgradeWebSocket: GetUpgradeWebSocket|undefined,
 	c: HonoContext,

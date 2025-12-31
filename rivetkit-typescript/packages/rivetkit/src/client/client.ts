@@ -2,7 +2,7 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
-import type { Registry } from "@/registry/mod";
+import type { Registry } from "@/registry";
 import type { ActorActionFunction } from "./actor-common";
 import {
 	type ActorConn,

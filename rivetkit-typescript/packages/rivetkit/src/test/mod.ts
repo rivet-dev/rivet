@@ -9,7 +9,7 @@ import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import { configureInspectorAccessToken } from "@/inspector/utils";
 import { createClientWithDriver, type Registry } from "@/mod";
 import { logger } from "./log";
-import { RunnerConfig, RunnerConfigSchema } from "@/registry/config/runner";
+import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 import { buildManagerRouter } from "@/manager/router";
 
 export interface SetupTestResult<A extends Registry<any>> {
@@ -33,28 +33,24 @@ export async function setupTest<A extends Registry<any>>(
 	// Build driver config
 	// biome-ignore lint/style/useConst: Assigned later
 	let upgradeWebSocket: any;
-	const config: RunnerConfig = RunnerConfigSchema.parse({
-		driver,
-		getUpgradeWebSocket: () => upgradeWebSocket!,
-		inspector: {
-			enabled: true,
-			token: () => "token",
-		},
-	});
+	registry.config.driver = driver;
+	registry.config.inspector = {
+		enabled: true,
+		token: () => "token",
+	};
 
 	// Create router
-	const managerDriver = driver.manager?.(registry.config, config);
+	const managerDriver = driver.manager?.(registry.config);
 	invariant(managerDriver, "missing manager driver");
 	// const internalClient = createClientWithDriver(
 	// 	managerDriver,
 	// 	ClientConfigSchema.parse({}),
 	// );
-	configureInspectorAccessToken(config, managerDriver);
+	configureInspectorAccessToken(registry.config, managerDriver);
 	const { router } = buildManagerRouter(
 		registry.config,
-		config,
 		managerDriver,
-		undefined,
+		() => upgradeWebSocket!,
 	);
 
 	// Inject WebSocket

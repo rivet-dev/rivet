@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { detectRuntime, stringifyError } from "../utils";
 import { logger } from "./log";
-import { BaseConfig } from "./config/base";
+import { RegistryConfig } from "./config";
 
 const DEFAULT_PORT = 6420;
 
@@ -25,7 +25,7 @@ export async function findFreePort(startPort: number = DEFAULT_PORT): Promise<nu
 }
 
 export async function crossPlatformServe(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	const runtime = detectRuntime();
@@ -33,18 +33,18 @@ export async function crossPlatformServe(
 
 	switch (runtime) {
 		case "deno":
-			return serveDeno(runConfig, app);
+			return serveDeno(config, app);
 		case "bun":
-			return serveBun(runConfig, app);
+			return serveBun(config, app);
 		case "node":
-			return serveNode(runConfig, app);
+			return serveNode(config, app);
 		default:
-			return serveNode(runConfig, app);
+			return serveNode(config, app);
 	}
 }
 
 async function serveNode(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import @hono/node-server using string variable to prevent static analysis
@@ -87,7 +87,7 @@ async function serveNode(
 	});
 
 	// Start server
-	const port = runConfig.managerPort;
+	const port = config.managerPort;
 	const server = serve({ fetch: app.fetch, port }, () =>
 		logger().info({ msg: "server listening", port }),
 	);
@@ -97,7 +97,7 @@ async function serveNode(
 }
 
 async function serveDeno(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import hono/deno using string variable to prevent static analysis
@@ -117,7 +117,7 @@ async function serveDeno(
 		process.exit(1);
 	}
 
-	const port = runConfig.managerPort;
+	const port = config.managerPort;
 
 	// Use Deno.serve
 	Deno.serve({ port }, app.fetch);
@@ -127,7 +127,7 @@ async function serveDeno(
 }
 
 async function serveBun(
-	runConfig: BaseConfig,
+	config: RegistryConfig,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import hono/bun using string variable to prevent static analysis
@@ -149,7 +149,7 @@ async function serveBun(
 
 	const { websocket, upgradeWebSocket } = createBunWebSocket();
 
-	const port = runConfig.managerPort;
+	const port = config.managerPort;
 
 	// Use Bun.serve
 	// @ts-expect-error - Bun global

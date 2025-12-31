@@ -2,7 +2,7 @@
 import { createMiddleware } from "hono/factory";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import { inspectorLogger } from "./log";
-import { BaseConfig } from "@/registry/config/base";
+import { RegistryConfig } from "@/registry/config";
 
 export function compareSecrets(providedSecret: string, validSecret: string) {
 	// Early length check to avoid unnecessary processing
@@ -27,7 +27,7 @@ export function compareSecrets(providedSecret: string, validSecret: string) {
 	return true;
 }
 
-export const secureInspector = (config: BaseConfig) =>
+export const secureInspector = (config: RegistryConfig) =>
 	createMiddleware(async (c, next) => {
 		const userToken = c.req.header("Authorization")?.replace("Bearer ", "");
 		if (!userToken) {
@@ -46,7 +46,7 @@ export const secureInspector = (config: BaseConfig) =>
 		await next();
 	});
 
-export function getInspectorUrl(config: BaseConfig): string | undefined {
+export function getInspectorUrl(config: RegistryConfig): string | undefined {
 	if (!config.inspector.enabled) {
 		return undefined;
 	}
@@ -76,7 +76,7 @@ export function getInspectorUrl(config: BaseConfig): string | undefined {
 }
 
 export const isInspectorEnabled = (
-	config: BaseConfig,
+	config: RegistryConfig,
 	// TODO(kacper): Remove context in favor of using the gateway, so only context is the actor
 	context: "actor" | "manager",
 ) => {
@@ -89,7 +89,7 @@ export const isInspectorEnabled = (
 };
 
 export const configureInspectorAccessToken = (
-	config: BaseConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 ) => {
 	if (!config.inspector.token()) {

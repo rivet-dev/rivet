@@ -1,18 +1,14 @@
-import { ServerlessConfig } from "@/registry/config/serverless";
+import { RegistryConfig } from "@/registry/config";
 import { logger } from "./log";
 import invariant from "invariant";
-import {
-	ClientConfig,
-	ClientConfigSchema,
-	convertBaseConfigToClientConfig,
-} from "@/client/config";
+import { convertRegistryConfigToClientConfig } from "@/client/config";
 import {
 	getDatacenters,
 	updateRunnerConfig,
 } from "@/remote-manager-driver/api-endpoints";
 
 export async function configureServerlessRunner(
-	config: ServerlessConfig,
+	config: RegistryConfig,
 ): Promise<void> {
 	logger().debug("configuring serverless runner");
 
@@ -30,10 +26,10 @@ export async function configureServerlessRunner(
 		}
 
 		// Prepare the configuration
-		const customConfig = config.configureRunnerPool;
+		const customConfig = config.serverless.configureRunnerPool;
 		invariant(customConfig, "configureRunnerPool should exist");
 
-		const clientConfig = convertBaseConfigToClientConfig(config);
+		const clientConfig = convertRegistryConfigToClientConfig(config);
 
 		// Fetch all datacenters
 		logger().debug({

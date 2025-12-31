@@ -8,7 +8,7 @@ import {
 	getRivetNamespace,
 	getRivetRunner,
 } from "@/utils/env-vars";
-import { BaseConfig } from "@/registry/config/base";
+import { RegistryConfig } from "@/registry/config";
 
 export const ClientConfigSchema = z.object({
 	/** Endpoint to connect to for Rivet Engine or RivetKit manager API. */
@@ -56,8 +56,8 @@ export type ClientConfigInput = z.input<typeof ClientConfigSchema>;
  * The base config does not include all of the properties of the client config,
  * so this converts the subset of properties in to the client config.
  */
-export function convertBaseConfigToClientConfig(
-	config: BaseConfig,
+export function convertRegistryConfigToClientConfig(
+	config: RegistryConfig,
 ): ClientConfig {
 	return ClientConfigSchema.parse({
 		endpoint: config.endpoint,
