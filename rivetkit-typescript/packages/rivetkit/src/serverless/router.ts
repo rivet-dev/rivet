@@ -8,7 +8,11 @@ import { DriverConfig } from "@/registry/config";
 import { RegistryConfig } from "@/registry/config";
 import { createClient } from "@/client/mod";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
-import { ClientConfigSchema } from "@/client/config";
+import {
+	ClientConfigSchema,
+	convertRegistryConfigToClientConfig,
+} from "@/client/config";
+import { createClientWithDriver } from "@/mod";
 
 export function buildServerlessRouter(
 	driverConfig: DriverConfig,
@@ -66,24 +70,13 @@ export function buildServerlessRouter(
 
 			// Create manager driver on demand based on the properties provided
 			// by headers
+			//
+			// NOTE: This relies on the `newConfig.runner.runnerName` to
+			// configure which runner to create actors on.
 			const managerDriver = new RemoteManagerDriver(
-				ClientConfigSchema.parse({
-					endpoint,
-					namespace,
-					token,
-					runnerName,
-					headers: config.headers,
-				}),
+				convertRegistryConfigToClientConfig(newConfig),
 			);
-
-			// Build new client that actors can use based on the given
-			// credentials
-			const client = createClient({
-				endpoint,
-				namespace,
-				token,
-				runnerName,
-			});
+			const client = createClientWithDriver(managerDriver);
 
 			// Create new actor driver with updated config
 			const actorDriver = driverConfig.actor(

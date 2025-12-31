@@ -59,6 +59,7 @@ runDriverTests({
 					managerDriver,
 					convertRegistryConfigToClientConfig(registry.config),
 				);
+
 				const actorDriver = driverConfig.actor(
 					registry.config,
 					managerDriver,

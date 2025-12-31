@@ -63,8 +63,7 @@ export function convertRegistryConfigToClientConfig(
 		endpoint: config.endpoint,
 		token: config.token,
 		namespace: config.namespace,
-		// TODO: We may need to configure the runner name, TBD how
-		// runnerName: config.runnerName,
+		runnerName: config.runner.runnerName,
 		headers: config.headers,
 		// We don't need health checks for internal clients
 		disableMetadataLookup: true,
