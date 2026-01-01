@@ -35,7 +35,15 @@ const RunnerConfigSchemaUnmerged = z
 		disableDefaultServer: z.boolean().optional().default(false),
 
 		/** @experimental */
-		defaultServerPort: z.number().default(6420),
+		defaultServerPort: z
+			.number()
+			.default(() => {
+				const defaultPort = getEnvUniversal("RIVET_SERVER_PORT");
+				if (typeof defaultPort === "undefined") {
+					return 6420;
+				}
+				return parseInt(defaultPort);
+			}),
 
 		/** @experimental */
 		runEngine: z
