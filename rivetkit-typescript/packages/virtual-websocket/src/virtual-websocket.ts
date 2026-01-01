@@ -3,12 +3,7 @@ import type {
 	RivetEvent,
 	RivetMessageEvent,
 	UniversalWebSocket,
-} from "@/common/websocket-interface";
-import { getLogger } from "./log";
-
-function logger() {
-	return getLogger("virtual-websocket");
-}
+} from "./interface";
 
 export interface VirtualWebSocketOptions {
 	/** Get the current ready state */
@@ -17,6 +12,8 @@ export interface VirtualWebSocketOptions {
 	onSend: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
 	/** Called when close() is invoked */
 	onClose: (code: number, reason: string) => void;
+	/** Called when terminate() is invoked (immediate close without close frame) */
+	onTerminate?: () => void;
 }
 
 /**
@@ -24,6 +21,11 @@ export interface VirtualWebSocketOptions {
  * send/close to callbacks. Used to create linked WebSocket pairs.
  */
 export class VirtualWebSocket implements UniversalWebSocket {
+	static readonly CONNECTING = 0 as const;
+	static readonly OPEN = 1 as const;
+	static readonly CLOSING = 2 as const;
+	static readonly CLOSED = 3 as const;
+
 	readonly CONNECTING = 0 as const;
 	readonly OPEN = 1 as const;
 	readonly CLOSING = 2 as const;
@@ -45,12 +47,21 @@ export class VirtualWebSocket implements UniversalWebSocket {
 		return this.#options.getReadyState();
 	}
 
+	/**
+	 * Binary type for message data. Only "arraybuffer" is supported.
+	 * Setting to "blob" will throw an error.
+	 */
 	get binaryType(): "arraybuffer" | "blob" {
 		return "arraybuffer";
 	}
 
-	set binaryType(_value: "arraybuffer" | "blob") {
-		// Ignored - always use arraybuffer
+	set binaryType(value: "arraybuffer" | "blob") {
+		if (value !== "arraybuffer") {
+			throw new DOMException(
+				'VirtualWebSocket only supports binaryType "arraybuffer"',
+				"NotSupportedError",
+			);
+		}
 	}
 
 	get bufferedAmount(): number {
@@ -79,10 +90,6 @@ export class VirtualWebSocket implements UniversalWebSocket {
 			);
 		}
 		if (state === this.CLOSING || state === this.CLOSED) {
-			logger().debug({
-				msg: "ignoring send, websocket is closing or closed",
-				readyState: state,
-			});
 			return;
 		}
 		this.#options.onSend(data);
@@ -93,7 +100,37 @@ export class VirtualWebSocket implements UniversalWebSocket {
 		if (state === this.CLOSED || state === this.CLOSING) {
 			return;
 		}
+		// Validate close code per WebSocket spec
+		// 1005 and 1006 are reserved and cannot be set by application code
+		if (
+			code !== 1000 &&
+			(code < 3000 || code > 4999) &&
+			code !== 1001 &&
+			code !== 1002 &&
+			code !== 1003 &&
+			code !== 1007 &&
+			code !== 1008 &&
+			code !== 1009 &&
+			code !== 1010 &&
+			code !== 1011
+		) {
+			throw new DOMException("Invalid close code", "InvalidAccessError");
+		}
+		// Validate reason length (must be ≤ 123 bytes UTF-8 encoded)
+		if (new TextEncoder().encode(reason).length > 123) {
+			throw new DOMException("Close reason too long", "SyntaxError");
+		}
 		this.#options.onClose(code, reason);
+	}
+
+	/** @experimental Immediate close without close frame */
+	terminate(): void {
+		if (this.#options.onTerminate) {
+			this.#options.onTerminate();
+		} else {
+			// Fallback to close with abnormal closure code
+			this.#options.onClose(1006, "Abnormal Closure");
+		}
 	}
 
 	addEventListener(type: string, listener: (ev: any) => void): void {
@@ -158,19 +195,6 @@ export class VirtualWebSocket implements UniversalWebSocket {
 	}
 
 	triggerMessage(data: any): void {
-		logger().debug({
-			msg: "triggering message event",
-			dataType: typeof data,
-			dataLength:
-				typeof data === "string"
-					? data.length
-					: data instanceof ArrayBuffer
-						? data.byteLength
-						: data instanceof Uint8Array
-							? data.byteLength
-							: "unknown",
-		});
-
 		const event = {
 			type: "message",
 			data,
@@ -180,12 +204,12 @@ export class VirtualWebSocket implements UniversalWebSocket {
 		this.#dispatch("message", event);
 	}
 
-	triggerClose(code: number, reason: string): void {
+	triggerClose(code: number, reason: string, wasClean?: boolean): void {
 		const event = {
 			type: "close",
 			code,
 			reason,
-			wasClean: code === 1000,
+			wasClean: wasClean ?? code === 1000,
 			target: this,
 			currentTarget: this,
 		} as unknown as RivetCloseEvent;
@@ -201,24 +225,17 @@ export class VirtualWebSocket implements UniversalWebSocket {
 			message: error instanceof Error ? error.message : String(error),
 		} as unknown as RivetEvent;
 		this.#dispatch("error", event);
-		logger().error({ msg: "websocket error", error });
 	}
 
 	#dispatch(type: string, event: any): void {
 		// Dispatch to addEventListener listeners
 		const listeners = this.#listeners.get(type);
 		if (listeners && listeners.length > 0) {
-			logger().debug(
-				`dispatching ${type} event to ${listeners.length} listeners`,
-			);
 			for (const listener of listeners) {
 				try {
 					listener(event);
 				} catch (err) {
-					logger().error({
-						msg: `error in ${type} event listener`,
-						error: err,
-					});
+					console.error("Error in WebSocket event listener:", err);
 				}
 			}
 		}
@@ -230,7 +247,10 @@ export class VirtualWebSocket implements UniversalWebSocket {
 					try {
 						this.#onopen(event);
 					} catch (err) {
-						logger().error({ msg: "error in onopen handler", error: err });
+						console.error(
+							"Error in WebSocket onopen handler:",
+							err,
+						);
 					}
 				}
 				break;
@@ -239,7 +259,10 @@ export class VirtualWebSocket implements UniversalWebSocket {
 					try {
 						this.#onclose(event);
 					} catch (err) {
-						logger().error({ msg: "error in onclose handler", error: err });
+						console.error(
+							"Error in WebSocket onclose handler:",
+							err,
+						);
 					}
 				}
 				break;
@@ -248,7 +271,10 @@ export class VirtualWebSocket implements UniversalWebSocket {
 					try {
 						this.#onerror(event);
 					} catch (err) {
-						logger().error({ msg: "error in onerror handler", error: err });
+						console.error(
+							"Error in WebSocket onerror handler:",
+							err,
+						);
 					}
 				}
 				break;
@@ -257,7 +283,10 @@ export class VirtualWebSocket implements UniversalWebSocket {
 					try {
 						this.#onmessage(event);
 					} catch (err) {
-						logger().error({ msg: "error in onmessage handler", error: err });
+						console.error(
+							"Error in WebSocket onmessage handler:",
+							err,
+						);
 					}
 				}
 				break;
