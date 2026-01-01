@@ -321,13 +321,6 @@ export async function handleRawWebSocket(
 			// this is called synchronously within onOpen.
 			actor.handleRawWebSocket(conn, ws, request);
 		},
-		onMessage: (event: any, ws: any) => {
-			// Find the adapter for this WebSocket
-			const adapter = (ws as any).__adapter;
-			if (adapter) {
-				adapter._handleMessage(event);
-			}
-		},
 		onClose: (evt: any, ws: any) => {
 			// Resolve the close promise
 			closePromiseResolvers.resolve();
