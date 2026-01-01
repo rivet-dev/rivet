@@ -112,6 +112,10 @@ function Content<const Steps extends Step[]>({
 			return onSubmit?.({ values: ref.current, form, stepper });
 		}
 		stepper.next();
+		form.reset(undefined, {
+			keepErrors: false,
+			keepValues: true,
+		});
 	};
 
 	return (
@@ -175,6 +179,7 @@ function StepPanel<const Steps extends Step[]>({
 	showPrevious?: boolean;
 }) {
 	const form = useFormContext();
+
 	return (
 		<Stepper.Panel className="space-y-6">
 			{stepper.match(step.id, content)}
