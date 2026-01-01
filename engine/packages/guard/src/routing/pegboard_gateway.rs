@@ -18,14 +18,45 @@ pub async fn route_request_path_based(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
 	actor_id_str: &str,
-	token: Option<&str>,
+	token_from_path: Option<&str>,
 	original_path: &str,
 	stripped_path: &str,
-	_headers: &hyper::HeaderMap,
-	_is_websocket: bool,
+	headers: &hyper::HeaderMap,
+	is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Parse actor ID
 	let actor_id = Id::parse(actor_id_str).context("invalid actor id in path")?;
+
+	// Prefer token from path, otherwise read headers
+	let token = if let Some(token) = token_from_path {
+		Some(token)
+	} else if is_websocket {
+		// For WebSocket, parse the sec-websocket-protocol header
+		let protocols_header = headers
+			.get(SEC_WEBSOCKET_PROTOCOL)
+			.and_then(|protocols| protocols.to_str().ok())
+			.ok_or_else(|| {
+				crate::errors::MissingHeader {
+					header: "sec-websocket-protocol".to_string(),
+				}
+				.build()
+			})?;
+
+		let protocols = protocols_header
+			.split(',')
+			.map(|p| p.trim())
+			.collect::<Vec<&str>>();
+
+		protocols
+			.iter()
+			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
+	} else {
+		headers
+			.get(X_RIVET_TOKEN)
+			.map(|x| x.to_str())
+			.transpose()
+			.context("invalid x-rivet-token header")?
+	};
 
 	route_request_inner(
 		ctx,

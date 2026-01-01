@@ -9,5 +9,9 @@ fn main() -> Result<()> {
 		.add_instructions(&vergen_gitcl::GitclBuilder::all_git()?)?
 		.emit()?;
 
+	if let Ok(git_sha) = std::env::var("OVERRIDE_GIT_SHA") {
+		println!("cargo:rustc-env=VERGEN_GIT_SHA={git_sha}");
+	}
+
 	Ok(())
 }
