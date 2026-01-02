@@ -1,0 +1,862 @@
+// Types
+
+// Context
+export {
+	DEFAULT_LOOP_COMMIT_INTERVAL,
+	DEFAULT_LOOP_HISTORY_EVERY,
+	DEFAULT_LOOP_HISTORY_KEEP,
+	DEFAULT_MAX_RETRIES,
+	DEFAULT_RETRY_BACKOFF_BASE,
+	DEFAULT_RETRY_BACKOFF_MAX,
+	DEFAULT_STEP_TIMEOUT,
+	WorkflowContextImpl,
+} from "./context.js";
+// Driver
+export type { EngineDriver, KVEntry, KVWrite } from "./driver.js";
+// Errors
+export {
+	CancelledError,
+	CriticalError,
+	EntryInProgressError,
+	EvictedError,
+	HistoryDivergedError,
+	JoinError,
+	MessageWaitError,
+	RaceError,
+	RollbackCheckpointError,
+	RollbackError,
+	SleepError,
+	StepExhaustedError,
+	StepFailedError,
+} from "./errors.js";
+
+// Location utilities
+export {
+	appendLoopIteration,
+	appendName,
+	emptyLocation,
+	isLocationPrefix,
+	isLoopIterationMarker,
+	locationsEqual,
+	locationToKey,
+	parentLocation,
+	registerName,
+	resolveName,
+} from "./location.js";
+
+// Storage utilities
+export {
+	addMessage,
+	consumeMessage,
+	consumeMessages,
+	createEntry,
+	createStorage,
+	deleteEntriesWithPrefix,
+	flush,
+	generateId,
+	getEntry,
+	getOrCreateMetadata,
+	loadMetadata,
+	loadStorage,
+	setEntry,
+} from "./storage.js";
+export type {
+	BranchConfig,
+	BranchOutput,
+	BranchStatus,
+	Entry,
+	EntryKind,
+	EntryKindType,
+	EntryMetadata,
+	EntryStatus,
+	History,
+	JoinEntry,
+	Location,
+	LoopConfig,
+	LoopEntry,
+	LoopIterationMarker,
+	LoopResult,
+	Message,
+	MessageEntry,
+	NameIndex,
+	PathSegment,
+	RaceEntry,
+	RemovedEntry,
+	RollbackCheckpointEntry,
+	RollbackContextInterface,
+	RunWorkflowOptions,
+	SleepEntry,
+	SleepState,
+	StepConfig,
+	StepEntry,
+	Storage,
+	WorkflowContextInterface,
+	WorkflowFunction,
+	WorkflowHandle,
+	WorkflowResult,
+	WorkflowRunMode,
+	WorkflowState,
+} from "./types.js";
+
+// Loop result helpers
+export const Loop = {
+	continue: <S>(state: S): { continue: true; state: S } => ({
+		continue: true,
+		state,
+	}),
+	break: <T>(value: T): { break: true; value: T } => ({
+		break: true,
+		value,
+	}),
+};
+
+import {
+	deserializeEntryMetadata,
+	deserializeWorkflowInput,
+	deserializeWorkflowOutput,
+	deserializeWorkflowState,
+	serializeEntryMetadata,
+	serializeMessage,
+	serializeWorkflowInput,
+	serializeWorkflowState,
+} from "../schemas/serde.js";
+import { type RollbackAction, WorkflowContextImpl } from "./context.js";
+// Main workflow runner
+import type { EngineDriver } from "./driver.js";
+import {
+	EvictedError,
+	MessageWaitError,
+	RollbackCheckpointError,
+	RollbackStopError,
+	SleepError,
+	StepFailedError,
+} from "./errors.js";
+import {
+	buildEntryMetadataPrefix,
+	buildMessageKey,
+	buildWorkflowErrorKey,
+	buildWorkflowInputKey,
+	buildWorkflowOutputKey,
+	buildWorkflowStateKey,
+} from "./keys.js";
+import { flush, generateId, loadMetadata, loadStorage } from "./storage.js";
+import type {
+	RollbackContextInterface,
+	RunWorkflowOptions,
+	Storage,
+	WorkflowFunction,
+	WorkflowHandle,
+	WorkflowResult,
+	WorkflowRunMode,
+	WorkflowState,
+} from "./types.js";
+import { setLongTimeout } from "./utils.js";
+
+/**
+ * Run a workflow and return a handle for managing it.
+ *
+ * The workflow starts executing immediately. Use the returned handle to:
+ * - `handle.result` - Await workflow completion (or yield in `yield` mode)
+ * - `handle.message()` - Send messages to the workflow
+ * - `handle.wake()` - Wake the workflow early
+ * - `handle.evict()` - Request graceful shutdown
+ * - `handle.getOutput()` / `handle.getState()` - Query status
+ */
+interface LiveRuntime {
+	pendingMessageNames: string[];
+	messageWaiters: Array<{ names: string[]; resolve: () => void }>;
+	sleepWaiter?: () => void;
+	isSleeping: boolean;
+}
+
+function createLiveRuntime(): LiveRuntime {
+	return {
+		pendingMessageNames: [],
+		messageWaiters: [],
+		isSleeping: false,
+	};
+}
+
+function notifyMessage(runtime: LiveRuntime, name: string): void {
+	runtime.pendingMessageNames.push(name);
+
+	for (let i = 0; i < runtime.messageWaiters.length; i++) {
+		const waiter = runtime.messageWaiters[i];
+		const matchIndex = runtime.pendingMessageNames.findIndex((pending) =>
+			waiter.names.includes(pending),
+		);
+		if (matchIndex !== -1) {
+			runtime.pendingMessageNames.splice(matchIndex, 1);
+			runtime.messageWaiters.splice(i, 1);
+			waiter.resolve();
+			break;
+		}
+	}
+}
+
+async function waitForMessage(
+	runtime: LiveRuntime,
+	names: string[],
+	abortSignal: AbortSignal,
+): Promise<void> {
+	if (abortSignal.aborted) {
+		throw new EvictedError();
+	}
+
+	const matchIndex = runtime.pendingMessageNames.findIndex((pending) =>
+		names.includes(pending),
+	);
+	if (matchIndex !== -1) {
+		runtime.pendingMessageNames.splice(matchIndex, 1);
+		return;
+	}
+
+	let resolveWaiter: (() => void) | undefined;
+	const waiter = {
+		names,
+		resolve: () => {
+			resolveWaiter?.();
+		},
+	};
+
+	const waiterPromise = new Promise<void>((resolve) => {
+		resolveWaiter = resolve;
+	});
+
+	runtime.messageWaiters.push(waiter);
+
+	try {
+		await awaitWithEviction(waiterPromise, abortSignal);
+	} finally {
+		const index = runtime.messageWaiters.indexOf(waiter);
+		if (index !== -1) {
+			runtime.messageWaiters.splice(index, 1);
+		}
+	}
+
+	if (abortSignal.aborted) {
+		throw new EvictedError();
+	}
+}
+
+function createEvictionWait(signal: AbortSignal): {
+	promise: Promise<never>;
+	cleanup: () => void;
+} {
+	if (signal.aborted) {
+		return {
+			promise: Promise.reject(new EvictedError()),
+			cleanup: () => {},
+		};
+	}
+
+	let onAbort: (() => void) | undefined;
+	const promise = new Promise<never>((_, reject) => {
+		onAbort = () => {
+			reject(new EvictedError());
+		};
+		signal.addEventListener("abort", onAbort, { once: true });
+	});
+
+	return {
+		promise,
+		cleanup: () => {
+			if (onAbort) {
+				signal.removeEventListener("abort", onAbort);
+			}
+		},
+	};
+}
+
+function createRollbackContext(
+	workflowId: string,
+	abortController: AbortController,
+): RollbackContextInterface {
+	return {
+		workflowId,
+		abortSignal: abortController.signal,
+		isEvicted: () => abortController.signal.aborted,
+	};
+}
+
+async function awaitWithEviction<T>(
+	promise: Promise<T>,
+	abortSignal: AbortSignal,
+): Promise<T> {
+	const { promise: evictionPromise, cleanup } =
+		createEvictionWait(abortSignal);
+	try {
+		return await Promise.race([promise, evictionPromise]);
+	} finally {
+		cleanup();
+	}
+}
+
+async function executeRollback<TInput, TOutput>(
+	workflowId: string,
+	workflowFn: WorkflowFunction<TInput, TOutput>,
+	input: TInput,
+	driver: EngineDriver,
+	abortController: AbortController,
+	storage: Storage,
+): Promise<void> {
+	const rollbackActions: RollbackAction[] = [];
+	const ctx = new WorkflowContextImpl(
+		workflowId,
+		storage,
+		driver,
+		undefined,
+		abortController,
+		"rollback",
+		rollbackActions,
+	);
+
+	try {
+		await workflowFn(ctx, input);
+	} catch (error) {
+		if (error instanceof EvictedError) {
+			throw error;
+		}
+		if (error instanceof RollbackStopError) {
+			// Stop replay once we hit incomplete history during rollback.
+		} else {
+			// Ignore workflow errors during rollback replay.
+		}
+	}
+
+	if (rollbackActions.length === 0) {
+		return;
+	}
+
+	const rollbackContext = createRollbackContext(workflowId, abortController);
+
+	for (let i = rollbackActions.length - 1; i >= 0; i--) {
+		if (abortController.signal.aborted) {
+			throw new EvictedError();
+		}
+
+		const action = rollbackActions[i];
+		const metadata = await loadMetadata(storage, driver, action.entryId);
+		if (metadata.rollbackCompletedAt !== undefined) {
+			continue;
+		}
+
+		try {
+			await awaitWithEviction(
+				action.rollback(rollbackContext, action.output),
+				abortController.signal,
+			);
+			metadata.rollbackCompletedAt = Date.now();
+			metadata.rollbackError = undefined;
+		} catch (error) {
+			if (error instanceof EvictedError) {
+				throw error;
+			}
+			metadata.rollbackError =
+				error instanceof Error ? error.message : String(error);
+			throw error;
+		} finally {
+			metadata.dirty = true;
+			await flush(storage, driver);
+		}
+	}
+}
+
+async function setSleepState<TOutput>(
+	storage: Storage,
+	driver: EngineDriver,
+	workflowId: string,
+	deadline: number,
+): Promise<WorkflowResult<TOutput>> {
+	storage.state = "sleeping";
+	await flush(storage, driver);
+	await driver.setAlarm(workflowId, deadline);
+
+	return { state: "sleeping", sleepUntil: deadline };
+}
+
+async function setMessageWaitState<TOutput>(
+	storage: Storage,
+	driver: EngineDriver,
+	messageNames: string[],
+): Promise<WorkflowResult<TOutput>> {
+	storage.state = "sleeping";
+	await flush(storage, driver);
+
+	return { state: "sleeping", waitingForMessages: messageNames };
+}
+
+async function setEvictedState<TOutput>(
+	storage: Storage,
+	driver: EngineDriver,
+): Promise<WorkflowResult<TOutput>> {
+	await flush(storage, driver);
+	return { state: storage.state };
+}
+
+async function setRetryState<TOutput>(
+	storage: Storage,
+	driver: EngineDriver,
+	workflowId: string,
+): Promise<WorkflowResult<TOutput>> {
+	storage.state = "sleeping";
+	await flush(storage, driver);
+
+	const retryAt = Date.now() + 100;
+	await driver.setAlarm(workflowId, retryAt);
+
+	return { state: "sleeping", sleepUntil: retryAt };
+}
+
+async function setFailedState(
+	storage: Storage,
+	driver: EngineDriver,
+	error: unknown,
+): Promise<void> {
+	storage.state = "failed";
+	storage.error = extractErrorInfo(error);
+	await flush(storage, driver);
+}
+
+async function waitForSleep(
+	runtime: LiveRuntime,
+	deadline: number,
+	abortSignal: AbortSignal,
+): Promise<void> {
+	while (true) {
+		const remaining = deadline - Date.now();
+		if (remaining <= 0) {
+			return;
+		}
+
+		let timeoutHandle: ReturnType<typeof setLongTimeout> | undefined;
+		const timeoutPromise = new Promise<void>((resolve) => {
+			timeoutHandle = setLongTimeout(resolve, remaining);
+		});
+
+		const wakePromise = new Promise<void>((resolve) => {
+			runtime.sleepWaiter = resolve;
+		});
+		runtime.isSleeping = true;
+
+		try {
+			await awaitWithEviction(
+				Promise.race([timeoutPromise, wakePromise]),
+				abortSignal,
+			);
+		} finally {
+			runtime.isSleeping = false;
+			runtime.sleepWaiter = undefined;
+			timeoutHandle?.abort();
+		}
+
+		if (abortSignal.aborted) {
+			throw new EvictedError();
+		}
+
+		if (Date.now() >= deadline) {
+			return;
+		}
+	}
+}
+
+async function executeLiveWorkflow<TInput, TOutput>(
+	workflowId: string,
+	workflowFn: WorkflowFunction<TInput, TOutput>,
+	input: TInput,
+	driver: EngineDriver,
+	abortController: AbortController,
+	runtime: LiveRuntime,
+): Promise<WorkflowResult<TOutput>> {
+	let lastResult: WorkflowResult<TOutput> | undefined;
+
+	while (true) {
+		const result = await executeWorkflow(
+			workflowId,
+			workflowFn,
+			input,
+			driver,
+			abortController,
+		);
+		lastResult = result;
+
+		if (result.state !== "sleeping") {
+			return result;
+		}
+
+		if (result.waitingForMessages && result.waitingForMessages.length > 0) {
+			try {
+				await waitForMessage(
+					runtime,
+					result.waitingForMessages,
+					abortController.signal,
+				);
+			} catch (error) {
+				if (error instanceof EvictedError) {
+					return lastResult;
+				}
+				throw error;
+			}
+			continue;
+		}
+
+		if (result.sleepUntil !== undefined) {
+			try {
+				await waitForSleep(
+					runtime,
+					result.sleepUntil,
+					abortController.signal,
+				);
+			} catch (error) {
+				if (error instanceof EvictedError) {
+					return lastResult;
+				}
+				throw error;
+			}
+			continue;
+		}
+
+		return result;
+	}
+}
+
+export function runWorkflow<TInput, TOutput>(
+	workflowId: string,
+	workflowFn: WorkflowFunction<TInput, TOutput>,
+	input: TInput,
+	driver: EngineDriver,
+	options: RunWorkflowOptions = {},
+): WorkflowHandle<TOutput> {
+	const abortController = new AbortController();
+	const mode: WorkflowRunMode = options.mode ?? "yield";
+	const liveRuntime = mode === "live" ? createLiveRuntime() : undefined;
+
+	const resultPromise =
+		mode === "live" && liveRuntime
+			? executeLiveWorkflow(
+					workflowId,
+					workflowFn,
+					input,
+					driver,
+					abortController,
+					liveRuntime,
+				)
+			: executeWorkflow(
+					workflowId,
+					workflowFn,
+					input,
+					driver,
+					abortController,
+				);
+
+	return {
+		workflowId,
+		result: resultPromise,
+
+		async message(name: string, data: unknown): Promise<void> {
+			const messageId = generateId();
+			await driver.set(
+				buildMessageKey(messageId),
+				serializeMessage({
+					id: messageId,
+					name,
+					data,
+					sentAt: Date.now(),
+				}),
+			);
+
+			if (liveRuntime) {
+				notifyMessage(liveRuntime, name);
+			}
+		},
+
+		async wake(): Promise<void> {
+			if (liveRuntime) {
+				if (liveRuntime.isSleeping && liveRuntime.sleepWaiter) {
+					liveRuntime.sleepWaiter();
+				}
+				return;
+			}
+			await driver.setAlarm(workflowId, Date.now());
+		},
+
+		async recover(): Promise<void> {
+			const stateValue = await driver.get(buildWorkflowStateKey());
+			const state = stateValue
+				? deserializeWorkflowState(stateValue)
+				: "pending";
+
+			if (state !== "failed") {
+				return;
+			}
+
+			const metadataEntries = await driver.list(
+				buildEntryMetadataPrefix(),
+			);
+			const writes: { key: Uint8Array; value: Uint8Array }[] = [];
+
+			for (const entry of metadataEntries) {
+				const metadata = deserializeEntryMetadata(entry.value);
+				if (
+					metadata.status !== "failed" &&
+					metadata.status !== "exhausted"
+				) {
+					continue;
+				}
+
+				metadata.status = "pending";
+				metadata.attempts = 0;
+				metadata.lastAttemptAt = 0;
+				metadata.error = undefined;
+				metadata.dirty = false;
+
+				writes.push({
+					key: entry.key,
+					value: serializeEntryMetadata(metadata),
+				});
+			}
+
+			if (writes.length > 0) {
+				await driver.batch(writes);
+			}
+
+			await driver.delete(buildWorkflowErrorKey());
+			await driver.set(
+				buildWorkflowStateKey(),
+				serializeWorkflowState("sleeping"),
+			);
+
+			if (liveRuntime) {
+				if (liveRuntime.isSleeping && liveRuntime.sleepWaiter) {
+					liveRuntime.sleepWaiter();
+				}
+				return;
+			}
+
+			await driver.setAlarm(workflowId, Date.now());
+		},
+
+		evict(): void {
+			abortController.abort(new EvictedError());
+		},
+
+		async cancel(): Promise<void> {
+			abortController.abort(new EvictedError());
+
+			await driver.set(
+				buildWorkflowStateKey(),
+				serializeWorkflowState("cancelled"),
+			);
+
+			await driver.clearAlarm(workflowId);
+		},
+
+		async getOutput(): Promise<TOutput | undefined> {
+			const value = await driver.get(buildWorkflowOutputKey());
+			if (!value) {
+				return undefined;
+			}
+			return deserializeWorkflowOutput<TOutput>(value);
+		},
+
+		async getState(): Promise<WorkflowState> {
+			const value = await driver.get(buildWorkflowStateKey());
+			if (!value) {
+				return "pending";
+			}
+			return deserializeWorkflowState(value);
+		},
+	};
+}
+
+/**
+ * Internal: Execute the workflow and return the result.
+ */
+async function executeWorkflow<TInput, TOutput>(
+	workflowId: string,
+	workflowFn: WorkflowFunction<TInput, TOutput>,
+	input: TInput,
+	driver: EngineDriver,
+	abortController: AbortController,
+): Promise<WorkflowResult<TOutput>> {
+	const storage = await loadStorage(driver);
+
+	// Check if workflow was cancelled
+	if (storage.state === "cancelled") {
+		throw new EvictedError();
+	}
+
+	// Input persistence: store on first run, use stored input on resume
+	const storedInputBytes = await driver.get(buildWorkflowInputKey());
+	let effectiveInput: TInput;
+
+	if (storedInputBytes) {
+		// Resume: use stored input for deterministic replay
+		effectiveInput = deserializeWorkflowInput<TInput>(storedInputBytes);
+	} else {
+		// First run: store the input
+		effectiveInput = input;
+		await driver.set(
+			buildWorkflowInputKey(),
+			serializeWorkflowInput(input),
+		);
+	}
+
+	if (storage.state === "rolling_back") {
+		try {
+			await executeRollback(
+				workflowId,
+				workflowFn,
+				effectiveInput,
+				driver,
+				abortController,
+				storage,
+			);
+		} catch (error) {
+			if (error instanceof EvictedError) {
+				return { state: storage.state };
+			}
+			throw error;
+		}
+
+		storage.state = "failed";
+		await flush(storage, driver);
+
+		const storedError = storage.error
+			? new Error(storage.error.message)
+			: new Error("Workflow failed");
+		if (storage.error?.name) {
+			storedError.name = storage.error.name;
+		}
+		throw storedError;
+	}
+
+	const ctx = new WorkflowContextImpl(
+		workflowId,
+		storage,
+		driver,
+		undefined,
+		abortController,
+	);
+
+	storage.state = "running";
+
+	try {
+		const output = await workflowFn(ctx, effectiveInput);
+
+		storage.state = "completed";
+		storage.output = output;
+		await flush(storage, driver);
+		await driver.clearAlarm(workflowId);
+
+		return { state: "completed", output };
+	} catch (error) {
+		if (error instanceof SleepError) {
+			return await setSleepState(
+				storage,
+				driver,
+				workflowId,
+				error.deadline,
+			);
+		}
+
+		if (error instanceof MessageWaitError) {
+			return await setMessageWaitState(
+				storage,
+				driver,
+				error.messageNames,
+			);
+		}
+
+		if (error instanceof EvictedError) {
+			return await setEvictedState(storage, driver);
+		}
+
+		if (error instanceof StepFailedError) {
+			return await setRetryState(storage, driver, workflowId);
+		}
+
+		if (error instanceof RollbackCheckpointError) {
+			await setFailedState(storage, driver, error);
+			throw error;
+		}
+
+		// Unrecoverable error
+		storage.error = extractErrorInfo(error);
+		storage.state = "rolling_back";
+		await flush(storage, driver);
+
+		try {
+			await executeRollback(
+				workflowId,
+				workflowFn,
+				effectiveInput,
+				driver,
+				abortController,
+				storage,
+			);
+		} catch (rollbackError) {
+			if (rollbackError instanceof EvictedError) {
+				return { state: storage.state };
+			}
+			throw rollbackError;
+		}
+
+		storage.state = "failed";
+		await flush(storage, driver);
+
+		throw error;
+	}
+}
+
+/**
+ * Extract structured error information from an error.
+ */
+function extractErrorInfo(error: unknown): {
+	name: string;
+	message: string;
+	stack?: string;
+	metadata?: Record<string, unknown>;
+} {
+	if (error instanceof Error) {
+		const result: {
+			name: string;
+			message: string;
+			stack?: string;
+			metadata?: Record<string, unknown>;
+		} = {
+			name: error.name,
+			message: error.message,
+			stack: error.stack,
+		};
+
+		// Extract custom properties from error
+		const metadata: Record<string, unknown> = {};
+		for (const key of Object.keys(error)) {
+			if (key !== "name" && key !== "message" && key !== "stack") {
+				const value = (error as unknown as Record<string, unknown>)[
+					key
+				];
+				// Only include serializable values
+				if (
+					typeof value === "string" ||
+					typeof value === "number" ||
+					typeof value === "boolean" ||
+					value === null
+				) {
+					metadata[key] = value;
+				}
+			}
+		}
+		if (Object.keys(metadata).length > 0) {
+			result.metadata = metadata;
+		}
+
+		return result;
+	}
+
+	return {
+		name: "Error",
+		message: String(error),
+	};
+}
