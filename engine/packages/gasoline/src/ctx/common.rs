@@ -67,6 +67,14 @@ pub async fn find_workflow<W: Workflow>(
 		.map_err(Into::into)
 }
 
+/// Finds the first incomplete workflow for each (name, tags) pair in a single batch transaction.
+pub async fn find_workflows(
+	db: &DatabaseHandle,
+	queries: &[(&str, serde_json::Value)],
+) -> Result<Vec<Option<Id>>> {
+	db.find_workflows(queries).await.map_err(Into::into)
+}
+
 /// Finds the first incomplete workflow with the given tags.
 pub async fn get_workflows(
 	db: &DatabaseHandle,

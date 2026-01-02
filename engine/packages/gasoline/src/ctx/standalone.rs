@@ -129,6 +129,17 @@ impl StandaloneCtx {
 			.await
 	}
 
+	/// Finds the first incomplete workflow for each (name, tags) pair in a single batch transaction.
+	#[tracing::instrument(skip_all)]
+	pub async fn find_workflows(
+		&self,
+		queries: &[(&str, serde_json::Value)],
+	) -> Result<Vec<Option<Id>>> {
+		common::find_workflows(&self.db, queries)
+			.in_current_span()
+			.await
+	}
+
 	/// Finds the first incomplete workflow with the given tags.
 	#[tracing::instrument(skip_all)]
 	pub async fn get_workflows(&self, workflow_ids: Vec<Id>) -> Result<Vec<WorkflowData>> {
