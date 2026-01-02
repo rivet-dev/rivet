@@ -1,5 +1,10 @@
 /** biome-ignore-all lint/correctness/useHookAtTopLevel: safe guarded by build consts */
-import { faPowerOff, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import {
+	faExclamationTriangle,
+	faPowerOff,
+	faSpinnerThird,
+	Icon,
+} from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -8,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 import { useMatch, useRouteContext } from "@tanstack/react-router";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { match, P } from "ts-pattern";
 import { useLocalStorage } from "usehooks-ts";
 import { useInspectorCredentials } from "@/app/credentials-context";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
@@ -19,8 +25,9 @@ import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
 import { ActorProvider, useActor } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
+import { QueriedActorError } from "./actor-status-label";
 import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
-import type { ActorId } from "./queries";
+import type { ActorId, ActorStatus } from "./queries";
 
 const InspectorGuardContext = createContext<ReactNode | null>(null);
 
@@ -35,41 +42,59 @@ export function GuardConnectableInspector({
 	actorId,
 	children,
 }: GuardConnectableInspectorProps) {
-	const { data: { destroyedAt, pendingAllocationAt, startedAt } = {} } =
-		useQuery({
-			...useDataProvider().actorQueryOptions(actorId),
-			refetchInterval: 1000,
-			select: (data) => ({
-				destroyedAt: data.destroyedAt,
-				sleepingAt: data.sleepingAt,
-				pendingAllocationAt: data.pendingAllocationAt,
-				startedAt: data.startedAt,
-			}),
-		});
+	const { data: status } = useQuery({
+		...useDataProvider().actorStatusQueryOptions(actorId),
+		refetchInterval: 1000,
+	});
 
-	if (destroyedAt) {
-		return (
+	return match(status)
+		.with(P.union("running", "sleeping"), () => (
+			<ActorContextProvider actorId={actorId}>
+				{children}
+			</ActorContextProvider>
+		))
+		.otherwise((status) => (
 			<InspectorGuardContext.Provider
-				value={<Info>Unavailable for inactive Actors.</Info>}
+				value={<UnavailableInfo actorId={actorId} status={status} />}
 			>
 				{children}
 			</InspectorGuardContext.Provider>
-		);
-	}
+		));
+}
 
-	if (pendingAllocationAt && !startedAt) {
-		return (
-			<InspectorGuardContext.Provider value={<NoRunners />}>
-				{children}
-			</InspectorGuardContext.Provider>
-		);
-	}
-
-	return (
-		<ActorContextProvider actorId={actorId}>
-			{children}
-		</ActorContextProvider>
-	);
+function UnavailableInfo({
+	actorId,
+	status,
+}: {
+	actorId: ActorId;
+	status?: ActorStatus;
+}) {
+	return match(status)
+		.with("crashed", () => (
+			<Info>
+				<Icon
+					icon={faExclamationTriangle}
+					className="text-4xl text-destructive"
+				/>
+				<p>Actor is unavailable.</p>
+				<p>
+					<QueriedActorError actorId={actorId} />
+				</p>
+			</Info>
+		))
+		.with("pending", () => <NoRunners />)
+		.with("stopped", () => (
+			<Info>
+				<p>Actor has been destroyed.</p>
+			</Info>
+		))
+		.otherwise(() => {
+			return (
+				<Info>
+					<p>Actor is unavailable.</p>
+				</Info>
+			);
+		});
 }
 
 function NoRunners() {

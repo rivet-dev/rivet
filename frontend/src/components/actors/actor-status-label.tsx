@@ -1,5 +1,7 @@
+import type { Rivet } from "@rivetkit/engine-api-full";
 import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
+import { match, P } from "ts-pattern";
 import { RelativeTime } from "../relative-time";
 import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
@@ -8,7 +10,7 @@ export const ACTOR_STATUS_LABEL_MAP = {
 	unknown: "Unknown",
 	starting: "Starting",
 	running: "Running",
-	stopped: "Stopped",
+	stopped: "Destroyed",
 	crashed: "Crashed",
 	sleeping: "Sleeping",
 	pending: "Pending",
@@ -48,7 +50,7 @@ export function QueriedActorStatusAdditionalInfo({
 }: {
 	actorId: ActorId;
 }) {
-	const { data: { rescheduleAt } = {} } = useQuery(
+	const { data: { rescheduleAt, error } = {} } = useQuery(
 		useDataProvider().actorStatusAdditionalInfoQueryOptions(actorId),
 	);
 
@@ -64,5 +66,88 @@ export function QueriedActorStatusAdditionalInfo({
 		);
 	}
 
+	if (error) {
+		return <ActorError error={error} />;
+	}
+
 	return null;
+}
+
+export function ActorError({ error }: { error: Rivet.ActorError }) {
+	return match(error)
+		.with(P.string, (errMsg) =>
+			match(errMsg)
+				.with("no_capacity", () => (
+					<span>No capacity available to start Actor.</span>
+				))
+				.exhaustive(),
+		)
+		.with(P.shape({ runnerPoolError: P.any }), (err) => (
+			<span>
+				Runner Pool Error:{" "}
+				<RunnerPoolError error={err.runnerPoolError} />
+			</span>
+		))
+		.with(P.shape({ runnerNoResponse: P.any }), (err) => (
+			<span>
+				Runner ({err.runnerNoResponse.runnerId}) was allocated but Actor
+				did not respond.
+			</span>
+		))
+		.exhaustive();
+}
+
+export function QueriedActorError({ actorId }: { actorId: ActorId }) {
+	const { data: error, isError } = useQuery(
+		useDataProvider().actorErrorQueryOptions(actorId),
+	);
+
+	if (isError || !error) {
+		return null;
+	}
+
+	return <ActorError error={error} />;
+}
+
+export function RunnerPoolError({
+	error,
+}: {
+	error: Rivet.RunnerPoolError | undefined;
+}) {
+	return match(error)
+		.with(P.nullish, () => null)
+		.with(P.string, (errStr) =>
+			match(errStr)
+				.with(
+					"internal_error",
+					() => "Internal error occurred in runner pool",
+				)
+				.with(
+					"serverless_invalid_base64",
+					() => "Invalid base64 encoding in serverless response",
+				)
+				.with(
+					"serverless_stream_ended_early",
+					() => "Connection terminated unexpectedly",
+				)
+				.otherwise(() => "Unknown runner pool error"),
+		)
+		.with(P.shape({ serverlessHttpError: P.any }), (errObj) => {
+			const { statusCode, body } = errObj.serverlessHttpError;
+			const code = statusCode ?? "unknown";
+			return body ? `HTTP ${code} error: ${body}` : `HTTP ${code} error`;
+		})
+		.with(P.shape({ serverlessConnectionError: P.any }), (errObj) => {
+			const message = errObj.serverlessConnectionError?.message;
+			return message
+				? `Connection failed: ${message}`
+				: "Unable to connect to serverless endpoint";
+		})
+		.with(P.shape({ serverlessInvalidPayload: P.any }), (errObj) => {
+			const message = errObj.serverlessInvalidPayload?.message;
+			return message
+				? `Invalid request payload: ${message}`
+				: "Request payload validation failed";
+		})
+		.exhaustive();
 }

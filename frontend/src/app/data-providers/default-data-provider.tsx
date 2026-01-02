@@ -189,9 +189,17 @@ const defaultContext = {
 	actorStatusAdditionalInfoQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
-			select: ({ rescheduleAt }) => ({
+			select: ({ rescheduleAt, error }) => ({
 				rescheduleAt,
+				error,
 			}),
+		});
+	},
+
+	actorErrorQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			...this.actorQueryOptions(actorId),
+			select: (data) => data.error,
 		});
 	},
 

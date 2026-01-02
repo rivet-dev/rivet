@@ -697,6 +697,7 @@ function transformActor(a: Rivet.Actor): Actor {
 		rescheduleAt: a.rescheduleTs
 			? new Date(a.rescheduleTs).toISOString()
 			: undefined,
+		error: a.error,
 		features: [
 			ActorFeature.Config,
 			ActorFeature.Connections,
