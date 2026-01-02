@@ -39,10 +39,10 @@ import {
 } from "@/serde";
 import {
 	bufferToArrayBuffer,
-	getEnvUniversal,
 	httpUserAgent,
 	promiseWithResolvers,
 } from "@/utils";
+import { getRivetkitLogMessage } from "@/utils/env-vars";
 import type { ActorDefinitionActions } from "./actor-common";
 import { queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
@@ -479,7 +479,7 @@ enc
 
 		const response = await this.#parseMessage(data as ConnMessage);
 		logger().trace(
-			getEnvUniversal("_RIVETKIT_LOG_MESSAGE")
+			getRivetkitLogMessage()
 				? {
 						msg: "parsed message",
 						message:

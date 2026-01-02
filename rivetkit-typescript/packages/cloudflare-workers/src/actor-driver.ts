@@ -324,13 +324,13 @@ export function createCloudflareActorsActorDriverBuilder(
 	globalState: CloudflareDurableObjectGlobalState,
 ) {
 	return (
-		registryConfig: RegistryConfig,
+		config: RegistryConfig,
 		runConfig: RunConfig,
 		managerDriver: ManagerDriver,
 		inlineClient: Client<any>,
 	) => {
 		return new CloudflareActorsActorDriver(
-			registryConfig,
+			config,
 			runConfig,
 			managerDriver,
 			inlineClient,

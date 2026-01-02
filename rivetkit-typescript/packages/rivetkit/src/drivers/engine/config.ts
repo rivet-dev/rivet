@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ClientConfigSchema } from "@/client/config";
-import { getEnvUniversal } from "@/utils";
+import { getRivetRunnerKey } from "@/utils/env-vars";
 
 const EngineConfigSchemaBase = z
 	.object({
@@ -8,7 +8,7 @@ const EngineConfigSchemaBase = z
 		runnerKey: z
 			.string()
 			.optional()
-			.transform((x) => x ?? getEnvUniversal("RIVET_RUNNER_KEY")),
+			.transform((x) => x ?? getRivetRunnerKey()),
 
 		/** How many actors this runner can run. */
 		totalSlots: z.number().default(100_000),

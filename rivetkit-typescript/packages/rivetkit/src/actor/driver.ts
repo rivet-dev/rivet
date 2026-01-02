@@ -1,14 +1,12 @@
 import type { Context as HonoContext } from "hono";
 import type { AnyClient } from "@/client/client";
 import type { ManagerDriver } from "@/manager/driver";
-import type { RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
-import { type AnyConn, Conn } from "./conn/mod";
+import { type AnyConn } from "./conn/mod";
 import type { AnyActorInstance } from "./instance/mod";
+import { RegistryConfig } from "@/registry/config";
 
 export type ActorDriverBuilder = (
-	registryConfig: RegistryConfig,
-	runConfig: RunnerConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 	inlineClient: AnyClient,
 ) => ActorDriver;

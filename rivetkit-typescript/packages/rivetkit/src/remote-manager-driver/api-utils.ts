@@ -3,6 +3,7 @@ import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
 import { combineUrlPath } from "@/utils";
 import { logger } from "./log";
+import { RegistryConfig } from "@/registry/config";
 
 // Error class for Engine API errors
 export class EngineApiError extends Error {
@@ -16,7 +17,7 @@ export class EngineApiError extends Error {
 	}
 }
 
-export function getEndpoint(config: ClientConfig) {
+export function getEndpoint(config: ClientConfig | RegistryConfig) {
 	return config.endpoint ?? "http://127.0.0.1:6420";
 }
 

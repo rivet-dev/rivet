@@ -1,9 +1,9 @@
 import type { Client } from "@/client/client";
+import { convertRegistryConfigToClientConfig } from "@/client/config";
 import type { ManagerDriver } from "@/manager/driver";
-import type { RegistryConfig } from "@/registry/config";
-import type { DriverConfig, RunnerConfig } from "@/registry/run-config";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import { EngineActorDriver } from "./actor-driver";
+import { RegistryConfig, DriverConfig } from "@/registry/config";
 
 export { EngineActorDriver } from "./actor-driver";
 export {
@@ -15,21 +15,22 @@ export {
 export function createEngineDriver(): DriverConfig {
 	return {
 		name: "engine",
-		manager: (_registryConfig, runConfig) => {
-			return new RemoteManagerDriver(runConfig);
+		displayName: "Engine",
+		manager: (config: RegistryConfig) => {
+			const clientConfig = convertRegistryConfigToClientConfig(config);
+			return new RemoteManagerDriver(clientConfig);
 		},
 		actor: (
-			registryConfig: RegistryConfig,
-			runConfig: RunnerConfig,
+			config: RegistryConfig,
 			managerDriver: ManagerDriver,
 			inlineClient: Client<any>,
 		) => {
 			return new EngineActorDriver(
-				registryConfig,
-				runConfig,
+				config,
 				managerDriver,
 				inlineClient,
 			);
 		},
+		autoStartActorDriver: true,
 	};
 }

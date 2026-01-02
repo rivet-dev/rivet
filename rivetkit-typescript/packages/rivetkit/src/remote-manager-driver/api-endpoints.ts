@@ -108,7 +108,7 @@ export async function getDatacenters(
 }
 
 // MARK: Update runner config
-export interface RunnerConfigRequest {
+export interface RegistryConfigRequest {
 	datacenters: Record<
 		string,
 		{
@@ -128,9 +128,9 @@ export interface RunnerConfigRequest {
 export async function updateRunnerConfig(
 	config: ClientConfig,
 	runnerName: string,
-	request: RunnerConfigRequest,
+	request: RegistryConfigRequest,
 ): Promise<void> {
-	return apiCall<RunnerConfigRequest, void>(
+	return apiCall<RegistryConfigRequest, void>(
 		config,
 		"PUT",
 		`/runner-configs/${runnerName}`,

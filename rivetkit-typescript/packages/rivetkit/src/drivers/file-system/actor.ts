@@ -4,8 +4,8 @@ import type {
 	AnyActorInstance,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
-import type { RegistryConfig, RunConfig } from "@/mod";
 import type { FileSystemGlobalState } from "./global-state";
+import { RegistryConfig } from "@/registry/config";
 
 export type ActorDriverContext = Record<never, never>;
 
@@ -13,21 +13,18 @@ export type ActorDriverContext = Record<never, never>;
  * File System implementation of the Actor Driver
  */
 export class FileSystemActorDriver implements ActorDriver {
-	#registryConfig: RegistryConfig;
-	#runConfig: RunConfig;
+	#config: RegistryConfig;
 	#managerDriver: ManagerDriver;
 	#inlineClient: AnyClient;
 	#state: FileSystemGlobalState;
 
 	constructor(
-		registryConfig: RegistryConfig,
-		runConfig: RunConfig,
+		config: RegistryConfig,
 		managerDriver: ManagerDriver,
 		inlineClient: AnyClient,
 		state: FileSystemGlobalState,
 	) {
-		this.#registryConfig = registryConfig;
-		this.#runConfig = runConfig;
+		this.#config = config;
 		this.#managerDriver = managerDriver;
 		this.#inlineClient = inlineClient;
 		this.#state = state;
@@ -35,8 +32,7 @@ export class FileSystemActorDriver implements ActorDriver {
 
 	async loadActor(actorId: string): Promise<AnyActorInstance> {
 		return this.#state.startActor(
-			this.#registryConfig,
-			this.#runConfig,
+			this.#config,
 			this.#inlineClient,
 			this,
 			actorId,

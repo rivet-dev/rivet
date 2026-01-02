@@ -29,8 +29,4 @@ export type {
 	ManagerDisplayInformation,
 	ManagerDriver,
 } from "@/manager/driver";
-export {
-	DriverConfigSchema,
-	RunnerConfigSchema as RunConfigSchema,
-} from "@/registry/run-config";
 export { getInitialActorKvState } from "./utils";

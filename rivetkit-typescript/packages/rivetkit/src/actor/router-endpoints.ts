@@ -13,7 +13,6 @@ import {
 	WS_PROTOCOL_ENCODING,
 } from "@/common/actor-router-consts";
 import { stringifyError } from "@/common/utils";
-import type { RunnerConfig } from "@/registry/run-config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -36,6 +35,7 @@ import { createHttpDriver } from "./conn/drivers/http";
 import { createRawRequestDriver } from "./conn/drivers/raw-request";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
+import { RegistryConfig } from "@/registry/config";
 
 export interface ActionOpts {
 	req?: HonoRequest;
@@ -66,7 +66,7 @@ export interface FetchOpts {
  */
 export async function handleAction(
 	c: HonoContext,
-	runConfig: RunnerConfig,
+	config: RegistryConfig,
 	actorDriver: ActorDriver,
 	actionName: string,
 	actorId: string,
@@ -78,7 +78,7 @@ export async function handleAction(
 	const arrayBuffer = await c.req.arrayBuffer();
 
 	// Check message size
-	if (arrayBuffer.byteLength > runConfig.maxIncomingMessageSize) {
+	if (arrayBuffer.byteLength > config.maxIncomingMessageSize) {
 		throw new errors.IncomingMessageTooLong();
 	}
 
@@ -139,7 +139,7 @@ export async function handleAction(
 
 	// Check outgoing message size
 	const messageSize = serialized instanceof Uint8Array ? serialized.byteLength : serialized.length;
-	if (messageSize > runConfig.maxOutgoingMessageSize) {
+	if (messageSize > config.maxOutgoingMessageSize) {
 		throw new errors.OutgoingMessageTooLong();
 	}
 

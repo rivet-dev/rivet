@@ -1,4 +1,4 @@
-import type { Registry } from "@/registry/mod";
+import type { Registry } from "@/registry";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import {
 	type Client,
@@ -9,7 +9,7 @@ import { ClientConfigSchema } from "./config";
 
 export {
 	ActorDefinition,
-	AnyActorDefinition,
+	type AnyActorDefinition,
 } from "@/actor/definition";
 export type { Encoding } from "@/actor/protocol/serde";
 export {
@@ -27,8 +27,9 @@ export type {
 	ConnectionStateCallback,
 	EventUnsubscribe,
 	StatusChangeCallback,
+	ActorConnStatus,
 } from "./actor-conn";
-export { ActorConnRaw, ActorConnStatus } from "./actor-conn";
+export { ActorConnRaw } from "./actor-conn";
 export type { ActorHandle } from "./actor-handle";
 export { ActorHandleRaw } from "./actor-handle";
 export type {

@@ -6,21 +6,26 @@ import { EngingConfigSchema as EngineConfigSchema } from "@/drivers/engine/confi
 import { InspectorConfigSchema } from "@/inspector/config";
 import type { ManagerDriverBuilder } from "@/manager/driver";
 import type { GetUpgradeWebSocket } from "@/utils";
-import { getEnvUniversal, VERSION } from "@/utils";
+import { VERSION } from "@/utils";
+import {
+	getRivetRunEngine,
+	getRivetRunEngineVersion,
+	getRivetRunnerKind,
+} from "@/utils/env-vars";
 
-export const DriverConfigSchema = z.object({
+export const LegacyDriverConfigSchema = z.object({
 	/** Machine-readable name to identify this driver by. */
 	name: z.string(),
 	manager: z.custom<ManagerDriverBuilder>(),
 	actor: z.custom<ActorDriverBuilder>(),
 });
 
-export type DriverConfig = z.infer<typeof DriverConfigSchema>;
+export type LegacyDriverConfig = z.infer<typeof LegacyDriverConfigSchema>;
 
 /** Base config used for the actor config across all platforms. */
-const RunnerConfigSchemaUnmerged = z
+const LegacyRunnerConfigSchemaUnmerged = z
 	.object({
-		driver: DriverConfigSchema.optional(),
+		driver: LegacyDriverConfigSchema.optional(),
 
 		/** @experimental */
 		maxIncomingMessageSize: z.number().optional().default(65_536),
@@ -41,14 +46,14 @@ const RunnerConfigSchemaUnmerged = z
 		runEngine: z
 			.boolean()
 			.optional()
-			.default(() => getEnvUniversal("RIVET_RUN_ENGINE") === "1"),
+			.default(() => getRivetRunEngine()),
 
 		/** @experimental */
 		runEngineVersion: z
 			.string()
 			.optional()
 			.default(
-				() => getEnvUniversal("RIVET_RUN_ENGINE_VERSION") ?? VERSION,
+				() => getRivetRunEngineVersion() ?? VERSION,
 			),
 
 		/** @experimental */
@@ -67,7 +72,7 @@ const RunnerConfigSchemaUnmerged = z
 			.enum(["serverless", "normal"])
 			.optional()
 			.default(() =>
-				getEnvUniversal("RIVET_RUNNER_KIND") === "serverless"
+				getRivetRunnerKind() === "serverless"
 					? "serverless"
 					: "normal",
 			),
@@ -131,10 +136,10 @@ const RunnerConfigSchemaUnmerged = z
 	})
 	.merge(EngineConfigSchema.removeDefault());
 
-const RunnerConfigSchemaBase = RunnerConfigSchemaUnmerged;
-export const RunnerConfigSchema = RunnerConfigSchemaBase.default(() =>
-	RunnerConfigSchemaBase.parse({}),
+const LegacyRunnerConfigSchemaBase = LegacyRunnerConfigSchemaUnmerged;
+export const LegacyRunnerConfigSchema = LegacyRunnerConfigSchemaBase.default(() =>
+	LegacyRunnerConfigSchemaBase.parse({}),
 );
 
-export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
-export type RunnerConfigInput = z.input<typeof RunnerConfigSchema>;
+export type LegacyRunnerConfig = z.infer<typeof LegacyRunnerConfigSchema>;
+export type LegacyRunnerConfigInput = z.input<typeof LegacyRunnerConfigSchema>;

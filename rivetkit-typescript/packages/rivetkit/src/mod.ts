@@ -12,5 +12,6 @@ export {
 	createMemoryDriver,
 } from "@/drivers/file-system/mod";
 export type { ActorQuery } from "@/manager/protocol/query";
-export * from "@/registry/mod";
+export * from "@/registry";
+export * from "@/registry/config";
 export { toUint8Array } from "@/utils";

@@ -1,12 +1,12 @@
 import { type TestContext, vi } from "vitest";
 import { assertUnreachable } from "@/actor/utils";
 import { type Client, createClient } from "@/client/mod";
-import { RunConfigSchema } from "@/driver-helpers/mod";
 import { createClientWithDriver } from "@/mod";
 import type { registry } from "../../fixtures/driver-test-suite/registry";
 import { logger } from "./log";
 import type { DriverTestConfig } from "./mod";
 import { createTestInlineClientDriver } from "./test-inline-client-driver";
+import { ClientConfigSchema } from "@/client/config";
 
 export const FAKE_TIME = new Date("2024-01-01T00:00:00.000Z");
 
@@ -44,7 +44,7 @@ export async function setupDriverTest(
 		// Use inline client from driver
 		const encoding = driverTestConfig.encoding ?? "bare";
 		const managerDriver = createTestInlineClientDriver(endpoint, encoding);
-		const runConfig = RunConfigSchema.parse({
+		const runConfig = ClientConfigSchema.parse({
 			encoding: encoding,
 		});
 		client = createClientWithDriver(managerDriver, runConfig);

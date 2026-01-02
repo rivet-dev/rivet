@@ -20,23 +20,19 @@ import type {
 import { ManagerInspector } from "@/inspector/manager";
 import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
-import type {
-	DriverConfig,
-	Encoding,
-	RegistryConfig,
-	RunConfig,
-	UniversalWebSocket,
-} from "@/mod";
+import type { Encoding, UniversalWebSocket } from "@/mod";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
 import { generateActorId } from "./utils";
+import { RegistryConfig, DriverConfig } from "@/registry/config";
+import { GetUpgradeWebSocket } from "@/utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
-	#registryConfig: RegistryConfig;
-	#runConfig: RunConfig;
+	#config: RegistryConfig;
 	#state: FileSystemGlobalState;
 	#driverConfig: DriverConfig;
+	#getUpgradeWebSocket: GetUpgradeWebSocket | undefined;
 
 	#actorDriver: ActorDriver;
 	#actorRouter: ActorRouter;
@@ -44,17 +40,15 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	inspector?: ManagerInspector;
 
 	constructor(
-		registryConfig: RegistryConfig,
-		runConfig: RunConfig,
+		config: RegistryConfig,
 		state: FileSystemGlobalState,
 		driverConfig: DriverConfig,
 	) {
-		this.#registryConfig = registryConfig;
-		this.#runConfig = runConfig;
+		this.#config = config;
 		this.#state = state;
 		this.#driverConfig = driverConfig;
 
-		if (runConfig.inspector.enabled) {
+		if (this.#config.inspector.enabled) {
 			const startedAt = new Date().toISOString();
 			function transformActor(actorState: schema.ActorState): Actor {
 				return {
@@ -99,7 +93,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 						}
 					},
 					getBuilds: async () => {
-						return Object.keys(this.#registryConfig.use).map(
+						return Object.keys(this.#config.use).map(
 							(name) => ({
 								name,
 							}),
@@ -122,20 +116,18 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		}
 
 		// Actors run on the same node as the manager, so we create a dummy actor router that we route requests to
-		const inlineClient = createClientWithDriver(
-			this,
-			ClientConfigSchema.parse({}),
-		);
+		const inlineClient = createClientWithDriver(this);
+
 		this.#actorDriver = this.#driverConfig.actor(
-			registryConfig,
-			runConfig,
+			config,
 			this,
 			inlineClient,
 		);
 		this.#actorRouter = createActorRouter(
-			this.#runConfig,
+			this.#config,
 			this.#actorDriver,
-			registryConfig.test.enabled,
+			undefined,
+			config.test.enabled,
 		);
 	}
 
@@ -170,7 +162,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			fakeRequest,
 			pathOnly,
 			{},
-			this.#runConfig,
+			this.#config,
 			this.#actorDriver,
 			actorId,
 			encoding,
@@ -200,7 +192,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<Response> {
-		const upgradeWebSocket = this.#runConfig.getUpgradeWebSocket?.();
+		const upgradeWebSocket = this.#getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
 
 		// Handle raw WebSocket paths
@@ -213,7 +205,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			c.req.raw,
 			normalizedPath,
 			c.req.header(),
-			this.#runConfig,
+			this.#config,
 			this.#actorDriver,
 			actorId,
 			encoding,
@@ -349,7 +341,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	displayInformation(): ManagerDisplayInformation {
 		return {
-			name: this.#state.persist ? "File System" : "Memory",
 			properties: {
 				...(this.#state.persist
 					? { Data: this.#state.storagePath }
@@ -368,5 +359,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	getOrCreateInspectorAccessToken() {
 		return this.#state.getOrCreateInspectorAccessToken();
+	}
+
+	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
+		this.#getUpgradeWebSocket = getUpgradeWebSocket;
 	}
 }
