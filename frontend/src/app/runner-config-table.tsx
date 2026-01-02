@@ -27,6 +27,8 @@ import { ActorRegion } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
 import { hasMetadataProvider } from "./data-providers/engine-data-provider";
 
+const TABLE_COLUMN_COUNT = 6;
+
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;
 	isError?: boolean;
@@ -57,7 +59,7 @@ export function RunnerConfigsTable({
 			<TableBody>
 				{!isLoading && !isError && configs?.length === 0 ? (
 					<TableRow>
-						<TableCell colSpan={6}>
+						<TableCell colSpan={TABLE_COLUMN_COUNT}>
 							<Text className="text-center">
 								There's no providers matching criteria.
 							</Text>
@@ -66,7 +68,7 @@ export function RunnerConfigsTable({
 				) : null}
 				{isError ? (
 					<TableRow>
-						<TableCell colSpan={6}>
+						<TableCell colSpan={TABLE_COLUMN_COUNT}>
 							<Text className="text-center">
 								An error occurred while fetching providers.
 							</Text>
@@ -91,7 +93,7 @@ export function RunnerConfigsTable({
 
 				{!isLoading && hasNextPage ? (
 					<TableRow>
-						<TableCell colSpan={6}>
+						<TableCell colSpan={TABLE_COLUMN_COUNT}>
 							<Button
 								variant="outline"
 								isLoading={isLoading}
@@ -292,8 +294,9 @@ function Regions({ regions }: { regions: string[] }) {
 
 function RunnerPoolErrorIndicator({ config }: { config: Rivet.RunnerConfig }) {
 	// Check if there's an error in the config
-	// The error field might be added to the API response in the future
-	const error = (config as any).error;
+	// The error field will be added to the API response in the future
+	type RunnerConfigWithError = Rivet.RunnerConfig & { error?: unknown };
+	const error = (config as RunnerConfigWithError).error;
 
 	if (!error) {
 		return null;
