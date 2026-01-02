@@ -3782,6 +3782,46 @@ importers:
         specifier: ^8.5.0
         version: 8.5.0(@microsoft/api-extractor@7.53.2(@types/node@22.18.1))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.2)
 
+  rivetkit-typescript/packages/workflow-engine:
+    dependencies:
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.2
+        version: 0.6.2
+      cbor-x:
+        specifier: ^1.6.0
+        version: 1.6.0
+      fdb-tuple:
+        specifier: ^1.0.0
+        version: 1.0.0
+      vbare:
+        specifier: ^0.0.4
+        version: 0.0.4
+    devDependencies:
+      '@bare-ts/tools':
+        specifier: ^0.13.0
+        version: 0.13.0(@bare-ts/lib@0.6.0)
+      '@biomejs/biome':
+        specifier: ^2.2.3
+        version: 2.3.11
+      '@types/node':
+        specifier: ^22.13.1
+        version: 22.19.5
+      commander:
+        specifier: ^12.0.0
+        version: 12.1.0
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.5))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.2)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.20.6
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
+
   scripts/release:
     dependencies:
       commander:
@@ -11533,6 +11573,9 @@ packages:
 
   fd-slicer@1.1.0:
     resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
+
+  fdb-tuple@1.0.0:
+    resolution: {integrity: sha512-8jSvKPCYCgTpi9Pt87qlfTk6griyMx4Gk3Xv31Dp72Qp8b6XgIyFsMm8KzPmFJ9iJ8K4pGvRxvOS8D0XGnrkjw==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -25353,6 +25396,8 @@ snapshots:
   fd-slicer@1.1.0:
     dependencies:
       pend: 1.2.0
+
+  fdb-tuple@1.0.0: {}
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:

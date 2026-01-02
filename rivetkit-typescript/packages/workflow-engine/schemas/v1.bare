@@ -1,0 +1,203 @@
+# Workflow Engine BARE Schema v1
+#
+# This schema defines the binary encoding for workflow engine persistence.
+# Types marked with `data` are arbitrary binary blobs (for user-provided data).
+
+# Opaque user data (CBOR-encoded)
+type Cbor data
+
+# MARK: Location
+# Index into the entry name registry
+type NameIndex u32
+
+# Marker for a loop iteration in a location path
+type LoopIterationMarker struct {
+	loop: NameIndex
+	iteration: u32
+}
+
+# A segment in a location path - either a name index or a loop iteration marker
+type PathSegment union {
+	NameIndex |
+	LoopIterationMarker
+}
+
+# Location identifies where an entry exists in the workflow execution tree
+type Location list<PathSegment>
+
+# MARK: Entry Status
+type EntryStatus enum {
+	PENDING
+	RUNNING
+	COMPLETED
+	FAILED
+	EXHAUSTED
+}
+
+# MARK: Sleep State
+type SleepState enum {
+	PENDING
+	COMPLETED
+	INTERRUPTED
+}
+
+# MARK: Branch Status
+type BranchStatusType enum {
+	PENDING
+	RUNNING
+	COMPLETED
+	FAILED
+	CANCELLED
+}
+
+# MARK: Step Entry
+type StepEntry struct {
+	# Output value (CBOR-encoded arbitrary data)
+	output: optional<Cbor>
+	# Error message if step failed
+	error: optional<str>
+}
+
+# MARK: Loop Entry
+type LoopEntry struct {
+	# Loop state (CBOR-encoded arbitrary data)
+	state: Cbor
+	# Current iteration number
+	iteration: u32
+	# Output value if loop completed (CBOR-encoded arbitrary data)
+	output: optional<Cbor>
+}
+
+# MARK: Sleep Entry
+type SleepEntry struct {
+	# Deadline timestamp in milliseconds
+	deadline: u64
+	# Current sleep state
+	state: SleepState
+}
+
+# MARK: Message Entry
+ type MessageEntry struct {
+ 	# Message name
+ 	name: str
+ 	# Message data (CBOR-encoded arbitrary data)
+ 	messageData: Cbor
+ }
+
+ # MARK: Rollback Checkpoint Entry
+ type RollbackCheckpointEntry struct {
+ 	# Checkpoint name
+ 	name: str
+ }
+
+ # MARK: Branch Status
+
+type BranchStatus struct {
+	status: BranchStatusType
+	# Output value if completed (CBOR-encoded arbitrary data)
+	output: optional<Cbor>
+	# Error message if failed
+	error: optional<str>
+}
+
+# MARK: Join Entry
+type JoinEntry struct {
+	# Map of branch name to status
+	branches: map<str><BranchStatus>
+}
+
+# MARK: Race Entry
+type RaceEntry struct {
+	# Name of the winning branch, or null if no winner yet
+	winner: optional<str>
+	# Map of branch name to status
+	branches: map<str><BranchStatus>
+}
+
+# MARK: Removed Entry
+type RemovedEntry struct {
+	# Original entry type before removal
+	originalType: str
+	# Original entry name
+	originalName: optional<str>
+}
+
+# MARK: Entry Kind
+# Type-specific entry data
+type EntryKind union {
+	StepEntry |
+	LoopEntry |
+	SleepEntry |
+	MessageEntry |
+	RollbackCheckpointEntry |
+	JoinEntry |
+	RaceEntry |
+	RemovedEntry
+}
+
+# MARK: Entry
+# An entry in the workflow history
+type Entry struct {
+	# Unique entry ID
+	id: str
+	# Location in the workflow tree
+	location: Location
+	# Entry kind and data
+	kind: EntryKind
+}
+
+# MARK: Entry Metadata
+# Metadata for an entry (stored separately, lazily loaded)
+type EntryMetadata struct {
+	status: EntryStatus
+	# Error message if failed
+	error: optional<str>
+	# Number of execution attempts
+	attempts: u32
+	# Last attempt timestamp in milliseconds
+	lastAttemptAt: u64
+	# Creation timestamp in milliseconds
+	createdAt: u64
+	# Completion timestamp in milliseconds
+	completedAt: optional<u64>
+	# Rollback completion timestamp in milliseconds
+	rollbackCompletedAt: optional<u64>
+	# Rollback error message if failed
+	rollbackError: optional<str>
+}
+
+# MARK: Message
+# A message in the queue
+type Message struct {
+	# Unique message ID (used as KV key)
+	id: str
+	# Message name
+	name: str
+	# Message data (CBOR-encoded arbitrary data)
+	messageData: Cbor
+	# Timestamp when message was sent in milliseconds
+	sentAt: u64
+}
+
+# MARK: Workflow State
+type WorkflowState enum {
+	PENDING
+	RUNNING
+	SLEEPING
+	FAILED
+	COMPLETED
+	ROLLING_BACK
+}
+
+# MARK: Workflow Metadata
+# Workflow-level metadata stored separately from entries
+type WorkflowMetadata struct {
+	# Current workflow state
+	state: WorkflowState
+	# Workflow output if completed (CBOR-encoded arbitrary data)
+	output: optional<Cbor>
+	# Error message if failed
+	error: optional<str>
+	# Workflow version hash for migration detection
+	version: optional<str>
+}
