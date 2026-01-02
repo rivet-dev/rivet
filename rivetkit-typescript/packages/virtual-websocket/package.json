@@ -1,0 +1,34 @@
+{
+	"name": "@rivetkit/virtual-websocket",
+	"version": "2.0.33",
+	"description": "Virtual WebSocket implementation for creating linked WebSocket pairs",
+	"license": "Apache-2.0",
+	"type": "module",
+	"files": [
+		"dist",
+		"src",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/mod.d.cts",
+				"default": "./dist/mod.cjs"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsup src/mod.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.1",
+		"tsup": "^8.4.0",
+		"typescript": "^5.7.3"
+	},
+	"stableVersion": "0.8.0"
+}

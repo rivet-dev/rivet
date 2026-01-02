@@ -321,6 +321,9 @@ export async function handleRawWebSocket(
 			// this is called synchronously within onOpen.
 			actor.handleRawWebSocket(conn, ws, request);
 		},
+		// Raw websocket messages are handled directly by the actor's event
+		// listeners on the WebSocket object, not through this callback
+		onMessage: (_evt: any, _ws: any) => {},
 		onClose: (evt: any, ws: any) => {
 			// Resolve the close promise
 			closePromiseResolvers.resolve();

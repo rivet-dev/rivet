@@ -395,11 +395,11 @@ export class Tunnel {
 		this.addRequestToActor(gatewayId, requestId, actorId);
 
 		// Call WebSocket handler. This handler will add event listeners
-		// for `open`, etc.
+		// for `open`, etc. Pass the VirtualWebSocket (not the adapter) to the actor.
 		await this.#runner.config.websocket(
 			this.#runner,
 			actorId,
-			adapter,
+			adapter.websocket,
 			gatewayId,
 			requestId,
 			request,
