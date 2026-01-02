@@ -1,6 +1,7 @@
 import {
 	faCog,
 	faCogs,
+	faExclamationTriangle,
 	faNextjs,
 	faRailway,
 	faTrash,
@@ -45,6 +46,7 @@ export function RunnerConfigsTable({
 		<Table>
 			<TableHeader>
 				<TableRow>
+					<TableHead />
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Provider</TableHead>
 					<TableHead className="pl-8">Endpoint</TableHead>
@@ -55,7 +57,7 @@ export function RunnerConfigsTable({
 			<TableBody>
 				{!isLoading && !isError && configs?.length === 0 ? (
 					<TableRow>
-						<TableCell colSpan={4}>
+						<TableCell colSpan={6}>
 							<Text className="text-center">
 								There's no providers matching criteria.
 							</Text>
@@ -64,7 +66,7 @@ export function RunnerConfigsTable({
 				) : null}
 				{isError ? (
 					<TableRow>
-						<TableCell colSpan={4}>
+						<TableCell colSpan={6}>
 							<Text className="text-center">
 								An error occurred while fetching providers.
 							</Text>
@@ -89,7 +91,7 @@ export function RunnerConfigsTable({
 
 				{!isLoading && hasNextPage ? (
 					<TableRow>
-						<TableCell colSpan={4}>
+						<TableCell colSpan={6}>
 							<Button
 								variant="outline"
 								isLoading={isLoading}
@@ -109,6 +111,9 @@ export function RunnerConfigsTable({
 function RowSkeleton() {
 	return (
 		<TableRow>
+			<TableCell>
+				<Skeleton className="w-full size-4" />
+			</TableCell>
 			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
@@ -133,6 +138,9 @@ function Row({
 
 	return (
 		<TableRow>
+			<TableCell className="size-8">
+				<RunnerPoolErrorIndicator config={config} />
+			</TableCell>
 			<TableCell>
 				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
 			</TableCell>
@@ -281,3 +289,28 @@ function Regions({ regions }: { regions: string[] }) {
 		/>
 	);
 }
+
+function RunnerPoolErrorIndicator({ config }: { config: Rivet.RunnerConfig }) {
+	// Check if there's an error in the config
+	// The error field might be added to the API response in the future
+	const error = (config as any).error;
+
+	if (!error) {
+		return null;
+	}
+
+	return (
+		<WithTooltip
+			content="Error connecting to runner pool"
+			trigger={
+				<div className="text-center relative size-8">
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+					/>
+				</div>
+			}
+		/>
+	);
+}
+
