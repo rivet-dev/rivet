@@ -15,6 +15,7 @@ import { GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
 import { RegistryConfig } from "@/registry/config";
+import invariant from "invariant";
 
 interface ActorPathInfo {
 	actorId: string;
@@ -141,7 +142,10 @@ export async function actorGateway(
 
 	// Strip basePath from the request path
 	let strippedPath = c.req.path;
-	if (config.managerBasePath && strippedPath.startsWith(config.managerBasePath)) {
+	if (
+		config.managerBasePath &&
+		strippedPath.startsWith(config.managerBasePath)
+	) {
 		strippedPath = strippedPath.slice(config.managerBasePath.length);
 		// Ensure the path starts with /
 		if (!strippedPath.startsWith("/")) {
@@ -205,7 +209,7 @@ export async function actorGateway(
 async function handleWebSocketGateway(
 	config: RegistryConfig,
 	managerDriver: ManagerDriver,
-	getUpgradeWebSocket: GetUpgradeWebSocket|undefined,
+	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 	c: HonoContext,
 	strippedPath: string,
 ) {
@@ -441,29 +445,33 @@ export function parseActorPath(path: string): ActorPathInfo | null {
 
 /**
  * Creates a WebSocket proxy for test endpoints that forwards messages between server and client WebSockets
+ *
+ * clientToProxyWs = the websocket from the client -> the proxy
+ * proxyToActorWs = the websocket from the proxy -> the actor
  */
 export async function createTestWebSocketProxy(
-	clientWsPromise: Promise<UniversalWebSocket>,
+	proxyToActorWsPromise: Promise<UniversalWebSocket>,
 ): Promise<UpgradeWebSocketArgs> {
 	// Store a reference to the resolved WebSocket
-	let clientWs: UniversalWebSocket | null = null;
+	let proxyToActorWs: UniversalWebSocket | null = null;
 	const {
-		promise: serverWsPromise,
-		resolve: serverWsResolve,
-		reject: serverWsReject,
+		promise: clientToProxyWsPromise,
+		resolve: clientToProxyWsResolve,
+		reject: clientToProxyWsReject,
 	} = promiseWithResolvers<WSContext>();
 	try {
 		// Resolve the client WebSocket promise
 		logger().debug({ msg: "awaiting client websocket promise" });
-		const ws = await clientWsPromise;
-		clientWs = ws;
+		proxyToActorWs = await proxyToActorWsPromise;
 		logger().debug({
 			msg: "client websocket promise resolved",
-			constructor: ws?.constructor.name,
+			constructor: proxyToActorWs?.constructor.name,
 		});
 
 		// Wait for ws to open
 		await new Promise<void>((resolve, reject) => {
+			invariant(proxyToActorWs, "missing proxyToActorWs");
+
 			const onOpen = () => {
 				logger().debug({
 					msg: "test websocket connection to actor opened",
@@ -480,84 +488,87 @@ export async function createTestWebSocketProxy(
 						`Failed to open WebSocket: ${error.message || error}`,
 					),
 				);
-				serverWsReject();
+				clientToProxyWsReject();
 			};
 
-			ws.addEventListener("open", onOpen);
+			proxyToActorWs.addEventListener("open", onOpen);
 
-			ws.addEventListener("error", onError);
+			proxyToActorWs.addEventListener("error", onError);
 
-			ws.addEventListener("message", async (clientEvt: MessageEvent) => {
-				const serverWs = await serverWsPromise;
+			proxyToActorWs.addEventListener(
+				"message",
+				async (clientEvt: MessageEvent) => {
+					const clientToProxyWs = await clientToProxyWsPromise;
 
-				logger().debug({
-					msg: `test websocket connection message from client`,
-					dataType: typeof clientEvt.data,
-					isBlob: clientEvt.data instanceof Blob,
-					isArrayBuffer: clientEvt.data instanceof ArrayBuffer,
-					dataConstructor: clientEvt.data?.constructor?.name,
-					dataStr:
-						typeof clientEvt.data === "string"
-							? clientEvt.data.substring(0, 100)
-							: undefined,
-				});
+					logger().debug({
+						msg: `test websocket connection message from client`,
+						dataType: typeof clientEvt.data,
+						isBlob: clientEvt.data instanceof Blob,
+						isArrayBuffer: clientEvt.data instanceof ArrayBuffer,
+						dataConstructor: clientEvt.data?.constructor?.name,
+						dataStr:
+							typeof clientEvt.data === "string"
+								? clientEvt.data.substring(0, 100)
+								: undefined,
+					});
 
-				if (serverWs.readyState === 1) {
-					// OPEN
-					// Handle Blob data
-					if (clientEvt.data instanceof Blob) {
-						clientEvt.data
-							.arrayBuffer()
-							.then((buffer) => {
-								logger().debug({
-									msg: "converted client blob to arraybuffer, sending to server",
-									bufferSize: buffer.byteLength,
+					if (clientToProxyWs.readyState === 1) {
+						// OPEN
+						// Handle Blob data
+						if (clientEvt.data instanceof Blob) {
+							clientEvt.data
+								.arrayBuffer()
+								.then((buffer) => {
+									logger().debug({
+										msg: "converted client blob to arraybuffer, sending to server",
+										bufferSize: buffer.byteLength,
+									});
+									clientToProxyWs.send(buffer as any);
+								})
+								.catch((error) => {
+									logger().error({
+										msg: "failed to convert blob to arraybuffer",
+										error,
+									});
 								});
-								serverWs.send(buffer as any);
-							})
-							.catch((error) => {
-								logger().error({
-									msg: "failed to convert blob to arraybuffer",
-									error,
-								});
+						} else {
+							logger().debug({
+								msg: "sending client data directly to server",
+								dataType: typeof clientEvt.data,
+								dataLength:
+									typeof clientEvt.data === "string"
+										? clientEvt.data.length
+										: undefined,
 							});
-					} else {
-						logger().debug({
-							msg: "sending client data directly to server",
-							dataType: typeof clientEvt.data,
-							dataLength:
-								typeof clientEvt.data === "string"
-									? clientEvt.data.length
-									: undefined,
-						});
-						serverWs.send(clientEvt.data as any);
+							clientToProxyWs.send(clientEvt.data as any);
+						}
 					}
-				}
-			});
+				},
+			);
 
-			ws.addEventListener("close", async (clientEvt: any) => {
-				const serverWs = await serverWsPromise;
+			proxyToActorWs.addEventListener("close", async (clientEvt: any) => {
+				const clientToProxyWs = await clientToProxyWsPromise;
 
 				logger().debug({
 					msg: `test websocket connection closed`,
 				});
 
-				if (serverWs.readyState !== 3) {
+				if (clientToProxyWs.readyState !== 3) {
 					// Not CLOSED
-					serverWs.close(clientEvt.code, clientEvt.reason);
+					clientToProxyWs.close(clientEvt.code, clientEvt.reason);
 				}
 			});
 
-			ws.addEventListener("error", async () => {
-				const serverWs = await serverWsPromise;
+			proxyToActorWs.addEventListener("error", async () => {
+				const clientToProxyWs = await clientToProxyWsPromise;
 
 				logger().debug({
 					msg: `test websocket connection error`,
 				});
 
-				if (serverWs.readyState !== 3) {
+				if (clientToProxyWs.readyState !== 3) {
 					// Not CLOSED
-					serverWs.close(1011, "Error in client websocket");
+					clientToProxyWs.close(1011, "Error in client websocket");
 				}
 			});
 		});
@@ -567,8 +578,8 @@ export async function createTestWebSocketProxy(
 			error,
 		});
 		return {
-			onOpen: (_evt, serverWs) => {
-				serverWs.close(1011, "Failed to establish connection");
+			onOpen: (_evt, clientToProxyWs) => {
+				clientToProxyWs.close(1011, "Failed to establish connection");
 			},
 			onMessage: () => {},
 			onError: () => {},
@@ -578,21 +589,21 @@ export async function createTestWebSocketProxy(
 
 	// Create WebSocket proxy handlers to relay messages between client and server
 	return {
-		onOpen: (_evt: any, serverWs: WSContext) => {
+		onOpen: (_evt: any, clientToProxyWs: WSContext) => {
 			logger().debug({
 				msg: `test websocket connection from client opened`,
 			});
 
 			// Check WebSocket type
 			logger().debug({
-				msg: "clientWs info",
-				constructor: clientWs.constructor.name,
+				msg: "proxyToActorWs info",
+				constructor: proxyToActorWs.constructor.name,
 				hasAddEventListener:
-					typeof clientWs.addEventListener === "function",
-				readyState: clientWs.readyState,
+					typeof proxyToActorWs.addEventListener === "function",
+				readyState: proxyToActorWs.readyState,
 			});
 
-			serverWsResolve(serverWs);
+			clientToProxyWsResolve(clientToProxyWs);
 		},
 		onMessage: (evt: { data: any }) => {
 			logger().debug({
@@ -608,7 +619,7 @@ export async function createTestWebSocketProxy(
 			});
 
 			// Forward messages from server websocket to client websocket
-			if (clientWs.readyState === 1) {
+			if (proxyToActorWs.readyState === 1) {
 				// OPEN
 				// Handle Blob data
 				if (evt.data instanceof Blob) {
@@ -619,7 +630,7 @@ export async function createTestWebSocketProxy(
 								msg: "converted blob to arraybuffer, sending",
 								bufferSize: buffer.byteLength,
 							});
-							clientWs.send(buffer);
+							proxyToActorWs.send(buffer);
 						})
 						.catch((error) => {
 							logger().error({
@@ -636,7 +647,7 @@ export async function createTestWebSocketProxy(
 								? evt.data.length
 								: undefined,
 					});
-					clientWs.send(evt.data);
+					proxyToActorWs.send(evt.data);
 				}
 			}
 		},
@@ -646,7 +657,7 @@ export async function createTestWebSocketProxy(
 				code: number;
 				reason: string;
 			},
-			serverWs: WSContext,
+			clientToProxyWs: WSContext,
 		) => {
 			logger().debug({
 				msg: `server websocket closed`,
@@ -657,16 +668,16 @@ export async function createTestWebSocketProxy(
 
 			// HACK: Close socket in order to fix bug with Cloudflare leaving WS in closing state
 			// https://github.com/cloudflare/workerd/issues/2569
-			serverWs.close(1000, "hack_force_close");
+			clientToProxyWs.close(1000, "hack_force_close");
 
 			// Close the client websocket when the server websocket closes
 			if (
-				clientWs &&
-				clientWs.readyState !== clientWs.CLOSED &&
-				clientWs.readyState !== clientWs.CLOSING
+				proxyToActorWs &&
+				proxyToActorWs.readyState !== proxyToActorWs.CLOSED &&
+				proxyToActorWs.readyState !== proxyToActorWs.CLOSING
 			) {
 				// Don't pass code/message since this may affect how close events are triggered
-				clientWs.close(1000, event.reason);
+				proxyToActorWs.close(1000, event.reason);
 			}
 		},
 		onError: (error: unknown) => {
@@ -677,14 +688,14 @@ export async function createTestWebSocketProxy(
 
 			// Close the client websocket on error
 			if (
-				clientWs &&
-				clientWs.readyState !== clientWs.CLOSED &&
-				clientWs.readyState !== clientWs.CLOSING
+				proxyToActorWs &&
+				proxyToActorWs.readyState !== proxyToActorWs.CLOSED &&
+				proxyToActorWs.readyState !== proxyToActorWs.CLOSING
 			) {
-				clientWs.close(1011, "Error in server websocket");
+				proxyToActorWs.close(1011, "Error in server websocket");
 			}
 
-			serverWsReject();
+			clientToProxyWsReject();
 		},
 	};
 }
