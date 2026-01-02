@@ -5,5 +5,5 @@
 import * as Rivet from "../index";
 
 export interface RunnerConfigsListResponseRunnerConfigsValue {
-    datacenters: Record<string, Rivet.RunnerConfig>;
+    datacenters: Record<string, Rivet.RunnerConfigResponse>;
 }
