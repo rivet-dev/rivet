@@ -29,6 +29,9 @@ import { hasMetadataProvider } from "./data-providers/engine-data-provider";
 
 const TABLE_COLUMN_COUNT = 6;
 
+// Type extension for future error field that will be added to RunnerConfig API response
+// Error type is intentionally unknown since the backend may return different error formats
+// (e.g., string, ServerlessMetadataError enum, or error object)
 type RunnerConfigWithError = Rivet.RunnerConfig & { error?: unknown };
 
 interface RunnerConfigsTableProps {
@@ -299,6 +302,8 @@ function Regions({ regions }: { regions: string[] }) {
 function RunnerPoolErrorIndicator({ config }: { config: Rivet.RunnerConfig }) {
 	// Check if there's an error in the config
 	// The error field will be added to the API response in the future
+	// We accept Rivet.RunnerConfig to match the API type and cast internally
+	// to avoid breaking changes when the error field is added
 	const error = (config as RunnerConfigWithError).error;
 
 	if (!error) {
