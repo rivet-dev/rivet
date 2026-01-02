@@ -167,11 +167,8 @@ export class InlineWebSocketAdapter implements UniversalWebSocket {
 
 			// Call the handler's onOpen method
 			logger().debug({ msg: "calling handler.onOpen with WSContext" });
-			this.#handler.onOpen(undefined, this.#wsContext);
-
-			// Update the ready state and fire events
 			this.#readyState = this.OPEN;
-			logger().debug({ msg: "fake websocket initialized and now OPEN" });
+			this.#handler.onOpen(undefined, this.#wsContext);
 
 			// Fire the open event
 			this.#fireOpen();
