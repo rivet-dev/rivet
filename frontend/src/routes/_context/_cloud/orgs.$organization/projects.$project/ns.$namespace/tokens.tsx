@@ -111,7 +111,8 @@ function PublishableToken() {
 			</div>
 			<p className="mb-6 text-muted-foreground">
 				Connect to your actors using the Rivet client token. This can be
-				used either on your frontend or backend.
+				used either on your frontend or backend. The code examples below show
+				the unified endpoint format with embedded credentials (namespace:token@endpoint).
 			</p>
 			<div className="space-y-8">
 				<DiscreteInput value={token || ""} show />
