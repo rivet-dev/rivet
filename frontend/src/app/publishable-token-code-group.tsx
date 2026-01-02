@@ -123,15 +123,21 @@ const javascriptCode = ({
 	token: string;
 	endpoint: string;
 	namespace: string;
-}) => `import { createClient } from "rivetkit/client";
+}) => {
+	// Create unified endpoint with embedded credentials
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token);
+	const unifiedEndpoint = url.toString();
+	
+	return `import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	// This token is safe to publish on your frontend
-	token: "${token}",
+	// Unified endpoint with embedded namespace and token
+	endpoint: "${unifiedEndpoint}",
 });`;
+};
 
 const reactCode = ({
 	token,
@@ -141,15 +147,21 @@ const reactCode = ({
 	token: string;
 	endpoint: string;
 	namespace: string;
-}) => `import { createRivetKit } from "@rivetkit/react";
+}) => {
+	// Create unified endpoint with embedded credentials
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token);
+	const unifiedEndpoint = url.toString();
+	
+	return `import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
 export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	// This token is safe to publish on your frontend
-	token: "${token}",
+	// Unified endpoint with embedded namespace and token
+	endpoint: "${unifiedEndpoint}",
 });`;
+};
 
 const nextJsCode = ({
 	token,
@@ -159,13 +171,19 @@ const nextJsCode = ({
 	token: string;
 	endpoint: string;
 	namespace: string;
-}) => `"use client";
+}) => {
+	// Create unified endpoint with embedded credentials
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token);
+	const unifiedEndpoint = url.toString();
+	
+	return `"use client";
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
 export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	// This token is safe to publish on your frontend
-	token: "${token}",
+	// Unified endpoint with embedded namespace and token
+	endpoint: "${unifiedEndpoint}",
 });`;
+};
