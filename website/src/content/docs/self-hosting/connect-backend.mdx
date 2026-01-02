@@ -59,15 +59,19 @@ Both formats are supported. Choose the one that works best for your deployment w
 The endpoint of your Rivet Engine instance. Can include namespace and token in unified format.
 
 ```bash
-# Unified format (recommended)
+# Unified format (recommended) - only supported by RIVET_ENDPOINT
 RIVET_ENDPOINT=https://my-namespace:pub_abc123@api.rivet.dev
 
 # Or separate endpoint only
 RIVET_ENDPOINT=https://api.rivet.dev
 
-# Legacy alias (still supported)
+# Legacy alias RIVET_ENGINE (endpoint only, no unified format)
 RIVET_ENGINE=http://localhost:6420
 ```
+
+<Note>
+`RIVET_ENGINE` is a legacy alias for `RIVET_ENDPOINT` that only supports endpoint-only configuration. Use `RIVET_ENDPOINT` for the unified format with embedded credentials.
+</Note>
 
 ### `RIVET_TOKEN`
 Authentication token for accessing the Rivet Engine (when not using unified endpoint format).

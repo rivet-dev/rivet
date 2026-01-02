@@ -115,6 +115,24 @@ export function PublishableTokenCodeGroup({
 	);
 }
 
+/**
+ * Creates a unified endpoint URL with embedded namespace and token credentials.
+ * @param endpoint - Base endpoint URL
+ * @param namespace - Namespace to embed
+ * @param token - Token to embed
+ * @returns URL string with embedded credentials in format: https://namespace:token@endpoint
+ */
+function createUnifiedEndpoint(
+	endpoint: string,
+	namespace: string,
+	token: string,
+): string {
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token);
+	return url.toString();
+}
+
 const javascriptCode = ({
 	token,
 	endpoint,
@@ -124,11 +142,7 @@ const javascriptCode = ({
 	endpoint: string;
 	namespace: string;
 }) => {
-	// Create unified endpoint with embedded credentials
-	const url = new URL(endpoint);
-	url.username = encodeURIComponent(namespace);
-	url.password = encodeURIComponent(token);
-	const unifiedEndpoint = url.toString();
+	const unifiedEndpoint = createUnifiedEndpoint(endpoint, namespace, token);
 	
 	return `import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
@@ -148,11 +162,7 @@ const reactCode = ({
 	endpoint: string;
 	namespace: string;
 }) => {
-	// Create unified endpoint with embedded credentials
-	const url = new URL(endpoint);
-	url.username = encodeURIComponent(namespace);
-	url.password = encodeURIComponent(token);
-	const unifiedEndpoint = url.toString();
+	const unifiedEndpoint = createUnifiedEndpoint(endpoint, namespace, token);
 	
 	return `import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
@@ -172,11 +182,7 @@ const nextJsCode = ({
 	endpoint: string;
 	namespace: string;
 }) => {
-	// Create unified endpoint with embedded credentials
-	const url = new URL(endpoint);
-	url.username = encodeURIComponent(namespace);
-	url.password = encodeURIComponent(token);
-	const unifiedEndpoint = url.toString();
+	const unifiedEndpoint = createUnifiedEndpoint(endpoint, namespace, token);
 	
 	return `"use client";
 import { createRivetKit } from "@rivetkit/next-js/client";

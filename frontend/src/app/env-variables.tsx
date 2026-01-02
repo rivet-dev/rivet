@@ -79,7 +79,7 @@ function RivetEndpointEnvUnified({
 	// Create unified endpoint with embedded credentials
 	const url = new URL(endpoint);
 	url.username = encodeURIComponent(namespace);
-	url.password = encodeURIComponent(token as string || "");
+	url.password = encodeURIComponent(token || "");
 	const unifiedEndpoint = url.toString();
 	
 	return (
