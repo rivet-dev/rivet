@@ -8,6 +8,7 @@ ENV CI=true
 
 # Copy and build SDK
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsup.base.ts tsconfig.base.json turbo.json .
+COPY shared/typescript/virtual-websocket ./shared/typescript/virtual-websocket/
 COPY engine/sdks/typescript/runner-protocol ./engine/sdks/typescript/runner-protocol/
 COPY engine/sdks/typescript/runner ./engine/sdks/typescript/runner/
 
