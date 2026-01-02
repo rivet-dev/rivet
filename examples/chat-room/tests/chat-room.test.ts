@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/backend/registry";
+import { registry } from "../src/actors";
 
 test("Chat room can handle message sending and history", async (ctx) => {
 	const { client } = await setupTest(ctx, registry);

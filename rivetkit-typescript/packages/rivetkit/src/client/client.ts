@@ -2,7 +2,7 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
-import type { Registry } from "@/registry/mod";
+import type { Registry } from "@/registry";
 import type { ActorActionFunction } from "./actor-common";
 import {
 	type ActorConn,
@@ -166,10 +166,10 @@ export class ClientRaw {
 	/**
 	 * Creates an instance of Client.
 	 */
-	public constructor(driver: ManagerDriver, config: ClientConfig) {
+	public constructor(driver: ManagerDriver, encoding: Encoding | undefined) {
 		this.#driver = driver;
 
-		this.#encodingKind = config.encoding ?? "bare";
+		this.#encodingKind = encoding ?? "bare";
 	}
 
 	/**
@@ -402,9 +402,9 @@ export type AnyClient = Client<Registry<any>>;
 
 export function createClientWithDriver<A extends Registry<any>>(
 	driver: ManagerDriver,
-	config: ClientConfig,
+	config: { encoding?: Encoding } = {},
 ): Client<A> {
-	const client = new ClientRaw(driver, config);
+	const client = new ClientRaw(driver, config.encoding);
 
 	// Create proxy for accessing actors by name
 	return new Proxy(client, {

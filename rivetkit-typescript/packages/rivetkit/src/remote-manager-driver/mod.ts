@@ -18,7 +18,8 @@ import type {
 } from "@/driver-helpers/mod";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { uint8ArrayToBase64 } from "@/serde";
-import { combineUrlPath, getEnvUniversal } from "@/utils";
+import { combineUrlPath, GetUpgradeWebSocket } from "@/utils";
+import { getNextPhase } from "@/utils/env-vars";
 import { sendHttpRequestToActor } from "./actor-http-client";
 import {
 	buildWebSocketProtocols,
@@ -60,7 +61,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 		// Disable health check if in Next.js build phase since there is no `/metadata` endpoint
 		//
 		// See https://github.com/vercel/next.js/blob/5e6b008b561caf2710ab7be63320a3d549474a5b/packages/next/shared/lib/constants.ts#L19-L23
-		if (getEnvUniversal("NEXT_PHASE") === "phase-production-build") {
+		if (getNextPhase() === "phase-production-build") {
 			logger().info(
 				"detected next.js build phase, disabling health check",
 			);
@@ -379,10 +380,14 @@ export class RemoteManagerDriver implements ManagerDriver {
 	}
 
 	displayInformation(): ManagerDisplayInformation {
-		return { name: "Remote", properties: {} };
+		return { properties: {} };
 	}
 
 	getOrCreateInspectorAccessToken() {
 		return generateRandomString();
+	}
+
+	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
+		this.#config.getUpgradeWebSocket = getUpgradeWebSocket;
 	}
 }

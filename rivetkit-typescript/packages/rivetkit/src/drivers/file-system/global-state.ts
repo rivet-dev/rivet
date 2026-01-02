@@ -6,8 +6,6 @@ import type { ActorKey } from "@/actor/mod";
 import { generateRandomString } from "@/actor/utils";
 import type { AnyClient } from "@/client/client";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
-import type { RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
 	ACTOR_ALARM_VERSIONED,
@@ -34,6 +32,7 @@ import {
 	ensureDirectoryExistsSync,
 	getStoragePath,
 } from "./utils";
+import { RegistryConfig } from "@/registry/config";
 
 // Actor handler to track running instances
 
@@ -91,8 +90,7 @@ export class FileSystemGlobalState {
 	#actorCountOnStartup: number = 0;
 
 	#runnerParams?: {
-		registryConfig: RegistryConfig;
-		runConfig: RunnerConfig;
+		config: RegistryConfig;
 		inlineClient: AnyClient;
 		actorDriver: ActorDriver;
 	};
@@ -696,8 +694,7 @@ export class FileSystemGlobalState {
 	 * This needs to be sync since DriverConfig.actor is sync
 	 */
 	onRunnerStart(
-		registryConfig: RegistryConfig,
-		runConfig: RunnerConfig,
+		config: RegistryConfig,
 		inlineClient: AnyClient,
 		actorDriver: ActorDriver,
 	) {
@@ -707,8 +704,7 @@ export class FileSystemGlobalState {
 
 		// Save runner params for future use
 		this.#runnerParams = {
-			registryConfig,
-			runConfig,
+			config: config,
 			inlineClient,
 			actorDriver,
 		};
@@ -725,8 +721,7 @@ export class FileSystemGlobalState {
 	}
 
 	async startActor(
-		registryConfig: RegistryConfig,
-		runConfig: RunnerConfig,
+		config: RegistryConfig,
 		inlineClient: AnyClient,
 		actorDriver: ActorDriver,
 		actorId: string,
@@ -757,7 +752,7 @@ export class FileSystemGlobalState {
 		try {
 			// Create actor
 			const definition = lookupInRegistry(
-				registryConfig,
+				config,
 				entry.state.name,
 			);
 			entry.actor = definition.instantiate();
@@ -921,8 +916,7 @@ export class FileSystemGlobalState {
 				invariant(runnerParams, "missing runner params");
 				if (!loaded.actor) {
 					await this.startActor(
-						runnerParams.registryConfig,
-						runnerParams.runConfig,
+						runnerParams.config,
 						runnerParams.inlineClient,
 						runnerParams.actorDriver,
 						actorId,

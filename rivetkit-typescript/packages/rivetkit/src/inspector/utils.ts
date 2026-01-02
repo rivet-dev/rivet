@@ -1,9 +1,8 @@
 // import crypto from "node:crypto";
 import { createMiddleware } from "hono/factory";
 import type { ManagerDriver } from "@/driver-helpers/mod";
-import type { RunConfig } from "@/mod";
-import type { RunnerConfigInput } from "@/registry/run-config";
 import { inspectorLogger } from "./log";
+import { RegistryConfig } from "@/registry/config";
 
 export function compareSecrets(providedSecret: string, validSecret: string) {
 	// Early length check to avoid unnecessary processing
@@ -28,73 +27,73 @@ export function compareSecrets(providedSecret: string, validSecret: string) {
 	return true;
 }
 
-export const secureInspector = (runConfig: RunConfig) =>
+export const secureInspector = (config: RegistryConfig) =>
 	createMiddleware(async (c, next) => {
 		const userToken = c.req.header("Authorization")?.replace("Bearer ", "");
 		if (!userToken) {
 			return c.text("Unauthorized", 401);
 		}
 
-		const inspectorToken = runConfig.inspector.token?.();
+		const inspectorToken = config.inspector.token();
 		if (!inspectorToken) {
 			return c.text("Unauthorized", 401);
 		}
 
 		const isValid = compareSecrets(userToken, inspectorToken);
-
 		if (!isValid) {
 			return c.text("Unauthorized", 401);
 		}
 		await next();
 	});
 
-export function getInspectorUrl(runConfig: RunnerConfigInput | undefined) {
-	if (!runConfig?.inspector?.enabled) {
-		return "disabled";
+export function getInspectorUrl(config: RegistryConfig): string | undefined {
+	if (!config.inspector.enabled) {
+		return undefined;
 	}
 
-	const accessToken = runConfig?.inspector?.token?.();
-
+	const accessToken = config.inspector.token();
 	if (!accessToken) {
 		inspectorLogger().warn(
 			"Inspector Token is not set, but Inspector is enabled. Please set it in the run configuration `inspector.token` or via `RIVETKIT_INSPECTOR_TOKEN` environment variable. Inspector will not be accessible.",
 		);
-		return "disabled";
+		return undefined;
 	}
 
 	const url = new URL("https://inspect.rivet.dev");
-
 	url.searchParams.set("t", accessToken);
 
-	const overrideDefaultEndpoint =
-		runConfig?.inspector?.defaultEndpoint ??
-		runConfig.overrideServerAddress;
-	if (overrideDefaultEndpoint) {
-		url.searchParams.set("u", overrideDefaultEndpoint);
+	// Only override endpoint if using non-default port or custom endpoint is set
+	const endpoint =
+		config.inspector.defaultEndpoint ??
+		(config.managerPort !== 6420
+			? `http://localhost:${config.managerPort}`
+			: undefined);
+	if (endpoint) {
+		url.searchParams.set("u", endpoint);
 	}
 
 	return url.href;
 }
 
 export const isInspectorEnabled = (
-	runConfig: RunConfig,
+	config: RegistryConfig,
 	// TODO(kacper): Remove context in favor of using the gateway, so only context is the actor
 	context: "actor" | "manager",
 ) => {
-	if (typeof runConfig.inspector?.enabled === "boolean") {
-		return runConfig.inspector.enabled;
-	} else if (typeof runConfig.inspector?.enabled === "object") {
-		return runConfig.inspector.enabled[context];
+	if (typeof config.inspector.enabled === "boolean") {
+		return config.inspector.enabled;
+	} else if (typeof config.inspector.enabled === "object") {
+		return config.inspector.enabled[context];
 	}
 	return false;
 };
 
 export const configureInspectorAccessToken = (
-	runConfig: RunConfig,
+	config: RegistryConfig,
 	managerDriver: ManagerDriver,
 ) => {
-	if (!runConfig.inspector?.token()) {
+	if (!config.inspector.token()) {
 		const token = managerDriver.getOrCreateInspectorAccessToken();
-		runConfig.inspector.token = () => token;
+		config.inspector.token = () => token;
 	}
 };

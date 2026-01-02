@@ -64,6 +64,7 @@ export function createInlineClient<R extends Registry<any>>(
 	// Create config
 	const runConfig = {
 		...config,
+		noWelcome: true,
 		driver: {
 			name: "cloudflare-workers",
 			manager: () => new CloudflareActorsManagerDriver(),

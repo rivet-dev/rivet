@@ -72,11 +72,11 @@ export class ActorDefinition<
 }
 
 export function lookupInRegistry(
-	registryConfig: RegistryConfig,
+	config: RegistryConfig,
 	name: string,
 ): AnyActorDefinition {
 	// Build actor
-	const definition = registryConfig.use[name];
+	const definition = config.use[name];
 	if (!definition) throw new Error(`no actor in registry for name ${name}`);
 	return definition;
 }
