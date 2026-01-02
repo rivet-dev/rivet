@@ -101,6 +101,12 @@ pub trait Database: Send {
 		tags: &serde_json::Value,
 	) -> WorkflowResult<Option<Id>>;
 
+	/// Retrieves the first incomplete workflow for each (name, tags) pair in a single batch transaction.
+	async fn find_workflows(
+		&self,
+		queries: &[(&str, serde_json::Value)],
+	) -> WorkflowResult<Vec<Option<Id>>>;
+
 	/// Pulls workflows for processing by the worker. Will only pull workflows with names matching the filter.
 	/// Should also update the ping of this worker.
 	async fn pull_workflows(
