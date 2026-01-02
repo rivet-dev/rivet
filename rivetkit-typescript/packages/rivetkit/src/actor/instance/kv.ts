@@ -2,6 +2,7 @@ export const KEYS = {
 	PERSIST_DATA: Uint8Array.from([1]),
 	CONN_PREFIX: Uint8Array.from([2]), // Prefix for connection keys
 	INSPECTOR_TOKEN: Uint8Array.from([3]), // Inspector token key
+	SQLITE_PREFIX: Uint8Array.from([4]), // Prefix for SQLite VFS data (see @rivetkit/sqlite-vfs)
 };
 
 // Helper to create a connection key

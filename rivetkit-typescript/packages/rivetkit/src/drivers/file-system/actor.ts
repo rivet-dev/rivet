@@ -1,4 +1,6 @@
 import type { AnyClient } from "@/client/client";
+import type { RawDatabaseClient } from "@/db/config";
+import type { SqliteVfs } from "@/db/vfs/mod";
 import type {
 	ActorDriver,
 	AnyActorInstance,
@@ -10,6 +12,21 @@ import { RegistryConfig } from "@/registry/config";
 export type ActorDriverContext = Record<never, never>;
 
 /**
+ * Type alias for better-sqlite3 Database.
+ * We define this inline to avoid importing from better-sqlite3 directly,
+ * since it's an optional peer dependency.
+ */
+type BetterSQLite3Database = {
+	prepare(sql: string): {
+		run(...args: unknown[]): { changes: number; lastInsertRowid: number | bigint };
+		all(...args: unknown[]): unknown[];
+		get(...args: unknown[]): unknown;
+	};
+	exec(sql: string): void;
+	close(): void;
+};
+
+/**
  * File System implementation of the Actor Driver
  */
 export class FileSystemActorDriver implements ActorDriver {
@@ -17,6 +34,8 @@ export class FileSystemActorDriver implements ActorDriver {
 	#managerDriver: ManagerDriver;
 	#inlineClient: AnyClient;
 	#state: FileSystemGlobalState;
+	#nativeDatabases: Map<string, BetterSQLite3Database> = new Map();
+	#drizzleDatabases: Map<string, any> = new Map();
 
 	constructor(
 		config: RegistryConfig,
@@ -79,8 +98,106 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.setActorAlarm(actor.id, timestamp);
 	}
 
-	getDatabase(actorId: string): Promise<unknown | undefined> {
-		return this.#state.createDatabase(actorId);
+	async overrideRawDatabaseClient(
+		actorId: string,
+	): Promise<RawDatabaseClient | undefined> {
+		if (!this.#state.useNativeSqlite) {
+			return undefined;
+		}
+
+		// Check if we already have a cached database for this actor
+		const existingDb = this.#nativeDatabases.get(actorId);
+		if (existingDb) {
+			return {
+				exec: (query: string) => {
+					const trimmed = query.trim().toUpperCase();
+					if (trimmed.startsWith("SELECT") || trimmed.startsWith("PRAGMA")) {
+						// SELECT/PRAGMA queries return data
+						return existingDb.prepare(query).all();
+					}
+					// Non-SELECT queries (INSERT, UPDATE, DELETE, CREATE, etc.)
+					// Use run() which doesn't throw for non-returning queries
+					existingDb.prepare(query).run();
+					return [];
+				},
+			};
+		}
+
+		// Dynamically import better-sqlite3
+		try {
+			const Database = (await import("better-sqlite3")).default;
+
+			const dbPath = this.#state.getActorDbPath(actorId);
+			const db = new Database(dbPath) as BetterSQLite3Database;
+
+			this.#nativeDatabases.set(actorId, db);
+
+			return {
+				exec: (query: string) => {
+					// HACK: sqlite3 throws error if not using a SELECT statement
+					const trimmed = query.trim().toUpperCase();
+					if (trimmed.startsWith("SELECT") || trimmed.startsWith("PRAGMA")) {
+						// SELECT/PRAGMA queries return data
+						return db.prepare(query).all();
+					} else {
+						// Non-SELECT queries (INSERT, UPDATE, DELETE, CREATE, etc.)
+						// Use run() which doesn't throw for non-returning queries
+						db.prepare(query).run();
+						return [];
+					}
+				},
+			};
+		} catch (error) {
+			throw new Error(
+				`Failed to load better-sqlite3. Make sure it's installed: ${error}`,
+			);
+		}
+	}
+
+	async overrideDrizzleDatabaseClient(
+		actorId: string,
+	): Promise<any | undefined> {
+		if (!this.#state.useNativeSqlite) {
+			return undefined;
+		}
+
+		// Check if we already have a cached drizzle database for this actor
+		const existingDrizzleDb = this.#drizzleDatabases.get(actorId);
+		if (existingDrizzleDb) {
+			return existingDrizzleDb;
+		}
+
+		// Get or create the raw better-sqlite3 database
+		let rawDb = this.#nativeDatabases.get(actorId);
+		if (!rawDb) {
+			// Create it via overrideRawDatabaseClient
+			await this.overrideRawDatabaseClient(actorId);
+			rawDb = this.#nativeDatabases.get(actorId);
+			if (!rawDb) {
+				throw new Error(
+					"Failed to initialize native database for actor",
+				);
+			}
+		}
+
+		// Dynamically import drizzle and wrap the raw database
+		try {
+			const { drizzle } = await import("drizzle-orm/better-sqlite3");
+			const drizzleDb = drizzle(rawDb as any);
+
+			this.#drizzleDatabases.set(actorId, drizzleDb);
+
+			return drizzleDb;
+		} catch (error) {
+			throw new Error(
+				`Failed to load drizzle-orm. Make sure it's installed: ${error}`,
+			);
+		}
+	}
+
+	/** SQLite VFS instance for creating KV-backed databases */
+	get sqliteVfs(): SqliteVfs {
+		return this.#state.sqliteVfs;
 	}
 
 	startSleep(actorId: string): void {

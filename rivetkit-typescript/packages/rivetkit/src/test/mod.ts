@@ -25,9 +25,9 @@ export async function setupTest<A extends Registry<any>>(
 	registry.config.test.enabled = true;
 
 	// Create driver
-	const driver = await createFileSystemOrMemoryDriver(
+	const driver = createFileSystemOrMemoryDriver(
 		true,
-		`/tmp/rivetkit-test-${crypto.randomUUID()}`,
+		{ path: `/tmp/rivetkit-test-${crypto.randomUUID()}` },
 	);
 
 	// Build driver config
