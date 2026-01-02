@@ -154,15 +154,21 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket> {
-		// Handle raw WebSocket paths
-		const pathOnly = path.split("?")[0];
-		const normalizedPath = pathOnly.startsWith("/")
-			? pathOnly
-			: `/${pathOnly}`;
+		// Normalize the path (add leading slash if needed) but preserve query params
+		const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+		// Create a fake request with the full URL including query parameters
+		const fakeUrl = `http://inline-actor${normalizedPath}`;
+		const fakeRequest = new Request(fakeUrl, {
+			method: "GET",
+		});
+
+		// Extract just the pathname for routing (without query params)
+		const pathOnly = normalizedPath.split("?")[0];
+
 		const wsHandler = await routeWebSocket(
-			// TODO: Create fake request
-			undefined,
-			normalizedPath,
+			fakeRequest,
+			pathOnly,
 			{},
 			this.#runConfig,
 			this.#actorDriver,
