@@ -9,7 +9,7 @@ export { EngineActorDriver } from "./actor-driver";
 export {
 	type EngineConfig as Config,
 	type EngineConfigInput as InputConfig,
-	EngingConfigSchema as ConfigSchema,
+	EngineConfigSchema as ConfigSchema,
 } from "./config";
 
 export function createEngineDriver(): DriverConfig {

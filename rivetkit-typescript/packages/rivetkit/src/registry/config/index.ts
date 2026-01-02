@@ -12,6 +12,11 @@ import { DriverConfigSchema, type DriverConfig } from "./driver";
 import invariant from "invariant";
 import { RunnerConfigSchema } from "./runner";
 import { ServerlessConfigSchema } from "./serverless";
+import {
+	EndpointSchema,
+	zodCheckDuplicateCredentials,
+} from "@/utils/endpoint-parser";
+import { resolveEndpoint } from "@/client/config";
 
 export { DriverConfigSchema, type DriverConfig };
 
@@ -76,15 +81,9 @@ export const RegistryConfigSchema = z
 		// getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
 		// MARK: Runner Configuration
-		endpoint: z
-			.string()
-			.optional()
-			.transform((x) => x ?? getRivetEndpoint()),
-		token: z
-			.string()
-			.optional()
-			.transform((x) => x ?? getRivetToken()),
-		namespace: z.string().default(() => getRivetNamespace() ?? "default"),
+		endpoint: EndpointSchema.optional(),
+		token: z.string().optional(),
+		namespace: z.string().optional(),
 		headers: z.record(z.string(), z.string()).optional().default({}),
 
 		// MARK: Client
@@ -123,10 +122,16 @@ export const RegistryConfigSchema = z
 			RunnerConfigSchema.parse({}),
 		),
 	})
-	.superRefine((config, ctx) => {
+	.transform((config, ctx) => {
 		const isDevEnv = isDev();
+		const resolvedEndpoint = resolveEndpoint(config.endpoint);
 
-		if (config.endpoint && config.serveManager) {
+		// Validate duplicate credentials
+		if (resolvedEndpoint) {
+			zodCheckDuplicateCredentials(resolvedEndpoint, config, ctx);
+		}
+
+		if (resolvedEndpoint && config.serveManager) {
 			ctx.addIssue({
 				code: "custom",
 				message: "cannot specify both endpoint and serveManager",
@@ -135,7 +140,7 @@ export const RegistryConfigSchema = z
 
 		if (config.serverless) {
 			// Can't spawn engine AND connect to remote endpoint
-			if (config.serverless.spawnEngine && config.endpoint) {
+			if (config.serverless.spawnEngine && resolvedEndpoint) {
 				ctx.addIssue({
 					code: "custom",
 					message: "cannot specify both spawnEngine and endpoint",
@@ -145,7 +150,7 @@ export const RegistryConfigSchema = z
 			// configureRunnerPool requires an engine (via endpoint or spawnEngine)
 			if (
 				config.serverless.configureRunnerPool &&
-				!config.endpoint &&
+				!resolvedEndpoint &&
 				!config.serverless.spawnEngine
 			) {
 				ctx.addIssue({
@@ -158,7 +163,7 @@ export const RegistryConfigSchema = z
 			// advertiseEndpoint required in production without endpoint
 			if (
 				!isDevEnv &&
-				!config.endpoint &&
+				!resolvedEndpoint &&
 				!config.serverless.advertiseEndpoint
 			) {
 				ctx.addIssue({
@@ -169,21 +174,28 @@ export const RegistryConfigSchema = z
 				});
 			}
 		}
-	})
-	.transform((config) => {
-		const isDevEnv = isDev();
+
+		// Flatten the endpoint and apply defaults for namespace/token
+		const endpoint = resolvedEndpoint?.endpoint;
+		const namespace =
+			resolvedEndpoint?.namespace ??
+			config.namespace ??
+			getRivetNamespace() ??
+			"default";
+		const token =
+			resolvedEndpoint?.token ?? config.token ?? getRivetToken();
 
 		if (config.serverless) {
 			let serveManager: boolean;
 			let advertiseEndpoint: string;
 
-			if (config.endpoint) {
+			if (endpoint) {
 				// Remote endpoint provided:
 				// - Do not start manager server
 				// - Redirect clients to remote endpoint
 				serveManager = config.serveManager ?? false;
 				advertiseEndpoint =
-					config.serverless.advertiseEndpoint ?? config.endpoint;
+					config.serverless.advertiseEndpoint ?? endpoint;
 			} else if (isDevEnv) {
 				// Development mode, no endpoint:
 				// - Start manager server
@@ -205,8 +217,7 @@ export const RegistryConfigSchema = z
 			}
 
 			// If endpoint is set or spawning engine, we'll use engine driver - disable manager inspector
-			const willUseEngine =
-				!!config.endpoint || config.serverless.spawnEngine;
+			const willUseEngine = !!endpoint || config.serverless.spawnEngine;
 			const inspector = willUseEngine
 				? {
 						...config.inspector,
@@ -216,6 +227,9 @@ export const RegistryConfigSchema = z
 
 			return {
 				...config,
+				endpoint,
+				namespace,
+				token,
 				serveManager,
 				advertiseEndpoint,
 				inspector,
@@ -226,7 +240,7 @@ export const RegistryConfigSchema = z
 			// - If dev mode without endpoint: start manager server
 			// - If prod mode without endpoint: do not start manager server
 			let serveManager: boolean;
-			if (config.endpoint) {
+			if (endpoint) {
 				serveManager = config.serveManager ?? false;
 			} else if (isDevEnv) {
 				serveManager = config.serveManager ?? true;
@@ -235,7 +249,7 @@ export const RegistryConfigSchema = z
 			}
 
 			// If endpoint is set, we'll use engine driver - disable manager inspector
-			const willUseEngine = !!config.endpoint;
+			const willUseEngine = !!endpoint;
 			const inspector = willUseEngine
 				? {
 						...config.inspector,
@@ -245,6 +259,9 @@ export const RegistryConfigSchema = z
 
 			return {
 				...config,
+				endpoint,
+				namespace,
+				token,
 				serveManager,
 				inspector,
 			};
