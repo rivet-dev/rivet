@@ -1,7 +1,7 @@
 import { WSContext } from "hono/ws";
 import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import { VirtualWebSocket } from "./virtual-websocket";
+import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { getLogger } from "./log";
 
 function logger() {
@@ -27,11 +27,21 @@ export class InlineWebSocketAdapter {
 		this.#handler = handler;
 
 		// Create linked WebSocket pair
-		// Client's send() -> Actor's message event
+		// Client's send() -> handler.onMessage (for RPC) + Actor's message event (for raw WS)
 		// Actor's send() -> Client's message event
 		this.#clientWs = new VirtualWebSocket({
 			getReadyState: () => this.#readyState,
-			onSend: (data) => this.#actorWs.triggerMessage(data),
+			onSend: (data) => {
+				try {
+					// Call handler.onMessage for protocol-based connections (RPC)
+					this.#handler.onMessage({ data }, this.#wsContext);
+					// Also trigger message event on actor's websocket for raw websocket handlers
+					this.#actorWs.triggerMessage(data);
+				} catch (err) {
+					this.#handleError(err);
+					this.#close(1011, "Internal error processing message");
+				}
+			},
 			onClose: (code, reason) => this.#close(code, reason),
 		});
 
@@ -84,16 +94,29 @@ export class InlineWebSocketAdapter {
 			this.#clientWs.triggerOpen();
 			this.#actorWs.triggerOpen();
 		} catch (err) {
-			logger().error({
-				msg: "error opening websocket",
-				error: err,
-				errorMessage: err instanceof Error ? err.message : String(err),
-				stack: err instanceof Error ? err.stack : undefined,
-			});
-			this.#clientWs.triggerError(err);
-			this.#actorWs.triggerError(err);
+			this.#handleError(err);
 			this.#close(1011, "Internal error during initialization");
 		}
+	}
+
+	#handleError(err: unknown): void {
+		logger().error({
+			msg: "error in websocket",
+			error: err,
+			errorMessage: err instanceof Error ? err.message : String(err),
+			stack: err instanceof Error ? err.stack : undefined,
+		});
+
+		// Call handler.onError
+		try {
+			this.#handler.onError(err, this.#wsContext);
+		} catch (handlerErr) {
+			logger().error({ msg: "error in onError handler", error: handlerErr });
+		}
+
+		// Fire error event to both sides
+		this.#clientWs.triggerError(err);
+		this.#actorWs.triggerError(err);
 	}
 
 	#close(code: number, reason: string): void {
