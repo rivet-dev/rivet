@@ -82,6 +82,7 @@ This is a Rust workspace-based monorepo for Rivet. Key packages and components:
 - **Pegboard** (`packages/core/pegboard/`) - Actor/server lifecycle management system
 - **Common Packages** (`/packages/common/`) - Foundation utilities, database connections, caching, metrics, logging, health checks, workflow engine core
 - **Core Packages** (`/packages/core/`) - Main engine executable, Pegboard actor orchestration, workflow workers
+- **Shared Libraries** (`shared/{language}/{package}/`) - Libraries shared between the engine and rivetkit (e.g., `shared/typescript/virtual-websocket/`)
 - **Service Infrastructure** - Distributed services communicate via NATS messaging with service discovery
 
 ### Important Patterns
