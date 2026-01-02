@@ -21,6 +21,7 @@ import {
 	createFileRoute,
 	notFound,
 	Link as RouterLink,
+	useNavigate,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -480,7 +481,7 @@ function ConnectYourFrontend() {
 }
 
 function ProviderDropdown({ children }: { children: React.ReactNode }) {
-	const navigate = Route.useNavigate();
+	const navigate = useNavigate();
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
@@ -488,67 +489,67 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				<DropdownMenuItem
 					className="relative"
 					indicator={<Icon icon={faVercel} />}
-					onSelect={() => {
+					onSelect={() =>
 						navigate({
 							to: ".",
 							search: { modal: "connect-vercel" },
-						});
-					}}
+						})
+					}
 				>
 					Vercel
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					indicator={<Icon icon={faRailway} />}
-					onSelect={() => {
+					onSelect={() =>
 						navigate({
 							to: ".",
 							search: { modal: "connect-railway" },
-						});
-					}}
+						})
+					}
 				>
 					Railway
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					indicator={<Icon icon={faAws} />}
-					onSelect={() => {
+					onSelect={() =>
 						navigate({
 							to: ".",
 							search: { modal: "connect-aws" },
-						});
-					}}
+						})
+					}
 				>
 					AWS ECS
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					indicator={<Icon icon={faGoogleCloud} />}
-					onSelect={() => {
+					onSelect={() =>
 						navigate({
 							to: ".",
 							search: { modal: "connect-gcp" },
-						});
-					}}
+						})
+					}
 				>
 					Google Cloud Run
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					indicator={<Icon icon={faHetznerH} />}
-					onSelect={() => {
+					onSelect={() =>
 						navigate({
 							to: ".",
 							search: { modal: "connect-hetzner" },
-						});
-					}}
+						})
+					}
 				>
 					Hetzner
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					indicator={<Icon icon={faServer} />}
-					onSelect={() => {
+					onSelect={() =>
 						navigate({
 							to: ".",
 							search: { modal: "connect-custom" },
-						});
-					}}
+						})
+					}
 				>
 					Custom
 				</DropdownMenuItem>
