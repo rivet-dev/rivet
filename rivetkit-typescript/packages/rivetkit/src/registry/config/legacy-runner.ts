@@ -2,7 +2,10 @@ import type { Logger } from "pino";
 import { z } from "zod";
 import type { ActorDriverBuilder } from "@/actor/driver";
 import { LogLevelSchema } from "@/common/log";
-import { EngingConfigSchema as EngineConfigSchema } from "@/drivers/engine/config";
+import {
+	EngineConfigSchemaBase,
+	transformEngineConfig,
+} from "@/drivers/engine/config";
 import { InspectorConfigSchema } from "@/inspector/config";
 import type { ManagerDriverBuilder } from "@/manager/driver";
 import type { GetUpgradeWebSocket } from "@/utils";
@@ -134,11 +137,16 @@ const LegacyRunnerConfigSchemaUnmerged = z
 		// created or must be imported async using `await import(...)`
 		getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 	})
-	.merge(EngineConfigSchema.removeDefault());
+	.merge(EngineConfigSchemaBase);
 
-const LegacyRunnerConfigSchemaBase = LegacyRunnerConfigSchemaUnmerged;
-export const LegacyRunnerConfigSchema = LegacyRunnerConfigSchemaBase.default(() =>
-	LegacyRunnerConfigSchemaBase.parse({}),
+const LegacyRunnerConfigSchemaTransformed =
+	LegacyRunnerConfigSchemaUnmerged.transform((config, ctx) => ({
+		...config,
+		...transformEngineConfig(config, ctx),
+	}));
+
+export const LegacyRunnerConfigSchema = LegacyRunnerConfigSchemaTransformed.default(
+	() => LegacyRunnerConfigSchemaTransformed.parse({}),
 );
 
 export type LegacyRunnerConfig = z.infer<typeof LegacyRunnerConfigSchema>;
