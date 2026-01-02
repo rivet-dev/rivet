@@ -50,7 +50,9 @@ export function RunnerConfigsTable({
 		<Table>
 			<TableHeader>
 				<TableRow>
-					<TableHead />
+					<TableHead>
+						<span className="sr-only">Status</span>
+					</TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Provider</TableHead>
 					<TableHead className="pl-8">Endpoint</TableHead>
@@ -116,7 +118,7 @@ function RowSkeleton() {
 	return (
 		<TableRow>
 			<TableCell>
-				<Skeleton className="w-full size-4" />
+				<Skeleton className="w-4 h-4" />
 			</TableCell>
 			<TableCell>
 				<Skeleton className="w-full h-4" />
@@ -142,7 +144,7 @@ function Row({
 
 	return (
 		<TableRow>
-			<TableCell className="size-8">
+			<TableCell>
 				<RunnerPoolErrorIndicator config={config} />
 			</TableCell>
 			<TableCell>
