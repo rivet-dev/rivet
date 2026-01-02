@@ -126,7 +126,7 @@ importers:
         version: link:../runner-protocol
       '@rivetkit/virtual-websocket':
         specifier: workspace:*
-        version: link:../../../../rivetkit-typescript/packages/virtual-websocket
+        version: link:../../../../shared/typescript/virtual-websocket
       pino:
         specifier: ^9.9.5
         version: 9.9.5
@@ -2313,7 +2313,7 @@ importers:
         version: 6.0.2-rc.1
       '@rivetkit/virtual-websocket':
         specifier: workspace:*
-        version: link:../virtual-websocket
+        version: link:../../../shared/typescript/virtual-websocket
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
@@ -2406,18 +2406,6 @@ importers:
         specifier: ^8.5.0
         version: 8.5.0(@microsoft/api-extractor@7.53.2(@types/node@22.18.1))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.1)
 
-  rivetkit-typescript/packages/virtual-websocket:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.1
-        version: 22.19.1
-      tsup:
-        specifier: ^8.4.0
-        version: 8.5.0(@microsoft/api-extractor@7.53.2(@types/node@22.19.1))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.1)
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-
   scripts/release:
     dependencies:
       commander:
@@ -2445,6 +2433,18 @@ importers:
       '@types/node':
         specifier: ^24.3.1
         version: 24.3.1
+
+  shared/typescript/virtual-websocket:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.1
+        version: 22.19.1
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.0(@microsoft/api-extractor@7.53.2(@types/node@22.19.1))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
 
   website:
     dependencies:
