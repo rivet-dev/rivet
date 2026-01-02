@@ -5,7 +5,7 @@ import { type ActorRouter, createActorRouter } from "@/actor/router";
 import { routeWebSocket } from "@/actor/router-websocket-endpoints";
 import { createClientWithDriver } from "@/client/client";
 import { ClientConfigSchema } from "@/client/config";
-import { InlineWebSocketAdapter } from "@/common/inline-websocket-adapter";
+import { createInlineWebSocket } from "@/common/inline-websocket-adapter";
 import { noopNext } from "@/common/utils";
 import type {
 	ActorDriver,
@@ -172,7 +172,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			false,
 			false,
 		);
-		return new InlineWebSocketAdapter(wsHandler);
+		return createInlineWebSocket(wsHandler);
 	}
 
 	async proxyRequest(

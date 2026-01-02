@@ -430,14 +430,14 @@ export function buildManagerRouter(
 					});
 
 					// Connect to the actor using the inline client driver - this returns a Promise<WebSocket>
-					const clientWsPromise = managerDriver.openWebSocket(
+					const clientToProxyWsPromise = managerDriver.openWebSocket(
 						path,
 						actorId,
 						encoding,
 						params,
 					);
 
-					return await createTestWebSocketProxy(clientWsPromise);
+					return await createTestWebSocketProxy(clientToProxyWsPromise);
 				})(c, noopNext());
 			});
 
