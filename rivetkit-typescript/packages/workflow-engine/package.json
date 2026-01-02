@@ -1,0 +1,69 @@
+{
+	"name": "@rivetkit/workflow-engine",
+	"version": "0.0.1",
+	"description": "Durable workflow engine with reentrant execution",
+	"license": "Apache-2.0",
+	"keywords": [
+		"workflow",
+		"durable",
+		"reentrant",
+		"stateful"
+	],
+	"files": [
+		"dist",
+		"src",
+		"schemas",
+		"package.json"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/tsup/index.d.ts",
+				"default": "./dist/tsup/index.js"
+			},
+			"require": {
+				"types": "./dist/tsup/index.d.cts",
+				"default": "./dist/tsup/index.cjs"
+			}
+		},
+		"./testing": {
+			"import": {
+				"types": "./dist/tsup/testing.d.ts",
+				"default": "./dist/tsup/testing.js"
+			},
+			"require": {
+				"types": "./dist/tsup/testing.d.cts",
+				"default": "./dist/tsup/testing.cjs"
+			}
+		}
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"scripts": {
+		"build": "pnpm run compile:bare && tsup src/index.ts src/testing.ts",
+		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
+		"check-types": "tsc --noEmit",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@rivetkit/bare-ts": "^0.6.2",
+		"cbor-x": "^1.6.0",
+		"fdb-tuple": "^1.0.0",
+		"vbare": "^0.0.4"
+	},
+	"devDependencies": {
+		"@bare-ts/tools": "^0.13.0",
+		"commander": "^12.0.0",
+		"tsx": "^4.7.0",
+		"@biomejs/biome": "^2.2.3",
+		"@types/node": "^22.13.1",
+		"tsup": "^8.4.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.1.1"
+	}
+}
