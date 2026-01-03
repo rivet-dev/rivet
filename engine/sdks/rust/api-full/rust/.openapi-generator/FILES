@@ -4,6 +4,10 @@
 Cargo.toml
 README.md
 docs/Actor.md
+docs/ActorError.md
+docs/ActorErrorOneOf.md
+docs/ActorErrorOneOf1.md
+docs/ActorErrorOneOf1RunnerNoResponse.md
 docs/ActorName.md
 docs/ActorsCreateApi.md
 docs/ActorsCreateRequest.md
@@ -41,6 +45,7 @@ docs/RunnerConfigKind.md
 docs/RunnerConfigKindOneOf.md
 docs/RunnerConfigKindOneOf1.md
 docs/RunnerConfigKindOneOf1Serverless.md
+docs/RunnerConfigResponse.md
 docs/RunnerConfigVariant.md
 docs/RunnerConfigsDeleteApi.md
 docs/RunnerConfigsListApi.md
@@ -67,6 +72,13 @@ docs/RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema.md
 docs/RunnerConfigsUpsertApi.md
 docs/RunnerConfigsUpsertRequestBody.md
 docs/RunnerConfigsUpsertResponse.md
+docs/RunnerPoolError.md
+docs/RunnerPoolErrorOneOf.md
+docs/RunnerPoolErrorOneOf1.md
+docs/RunnerPoolErrorOneOf1ServerlessConnectionError.md
+docs/RunnerPoolErrorOneOf2.md
+docs/RunnerPoolErrorOneOf2ServerlessInvalidPayload.md
+docs/RunnerPoolErrorOneOfServerlessHttpError.md
 docs/RunnersApi.md
 docs/RunnersListNamesResponse.md
 docs/RunnersListResponse.md
@@ -91,6 +103,10 @@ src/apis/runner_configs_upsert_api.rs
 src/apis/runners_api.rs
 src/lib.rs
 src/models/actor.rs
+src/models/actor_error.rs
+src/models/actor_error_one_of.rs
+src/models/actor_error_one_of_1.rs
+src/models/actor_error_one_of_1_runner_no_response.rs
 src/models/actor_name.rs
 src/models/actors_create_request.rs
 src/models/actors_create_response.rs
@@ -119,6 +135,7 @@ src/models/runner_config_kind.rs
 src/models/runner_config_kind_one_of.rs
 src/models/runner_config_kind_one_of_1.rs
 src/models/runner_config_kind_one_of_1_serverless.rs
+src/models/runner_config_response.rs
 src/models/runner_config_variant.rs
 src/models/runner_configs_list_response.rs
 src/models/runner_configs_list_response_runner_configs_value.rs
@@ -140,5 +157,12 @@ src/models/runner_configs_serverless_metadata_error_one_of_5.rs
 src/models/runner_configs_serverless_metadata_error_one_of_5_invalid_response_schema.rs
 src/models/runner_configs_upsert_request_body.rs
 src/models/runner_configs_upsert_response.rs
+src/models/runner_pool_error.rs
+src/models/runner_pool_error_one_of.rs
+src/models/runner_pool_error_one_of_1.rs
+src/models/runner_pool_error_one_of_1_serverless_connection_error.rs
+src/models/runner_pool_error_one_of_2.rs
+src/models/runner_pool_error_one_of_2_serverless_invalid_payload.rs
+src/models/runner_pool_error_one_of_serverless_http_error.rs
 src/models/runners_list_names_response.rs
 src/models/runners_list_response.rs
