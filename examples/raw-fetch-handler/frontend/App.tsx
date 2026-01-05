@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@rivetkit/react";
-import type { registry } from "../backend/registry";
+import type { registry } from "../src/registry";
 
 // Create a client that connects to the running server
 const client = createClient<typeof registry>("http://localhost:8080");
