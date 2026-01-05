@@ -1,17 +1,9 @@
 import { Hono } from "hono";
-import { upgradeWebSocket, websocket } from "hono/bun";
 import { cors } from "hono/cors";
+import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
-const { client, fetch } = registry.start({
-	basePath: "/rivet",
-	// Hono requires using Hono.serve
-	disableDefaultServer: true,
-	// Override endpoint
-	overrideServerAddress: "http://localhost:8080/rivet",
-	// Specify Hono-specific upgradeWebSocket
-	getUpgradeWebSocket: () => upgradeWebSocket,
-});
+const client = createClient<typeof registry>();
 
 // Setup router
 const app = new Hono();
@@ -24,9 +16,7 @@ app.use(
 	}),
 );
 
-app.use("/rivet/*", async (c) => {
-	return await fetch(c.req.raw, c.env);
-});
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 
 // Example HTTP endpoint
 app.post("/increment/:name", async (c) => {
@@ -38,10 +28,6 @@ app.post("/increment/:name", async (c) => {
 	return c.text(`New Count: ${newCount}`);
 });
 
-Bun.serve({
-	port: 8080,
-	fetch: app.fetch,
-	websocket,
-});
+export default app;
 
-console.log("Listening at http://localhost:8080");
+console.log("Listening at http://localhost:6420");

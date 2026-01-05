@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "../src/registry";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
 
 export default function App() {
 	const [messages, setMessages] = useState<Array<{ id: string; text: string; timestamp: number }>>([]);

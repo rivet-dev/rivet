@@ -2,7 +2,7 @@ import { createClient } from "rivetkit/client";
 import { useEffect, useState } from "react";
 import type { registry } from "../src/registry";
 
-const client = createClient<typeof registry>("http://localhost:6420");
+const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
 
 interface ItemStock {
 	itemName: string;

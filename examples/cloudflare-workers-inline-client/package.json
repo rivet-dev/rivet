@@ -19,8 +19,8 @@
 		"wrangler": "^4.22.0"
 	},
 	"dependencies": {
-		"rivetkit": "workspace:*",
-		"@rivetkit/cloudflare-workers": "workspace:*"
+		"rivetkit": "*",
+		"@rivetkit/cloudflare-workers": "*"
 	},
 	"stableVersion": "0.8.0",
 	"template": {

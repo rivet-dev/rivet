@@ -6,7 +6,7 @@ import type {
 	registry,
 } from "../src/registry";
 
-const client = createClient<typeof registry>("http://localhost:6420");
+const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
 
 export function App() {
 	const [companyEin, setCompanyEin] = useState("12-3456789");

@@ -2,7 +2,8 @@ import { createClient } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { registry } from "../src/registry";
 
-const rivetUrl = "http://localhost:6420";
+// FIXME: use metadata's clientEndpoint
+const rivetUrl = `${window.location.origin}/api/rivet`;
 
 const client = createClient<typeof registry>(rivetUrl);
 

@@ -11,7 +11,7 @@
 		"build": "tsc"
 	},
 	"devDependencies": {
-		"rivetkit": "workspace:*",
+		"rivetkit": "*",
 		"@types/node": "^22.13.9",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"

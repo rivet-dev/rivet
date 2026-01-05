@@ -17,7 +17,7 @@
 	"stableVersion": "0.8.0",
 	"dependencies": {
 		"hono": "4.9.8",
-		"rivetkit": "workspace:*"
+		"rivetkit": "*"
 	},
 	"template": {
 		"technologies": [

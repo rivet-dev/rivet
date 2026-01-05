@@ -1,6 +1,6 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { Message, registry } from "../src/server";
+import type { Message, registry } from "../src/actors";
 
 const { useActor } = createRivetKit<typeof registry>("http://localhost:5173/api/rivet");
 

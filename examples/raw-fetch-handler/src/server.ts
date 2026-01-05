@@ -1,7 +1,5 @@
-import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
@@ -18,9 +16,6 @@ app.use(
 		credentials: true,
 	}),
 );
-
-// Serve static files from dist (built frontend)
-app.use("/*", serveStatic({ root: "./dist" }));
 
 app.get("/", (c) => {
 	return c.json({ message: "Fetch Handler Example Server" });
@@ -42,7 +37,6 @@ app.all("/forward/:name/*", async (c) => {
 	return response;
 });
 
-serve({ fetch: app.fetch, port: 8080 });
-console.log("Listening on port 8080");
+export default app;
 
 export { client };
