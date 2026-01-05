@@ -102,7 +102,7 @@ export default async function Page({ params }: Props) {
 	// Construct Vercel deploy URL with demo card parameters
 	const vercelDeployUrl = new URL('https://vercel.com/new/clone');
 	vercelDeployUrl.searchParams.set('repository-url', `https://github.com/rivet-dev/rivet/tree/main/examples/${template.name}`);
-	vercelDeployUrl.searchParams.set('project-name', template.displayName);
+	vercelDeployUrl.searchParams.set('project-name', template.name);
 	vercelDeployUrl.searchParams.set('demo-title', template.displayName);
 	vercelDeployUrl.searchParams.set('demo-description', description);
 	vercelDeployUrl.searchParams.set('demo-image', `https://www.rivet.dev/examples/${template.name}/image.png`);
