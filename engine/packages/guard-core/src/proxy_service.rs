@@ -2288,9 +2288,7 @@ impl ProxyService {
 									// Keep TCP connection open briefly to allow client to process close
 									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 								}
-								.instrument(
-									tracing::info_span!("ws_error_proxy_task", ?request_ids.ray_id),
-								),
+								.instrument(tracing::info_span!("ws_error_proxy_task")),
 							);
 
 							// Return the response that will upgrade the client connection
