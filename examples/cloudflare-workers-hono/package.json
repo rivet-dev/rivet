@@ -7,7 +7,8 @@
 		"dev": "wrangler dev",
 		"deploy": "wrangler deploy",
 		"check-types": "tsc --noEmit",
-		"client": "tsx scripts/client.ts"
+		"client": "tsx scripts/client.ts",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250129.0",

@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
@@ -8,6 +9,9 @@ const client = createClient<typeof registry>();
 
 // Setup router
 const app = new Hono();
+
+// Serve static files from dist (built frontend)
+app.use("/*", serveStatic({ root: "./dist" }));
 
 // Example HTTP endpoint
 app.post("/increment/:name", async (c) => {
