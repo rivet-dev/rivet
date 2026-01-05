@@ -7,10 +7,12 @@ export function EnvVariables({
 	prefix,
 	runnerName,
 	endpoint,
+	unified = true,
 }: {
 	prefix?: string;
 	runnerName?: string;
 	endpoint: string;
+	unified?: boolean;
 }) {
 	return (
 		<div>
@@ -24,9 +26,15 @@ export function EnvVariables({
 				<Label asChild className="text-muted-foreground text-xs mb-1">
 					<p>Value</p>
 				</Label>
-				<RivetEndpointEnv prefix={prefix} endpoint={endpoint} />
-				<RivetTokenEnv prefix={prefix} />
-				<RivetNamespaceEnv prefix={prefix} />
+				{unified ? (
+					<RivetEndpointEnvUnified prefix={prefix} endpoint={endpoint} />
+				) : (
+					<>
+						<RivetEndpointEnv prefix={prefix} endpoint={endpoint} />
+						<RivetTokenEnv prefix={prefix} />
+						<RivetNamespaceEnv prefix={prefix} />
+					</>
+				)}
 				<RivetRunnerEnv prefix={prefix} runnerName={runnerName} />
 			</div>
 			<div className="mt-2 flex justify-end">
@@ -54,6 +62,39 @@ export function EnvVariables({
 				</CopyButton>
 			</div>
 		</div>
+	);
+}
+
+function RivetEndpointEnvUnified({
+	prefix,
+	endpoint,
+}: {
+	prefix?: string;
+	endpoint: string;
+}) {
+	const dataProvider = useEngineCompatDataProvider();
+	const token = usePublishableToken();
+	const namespace = dataProvider.engineNamespace || "default";
+	
+	// Create unified endpoint with embedded credentials
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token || "");
+	const unifiedEndpoint = url.toString();
+	
+	return (
+		<>
+			<DiscreteInput
+				aria-label="environment variable key"
+				value={`${prefix ? `${prefix}_` : ""}RIVET_ENDPOINT`}
+				show
+			/>
+			<DiscreteInput
+				aria-label="environment variable value"
+				value={unifiedEndpoint}
+				show
+			/>
+		</>
 	);
 }
 

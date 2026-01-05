@@ -119,6 +119,7 @@ The deployment process involves four key steps:
 						cwd: projectDir,
 						env: {
 							...process.env,
+							// Using separate variables (both formats work)
 							VITE_RIVET_ENDPOINT: "https://api.rivet.dev",
 							VITE_RIVET_NAMESPACE: engineNamespaceName,
 							VITE_RIVET_TOKEN: publishableToken,
@@ -133,6 +134,7 @@ The deployment process involves four key steps:
 
 					const { deploymentId } = await freestyle.deployWeb(deploymentSource, {
 						envVars: {
+							// Using separate variables (both formats work)
 							RIVET_ENDPOINT: "https://api.rivet.dev",
 							RIVET_NAMESPACE: engineNamespaceName,
 							RIVET_TOKEN: runnerToken,
@@ -242,6 +244,7 @@ The deployment process involves four key steps:
 						cwd: projectDir,
 						env: {
 							...process.env,
+							// Using separate variables (both formats work)
 							VITE_RIVET_ENDPOINT: RIVET_ENDPOINT,
 							VITE_RIVET_NAMESPACE: namespace.name,
 							VITE_RIVET_TOKEN: RIVET_TOKEN,
@@ -256,6 +259,7 @@ The deployment process involves four key steps:
 
 					const { deploymentId } = await freestyle.deployWeb(deploymentSource, {
 						envVars: {
+							// Using separate variables (both formats work)
 							RIVET_ENDPOINT,
 							RIVET_NAMESPACE: namespace.name,
 							RIVET_TOKEN,

@@ -23,19 +23,69 @@ Once connected:
 
 ## Environment Variables
 
-### `RIVET_ENGINE`
-The endpoint of your Rivet Engine instance.
+RivetKit supports two formats for configuration:
+
+1. **Unified Endpoint Format** (Recommended): Embed namespace and token in the endpoint URL
+2. **Separate Variables**: Use individual environment variables for each config
+
+### Unified Endpoint Format (Recommended)
+
+The unified format allows you to specify the endpoint, namespace, and token in a single URL using HTTP Basic Auth syntax:
 
 ```bash
-# Local development
-RIVET_ENGINE=http://localhost:6420
+# Format: https://namespace:token@endpoint
+RIVET_ENDPOINT=https://my-namespace:pub_abc123@api.rivet.dev
+```
 
-# Production
-RIVET_ENGINE=https://engine.your-domain.com
+This format is more concise and reduces configuration complexity. The namespace and token are automatically extracted from the URL.
+
+### Separate Variables
+
+You can also use separate environment variables:
+
+```bash
+RIVET_ENDPOINT=https://api.rivet.dev
+RIVET_NAMESPACE=my-namespace
+RIVET_TOKEN=pub_abc123
+```
+
+<Note>
+Both formats are supported. Choose the one that works best for your deployment workflow.
+</Note>
+
+### Configuration Details
+
+### `RIVET_ENDPOINT` or `RIVET_ENGINE`
+The endpoint of your Rivet Engine instance. Can include namespace and token in unified format.
+
+```bash
+# Unified format (recommended) - only supported by RIVET_ENDPOINT
+RIVET_ENDPOINT=https://my-namespace:pub_abc123@api.rivet.dev
+
+# Or separate endpoint only
+RIVET_ENDPOINT=https://api.rivet.dev
+
+# Legacy alias RIVET_ENGINE (endpoint only, no unified format)
+RIVET_ENGINE=http://localhost:6420
+```
+
+<Note>
+`RIVET_ENGINE` is a legacy alias for `RIVET_ENDPOINT` that only supports endpoint-only configuration. Use `RIVET_ENDPOINT` for the unified format with embedded credentials.
+</Note>
+
+### `RIVET_TOKEN`
+Authentication token for accessing the Rivet Engine (when not using unified endpoint format).
+
+```bash
+# Client/publishable token (safe for frontend)
+RIVET_TOKEN=pub_abc123
+
+# Runner/secret token (backend only)
+RIVET_TOKEN=sec_xyz789
 ```
 
 ### `RIVET_NAMESPACE`
-The namespace to run actors in. Useful for multi-tenant deployments.
+The namespace to run actors in (when not using unified endpoint format). Useful for multi-tenant deployments.
 
 ```bash
 RIVET_NAMESPACE=production
@@ -61,26 +111,45 @@ RIVET_RUNNER_KEY=unique-runner-key-123
 
 ## Connection Examples
 
-### Testing Setup
+### Local Development (No Engine)
 
-You do not need the engine for local development, but it can be helpful for testing your production-readiness: 
+You do not need the engine for local development:
+
+```bash
+npm run dev
+```
+
+### Local Development (With Engine)
+
+For testing production-readiness:
 
 ```bash
 # Start the engine
 docker run -p 6420:6420 rivetkit/engine
 
-# In another terminal, start your runner
-RIVET_ENGINE=http://localhost:6420 npm run dev
+# In another terminal, start your runner with unified endpoint
+RIVET_ENDPOINT=http://default:your-token@localhost:6420 npm run dev
+
+# Or with separate variables
+RIVET_ENDPOINT=http://localhost:6420 \
+RIVET_NAMESPACE=default \
+RIVET_TOKEN=your-token \
+npm run dev
 ```
 
 ### Production Setup
 
 ```bash
-# Assume the engine is running at 1.2.3.4
+# With unified endpoint (recommended)
+RIVET_ENDPOINT=https://my-namespace:pub_abc123@api.rivet.dev \
+RIVET_RUNNER=worker-$(hostname) \
+RIVET_RUNNER_KEY=$(cat /etc/machine-id) \
+npm run start
 
-# On runner nodes
-RIVET_ENGINE=http://1.2.3.4 \
-RIVET_NAMESPACE=production \
+# Or with separate variables
+RIVET_ENDPOINT=https://api.rivet.dev \
+RIVET_NAMESPACE=my-namespace \
+RIVET_TOKEN=pub_abc123 \
 RIVET_RUNNER=worker-$(hostname) \
 RIVET_RUNNER_KEY=$(cat /etc/machine-id) \
 npm run start

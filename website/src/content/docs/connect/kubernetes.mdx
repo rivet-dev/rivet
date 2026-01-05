@@ -14,8 +14,14 @@ Run your backend on any Kubernetes cluster with a simple container image and dep
 </Step>
 <Step title="Generate Environment Variables">
 
-Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in later manifests. They should look something like this:
+Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in later manifests. You can use either the unified endpoint format or separate variables:
 
+**Unified Format (Recommended):**
+```bash
+RIVET_ENDPOINT=https://your-namespace-id:your-token@api-us-west-1.rivet.dev
+```
+
+**Separate Variables:**
 ```bash
 RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
 RIVET_NAMESPACE=your-namespace-id
@@ -52,6 +58,18 @@ Replace `registry.example.com/your-team` with your registry path. Auth with `doc
 
 Create a `backend-secrets.yaml` for your environment variables:
 
+**With Unified Format (Recommended):**
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+type: Opaque
+stringData:
+  RIVET_ENDPOINT: https://your-namespace-id:your-token@api-us-west-1.rivet.dev
+```
+
+**Or With Separate Variables:**
 ```yaml
 apiVersion: v1
 kind: Secret
