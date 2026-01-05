@@ -3,9 +3,11 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { WSContext } from "hono/ws";
+import { createClient } from "rivetkit/client";
 import { registry } from "./registry.js";
 
-const { client } = registry.start();
+registry.startRunner();
+const client = createClient<typeof registry>();
 
 const app = new Hono();
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
