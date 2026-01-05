@@ -233,6 +233,7 @@ export default async function Page({ params }: Props) {
 											Deploy to Railway
 										</Link>
 									)}
+									{/* Show additional deployment platforms (Kubernetes, AWS, GCP, etc.) when quick-deploy options are available */}
 									{(template.deployTemplate?.vercel || template.deployTemplate?.railway) && <DeployDropdown />}
 								</div>
 							</div>
