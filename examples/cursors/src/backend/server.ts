@@ -1,4 +1,3 @@
 import { registry } from "./registry";
 
-registry.start();
-
+export default registry.serve();
