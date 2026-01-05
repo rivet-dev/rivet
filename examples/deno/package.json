@@ -7,7 +7,8 @@
 	"scripts": {
 		"dev": "deno run --allow-all src/server.ts",
 		"check-types": "command -v deno >/dev/null 2>&1 && deno task check-types || echo 'Skipping deno check-types (deno not installed)'",
-		"connect": "deno run --allow-all scripts/connect.ts"
+		"connect": "deno run --allow-all scripts/connect.ts",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@types/deno": "^2.3.0",

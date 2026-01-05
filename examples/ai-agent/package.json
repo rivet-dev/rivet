@@ -4,15 +4,11 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"dev:backend": "npx srvx --import tsx src/server.ts",
-		"dev:frontend": "vite",
+		"dev": "npx srvx --static dist --import tsx src/server.ts",
 		"build": "vite build",
 		"check-types": "tsc --noEmit",
 		"test": "vitest run",
-		"start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
-		"start:backend": "npx srvx --prod --import tsx src/server.ts",
-		"start:frontend": "vite build && vite preview"
+		"start": "npx srvx --prod --static dist --import tsx src/server.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

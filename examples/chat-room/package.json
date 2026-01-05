@@ -9,7 +9,8 @@
 		"dev:frontend": "vite",
 		"dev:cli": "tsx src/scripts/cli.ts",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"build": "tsc && vite build"
 	},
 	"devDependencies": {
 		"@rivetkit/react": "workspace:*",

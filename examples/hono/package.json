@@ -7,7 +7,8 @@
 		"dev": "tsx --watch src/server.ts",
 		"start": "tsx src/server.ts",
 		"check-types": "tsc --noEmit",
-		"client": "tsx scripts/client.ts"
+		"client": "tsx scripts/client.ts",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@hono/node-server": "^1.19.1",
