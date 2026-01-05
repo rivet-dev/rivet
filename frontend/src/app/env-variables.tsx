@@ -1,16 +1,18 @@
 import { Button, CopyButton, DiscreteInput } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { Label } from "@/components/ui/label";
-import { usePublishableToken } from "@/queries/accessors";
+import { useAdminToken, usePublishableToken } from "@/queries/accessors";
 
 export function EnvVariables({
 	prefix,
 	runnerName,
 	endpoint,
+	kind,
 }: {
 	prefix?: string;
 	runnerName?: string;
 	endpoint: string;
+	kind: "serverless" | "serverfull";
 }) {
 	return (
 		<div>
@@ -25,7 +27,7 @@ export function EnvVariables({
 					<p>Value</p>
 				</Label>
 				<RivetEndpointEnv prefix={prefix} endpoint={endpoint} />
-				<RivetTokenEnv prefix={prefix} />
+				<RivetTokenEnv prefix={prefix} kind={kind} />
 				<RivetNamespaceEnv prefix={prefix} />
 				<RivetRunnerEnv prefix={prefix} runnerName={runnerName} />
 			</div>
@@ -82,8 +84,16 @@ function RivetRunnerEnv({
 	);
 }
 
-function RivetTokenEnv({ prefix }: { prefix?: string }) {
-	const data = usePublishableToken();
+function RivetTokenEnv({
+	prefix,
+	kind,
+}: {
+	prefix?: string;
+	kind: "serverless" | "serverfull";
+}) {
+	const publishableToken = usePublishableToken();
+	const adminToken = useAdminToken();
+
 	return (
 		<>
 			<DiscreteInput
@@ -94,7 +104,10 @@ function RivetTokenEnv({ prefix }: { prefix?: string }) {
 
 			<DiscreteInput
 				aria-label="environment variable value"
-				value={(data as string) || ""}
+				value={
+					(kind === "serverless" ? publishableToken : adminToken) ||
+					""
+				}
 				show
 			/>
 		</>
