@@ -11,15 +11,13 @@
 		"realtime"
 	],
 	"scripts": {
-		"dev": "concurrently \"npm:dev:*\"",
-		"dev:backend": "tsx watch src/server.ts",
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"dev:backend": "tsx --watch src/server.ts",
 		"dev:frontend": "vite",
+		"build": "vite build",
+		"start": "tsx src/server.ts",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run",
-		"start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
-		"start:backend": "tsx watch src/server.ts",
-		"start:frontend": "vite build && vite preview",
-		"build": "tsc && vite build"
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.14.0",
