@@ -2,7 +2,7 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { Reminder, Registry } from "../src/registry";
 
-const { useActor } = createRivetKit<Registry>("http://localhost:6420");
+const { useActor } = createRivetKit<Registry>(`${window.location.origin}/api/rivet`);
 
 export function App() {
 	const [reminders, setReminders] = useState<Reminder[]>([]);

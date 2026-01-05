@@ -6,7 +6,7 @@ import type {
 	registry,
 } from "../src/registry";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
 
 // Generate a random user ID
 const generateUserId = () =>

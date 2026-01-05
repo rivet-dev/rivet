@@ -32,6 +32,7 @@ export default function RawWebSocketTab({ state }: TabProps) {
     const actorPath = state.actorKey ?
       `/actors/${state.actorName}/${encodeURIComponent(state.actorKey)}/ws` :
       `/actors/${state.actorName}/ws`;
+      // FIXME: use clientEndpoint from metadata
     return `${wsProtocol}//localhost:8080${actorPath}`;
   };
 

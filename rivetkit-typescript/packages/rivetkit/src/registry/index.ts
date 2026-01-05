@@ -1,5 +1,7 @@
 import invariant from "invariant";
+import type { Client } from "@/client/client";
 import { createClientWithDriver } from "@/client/client";
+import { createClient } from "@/client/mod";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
 import { chooseDefaultDriver } from "@/drivers/default";
 import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
@@ -8,27 +10,26 @@ import {
 	getInspectorUrl,
 	isInspectorEnabled,
 } from "@/inspector/utils";
+import { buildManagerRouter } from "@/manager/router";
+import { configureServerlessRunner } from "@/serverless/configure";
+import { buildServerlessRouter } from "@/serverless/router";
+import type { GetUpgradeWebSocket } from "@/utils";
+import { isDev } from "@/utils/env-vars";
 import pkg from "../../package.json" with { type: "json" };
 import {
-	type RegistryActors,
-	type RegistryConfigInput,
 	type DriverConfig,
+	type RegistryActors,
+	type RegistryConfig,
+	type RegistryConfigInput,
+	RegistryConfigSchema,
 } from "./config";
-import { type RegistryConfig, RegistryConfigSchema } from "./config";
 import {
 	type LegacyRunnerConfig,
 	type LegacyRunnerConfigInput,
 	LegacyRunnerConfigSchema,
 } from "./config/legacy-runner";
 import { logger } from "./log";
-import { buildServerlessRouter } from "@/serverless/router";
-import { buildManagerRouter } from "@/manager/router";
 import { crossPlatformServe, findFreePort } from "./serve";
-import { GetUpgradeWebSocket } from "@/utils";
-import { configureServerlessRunner } from "@/serverless/configure";
-import type { Client } from "@/client/client";
-import { createClient } from "@/client/mod";
-import { isDev } from "@/utils/env-vars";
 
 export type FetchHandler = (
 	request: Request,
@@ -92,7 +93,7 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public serve(): ServerlessHandler {
-		return { fetch: this.handler };
+		return { fetch: this.handler.bind(this) };
 	}
 
 	/**

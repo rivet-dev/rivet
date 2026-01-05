@@ -2,7 +2,7 @@ import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
 import type { Player, registry } from "../src/registry";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
 
 export function App() {
 	const [region, setRegion] = useState("us-east");

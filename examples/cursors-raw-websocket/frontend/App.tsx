@@ -89,6 +89,7 @@ export function App() {
 				const actorId = await client.cursorRoom.getOrCreate(roomId).resolve();
 				console.log("found actor", actorId);
 
+				// FIXME: derive ws url from rivet url, should use metadata and `clientEndpoint`
 				const wsOrigin = rivetUrl.replace(/^http/, "ws");
 				const wsUrl = `${wsOrigin}/gateway/${actorId}/websocket?sessionId=${encodeURIComponent(sessionId)}`;
 

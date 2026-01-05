@@ -12,14 +12,14 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250129.0",
-		"rivetkit": "workspace:*",
+		"rivetkit": "*",
 		"@types/node": "^22.13.9",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"wrangler": "^4.22.0"
 	},
 	"dependencies": {
-		"@rivetkit/cloudflare-workers": "workspace:*",
+		"@rivetkit/cloudflare-workers": "*",
 		"hono": "^4.8.0"
 	},
 	"stableVersion": "0.8.0",
