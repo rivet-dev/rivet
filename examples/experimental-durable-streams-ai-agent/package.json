@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "concurrently \"npm run dev:streams\" \"npm run dev:backend\" \"npm run dev:frontend\"",
 		"dev:streams": "tsx --watch src/streams-server/server.ts",
-		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:backend": "npx srvx --import tsx src/backend/server.ts",
 		"dev:frontend": "vite",
 		"build": "vite build",
 		"check-types": "tsc --noEmit",

@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx --watch src/server.ts",
+		"dev": "npx srvx --import tsx src/server.ts",
 		"check-types": "tsc --noEmit",
 		"build": "tsc",
 		"client": "tsx scripts/client.ts"

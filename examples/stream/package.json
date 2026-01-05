@@ -3,7 +3,7 @@
 	"version": "2.0.21",
 	"type": "module",
 	"scripts": {
-		"dev": "concurrently \"tsx --watch src/backend/server.ts\" \"vite\"",
+		"dev": "concurrently \"npx srvx --import tsx src/backend/server.ts\" \"vite\"",
 		"build": "vite build",
 		"preview": "vite preview",
 		"check-types": "tsc --noEmit",
