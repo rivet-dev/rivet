@@ -222,6 +222,7 @@ function Step2({ provider }: { provider: string }) {
 				))}
 
 			<EnvVariables
+				kind="serverfull"
 				endpoint={useSelectedDatacenter()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>
