@@ -27,7 +27,10 @@
 		"tags": [
 			"database"
 		],
-		"noFrontend": true
+		"noFrontend": true,
+		"deployTemplate": {
+			"railway": true
+		}
 	},
 	"license": "MIT"
 }

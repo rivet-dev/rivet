@@ -211,25 +211,29 @@ export default async function Page({ params }: Props) {
 										<Icon icon={faGithub} className="text-sm" />
 										View on GitHub
 									</Link>
-									{/*<Link
-										href={vercelDeployUrl.toString()}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
-									>
-										<Icon icon={faVercel} className="text-sm" />
-										Deploy to Vercel
-									</Link>
-									<Link
-										href={`https://railway.app/new/template?template=https://github.com/rivet-dev/rivet/tree/main/examples/${template.name}`}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
-									>
-										<Icon icon={faRailway} className="text-sm" />
-										Deploy to Railway
-									</Link>
-									<DeployDropdown />*/}
+									{template.deployTemplate?.vercel && (
+										<Link
+											href={vercelDeployUrl.toString()}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
+										>
+											<Icon icon={faVercel} className="text-sm" />
+											Deploy to Vercel
+										</Link>
+									)}
+									{template.deployTemplate?.railway && (
+										<Link
+											href={`https://railway.app/new/template?template=https://github.com/rivet-dev/rivet/tree/main/examples/${template.name}`}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
+										>
+											<Icon icon={faRailway} className="text-sm" />
+											Deploy to Railway
+										</Link>
+									)}
+									{(template.deployTemplate?.vercel || template.deployTemplate?.railway) && <DeployDropdown />}
 								</div>
 							</div>
 

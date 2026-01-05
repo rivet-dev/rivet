@@ -34,7 +34,10 @@
 		"tags": [
 			"starter"
 		],
-		"frontendPort": 3000
+		"frontendPort": 3000,
+		"deployTemplate": {
+			"vercel": true
+		}
 	},
 	"license": "MIT"
 }
