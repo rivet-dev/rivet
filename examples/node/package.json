@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "npx srvx --import tsx src/server.ts",
+		"start": "npx srvx --prod --import tsx src/server.ts",
 		"check-types": "tsc --noEmit",
 		"build": "tsc",
 		"client": "tsx scripts/client.ts"

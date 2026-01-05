@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "bun --watch src/server.ts",
+		"start": "bun src/server.ts",
 		"check-types": "tsc --noEmit"
 	},
 	"devDependencies": {
