@@ -13,7 +13,7 @@
 	],
 	"scripts": {
 		"dev": "concurrently \"npm:dev:*\"",
-		"dev:backend": "tsx watch src/backend/server.ts",
+		"dev:backend": "npx srvx --import tsx src/backend/server.ts",
 		"dev:frontend": "vite",
 		"check-types": "tsc --noEmit",
 		"test": "vitest run"
