@@ -5,10 +5,13 @@
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"dev:backend": "npx srvx --import tsx src/backend/server.ts",
+		"dev:backend": "npx srvx --import tsx src/server.ts",
 		"dev:frontend": "vite",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+		"start:backend": "npx srvx --prod --import tsx src/server.ts",
+		"start:frontend": "vite build && vite preview"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

@@ -5,11 +5,14 @@
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"dev:backend": "npx srvx --import tsx src/backend/server.ts",
+		"dev:backend": "npx srvx --import tsx src/server.ts",
 		"dev:frontend": "vite",
 		"build": "tsc && vite build",
 		"preview": "vite preview",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+		"start:backend": "npx srvx --prod --import tsx src/server.ts",
+		"start:frontend": "vite build && vite preview"
 	},
 	"dependencies": {
 		"@rivetkit/react": "workspace:*",
