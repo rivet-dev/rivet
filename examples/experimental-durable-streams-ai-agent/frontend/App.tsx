@@ -1,6 +1,6 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { registry } from "../backend/registry";
+import { registry } from "../src/registry";
 import { type PromptMessage, type ResponseChunk } from "../shared/types";
 import { getStreams, getStreamPaths } from "../shared/streams";
 import "./App.css";

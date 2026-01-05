@@ -1,6 +1,6 @@
 import { createClient } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { registry } from "../backend/registry";
+import type { registry } from "../src/registry";
 
 const rivetUrl = "http://localhost:6420";
 

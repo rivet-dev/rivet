@@ -1,6 +1,6 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { registry } from "../backend/registry";
+import type { registry } from "../src/registry";
 
 console.log("Environment variables:", {
 	VITE_RIVET_ENDPOINT: import.meta.env.VITE_RIVET_ENDPOINT,

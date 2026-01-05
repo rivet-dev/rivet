@@ -4,7 +4,7 @@ import type {
 	CompanyProfile,
 	EmployeeProfile,
 	registry,
-} from "../backend/registry";
+} from "../src/registry";
 
 const client = createClient<typeof registry>("http://localhost:6420");
 
