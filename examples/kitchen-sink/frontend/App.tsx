@@ -1,6 +1,6 @@
 import { createClient } from "@rivetkit/react";
 import { useState, useMemo, useEffect } from "react";
-import type { Registry } from "../backend/registry";
+import type { Registry } from "../src/registry";
 import ConnectionScreen from "./components/ConnectionScreen";
 import InteractionScreen from "./components/InteractionScreen";
 

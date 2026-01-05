@@ -1,9 +1,9 @@
 import { useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import "./App.css";
-import DEFAULT_REGISTRY from "../../template/src/backend/registry.ts?raw";
-import DEFAULT_APP from "../../template/src/frontend/App.tsx?raw";
-import { DeployRequest } from "../backend/utils";
+import DEFAULT_REGISTRY from "../../template/src/registry.ts?raw";
+import DEFAULT_APP from "../../template/frontend/App.tsx?raw";
+import { DeployRequest } from "../src/utils";
 
 type DeploymentTarget = "cloud" | "selfHosted";
 
