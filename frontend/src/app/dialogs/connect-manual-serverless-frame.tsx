@@ -202,6 +202,7 @@ function Step2() {
 		<>
 			<p>Set the following environment variables.</p>
 			<EnvVariables
+				kind="serverless"
 				endpoint={useSelectedDatacenter()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>

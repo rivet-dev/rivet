@@ -186,6 +186,7 @@ function Step2() {
 				settings.
 			</p>
 			<EnvVariables
+				kind="serverfull"
 				endpoint={useSelectedDatacenter()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>

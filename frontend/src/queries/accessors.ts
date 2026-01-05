@@ -3,6 +3,7 @@ import { match } from "ts-pattern";
 import { getConfig } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
+	useEngineCompatDataProvider,
 	useEngineNamespaceDataProvider,
 } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
@@ -26,6 +27,12 @@ export function usePublishableToken() {
 		.otherwise(() => {
 			throw new Error("Not in a valid context");
 		});
+}
+
+export function useAdminToken() {
+	return useSuspenseQuery(
+		useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
+	).data;
 }
 
 export const useEndpoint = () => {
