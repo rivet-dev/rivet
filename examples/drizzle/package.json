@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/server.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
