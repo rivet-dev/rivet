@@ -1,3 +1,3 @@
 import { registry } from "./registry.js";
 
-registry.start();
+export default registry.serve();
