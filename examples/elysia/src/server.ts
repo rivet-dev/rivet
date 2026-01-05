@@ -1,7 +1,9 @@
 import { Elysia } from "elysia";
+import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
-const { client } = registry.start();
+registry.startRunner();
+const client = createClient<typeof registry>();
 
 // Setup router
 new Elysia()
