@@ -18,6 +18,20 @@ import {
 import { RegionSelect } from "@/components/actors/region-select";
 import { cloudEnv } from "@/lib/env";
 
+/**
+ * Creates a unified endpoint URL with embedded namespace and token credentials.
+ */
+function createUnifiedEndpoint(
+	endpoint: string,
+	namespace: string,
+	token: string,
+): string {
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token);
+	return url.toString();
+}
+
 interface TokensFrameContentProps extends DialogContentProps {}
 
 export default function TokensFrameContent({
@@ -87,9 +101,7 @@ function SecretToken() {
 			throw new Error("Not in a valid context");
 		});
 
-	const envVars = `RIVET_ENDPOINT=${endpoint}
-RIVET_NAMESPACE=${namespace}
-RIVET_TOKEN=${token || ""}`;
+	const envVars = `RIVET_ENDPOINT=${createUnifiedEndpoint(endpoint, namespace, token || "")}`;
 
 	const codeSnippet = `// Configuration will automatically be read from env
 registry.start();`;

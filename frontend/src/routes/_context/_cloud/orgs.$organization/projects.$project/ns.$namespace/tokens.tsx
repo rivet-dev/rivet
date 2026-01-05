@@ -48,6 +48,20 @@ import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 
+/**
+ * Creates a unified endpoint URL with embedded namespace and token credentials.
+ */
+function createUnifiedEndpoint(
+	endpoint: string,
+	namespace: string,
+	token: string,
+): string {
+	const url = new URL(endpoint);
+	url.username = encodeURIComponent(namespace);
+	url.password = encodeURIComponent(token);
+	return url.toString();
+}
+
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens",
 )({
@@ -205,32 +219,13 @@ registry.start();`;
 							value="RIVET_ENDPOINT"
 							show
 						/>
-						<DiscreteInput
-							aria-label="environment variable value"
-							value={endpoint}
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable key"
-							value="RIVET_NAMESPACE"
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable value"
-							value={namespace}
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable key"
-							value="RIVET_TOKEN"
-							show
-						/>
 						{isTokenLoading ? (
 							<Skeleton className="w-full h-10" />
 						) : (
 							<DiscreteInput
 								aria-label="environment variable value"
-								value={token || ""}
+								value={createUnifiedEndpoint(endpoint, namespace, token || "")}
+								show
 							/>
 						)}
 					</div>
@@ -239,9 +234,7 @@ registry.start();`;
 							variant="outline"
 							size="sm"
 							onClick={() => {
-								const envVars = `RIVET_ENDPOINT=${endpoint}
-RIVET_NAMESPACE=${namespace}
-RIVET_TOKEN=${token || ""}`;
+								const envVars = `RIVET_ENDPOINT=${createUnifiedEndpoint(endpoint, namespace, token || "")}`;
 								navigator.clipboard.writeText(envVars);
 								toast.success("Copied to clipboard");
 							}}
