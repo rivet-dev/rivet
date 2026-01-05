@@ -23,7 +23,7 @@ const { useActor } = createRivetKit<typeof registry>();
 
 #### Parameters
 
-- `endpoint`: Optional endpoint URL (defaults to `http://localhost:6420` or `process.env.RIVET_ENDPOINT`)
+- `endpoint`: Optional endpoint URL (defaults to `http://localhost:6420` or `process.env.RIVET_ENDPOINT`). Supports unified format with embedded credentials: `https://namespace:token@api.rivet.dev`
 - `options`: Optional configuration object
 
 #### Returns
