@@ -5,12 +5,15 @@
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently \"tsx --watch src/backend/server.ts\" \"vite\"",
-		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:backend": "tsx --watch src/server.ts",
 		"dev:frontend": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
 		"check-types": "tsc --noEmit",
-		"test": "vitest"
+		"test": "vitest",
+		"start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+		"start:backend": "tsx --watch src/server.ts",
+		"start:frontend": "vite build && vite preview"
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.14.0",
