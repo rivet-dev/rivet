@@ -42,7 +42,7 @@ function App() {
     if (!state) return null;
 
     return createClient<Registry>({
-      endpoint: "http://localhost:6420",
+      endpoint: `${window.location.origin}/api/rivet`,
       encoding: state.encoding,
     });
   }, [state?.encoding]);

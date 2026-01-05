@@ -1,16 +1,15 @@
-import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { WSContext } from "hono/ws";
 import { createClient } from "rivetkit/client";
-import { registry } from "./registry.js";
+import { registry } from "./registry";
 
 registry.startRunner();
 const client = createClient<typeof registry>();
 
 const app = new Hono();
-const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
+const { upgradeWebSocket } = createNodeWebSocket({ app });
 
 // Forward WebSocket connections to actor's WebSocket handler
 app.get(
@@ -49,6 +48,4 @@ app.get(
 	}),
 );
 
-const server = serve({ fetch: app.fetch, port: 8080 });
-injectWebSocket(server);
-console.log("Listening on port 8080");
+export default app;

@@ -2,8 +2,8 @@ import { anthropic } from "@ai-sdk/anthropic";
 import type { DurableStream } from "@durable-streams/client";
 import { streamText } from "ai";
 import { type ActorContextOf, actor, setup } from "rivetkit";
-import { getStreams } from "../shared/streams";
-import type { PromptMessage, ResponseChunk } from "../shared/types";
+import { getStreams } from "./shared/streams";
+import type { PromptMessage, ResponseChunk } from "./shared/types";
 
 export const aiAgent = actor({
 	createState: (_c, input: { conversationId: string }) => ({

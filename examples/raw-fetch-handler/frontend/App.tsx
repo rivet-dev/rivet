@@ -3,7 +3,7 @@ import { createClient } from "@rivetkit/react";
 import type { registry } from "../src/registry";
 
 // Create a client that connects to the running server
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
 
 function Counter({ name }: { name: string }) {
 	const [count, setCount] = useState<number | null>(null);
@@ -33,6 +33,7 @@ function Counter({ name }: { name: string }) {
 		setLoading(true);
 		try {
 			// Method 2: Using the forward endpoint
+			// FIXME: Use metadata's clientEndpoint
 			const response = await fetch(`http://localhost:8080/forward/${name}/increment`, {
 				method: "POST",
 			});

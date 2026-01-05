@@ -16,7 +16,8 @@ export default function App() {
 			`conn_params.${encodeURIComponent(JSON.stringify({ apiKey: "your-api-key" }))}`
 		];
 
-		const ws = new WebSocket("ws://localhost:8080/registry/actors/chatRoom/ws/", protocols);
+		// FIXME: Use metadata's clientEndpoint
+		const ws = new WebSocket("ws://localhost:6420/api/rivet/actors/chatRoom/ws/", protocols);
 		
 		ws.onopen = () => {
 			setIsConnected(true);
