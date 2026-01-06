@@ -6,18 +6,17 @@ use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod
 use futures_util::future::poll_fn;
 use rivet_postgres_util::build_tls_config;
 use rivet_util::backoff::Backoff;
-use std::{
-	collections::HashMap,
-	hash::{DefaultHasher, Hash, Hasher},
-	path::PathBuf,
-	sync::Arc,
-};
+use scc::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::{Mutex, broadcast};
 use tokio_postgres::AsyncMessage;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::Instrument;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
+use crate::metrics;
 use crate::pubsub::DriverOutput;
 
 #[derive(Clone)]
@@ -54,8 +53,8 @@ pub const POSTGRES_MAX_MESSAGE_SIZE: usize =
 #[derive(Clone)]
 pub struct PostgresDriver {
 	pool: Arc<Pool>,
-	client: Arc<Mutex<Option<Arc<tokio_postgres::Client>>>>,
-	subscriptions: Arc<Mutex<HashMap<String, Subscription>>>,
+	client: Arc<Mutex<Option<tokio_postgres::Client>>>,
+	subscriptions: Arc<HashMap<String, Subscription>>,
 	client_ready: tokio::sync::watch::Receiver<bool>,
 }
 
@@ -97,9 +96,8 @@ impl PostgresDriver {
 			.context("failed to create postgres pool")?;
 		tracing::debug!("postgres pool created successfully");
 
-		let subscriptions: Arc<Mutex<HashMap<String, Subscription>>> =
-			Arc::new(Mutex::new(HashMap::new()));
-		let client: Arc<Mutex<Option<Arc<tokio_postgres::Client>>>> = Arc::new(Mutex::new(None));
+		let subscriptions: Arc<HashMap<String, Subscription>> = Arc::new(HashMap::new());
+		let client: Arc<Mutex<Option<tokio_postgres::Client>>> = Arc::new(Mutex::new(None));
 
 		// Create channel for client ready notifications
 		let (ready_tx, client_ready) = tokio::sync::watch::channel(false);
@@ -131,8 +129,8 @@ impl PostgresDriver {
 	/// Manages the connection lifecycle with automatic reconnection
 	async fn spawn_connection_lifecycle(
 		conn_str: String,
-		subscriptions: Arc<Mutex<HashMap<String, Subscription>>>,
-		client: Arc<Mutex<Option<Arc<tokio_postgres::Client>>>>,
+		subscriptions: Arc<HashMap<String, Subscription>>,
+		client: Arc<Mutex<Option<tokio_postgres::Client>>>,
 		ready_tx: tokio::sync::watch::Sender<bool>,
 		ssl_root_cert_path: Option<PathBuf>,
 		ssl_client_cert_path: Option<PathBuf>,
@@ -162,8 +160,6 @@ impl PostgresDriver {
 					// Reset backoff on successful connection
 					backoff = Backoff::default();
 
-					let new_client = Arc::new(new_client);
-
 					// Spawn the polling task immediately
 					// This must be done before any operations on the client
 					let subscriptions_clone = subscriptions.clone();
@@ -172,8 +168,13 @@ impl PostgresDriver {
 					});
 
 					// Get channels to re-subscribe to
-					let channels: Vec<String> =
-						subscriptions.lock().await.keys().cloned().collect();
+					let mut channels = Vec::new();
+					subscriptions
+						.iter_async(|k, _| {
+							channels.push(k.clone());
+							true
+						})
+						.await;
 					let needs_resubscribe = !channels.is_empty();
 
 					if needs_resubscribe {
@@ -204,7 +205,7 @@ impl PostgresDriver {
 
 					// Update the client reference and signal ready
 					// Do this AFTER re-subscribing to ensure LISTEN is complete
-					*client.lock().await = Some(new_client.clone());
+					*client.lock().await = Some(new_client);
 					let _ = ready_tx.send(true);
 
 					// Wait for the polling task to complete (when the connection closes)
@@ -227,7 +228,7 @@ impl PostgresDriver {
 	/// Polls the connection for notifications until it closes or errors
 	async fn poll_connection<T>(
 		mut conn: tokio_postgres::Connection<tokio_postgres::Socket, T>,
-		subscriptions: Arc<Mutex<HashMap<String, Subscription>>>,
+		subscriptions: Arc<HashMap<String, Subscription>>,
 	) where
 		T: tokio_postgres::tls::TlsStream + Unpin,
 	{
@@ -235,7 +236,7 @@ impl PostgresDriver {
 			match poll_fn(|cx| conn.poll_message(cx)).await {
 				Some(std::result::Result::Ok(AsyncMessage::Notification(note))) => {
 					tracing::trace!(channel = %note.channel(), "received notification");
-					if let Some(sub) = subscriptions.lock().await.get(note.channel()).cloned() {
+					if let Some(sub) = subscriptions.get_async(note.channel()).await {
 						let bytes = match BASE64.decode(note.payload()) {
 							std::result::Result::Ok(b) => b,
 							std::result::Result::Err(err) => {
@@ -265,13 +266,13 @@ impl PostgresDriver {
 	}
 
 	/// Wait for the client to be connected
-	async fn wait_for_client(&self) -> Result<Arc<tokio_postgres::Client>> {
+	async fn wait_for_client(&self) -> Result<()> {
 		let mut ready_rx = self.client_ready.clone();
 		tokio::time::timeout(tokio::time::Duration::from_secs(5), async {
 			loop {
 				// Check if client is already available
-				if let Some(client) = self.client.lock().await.clone() {
-					return Ok(client);
+				if self.client.lock().await.is_some() {
+					return Ok(());
 				}
 
 				// Wait for the ready signal to change
@@ -311,28 +312,27 @@ impl PubSubDriver for PostgresDriver {
 		let hashed = self.hash_subject(subject);
 
 		// Check if we already have a subscription for this channel
-		let (rx, drop_guard) =
-			if let Some(existing_sub) = self.subscriptions.lock().await.get(&hashed).cloned() {
+		let (rx, drop_guard) = match self.subscriptions.entry_async(hashed.clone()).await {
+			scc::hash_map::Entry::Occupied(existing_sub) => {
 				// Reuse the existing broadcast channel
 				let rx = existing_sub.tx.subscribe();
 				let drop_guard = existing_sub.token.clone().drop_guard();
 				(rx, drop_guard)
-			} else {
+			}
+			scc::hash_map::Entry::Vacant(e) => {
 				// Create a new broadcast channel for this subject
 				let (tx, rx) = tokio::sync::broadcast::channel(1024);
 				let subscription = Subscription::new(tx.clone());
 
 				// Register subscription
-				self.subscriptions
-					.lock()
-					.await
-					.insert(hashed.clone(), subscription.clone());
+				e.insert_entry(subscription.clone());
+				metrics::POSTGRES_SUBSCRIPTIONS_COUNT.set(self.subscriptions.len() as i64);
 
 				// Execute LISTEN command on the async client (for receiving notifications)
 				// This only needs to be done once per channel
 				// Try to LISTEN if client is available, but don't fail if disconnected
 				// The reconnection logic will handle re-subscribing
-				if let Some(client) = self.client.lock().await.clone() {
+				if let Some(client) = &*self.client.lock().await {
 					match client
 						.execute(&format!("LISTEN \"{hashed}\""), &[])
 						.instrument(tracing::trace_span!("pg_listen"))
@@ -351,28 +351,29 @@ impl PubSubDriver for PostgresDriver {
 
 				// Spawn a single cleanup task for this subscription waiting on its token
 				let driver = self.clone();
-				let hashed_clone = hashed.clone();
 				let tx_clone = tx.clone();
 				let token_clone = subscription.token.clone();
 				tokio::spawn(async move {
 					token_clone.cancelled().await;
 					if tx_clone.receiver_count() == 0 {
-						let client = driver.client.lock().await.clone();
-						if let Some(client) = client {
-							let sql = format!("UNLISTEN \"{}\"", hashed_clone);
+						if let Some(client) = &*driver.client.lock().await {
+							let sql = format!("UNLISTEN \"{}\"", hashed);
 							if let Err(err) = client.execute(sql.as_str(), &[]).await {
-								tracing::warn!(?err, %hashed_clone, "failed to UNLISTEN channel");
+								tracing::warn!(?err, %hashed, "failed to UNLISTEN channel");
 							} else {
-								tracing::trace!(%hashed_clone, "unlistened channel");
+								tracing::trace!(%hashed, "unlistened channel");
 							}
 						}
-						driver.subscriptions.lock().await.remove(&hashed_clone);
+						driver.subscriptions.remove_async(&hashed).await;
+						metrics::POSTGRES_SUBSCRIPTIONS_COUNT
+							.set(driver.subscriptions.len() as i64);
 					}
 				});
 
 				let drop_guard = subscription.token.clone().drop_guard();
 				(rx, drop_guard)
-			};
+			}
+		};
 
 		Ok(Box::new(PostgresSubscriber {
 			subject: subject.to_string(),
@@ -392,7 +393,7 @@ impl PubSubDriver for PostgresDriver {
 
 		// Wait for listen connection to be ready first if this channel has subscribers
 		// This ensures that if we're reconnecting, the LISTEN is re-registered before NOTIFY
-		if self.subscriptions.lock().await.contains_key(&hashed) {
+		if self.subscriptions.contains_async(&hashed).await {
 			self.wait_for_client().await?;
 		}
 
