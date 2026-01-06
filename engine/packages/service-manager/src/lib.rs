@@ -135,8 +135,15 @@ impl RunConfigData {
 pub async fn start(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	services: Vec<Service>,
+	mut services: Vec<Service>,
 ) -> Result<()> {
+	services.push(Service::new(
+		"metrics",
+		ServiceKind::Core,
+		|config, _pools| rivet_metrics::run_standalone(config),
+		false,
+	));
+
 	// Spawn services
 	tracing::info!(services=?services.len(), "starting services");
 	let mut running_services = Vec::new();

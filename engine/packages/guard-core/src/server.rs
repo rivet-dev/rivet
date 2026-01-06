@@ -98,8 +98,8 @@ pub async fn run_server(
 		port_type_str: String,
 	) {
 		let connection_start = Instant::now();
-		metrics::TCP_CONNECTION_PENDING.add(1, &[]);
-		metrics::TCP_CONNECTION_TOTAL.add(1, &[]);
+		metrics::TCP_CONNECTION_PENDING.inc();
+		metrics::TCP_CONNECTION_TOTAL.inc();
 
 		let io = hyper_util::rt::TokioIo::new(tcp_stream);
 
@@ -124,8 +124,8 @@ pub async fn run_server(
 				tracing::debug!("{} connection dropped: {}", port_type_str, remote_addr);
 
 				let connection_duration = connection_start.elapsed().as_secs_f64();
-				metrics::TCP_CONNECTION_DURATION.record(connection_duration, &[]);
-				metrics::TCP_CONNECTION_PENDING.add(-1, &[]);
+				metrics::TCP_CONNECTION_DURATION.observe(connection_duration);
+				metrics::TCP_CONNECTION_PENDING.dec();
 			}
 			.instrument(tracing::info_span!(parent: None, "process_connection_task")),
 		);
@@ -175,8 +175,8 @@ pub async fn run_server(
 									// Accept TLS connection in a separate task to avoid ownership issues
 									tokio::spawn(async move {
 										let connection_start = Instant::now();
-										metrics::TCP_CONNECTION_PENDING.add(1, &[]);
-										metrics::TCP_CONNECTION_TOTAL.add(1, &[]);
+										metrics::TCP_CONNECTION_PENDING.inc();
+										metrics::TCP_CONNECTION_TOTAL.inc();
 
 										match acceptor_clone
 											.accept(tcp_stream)
@@ -215,8 +215,8 @@ pub async fn run_server(
 										}
 
 										let connection_duration = connection_start.elapsed().as_secs_f64();
-										metrics::TCP_CONNECTION_DURATION.record(connection_duration, &[]);
-										metrics::TCP_CONNECTION_PENDING.add(-1, &[]);
+										metrics::TCP_CONNECTION_DURATION.observe(connection_duration);
+										metrics::TCP_CONNECTION_PENDING.dec();
 									}.instrument(tracing::info_span!(parent: None, "process_tls_connection_task")));
 								} else {
 									// Fallback to non-TLS handling (useful for testing)

@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
-use rivet_metrics::KeyValue;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION, versioned};
 use universaldb::{
 	options::{ConflictRangeType, StreamingMode},
@@ -1127,13 +1126,9 @@ pub(crate) async fn allocate_pending_actors(
 		.custom_instrument(tracing::info_span!("runner_allocate_pending_actors_tx"))
 		.await?;
 
-	metrics::ACTOR_PENDING_ALLOCATION.record(
-		pending_actor_count as f64,
-		&[
-			KeyValue::new("namespace_id", input.namespace_id.to_string()),
-			KeyValue::new("runner_name", input.name.to_string()),
-		],
-	);
+	metrics::ACTOR_PENDING_ALLOCATION
+		.with_label_values(&[&input.namespace_id.to_string(), &input.name.to_string()])
+		.set(pending_actor_count as i64);
 
 	Ok(AllocatePendingActorsOutput { allocations })
 }

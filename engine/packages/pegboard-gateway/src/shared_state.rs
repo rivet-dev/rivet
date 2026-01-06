@@ -325,7 +325,7 @@ impl SharedState {
 					in_flight.last_pong = now;
 
 					let rtt = now.saturating_sub(pong.ts);
-					metrics::TUNNEL_PING_DURATION.record(rtt as f64 * 0.001, &[]);
+					metrics::TUNNEL_PING_DURATION.observe(rtt as f64 * 0.001);
 				}
 				Ok(protocol::mk2::ToGateway::ToServerTunnelMessage(msg)) => {
 					let message_id = msg.message_id;
