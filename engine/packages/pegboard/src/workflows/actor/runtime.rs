@@ -940,10 +940,11 @@ pub async fn spawn_actor(
 							runner_protocol_version,
 						})
 					} else {
-						ctx.activity(SetFailureReasonInput {
-							failure_reason: FailureReason::NoCapacity,
-						})
-						.await?;
+						ctx.v(2)
+							.activity(SetFailureReasonInput {
+								failure_reason: FailureReason::NoCapacity,
+							})
+							.await?;
 
 						Ok(SpawnActorOutput::Sleep)
 					}
@@ -951,10 +952,11 @@ pub async fn spawn_actor(
 			}
 		}
 		AllocateActorStatus::Sleep => {
-			ctx.activity(SetFailureReasonInput {
-				failure_reason: FailureReason::NoCapacity,
-			})
-			.await?;
+			ctx.v(2)
+				.activity(SetFailureReasonInput {
+					failure_reason: FailureReason::NoCapacity,
+				})
+				.await?;
 
 			Ok(SpawnActorOutput::Sleep)
 		}

@@ -895,10 +895,11 @@ async fn handle_stopped(
 		..
 	} = &variant
 	{
-		ctx.activity(runtime::SetFailureReasonInput {
-			failure_reason: failure_reason.clone(),
-		})
-		.await?;
+		ctx.v(2)
+			.activity(runtime::SetFailureReasonInput {
+				failure_reason: failure_reason.clone(),
+			})
+			.await?;
 	}
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
@@ -1053,19 +1054,16 @@ async fn handle_stopped(
 
 				state.sleeping = true;
 
-				// Set Crashed failure reason for actual crashes.
-				// Runner failure reasons are already set at the start of handle_stopped.
-				if let StoppedVariant::Normal { code, message } = &variant {
-					ensure!(
-						*code != protocol::mk2::StopCode::Ok,
-						"expected non-Ok stop code in crash handler, got Ok"
-					);
-					ctx.activity(runtime::SetFailureReasonInput {
-						failure_reason: FailureReason::Crashed {
-							message: message.clone(),
-						},
-					})
-					.await?;
+				if !state.going_away
+					&& let StoppedVariant::Normal { message, .. } = &variant
+				{
+					ctx.v(2)
+						.activity(runtime::SetFailureReasonInput {
+							failure_reason: FailureReason::Crashed {
+								message: message.clone(),
+							},
+						})
+						.await?;
 				}
 
 				ctx.activity(runtime::SetSleepingInput {

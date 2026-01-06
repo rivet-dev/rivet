@@ -66,6 +66,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 
 	// Drain older runner versions if configured
 	let drain_result = ctx
+		.v(2)
 		.activity(DrainOlderVersionsInput {
 			namespace_id: input.namespace_id,
 			name: input.name.clone(),
@@ -73,12 +74,13 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 		})
 		.await?;
 	for workflow_id in drain_result.older_runner_workflow_ids {
-		ctx.signal(Stop {
-			reset_actor_rescheduling: false,
-		})
-		.to_workflow_id(workflow_id)
-		.send()
-		.await?;
+		ctx.v(2)
+			.signal(Stop {
+				reset_actor_rescheduling: false,
+			})
+			.to_workflow_id(workflow_id)
+			.send()
+			.await?;
 	}
 
 	// Check for pending actors (which happen when there is not enough runner capacity)
