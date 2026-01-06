@@ -140,8 +140,6 @@ function SecretToken() {
 		string | undefined
 	>(undefined);
 
-	console.log(regions, selectedDatacenter);
-
 	// Set default datacenter when regions are loaded
 	useEffect(() => {
 		if (regions.length > 0 && !selectedDatacenter) {
