@@ -83,16 +83,16 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let workflows = db
-					.find_workflows(
-						&tags
-							.into_iter()
-							.map(|kv| (kv.key, kv.value))
-							.collect::<Vec<_>>(),
-						name.as_deref(),
-						state.map(Into::into),
-					)
-					.await?;
+				let workflows = DatabaseDebug::find_workflows(
+					&*db,
+					&tags
+						.into_iter()
+						.map(|kv| (kv.key, kv.value))
+						.collect::<Vec<_>>(),
+					name.as_deref(),
+					state.map(Into::into),
+				)
+				.await?;
 				util::wf::print_workflows(workflows, pretty).await
 			}
 			Self::Silence { workflow_ids } => db.silence_workflows(workflow_ids).await,

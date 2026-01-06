@@ -6,7 +6,10 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
-use rivet_api_types::{pagination::Pagination, runner_configs::list::*};
+use rivet_api_types::{
+	pagination::Pagination,
+	runner_configs::{RunnerConfigResponse, list::*},
+};
 use rivet_api_util::fanout_to_datacenters;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -24,7 +27,7 @@ pub struct ListResponse {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsListResponseRunnerConfigsValue)]
 pub struct RunnerConfigDatacenters {
-	pub datacenters: HashMap<String, rivet_types::runner_configs::RunnerConfig>,
+	pub datacenters: HashMap<String, RunnerConfigResponse>,
 }
 
 #[utoipa::path(

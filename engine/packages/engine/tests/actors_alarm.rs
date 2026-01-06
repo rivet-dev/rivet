@@ -962,7 +962,7 @@ fn alarm_with_null_timestamp() {
 #[test]
 fn alarm_fires_at_correct_time() {
 	common::run(
-		common::TestOpts::new_with_timeout(1, 10),
+		common::TestOpts::new(1).with_timeout(10),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
@@ -1195,7 +1195,7 @@ fn alarm_wake_then_sleep_without_new_alarm() {
 #[test]
 fn alarm_behavior_with_crash_policy_restart() {
 	common::run(
-		common::TestOpts::new_with_timeout(1, 45),
+		common::TestOpts::new(1).with_timeout(45),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 

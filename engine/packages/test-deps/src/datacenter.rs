@@ -89,6 +89,14 @@ pub async fn setup_single_datacenter(
 		https: None,
 	});
 
+	// Use short timeouts for tests
+	root.pegboard = Some(rivet_config::config::pegboard::Pegboard {
+		actor_start_threshold: Some(3_000), // 3 seconds instead of 30
+		serverless_base_retry_timeout: Some(500), // 500ms instead of 2s
+		serverless_backoff_max_exponent: Some(2), // Max 2^2 = 4x base = 2s
+		..Default::default()
+	});
+
 	tracing::info!(
 		dc = dc.datacenter_label,
 		"creating test configuration and pools"

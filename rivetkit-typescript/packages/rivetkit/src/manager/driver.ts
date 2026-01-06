@@ -1,5 +1,6 @@
 import type { Env, Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
+import type { ActorErrorDetails } from "@/client/errors";
 import type { ManagerInspector } from "@/inspector/manager";
 import { RegistryConfig } from "@/registry/config";
 import { GetUpgradeWebSocket } from "@/utils";
@@ -113,4 +114,5 @@ export interface ActorOutput {
 	connectableTs?: number | null;
 	sleepTs?: number | null;
 	destroyTs?: number | null;
+	error?: ActorErrorDetails | null;
 }

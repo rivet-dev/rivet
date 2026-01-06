@@ -290,7 +290,7 @@ impl TestRunner {
 		&self.config.runner_name
 	}
 
-	/// Shutdown the runner
+	/// Shutdown the runner gracefully (destroys actors first)
 	pub async fn shutdown(&self) {
 		tracing::info!("shutting down test runner");
 		self.shutdown.store(true, Ordering::SeqCst);
@@ -299,6 +299,24 @@ impl TestRunner {
 		if let Some(tx) = self.shutdown_tx.lock().await.take() {
 			let _ = tx.send(());
 		}
+	}
+
+	/// Crash the runner without graceful shutdown.
+	/// This simulates an ungraceful disconnect where the runner stops responding
+	/// without destroying its actors first. Use this to test RunnerNoResponse errors.
+	pub async fn crash(&self) {
+		tracing::info!("crashing test runner (ungraceful disconnect)");
+		self.shutdown.store(true, Ordering::SeqCst);
+
+		// Just drop the websocket without cleanup - don't send any signals
+		// The server will detect the disconnect and actors will remain in
+		// an unresponsive state until they timeout.
+		if let Some(tx) = self.shutdown_tx.lock().await.take() {
+			let _ = tx.send(());
+		}
+
+		// Clear local actor state without notifying server
+		self.actors.lock().await.clear();
 	}
 
 	fn build_ws_url(&self) -> String {

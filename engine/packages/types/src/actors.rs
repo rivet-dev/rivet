@@ -30,6 +30,10 @@ pub struct Actor {
 	pub reschedule_ts: Option<i64>,
 	/// Denotes when the actor was destroyed.
 	pub destroy_ts: Option<i64>,
+
+	/// Error details if the actor failed to start.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub error: Option<crate::actor::ActorError>,
 }
 
 #[derive(Debug, Copy, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, ToSchema)]
