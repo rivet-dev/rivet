@@ -20,7 +20,7 @@ import {
 } from "@/schemas/client-protocol-zod/mod";
 import { encodingIsBinary, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, VERSION } from "@/utils";
-import { getRivetLogHeaders } from "@/utils/env-vars";
+import { getLogHeaders } from "@/utils/env-vars";
 import { getLogger, type Logger } from "./log";
 import { deconstructError, stringifyError } from "./utils";
 
@@ -46,7 +46,7 @@ export function loggerMiddleware(logger: Logger) {
 			reqSize: c.req.header("content-length"),
 			resSize: c.res.headers.get("content-length"),
 			userAgent: c.req.header("user-agent"),
-			...(getRivetLogHeaders()
+			...(getLogHeaders()
 				? { allHeaders: JSON.stringify(c.req.header()) }
 				: {}),
 		});
