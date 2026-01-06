@@ -276,7 +276,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			async move {
 				let signals = if let Some(gc_timeout_ts) = state.gc_timeout_ts {
 					// Listen for signals with gc timeout. if a timeout happens, it means this actor is lost
-					let signals = ctx.listen_n_until::<Main>(gc_timeout_ts, 1024).await?;
+					let signals = ctx.listen_n_until::<Main>(gc_timeout_ts, 256).await?;
 					if signals.is_empty() {
 						tracing::warn!(actor_id=?input.actor_id, "actor lost");
 
@@ -292,7 +292,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 				} else if let Some(alarm_ts) = state.alarm_ts {
 					// Listen for signals with timeout. if a timeout happens, it means this actor should
 					// wake up
-					let signals = ctx.listen_n_until::<Main>(alarm_ts, 1024).await?;
+					let signals = ctx.listen_n_until::<Main>(alarm_ts, 256).await?;
 					if signals.is_empty() {
 						tracing::debug!(actor_id=?input.actor_id, "actor wake");
 
@@ -307,7 +307,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					}
 				} else {
 					// Listen for signals normally
-					ctx.listen_n::<Main>(1024).await?
+					ctx.listen_n::<Main>(256).await?
 				};
 
 				for sig in signals {
@@ -824,9 +824,6 @@ async fn handle_stopped(
 		})
 		.await?;
 
-	// NOTE: The reason we allocate other actors from this actor workflow is because if we instead sent a
-	// signal to the runner wf here it would incur a heavy throughput hit and we need the runner wf to be as
-	// lightweight as possible; processing as few signals that aren't events/commands.
 	// Allocate other pending actors from queue since a slot has now cleared
 	let allocate_pending_res = ctx
 		.activity(AllocatePendingActorsInput {
