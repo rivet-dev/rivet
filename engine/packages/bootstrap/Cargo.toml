@@ -13,6 +13,7 @@ pegboard.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true
 rivet-runtime.workspace = true
+rivet-types.workspace = true
 serde.workspace = true
 tokio-tungstenite.workspace = true
 tracing.workspace = true

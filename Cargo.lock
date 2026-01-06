@@ -4418,6 +4418,7 @@ dependencies = [
  "rivet-config",
  "rivet-metrics",
  "rivet-runtime",
+ "rivet-types",
  "serde",
  "tokio-tungstenite",
  "tracing",
