@@ -1,15 +1,15 @@
 use rivet_metrics::{MICRO_BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
-	pub static ref PING_DURATION: Histogram = register_histogram_with_registry!(
-		"udb_ping_duration",
-		"Total duration to retrieve a single value from udb.",
+	pub static ref FDB_PING_DURATION: Histogram = register_histogram_with_registry!(
+		"udb_fdb_ping_duration",
+		"Total duration to retrieve a single value from fdb.",
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
-	pub static ref MISSED_PING: IntGauge = register_int_gauge_with_registry!(
-		"udb_missed_ping",
-		"1 if udb missed the last ping.",
+	pub static ref FDB_MISSED_PING: IntGauge = register_int_gauge_with_registry!(
+		"udb_fdb_missed_ping",
+		"1 if fdb missed the last ping.",
 		*REGISTRY
 	).unwrap();
 

@@ -6,7 +6,6 @@ use rivet_ups_protocol::versioned::UpsMessage;
 use rivet_ups_protocol::{MessageBody, MessageChunk, MessageStart, PROTOCOL_VERSION};
 use vbare::OwnedVersionedData;
 
-pub const CHUNK_BUFFER_GC_INTERVAL: Duration = Duration::from_secs(60);
 pub const CHUNK_BUFFER_MAX_AGE: Duration = Duration::from_secs(300);
 
 #[derive(Debug)]

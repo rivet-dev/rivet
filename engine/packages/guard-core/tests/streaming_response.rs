@@ -1,5 +1,6 @@
 mod common;
 
+use anyhow::bail;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{BodyExt, Full};
@@ -251,14 +252,9 @@ fn create_streaming_routing_fn(server_addr: SocketAddr) -> RoutingFn {
 							routing_timeout: 30, // 30 seconds for routing timeout
 						},
 					}))
-				} else {
-					use rivet_guard_core::proxy_service::StructuredResponse;
-					Ok(RoutingOutput::Response(StructuredResponse {
-						status: StatusCode::NOT_FOUND,
-						message: std::borrow::Cow::Borrowed("Not found"),
-						docs: None,
-					}))
 				}
+
+				bail!("bad path");
 			})
 		},
 	)
