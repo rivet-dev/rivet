@@ -1,7 +1,6 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
-use rivet_metrics::KeyValue;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
@@ -89,13 +88,9 @@ pub async fn pegboard_runner_drain_older_versions(
 			"draining older runner versions due to drain_on_version_upgrade"
 		);
 
-		metrics::RUNNER_VERSION_UPGRADE_DRAIN.add(
-			older_runners.len() as u64,
-			&[
-				KeyValue::new("namespace_id", input.namespace_id.to_string()),
-				KeyValue::new("runner_name", input.name.clone()),
-			],
-		);
+		metrics::RUNNER_VERSION_UPGRADE_DRAIN
+			.with_label_values(&[&input.namespace_id.to_string(), &input.name])
+			.inc_by(older_runners.len() as u64);
 
 		if input.send_runner_stop_signals {
 			for workflow_id in &older_runners {
