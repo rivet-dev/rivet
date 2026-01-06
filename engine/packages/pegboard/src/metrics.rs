@@ -15,4 +15,11 @@ lazy_static::lazy_static! {
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
+
+	pub static ref RUNNER_VERSION_UPGRADE_DRAIN: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_runner_version_upgrade_drain",
+		"Count of runners drained due to version upgrade.",
+		&["namespace_id", "runner_name"],
+		*REGISTRY
+	).unwrap();
 }

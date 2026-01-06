@@ -131,6 +131,9 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									create_ts: ctx.create_ts(),
 								})
 								.await?;
+
+								// NOTE: This intentionally does not implement drain_on_version_upgrade
+								// like runner2.rs since this workflow is legacy.
 							}
 
 							// Check for pending actors (which happen when there is not enough runner capacity)

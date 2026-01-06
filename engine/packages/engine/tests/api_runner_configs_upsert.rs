@@ -16,6 +16,7 @@ fn upsert_runner_config_normal_single_dc() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -50,6 +51,7 @@ fn upsert_runner_config_normal_multiple_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 		datacenters.insert(
@@ -57,6 +59,7 @@ fn upsert_runner_config_normal_multiple_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -97,6 +100,7 @@ fn upsert_runner_config_serverless() {
 					runners_margin: Some(2),
 				},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -129,6 +133,7 @@ fn upsert_runner_config_update_existing() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -156,6 +161,7 @@ fn upsert_runner_config_update_existing() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: Some(serde_json::json!({"test": "value"})),
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -189,6 +195,7 @@ fn upsert_runner_config_returns_endpoint_changed() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -232,6 +239,7 @@ fn upsert_runner_config_with_metadata() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: Some(metadata_value),
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -268,6 +276,7 @@ fn upsert_runner_config_removes_missing_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 		datacenters.insert(
@@ -275,6 +284,7 @@ fn upsert_runner_config_removes_missing_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -300,6 +310,7 @@ fn upsert_runner_config_removes_missing_dcs() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -365,6 +376,7 @@ fn upsert_runner_config_empty_map_deletes_all() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -438,6 +450,7 @@ fn upsert_runner_config_non_existent_namespace() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -473,6 +486,7 @@ fn upsert_runner_config_overwrites_different_variant() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -506,6 +520,7 @@ fn upsert_runner_config_overwrites_different_variant() {
 					runners_margin: Some(2),
 				},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -540,6 +555,7 @@ fn upsert_runner_config_idempotent() {
 			rivet_api_types::namespaces::runner_configs::RunnerConfig {
 				kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 
@@ -603,6 +619,7 @@ fn upsert_runner_config_serverless_slots_per_runner_zero() {
 					runners_margin: Some(2),
 				},
 				metadata: None,
+				drain_on_version_upgrade: true,
 			},
 		);
 

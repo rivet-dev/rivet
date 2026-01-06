@@ -1,7 +1,7 @@
 use super::{actor::*, protocol};
 use anyhow::*;
 use futures_util::{SinkExt, StreamExt};
-use rivet_runner_protocol as rp;
+use rivet_runner_protocol::mk2 as rp;
 use rivet_util::Id;
 use std::{
 	collections::HashMap,
@@ -53,8 +53,8 @@ pub struct TestRunner {
 	// State
 	pub runner_id: Arc<Mutex<Option<String>>>,
 	actors: Arc<Mutex<HashMap<String, ActorState>>>,
-	last_command_idx: Arc<Mutex<i64>>,
-	next_event_idx: Arc<Mutex<u64>>,
+	/// Per-actor event indices for MK2 checkpoints
+	actor_event_indices: Arc<Mutex<HashMap<String, i64>>>,
 	event_history: Arc<Mutex<Vec<rp::EventWrapper>>>,
 	shutdown: Arc<AtomicBool>,
 	is_child_task: bool,
@@ -162,8 +162,7 @@ impl TestRunnerBuilder {
 			config,
 			runner_id: Arc::new(Mutex::new(None)),
 			actors: Arc::new(Mutex::new(HashMap::new())),
-			last_command_idx: Arc::new(Mutex::new(-1)),
-			next_event_idx: Arc::new(Mutex::new(0)),
+			actor_event_indices: Arc::new(Mutex::new(HashMap::new())),
 			event_history: Arc::new(Mutex::new(Vec::new())),
 			shutdown: Arc::new(AtomicBool::new(false)),
 			is_child_task: false,
@@ -241,8 +240,7 @@ impl TestRunner {
 			config: self.config.clone(),
 			runner_id: self.runner_id.clone(),
 			actors: self.actors.clone(),
-			last_command_idx: self.last_command_idx.clone(),
-			next_event_idx: self.next_event_idx.clone(),
+			actor_event_indices: self.actor_event_indices.clone(),
 			event_history: self.event_history.clone(),
 			is_child_task: true,
 			shutdown: self.shutdown.clone(),
@@ -263,6 +261,13 @@ impl TestRunner {
 		loop {
 			let runner_id = self.runner_id.lock().await;
 			if let Some(id) = runner_id.as_ref() {
+				// In MK2, we need to wait for the workflow to process the Init signal
+				// and mark the runner as eligible for actor allocation.
+				// This can take some time due to workflow processing:
+				// 1. Workflow receives Init signal
+				// 2. Workflow executes MarkEligible activity
+				// 3. Database is updated with runner allocation index
+				tokio::time::sleep(Duration::from_millis(2000)).await;
 				return id.clone();
 			}
 			drop(runner_id);
@@ -330,18 +335,12 @@ impl TestRunner {
 		)
 	}
 
-	async fn build_init_message(&self) -> rp::ToServer {
-		let last_command_idx = *self.last_command_idx.lock().await;
-
+	fn build_init_message(&self) -> rp::ToServer {
+		// MK2 init doesn't have lastCommandIdx - uses checkpoints instead
 		rp::ToServer::ToServerInit(rp::ToServerInit {
 			name: self.config.runner_name.clone(),
 			version: self.config.version,
 			total_slots: self.config.total_slots,
-			last_command_idx: if last_command_idx >= 0 {
-				Some(last_command_idx)
-			} else {
-				None
-			},
 			prepopulate_actor_names: None,
 			metadata: None,
 		})
@@ -353,7 +352,7 @@ impl TestRunner {
 		mut shutdown_rx: oneshot::Receiver<()>,
 	) -> Result<()> {
 		// Send init message
-		let init_msg = self.build_init_message().await;
+		let init_msg = self.build_init_message();
 		let encoded = protocol::encode_to_server(init_msg);
 		ws_stream
 			.send(Message::Binary(encoded.into()))
@@ -381,11 +380,11 @@ impl TestRunner {
 						break;
 					}
 
-					// Send ping
-					let ping = rp::ToServer::ToServerPing(rp::ToServerPing {
+					// Send pong (MK2 uses ToServerPong instead of ToServerPing)
+					let pong = rp::ToServer::ToServerPong(rp::ToServerPong {
 						ts: chrono::Utc::now().timestamp_millis(),
 					});
-					let encoded = protocol::encode_to_server(ping);
+					let encoded = protocol::encode_to_server(pong);
 					ws_stream.send(Message::Binary(encoded.into())).await?;
 				}
 
@@ -456,17 +455,26 @@ impl TestRunner {
 		ws_stream: &mut WsStream,
 		actor_event: ActorEvent,
 	) -> Result<()> {
-		let mut idx = self.next_event_idx.lock().await;
-		let event_wrapper = protocol::make_event_wrapper(*idx, actor_event.event);
+		// Get next event index for this actor (MK2 uses per-actor checkpoints)
+		let mut indices = self.actor_event_indices.lock().await;
+		let idx = indices.entry(actor_event.actor_id.clone()).or_insert(-1);
 		*idx += 1;
-		drop(idx);
+		let event_idx = *idx;
+		drop(indices);
+
+		let event_wrapper = protocol::make_event_wrapper(
+			&actor_event.actor_id,
+			actor_event.generation,
+			event_idx as u64,
+			actor_event.event,
+		);
 
 		self.event_history.lock().await.push(event_wrapper.clone());
 
 		tracing::debug!(
 			actor_id = ?actor_event.actor_id,
 			generation = actor_event.generation,
-			event_idx = event_wrapper.index,
+			event_idx = event_idx,
 			"sending actor event"
 		);
 
@@ -501,30 +509,16 @@ impl TestRunner {
 		Ok(())
 	}
 
-	async fn handle_init(&self, init: rp::ToClientInit, ws_stream: &mut WsStream) -> Result<()> {
+	async fn handle_init(&self, init: rp::ToClientInit, _ws_stream: &mut WsStream) -> Result<()> {
 		tracing::info!(
 			runner_id = %init.runner_id,
-			last_event_idx = ?init.last_event_idx,
 			"received init from server"
 		);
 
 		*self.runner_id.lock().await = Some(init.runner_id.clone());
 
-		// Resend unacknowledged events
-		let events = self.event_history.lock().await;
-		let to_resend: Vec<_> = events
-			.iter()
-			.filter(|e| e.index > init.last_event_idx)
-			.cloned()
-			.collect();
-		drop(events);
-
-		if !to_resend.is_empty() {
-			tracing::info!(count = to_resend.len(), "resending unacknowledged events");
-			let msg = rp::ToServer::ToServerEvents(to_resend);
-			let encoded = protocol::encode_to_server(msg);
-			ws_stream.send(Message::Binary(encoded.into())).await?;
-		}
+		// MK2 doesn't have lastEventIdx in init - events are acked via checkpoints
+		// For simplicity, we don't resend events on reconnect in the test runner
 
 		Ok(())
 	}
@@ -537,22 +531,35 @@ impl TestRunner {
 		tracing::info!(count = commands.len(), "received commands");
 
 		for cmd_wrapper in commands {
+			let checkpoint = &cmd_wrapper.checkpoint;
 			tracing::debug!(
-				index = cmd_wrapper.index,
+				actor_id = %checkpoint.actor_id,
+				generation = checkpoint.generation,
+				index = checkpoint.index,
 				command = ?cmd_wrapper.inner,
 				"processing command"
 			);
 
 			match cmd_wrapper.inner {
 				rp::Command::CommandStartActor(start_cmd) => {
-					self.handle_start_actor(start_cmd, ws_stream).await?;
+					self.handle_start_actor(
+						checkpoint.actor_id.clone(),
+						checkpoint.generation,
+						start_cmd,
+						ws_stream,
+					)
+					.await?;
 				}
-				rp::Command::CommandStopActor(stop_cmd) => {
-					self.handle_stop_actor(stop_cmd, ws_stream).await?;
+				rp::Command::CommandStopActor => {
+					// MK2 CommandStopActor is void - actor info is in checkpoint
+					self.handle_stop_actor(
+						checkpoint.actor_id.clone(),
+						checkpoint.generation,
+						ws_stream,
+					)
+					.await?;
 				}
 			}
-
-			*self.last_command_idx.lock().await = cmd_wrapper.index as i64;
 		}
 
 		Ok(())
@@ -560,12 +567,11 @@ impl TestRunner {
 
 	async fn handle_start_actor(
 		&self,
+		actor_id: String,
+		generation: u32,
 		cmd: rp::CommandStartActor,
-		ws_stream: &mut WsStream,
+		_ws_stream: &mut WsStream,
 	) -> Result<()> {
-		let actor_id = cmd.actor_id.clone();
-		let generation = cmd.generation;
-
 		tracing::info!(?actor_id, generation, name = %cmd.config.name, "starting actor");
 
 		// Create actor config
@@ -656,11 +662,7 @@ impl TestRunner {
 		// Handle start result and send state update via event
 		match start_result {
 			ActorStartResult::Running => {
-				let event = protocol::make_actor_state_update(
-					&actor_id,
-					generation,
-					rp::ActorState::ActorStateRunning,
-				);
+				let event = protocol::make_actor_state_update(rp::ActorState::ActorStateRunning);
 				self.event_tx
 					.send(ActorEvent {
 						actor_id: actor_id.clone(),
@@ -680,11 +682,8 @@ impl TestRunner {
 						"delaying before sending running state"
 					);
 					tokio::time::sleep(duration).await;
-					let event = protocol::make_actor_state_update(
-						&actor_id_clone,
-						generation,
-						rp::ActorState::ActorStateRunning,
-					);
+					let event =
+						protocol::make_actor_state_update(rp::ActorState::ActorStateRunning);
 					event_tx
 						.send(ActorEvent {
 							actor_id: actor_id_clone,
@@ -704,18 +703,16 @@ impl TestRunner {
 			}
 			ActorStartResult::Crash { code, message } => {
 				tracing::warn!(?actor_id, generation, code, %message, "actor crashed on start");
-				let event = protocol::make_actor_state_update(
-					&actor_id,
-					generation,
-					rp::ActorState::ActorStateStopped(rp::ActorStateStopped {
+				let event = protocol::make_actor_state_update(rp::ActorState::ActorStateStopped(
+					rp::ActorStateStopped {
 						code: if code == 0 {
 							rp::StopCode::Ok
 						} else {
 							rp::StopCode::Error
 						},
 						message: Some(message),
-					}),
-				);
+					},
+				));
 				let _ = self
 					.event_tx
 					.send(ActorEvent {
@@ -733,12 +730,10 @@ impl TestRunner {
 
 	async fn handle_stop_actor(
 		&self,
-		cmd: rp::CommandStopActor,
+		actor_id: String,
+		generation: u32,
 		ws_stream: &mut WsStream,
 	) -> Result<()> {
-		let actor_id = cmd.actor_id.clone();
-		let generation = cmd.generation;
-
 		tracing::info!(?actor_id, generation, "stopping actor");
 
 		// Get actor
@@ -819,15 +814,29 @@ impl TestRunner {
 	}
 
 	async fn handle_ack_events(&self, ack: rp::ToClientAckEvents) {
-		let last_acked_idx = ack.last_event_idx;
+		// MK2 uses per-actor checkpoints for acknowledgments
+		let checkpoints = &ack.last_event_checkpoints;
 
 		let mut events = self.event_history.lock().await;
 		let original_len = events.len();
-		events.retain(|e| e.index > last_acked_idx);
+
+		// Remove events that have been acknowledged based on checkpoints
+		events.retain(|e| {
+			// Check if this event's checkpoint is covered by any ack checkpoint
+			!checkpoints.iter().any(|ck| {
+				ck.actor_id == e.checkpoint.actor_id
+					&& ck.generation == e.checkpoint.generation
+					&& ck.index >= e.checkpoint.index
+			})
+		});
 
 		let pruned = original_len - events.len();
 		if pruned > 0 {
-			tracing::debug!(last_acked_idx, pruned, "pruned acknowledged events");
+			tracing::debug!(
+				checkpoint_count = checkpoints.len(),
+				pruned,
+				"pruned acknowledged events"
+			);
 		}
 	}
 
@@ -838,7 +847,7 @@ impl TestRunner {
 		state: rp::ActorState,
 		ws_stream: &mut WsStream,
 	) -> Result<()> {
-		let event = protocol::make_actor_state_update(actor_id, generation, state);
+		let event = protocol::make_actor_state_update(state);
 
 		self.send_actor_event(
 			ws_stream,

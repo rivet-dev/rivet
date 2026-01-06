@@ -1682,7 +1682,12 @@
             ],
             "properties": {
               "normal": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "drain_on_version_upgrade": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           },
@@ -1701,6 +1706,9 @@
                   "max_runners"
                 ],
                 "properties": {
+                  "drain_on_version_upgrade": {
+                    "type": "boolean"
+                  },
                   "headers": {
                     "type": [
                       "object",
