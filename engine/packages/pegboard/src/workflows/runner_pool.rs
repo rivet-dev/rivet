@@ -140,6 +140,7 @@ struct ReadDesiredInput {
 	runner_name: String,
 }
 
+// Should have `#[serde(rename_all = "snake_case")]` but doesn't
 #[derive(Debug, Serialize, Deserialize)]
 enum ReadDesiredOutput {
 	Desired {
