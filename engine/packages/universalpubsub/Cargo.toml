@@ -12,20 +12,23 @@ async-trait.workspace = true
 base64.workspace = true
 deadpool-postgres.workspace = true
 futures-util.workspace = true
+lazy_static.workspace = true
 rivet-error.workspace = true
+rivet-metrics.workspace = true
 rivet-postgres-util.workspace = true
 rivet-ups-protocol.workspace = true
 rivet-util.workspace = true
+scc.workspace = true
 serde_json.workspace = true
-vbare.workspace = true
 serde.workspace = true
 sha2.workspace = true
-tokio-postgres.workspace = true
 tokio-postgres-rustls.workspace = true
-tokio.workspace = true
+tokio-postgres.workspace = true
 tokio-util.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+vbare.workspace = true
 
 [dev-dependencies]
 rivet-config.workspace = true

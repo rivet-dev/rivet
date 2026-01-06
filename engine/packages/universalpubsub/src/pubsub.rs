@@ -1,24 +1,26 @@
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::*;
-use tokio::sync::broadcast;
-use tokio::sync::{RwLock, oneshot};
+use scc::HashMap;
+use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;
 
 use rivet_util::backoff::Backoff;
 
 use crate::chunking::{ChunkTracker, encode_chunk, split_payload_into_chunks};
 use crate::driver::{PubSubDriverHandle, PublishOpts, SubscriberDriverHandle};
+use crate::metrics;
+
+const GC_INTERVAL: Duration = Duration::from_secs(60);
 
 pub struct PubSubInner {
 	driver: PubSubDriverHandle,
 	chunk_tracker: Mutex<ChunkTracker>,
-	reply_subscribers: RwLock<HashMap<String, oneshot::Sender<Vec<u8>>>>,
+	reply_subscribers: HashMap<String, oneshot::Sender<Vec<u8>>>,
 	// Local in-memory subscribers by subject (shared across all drivers)
-	local_subscribers: RwLock<HashMap<String, broadcast::Sender<Vec<u8>>>>,
+	local_subscribers: HashMap<String, broadcast::Sender<Vec<u8>>>,
 	// Enables/disables local fast-path across all drivers
 	memory_optimization: bool,
 }
@@ -46,19 +48,29 @@ impl PubSub {
 		let inner = Arc::new(PubSubInner {
 			driver,
 			chunk_tracker: Mutex::new(ChunkTracker::new()),
-			reply_subscribers: RwLock::new(HashMap::new()),
-			local_subscribers: RwLock::new(HashMap::new()),
+			reply_subscribers: HashMap::new(),
+			local_subscribers: HashMap::new(),
 			memory_optimization,
 		});
 
-		// Spawn GC task for chunk buffers
+		// Spawn GC task for chunk buffers and local subscribers
 		let gc_inner = Arc::downgrade(&inner);
 		tokio::spawn(async move {
-			let mut interval = tokio::time::interval(crate::chunking::CHUNK_BUFFER_GC_INTERVAL);
+			let mut interval = tokio::time::interval(GC_INTERVAL);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
 			loop {
 				interval.tick().await;
 				if let Some(inner) = gc_inner.upgrade() {
+					// Clean up chunk buffers
 					inner.chunk_tracker.lock().unwrap().gc();
+
+					// Clean up local subscribers with no receivers
+					inner
+						.local_subscribers
+						.retain_async(|_, sender| sender.receiver_count() > 0)
+						.await;
+					metrics::LOCAL_SUBSCRIBERS_COUNT.set(inner.local_subscribers.len() as i64);
 				} else {
 					break;
 				}
@@ -73,37 +85,33 @@ impl PubSub {
 		let driver = self.driver.subscribe(subject).await?;
 
 		if !self.memory_optimization {
-			return Ok(Subscriber::new(driver, self.clone()));
+			return Ok(Subscriber::new(driver, self.clone(), None));
 		}
 
 		// Ensure a local broadcast channel exists for this subject
-		let rx = {
-			// Try read first for fast path
-			if let Some(sender) = self.local_subscribers.read().await.get(subject) {
-				sender.subscribe()
-			} else {
-				// Create and insert
-				let (tx, rx) = broadcast::channel(1024);
-				let mut map = self.local_subscribers.write().await;
-				// Double-check in case of race
-				let rx = if let Some(existing) = map.get(subject) {
-					existing.subscribe()
-				} else {
-					map.insert(subject.to_string(), tx);
-					rx
-				};
-				rx
-			}
+		let local_rx = {
+			let rx = self
+				.local_subscribers
+				.entry_async(subject.to_string())
+				.await
+				.or_insert_with(|| broadcast::channel(1024).0)
+				.subscribe();
+			metrics::LOCAL_SUBSCRIBERS_COUNT.set(self.local_subscribers.len() as i64);
+			rx
 		};
 
 		// Wrap the driver
 		let optimized_driver: SubscriberDriverHandle = Box::new(LocalOptimizedSubscriberDriver {
 			subject: subject.to_string(),
 			driver,
-			local_rx: rx,
+			local_rx,
 		});
 
-		Ok(Subscriber::new(optimized_driver, self.clone()))
+		Ok(Subscriber::new(
+			optimized_driver,
+			self.clone(),
+			self.memory_optimization.then_some(subject.to_string()),
+		))
 	}
 
 	pub async fn publish(&self, subject: &str, payload: &[u8], opts: PublishOpts) -> Result<()> {
@@ -126,7 +134,7 @@ impl PubSub {
 			)?;
 
 			if use_local {
-				if let Some(sender) = self.local_subscribers.read().await.get(subject) {
+				if let Some(sender) = self.local_subscribers.get_async(subject).await {
 					let _ = sender.send(encoded);
 				} else {
 					tracing::warn!(%subject, "local subscriber disappeared");
@@ -170,7 +178,7 @@ impl PubSub {
 			)?;
 
 			if use_local {
-				if let Some(sender) = self.local_subscribers.read().await.get(subject) {
+				if let Some(sender) = self.local_subscribers.get_async(subject).await {
 					let _ = sender.send(encoded);
 				} else {
 					tracing::warn!(%subject, "local subscriber disappeared");
@@ -224,10 +232,10 @@ impl PubSub {
 		let (tx, rx) = oneshot::channel();
 
 		// Register the reply handler
-		{
-			let mut subscribers = self.reply_subscribers.write().await;
-			subscribers.insert(reply_subject.clone(), tx);
-		}
+		self.reply_subscribers
+			.upsert_async(reply_subject.clone(), tx)
+			.await;
+		metrics::REPLY_SUBSCRIBERS_COUNT.set(self.reply_subscribers.len() as i64);
 
 		// Subscribe to the reply subject (use local-aware subscribe)
 		let mut reply_subscriber = self.subscribe(&reply_subject).await?;
@@ -244,10 +252,14 @@ impl PubSub {
 				match reply_subscriber.next().await {
 					std::result::Result::Ok(NextOutput::Message(msg)) => {
 						// Already decoded; forward payload
-						let mut subscribers = inner.reply_subscribers.write().await;
-						if let Some(tx) = subscribers.remove(&reply_subject_clone) {
+						if let Some((_, tx)) = inner
+							.reply_subscribers
+							.remove_async(&reply_subject_clone)
+							.await
+						{
 							let _ = tx.send(msg.payload);
 						}
+						metrics::REPLY_SUBSCRIBERS_COUNT.set(inner.reply_subscribers.len() as i64);
 						break;
 					}
 					std::result::Result::Ok(NextOutput::Unsubscribed)
@@ -261,12 +273,14 @@ impl PubSub {
 			std::result::Result::Ok(std::result::Result::Ok(payload)) => Response { payload },
 			std::result::Result::Ok(std::result::Result::Err(_)) => {
 				// Clean up the reply subscription
-				self.reply_subscribers.write().await.remove(&reply_subject);
+				self.reply_subscribers.remove_async(&reply_subject).await;
+				metrics::REPLY_SUBSCRIBERS_COUNT.set(self.reply_subscribers.len() as i64);
 				return Err(crate::errors::Ups::RequestTimeout.build().into());
 			}
 			std::result::Result::Err(_) => {
 				// Timeout elapsed
-				self.reply_subscribers.write().await.remove(&reply_subject);
+				self.reply_subscribers.remove_async(&reply_subject).await;
+				metrics::REPLY_SUBSCRIBERS_COUNT.set(self.reply_subscribers.len() as i64);
 				return Err(crate::errors::Ups::RequestTimeout.build().into());
 			}
 		};
@@ -294,7 +308,7 @@ impl PubSub {
 		if !matches!(behavior, crate::driver::PublishBehavior::OneSubscriber) {
 			return false;
 		}
-		if let Some(sender) = self.local_subscribers.read().await.get(subject) {
+		if let Some(sender) = self.local_subscribers.get_async(subject).await {
 			sender.receiver_count() > 0
 		} else {
 			false
@@ -305,11 +319,17 @@ impl PubSub {
 pub struct Subscriber {
 	driver: SubscriberDriverHandle,
 	pubsub: PubSub,
+	// Subject for cleanup when memory_optimization is enabled
+	subject: Option<String>,
 }
 
 impl Subscriber {
-	pub fn new(driver: SubscriberDriverHandle, pubsub: PubSub) -> Self {
-		Self { driver, pubsub }
+	fn new(driver: SubscriberDriverHandle, pubsub: PubSub, subject: Option<String>) -> Self {
+		Self {
+			driver,
+			pubsub,
+			subject,
+		}
 	}
 
 	pub async fn next(&mut self) -> Result<NextOutput> {
@@ -338,6 +358,24 @@ impl Subscriber {
 				}
 				DriverOutput::Unsubscribed => return Ok(NextOutput::Unsubscribed),
 			}
+		}
+	}
+}
+
+impl Drop for Subscriber {
+	fn drop(&mut self) {
+		// Clean up local subscriber entry immediately if memory_optimization was enabled
+		if let Some(subject) = &self.subject {
+			let pubsub = self.pubsub.clone();
+			let subject = subject.clone();
+			tokio::spawn(async move {
+				if let Some(sender) = pubsub.local_subscribers.get_async(&subject).await {
+					if sender.receiver_count() == 0 {
+						pubsub.local_subscribers.remove_async(&subject).await;
+						metrics::LOCAL_SUBSCRIBERS_COUNT.set(pubsub.local_subscribers.len() as i64);
+					}
+				}
+			});
 		}
 	}
 }
