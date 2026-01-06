@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use futures_util::{StreamExt, TryStreamExt, stream::BoxStream};
+use futures_util::{StreamExt, TryStreamExt, future::try_join_all, stream::BoxStream};
 use rivet_util::Id;
 use rivet_util::future::CustomInstrumentExt;
 use serde_json::json;
@@ -994,6 +994,34 @@ impl Database for DatabaseKv {
 			.observe(dt);
 
 		Ok(workflow_id)
+	}
+
+	#[tracing::instrument(skip_all)]
+	async fn find_workflows(
+		&self,
+		queries: &[(&str, serde_json::Value)],
+	) -> WorkflowResult<Vec<Option<Id>>> {
+		let start_instant = Instant::now();
+
+		let workflow_ids = self
+			.pools
+			.udb()
+			.map_err(WorkflowError::PoolsGeneric)?
+			.run(|tx| async move {
+				let futures = queries.iter().map(|(workflow_name, tags)| {
+					self.find_workflow_inner(workflow_name, tags, &tx)
+				});
+				try_join_all(futures).await
+			})
+			.custom_instrument(tracing::info_span!("find_workflows_batch_tx"))
+			.await
+			.context("failed to find workflows")
+			.map_err(WorkflowError::Udb)?;
+
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::FIND_WORKFLOWS_DURATION.record(dt, &[KeyValue::new("workflow_name", "batch")]);
+
+		Ok(workflow_ids)
 	}
 
 	#[tracing::instrument(skip_all)]
