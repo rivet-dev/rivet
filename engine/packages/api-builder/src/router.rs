@@ -17,6 +17,15 @@ use crate::{
 
 pub type ApiRouter = Router<GlobalApiCtx>;
 
+#[derive(Clone, Copy)]
+pub struct RouterName(pub &'static str);
+
+#[derive(Clone, axum::extract::FromRef)]
+pub struct LoggingMiddlewareState {
+	config: rivet_config::Config,
+	router_name: RouterName,
+}
+
 /// Middleware to build ApiCtx and expose it as an extension
 async fn api_ctx_middleware(
 	State(global_ctx): State<GlobalApiCtx>,
@@ -59,7 +68,10 @@ pub async fn create_router(
 		.route("/health", axum_get(health_check))
 		.merge(user_router)
 		.layer(middleware::from_fn_with_state(
-			config,
+			LoggingMiddlewareState {
+				config,
+				router_name: RouterName(name),
+			},
 			http_logging_middleware,
 		))
 		.route_layer(middleware::from_fn_with_state(

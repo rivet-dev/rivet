@@ -699,8 +699,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",status=~\"4[0-9][0-9]\",path=~\"$path\",method=~\"$method\",error_code!=\"API_CANCELLED\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error_code)",
-          "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}: {{status}} ({{error_code}})",
+          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",status=~\"4[0-9][0-9]\",path=~\"$path\",method=~\"$method\",error!=\"API_CANCELLED\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error)",
+          "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}: {{status}} ({{error}})",
           "range": true,
           "refId": "A"
         }
@@ -797,8 +797,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",status=~\"5[0-9][0-9]\",method=~\"$method\",error_code!=\"API_CANCELLED\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error_code)",
-          "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}: {{status}} ({{error_code}})",
+          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",status=~\"5[0-9][0-9]\",method=~\"$method\",error!=\"API_CANCELLED\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error)",
+          "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}: {{status}} ({{error}})",
           "range": true,
           "refId": "A"
         }
@@ -896,8 +896,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(\n    rivet_api_request_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",status=~\"(200|5[0-9][0-9])\",error_code!=\"API_CANCELLED\"}\n    [$__rate_interval])) by (status, error_code)",
-          "legendFormat": "{{method}} {{path}}: {{status}} {{error_code}}",
+          "expr": "sum(rate(\n    rivet_api_request_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",status=~\"(200|5[0-9][0-9])\",error!=\"API_CANCELLED\"}\n    [$__rate_interval])) by (status, error)",
+          "legendFormat": "{{method}} {{path}}: {{status}} {{error}}",
           "range": true,
           "refId": "A"
         }

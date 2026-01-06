@@ -116,15 +116,15 @@ where
 
 	// Record metrics
 	{
-		let error_code_str = match &res {
+		let error_str = match &res {
 			Ok(Err(err)) => {
-				let error_code_str = err.to_string();
+				let error_str = err.to_string();
 
 				crate::metrics::OPERATION_ERRORS
-					.with_label_values(&[I::Operation::NAME, error_code_str.as_str()])
+					.with_label_values(&[I::Operation::NAME, error_str.as_str()])
 					.inc();
 
-				error_code_str
+				error_str
 			}
 			Ok(_) => String::new(),
 			Err(_) => "timeout".to_string(),
@@ -136,7 +136,7 @@ where
 			.with_label_values(&[I::Operation::NAME])
 			.dec();
 		crate::metrics::OPERATION_DURATION
-			.with_label_values(&[I::Operation::NAME, error_code_str.as_str()])
+			.with_label_values(&[I::Operation::NAME, error_str.as_str()])
 			.observe(dt);
 	}
 
