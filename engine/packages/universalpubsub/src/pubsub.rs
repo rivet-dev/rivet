@@ -2,9 +2,10 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::*;
+use anyhow::Result;
 use scc::HashMap;
 use tokio::sync::{broadcast, oneshot};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use rivet_util::backoff::Backoff;
@@ -80,6 +81,7 @@ impl PubSub {
 		Self(inner)
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
 		// Underlying driver subscription
 		let driver = self.driver.subscribe(subject).await?;
@@ -114,6 +116,7 @@ impl PubSub {
 		))
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn publish(&self, subject: &str, payload: &[u8], opts: PublishOpts) -> Result<()> {
 		let message_id = *Uuid::new_v4().as_bytes();
 		let chunks =
@@ -148,6 +151,7 @@ impl PubSub {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject, %reply_subject))]
 	pub async fn publish_with_reply(
 		&self,
 		subject: &str,
@@ -192,6 +196,7 @@ impl PubSub {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject))]
 	async fn publish_with_backoff(&self, subject: &str, encoded: &[u8]) -> Result<()> {
 		let mut backoff = Backoff::default();
 		loop {
@@ -210,15 +215,18 @@ impl PubSub {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn flush(&self) -> Result<()> {
 		self.driver.flush().await
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn request(&self, subject: &str, payload: &[u8]) -> Result<Response> {
 		self.request_with_timeout(subject, payload, Duration::from_secs(30))
 			.await
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn request_with_timeout(
 		&self,
 		subject: &str,
@@ -288,6 +296,7 @@ impl PubSub {
 		Ok(response)
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject))]
 	async fn should_use_local_subscriber(
 		&self,
 		subject: &str,
@@ -332,6 +341,7 @@ impl Subscriber {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn next(&mut self) -> Result<NextOutput> {
 		loop {
 			match self.driver.next().await? {
@@ -371,7 +381,7 @@ impl Drop for Subscriber {
 			tokio::spawn(async move {
 				if let Some(sender) = pubsub.local_subscribers.get_async(&subject).await {
 					if sender.receiver_count() == 0 {
-						pubsub.local_subscribers.remove_async(&subject).await;
+						let _ = sender.remove();
 						metrics::LOCAL_SUBSCRIBERS_COUNT.set(pubsub.local_subscribers.len() as i64);
 					}
 				}
@@ -399,6 +409,7 @@ pub struct Message {
 }
 
 impl Message {
+	#[tracing::instrument(skip_all)]
 	pub async fn reply(&self, payload: &[u8]) -> Result<()> {
 		if let Some(ref reply_subject) = self.reply {
 			// Replies expect exactly one subscriber and should use local fast-path
@@ -423,6 +434,7 @@ struct LocalOptimizedSubscriberDriver {
 
 #[async_trait::async_trait]
 impl crate::driver::SubscriberDriver for LocalOptimizedSubscriberDriver {
+	#[tracing::instrument(skip_all)]
 	async fn next(&mut self) -> Result<DriverOutput> {
 		loop {
 			tokio::select! {
@@ -444,7 +456,7 @@ impl crate::driver::SubscriberDriver for LocalOptimizedSubscriberDriver {
 						}
 					}
 				}
-				res = self.driver.next() => {
+				res = self.driver.next().in_current_span() => {
 					return res;
 				}
 			}
