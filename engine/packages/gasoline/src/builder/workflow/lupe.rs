@@ -136,7 +136,7 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 				// Set branch loop location to the current loop
 				iteration_branch.set_loop_location(loop_location.clone());
 
-				let i = iteration;
+				let previous_iteration = iteration;
 
 				// Async block for instrumentation purposes
 				let res = async {
@@ -275,7 +275,7 @@ impl<'a, S: Serialize + DeserializeOwned> LoopBuilder<'a, S> {
 						}
 					}
 				}
-				.instrument(tracing::info_span!("iteration", iteration=%i))
+				.instrument(tracing::info_span!("iteration", iteration=%previous_iteration))
 				.await?;
 
 				// Validate no leftover events
