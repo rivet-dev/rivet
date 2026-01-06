@@ -15,8 +15,6 @@ use serde_json;
 
 use rivet_runner_protocol as protocol;
 use std::{
-	borrow::Cow,
-	collections::HashMap as StdHashMap,
 	net::SocketAddr,
 	sync::Arc,
 	time::{Duration, Instant},
@@ -134,44 +132,13 @@ pub struct RouteConfig {
 pub enum RoutingOutput {
 	/// Return the data to route to.
 	Route(RouteConfig),
-	/// Return a custom response.
-	Response(StructuredResponse),
 	/// Return a custom serve handler.
 	CustomServe(Arc<dyn CustomServeTrait>),
-}
-
-#[derive(Clone, Debug)]
-pub struct StructuredResponse {
-	pub status: StatusCode,
-	pub message: Cow<'static, str>,
-	pub docs: Option<Cow<'static, str>>,
-}
-
-impl StructuredResponse {
-	pub fn build_response(&self) -> Result<Response<ResponseBody>> {
-		let mut body = StdHashMap::new();
-		body.insert("message", self.message.clone().into_owned());
-
-		if let Some(docs) = &self.docs {
-			body.insert("docs", docs.clone().into_owned());
-		}
-
-		let body_json = serde_json::to_string(&body)?;
-		let bytes = Bytes::from(body_json);
-
-		let response = Response::builder()
-			.status(self.status)
-			.header(hyper::header::CONTENT_TYPE, "application/json")
-			.body(ResponseBody::Full(Full::new(bytes)))?;
-
-		Ok(response)
-	}
 }
 
 #[derive(Clone)]
 enum ResolveRouteOutput {
 	Target(RouteTarget),
-	Response(StructuredResponse),
 	CustomServe(Arc<dyn CustomServeTrait>),
 }
 
@@ -347,6 +314,7 @@ pub struct ProxyState {
 	cache_key_fn: CacheKeyFn,
 	middleware_fn: MiddlewareFn,
 	route_cache: RouteCache,
+	// We use moka::Cache instead of scc::HashMap because it automatically handles TTL and capacity
 	rate_limiters: Cache<(Id, std::net::IpAddr), Arc<Mutex<RateLimiter>>>,
 	in_flight_counters: Cache<(Id, std::net::IpAddr), Arc<Mutex<InFlightCounter>>>,
 	in_flight_requests: Cache<protocol::RequestId, ()>,
@@ -477,15 +445,6 @@ impl ProxyState {
 					);
 					Err(errors::NoRouteTargets.build())
 				}
-			}
-			RoutingOutput::Response(response) => {
-				tracing::debug!(
-					hostname = %hostname_only,
-					path = %path,
-					status = ?response.status,
-					"Routing returned custom response"
-				);
-				Ok(ResolveRouteOutput::Response(response))
 			}
 			RoutingOutput::CustomServe(handler) => {
 				tracing::debug!(
@@ -660,6 +619,7 @@ impl ProxyState {
 
 		// Release request ID
 		self.in_flight_requests.invalidate(&request_id).await;
+		metrics::IN_FLIGHT_REQUEST_COUNT.set(self.in_flight_requests.entry_count() as i64);
 	}
 
 	/// Generate a unique request ID that is not currently in flight
@@ -668,11 +628,19 @@ impl ProxyState {
 
 		for attempt in 0..MAX_TRIES {
 			let request_id = protocol::util::generate_request_id();
+			let mut inserted = false;
 
 			// Check if this ID is already in use
-			if self.in_flight_requests.get(&request_id).await.is_none() {
-				// Insert the ID and return it
-				self.in_flight_requests.insert(request_id, ()).await;
+			self.in_flight_requests
+				.entry(request_id)
+				.or_insert_with(async {
+					inserted = true;
+				})
+				.await;
+
+			if inserted {
+				metrics::IN_FLIGHT_REQUEST_COUNT.set(self.in_flight_requests.entry_count() as i64);
+
 				return Ok(request_id);
 			}
 
@@ -769,10 +737,6 @@ impl ProxyService {
 
 		// Resolve target
 		let target = target_res?;
-		if let ResolveRouteOutput::Response(response) = &target {
-			// Return the custom response
-			return response.build_response();
-		}
 
 		let actor_id = if let ResolveRouteOutput::Target(target) = &target {
 			target.actor_id
@@ -1087,9 +1051,6 @@ impl ProxyService {
 					attempts: max_attempts,
 				}
 				.build());
-			}
-			ResolveRouteOutput::Response(_) => {
-				unreachable!()
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
 				let req_headers = req.headers().clone();
@@ -1554,20 +1515,6 @@ impl ProxyService {
 								Ok(ResolveRouteOutput::Target(new_target)) => {
 									target = new_target;
 								}
-								Ok(ResolveRouteOutput::Response(response)) => {
-									tracing::debug!(
-										status=?response.status,
-										message=?response.message,
-										docs=?response.docs,
-										"got response instead of websocket target",
-									);
-
-									// Close the WebSocket connection with the response message
-									let _ = client_ws
-										.close(Some(str_to_close_frame(response.message.as_ref())))
-										.await;
-									return;
-								}
 								Ok(ResolveRouteOutput::CustomServe(_)) => {
 									let err = errors::WebSocketTargetChanged.build();
 									tracing::warn!(
@@ -1907,7 +1854,6 @@ impl ProxyService {
 					.instrument(tracing::info_span!("handle_ws_task_target")),
 				);
 			}
-			ResolveRouteOutput::Response(_) => unreachable!(),
 			ResolveRouteOutput::CustomServe(mut handler) => {
 				tracing::debug!(%req_path, "Spawning task to handle WebSocket communication");
 				let mut request_context = request_context.clone();
@@ -2089,19 +2035,6 @@ impl ProxyService {
 										Ok(ResolveRouteOutput::CustomServe(new_handler)) => {
 											handler = new_handler;
 											continue;
-										}
-										Ok(ResolveRouteOutput::Response(response)) => {
-											ws_handle
-												.send(to_hyper_close(Some(str_to_close_frame(
-													response.message.as_ref(),
-												))))
-												.await?;
-
-											// Flush to ensure close frame is sent
-											ws_handle.flush().await?;
-
-											// Keep TCP connection open briefly to allow client to process close
-											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 										}
 										Ok(ResolveRouteOutput::Target(_)) => {
 											let err = errors::WebSocketTargetChanged.build();
@@ -2663,16 +2596,6 @@ pub fn is_ws_hibernate(err: &anyhow::Error) -> bool {
 		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_hibernate"
 	} else {
 		false
-	}
-}
-
-fn str_to_close_frame(err: &str) -> CloseFrame {
-	// NOTE: reason cannot be more than 123 bytes as per the WS protocol spec
-	let reason = rivet_util::safe_slice(err, 0, 123).into();
-
-	CloseFrame {
-		code: CloseCode::Error,
-		reason,
 	}
 }
 
