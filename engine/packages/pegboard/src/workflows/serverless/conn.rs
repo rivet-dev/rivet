@@ -13,6 +13,7 @@ use tokio::time::Duration;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
+use crate::metrics;
 use crate::pubsub_subjects::RunnerReceiverSubject;
 use crate::workflows::{runner_pool, runner_pool_error_tracker, serverless::receiver};
 use rivet_types::actor::RunnerPoolError;
@@ -396,6 +397,10 @@ async fn outbound_req_inner(
 
 		anyhow::Ok(())
 	};
+
+	metrics::SERVERLESS_OUTBOUND_REQ_TOTAL
+		.with_label_values(&[&input.namespace_id.to_string(), &input.runner_name])
+		.inc();
 
 	let sleep_until_drain =
 		Duration::from_secs(request_lifespan as u64).saturating_sub(DRAIN_GRACE_PERIOD);
