@@ -64,6 +64,23 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 	})
 	.await?;
 
+	// Drain older runner versions if configured
+	let drain_result = ctx
+		.activity(DrainOlderVersionsInput {
+			namespace_id: input.namespace_id,
+			name: input.name.clone(),
+			version: input.version,
+		})
+		.await?;
+	for workflow_id in drain_result.older_runner_workflow_ids {
+		ctx.signal(Stop {
+			reset_actor_rescheduling: false,
+		})
+		.to_workflow_id(workflow_id)
+		.send()
+		.await?;
+	}
+
 	// Check for pending actors (which happen when there is not enough runner capacity)
 	let res = ctx
 		.activity(AllocatePendingActorsInput {
@@ -825,6 +842,34 @@ async fn send_messages_to_runner(
 	}
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct DrainOlderVersionsInput {
+	namespace_id: Id,
+	name: String,
+	version: u32,
+}
+
+#[activity(DrainOlderVersions)]
+async fn drain_older_versions(
+	ctx: &ActivityCtx,
+	input: &DrainOlderVersionsInput,
+) -> Result<crate::ops::runner::drain::Output> {
+	tracing::info!(
+		namespace_id = %input.namespace_id,
+		name = %input.name,
+		version = input.version,
+		"drain_older_versions activity called"
+	);
+	ctx.op(crate::ops::runner::drain::Input {
+		namespace_id: input.namespace_id,
+		name: input.name.clone(),
+		version: input.version,
+		// Signals are sent by the workflow directly
+		send_runner_stop_signals: false,
+	})
+	.await
 }
 
 #[signal("pegboard_runner_init")]

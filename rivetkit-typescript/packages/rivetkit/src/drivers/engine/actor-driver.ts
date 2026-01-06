@@ -79,7 +79,6 @@ export class EngineActorDriver implements ActorDriver {
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
-	#version: number = 1; // Version for the runner protocol
 	#alarmTimeout?: LongTimeoutHandle;
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
@@ -139,7 +138,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Create runner configuration
 		const engineRunnerConfig: EngineRunnerConfig = {
-			version: this.#version,
+			version: config.runner.version,
 			endpoint: getEndpoint(config),
 			token,
 			namespace: config.namespace,

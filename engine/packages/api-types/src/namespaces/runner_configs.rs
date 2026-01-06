@@ -9,6 +9,8 @@ pub struct RunnerConfig {
 	pub kind: RunnerConfigKind,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<serde_json::Value>,
+	#[serde(default = "default_drain_on_version_upgrade")]
+	pub drain_on_version_upgrade: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -27,9 +29,17 @@ pub enum RunnerConfigKind {
 	},
 }
 
+fn default_drain_on_version_upgrade() -> bool {
+	false
+}
+
 impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 	fn into(self) -> rivet_types::runner_configs::RunnerConfig {
-		let RunnerConfig { kind, metadata } = self;
+		let RunnerConfig {
+			kind,
+			metadata,
+			drain_on_version_upgrade,
+		} = self;
 		let kind = match kind {
 			RunnerConfigKind::Normal {} => rivet_types::runner_configs::RunnerConfigKind::Normal {},
 			RunnerConfigKind::Serverless {
@@ -50,7 +60,10 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				runners_margin: runners_margin.unwrap_or_default(),
 			},
 		};
-
-		rivet_types::runner_configs::RunnerConfig { kind, metadata }
+		rivet_types::runner_configs::RunnerConfig {
+			kind,
+			metadata,
+			drain_on_version_upgrade,
+		}
 	}
 }

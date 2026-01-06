@@ -1,0 +1,24 @@
+type Json str
+
+type Serverless struct {
+	url: str
+	headers: map<str><str>
+	request_lifespan: u32
+	slots_per_runner: u32
+	min_runners: u32
+	max_runners: u32
+	runners_margin: u32
+}
+
+type Normal void
+
+type RunnerConfigKind union {
+	Serverless |
+	Normal
+}
+
+type RunnerConfig struct {
+	kind: RunnerConfigKind
+	metadata: optional<Json>
+	drain_on_version_upgrade: bool
+}
