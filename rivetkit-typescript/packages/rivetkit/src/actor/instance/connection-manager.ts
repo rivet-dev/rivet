@@ -23,9 +23,11 @@ import {
 	type PersistedConn,
 } from "../conn/persisted";
 import type { ConnDataInput } from "../conn/state-manager";
-import { CreateConnStateContext } from "../contexts/create-conn-state";
-import { OnBeforeConnectContext } from "../contexts/on-before-connect";
-import { OnConnectContext } from "../contexts/on-connect";
+import {
+	BeforeConnectContext,
+	ConnectContext,
+	CreateConnStateContext,
+} from "../contexts";
 import type { AnyDatabaseProvider } from "../database";
 import { CachedSerializer } from "../protocol/serde";
 import { deadline } from "../utils";
@@ -115,7 +117,7 @@ export class ConnectionManager<
 
 		// Create new connection
 		if (this.#actor.config.onBeforeConnect) {
-			const ctx = new OnBeforeConnectContext(this.#actor, request);
+			const ctx = new BeforeConnectContext(this.#actor, request);
 			await this.#actor.config.onBeforeConnect(ctx, params);
 		}
 
@@ -443,7 +445,7 @@ export class ConnectionManager<
 	#callOnConnect(conn: Conn<S, CP, CS, V, I, DB>) {
 		if (this.#actor.config.onConnect) {
 			try {
-				const ctx = new OnConnectContext(this.#actor, conn);
+				const ctx = new ConnectContext(this.#actor, conn);
 				const result = this.#actor.config.onConnect(ctx, conn);
 				if (result instanceof Promise) {
 					deadline(
