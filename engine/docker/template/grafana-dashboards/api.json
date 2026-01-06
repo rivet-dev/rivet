@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 9,
+  "id": 8,
   "links": [],
   "panels": [
     {
@@ -109,7 +109,7 @@
           "unit": "s"
         }
       },
-      "pluginVersion": "10.4.1",
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -117,7 +117,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_api_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_api_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -144,6 +144,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -201,10 +202,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -212,7 +215,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(rivet_api_request_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"}[$__interval])) by (rivet_datacenter, path)",
+          "expr": "sum(max_over_time(rivet_api_request_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"}[$__interval])) by (rivet_datacenter, path)",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}",
           "range": true,
           "refId": "A"
@@ -238,6 +241,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -296,11 +300,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.1.4",
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -308,7 +313,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_duration_sum{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"} [$__rate_interval])) by (rivet_datacenter, method, path) /\r\nsum(rate(rivet_api_request_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"} [$__rate_interval])) by (rivet_datacenter, method, path)",
+          "expr": "sum(rate(rivet_api_request_duration_sum{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"} [$__rate_interval])) by (rivet_datacenter, method, path) /\r\nsum(rate(rivet_api_request_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"} [$__rate_interval])) by (rivet_datacenter, method, path)",
           "format": "heatmap",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}",
           "range": true,
@@ -335,6 +340,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -393,11 +399,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.1.4",
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -405,7 +412,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \r\n    sum(rate(rivet_api_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"} [$__rate_interval]))\r\n    by (le, rivet_datacenter, method, path)\r\n)",
+          "expr": "histogram_quantile(0.95, \r\n    sum(rate(rivet_api_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"} [$__rate_interval]))\r\n    by (le, rivet_datacenter, method, path)\r\n)",
           "format": "heatmap",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}",
           "range": true,
@@ -432,6 +439,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -490,11 +498,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.1.4",
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -502,7 +511,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \r\n    sum(rate(rivet_api_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"} [$__rate_interval]))\r\n    by (le, rivet_datacenter, method, path)\r\n)",
+          "expr": "histogram_quantile(0.99, \r\n    sum(rate(rivet_api_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"} [$__rate_interval]))\r\n    by (le, rivet_datacenter, method, path)\r\n)",
           "format": "heatmap",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}",
           "range": true,
@@ -529,6 +538,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -590,10 +600,12 @@
           "sortDesc": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -601,7 +613,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\"}[$__rate_interval])) by (rivet_datacenter, method, path)",
+          "expr": "sum(rate(rivet_api_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",router=~\"$router\"}[$__rate_interval])) by (rivet_datacenter, method, path)",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}",
           "range": true,
           "refId": "A"
@@ -627,6 +639,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -688,10 +701,12 @@
           "sortDesc": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -699,7 +714,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",status=~\"4[0-9][0-9]\",path=~\"$path\",method=~\"$method\",error!=\"API_CANCELLED\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error)",
+          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",status=~\"4[0-9][0-9]\",path=~\"$path\",method=~\"$method\",router=~\"$router\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error)",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}: {{status}} ({{error}})",
           "range": true,
           "refId": "A"
@@ -725,6 +740,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -786,10 +802,12 @@
           "sortDesc": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -797,7 +815,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",status=~\"5[0-9][0-9]\",method=~\"$method\",error!=\"API_CANCELLED\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error)",
+          "expr": "sum(rate(rivet_api_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",status=~\"5[0-9][0-9]\",method=~\"$method\",router=~\"$router\"}[$__rate_interval])) by (rivet_datacenter, method, path, status, error)",
           "legendFormat": "{{rivet_datacenter}} {{method}} {{path}}: {{status}} ({{error}})",
           "range": true,
           "refId": "A"
@@ -855,8 +873,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -888,7 +905,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "11.6.7",
       "targets": [
         {
           "datasource": {
@@ -896,7 +913,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(\n    rivet_api_request_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",status=~\"(200|5[0-9][0-9])\",error!=\"API_CANCELLED\"}\n    [$__rate_interval])) by (status, error)",
+          "expr": "sum(rate(\n    rivet_api_request_duration_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",path=~\"$path\",method=~\"$method\",status=~\"(200|5[0-9][0-9])\",router=~\"$router\"}\n    [$__rate_interval])) by (status, error)",
           "legendFormat": "{{method}} {{path}}: {{status}} {{error}}",
           "range": true,
           "refId": "A"
@@ -908,14 +925,13 @@
   ],
   "preload": false,
   "refresh": "30s",
-  "schemaVersion": 40,
+  "schemaVersion": 41,
+  "tags": [],
   "templating": {
     "list": [
       {
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -942,9 +958,7 @@
       },
       {
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -982,6 +996,32 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
+        "definition": "label_values(rivet_api_request_total,router)",
+        "includeAll": true,
+        "label": "Router",
+        "multi": true,
+        "name": "router",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_api_request_total,router)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "definition": "label_values(rivet_api_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},path)",
         "includeAll": true,
         "label": "Path",
@@ -1000,9 +1040,7 @@
       },
       {
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -1029,13 +1067,12 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "API",
   "uid": "feg8y72gpm2o0c",
-  "version": 1,
-  "weekStart": ""
+  "version": 4
 }

@@ -430,7 +430,7 @@ path = "engine/sdks/rust/ups-protocol"
 
 [profile.dev]
 overflow-checks = false
-debug = false
+debug = true
 lto = "off"
 
 [profile.dev.build-override]

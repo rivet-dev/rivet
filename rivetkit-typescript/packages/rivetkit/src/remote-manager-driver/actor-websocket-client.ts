@@ -24,7 +24,13 @@ export async function openWebSocketToActor(
 
 	// WebSocket connections go through guard
 	const endpoint = getEndpoint(runConfig);
-	const guardUrl = combineUrlPath(endpoint, `/gateway/${actorId}${path}`);
+	let gatewayPath;
+	if (runConfig.token !== undefined) {
+		gatewayPath = `/gateway/${encodeURIComponent(actorId)}@${encodeURIComponent(runConfig.token)}${path}`;
+	} else {
+		gatewayPath = `/gateway/${encodeURIComponent(actorId)}${path}`;
+	}
+	const guardUrl = combineUrlPath(endpoint, gatewayPath);
 
 	logger().debug({
 		msg: "opening websocket to actor via guard",

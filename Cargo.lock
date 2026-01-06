@@ -4584,10 +4584,8 @@ dependencies = [
 name = "rivet-env"
 version = "2.0.33"
 dependencies = [
- "anyhow",
  "lazy_static",
  "uuid",
- "vergen",
 ]
 
 [[package]]
