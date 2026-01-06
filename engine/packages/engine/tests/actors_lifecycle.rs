@@ -130,7 +130,7 @@ fn create_actor_with_input() {
 fn actor_start_timeout() {
 	// This test takes 35+ seconds
 	common::run(
-		common::TestOpts::new_with_timeout(1, 45),
+		common::TestOpts::new(1).with_timeout(45),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
@@ -972,7 +972,7 @@ fn pending_allocation_queue_ordering() {
 #[test]
 fn actor_survives_runner_disconnect() {
 	common::run(
-		common::TestOpts::new_with_timeout(1, 60),
+		common::TestOpts::new(1).with_timeout(60),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
@@ -1066,7 +1066,7 @@ fn actor_survives_runner_disconnect() {
 #[ignore]
 fn runner_at_max_capacity() {
 	common::run(
-		common::TestOpts::new_with_timeout(1, 30),
+		common::TestOpts::new(1).with_timeout(30),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 

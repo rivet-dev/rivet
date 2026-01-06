@@ -3440,6 +3440,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "epoxy",
+ "futures-util",
  "gasoline",
  "lazy_static",
  "namespace",
@@ -3449,6 +3450,7 @@ dependencies = [
  "reqwest-eventsource",
  "rivet-api-types",
  "rivet-api-util",
+ "rivet-config",
  "rivet-data",
  "rivet-error",
  "rivet-metrics",
@@ -4412,12 +4414,14 @@ dependencies = [
  "epoxy",
  "gasoline",
  "namespace",
+ "pegboard",
  "rivet-config",
  "rivet-metrics",
  "rivet-runtime",
  "serde",
  "tokio-tungstenite",
  "tracing",
+ "universaldb",
  "url",
 ]
 
@@ -4548,7 +4552,6 @@ dependencies = [
  "rivet-pools",
  "rivet-runner-protocol",
  "rivet-runtime",
- "rivet-serverless-backfill",
  "rivet-service-manager",
  "rivet-telemetry",
  "rivet-term",
@@ -4821,19 +4824,6 @@ dependencies = [
  "tracing-logfmt",
  "tracing-opentelemetry",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "rivet-serverless-backfill"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gasoline",
- "pegboard",
- "rivet-config",
- "rivet-types",
- "tracing",
- "universaldb",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 use universaldb::prelude::*;
 
 pub mod actor;
+pub mod backfill;
 pub mod epoxy;
 pub mod hibernating_request;
 pub mod ns;

@@ -1,6 +1,25 @@
 import { z } from "zod";
 import { RivetIdSchema } from "./common";
 
+// Schema for serverless connection errors
+const ServerlessConnectionErrorSchema = z.union([
+	z.object({ http_error: z.object({ status_code: z.number(), body: z.string() }) }),
+	z.literal("stream_ended_early"),
+	z.object({ connection_error: z.object({ message: z.string() }) }),
+	z.literal("invalid_base64"),
+	z.object({ invalid_payload: z.object({ message: z.string() }) }),
+	z.literal("runner_config_not_found"),
+	z.literal("runner_config_not_serverless"),
+	z.literal("namespace_not_found"),
+]);
+
+// Schema for actor error details from API
+const ActorErrorDetailsSchema = z.union([
+	z.object({ serverless_error: ServerlessConnectionErrorSchema }),
+	z.object({ no_capacity: z.object({ runner_name: z.string() }) }),
+	z.object({ runner_no_response: z.object({ runner_id: z.string() }) }),
+]);
+
 export const ActorSchema = z.object({
 	actor_id: RivetIdSchema,
 	name: z.string(),
@@ -12,6 +31,7 @@ export const ActorSchema = z.object({
 	destroy_ts: z.number().nullable().optional(),
 	sleep_ts: z.number().nullable().optional(),
 	start_ts: z.number().nullable().optional(),
+	error: ActorErrorDetailsSchema.nullable().optional(),
 });
 export type Actor = z.infer<typeof ActorSchema>;
 

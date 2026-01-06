@@ -41,6 +41,15 @@ impl State {
 	}
 }
 
+/// Reason why the runner lifecycle loop exited.
+#[derive(Debug, Serialize, Deserialize)]
+enum RunnerStopReason {
+	/// Runner was draining and completed.
+	Draining,
+	/// Runner connection expired (no recent ping).
+	ConnectionLost,
+}
+
 #[workflow]
 pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.activity(InitInput {
@@ -72,65 +81,68 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 			.await?;
 	}
 
-	ctx.loope(LifecycleState::new(), |ctx, state| {
-		let input = input.clone();
+	let exit_reason = ctx
+		.loope(LifecycleState::new(), |ctx, state| {
+			let input = input.clone();
 
-		async move {
-			let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
+			async move {
+				let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
 
-			match ctx
-				.listen_with_timeout::<Main>(runner_lost_threshold)
-				.await?
-			{
-				Some(Main::Init(_)) => {
-					if !state.draining {
-						ctx.activity(MarkEligibleInput {
-							runner_id: input.runner_id,
-						})
-						.await?;
-					}
-				}
-				Some(Main::CheckQueue(_)) => {
-					// Check for pending actors (which happen when there is not enough runner capacity)
-					let res = ctx
-						.activity(AllocatePendingActorsInput {
-							namespace_id: input.namespace_id,
-							name: input.name.clone(),
-						})
-						.await?;
-
-					// Dispatch pending allocs
-					for alloc in res.allocations {
-						ctx.signal(alloc.signal)
-							.to_workflow::<crate::workflows::actor::Workflow>()
-							.tag("actor_id", alloc.actor_id)
-							.send()
+				match ctx
+					.listen_with_timeout::<Main>(runner_lost_threshold)
+					.await?
+				{
+					Some(Main::Init(_)) => {
+						if !state.draining {
+							ctx.activity(MarkEligibleInput {
+								runner_id: input.runner_id,
+							})
 							.await?;
+						}
 					}
-				}
-				Some(Main::Stop(sig)) => {
-					handle_stopping(ctx, &input, state, sig.reset_actor_rescheduling).await?;
-				}
-				None => {
-					let expired = ctx
-						.activity(CheckExpiredInput {
-							runner_id: input.runner_id,
-						})
-						.await?;
+					Some(Main::CheckQueue(_)) => {
+						// Check for pending actors (which happen when there is not enough runner capacity)
+						let res = ctx
+							.activity(AllocatePendingActorsInput {
+								namespace_id: input.namespace_id,
+								name: input.name.clone(),
+							})
+							.await?;
 
-					if state.draining || expired {
-						return Ok(Loop::Break(()));
-					} else {
-						return Ok(Loop::Continue);
+						// Dispatch pending allocs
+						for alloc in res.allocations {
+							ctx.signal(alloc.signal)
+								.to_workflow::<crate::workflows::actor::Workflow>()
+								.tag("actor_id", alloc.actor_id)
+								.send()
+								.await?;
+						}
+					}
+					Some(Main::Stop(sig)) => {
+						handle_stopping(ctx, &input, state, sig.reset_actor_rescheduling).await?;
+					}
+					None => {
+						let expired = ctx
+							.activity(CheckExpiredInput {
+								runner_id: input.runner_id,
+							})
+							.await?;
+
+						if expired {
+							return Ok(Loop::Break(RunnerStopReason::ConnectionLost));
+						} else if state.draining {
+							return Ok(Loop::Break(RunnerStopReason::Draining));
+						} else {
+							return Ok(Loop::Continue);
+						}
 					}
 				}
+
+				Ok(Loop::Continue)
 			}
-
-			Ok(Loop::Continue)
-		}
-		.boxed()
-	})
-	.await?;
+			.boxed()
+		})
+		.await?;
 
 	ctx.activity(ClearDbInput {
 		runner_id: input.runner_id,
@@ -146,6 +158,14 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 		})
 		.await?;
 
+	// Determine lost reason based on why the loop exited
+	let lost_reason = match exit_reason {
+		RunnerStopReason::ConnectionLost => {
+			crate::workflows::actor::LostReason::RunnerConnectionLost
+		}
+		RunnerStopReason::Draining => crate::workflows::actor::LostReason::RunnerDrainingTimeout,
+	};
+
 	// Set all remaining actors as lost
 	for (actor_id, generation) in actors {
 		let res = ctx
@@ -153,6 +173,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 				generation,
 				force_reschedule: false,
 				reset_rescheduling: false,
+				reason: Some(lost_reason.clone()),
 			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
 			.tag("actor_id", actor_id)

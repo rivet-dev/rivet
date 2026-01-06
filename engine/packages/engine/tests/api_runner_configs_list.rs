@@ -499,20 +499,20 @@ fn list_runner_configs_validates_returned_data() {
 			min_runners,
 			max_runners,
 			runners_margin,
-		} = &dc_config.kind
+		} = &dc_config.config.kind
 		{
 			assert_eq!(url, "http://localhost:9000");
-			assert_eq!(*request_lifespan, 600);
-			assert_eq!(*slots_per_runner, 20);
-			assert_eq!(*min_runners, 2);
-			assert_eq!(*max_runners, 10);
-			assert_eq!(*runners_margin, 3);
+			assert_eq!(request_lifespan, &600);
+			assert_eq!(slots_per_runner, &20);
+			assert_eq!(min_runners, &2);
+			assert_eq!(max_runners, &10);
+			assert_eq!(runners_margin, &3);
 			assert_eq!(headers.get("X-Custom-Header").unwrap(), "value");
 		} else {
 			panic!("Expected serverless config");
 		}
 
-		assert!(dc_config.metadata.is_some());
+		assert!(dc_config.config.metadata.is_some());
 	});
 }
 

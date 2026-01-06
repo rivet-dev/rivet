@@ -240,6 +240,45 @@ impl TestActor for StopImmediatelyActor {
 	}
 }
 
+/// Actor that always crashes and increments a counter.
+/// Used to test crash policy restart behavior.
+pub struct CountingCrashActor {
+	crash_count: Arc<std::sync::atomic::AtomicU32>,
+}
+
+impl CountingCrashActor {
+	pub fn new(crash_count: Arc<std::sync::atomic::AtomicU32>) -> Self {
+		Self { crash_count }
+	}
+}
+
+#[async_trait]
+impl TestActor for CountingCrashActor {
+	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
+		let count = self
+			.crash_count
+			.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+		tracing::warn!(
+			actor_id = ?config.actor_id,
+			generation = config.generation,
+			crash_count = count + 1,
+			"counting crash actor crashing"
+		);
+		Ok(ActorStartResult::Crash {
+			code: 1,
+			message: format!("crash #{}", count + 1),
+		})
+	}
+
+	async fn on_stop(&mut self) -> Result<ActorStopResult> {
+		Ok(ActorStopResult::Success)
+	}
+
+	fn name(&self) -> &str {
+		"CountingCrashActor"
+	}
+}
+
 /// Actor that crashes N times then succeeds
 /// Used to test crash policy restart with retry reset on success
 pub struct CrashNTimesThenSucceedActor {

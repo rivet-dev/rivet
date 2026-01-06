@@ -143,7 +143,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		|res| {
 			res.runner_configs
 				.iter()
-				.filter(|(_, rc)| match rc.kind {
+				.filter(|(_, rc)| match rc.config.kind {
 					RunnerConfigKind::Serverless { max_runners, .. } => max_runners != 0,
 					_ => false,
 				})

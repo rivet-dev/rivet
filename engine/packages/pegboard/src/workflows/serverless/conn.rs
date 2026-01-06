@@ -14,7 +14,8 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::pubsub_subjects::RunnerReceiverSubject;
-use crate::workflows::{runner_pool, serverless::receiver};
+use crate::workflows::{runner_pool, runner_pool_error_tracker, serverless::receiver};
+use rivet_types::actor::RunnerPoolError;
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
@@ -224,10 +225,17 @@ async fn outbound_req_inner(
 		return Ok(OutboundReqOutput::Draining { drain_sent: false });
 	};
 
-	let namespace = namespace_res
-		.into_iter()
-		.next()
-		.context("runner namespace not found")?;
+	let Some(namespace) = namespace_res.into_iter().next() else {
+		tracing::error!("namespace not found, ending outbound req");
+		report_error(
+			ctx,
+			input.namespace_id,
+			&input.runner_name,
+			RunnerPoolError::InternalError,
+		)
+		.await;
+		return Ok(OutboundReqOutput::Draining { drain_sent: false });
+	};
 
 	let current_dc = ctx.config().topology().current_dc()?;
 
@@ -293,22 +301,60 @@ async fn outbound_req_inner(
 				Ok(sse::Event::Open) => {}
 				Ok(sse::Event::Message(msg)) => {
 					if runner_id.is_none() {
-						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
-						let payload =
-							protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data)
-								.context("invalid payload")?;
+						let data = match BASE64.decode(msg.data) {
+							Ok(data) => data,
+							Err(err) => {
+								report_error(
+									ctx,
+									input.namespace_id,
+									&input.runner_name,
+									RunnerPoolError::ServerlessInvalidBase64,
+								)
+								.await;
+								return Err(anyhow::anyhow!("invalid base64 message: {err}"));
+							}
+						};
+						let payload = match protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data) {
+							Ok(payload) => payload,
+							Err(err) => {
+								report_error(
+									ctx,
+									input.namespace_id,
+									&input.runner_name,
+									RunnerPoolError::ServerlessInvalidPayload {
+										message: err.to_string(),
+									},
+								)
+								.await;
+								return Err(anyhow::anyhow!("invalid payload: {err}"));
+							}
+						};
 
 						match payload {
 							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
 								runner_id =
 									Some(Id::parse(&init.runner_id).context("invalid runner id")?);
 								*runner_protocol_version2 = Some(init.runner_protocol_version);
+
+								// Report success to error tracker - runner initialized successfully
+								report_success(ctx, input.namespace_id, &input.runner_name).await;
 							}
 						}
 					}
 				}
 				Err(sse::Error::StreamEnded) => {
 					tracing::debug!("outbound req stopped early");
+
+					// If stream ended before runner init, report error
+					if runner_id.is_none() {
+						report_error(
+							ctx,
+							input.namespace_id,
+							&input.runner_name,
+							RunnerPoolError::ServerlessStreamEndedEarly,
+						)
+						.await;
+					}
 
 					return Ok(());
 				}
@@ -317,12 +363,34 @@ async fn outbound_req_inner(
 						.text()
 						.await
 						.unwrap_or_else(|_| "<could not read body>".to_string());
-					bail!(
-						"invalid status code ({code}):\n{}",
-						util::safe_slice(&body, 0, 512)
-					);
+					let body_slice = util::safe_slice(&body, 0, 512).to_string();
+
+					report_error(
+						ctx,
+						input.namespace_id,
+						&input.runner_name,
+						RunnerPoolError::ServerlessHttpError {
+							status_code: code.as_u16(),
+							body: body_slice.clone(),
+						},
+					)
+					.await;
+
+					bail!("invalid status code ({code}):\n{}", body_slice);
 				}
-				Err(err) => return Err(err.into()),
+				Err(err) => {
+					report_error(
+						ctx,
+						input.namespace_id,
+						&input.runner_name,
+						RunnerPoolError::ServerlessConnectionError {
+							message: err.to_string(),
+						},
+					)
+					.await;
+
+					return Err(err.into());
+				}
 			}
 		}
 
@@ -532,4 +600,45 @@ fn reconnect_backoff(
 	max_exponent: usize,
 ) -> util::backoff::Backoff {
 	util::backoff::Backoff::new_at(max_exponent, None, base_retry_timeout, 500, retry_count)
+}
+
+/// Report an error to the error tracker workflow.
+async fn report_error(
+	ctx: &ActivityCtx,
+	namespace_id: Id,
+	runner_name: &str,
+	error: RunnerPoolError,
+) {
+	if let Err(err) = ctx
+		.signal(runner_pool_error_tracker::ReportError { error })
+		.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
+		.to_workflow::<runner_pool_error_tracker::Workflow>()
+		.tags(serde_json::json!({
+			"namespace_id": namespace_id,
+			"runner_name": runner_name,
+		}))
+		.graceful_not_found()
+		.send()
+		.await
+	{
+		tracing::warn!(?err, "failed to report serverless error");
+	}
+}
+
+/// Report success to the error tracker workflow.
+async fn report_success(ctx: &ActivityCtx, namespace_id: Id, runner_name: &str) {
+	if let Err(err) = ctx
+		.signal(runner_pool_error_tracker::ReportSuccess {})
+		.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
+		.to_workflow::<runner_pool_error_tracker::Workflow>()
+		.tags(serde_json::json!({
+			"namespace_id": namespace_id,
+			"runner_name": runner_name,
+		}))
+		.graceful_not_found()
+		.send()
+		.await
+	{
+		tracing::warn!(?err, "failed to report serverless success");
+	}
 }

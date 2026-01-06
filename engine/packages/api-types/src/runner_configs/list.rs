@@ -5,6 +5,8 @@ use utoipa::IntoParams;
 
 use crate::pagination::Pagination;
 
+use super::RunnerConfigResponse;
+
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
@@ -27,6 +29,6 @@ pub struct ListPath {}
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ListResponse {
-	pub runner_configs: HashMap<String, rivet_types::runner_configs::RunnerConfig>,
+	pub runner_configs: HashMap<String, RunnerConfigResponse>,
 	pub pagination: Pagination,
 }

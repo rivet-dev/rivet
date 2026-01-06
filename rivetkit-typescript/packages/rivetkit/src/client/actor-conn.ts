@@ -355,6 +355,9 @@ enc
 			this.#driver,
 		);
 
+		// Store actorId early so we can use it for error lookups
+		this.#actorId = actorId;
+
 		const ws = await this.#driver.openWebSocket(
 			PATH_CONNECT,
 			actorId,
@@ -516,27 +519,44 @@ enc
 					metadata,
 				});
 
-				// Create a connection error
-				const actorError = new errors.ActorError(
-					group,
-					code,
-					message,
-					metadata,
-				);
+				// Check if this is an actor scheduling error
+				let errorToThrow: Error;
+				if (
+					group === "guard" &&
+					(code === "actor_ready_timeout" ||
+						code === "actor_runner_failed") &&
+					this.#actorId
+				) {
+					// Try to fetch actor details to get more specific error info
+					const schedulingError =
+						await this.#checkForSchedulingError();
+					errorToThrow =
+						schedulingError ??
+						new errors.ActorError(group, code, message, metadata);
+				} else {
+					errorToThrow = new errors.ActorError(
+						group,
+						code,
+						message,
+						metadata,
+					);
+				}
 
 				// If we have an onOpenPromise, reject it with the error
 				if (this.#onOpenPromise) {
-					this.#onOpenPromise.reject(actorError);
+					this.#onOpenPromise.reject(errorToThrow);
 				}
 
 				// Reject any in-flight requests
 				for (const [id, inFlight] of this.#actionsInFlight.entries()) {
-					inFlight.reject(actorError);
+					inFlight.reject(errorToThrow);
 					this.#actionsInFlight.delete(id);
 				}
 
-				// Dispatch to error handler if registered
-				this.#dispatchActorError(actorError);
+				// Dispatch to error handler if it's an ActorError
+				if (errorToThrow instanceof errors.ActorError) {
+					this.#dispatchActorError(errorToThrow);
+				}
 			}
 		} else if (response.body.tag === "ActionResponse") {
 			// Action response OK
@@ -690,6 +710,55 @@ enc
 				});
 			}
 		}
+	}
+
+	async #checkForSchedulingError(): Promise<errors.ActorSchedulingError | null> {
+		if (!this.#actorId) return null;
+
+		// Extract name from the query (it's nested in one of the variant properties)
+		const query = this.#actorQuery;
+		const name =
+			"getForId" in query
+				? query.getForId.name
+				: "getForKey" in query
+					? query.getForKey.name
+					: "getOrCreateForKey" in query
+						? query.getOrCreateForKey.name
+						: "create" in query
+							? query.create.name
+							: null;
+
+		if (!name) return null;
+
+		try {
+			// Fetch actor details to check for scheduling errors
+			const actor = await this.#driver.getForId({
+				name,
+				actorId: this.#actorId,
+			});
+
+			if (actor?.error) {
+				logger().info({
+					msg: "found actor scheduling error",
+					actorId: this.#actorId,
+					error: actor.error,
+				});
+				return new errors.ActorSchedulingError(
+					this.#actorId,
+					actor.error,
+				);
+			}
+		} catch (err) {
+			// If we can't fetch actor details, just return null
+			// and fall back to the generic error
+			logger().warn({
+				msg: "failed to fetch actor details for scheduling error check",
+				actorId: this.#actorId,
+				error: stringifyError(err),
+			});
+		}
+
+		return null;
 	}
 
 	#addEventSubscription<Args extends Array<unknown>>(

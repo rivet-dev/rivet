@@ -40,12 +40,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, pools| Box::pin(rivet_cache_purge::start(config, pools)),
 			false,
 		),
-		Service::new(
-			"serverless_backfill",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(rivet_serverless_backfill::start(config, pools)),
-			false,
-		),
 	];
 
 	Ok(RunConfigData { services })

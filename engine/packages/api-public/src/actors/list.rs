@@ -144,6 +144,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 				namespace_id: namespace.namespace_id,
 				name: name.clone(),
 				key: key.clone(),
+				fetch_error: true,
 			})
 			.await?
 			.actor
