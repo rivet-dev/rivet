@@ -5,17 +5,7 @@ import type { CloseEvent } from "ws";
 import type { AnyActorDefinition } from "@/actor/definition";
 import { inputDataToBuffer } from "@/actor/protocol/old";
 import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
-import {
-	HEADER_CONN_PARAMS,
-	HEADER_ENCODING,
-	PATH_CONNECT,
-} from "@/common/actor-router-consts";
-import { importEventSource } from "@/common/eventsource";
-import type {
-	UniversalErrorEvent,
-	UniversalEventSource,
-	UniversalMessageEvent,
-} from "@/common/eventsource-interface";
+import { PATH_CONNECT } from "@/common/actor-router-consts";
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { ManagerDriver } from "@/driver-helpers/mod";
@@ -32,17 +22,9 @@ import {
 	type ToServer as ToServerJson,
 	ToServerSchema,
 } from "@/schemas/client-protocol-zod/mod";
-import {
-	deserializeWithEncoding,
-	encodingIsBinary,
-	serializeWithEncoding,
-} from "@/serde";
-import {
-	bufferToArrayBuffer,
-	httpUserAgent,
-	promiseWithResolvers,
-} from "@/utils";
-import { getRivetkitLogMessage } from "@/utils/env-vars";
+import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
+import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
+import { getLogMessage } from "@/utils/env-vars";
 import type { ActorDefinitionActions } from "./actor-common";
 import { queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
@@ -62,7 +44,11 @@ import {
  * - `"connected"`: Connection is active
  * - `"disconnected"`: Connection was lost, will auto-reconnect
  */
-export type ActorConnStatus = "idle" | "connecting" | "connected" | "disconnected";
+export type ActorConnStatus =
+	| "idle"
+	| "connecting"
+	| "connected"
+	| "disconnected";
 
 interface ActionInFlight {
 	name: string;
@@ -298,8 +284,7 @@ enc
 
 		// Notify close handlers (only if transitioning from Connected to Disconnected or Idle)
 		if (
-			(status === "disconnected" ||
-				status === "idle") &&
+			(status === "disconnected" || status === "idle") &&
 			prevStatus === "connected"
 		) {
 			for (const handler of [...this.#closeHandlers]) {
@@ -425,7 +410,9 @@ enc
 	#handleOnOpen() {
 		// Connection was disposed before Init message arrived - close the websocket to avoid leak
 		if (this.#disposed) {
-			logger().debug({ msg: "handleOnOpen called after dispose, closing websocket" });
+			logger().debug({
+				msg: "handleOnOpen called after dispose, closing websocket",
+			});
 			if (this.#websocket) {
 				this.#websocket.close(1000, "Disposed");
 				this.#websocket = undefined;
@@ -479,7 +466,7 @@ enc
 
 		const response = await this.#parseMessage(data as ConnMessage);
 		logger().trace(
-			getRivetkitLogMessage()
+			getLogMessage()
 				? {
 						msg: "parsed message",
 						message:
@@ -611,7 +598,10 @@ enc
 
 			// Automatically reconnect if we were connected
 			if (wasConnected) {
-				logger().debug({ msg: "triggering reconnect", connId: this.#connId });
+				logger().debug({
+					msg: "triggering reconnect",
+					connId: this.#connId,
+				});
 				this.#connectWithRetry();
 			}
 		}
@@ -1097,7 +1087,10 @@ enc
 		// Close websocket (#handleOnClose will reject pending promises)
 		if (this.#websocket) {
 			const ws = this.#websocket;
-			if (ws.readyState !== 2 /* CLOSING */ && ws.readyState !== 3 /* CLOSED */) {
+			if (
+				ws.readyState !== 2 /* CLOSING */ &&
+				ws.readyState !== 3 /* CLOSED */
+			) {
 				const { promise, resolve } = promiseWithResolvers();
 				ws.addEventListener("close", () => resolve(undefined));
 				ws.close(1000, "Disposed");

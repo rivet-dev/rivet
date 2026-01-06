@@ -153,7 +153,7 @@ actor definitions include the following generic parameters that you'll see frequ
 - rivet uses pino for logging
 - we expose a scoped child logger for each actor at `c.log` that automatically logs the actor id + key
 - this allows you to search lgos easily by actor id without having to log the actor id frequently
-- logs can be configured via the `LOG_LEVEL` env var
+- logs can be configured via the `RIVETKIT_LOG_LEVEL` env var
 
 ### fault tolerance
 
