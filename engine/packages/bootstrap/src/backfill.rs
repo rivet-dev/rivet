@@ -32,7 +32,7 @@ async fn is_complete(ctx: &StandaloneCtx, name: &str) -> Result<bool> {
 		.run(|tx| {
 			let name = name.to_string();
 			async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
+				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());
 				tx.exists(&pegboard::keys::backfill::CompleteKey::new(&name), Snapshot)
 					.await
 			}

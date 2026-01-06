@@ -8,7 +8,6 @@ use gas::prelude::*;
 use universaldb::KeySelector;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
-use universaldb::utils::end_of_key_range;
 
 use crate::keys;
 
@@ -85,7 +84,7 @@ pub async fn mark_complete(ctx: &ActivityCtx, input: &MarkCompleteInput) -> Resu
 		.run(|tx| {
 			let name = input.name.clone();
 			async move {
-				let tx = tx.with_subspace(keys::subspace());
+				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());
 				tx.write(
 					&keys::backfill::CompleteKey::new(&name),
 					rivet_util::timestamp::now(),
@@ -133,6 +132,7 @@ pub async fn backfill_batch(
 
 				// Get actors that have a workflow_id key, starting after the last processed actor
 				let actor_data_subspace = keys::subspace().subspace(&keys::actor::DataSubspaceKey);
+				let (subspace_start, subspace_end) = actor_data_subspace.range();
 
 				// Build range start key based on pagination cursor
 				let begin_key = if let Some(after_actor_id) = after_actor_id {
@@ -141,15 +141,13 @@ pub async fn backfill_batch(
 					let packed = keys::subspace().pack(&after_key);
 					KeySelector::first_greater_than(packed)
 				} else {
-					KeySelector::first_greater_or_equal(actor_data_subspace.bytes().to_vec())
+					KeySelector::first_greater_or_equal(subspace_start)
 				};
 
 				let range_option = universaldb::RangeOption {
 					mode: StreamingMode::Iterator,
 					begin: begin_key,
-					end: KeySelector::first_greater_or_equal(end_of_key_range(
-						actor_data_subspace.bytes(),
-					)),
+					end: KeySelector::first_greater_or_equal(subspace_end),
 					..Default::default()
 				};
 
