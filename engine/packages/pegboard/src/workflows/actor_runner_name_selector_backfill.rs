@@ -84,7 +84,7 @@ pub async fn mark_complete(ctx: &ActivityCtx, input: &MarkCompleteInput) -> Resu
 		.run(|tx| {
 			let name = input.name.clone();
 			async move {
-				let tx = tx.with_subspace(keys::subspace());
+				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());
 				tx.write(
 					&keys::backfill::CompleteKey::new(&name),
 					rivet_util::timestamp::now(),
