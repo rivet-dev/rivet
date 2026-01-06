@@ -1,1075 +1,906 @@
 {
-	"annotations": {
-		"list": [
-			{
-				"builtIn": 1,
-				"datasource": {
-					"type": "grafana",
-					"uid": "-- Grafana --"
-				},
-				"enable": true,
-				"hide": true,
-				"iconColor": "rgba(0, 211, 255, 1)",
-				"name": "Annotations & Alerts",
-				"type": "dashboard"
-			}
-		]
-	},
-	"editable": true,
-	"fiscalYearStartMonth": 0,
-	"graphTooltip": 1,
-	"id": 8,
-	"links": [],
-	"panels": [
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 0
-			},
-			"id": 1,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_request_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Request Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 0
-			},
-			"id": 2,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_request_errors'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Request Error Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 8
-			},
-			"id": 3,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_value_miss_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Miss Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"max": 1,
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percentunit"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 8
-			},
-			"id": 4,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(total_diff > 0 AND miss_diff >= 0, miss_diff / total_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            miss_val - lagInFrame(miss_val, 1, miss_val) OVER (PARTITION BY key ORDER BY time) as miss_diff,\n            total_val - lagInFrame(total_val, 1, total_val) OVER (PARTITION BY key ORDER BY time) as total_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                sumIf(Value, MetricName = 'rivet_cache_value_miss_total') as miss_val,\n                sumIf(Value, MetricName = 'rivet_cache_value_total') as total_val\n            FROM otel.otel_metrics_sum\n            WHERE MetricName IN ('rivet_cache_value_miss_total', 'rivet_cache_value_total')\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> ''\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Miss Rate (% of total)",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 16
-			},
-			"id": 5,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_value_empty_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Empty Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"max": 1,
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "percentunit"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 16
-			},
-			"id": 6,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(total_diff > 0 AND empty_diff >= 0, empty_diff / total_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            empty_val - lagInFrame(empty_val, 1, empty_val) OVER (PARTITION BY key ORDER BY time) as empty_diff,\n            total_val - lagInFrame(total_val, 1, total_val) OVER (PARTITION BY key ORDER BY time) as total_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                sumIf(Value, MetricName = 'rivet_cache_value_empty_total') as empty_val,\n                sumIf(Value, MetricName = 'rivet_cache_value_total') as total_val\n            FROM otel.otel_metrics_sum\n            WHERE MetricName IN ('rivet_cache_value_empty_total', 'rivet_cache_value_total')\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> ''\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Empty Rate (% of total)",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 24
-			},
-			"id": 7,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_purge_request_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Purge Request Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "reqps"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 24
-			},
-			"id": 8,
-			"options": {
-				"legend": {
-					"calcs": ["mean"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Mean",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "single",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"meta": {},
-					"pluginVersion": "4.11.2",
-					"queryType": "table",
-					"range": true,
-					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_purge_value_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
-					"refId": "A"
-				}
-			],
-			"title": "Cache Purge Rate",
-			"transformations": [
-				{
-					"id": "prepareTimeSeries",
-					"options": {
-						"format": "multi"
-					}
-				},
-				{
-					"id": "renameByRegex",
-					"options": {
-						"regex": "^value\\s(.*)$",
-						"renamePattern": "$1"
-					}
-				}
-			],
-			"type": "timeseries"
-		}
-	],
-	"preload": false,
-	"refresh": "30s",
-	"schemaVersion": 40,
-	"tags": [],
-	"templating": {
-		"list": [
-			{
-				"current": {
-					"text": "All",
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
-				"includeAll": true,
-				"label": "project",
-				"multi": true,
-				"name": "project",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": "All",
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
-				"includeAll": true,
-				"label": "datacenter",
-				"multi": true,
-				"name": "datacenter",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": "All",
-					"value": ["$__all"]
-				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT Attributes['key'] FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_cache_request_total' AND ServiceName = 'rivet' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) ORDER BY Attributes['key']",
-				"includeAll": true,
-				"label": "key",
-				"multi": true,
-				"name": "key",
-				"options": [],
-				"query": "SELECT DISTINCT Attributes['key'] FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_cache_request_total' AND ServiceName = 'rivet' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) ORDER BY Attributes['key']",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			}
-		]
-	},
-	"time": {
-		"from": "now-30m",
-		"to": "now"
-	},
-	"timepicker": {},
-	"timezone": "",
-	"title": "Cache",
-	"uid": "c35233ed-b698-4838-9426-18e1586017f1",
-	"version": 1,
-	"weekStart": ""
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "key/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_cache_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(rivet_cache_request_error_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Request Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "key/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_cache_value_miss_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Miss Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_cache_value_miss_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval]) / rate(rivet_cache_value_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Miss Rate (% of total)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "key/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_cache_value_empty_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Empty Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_cache_value_empty_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval]) / rate(rivet_cache_value_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Empty Rate (% of total)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "key/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_cache_purge_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Purge Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "key/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(irate(rivet_purge_cache_value_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",key=~\"$key\"}[$__rate_interval])) by (key)",
+          "instant": false,
+          "legendFormat": "{{key}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache Purge Rate",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_project)",
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(rivet_project)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+        "includeAll": true,
+        "label": "Datacenter",
+        "multi": true,
+        "name": "datacenter",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(rivet_cache_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},key)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cache Key",
+        "multi": true,
+        "name": "key",
+        "options": [],
+        "query": {
+          "query": "label_values(rivet_cache_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},key)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Cache",
+  "uid": "c35233ed-b698-4838-9426-18e1586017f1",
+  "version": 1,
+  "weekStart": ""
 }
