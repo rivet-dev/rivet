@@ -163,7 +163,9 @@
 									"type": "datetime"
 								}
 							],
-							"groupBy": ["ServiceName"],
+							"groupBy": [
+								"ServiceName"
+							],
 							"limit": 10000,
 							"mode": "trend",
 							"orderBy": [],
@@ -381,7 +383,9 @@
 				"footer": {
 					"countRows": false,
 					"fields": "",
-					"reducer": ["sum"],
+					"reducer": [
+						"sum"
+					],
 					"show": false
 				},
 				"showHeader": true,
@@ -712,7 +716,9 @@
 									"type": "datetime"
 								}
 							],
-							"groupBy": ["ServiceName"],
+							"groupBy": [
+								"ServiceName"
+							],
 							"limit": 10000,
 							"mode": "trend",
 							"orderBy": [],
@@ -722,7 +728,7 @@
 					},
 					"pluginVersion": "4.0.6",
 					"queryType": "timeseries",
-					"rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
+					"rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  TraceId IN array($trace_id),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
 					"refId": "A"
 				}
 			],
@@ -840,8 +846,12 @@
 			},
 			{
 				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
+					"text": [
+						"All"
+					],
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -879,8 +889,12 @@
 			},
 			{
 				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
+					"text": [
+						"All"
+					],
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -901,8 +915,12 @@
 			{
 				"allValue": "'All'",
 				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
+					"text": [
+						"All"
+					],
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -923,8 +941,12 @@
 			{
 				"allValue": "'All'",
 				"current": {
-					"text": ["All"],
-					"value": ["$__all"]
+					"text": [
+						"All"
+					],
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
