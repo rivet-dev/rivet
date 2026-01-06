@@ -1019,7 +1019,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::Udb)?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::FIND_WORKFLOWS_DURATION.record(dt, &[KeyValue::new("workflow_name", "batch")]);
+		metrics::FIND_WORKFLOWS_BATCH_DURATION.observe(dt);
 
 		Ok(workflow_ids)
 	}

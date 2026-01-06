@@ -55,6 +55,12 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref FIND_WORKFLOWS_BATCH_DURATION: Histogram = register_histogram_with_registry!(
+		"gasoline_find_workflows_batch_duration",
+		"Duration to find workflows.",
+		*REGISTRY
+	).unwrap();
+
 	pub static ref WORKFLOW_TOTAL: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"gasoline_workflow_total",
 		"Total workflows.",
