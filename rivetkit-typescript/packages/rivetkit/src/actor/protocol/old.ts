@@ -23,7 +23,7 @@ import {
 import { deserializeWithEncoding } from "@/serde";
 import { assertUnreachable, bufferToArrayBuffer } from "../../utils";
 import { CONN_SEND_MESSAGE_SYMBOL, type Conn } from "../conn/mod";
-import { ActionContext } from "../contexts/action";
+import { ActionContext } from "../contexts";
 import type { ActorInstance } from "../instance/mod";
 
 interface MessageEventOpts {
