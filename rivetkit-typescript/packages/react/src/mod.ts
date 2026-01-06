@@ -16,7 +16,7 @@ export { ActorConnDisposed, createClient } from "rivetkit/client";
 export type { ActorConnStatus } from "@rivetkit/framework-base";
 
 export function createRivetKit<Registry extends AnyActorRegistry>(
-	clientInput: Parameters<typeof createClient>[0],
+	clientInput: Parameters<typeof createClient>[0] = undefined,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
 	return createRivetKitWithClient<Registry>(
