@@ -183,15 +183,14 @@ pub async fn backfill_batch(
 								continue;
 							}
 						};
-					let actor_id = key.actor_id();
 
 					// Check if runner_name_selector key exists
 					let runner_name_selector_key =
-						keys::actor::RunnerNameSelectorKey::new(actor_id);
+						keys::actor::RunnerNameSelectorKey::new(key.actor_id);
 					let exists = tx.exists(&runner_name_selector_key, Snapshot).await?;
 
 					if !exists {
-						actors_missing_runner_name.push((actor_id, workflow_id));
+						actors_missing_runner_name.push((key.actor_id, workflow_id));
 
 						if actors_missing_runner_name.len() >= batch_size {
 							break;
