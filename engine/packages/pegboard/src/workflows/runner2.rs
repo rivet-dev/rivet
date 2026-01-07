@@ -712,7 +712,7 @@ pub(crate) async fn allocate_pending_actors(
 					}
 
 					let Some(entry) = stream.try_next().await? else {
-						break;
+						break 'queue_loop;
 					};
 
 					let (old_runner_alloc_key, old_runner_alloc_key_data) =
@@ -722,7 +722,7 @@ pub(crate) async fn allocate_pending_actors(
 						// We have passed all of the runners with the highest version. This is reachable if
 						// the ping of the highest version workers makes them ineligible
 						if old_runner_alloc_key.version < highest_version {
-							break;
+							break 'queue_loop;
 						}
 					} else {
 						highest_version = Some(old_runner_alloc_key.version);
@@ -730,7 +730,7 @@ pub(crate) async fn allocate_pending_actors(
 
 					// An empty runner means we have reached the end of the runners with the highest version
 					if old_runner_alloc_key.remaining_millislots == 0 {
-						break;
+						break 'queue_loop;
 					}
 
 					// Scan by last ping

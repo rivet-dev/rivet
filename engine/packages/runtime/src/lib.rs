@@ -124,8 +124,14 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 		rt_builder.thread_stack_size(8 * 1024 * 1024);
 	}
 
-	if let Ok(worker_threads) = env::var("TOKIO_WORKER_THREADS") {
-		rt_builder.worker_threads(worker_threads.parse().unwrap());
+	// Sets the thread count to available_parallelism - N
+	if let Ok(subtract_worker_threads) = env::var("TOKIO_WORKER_THREADS_SUBTRACT") {
+		rt_builder.worker_threads(
+			std::thread::available_parallelism()
+				.map_or(1, std::num::NonZeroUsize::get)
+				.saturating_sub(subtract_worker_threads.parse().unwrap())
+				.max(1),
+		);
 	}
 
 	if let Ok(max_blocking_threads) = env::var("TOKIO_MAX_BLOCKING_THREADS") {

@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::*;
+use anyhow::Result;
 use clap::Parser;
 use once_cell::sync::Lazy;
 use rivet_engine::{SubCommand, run_config};
