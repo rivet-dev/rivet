@@ -16,8 +16,13 @@ pub async fn run(ctx: &StandaloneCtx) -> Result<()> {
 	}
 
 	// Serverless backfill
-	if !is_complete(ctx, pegboard::workflows::serverless_backfill::BACKFILL_NAME).await? {
-		ctx.workflow(pegboard::workflows::serverless_backfill::Input {})
+	if !is_complete(
+		ctx,
+		pegboard::workflows::serverless::backfill::BACKFILL_NAME,
+	)
+	.await?
+	{
+		ctx.workflow(pegboard::workflows::serverless::backfill::Input {})
 			.unique()
 			.dispatch()
 			.await?;

@@ -527,7 +527,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "count by (rivet_datacenter) ((time() - timestamp(rivet_gasoline_worker_last_ping{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}) < 30)) ",
+          "expr": "count by (rivet_datacenter) ((time() - rivet_gasoline_worker_last_ping{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} / 1000) < 30)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,

@@ -1,4 +1,4 @@
-use rivet_metrics::{MICRO_BUCKETS, REGISTRY, prometheus::*};
+use rivet_metrics::{REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
 	pub static ref KEY_PACK_COUNT: IntCounterVec = register_int_counter_vec_with_registry!(

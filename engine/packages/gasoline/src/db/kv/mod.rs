@@ -1232,7 +1232,7 @@ impl Database for DatabaseKv {
 
 							let wf_worker_idx = wf_hash % active_worker_count;
 
-							// Every worker pulls workflows that has to the current worker as well as the next
+							// Every worker pulls workflows that match the current worker idx as well as the next
 							// worker for redundancy. this results in increased txn conflicts but less chance of
 							// orphaned workflows
 							let next_worker_idx = (current_worker_idx + 1) % active_worker_count;
@@ -2088,6 +2088,8 @@ impl Database for DatabaseKv {
 							tx.get_ranges_keyvalues(
 								universaldb::RangeOption {
 									mode: StreamingMode::Exact,
+									// Each individual stream is limited to our max limit, we apply this
+									// limit again after they are all aggregated further down
 									limit: Some(limit),
 									..(&pending_signal_subspace).into()
 								},
@@ -2110,9 +2112,6 @@ impl Database for DatabaseKv {
 						.await?;
 
 					if !signals.is_empty() {
-						// Sort by ts
-						signals.sort_by_key(|key| key.ts);
-
 						let now = rivet_util::timestamp::now();
 
 						// Insert history event
@@ -2125,6 +2124,11 @@ impl Database for DatabaseKv {
 							now,
 						)?;
 
+						// Sort by ts after aggregating but before applying limit again. Signals are already
+						// in order by ts in their individual streams so this should be cheap
+						signals.sort_by_key(|key| key.ts);
+
+						// Read signal data in parallel
 						let signals =
 							futures_util::stream::iter(signals.into_iter().take(limit).enumerate())
 								.map(|(index, key)| {
@@ -2153,8 +2157,6 @@ impl Database for DatabaseKv {
 											None,
 										);
 
-										// TODO: Split txn into two after acking here?
-
 										// Clear pending signal key
 										tx.clear(&packed_key);
 
@@ -2175,6 +2177,7 @@ impl Database for DatabaseKv {
 
 										let body = body_key.combine(chunks)?;
 
+										// Insert each signal body into the signals event
 										keys::history::insert::signals_event_signal(
 											&self.subspace,
 											&tx,
@@ -2194,7 +2197,8 @@ impl Database for DatabaseKv {
 										})
 									}
 								})
-								.buffer_unordered(1024)
+								// IMPORTANT: The signals need to stay in order
+								.buffered(1024)
 								.try_collect::<Vec<_>>()
 								.await?;
 
