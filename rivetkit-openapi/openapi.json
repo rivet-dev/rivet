@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "version": "2.0.32",
+    "version": "2.0.33",
     "title": "RivetKit API"
   },
   "components": {
@@ -83,6 +83,154 @@
                           "start_ts": {
                             "type": "number",
                             "nullable": true
+                          },
+                          "error": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "serverless_error": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "http_error": {
+                                            "type": "object",
+                                            "properties": {
+                                              "status_code": {
+                                                "type": "number"
+                                              },
+                                              "body": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "status_code",
+                                              "body"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "http_error"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "stream_ended_early"
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "connection_error": {
+                                            "type": "object",
+                                            "properties": {
+                                              "message": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "message"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "connection_error"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "invalid_base64"
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "invalid_payload": {
+                                            "type": "object",
+                                            "properties": {
+                                              "message": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "message"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "invalid_payload"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "runner_config_not_found"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "runner_config_not_serverless"
+                                        ]
+                                      },
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "namespace_not_found"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "serverless_error"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "no_capacity": {
+                                    "type": "object",
+                                    "properties": {
+                                      "runner_name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "runner_name"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "no_capacity"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "runner_no_response": {
+                                    "type": "object",
+                                    "properties": {
+                                      "runner_id": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "runner_id"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "runner_no_response"
+                                ]
+                              },
+                              {
+                                "nullable": true
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -193,6 +341,154 @@
                         "start_ts": {
                           "type": "number",
                           "nullable": true
+                        },
+                        "error": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "serverless_error": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "http_error": {
+                                          "type": "object",
+                                          "properties": {
+                                            "status_code": {
+                                              "type": "number"
+                                            },
+                                            "body": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "status_code",
+                                            "body"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "http_error"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "stream_ended_early"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "connection_error": {
+                                          "type": "object",
+                                          "properties": {
+                                            "message": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "message"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "connection_error"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "invalid_base64"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "invalid_payload": {
+                                          "type": "object",
+                                          "properties": {
+                                            "message": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "message"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "invalid_payload"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "runner_config_not_found"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "runner_config_not_serverless"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "namespace_not_found"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "serverless_error"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "no_capacity": {
+                                  "type": "object",
+                                  "properties": {
+                                    "runner_name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "runner_name"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "no_capacity"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "runner_no_response": {
+                                  "type": "object",
+                                  "properties": {
+                                    "runner_id": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "runner_id"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "runner_no_response"
+                              ]
+                            },
+                            {
+                              "nullable": true
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -306,6 +602,154 @@
                         "start_ts": {
                           "type": "number",
                           "nullable": true
+                        },
+                        "error": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "serverless_error": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "http_error": {
+                                          "type": "object",
+                                          "properties": {
+                                            "status_code": {
+                                              "type": "number"
+                                            },
+                                            "body": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "status_code",
+                                            "body"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "http_error"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "stream_ended_early"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "connection_error": {
+                                          "type": "object",
+                                          "properties": {
+                                            "message": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "message"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "connection_error"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "invalid_base64"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "invalid_payload": {
+                                          "type": "object",
+                                          "properties": {
+                                            "message": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "message"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "invalid_payload"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "runner_config_not_found"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "runner_config_not_serverless"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "namespace_not_found"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "serverless_error"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "no_capacity": {
+                                  "type": "object",
+                                  "properties": {
+                                    "runner_name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "runner_name"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "no_capacity"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "runner_no_response": {
+                                  "type": "object",
+                                  "properties": {
+                                    "runner_id": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "runner_id"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "runner_no_response"
+                              ]
+                            },
+                            {
+                              "nullable": true
+                            }
+                          ]
                         }
                       },
                       "required": [

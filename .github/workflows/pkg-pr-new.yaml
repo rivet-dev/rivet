@@ -12,5 +12,5 @@ jobs:
       - run: corepack enable
       - uses: actions/setup-node@v4
       - run: pnpm install
-      - run: pnpm build -F '@rivetkit/*'
-      - run: pnpm dlx pkg-pr-new publish 'engine/sdks/typescript/runner/' 'engine/sdks/typescript/runner-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'
+      - run: pnpm build -F '@rivetkit/*' -F '!@rivetkit/example-registry'
+      - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/runner/' 'engine/sdks/typescript/runner-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'
