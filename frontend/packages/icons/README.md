@@ -15,12 +15,23 @@
 
 This package includes icons from Font Awesome Pro, which are licensed to Rivet for use in Rivet products only. If you wish to use Font Awesome Pro icons in your own projects, you must obtain your own license from [Font Awesome](https://fontawesome.com/plans).
 
-## Motivation
+## Overview
 
-Rivet Icons are a set of SVG icons that are used in Rivet products. This package is built on top of great Font Awesome icons. Some icons used in our products are from the premium Font Awesome icon set. We've created a package that lets you use premium icons without having to buy a Font Awesome license.
+Rivet Icons is an icon library built on Font Awesome that provides pre-generated SVG icons for use in Rivet products. All icons (including Pro icons) are committed to the repository, making this package work out-of-the-box with **no Font Awesome token required** for end users.
 
-All icons (including Pro icons) are pre-generated and committed to the repository, so this package works out-of-the-box with **no Font Awesome token required** for end users.
+## Installation
 
+```bash
+pnpm add @rivet-gg/icons
+```
+
+## Usage
+
+```tsx
+import { Icon, faCheckCircle } from "@rivet-gg/icons";
+
+<Icon icon={faCheckCircle} />
+```
 
 ## Contributing
 
@@ -31,8 +42,8 @@ All icons (including Pro icons) are pre-generated and committed to the repositor
 ### Adding new icons
 
 1. Ensure you have a `FONTAWESOME_PACKAGE_TOKEN` environment variable set
-2. Modify [scripts/generateManifest.js](scripts/generateManifest.js) to include new icons
-3. Run `./scripts/generateManifest.js` to generate a new `manifest.json` file
+2. Modify [scripts/generate-manifest.js](scripts/generate-manifest.js) to include new icons
+3. Run `pnpm manifest` to generate a new `manifest.json` file
     - If you're getting an error about missing packages, run `pnpm install` in the `src` folder first
 4. Run `pnpm vendor` to generate icon files:
     - `src/index.gen.js`

@@ -2,7 +2,7 @@
 	"name": "@rivet-gg/icons",
 	"version": "2.0.33",
 	"description": "Icon library for Rivet products. Licensed exclusively for use in Rivet products and services only.",
-	"license": "UNLICENSED",
+	"license": "SEE LICENSE IN LICENSE",
 	"private": false,
 	"sideEffects": false,
 	"files": [
@@ -13,8 +13,9 @@
 		"dist"
 	],
 	"scripts": {
-		"vendor": "node scripts/vendor-icons.js",
-		"manifest": "node scripts/generate-manifest.js"
+		"generate": "npm run gen:manifest && npm run gen:vendor",
+		"gen:vendor": "node scripts/vendor-icons.js",
+		"gen:manifest": "node scripts/generate-manifest.js"
 	},
 	"engines": {
 		"node": ">=18"
