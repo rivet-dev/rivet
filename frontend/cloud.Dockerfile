@@ -36,6 +36,10 @@ COPY rivetkit-openapi/ rivetkit-openapi/
 COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
 RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
 
+# Arguments required before installing dependencies
+ARG FONTAWESOME_PACKAGE_TOKEN=""
+ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
+
 # Install dependencies (with pnpm store cache)
 RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-/pnpm/store,target=/pnpm/store \
     pnpm install --frozen-lockfile
