@@ -1,0 +1,8 @@
+[build]
+dockerfilePath = "website/Dockerfile"
+watchPatterns = ["website/**"]
+
+[deploy]
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
