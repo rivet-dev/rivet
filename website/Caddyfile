@@ -1,0 +1,46 @@
+{
+	admin off
+}
+
+:{$PORT:80} {
+	root * /srv
+
+	# Gzip compression
+	encode gzip
+
+	# Security headers
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+	}
+
+	# Cache static assets aggressively
+	@static {
+		path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+	}
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	# Don't cache HTML files
+	@html {
+		path *.html
+	}
+	header @html Cache-Control "no-store, no-cache, must-revalidate"
+
+	# Health check endpoint
+	handle /health {
+		respond "healthy" 200
+	}
+
+	# Main site handler - Next.js static export with directory index
+	handle {
+		try_files {path} {path}/ {path}/index.html
+		file_server
+	}
+
+	# Custom 404 page
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+}
