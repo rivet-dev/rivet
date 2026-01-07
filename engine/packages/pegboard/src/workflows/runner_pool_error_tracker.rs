@@ -1,5 +1,10 @@
+use std::time::Duration;
+
 use gas::prelude::*;
 use rivet_types::actor::RunnerPoolError;
+
+const SIGNAL_DEBOUNCE: Duration = Duration::from_millis(250);
+const SIGNAL_BATCH_SIZE: usize = 1024;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -37,15 +42,28 @@ pub async fn pegboard_runner_pool_error_tracker(
 
 	ctx.activity(InitStateInput {}).await?;
 
+	// Batch receive signals with debounce. This allows us to (a) not require polling if the pool
+	// is idle and has no signals and (b) avoid a hot loop by debouncing signal processing.
 	ctx.lupe()
 		// Txn sizes can quickly get large in this workflow, need to commit loop more often
 		.commit_interval(1)
 		.run(|ctx, _| {
 			Box::pin(async move {
-				let signals = ctx.listen_n_with_timeout::<Main>(100, 256).await?;
+				// Sleep until we receive a signal
+				let signals_a = ctx.v(2).listen_n::<Main>(SIGNAL_BATCH_SIZE).await?;
 
-				let signals_inner = signals
+				// Debounce rest of signals if we haven't already reached the batch size
+				let remaining_signals = SIGNAL_BATCH_SIZE.saturating_sub(signals_a.len());
+				let signals_b = if remaining_signals > 0 {
+					ctx.listen_n_with_timeout::<Main>(SIGNAL_DEBOUNCE, remaining_signals)
+						.await?
+				} else {
+					Vec::new()
+				};
+
+				let signals_inner = signals_a
 					.into_iter()
+					.chain(signals_b.into_iter())
 					.map(|s| match s {
 						Main::ReportSuccess(x) => MainInner::ReportSuccess(x),
 						Main::ReportError(x) => MainInner::ReportError(x),
@@ -53,6 +71,7 @@ pub async fn pegboard_runner_pool_error_tracker(
 					})
 					.collect();
 
+				// Process signals
 				let shutdown = ctx
 					.activity(ProcessSignalsInput {
 						signals: signals_inner,
