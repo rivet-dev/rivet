@@ -11,18 +11,18 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@rivetkit/next-js": "workspace:*",
+		"next": "15.5.9",
 		"react": "19.1.0",
 		"react-dom": "19.1.0",
-		"next": "15.4.5",
-		"@rivetkit/next-js": "workspace:*",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
-		"typescript": "^5",
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
-		"tsx": "^3.12.7"
+		"tsx": "^3.12.7",
+		"typescript": "^5"
 	},
 	"stableVersion": "0.8.0",
 	"template": {
