@@ -63,16 +63,12 @@ impl<'de> TupleUnpack<'de> for CreateTsKey {
 
 #[derive(Debug)]
 pub struct WorkflowIdKey {
-	actor_id: Id,
+	pub actor_id: Id,
 }
 
 impl WorkflowIdKey {
 	pub fn new(actor_id: Id) -> Self {
 		WorkflowIdKey { actor_id }
-	}
-
-	pub fn actor_id(&self) -> Id {
-		self.actor_id
 	}
 }
 
