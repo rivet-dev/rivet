@@ -64,32 +64,34 @@ pub struct State {
 	pub runner_workflow_id: Option<Id>,
 	pub runner_state: Option<RunnerState>,
 
-	/// Reason for actor failure, set when actor fails to start.
+	/// Explains why the actor is NOT healthy, either due to failure to allocate or a failed
+	/// runner.
+	///
+	/// # When failure_reason is cleared
+	///
+	/// - When actor is allocated (gets a runner assigned)
+	/// - When actor becomes connectable
 	#[serde(default)]
 	pub failure_reason: Option<FailureReason>,
 }
 
-/// Persistent reason why an actor failed to start or run.
+/// Reason why an actor failed to allocate or run.
+///
 /// Distinct from `errors::Actor` which represents user-facing API errors.
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureReason {
+	/// Actor cannot allocate due to no available runner capacity. Only set if `failure_reason`
+	/// is currently `None` (runner failures take precedence as root causes).
 	NoCapacity,
 	/// Runner did not respond with expected events (GC timeout).
-	RunnerNoResponse {
-		runner_id: Id,
-	},
+	RunnerNoResponse { runner_id: Id },
 	/// Runner connection was lost (no recent ping, network issue, or crash).
-	RunnerConnectionLost {
-		runner_id: Id,
-	},
+	RunnerConnectionLost { runner_id: Id },
 	/// Runner was draining but actor didn't stop in time.
-	RunnerDrainingTimeout {
-		runner_id: Id,
-	},
-	Crashed {
-		message: Option<String>,
-	},
+	RunnerDrainingTimeout { runner_id: Id },
+	/// Actor crashed during execution.
+	Crashed { message: Option<String> },
 }
 
 impl FailureReason {
@@ -895,10 +897,11 @@ async fn handle_stopped(
 		..
 	} = &variant
 	{
-		ctx.activity(runtime::SetFailureReasonInput {
-			failure_reason: failure_reason.clone(),
-		})
-		.await?;
+		ctx.v(3)
+			.activity(runtime::SetFailureReasonInput {
+				failure_reason: failure_reason.clone(),
+			})
+			.await?;
 	}
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
@@ -1060,12 +1063,13 @@ async fn handle_stopped(
 						*code != protocol::mk2::StopCode::Ok,
 						"expected non-Ok stop code in crash handler, got Ok"
 					);
-					ctx.activity(runtime::SetFailureReasonInput {
-						failure_reason: FailureReason::Crashed {
-							message: message.clone(),
-						},
-					})
-					.await?;
+					ctx.v(3)
+						.activity(runtime::SetFailureReasonInput {
+							failure_reason: FailureReason::Crashed {
+								message: message.clone(),
+							},
+						})
+						.await?;
 				}
 
 				ctx.activity(runtime::SetSleepingInput {

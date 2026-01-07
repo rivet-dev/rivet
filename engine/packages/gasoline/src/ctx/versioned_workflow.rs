@@ -125,6 +125,15 @@ impl<'a> VersionedWorkflowCtx<'a> {
 		})
 	}
 
+	/// Listens for N signals for a short time before setting the workflow to sleep. Once signals are
+	/// received, the workflow will be woken up and continue. Never returns an empty vec.
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
+	pub async fn listen_n<T: Listen>(&mut self, limit: usize) -> Result<Vec<T>> {
+		wrap!(self, "listen", {
+			self.inner.listen_n::<T>(limit).in_current_span().await
+		})
+	}
+
 	/// Creates a message builder.
 	pub fn msg<M: Message>(&mut self, body: M) -> builder::message::MessageBuilder<'_, M> {
 		builder::message::MessageBuilder::new(self.inner, self.version(), body)
@@ -171,9 +180,37 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	}
 
 	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
+	pub async fn listen_n_with_timeout<T: Listen>(
+		&mut self,
+		duration: impl DurationToMillis,
+		limit: usize,
+	) -> Result<Vec<T>> {
+		wrap!(self, "listen with timeout", {
+			self.inner
+				.listen_n_with_timeout::<T>(duration, limit)
+				.in_current_span()
+				.await
+		})
+	}
+
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn listen_until<T: Listen>(&mut self, time: impl TsToMillis) -> Result<Option<T>> {
 		wrap!(self, "listen until", {
 			self.inner.listen_until::<T>(time).in_current_span().await
+		})
+	}
+
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
+	pub async fn listen_n_until<T: Listen>(
+		&mut self,
+		time: impl TsToMillis,
+		limit: usize,
+	) -> Result<Vec<T>> {
+		wrap!(self, "listen until", {
+			self.inner
+				.listen_n_until::<T>(time, limit)
+				.in_current_span()
+				.await
 		})
 	}
 }

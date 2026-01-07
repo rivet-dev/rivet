@@ -306,12 +306,6 @@ fn serverless_http_404_error() {
 				}
 				other => panic!("expected ServerlessHttpError, got: {:?}", other),
 			}
-
-			// Note: Actor error won't be set for serverless configs because the actor workflow
-			// waits indefinitely for allocation (no timeout). The actor error enrichment only
-			// works when the actor times out with NoCapacity. For serverless, we rely on:
-			// 1. Pool error via runner configs API (verified above)
-			// 2. Guard fail-fast (verified above)
 		},
 	);
 }
@@ -454,8 +448,6 @@ fn serverless_stream_ended_then_http_error() {
 				}
 				other => panic!("expected ServerlessHttpError, got: {:?}", other),
 			}
-
-			// Note: Actor error won't be set for serverless configs (see serverless_http_404_error)
 		},
 	);
 }
@@ -543,8 +535,6 @@ fn runner_config_returns_pool_error() {
 				}
 				other => panic!("expected ServerlessHttpError, got: {:?}", other),
 			}
-
-			// Note: Actor error won't be set for serverless configs (see serverless_http_404_error)
 		},
 	);
 }
