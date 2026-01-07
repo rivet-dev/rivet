@@ -1,5 +1,5 @@
 import { faSparkle, Icon } from "@rivet-gg/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useLocalStorage } from "usehooks-ts";
 import {
 	Avatar,
@@ -113,12 +113,26 @@ interface ChangelogProps {
 }
 
 export function Changelog({ className, children, ...props }: ChangelogProps) {
-	const { data } = useSuspenseQuery(changelogQueryOptions());
+	const { data, isLoading } = useQuery(changelogQueryOptions());
 
 	const [lastChangelog, setLast] = useLocalStorage<string | null>(
 		"rivet-lastchangelog",
 		null,
 	);
+
+	if (isLoading || !data) {
+		return (
+			<Slot
+				{...props}
+				className={cn(
+					"relative [&_[data-changelog-ping]]:hidden",
+					className,
+				)}
+			>
+				{children}
+			</Slot>
+		);
+	}
 
 	const hasNewChangelog = !lastChangelog
 		? data.length > 0
