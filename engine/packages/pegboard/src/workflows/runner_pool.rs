@@ -25,15 +25,16 @@ struct RunnerState {
 
 #[workflow]
 pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
-	ctx.workflow(runner_pool_error_tracker::Input {
-		namespace_id: input.namespace_id,
-		runner_name: input.runner_name.clone(),
-	})
-	.tag("namespace_id", input.namespace_id)
-	.tag("runner_name", &input.runner_name)
-	.unique()
-	.dispatch()
-	.await?;
+	ctx.v(2)
+		.workflow(runner_pool_error_tracker::Input {
+			namespace_id: input.namespace_id,
+			runner_name: input.runner_name.clone(),
+		})
+		.tag("namespace_id", input.namespace_id)
+		.tag("runner_name", &input.runner_name)
+		.unique()
+		.dispatch()
+		.await?;
 
 	ctx.loope(LifecycleState::default(), |ctx, state| {
 		let input = input.clone();
