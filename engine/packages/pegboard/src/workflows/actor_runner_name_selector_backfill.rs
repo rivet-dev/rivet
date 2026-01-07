@@ -7,7 +7,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use universaldb::KeySelector;
 use universaldb::options::StreamingMode;
-use universaldb::utils::IsolationLevel::*;
+use universaldb::prelude::*;
 
 use crate::keys;
 
@@ -16,7 +16,7 @@ pub const BACKFILL_NAME: &str = "actor_runner_name_selector";
 /// Timeout to stop processing early to avoid transaction timeout.
 const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
 
-const BATCH_SIZE: usize = 1024;
+const BATCH_SIZE: usize = 256;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {}
@@ -32,12 +32,15 @@ pub async fn pegboard_actor_runner_name_selector_backfill(
 		after_actor_id: Option<Id>,
 		/// Total actors backfilled so far.
 		total_backfilled: u64,
+		/// Total actors that failed to deserialize (corrupt data).
+		total_errored: u64,
 	}
 
 	ctx.loope(
 		State {
 			after_actor_id: None,
 			total_backfilled: 0,
+			total_errored: 0,
 		},
 		|ctx, state| {
 			Box::pin(async move {
@@ -49,6 +52,7 @@ pub async fn pegboard_actor_runner_name_selector_backfill(
 					.await?;
 
 				state.total_backfilled += output.backfilled_count as u64;
+				state.total_errored += output.errored_count as u64;
 
 				if let Some(last_actor_id) = output.last_actor_id {
 					state.after_actor_id = Some(last_actor_id);
@@ -56,6 +60,7 @@ pub async fn pegboard_actor_runner_name_selector_backfill(
 				} else {
 					tracing::info!(
 						total_backfilled = state.total_backfilled,
+						total_errored = state.total_errored,
 						"completed runner_name_selector backfill"
 					);
 					Ok(Loop::Break(()))
@@ -113,6 +118,8 @@ pub struct BackfillBatchOutput {
 	pub last_actor_id: Option<Id>,
 	/// Number of actors backfilled in this batch.
 	pub backfilled_count: usize,
+	/// Number of actors that failed to deserialize (corrupt data).
+	pub errored_count: usize,
 }
 
 #[activity(BackfillBatch)]
@@ -121,7 +128,7 @@ pub async fn backfill_batch(
 	input: &BackfillBatchInput,
 ) -> Result<BackfillBatchOutput> {
 	// Find actors missing runner_name_selector key
-	let actors_to_backfill: Vec<(Id, Id)> = ctx
+	let (actors_to_backfill, errored_count): (Vec<(Id, Id)>, usize) = ctx
 		.udb()?
 		.run(|tx| {
 			let after_actor_id = input.after_actor_id;
@@ -152,6 +159,7 @@ pub async fn backfill_batch(
 				};
 
 				let mut actors_missing_runner_name = Vec::new();
+				let mut errored_count = 0usize;
 				let mut stream = tx.get_ranges_keyvalues(range_option, Snapshot);
 
 				while let Some(entry) = stream.try_next().await? {
@@ -160,15 +168,30 @@ pub async fn backfill_batch(
 						break;
 					}
 
-					let (key, workflow_id) = tx.read_entry::<keys::actor::WorkflowIdKey>(&entry)?;
+					// Skip non-WorkflowIdKey entries (validation happens in WorkflowIdKey::unpack)
+					let (key, workflow_id) =
+						match tx.read_entry::<keys::actor::WorkflowIdKey>(&entry) {
+							Ok(result) => result,
+							Err(err) => {
+								if !err.to_string().contains("expected WORKFLOW_ID") {
+									tracing::error!(
+										?err,
+										"failed to deserialize actor entry, skipping"
+									);
+									errored_count += 1;
+								}
+								continue;
+							}
+						};
+					let actor_id = key.actor_id();
 
 					// Check if runner_name_selector key exists
 					let runner_name_selector_key =
-						keys::actor::RunnerNameSelectorKey::new(key.actor_id);
+						keys::actor::RunnerNameSelectorKey::new(actor_id);
 					let exists = tx.exists(&runner_name_selector_key, Snapshot).await?;
 
 					if !exists {
-						actors_missing_runner_name.push((key.actor_id, workflow_id));
+						actors_missing_runner_name.push((actor_id, workflow_id));
 
 						if actors_missing_runner_name.len() >= batch_size {
 							break;
@@ -176,7 +199,7 @@ pub async fn backfill_batch(
 					}
 				}
 
-				Ok(actors_missing_runner_name)
+				Ok((actors_missing_runner_name, errored_count))
 			}
 		})
 		.custom_instrument(tracing::info_span!("find_actors_tx"))
@@ -186,6 +209,7 @@ pub async fn backfill_batch(
 		return Ok(BackfillBatchOutput {
 			last_actor_id: None,
 			backfilled_count: 0,
+			errored_count,
 		});
 	}
 
@@ -238,5 +262,6 @@ pub async fn backfill_batch(
 	Ok(BackfillBatchOutput {
 		last_actor_id,
 		backfilled_count: backfill_data.len(),
+		errored_count,
 	})
 }

@@ -134,6 +134,7 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 
 	state.sleep_ts = None;
 	state.pending_allocation_ts = None;
+	state.failure_reason = None;
 	state.runner_id = Some(input.runner_id);
 	state.runner_workflow_id = Some(input.runner_workflow_id);
 
@@ -472,6 +473,7 @@ async fn allocate_actor_v2(
 		} => {
 			state.sleep_ts = None;
 			state.pending_allocation_ts = None;
+			state.failure_reason = None;
 			state.runner_id = Some(*runner_id);
 			state.runner_workflow_id = Some(*runner_workflow_id);
 		}
@@ -485,8 +487,15 @@ async fn allocate_actor_v2(
 			);
 
 			state.pending_allocation_ts = Some(*pending_allocation_ts);
+			if state.failure_reason.is_none() {
+				state.failure_reason = Some(super::FailureReason::NoCapacity);
+			}
 		}
-		AllocateActorStatus::Sleep => {}
+		AllocateActorStatus::Sleep => {
+			if state.failure_reason.is_none() {
+				state.failure_reason = Some(super::FailureReason::NoCapacity);
+			}
+		}
 	}
 
 	Ok(res)
@@ -940,24 +949,12 @@ pub async fn spawn_actor(
 							runner_protocol_version,
 						})
 					} else {
-						ctx.activity(SetFailureReasonInput {
-							failure_reason: FailureReason::NoCapacity,
-						})
-						.await?;
-
 						Ok(SpawnActorOutput::Sleep)
 					}
 				}
 			}
 		}
-		AllocateActorStatus::Sleep => {
-			ctx.activity(SetFailureReasonInput {
-				failure_reason: FailureReason::NoCapacity,
-			})
-			.await?;
-
-			Ok(SpawnActorOutput::Sleep)
-		}
+		AllocateActorStatus::Sleep => Ok(SpawnActorOutput::Sleep),
 	}
 }
 
@@ -1129,6 +1126,7 @@ pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<(
 		state.start_ts = Some(util::timestamp::now());
 	}
 	state.connectable_ts = Some(util::timestamp::now());
+	state.failure_reason = None;
 
 	ctx.udb()?
 		.run(|tx| async move {

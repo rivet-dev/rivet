@@ -97,7 +97,12 @@ impl TuplePack for WorkflowIdKey {
 
 impl<'de> TupleUnpack<'de> for WorkflowIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, actor_id, key_type)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		if key_type != WORKFLOW_ID {
+			return Err(PackError::Message("expected WORKFLOW_ID key type".into()));
+		}
 
 		let v = WorkflowIdKey { actor_id };
 
