@@ -1,6 +1,6 @@
 [build]
-dockerfilePath = "Dockerfile"
-watchPatterns = ["**"]
+dockerfilePath = "/frontend/Dockerfile"
+watchPatterns = ["/frontend/**"]
 
 [deploy]
 healthcheckPath = "/health"
