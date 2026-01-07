@@ -1,1 +1,4 @@
-src
+# Keep src/node_modules out of git (only used during vendoring)
+src/node_modules
+src/.npmrc
+src/package.json
