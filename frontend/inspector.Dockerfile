@@ -1,5 +1,5 @@
-# Frontend (Cloud) Dockerfile
-# Multi-stage build: Node.js for building, nginx for serving
+# Frontend (Inspector) Dockerfile
+# Multi-stage build: Node.js for building, Caddy for serving
 
 # =============================================================================
 # Stage 1: Build
@@ -36,35 +36,34 @@ COPY rivetkit-openapi/ rivetkit-openapi/
 COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
 RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (with pnpm store cache)
+RUN --mount=type=cache,id=s/11ac71ef-9b68-4d4c-bc8a-bc8b45000c14-/pnpm/store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Build arguments for environment variables
 # Use placeholder URLs that pass validation but can be replaced at runtime
-# Format: https://__PLACEHOLDER__.rivet.gg allows easy sed replacement
 ARG VITE_APP_API_URL="https://VITE_APP_API_URL.placeholder.rivet.gg"
-ARG VITE_APP_CLOUD_API_URL="https://VITE_APP_CLOUD_API_URL.placeholder.rivet.gg"
 ARG VITE_APP_ASSETS_URL="https://VITE_APP_ASSETS_URL.placeholder.rivet.gg"
-ARG VITE_APP_CLERK_PUBLISHABLE_KEY="pk_placeholder_clerk_key"
 ARG VITE_APP_SENTRY_DSN="https://VITE_APP_SENTRY_DSN.placeholder.rivet.gg/0"
 ARG VITE_APP_SENTRY_PROJECT_ID="0"
 ARG VITE_APP_POSTHOG_API_KEY=""
 ARG VITE_APP_POSTHOG_HOST=""
 ARG DEPLOYMENT_TYPE="staging"
+ARG FONTAWESOME_PACKAGE_TOKEN=""
 
 # Set environment variables for build
 ENV VITE_APP_API_URL=${VITE_APP_API_URL}
-ENV VITE_APP_CLOUD_API_URL=${VITE_APP_CLOUD_API_URL}
 ENV VITE_APP_ASSETS_URL=${VITE_APP_ASSETS_URL}
-ENV VITE_APP_CLERK_PUBLISHABLE_KEY=${VITE_APP_CLERK_PUBLISHABLE_KEY}
 ENV VITE_APP_SENTRY_DSN=${VITE_APP_SENTRY_DSN}
 ENV VITE_APP_SENTRY_PROJECT_ID=${VITE_APP_SENTRY_PROJECT_ID}
 ENV VITE_APP_POSTHOG_API_KEY=${VITE_APP_POSTHOG_API_KEY}
 ENV VITE_APP_POSTHOG_HOST=${VITE_APP_POSTHOG_HOST}
 ENV DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
+ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 
-# Build the cloud frontend using turbo (automatically builds all dependencies)
-RUN npx turbo run build:cloud --filter=@rivetkit/engine-frontend
+# Build the inspector frontend using turbo (automatically builds all dependencies, with turbo cache)
+RUN --mount=type=cache,id=s/11ac71ef-9b68-4d4c-bc8a-bc8b45000c14-/app/.turbo,target=/app/.turbo \
+    npx turbo run build:inspector --filter=@rivetkit/engine-frontend
 
 # =============================================================================
 # Stage 2: Serve with Caddy

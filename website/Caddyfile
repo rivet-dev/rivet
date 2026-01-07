@@ -15,6 +15,24 @@
 		X-XSS-Protection "1; mode=block"
 	}
 
+	# CORS for *.rivet.dev subdomains to fetch changelog.json
+	@cors_preflight {
+		path /changelog.json
+		method OPTIONS
+		header_regexp Origin ^https://.*\.rivet\.dev$
+	}
+	handle @cors_preflight {
+		header Access-Control-Allow-Origin {header.Origin}
+		header Access-Control-Allow-Methods "GET, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type"
+		respond 204
+	}
+	@cors_json {
+		path /changelog.json
+		header_regexp Origin ^https://.*\.rivet\.dev$
+	}
+	header @cors_json Access-Control-Allow-Origin {header.Origin}
+
 	# Cache static assets aggressively
 	@static {
 		path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot

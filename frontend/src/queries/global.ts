@@ -44,7 +44,7 @@ export const changelogQueryOptions = () => {
 		staleTime: 1 * 60 * 60 * 1000, // 1 hour
 		queryFn: async () => {
 			const response = await fetch(
-				"https://rivet-site.vercel.app/changelog.json",
+				"https://rivet.dev/changelog.json",
 			);
 			if (!response.ok) {
 				throw new Error("Failed to fetch changelog");
