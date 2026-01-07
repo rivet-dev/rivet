@@ -1,6 +1,11 @@
 import { useClerk } from "@clerk/clerk-react";
+import { type Project } from "@rivet-gg/cloud";
 import { faChevronDown, faPlusCircle, Icon } from "@rivet-gg/icons";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	usePrefetchInfiniteQuery,
+	useQuery,
+} from "@tanstack/react-query";
 import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import {
@@ -25,6 +30,16 @@ export function ContextSwitcher() {
 	const [isOpen, setIsOpen] = useState(false);
 
 	const match = useContextSwitchMatch();
+
+	usePrefetchInfiniteQuery({
+		enabled: typeof match === "object" && "organization" in match,
+		...useCloudDataProvider().projectsQueryOptions({
+			organization:
+				typeof match === "object" && "organization" in match
+					? match.organization
+					: "",
+		}),
+	});
 
 	if (!match) {
 		return null;
@@ -214,13 +229,13 @@ function ProjectList({
 			}),
 		);
 	const navigate = useNavigate();
-	const clerk = useClerk();
 	const project = useParams({
 		strict: false,
 		select(params) {
 			return params.project;
 		},
 	});
+	const clerk = useClerk();
 
 	return (
 		<div className="border-l w-48">
@@ -255,41 +270,28 @@ function ProjectList({
 							</CommandEmpty>
 						) : null}
 
-						{data?.map((project) => (
-							<SafeHover key={project.id} offset={40}>
-								<CommandItem
-									value={project.name}
-									keywords={[
-										project.displayName,
-										project.name,
-									]}
-									className="static w-full"
-									onSelect={() => {
-										clerk.setActive({
-											organization,
-										});
-										navigate({
-											to: "/orgs/$organization/projects/$project",
-											params: {
-												organization: organization,
-												project: project.name,
-											},
-										});
-										onClose?.();
-									}}
-									onMouseEnter={() => {
-										onHover?.(project.name);
-									}}
-									onFocus={() => {
-										onHover?.(project.name);
-									}}
-								>
-									<span className="truncate w-full">
-										{project.displayName}
-									</span>
-								</CommandItem>
-							</SafeHover>
-						))}
+						{data?.map((project, index) => {
+							const Component = index < 5 ? PrefetchedProjectListItem : ProjectListItem;
+							return <Component
+								key={project.id}
+								{...project}
+								onHover={() => onHover?.(project.name)}
+								onSelect={() => {
+									onClose?.();
+									clerk.setActive({
+										organization,
+									});
+									return navigate({
+										to: "/orgs/$organization/projects/$project",
+										params: {
+											organization: organization,
+											project: project.name,
+										},
+										search: {},
+									});
+								}}
+							/>
+						})}
 						{isLoading || isFetchingNextPage ? (
 							<>
 								<ListItemSkeleton />
@@ -324,6 +326,46 @@ function ProjectList({
 				</CommandList>
 			</Command>
 		</div>
+	);
+}
+
+function PrefetchedProjectListItem({
+	id,
+	name,
+	displayName,
+}: Project) {
+	usePrefetchInfiniteQuery({
+		...useCloudDataProvider().currentOrgProjectNamespacesQueryOptions({
+			project: name,
+		}),
+	});
+
+	return <ProjectListItem id={id} name={name} displayName={displayName} />;
+}
+
+function ProjectListItem({
+	id,
+	name,
+	displayName,
+	onHover,
+	onSelect,
+}: Project & {
+	onHover?: () => void;
+	onSelect?: () => void;
+}) {
+	return (
+		<SafeHover key={id} offset={40}>
+			<CommandItem
+				value={name}
+				keywords={[displayName, name]}
+				className="static w-full"
+				onSelect={onSelect}
+				onMouseEnter={onHover}
+				onFocus={onHover}
+			>
+				<span className="truncate w-full">{displayName}</span>
+			</CommandItem>
+		</SafeHover>
 	);
 }
 
