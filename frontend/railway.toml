@@ -1,6 +1,6 @@
 [build]
 dockerfilePath = "/frontend/Dockerfile"
-watchPatterns = ["/frontend/**"]
+watchPatterns = ["/frontend/**", "/engine/sdks/typescript/**", "/rivetkit-typescript/**", "/pnpm-lock.yaml"]
 
 [deploy]
 healthcheckPath = "/health"

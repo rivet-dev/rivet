@@ -1,6 +1,6 @@
 [build]
 dockerfilePath = "/website/Dockerfile"
-watchPatterns = ["/website/**"]
+watchPatterns = ["/website/**", "/frontend/packages/**", "/examples/**", "/pnpm-lock.yaml"]
 
 [deploy]
 healthcheckPath = "/health"
