@@ -88,7 +88,7 @@ pub async fn pegboard_runner_drain_older_versions(
 			"draining older runner versions due to drain_on_version_upgrade"
 		);
 
-		metrics::RUNNER_VERSION_UPGRADE_DRAIN
+		metrics::RUNNER_VERSION_UPGRADE_DRAIN_TOTAL
 			.with_label_values(&[&input.namespace_id.to_string(), &input.name])
 			.inc_by(older_runners.len() as u64);
 

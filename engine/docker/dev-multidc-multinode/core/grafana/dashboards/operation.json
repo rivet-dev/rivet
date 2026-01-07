@@ -448,8 +448,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(rivet_gasoline_operation_errors{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",operation_name=~\"$operation_name\"}[$__rate_interval])) by (operation_name, error_type)",
-          "legendFormat": "{{operation_name}}: {{error_type}}",
+          "expr": "sum(rate(rivet_gasoline_operation_errors{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",operation_name=~\"$operation_name\"}[$__rate_interval])) by (operation_name, error)",
+          "legendFormat": "{{operation_name}}: {{error}}",
           "range": true,
           "refId": "A"
         }
