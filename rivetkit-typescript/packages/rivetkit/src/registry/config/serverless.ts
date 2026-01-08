@@ -53,7 +53,7 @@ export const ServerlessConfigSchema = z.object({
 	 *
 	 * Auto-determined based on endpoint and NODE_ENV if not specified.
 	 */
-	advertiseEndpoint: z.string().optional(),
+	clientEndpoint: z.string().optional(),
 });
 export type ServerlessConfigInput = z.input<typeof ServerlessConfigSchema>;
 export type ServerlessConfig = z.infer<typeof ServerlessConfigSchema>;
