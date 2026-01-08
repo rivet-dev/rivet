@@ -42,6 +42,27 @@ pub async fn router(
 			)
 			.route("/epoxy/coordinator/state", get(internal::get_epoxy_state))
 			.route("/epoxy/coordinator/state", post(internal::set_epoxy_state))
+			.route(
+				"/epoxy/replica/debug",
+				get(internal::get_epoxy_replica_debug),
+			)
+			.route(
+				"/epoxy/replica/key/{key}",
+				get(internal::get_epoxy_key_debug),
+			)
+			.route(
+				"/epoxy/replica/key/{key}/fanout",
+				get(internal::get_epoxy_key_debug_fanout),
+			)
+			.route(
+				"/epoxy/replica/kv/{key}/local",
+				get(internal::get_epoxy_kv_local),
+			)
+			.route(
+				"/epoxy/replica/kv/{key}/optimistic",
+				get(internal::get_epoxy_kv_optimistic),
+			)
+			.route("/epoxy/replica/kv/{key}", put(internal::set_epoxy_kv))
 			.route("/debug/tracing/config", put(internal::set_tracing_config))
 	})
 	.await
