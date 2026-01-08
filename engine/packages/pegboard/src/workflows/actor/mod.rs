@@ -1058,11 +1058,11 @@ async fn handle_stopped(
 
 				// Set Crashed failure reason for actual crashes.
 				// Runner failure reasons are already set at the start of handle_stopped.
-				if let StoppedVariant::Normal { code, message } = &variant {
-					ensure!(
-						*code != protocol::mk2::StopCode::Ok,
-						"expected non-Ok stop code in crash handler, got Ok"
-					);
+				if let StoppedVariant::Normal {
+					code: protocol::mk2::StopCode::Error,
+					message,
+				} = &variant
+				{
 					ctx.v(3)
 						.activity(runtime::SetFailureReasonInput {
 							failure_reason: FailureReason::Crashed {

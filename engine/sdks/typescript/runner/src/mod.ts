@@ -886,7 +886,7 @@ export class Runner {
 
 		ws.addEventListener("error", (ev) => {
 			this.log?.error({
-				msg: `WebSocket error: ${ev.error}`,
+				msg: `WebSocket error: ${stringifyError(ev.error)}`,
 			});
 
 			if (!this.#shutdown) {
