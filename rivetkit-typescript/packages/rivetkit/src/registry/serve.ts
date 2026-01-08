@@ -3,6 +3,9 @@ import { detectRuntime, stringifyError } from "../utils";
 import { logger } from "./log";
 import { RegistryConfig } from "./config";
 
+// TODO: Go back to dynamic import for this
+import getPort from "get-port";
+
 const DEFAULT_PORT = 6420;
 
 /**
@@ -10,9 +13,12 @@ const DEFAULT_PORT = 6420;
  *
  * Tries ports incrementally until a free one is found.
  */
-export async function findFreePort(startPort: number = DEFAULT_PORT): Promise<number> {
-	const getPortModule = "get-port";
-	const { default: getPort } = await import(/* webpackIgnore: true */ getPortModule);
+export async function findFreePort(
+	startPort: number = DEFAULT_PORT,
+): Promise<number> {
+	// TODO: Fix this
+	// const getPortModule = "get-port";
+	// const { default: getPort } = await import(/* webpackIgnore: true */ getPortModule);
 
 	// Create an iterable of ports starting from startPort
 	function* portRange(start: number, count: number = 100): Iterable<number> {

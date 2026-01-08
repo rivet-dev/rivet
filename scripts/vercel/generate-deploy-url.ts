@@ -12,7 +12,7 @@
 
 const REPO_OWNER = "rivet-dev";
 const REPO_NAME = "rivet";
-const BRANCH = "update-examples";
+const BRANCH = "01-07-chore_example_update_examples_to_use_srvx";
 
 interface DeployUrlOptions {
 	example: string;
