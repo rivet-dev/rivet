@@ -27,48 +27,45 @@ import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
 export function ContextSwitcher() {
-	const [isOpen, setIsOpen] = useState(false);
-
-	const match = useContextSwitchMatch();
-
-	usePrefetchInfiniteQuery({
-		enabled: typeof match === "object" && "organization" in match,
-		...useCloudDataProvider().projectsQueryOptions({
-			organization:
-				typeof match === "object" && "organization" in match
-					? match.organization
-					: "",
-		}),
-	});
+	const match = useContextSwitcherMatch();
 
 	if (!match) {
 		return null;
 	}
 
+	return <ContextSwitcherInner organization={match.organization} />;
+}
+
+function ContextSwitcherInner({ organization }: { organization: string }) {
+	const [isOpen, setIsOpen] = useState(false);
+	usePrefetchInfiniteQuery({
+		...useCloudDataProvider().projectsQueryOptions({
+			organization,
+		}),
+	});
+
 	return (
-		<>
-			<Popover open={isOpen} onOpenChange={setIsOpen}>
-				<PopoverTrigger asChild>
-					<Button
-						variant="outline"
-						className="flex h-auto justify-between items-center px-2 py-1.5"
-						endIcon={<Icon icon={faChevronDown} />}
-					>
-						<Breadcrumbs />
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent
-					className="p-0 max-w-[calc(12rem*3)] w-full"
-					align="start"
+		<Popover open={isOpen} onOpenChange={setIsOpen}>
+			<PopoverTrigger asChild>
+				<Button
+					variant="outline"
+					className="flex h-auto justify-between items-center px-2 py-1.5"
+					endIcon={<Icon icon={faChevronDown} />}
 				>
-					<Content onClose={() => setIsOpen(false)} />
-				</PopoverContent>
-			</Popover>
-		</>
+					<Breadcrumbs />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				className="p-0 max-w-[calc(12rem*3)] w-full"
+				align="start"
+			>
+				<Content onClose={() => setIsOpen(false)} />
+			</PopoverContent>
+		</Popover>
 	);
 }
 
-const useContextSwitchMatch = ():
+const useContextSwitcherMatch = ():
 	| {
 			project: string;
 			namespace: string;
@@ -100,7 +97,7 @@ const useContextSwitchMatch = ():
 };
 
 function Breadcrumbs() {
-	const match = useContextSwitchMatch();
+	const match = useContextSwitcherMatch();
 
 	if (match && "project" in match && "namespace" in match) {
 		return (
