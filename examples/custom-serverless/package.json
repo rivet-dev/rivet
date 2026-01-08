@@ -12,6 +12,8 @@
 		"start": "srvx dist/server.js"
 	},
 	"devDependencies": {
+		"@hono/node-server": "^1.19.7",
+		"@hono/node-ws": "^1.3.0",
 		"@types/node": "^22.13.9",
 		"srvx": "^0.10.0",
 		"tsx": "^3.12.7",
