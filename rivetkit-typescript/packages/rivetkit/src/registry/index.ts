@@ -244,7 +244,7 @@ export class Registry<A extends RegistryActors> {
 					(kind === "serverless" && config.serverless.spawnEngine)
 				) {
 					console.log(
-						`  - Endpoint:     ${config.serverless.advertiseEndpoint}`,
+						`  - Endpoint:     ${config.endpoint ?? config.serverless.clientEndpoint}`,
 					);
 				}
 				if (kind === "serverless" && config.serverless.spawnEngine) {
