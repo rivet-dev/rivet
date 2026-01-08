@@ -165,23 +165,23 @@
 		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts"
 	},
 	"dependencies": {
-		"@rivetkit/virtual-websocket": "workspace:*",
-		"@rivetkit/bare-ts": "^0.6.2",
 		"@hono/standard-validator": "^0.1.3",
 		"@hono/zod-openapi": "^1.1.5",
+		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
+		"@rivetkit/on-change": "^6.0.2-rc.1",
+		"@rivetkit/virtual-websocket": "workspace:*",
 		"cbor-x": "^1.6.0",
 		"get-port": "^7.1.0",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
 		"nanoevents": "^9.1.0",
-		"@rivetkit/on-change": "^6.0.2-rc.1",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
 		"uuid": "^12.0.0",
-		"zod": "^4.1.0",
-		"vbare": "^0.0.4"
+		"vbare": "^0.0.4",
+		"zod": "^4.1.0"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "^0.13.0",
@@ -194,6 +194,7 @@
 		"@vitest/ui": "3.1.1",
 		"commander": "^12.1.0",
 		"eventsource": "^4.0.0",
+		"local-pkg": "^0.5.1",
 		"tsup": "^8.4.0",
 		"tsx": "^4.19.4",
 		"typescript": "^5.7.3",

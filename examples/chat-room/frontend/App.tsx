@@ -1,8 +1,8 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { Message, registry } from "../src/actors";
+import type { Message, registry } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:5173/api/rivet");
+const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
 
 export function App() {
 	const [roomId, setRoomId] = useState("general");
