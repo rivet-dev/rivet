@@ -63,3 +63,63 @@ pub async fn read_config(
 		}
 	}
 }
+
+pub async fn read_instance_number(tx: &Transaction, replica_id: ReplicaId) -> Result<u64> {
+	use universaldb::prelude::*;
+
+	let subspace = crate::keys::subspace(replica_id);
+	let instance_number_key = crate::keys::replica::InstanceNumberKey;
+	let packed_key = subspace.pack(&instance_number_key);
+
+	match tx.get(&packed_key, Serializable).await? {
+		Some(bytes) => Ok(instance_number_key.deserialize(&bytes)?),
+		None => Ok(0),
+	}
+}
+
+/// Reads all instances that have touched a specific key.
+pub async fn read_key_instances(
+	tx: &Transaction,
+	replica_id: ReplicaId,
+	key: Vec<u8>,
+) -> Result<Vec<protocol::Instance>> {
+	use universaldb::RangeOption;
+	use universaldb::prelude::*;
+
+	let subspace = crate::keys::subspace(replica_id);
+	let key_subspace = subspace.subspace(&crate::keys::replica::KeyInstanceKey::subspace(key));
+
+	let range_opt: RangeOption = (&key_subspace).into();
+	let entries = tx.get_range(&range_opt, 1, Serializable).await?;
+
+	let mut instances = Vec::new();
+	for kv in entries.into_iter() {
+		// Unpack the key to get instance info
+		let (instance_replica_id, instance_slot_id): (ReplicaId, protocol::SlotId) =
+			key_subspace.unpack(kv.key())?;
+		instances.push(protocol::Instance {
+			replica_id: instance_replica_id,
+			slot_id: instance_slot_id,
+		});
+	}
+
+	Ok(instances)
+}
+
+/// Reads a log entry for a specific instance.
+pub async fn read_log_entry(
+	tx: &Transaction,
+	replica_id: ReplicaId,
+	instance: &protocol::Instance,
+) -> Result<Option<protocol::LogEntry>> {
+	use universaldb::prelude::*;
+
+	let subspace = crate::keys::subspace(replica_id);
+	let log_key = crate::keys::replica::LogEntryKey::new(instance.replica_id, instance.slot_id);
+	let packed_key = subspace.pack(&log_key);
+
+	match tx.get(&packed_key, Serializable).await? {
+		Some(bytes) => Ok(Some(log_key.deserialize(&bytes)?)),
+		None => Ok(None),
+	}
+}
