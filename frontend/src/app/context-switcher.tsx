@@ -1,5 +1,5 @@
 import { useClerk } from "@clerk/clerk-react";
-import { type Project } from "@rivet-gg/cloud";
+import type { Project } from "@rivet-gg/cloud";
 import { faChevronDown, faPlusCircle, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
@@ -271,26 +271,31 @@ function ProjectList({
 						) : null}
 
 						{data?.map((project, index) => {
-							const Component = index < 5 ? PrefetchedProjectListItem : ProjectListItem;
-							return <Component
-								key={project.id}
-								{...project}
-								onHover={() => onHover?.(project.name)}
-								onSelect={() => {
-									onClose?.();
-									clerk.setActive({
-										organization,
-									});
-									return navigate({
-										to: "/orgs/$organization/projects/$project",
-										params: {
-											organization: organization,
-											project: project.name,
-										},
-										search: {},
-									});
-								}}
-							/>
+							const Component =
+								index < 5
+									? PrefetchedProjectListItem
+									: ProjectListItem;
+							return (
+								<Component
+									key={project.id}
+									{...project}
+									onHover={() => onHover?.(project.name)}
+									onSelect={() => {
+										onClose?.();
+										clerk.setActive({
+											organization,
+										});
+										return navigate({
+											to: "/orgs/$organization/projects/$project",
+											params: {
+												organization: organization,
+												project: project.name,
+											},
+											search: {},
+										});
+									}}
+								/>
+							);
 						})}
 						{isLoading || isFetchingNextPage ? (
 							<>
@@ -333,6 +338,7 @@ function PrefetchedProjectListItem({
 	id,
 	name,
 	displayName,
+	...props
 }: Project) {
 	usePrefetchInfiniteQuery({
 		...useCloudDataProvider().currentOrgProjectNamespacesQueryOptions({
@@ -340,7 +346,14 @@ function PrefetchedProjectListItem({
 		}),
 	});
 
-	return <ProjectListItem id={id} name={name} displayName={displayName} />;
+	return (
+		<ProjectListItem
+			id={id}
+			name={name}
+			displayName={displayName}
+			{...props}
+		/>
+	);
 }
 
 function ProjectListItem({
