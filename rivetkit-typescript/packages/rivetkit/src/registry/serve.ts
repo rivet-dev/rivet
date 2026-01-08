@@ -12,16 +12,24 @@ const DEFAULT_PORT = 6420;
  */
 export async function findFreePort(startPort: number = DEFAULT_PORT): Promise<number> {
 	const getPortModule = "get-port";
-	const { default: getPort } = await import(/* webpackIgnore: true */ getPortModule);
+	try {
+		const { default: getPort } = await import(/* webpackIgnore: true */ getPortModule);
 
-	// Create an iterable of ports starting from startPort
-	function* portRange(start: number, count: number = 100): Iterable<number> {
-		for (let i = 0; i < count; i++) {
-			yield start + i;
+		// Create an iterable of ports starting from startPort
+		function* portRange(start: number, count: number = 100): Iterable<number> {
+			for (let i = 0; i < count; i++) {
+				yield start + i;
+			}
 		}
-	}
 
-	return getPort({ port: portRange(startPort) });
+		return getPort({ port: portRange(startPort) });
+	} catch (err) {
+		logger().error({
+			msg: "failed to import get-port. please run 'npm install get-port'",
+			error: stringifyError(err),
+		});
+		throw new Error("get-port is required for finding free ports. Please install it with 'npm install get-port'");
+	}
 }
 
 export async function crossPlatformServe(

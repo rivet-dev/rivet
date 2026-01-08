@@ -24,13 +24,35 @@
 	"type": "module",
 	"exports": {
 		".": {
-			"import": {
-				"types": "./dist/tsup/mod.d.ts",
-				"default": "./dist/tsup/mod.js"
+			"node": {
+				"import": {
+					"types": "./dist/tsup/mod.d.ts",
+					"default": "./dist/tsup/mod.js"
+				},
+				"require": {
+					"types": "./dist/tsup/mod.d.cts",
+					"default": "./dist/tsup/mod.cjs"
+				}
 			},
-			"require": {
-				"types": "./dist/tsup/mod.d.cts",
-				"default": "./dist/tsup/mod.cjs"
+			"browser": {
+				"import": {
+					"types": "./dist/tsup/client/mod.d.ts",
+					"default": "./dist/tsup/client/mod.js"
+				},
+				"require": {
+					"types": "./dist/tsup/client/mod.d.cts",
+					"default": "./dist/tsup/client/mod.cjs"
+				}
+			},
+			"default": {
+				"import": {
+					"types": "./dist/tsup/mod.d.ts",
+					"default": "./dist/tsup/mod.js"
+				},
+				"require": {
+					"types": "./dist/tsup/mod.d.cts",
+					"default": "./dist/tsup/mod.cjs"
+				}
 			}
 		},
 		"./client": {
@@ -172,7 +194,6 @@
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"cbor-x": "^1.6.0",
-		"get-port": "^7.1.0",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
 		"nanoevents": "^9.1.0",
@@ -182,6 +203,9 @@
 		"uuid": "^12.0.0",
 		"zod": "^4.1.0",
 		"vbare": "^0.0.4"
+	},
+	"optionalDependencies": {
+		"get-port": "^7.1.0"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "^0.13.0",
