@@ -92,7 +92,7 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public serve(): ServerlessHandler {
-		return { fetch: this.handler };
+		return { fetch: this.handler.bind(this) };
 	}
 
 	/**
@@ -239,13 +239,9 @@ export class Registry<A extends RegistryActors> {
 					`  RivetKit ${pkg.version} (${driver.displayName})`,
 				);
 				// Only show endpoint if manager is running or engine is spawned
-				const shouldShowEndpoint =
-					config.serveManager ||
-					(kind === "serverless" && config.serverless.spawnEngine);
 				if (
-					kind === "serverless" &&
-					config.serverless.advertiseEndpoint &&
-					shouldShowEndpoint
+					config.serveManager ||
+					(kind === "serverless" && config.serverless.spawnEngine)
 				) {
 					console.log(
 						`  - Endpoint:     ${config.serverless.advertiseEndpoint}`,
