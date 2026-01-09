@@ -28,7 +28,7 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
-import { ActorRegion } from "@/components/actors";
+import { ActorRegion, RunnerPoolError } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
 import { hasMetadataProvider } from "./data-providers/engine-data-provider";
 
@@ -256,48 +256,7 @@ function Row({
 	);
 }
 
-function RunnerPoolError({
-	error,
-}: {
-	error: Rivet.RunnerPoolError | undefined;
-}) {
-	return match(error)
-		.with(P.nullish, () => null)
-		.with(P.string, (errStr) =>
-			match(errStr)
-				.with(
-					"internal_error",
-					() => "Internal error occurred in runner pool",
-				)
-				.with(
-					"serverless_invalid_base64",
-					() => "Invalid base64 encoding in serverless response",
-				)
-				.with(
-					"serverless_stream_ended_early",
-					() => "Connection terminated unexpectedly",
-				)
-				.otherwise(() => "Unknown runner pool error"),
-		)
-		.with(P.shape({ serverlessHttpError: P.any }), (errObj) => {
-			const { statusCode, body } = errObj.serverlessHttpError;
-			const code = statusCode ?? "unknown";
-			return body ? `HTTP ${code} error: ${body}` : `HTTP ${code} error`;
-		})
-		.with(P.shape({ serverlessConnectionError: P.any }), (errObj) => {
-			const message = errObj.serverlessConnectionError?.message;
-			return message
-				? `Connection failed: ${message}`
-				: "Unable to connect to serverless endpoint";
-		})
-		.with(P.shape({ serverlessInvalidPayload: P.any }), (errObj) => {
-			const message = errObj.serverlessInvalidPayload?.message;
-			return message
-				? `Invalid request payload: ${message}`
-				: "Request payload validation failed";
-		})
-		.otherwise(() => "Unexpected runner pool error");
-}
+
 
 function StatusCell({
 	errors,
