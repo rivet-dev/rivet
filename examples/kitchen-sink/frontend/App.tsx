@@ -1,8 +1,8 @@
 import { createClient } from "@rivetkit/react";
 import { useState, useMemo, useEffect } from "react";
-import type { Registry } from "../src/registry";
-import ConnectionScreen from "./components/ConnectionScreen";
-import InteractionScreen from "./components/InteractionScreen";
+import type { Registry } from "../src/actors.ts";
+import ConnectionScreen from "./components/ConnectionScreen.tsx";
+import InteractionScreen from "./components/InteractionScreen.tsx";
 
 export interface AppState {
   // Configuration

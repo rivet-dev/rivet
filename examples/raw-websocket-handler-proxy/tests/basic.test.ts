@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/backend/registry.js";
+import { registry } from "../src/actors.ts";
 
 describe("basic websocket test", () => {
 	test("should handle basic websocket connection", async (t) => {

@@ -1,11 +1,9 @@
 import { Hono } from "hono";
 import { createClient } from "rivetkit/client";
-import { registry } from "./registry";
+import { registry } from "./actors.ts";
 
-registry.startRunner();
 const client = createClient<typeof registry>();
 
-// Setup router
 const app = new Hono();
 
 // Example HTTP endpoint

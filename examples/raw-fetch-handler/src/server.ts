@@ -1,13 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createClient } from "rivetkit/client";
-import { registry } from "./registry";
+import { registry } from "./actors.ts";
 
-// Start RivetKit
-registry.startRunner();
 const client = createClient<typeof registry>();
 
-// Setup router
 const app = new Hono();
 
 app.use(
@@ -36,6 +33,8 @@ app.all("/forward/:name/*", async (c) => {
 
 	return response;
 });
+
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 
 export default app;
 

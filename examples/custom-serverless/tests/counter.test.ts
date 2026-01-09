@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/registry";
+import { registry } from "../src/actors.ts";
 
 test("it should count", async (test) => {
 	const { client } = await setupTest(test, registry);

@@ -3,9 +3,8 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import type { WSContext } from "hono/ws";
 import { createClient } from "rivetkit/client";
-import { registry } from "./registry";
+import { registry } from "./actors.ts";
 
-registry.startRunner();
 const client = createClient<typeof registry>();
 
 const app = new Hono();
@@ -47,5 +46,7 @@ app.get(
 		};
 	}),
 );
+
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 
 export default app;

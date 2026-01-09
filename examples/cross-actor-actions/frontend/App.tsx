@@ -1,6 +1,6 @@
 import { createClient } from "rivetkit/client";
 import { useEffect, useState } from "react";
-import type { registry } from "../src/registry";
+import type { registry } from "../src/actors.ts";
 
 const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
 

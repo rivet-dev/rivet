@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { expect, test, vi } from "vitest";
-import { registry } from "../src/backend/registry";
+import { registry } from "../src/actors.ts";
 
 // Mock the AI SDK and OpenAI
 vi.mock("@ai-sdk/openai", () => ({
@@ -14,7 +14,7 @@ vi.mock("ai", () => ({
 	tool: vi.fn().mockImplementation(({ execute }) => ({ execute })),
 }));
 
-vi.mock("../src/backend/my-tools", () => ({
+vi.mock("../src/my-tools.ts", () => ({
 	getWeather: vi.fn().mockResolvedValue({
 		location: "San Francisco",
 		temperature: 72,

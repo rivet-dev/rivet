@@ -4,7 +4,7 @@ import type {
 	CompanyProfile,
 	EmployeeProfile,
 	registry,
-} from "../src/registry";
+} from "../src/actors.ts";
 
 const client = createClient<typeof registry>(`${window.location.origin}/api/rivet`);
 

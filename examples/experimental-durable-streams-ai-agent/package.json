@@ -16,14 +16,11 @@
 		"build": "npm run build:backend && npm run build:frontend"
 	},
 	"devDependencies": {
-		"@hono/node-server": "^1.19.7",
-		"@hono/node-ws": "^1.3.0",
 		"@types/node": "^22.13.9",
 		"@types/react": "^18.2.0",
 		"@types/react-dom": "^18.2.0",
 		"@vitejs/plugin-react": "^4.2.0",
 		"concurrently": "^8.2.2",
-		"srvx": "^0.10.0",
 		"tsup": "^8.5.1",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
@@ -35,11 +32,15 @@
 		"@durable-streams/client": "https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/client@0323b8b",
 		"@durable-streams/server": "https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/server@0323b8b",
 		"@durable-streams/writer": "https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b",
+		"@hono/node-server": "^1.19.7",
+		"@hono/node-ws": "^1.3.0",
 		"@rivetkit/react": "*",
 		"ai": "^4.0.38",
+		"hono": "^4.0.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"rivetkit": "*",
+		"srvx": "^0.10.0",
 		"zod": "^4.1.0"
 	},
 	"template": {

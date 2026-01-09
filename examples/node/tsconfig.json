@@ -35,7 +35,9 @@
 
 		/* Skip type checking all .d.ts files. */
 		"skipLibCheck": true,
-		"outDir": "dist"
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true,
+		"noEmit": true
 	},
 	"include": ["src/**/*"]
 }

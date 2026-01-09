@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
-import type { AppState } from "../../App";
-import type { EventSubscription, EventItem } from "../InteractionScreen";
+import type { AppState } from "../../App.tsx";
+import type { EventSubscription, EventItem } from "../InteractionScreen.tsx";
 
 interface TabProps {
   state: AppState;

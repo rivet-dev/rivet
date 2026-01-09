@@ -12,8 +12,10 @@
 		"resolveJsonModule": true,
 		"allowSyntheticDefaultImports": true,
 		"noEmit": true,
-		"types": ["vitest/globals", "node"]
+		"types": ["vitest/globals", "node"],
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true
 	},
-	"include": ["src/**/*", "tests/**/*", "vite.config.ts"],
+	"include": ["src/**/*", "tests/**/*", "frontend/**/*", "vite.config.ts"],
 	"exclude": ["node_modules", "dist"]
 }

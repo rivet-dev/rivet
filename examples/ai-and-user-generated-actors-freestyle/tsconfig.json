@@ -8,6 +8,7 @@
 
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true,
 		"resolveJsonModule": true,
 		"isolatedModules": true,
 		"noEmit": true,
@@ -19,6 +20,6 @@
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true
 	},
-	"include": ["src"],
+	"include": ["src", "frontend", "tests"],
 	"references": [{ "path": "./tsconfig.node.json" }]
 }

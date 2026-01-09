@@ -1,21 +1,15 @@
 import { Elysia } from "elysia";
 import { createClient } from "rivetkit/client";
-import { registry } from "./registry";
+import { registry } from "./actors.ts";
 
-registry.startRunner();
 const client = createClient<typeof registry>();
 
-// Setup router
-new Elysia()
-	// Example HTTP endpoint
-	.post("/increment/:name", async ({ params }) => {
-		const name = params.name;
-
-		const counter = client.counter.getOrCreate(name);
+const app = new Elysia()
+	.all("/api/rivet/*", (c) => registry.handler(c.request))
+	.get("/increment/:name", async ({ params }) => {
+		const counter = client.counter.getOrCreate(params.name);
 		const newCount = await counter.increment(1);
-
 		return `New Count: ${newCount}`;
-	})
-	.listen(8080);
+	});
 
-console.log("Listening at http://localhost:8080");
+export default app;

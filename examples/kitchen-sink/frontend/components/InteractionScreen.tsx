@@ -1,13 +1,13 @@
 import { useState } from "react";
-import type { AppState } from "../App";
-import ActionsTab from "./tabs/ActionsTab";
-import EventsTab from "./tabs/EventsTab";
-import ScheduleTab from "./tabs/ScheduleTab";
-import SleepTab from "./tabs/SleepTab";
-import RawHttpTab from "./tabs/RawHttpTab";
-import RawWebSocketTab from "./tabs/RawWebSocketTab";
-import MetadataTab from "./tabs/MetadataTab";
-import ConnectionsTab from "./tabs/ConnectionsTab";
+import type { AppState } from "../App.tsx";
+import ActionsTab from "./tabs/ActionsTab.tsx";
+import EventsTab from "./tabs/EventsTab.tsx";
+import ScheduleTab from "./tabs/ScheduleTab.tsx";
+import SleepTab from "./tabs/SleepTab.tsx";
+import RawHttpTab from "./tabs/RawHttpTab.tsx";
+import RawWebSocketTab from "./tabs/RawWebSocketTab.tsx";
+import MetadataTab from "./tabs/MetadataTab.tsx";
+import ConnectionsTab from "./tabs/ConnectionsTab.tsx";
 
 interface InteractionScreenProps {
   state: AppState;

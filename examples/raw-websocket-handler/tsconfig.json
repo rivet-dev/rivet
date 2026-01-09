@@ -13,8 +13,9 @@
 		"isolatedModules": true,
 		"noEmit": true,
 		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true,
 		"types": ["node", "vitest/globals"]
 	},
-	"include": ["src/**/*", "tests/**/*"],
+	"include": ["src/**/*", "frontend/**/*"],
 	"exclude": ["node_modules", "dist"]
 }

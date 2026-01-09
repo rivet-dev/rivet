@@ -1,11 +1,10 @@
+import { trpcServer } from "@hono/trpc-server";
 import { initTRPC } from "@trpc/server";
-import { createHTTPServer } from "@trpc/server/adapters/standalone";
+import { Hono } from "hono";
 import { createClient } from "rivetkit/client";
 import { z } from "zod";
-import { registry } from "./registry.js";
+import { registry } from "./actors.ts";
 
-// Start RivetKit
-registry.startRunner();
 const client = createClient<typeof registry>();
 
 // Initialize tRPC
@@ -26,11 +25,10 @@ const appRouter = t.router({
 // Export type for client
 export type AppRouter = typeof appRouter;
 
-// Create HTTP server
-const server = createHTTPServer({
-	router: appRouter,
-});
+const app = new Hono();
 
-server.listen(3001);
+app.use("/trpc/*", trpcServer({ router: appRouter }));
 
-console.log("tRPC server listening at http://localhost:3001");
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+export default app;

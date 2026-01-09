@@ -1,6 +1,6 @@
 import { actor } from "rivetkit";
-import { handleHttpRequest, httpActions } from "./http";
-import { handleWebSocket, websocketActions } from "./websocket";
+import { handleHttpRequest, httpActions } from "./http.ts";
+import { handleWebSocket, websocketActions } from "./websocket.ts";
 
 export const demo = actor({
 	createState: (_c, input) => ({

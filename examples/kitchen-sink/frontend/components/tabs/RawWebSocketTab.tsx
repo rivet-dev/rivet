@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { AppState } from "../../App";
+import type { AppState } from "../../App.tsx";
 
 interface TabProps {
   state: AppState;

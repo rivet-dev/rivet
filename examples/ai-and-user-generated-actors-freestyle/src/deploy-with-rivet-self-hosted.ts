@@ -5,7 +5,7 @@ import {
 	deployToFreestyle,
 	generateNamespaceName,
 	type LogCallback,
-} from "./utils";
+} from "./utils.ts";
 
 export async function deployWithRivetSelfHosted(
 	req: DeployRequest,

@@ -1,13 +1,9 @@
-import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { createClient } from "rivetkit/client";
-import { registry } from "./registry";
+import { registry } from "./actors.ts";
 
-// Start RivetKit
-registry.startRunner();
 const client = createClient<typeof registry>();
 
-// Setup router
 const app = new Hono();
 
 // Example HTTP endpoint
@@ -20,5 +16,6 @@ app.post("/increment/:name", async (c) => {
 	return c.text(`New Count: ${newCount}`);
 });
 
-serve({ fetch: app.fetch, port: 8080 });
-console.log("Listening on port 8080");
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+export default app;
