@@ -1,4 +1,5 @@
 import {
+	faExclamationTriangle,
 	faPlus,
 	faSignalAlt,
 	faSignalAlt2,
@@ -180,13 +181,15 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 	if (now - runner.lastPingTs > 15000) {
 		return (
 			<WithTooltip
-				content={`Last ping ${formatDistance(runner.lastPingTs, now, {
-					addSuffix: true,
-				})}`}
+				content={`Offline (last seen ${formatDistance(
+					runner.lastPingTs,
+					now,
+					{ addSuffix: true },
+				)})`}
 				trigger={
 					<div className="text-center relative size-8">
 						<Icon
-							icon={faSignalAlt}
+							icon={faExclamationTriangle}
 							className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
 						/>
 					</div>
