@@ -1,4 +1,6 @@
-import { registry } from "./actors";
+import { Hono } from "hono";
+import { registry } from "./actors.ts";
 
-export default registry.serve();
-
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+export default app;
