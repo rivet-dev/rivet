@@ -71,7 +71,7 @@ export function buildManagerRouter(
 		// GET /
 		router.get("/", (c) => {
 			return c.text(
-				"This is a RivetKit server.\n\nLearn more at https://rivetkit.org",
+				"This is a RivetKit server.\n\nLearn more at https://rivet.dev",
 			);
 		});
 

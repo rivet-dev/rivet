@@ -13,21 +13,20 @@ export const { useActor } = createRivetKit<typeof registry>({
 export function Counter() {
 	const [counterId, setCounterId] = useState("default");
 	const [count, setCount] = useState<number>(0);
-	const [isConnected, setIsConnected] = useState(false);
 
 	const counter = useActor({
 		name: "counter",
 		key: [counterId],
 	});
 
+	// Use connStatus from the hook instead of tracking connection state manually
+	const isConnected = counter.connStatus === "connected";
+
 	useEffect(() => {
-		if (counter.connection) {
-			setIsConnected(true);
+		if (counter.connection && isConnected) {
 			counter.connection.getCount().then(setCount);
-		} else {
-			setIsConnected(false);
 		}
-	}, [counter.connection]);
+	}, [counter.connection, isConnected]);
 
 	counter.useEvent("newCount", (newCount: number) => {
 		setCount(newCount);

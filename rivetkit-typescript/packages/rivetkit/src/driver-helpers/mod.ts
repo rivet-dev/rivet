@@ -28,4 +28,5 @@ export type {
 	ManagerDisplayInformation,
 	ManagerDriver,
 } from "@/manager/driver";
+export { buildManagerRouter } from "@/manager/router";
 export { getInitialActorKvState } from "./utils";

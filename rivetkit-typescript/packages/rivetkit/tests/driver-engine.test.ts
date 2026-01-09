@@ -47,21 +47,27 @@ runDriverTests({
 				// Create driver config
 				const driverConfig = createEngineDriver();
 
+				// TODO: We should not have to do this, we should have access to the Runtime instead
+				const parsedConfig = registry.parseConfig();
+
 				// Start the actor driver
 				registry.config.driver = driverConfig;
 				registry.config.endpoint = endpoint;
 				registry.config.namespace = namespace;
 				registry.config.token = token;
-				registry.config.runner.runnerName = runnerName;
-				const managerDriver = driverConfig.manager?.(registry.config);
+				registry.config.runner = {
+					...registry.config.runner,
+					runnerName,
+				};
+				const managerDriver = driverConfig.manager?.(parsedConfig);
 				invariant(managerDriver, "missing manager driver");
 				const inlineClient = createClientWithDriver(
 					managerDriver,
-					convertRegistryConfigToClientConfig(registry.config),
+					convertRegistryConfigToClientConfig(parsedConfig),
 				);
 
 				const actorDriver = driverConfig.actor(
-					registry.config,
+					parsedConfig,
 					managerDriver,
 					inlineClient,
 				);

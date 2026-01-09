@@ -124,7 +124,7 @@ export async function sendHttpRequest<
 						: {}),
 					"User-Agent": httpUserAgent(),
 				},
-				body: bodyData as BodyInit | undefined,
+				body: bodyData,
 				credentials: "include",
 				signal: opts.signal,
 			}),
