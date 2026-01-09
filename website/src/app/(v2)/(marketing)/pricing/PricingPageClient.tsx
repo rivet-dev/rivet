@@ -501,7 +501,7 @@ const Pricing = () => {
         {
             name: "Hobby",
             prefix: "From",
-            price: "$5",
+            price: "$20",
             period: "/mo + Usage",
             desc: "For scaling applications.",
             features: [
