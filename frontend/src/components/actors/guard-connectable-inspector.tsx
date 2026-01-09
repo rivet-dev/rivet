@@ -77,9 +77,8 @@ function UnavailableInfo({
 					className="text-4xl text-destructive"
 				/>
 				<p>Actor is unavailable.</p>
-				<p>
-					<QueriedActorError actorId={actorId} />
-				</p>
+
+				<QueriedActorError actorId={actorId} />
 			</Info>
 		))
 		.with("pending", () => <NoRunners />)

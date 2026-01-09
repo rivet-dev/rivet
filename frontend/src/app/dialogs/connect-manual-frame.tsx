@@ -7,6 +7,7 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@/components";
+import { RunnerConfigToggleGroup } from "../runner-config-toggle-group";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 import ConnectManualServerlessFrameContent from "./connect-manual-serverless-frame";
 
@@ -27,33 +28,7 @@ export default function CreateProjectFrameContent({
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<div className="flex mx-auto items-center justify-center">
-					<ToggleGroup
-						defaultValue="serverfull"
-						type="single"
-						className="border rounded-md gap-0"
-						value={mode}
-						onValueChange={(mode) => {
-							if (!mode) {
-								return;
-							}
-							setMode(mode);
-						}}
-					>
-						<ToggleGroupItem
-							value="serverless"
-							className="rounded-none"
-						>
-							Serverless
-						</ToggleGroupItem>
-						<ToggleGroupItem
-							value="serverfull"
-							className="border-l rounded-none"
-						>
-							Server
-						</ToggleGroupItem>
-					</ToggleGroup>
-				</div>
+				<RunnerConfigToggleGroup mode={mode} onChange={setMode} />
 				{mode === "serverless" ? (
 					<ConnectManualServerlessFrameContent onClose={onClose} />
 				) : null}

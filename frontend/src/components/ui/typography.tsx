@@ -112,9 +112,9 @@ const Ul = ({ className, asChild, ...props }: TypographyElementProps<"ul">) => {
 	return (
 		<Comp
 			className={cn(
-				className,
 				"my-6 ml-6 list-disc [&>li]:mt-2",
 				getCommonHelperClass(props),
+				className,
 			)}
 			{...omitCommonHelperProps(props)}
 		/>

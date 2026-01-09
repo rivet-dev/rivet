@@ -1,9 +1,9 @@
 import {
-	faChevronDown,
-	faChevronRight,
 	faCog,
 	faCogs,
+	faEllipsisVertical,
 	faNextjs,
+	faPencil,
 	faRailway,
 	faTrash,
 	faTriangleExclamation,
@@ -11,12 +11,16 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
-import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { match, P } from "ts-pattern";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 import {
 	Button,
+	CopyArea,
 	DiscreteCopyButton,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
 	Ping,
 	Skeleton,
 	Table,
@@ -53,8 +57,8 @@ export function RunnerConfigsTable({
 				<TableRow>
 					<TableHead className="w-8"></TableHead>
 					<TableHead className="pl-8">Name</TableHead>
-					<TableHead>Provider</TableHead>
-					<TableHead className="pl-8">Endpoint</TableHead>
+					<TableHead className="text-center">Provider</TableHead>
+					<TableHead className="text-center">Endpoint</TableHead>
 					<TableHead className="text-center">Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
@@ -136,136 +140,90 @@ function RowSkeleton() {
 	);
 }
 
-type DatacenterConfig = {
-	datacenterId: string;
-	config: Rivet.RunnerConfigResponse;
-};
-
-type GroupedConfig = {
-	provider: string;
-	endpoint: string;
-	metadata: unknown;
-	datacenters: string[];
-	runnerPoolErrors: Record<string, Rivet.RunnerPoolError | undefined>;
-};
-
 function Row({
 	name,
 	...value
 }: { name: string } & Rivet.RunnerConfigsListResponseRunnerConfigsValue) {
-	const [isExpanded, setIsExpanded] = useState(true);
+	const navigate = useNavigate();
 
-	const groupedConfigs = useMemo(() => {
-		const datacenterEntries: DatacenterConfig[] = Object.entries(
-			value.datacenters,
-		).map(([datacenterId, config]) => ({ datacenterId, config }));
-
-		const groupedConfigs: GroupedConfig[] = [];
-
-		for (const { datacenterId, config } of datacenterEntries) {
-			const provider = getProviderName(config.metadata);
-			const endpoint = config.serverless?.url || "";
-			const runnerPoolError = config.runnerPoolError;
-
-			const existingGroup = groupedConfigs.find(
-				(g) => g.provider === provider && g.endpoint === endpoint,
-			);
-
-			if (existingGroup) {
-				existingGroup.datacenters.push(datacenterId);
-				existingGroup.runnerPoolErrors[datacenterId] = runnerPoolError;
-			} else {
-				groupedConfigs.push({
-					provider,
-					endpoint,
-					metadata: config.metadata,
-					datacenters: [datacenterId],
-					runnerPoolErrors: { [datacenterId]: runnerPoolError },
-				});
-			}
-		}
-		return groupedConfigs;
-	}, [value.datacenters]);
-
-	const hasMultipleConfigs = groupedConfigs.length > 1;
-
-	if (!hasMultipleConfigs) {
-		return <ProviderRow {...groupedConfigs[0]} name={name} />;
-	}
-
-	const hasAtLeastOneError = groupedConfigs.some(
-		(g) => Object.keys(g.runnerPoolErrors).length > 0,
-	);
+	const datacenters = Object.entries(value.datacenters);
 
 	return (
-		<>
-			<TableRow
-				className="cursor-pointer hover:bg-muted/50"
-				onClick={() => setIsExpanded(!isExpanded)}
-			>
-				<StatusCell
-					errors={hasAtLeastOneError ? "One or more providers	have errors" : ""}
-				/>
-				<TableCell>
-					<div className="flex items-center gap-2">
-						<Icon
-							icon={isExpanded ? faChevronDown : faChevronRight}
-							className="text-muted-foreground"
-						/>
-						<DiscreteCopyButton value={name}>
-							{name}
-						</DiscreteCopyButton>
-					</div>
-				</TableCell>
-				<TableCell colSpan={2}>
-					<Text className="text-muted-foreground">
-						{groupedConfigs.length}{" "}
-						{groupedConfigs.length === 1 ? "provider" : "providers"}
-					</Text>
-				</TableCell>
-				<TableCell className="text-center">
-					<Regions regions={Object.keys(value.datacenters)} />
-				</TableCell>
-				<TableCell>
-					<div className="flex gap-2 justify-end">
-						<WithTooltip
-							content="Delete provider"
-							trigger={
-								<Button variant="outline" size="icon" asChild>
-									<Link
-										to="."
-										search={{
-											modal: "delete-provider-config",
-											config: name,
-										}}
-									>
-										<Icon icon={faTrash} />
-									</Link>
-								</Button>
+		<TableRow className="hover:bg-muted/50">
+			<StatusCell datacenters={value.datacenters} />
+			<TableCell>
+				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
+			</TableCell>
+			<TableCell className="text-center">
+				<Providers datacenters={datacenters} />
+			</TableCell>
+			<TableCell className="text-center">
+				<Endpoints datacenters={datacenters} />
+			</TableCell>
+			<TableCell className="text-center">
+				<Regions regions={Object.keys(value.datacenters)} />
+			</TableCell>
+			<TableCell className="text-right">
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="ghost" size="icon">
+							<Icon icon={faEllipsisVertical} />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							indicator={<Icon icon={faPencil} />}
+							onSelect={() =>
+								navigate({
+									to: ".",
+									search: {
+										modal: "edit-provider-config",
+										config: name,
+									},
+								})
 							}
-						/>
-					</div>
-				</TableCell>
-			</TableRow>
-
-			{isExpanded &&
-				groupedConfigs.map((groupedConfig, idx) => (
-					<ProviderRow key={idx} name={name} {...groupedConfig} />
-				))}
-		</>
+						>
+							Edit
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							indicator={<Icon icon={faTrash} />}
+							onSelect={() =>
+								navigate({
+									to: ".",
+									search: {
+										modal: "delete-provider-config",
+										config: name,
+									},
+								})
+							}
+						>
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</TableCell>
+		</TableRow>
 	);
 }
 
-
-
 function StatusCell({
-	errors,
+	datacenters,
 }: {
-	errors: Record<string, Rivet.RunnerPoolError | undefined> | string;
+	datacenters: Record<string, Rivet.RunnerConfigResponse>;
 }) {
-	const hasErrors = typeof errors !== "string" ? Object.values(errors).some((err) => err !== undefined) : !!errors;
+	const errors = useMemo(() => {
+		const errorMap: Record<string, Rivet.RunnerPoolError | undefined> = {};
+		let hasErrors = false;
+		for (const [dc, config] of Object.entries(datacenters)) {
+			if (config.runnerPoolError) {
+				errorMap[dc] = config.runnerPoolError;
+				hasErrors = true;
+			}
+		}
+		return hasErrors ? errorMap : null;
+	}, [datacenters]);
 
-	if (!hasErrors) {
+	if (!errors) {
 		return (
 			<TableCell className="w-8">
 				<Ping variant="success" className="relative" />
@@ -277,21 +235,33 @@ function StatusCell({
 		<TableCell className="w-8 text-center">
 			<WithTooltip
 				content={
-					<div className="max-w-xs whitespace-pre-wrap text-left space-y-1">
-						{typeof errors !== "string" ? Object.entries(errors).map(([dc, error]) => {
-							if (!error) return null;
-							return (
-								<div key={dc}>
-									<ActorRegion
-										className="w-full items-center mr-2"
-										regionId={dc}
-										showLabel
-									/>
-									<RunnerPoolError error={error} />
-								</div>
-							);
-						}) : errors}
-					</div>
+					<>
+						<p>Some providers are experiencing errors:</p>
+						<ul className="max-w-xs whitespace-pre-wrap text-left my-0 space-y-1">
+							{typeof errors !== "string"
+								? Object.entries(errors).map(([dc, error]) => {
+										if (!error) return null;
+										return (
+											<li
+												key={dc}
+												className="border-t pt-2 pb-2"
+											>
+												<ActorRegion
+													className="w-full justify-start items-center mr-2 mt-3 mb-2"
+													regionId={dc}
+													showLabel
+												/>
+												<div className="text-xs">
+													<RunnerPoolError
+														error={error}
+													/>
+												</div>
+											</li>
+										);
+									})
+								: errors}
+						</ul>
+					</>
 				}
 				trigger={
 					<span className="inline-flex items-center justify-center text-destructive">
@@ -303,84 +273,85 @@ function StatusCell({
 	);
 }
 
-function ProviderRow({
-	name,
-	metadata,
-	endpoint,
-	runnerPoolErrors,
+function Providers({
 	datacenters,
-}: GroupedConfig & { name: string }) {
+}: {
+	datacenters: [string, Rivet.RunnerConfigResponse][];
+}) {
+	const providers = useMemo(() => {
+		const providerSet = new Set<string>();
+		for (const [, config] of datacenters) {
+			const providerName = getProviderName(config.metadata);
+			providerSet.add(providerName);
+		}
+		return Array.from(providerSet);
+	}, [datacenters]);
+
+	if (providers.length === 1) {
+		return <Provider metadata={datacenters[0][1].metadata} />;
+	}
+
 	return (
-		<TableRow>
-			<StatusCell errors={runnerPoolErrors} />
-			<TableCell>
-				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
-			</TableCell>
-			<TableCell>
-				<Provider metadata={metadata} />
-			</TableCell>
-			<TableCell>
-				<WithTooltip
-					content={endpoint || "-"}
-					trigger={
-						<DiscreteCopyButton value={endpoint || ""}>
-							<span>
-								{endpoint && endpoint.length > 32
-									? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
-									: endpoint || "-"}
-							</span>
-						</DiscreteCopyButton>
-					}
-				/>
-			</TableCell>
-			<TableCell className="text-center">
-				<Regions regions={datacenters} />
-			</TableCell>
-			<TableCell>
-				<div className="flex gap-2 justify-end">
-					{endpoint && hasMetadataProvider(metadata) ? (
-						<WithTooltip
-							content="Edit provider settings"
-							trigger={
-								<Button variant="outline" size="icon" asChild>
-									<Link
-										to="."
-										search={{
-											modal: getModal(metadata),
-											config: name,
-											dc: datacenters[0],
-										}}
-									>
-										<Icon icon={faCog} />
-									</Link>
-								</Button>
-							}
-						/>
-					) : null}
-					<WithTooltip
-						content="Delete provider"
-						trigger={
-							<Button variant="outline" size="icon" asChild>
-								<Link
-									to="."
-									search={{
-										modal: "delete-provider-config",
-										config: name,
-									}}
-								>
-									<Icon icon={faTrash} />
-								</Link>
-							</Button>
-						}
-					/>
-				</div>
-			</TableCell>
-		</TableRow>
+		<WithTooltip
+			content={providers.join(" and ")}
+			trigger={<span>Multiple providers</span>}
+		/>
 	);
 }
 
-function getModal(metadata: unknown) {
-	return "edit-provider-config";
+function Endpoints({
+	datacenters,
+}: {
+	datacenters: [string, Rivet.RunnerConfigResponse][];
+}) {
+	const endpoints = useMemo(() => {
+		const endpointSet = new Set<string>();
+		for (const [, config] of datacenters) {
+			if (config.serverless?.url) {
+				endpointSet.add(config.serverless.url);
+			}
+		}
+		return Array.from(endpointSet);
+	}, [datacenters]);
+
+	if (endpoints.length === 1) {
+		const endpoint = endpoints[0];
+		return (
+			<DiscreteCopyButton value={endpoint}>
+				{endpoint && endpoint.length > 32
+					? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
+					: endpoint || "-"}
+			</DiscreteCopyButton>
+		);
+	}
+
+	return (
+		<WithTooltip
+			content={
+				<>
+					<p className="my-2">Endpoints:</p>
+					<ul className="list-disc list-inside">
+						{endpoints.map((endpoint) => (
+							<li key={endpoint}>
+								<DiscreteCopyButton
+									tooltip={false}
+									value={endpoint}
+									className="px-2 -mx-2"
+								>
+									<span>
+										{endpoint && endpoint.length > 32
+											? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
+											: endpoint || "-"}
+									</span>
+								</DiscreteCopyButton>
+							</li>
+						))}
+					</ul>
+				</>
+			}
+			trigger={<span>Multiple endpoints</span>}
+		/>
+	);
 }
 
 function getProviderName(metadata: unknown): string {
@@ -400,35 +371,35 @@ function Provider({ metadata }: { metadata: unknown }) {
 	if ("provider" in metadata && typeof metadata.provider === "string") {
 		if (metadata.provider === "vercel") {
 			return (
-				<div>
+				<div className="whitespace-nowrap">
 					<Icon icon={faVercel} className="mr-1" /> Vercel
 				</div>
 			);
 		}
 		if (metadata.provider === "next-js") {
 			return (
-				<div>
+				<div className="whitespace-nowrap">
 					<Icon icon={faNextjs} className="mr-1" /> Next.js
 				</div>
 			);
 		}
 		if (metadata.provider === "railway") {
 			return (
-				<div>
+				<div className="whitespace-nowrap">
 					<Icon icon={faRailway} className="mr-1" /> Railway
 				</div>
 			);
 		}
 		if (metadata.provider === "hetzner") {
 			return (
-				<div>
+				<div className="whitespace-nowrap">
 					<Icon icon={faCogs} className="mr-1" /> Hetzner
 				</div>
 			);
 		}
 		if (metadata.provider === "gcp") {
 			return (
-				<div>
+				<div className="whitespace-nowrap">
 					<Icon icon={faCog} className="mr-1" /> Google Cloud Run
 				</div>
 			);
@@ -455,9 +426,7 @@ function Regions({ regions }: { regions: string[] }) {
 				.map((region) => REGION_LABEL[region] ?? REGION_LABEL.unknown)
 				.join(" and ")}
 			trigger={
-				<span className="w-full cursor-pointer">
-					{regions.length} regions
-				</span>
+				<span className="w-full cursor-pointer">Multiple regions</span>
 			}
 		/>
 	);
