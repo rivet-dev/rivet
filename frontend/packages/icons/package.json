@@ -1,23 +1,24 @@
 {
 	"name": "@rivet-gg/icons",
 	"version": "2.0.33",
+	"description": "Icon library for Rivet products. Licensed exclusively for use in Rivet products and services only.",
+	"license": "SEE LICENSE IN LICENSE",
+	"private": false,
 	"sideEffects": false,
 	"files": [
+		"LICENSE",
 		"scripts",
 		"manifest.json",
 		"src",
 		"dist"
 	],
 	"scripts": {
-		"postinstall": "node scripts/postinstall.js"
+		"generate": "npm run gen:manifest && npm run gen:vendor",
+		"gen:vendor": "node scripts/vendor-icons.js",
+		"gen:manifest": "node scripts/generate-manifest.js"
 	},
 	"engines": {
 		"node": ">=18"
-	},
-	"dependencies": {
-		"dedent": "^1.7.0",
-		"local-pkg": "^0.5.1",
-		"vite": "^5.4.20"
 	},
 	"peerDependencies": {
 		"@fortawesome/fontawesome-svg-core": "^6.5.2",
@@ -27,25 +28,20 @@
 		"react": "^19",
 		"react-dom": "^19"
 	},
+	"type": "module",
 	"main": "./dist/index.js",
-	"module": "./dist/index.js",
-	"jsnext:main": "./dist/index.js",
 	"types": "./src/index.gen.ts",
 	"exports": {
 		".": {
 			"types": "./src/index.gen.ts",
-			"import": "./dist/index.js"
-		},
-		"./index": {
-			"types": "./src/index.gen.ts",
-			"import": "./dist/index.js"
-		},
-		"./index.js": {
-			"types": "./src/index.gen.ts",
-			"import": "./dist/index.js"
+			"import": "./dist/index.js",
+			"require": "./dist/index.js",
+			"default": "./dist/index.js"
 		}
 	},
 	"devDependencies": {
-		"esbuild": "^0.25.9"
+		"dedent": "^1.7.0",
+		"esbuild": "^0.25.9",
+		"local-pkg": "^0.5.1"
 	}
 }
