@@ -9,6 +9,10 @@ export interface Template {
 	tags: string[];
 	noFrontend: boolean;
 	priority?: number;
+	deployTemplate?: {
+		railway?: boolean;
+		vercel?: boolean;
+	};
 }
 
 export const templates: Template[] = [
@@ -237,7 +241,10 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "deno",
@@ -249,7 +256,10 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "drizzle",
@@ -263,7 +273,10 @@ export const templates: Template[] = [
     "tags": [
       "database"
     ],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "elysia",
@@ -276,7 +289,10 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "experimental-durable-streams-ai-agent",
@@ -304,7 +320,10 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "hono",
@@ -316,7 +335,10 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "hono-bun",
@@ -331,7 +353,10 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "hono-react",
@@ -386,7 +411,10 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "deployTemplate": {
+      "vercel": true
+    }
   },
   {
     "name": "node",
@@ -399,7 +427,10 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   },
   {
     "name": "raw-websocket-handler-proxy",
@@ -448,6 +479,9 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "deployTemplate": {
+      "railway": true
+    }
   }
 ];

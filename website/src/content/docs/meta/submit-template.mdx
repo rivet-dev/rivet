@@ -57,3 +57,39 @@ Submit your changes by [creating a pull request](https://github.com/rivet-dev/ri
 - `tags` (required) - Array of tags categorizing the template
 - `noFrontend` (optional) - Set to `true` to skip screenshot generation
 - `priority` (optional) - Lower numbers appear first in the list
+- `deployTemplate` (optional) - Configuration for deployment platform support:
+  - `railway` (optional) - Set to `true` to enable Railway deployment
+  - `vercel` (optional) - Set to `true` to enable Vercel deployment
+
+### Deploy Template Guidelines
+
+The `deployTemplate` field indicates which platforms your example can be deployed to:
+
+- **Railway**: For containerized Node.js, Bun, or Deno applications that use `registry.start()` with standard HTTP frameworks (Express, Hono, tRPC, etc.)
+- **Vercel**: For Next.js applications that use the Vercel deployment model
+
+Examples:
+
+```json
+{
+  "template": {
+    "technologies": ["typescript", "hono"],
+    "tags": ["starter"],
+    "deployTemplate": {
+      "railway": true
+    }
+  }
+}
+```
+
+```json
+{
+  "template": {
+    "technologies": ["next-js", "react", "typescript"],
+    "tags": ["starter"],
+    "deployTemplate": {
+      "vercel": true
+    }
+  }
+}
+```

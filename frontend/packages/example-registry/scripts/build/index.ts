@@ -54,6 +54,10 @@ interface TemplateMetadata {
 	tags: string[];
 	noFrontend?: boolean;
 	priority?: number;
+	deployTemplate?: {
+		railway?: boolean;
+		vercel?: boolean;
+	};
 }
 
 interface PackageJson {
@@ -73,6 +77,10 @@ interface Template {
 	tags: string[];
 	noFrontend: boolean;
 	priority?: number;
+	deployTemplate?: {
+		railway?: boolean;
+		vercel?: boolean;
+	};
 }
 
 function validateTechnologiesAndTags(
@@ -300,6 +308,7 @@ async function main() {
 				tags: packageJson.template.tags,
 				noFrontend: packageJson.template.noFrontend ?? false,
 				priority: packageJson.template.priority,
+				deployTemplate: packageJson.template.deployTemplate,
 			});
 
 			// Collect example data for Railway sync
@@ -357,6 +366,10 @@ export interface Template {
 	tags: string[];
 	noFrontend: boolean;
 	priority?: number;
+	deployTemplate?: {
+		railway?: boolean;
+		vercel?: boolean;
+	};
 }
 
 export const templates: Template[] = ${JSON.stringify(templates, null, 2)};
