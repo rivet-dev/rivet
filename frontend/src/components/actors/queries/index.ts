@@ -1,3 +1,4 @@
+import type { Rivet } from "@rivetkit/engine-api-full";
 import type { Actor as InspectorActor } from "rivetkit/inspector";
 
 export type { ActorLogEntry } from "rivetkit/inspector";
@@ -64,6 +65,7 @@ export type Actor = Omit<InspectorActor, "id" | "key"> & {
 	pendingAllocationAt?: string | null;
 	datacenter?: string | null;
 	rescheduleAt?: string | null;
+	error?: Rivet.ActorError | null;
 } & { id: ActorId };
 
 export enum CrashPolicy {
@@ -110,6 +112,7 @@ export function getActorStatus(
 		| "sleepingAt"
 		| "pendingAllocationAt"
 		| "rescheduleAt"
+		| "error"
 	>,
 ): ActorStatus {
 	const {
@@ -119,7 +122,12 @@ export function getActorStatus(
 		sleepingAt,
 		pendingAllocationAt,
 		rescheduleAt,
+		error,
 	} = actor;
+
+	if (error) {
+		return "crashed";
+	}
 
 	if (rescheduleAt) {
 		return "crash-loop";
