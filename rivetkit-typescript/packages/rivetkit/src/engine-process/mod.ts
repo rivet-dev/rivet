@@ -12,9 +12,9 @@ import {
 	importNodeDependencies,
 } from "@/utils/node";
 import { logger } from "./log";
+import { ENGINE_ENDPOINT, ENGINE_PORT } from "./constants";
 
-export const ENGINE_PORT = 6420;
-export const ENGINE_ENDPOINT = `http://localhost:${ENGINE_PORT}`;
+export { ENGINE_ENDPOINT, ENGINE_PORT };
 
 const ENGINE_BASE_URL = "https://releases.rivet.dev/rivet";
 const ENGINE_BINARY_NAME = "rivet-engine";

@@ -6,7 +6,6 @@ import { type TestContext, vi } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import { configureInspectorAccessToken } from "@/inspector/utils";
 import { createClientWithDriver, type Registry } from "@/mod";
 import { logger } from "./log";
 import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
@@ -22,7 +21,7 @@ export async function setupTest<A extends Registry<any>>(
 	registry: A,
 ): Promise<SetupTestResult<A>> {
 	// Force enable test mode
-	registry.config.test.enabled = true;
+	registry.config.test = { ...registry.config.test, enabled: true };
 
 	// Create driver
 	const driver = await createFileSystemOrMemoryDriver(
@@ -40,15 +39,15 @@ export async function setupTest<A extends Registry<any>>(
 	};
 
 	// Create router
-	const managerDriver = driver.manager?.(registry.config);
+	const parsedConfig = registry.parseConfig();
+	const managerDriver = driver.manager?.(parsedConfig);
 	invariant(managerDriver, "missing manager driver");
 	// const internalClient = createClientWithDriver(
 	// 	managerDriver,
 	// 	ClientConfigSchema.parse({}),
 	// );
-	configureInspectorAccessToken(registry.config, managerDriver);
 	const { router } = buildManagerRouter(
-		registry.config,
+		parsedConfig,
 		managerDriver,
 		() => upgradeWebSocket!,
 	);
@@ -57,6 +56,7 @@ export async function setupTest<A extends Registry<any>>(
 	const nodeWebSocket = createNodeWebSocket({ app: router });
 	upgradeWebSocket = nodeWebSocket.upgradeWebSocket;
 
+	// TODO: I think this whole function is fucked, we should probably switch to calling registry.serve() directly
 	// Start server
 	const port = await getPort();
 	const server = honoServe({

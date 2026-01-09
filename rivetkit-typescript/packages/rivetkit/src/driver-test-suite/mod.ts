@@ -1,11 +1,9 @@
 import { serve as honoServe } from "@hono/node-server";
-import { createNodeWebSocket, type NodeWebSocket } from "@hono/node-ws";
+import { createNodeWebSocket } from "@hono/node-ws";
 import invariant from "invariant";
 import { describe } from "vitest";
-import { ClientConfigSchema } from "@/client/config";
 import type { Encoding } from "@/client/mod";
-import { configureInspectorAccessToken } from "@/inspector/utils";
-import { createClientWithDriver, type Registry } from "@/mod";
+import { type Registry } from "@/mod";
 import { getPort } from "@/test/mod";
 import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
@@ -172,7 +170,7 @@ export async function createTestRuntime(
 
 	// TODO: Find a cleaner way of flagging an registry as test mode (ideally not in the config itself)
 	// Force enable test
-	registry.config.test.enabled = true;
+	registry.config.test = { ...registry.config.test, enabled: true };
 	registry.config.inspector = {
 		enabled: true,
 		token: () => "token",
@@ -207,15 +205,15 @@ export async function createTestRuntime(
 		let upgradeWebSocket: any;
 
 		// Create router
-		const managerDriver = driver.manager?.(registry.config);
+		const parsedConfig = registry.parseConfig();
+		const managerDriver = driver.manager?.(parsedConfig);
 		invariant(managerDriver, "missing manager driver");
 		// const client = createClientWithDriver(
 		// 	managerDriver,
 		// 	ClientConfigSchema.parse({}),
 		// );
-		configureInspectorAccessToken(registry.config, managerDriver);
 		const { router } = buildManagerRouter(
-			registry.config,
+			parsedConfig,
 			managerDriver,
 			() => upgradeWebSocket,
 		);
@@ -225,6 +223,7 @@ export async function createTestRuntime(
 		upgradeWebSocket = nodeWebSocket.upgradeWebSocket;
 		managerDriver.setGetUpgradeWebSocket(() => upgradeWebSocket);
 
+		// TODO: I think this whole function is fucked, we should probably switch to calling registry.serve() directly
 		// Start server
 		const port = await getPort();
 		const server = honoServe({

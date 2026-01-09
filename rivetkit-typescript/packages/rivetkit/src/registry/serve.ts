@@ -32,6 +32,7 @@ export async function findFreePort(
 
 export async function crossPlatformServe(
 	config: RegistryConfig,
+	managerPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	const runtime = detectRuntime();
@@ -39,18 +40,19 @@ export async function crossPlatformServe(
 
 	switch (runtime) {
 		case "deno":
-			return serveDeno(config, app);
+			return serveDeno(config, managerPort, app);
 		case "bun":
-			return serveBun(config, app);
+			return serveBun(config, managerPort, app);
 		case "node":
-			return serveNode(config, app);
+			return serveNode(config, managerPort, app);
 		default:
-			return serveNode(config, app);
+			return serveNode(config, managerPort, app);
 	}
 }
 
 async function serveNode(
 	config: RegistryConfig,
+	managerPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import @hono/node-server using string variable to prevent static analysis
@@ -93,7 +95,7 @@ async function serveNode(
 	});
 
 	// Start server
-	const port = config.managerPort;
+	const port = managerPort;
 	const server = serve({ fetch: app.fetch, port }, () =>
 		logger().info({ msg: "server listening", port }),
 	);
@@ -104,6 +106,7 @@ async function serveNode(
 
 async function serveDeno(
 	config: RegistryConfig,
+	managerPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import hono/deno using string variable to prevent static analysis
@@ -134,6 +137,7 @@ async function serveDeno(
 
 async function serveBun(
 	config: RegistryConfig,
+	managerPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
 	// Import hono/bun using string variable to prevent static analysis

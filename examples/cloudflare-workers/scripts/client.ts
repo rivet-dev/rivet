@@ -11,7 +11,7 @@ async function main() {
 
 	try {
 		// Create counter instance
-		const counter = client.counter.getOrCreate("demo");
+		const counter = client.counter.getOrCreate("demo").connect();
 
 		// Increment counter
 		console.log("Incrementing counter 'demo'...");

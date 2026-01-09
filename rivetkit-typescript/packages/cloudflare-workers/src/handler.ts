@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
-import type { Client, Registry, RunConfig } from "rivetkit";
+import type { Client, Registry } from "rivetkit";
+import { createClientWithDriver } from "rivetkit";
+import { buildManagerRouter } from "rivetkit/driver-helpers";
 import {
 	type ActorHandlerInterface,
 	createActorDurableObject,
@@ -61,26 +63,37 @@ export function createInlineClient<R extends Registry<any>>(
 	// Parse config
 	const config = ConfigSchema.parse(inputConfig);
 
-	// Create config
-	const runConfig = {
-		...config,
-		noWelcome: true,
-		driver: {
-			name: "cloudflare-workers",
-			manager: () => new CloudflareActorsManagerDriver(),
-			// HACK: We can't build the actor driver until we're inside the Durable Object
-			actor: undefined as any,
-		},
-		getUpgradeWebSocket: () => upgradeWebSocket,
-	} satisfies RunConfig;
-
 	// Create Durable Object
-	const ActorHandler = createActorDurableObject(registry, runConfig);
+	const ActorHandler = createActorDurableObject(
+		registry,
+		() => upgradeWebSocket,
+	);
 
-	// Create server
-	const { client, fetch } = registry.start(runConfig);
+	// Configure registry for cloudflare-workers
+	registry.config.noWelcome = true;
+	// Disable inspector since it's not supported on Cloudflare Workers
+	registry.config.inspector = {
+		enabled: false,
+		token: () => "",
+	};
+	// Set manager base path to "/" since the cloudflare handler strips the /rivet prefix
+	registry.config.managerBasePath = "/";
+	const parsedConfig = registry.parseConfig();
 
-	return { client, fetch, config, ActorHandler };
+	// Create manager driver
+	const managerDriver = new CloudflareActorsManagerDriver();
+
+	// Build the manager router (has actor management endpoints like /actors)
+	const { router } = buildManagerRouter(
+		parsedConfig,
+		managerDriver,
+		() => upgradeWebSocket,
+	);
+
+	// Create client using the manager driver
+	const client = createClientWithDriver<R>(managerDriver);
+
+	return { client, fetch: router.fetch.bind(router), config, ActorHandler };
 }
 
 /**

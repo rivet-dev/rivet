@@ -4,7 +4,6 @@ import type {
 	ActorRouter,
 	AnyActorInstance as CoreAnyActorInstance,
 	RegistryConfig,
-	RunConfig,
 } from "rivetkit";
 import { lookupInRegistry } from "rivetkit";
 import type { Client } from "rivetkit/client";
@@ -104,20 +103,17 @@ export class ActorGlobalState {
 
 export class CloudflareActorsActorDriver implements ActorDriver {
 	#registryConfig: RegistryConfig;
-	#runConfig: RunConfig;
 	#managerDriver: ManagerDriver;
 	#inlineClient: Client<any>;
 	#globalState: CloudflareDurableObjectGlobalState;
 
 	constructor(
 		registryConfig: RegistryConfig,
-		runConfig: RunConfig,
 		managerDriver: ManagerDriver,
 		inlineClient: Client<any>,
 		globalState: CloudflareDurableObjectGlobalState,
 	) {
 		this.#registryConfig = registryConfig;
-		this.#runConfig = runConfig;
 		this.#managerDriver = managerDriver;
 		this.#inlineClient = inlineClient;
 		this.#globalState = globalState;
@@ -325,13 +321,11 @@ export function createCloudflareActorsActorDriverBuilder(
 ) {
 	return (
 		config: RegistryConfig,
-		runConfig: RunConfig,
 		managerDriver: ManagerDriver,
 		inlineClient: Client<any>,
 	) => {
 		return new CloudflareActorsActorDriver(
 			config,
-			runConfig,
 			managerDriver,
 			inlineClient,
 			globalState,

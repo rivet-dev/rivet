@@ -135,6 +135,7 @@ export async function actorGateway(
 	c: HonoContext,
 	next: Next,
 ) {
+
 	// Skip test routes - let them be handled by their specific handlers
 	if (c.req.path.startsWith("/.test/")) {
 		return next();
