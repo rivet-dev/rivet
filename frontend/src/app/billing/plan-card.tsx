@@ -96,7 +96,7 @@ export const ProPlan = (props: Partial<PlanCardProps>) => {
 	return (
 		<PlanCard
 			title="Hobby"
-			price="$5"
+			price="$20"
 			usageBased
 			features={[
 				{
