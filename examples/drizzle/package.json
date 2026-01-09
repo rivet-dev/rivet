@@ -5,16 +5,17 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/server.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
-		"rivetkit": "workspace:*",
+		"rivetkit": "*",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
 	},
 	"dependencies": {
-		"@rivetkit/db": "workspace:*",
+		"@rivetkit/db": "*",
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2"
 	},

@@ -4,11 +4,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:backend": "srvx --import tsx src/server.ts",
 		"dev:frontend": "vite",
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"start": "srvx --static=../frontend/dist dist/server.js",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"build:frontend": "vite build",
+		"build:backend": "tsup",
+		"build": "npm run build:backend && npm run build:frontend"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
@@ -17,17 +21,19 @@
 		"@types/ws": "^8.5.10",
 		"@vitejs/plugin-react": "^4.2.0",
 		"concurrently": "^8.2.2",
+		"srvx": "^0.10.0",
+		"tsup": "^8.5.1",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
 		"vitest": "^3.1.1",
-		"ws": "^8.16.0",
-		"@rivetkit/react": "workspace:*",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0"
+		"ws": "^8.16.0"
 	},
 	"dependencies": {
-		"rivetkit": "workspace:*"
+		"@rivetkit/react": "*",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"rivetkit": "*"
 	},
 	"template": {
 		"technologies": [

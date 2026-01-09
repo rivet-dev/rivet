@@ -4,13 +4,16 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "concurrently \"npm run dev:streams\" \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"dev:streams": "tsx --watch src/streams-server/server.ts",
-		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:backend": "srvx --import tsx src/server.ts",
 		"dev:frontend": "vite",
-		"build": "vite build",
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"dev:streams": "tsx --watch src/streams-server/server.ts",
+		"start": "srvx --static=../frontend/dist dist/server.js",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"build:frontend": "vite build",
+		"build:backend": "tsup",
+		"build": "npm run build:backend && npm run build:frontend"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
@@ -18,7 +21,8 @@
 		"@types/react-dom": "^18.2.0",
 		"@vitejs/plugin-react": "^4.2.0",
 		"concurrently": "^8.2.2",
-		"rivetkit": "workspace:*",
+		"srvx": "^0.10.0",
+		"tsup": "^8.5.1",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
@@ -29,10 +33,11 @@
 		"@durable-streams/client": "https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/client@0323b8b",
 		"@durable-streams/server": "https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/server@0323b8b",
 		"@durable-streams/writer": "https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8b",
-		"@rivetkit/react": "workspace:*",
+		"@rivetkit/react": "*",
 		"ai": "^4.0.38",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
+		"rivetkit": "*",
 		"zod": "^4.1.0"
 	},
 	"template": {

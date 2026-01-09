@@ -4,18 +4,20 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx --watch src/server.ts",
+		"dev": "npx srvx --import tsx src/server.ts",
+		"start": "npx srvx --import tsx src/server.ts",
 		"check-types": "tsc --noEmit",
-		"build": "tsc",
+		"build": "tsup",
 		"client": "tsx scripts/client.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
+		"srvx": "^0.10.0",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
 	},
 	"dependencies": {
-		"rivetkit": "workspace:*"
+		"rivetkit": "*"
 	},
 	"stableVersion": "0.8.0",
 	"template": {

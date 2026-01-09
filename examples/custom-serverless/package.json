@@ -4,17 +4,22 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx src/server.ts",
+		"dev": "srvx --import tsx src/server.ts",
 		"check-types": "tsc --noEmit",
 		"connect": "tsx scripts/connect.ts",
-		"test": "vitest run"
+		"test": "vitest run",
+		"build": "tsup",
+		"start": "srvx dist/server.js"
 	},
 	"devDependencies": {
-		"rivetkit": "workspace:*",
 		"@types/node": "^22.13.9",
+		"srvx": "^0.10.0",
 		"tsx": "^3.12.7",
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1"
+	},
+	"dependencies": {
+		"rivetkit": "*"
 	},
 	"stableVersion": "0.8.0",
 	"template": {

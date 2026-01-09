@@ -32,6 +32,11 @@
 	},
 	"resolutions": {
 		"rivetkit": "workspace:*",
+		"@rivetkit/react": "workspace:*",
+		"@rivetkit/cloudflare-workers": "workspace:*",
+		"@rivetkit/next-js": "workspace:*",
+		"@rivetkit/db": "workspace:*",
+		"@rivetkit/engine-api-full": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@clerk/shared": "3.27.1"

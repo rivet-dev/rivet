@@ -1,10 +1,12 @@
 import { initTRPC } from "@trpc/server";
 import { createHTTPServer } from "@trpc/server/adapters/standalone";
+import { createClient } from "rivetkit/client";
 import { z } from "zod";
 import { registry } from "./registry.js";
 
 // Start RivetKit
-const { client } = registry.start();
+registry.startRunner();
+const client = createClient<typeof registry>();
 
 // Initialize tRPC
 const t = initTRPC.create();
