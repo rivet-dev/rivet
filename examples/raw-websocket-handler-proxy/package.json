@@ -22,15 +22,12 @@
 		"build": "npm run build:backend && npm run build:frontend"
 	},
 	"devDependencies": {
-		"@hono/node-server": "^1.19.1",
-		"@hono/node-ws": "^1.2.0",
 		"@types/node": "^22.10.2",
 		"@types/react": "^18.3.16",
 		"@types/react-dom": "^18.3.5",
 		"@types/ws": "^8.5.10",
 		"@vitejs/plugin-react": "^4.3.4",
 		"concurrently": "^9.1.0",
-		"srvx": "^0.10.0",
 		"tsup": "^8.5.1",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2",
@@ -38,11 +35,14 @@
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
+		"@hono/node-server": "^1.19.1",
+		"@hono/node-ws": "^1.2.0",
 		"@rivetkit/react": "*",
 		"hono": "^4.7.0",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"rivetkit": "*",
+		"srvx": "^0.10.0",
 		"ws": "^8.18.0"
 	},
 	"template": {

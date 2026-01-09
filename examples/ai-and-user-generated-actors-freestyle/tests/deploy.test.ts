@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { deployWithRivetCloud } from "../src/deploy-with-rivet-cloud";
-import { deployWithRivetSelfHosted } from "../src/deploy-with-rivet-self-hosted";
-import type { DeployRequest, LogCallback } from "../src/utils";
+import { deployWithRivetCloud } from "../src/deploy-with-rivet-cloud.ts";
+import { deployWithRivetSelfHosted } from "../src/deploy-with-rivet-self-hosted.ts";
+import type { DeployRequest, LogCallback } from "../src/utils.ts";
 
 // Simple log callback for tests
 const testLog: LogCallback = async (message: string) => {
