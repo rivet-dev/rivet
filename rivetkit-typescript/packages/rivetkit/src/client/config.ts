@@ -8,7 +8,7 @@ import {
 	getRivetNamespace,
 	getRivetRunner,
 } from "@/utils/env-vars";
-import { RegistryConfig } from "@/registry/config";
+import type { RegistryConfig } from "@/registry/config";
 import {
 	EndpointSchema,
 	type ParsedEndpoint,

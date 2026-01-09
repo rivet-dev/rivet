@@ -141,6 +141,8 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
+		const env = getCloudflareAmbientEnv();
+
 		// Parse actor ID to get DO ID
 		const [doId] = parseActorId(actorId);
 
@@ -152,8 +154,8 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			url: actorRequest.url,
 		});
 
-		const id = c.env.ACTOR_DO.idFromString(doId);
-		const stub = c.env.ACTOR_DO.get(id);
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
 
 		return await stub.fetch(actorRequest);
 	}
@@ -218,15 +220,17 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		);
 
 		// Parse actor ID to get DO ID
+		const env = getCloudflareAmbientEnv();
 		const [doId] = parseActorId(actorId);
-		const id = c.env.ACTOR_DO.idFromString(doId);
-		const stub = c.env.ACTOR_DO.get(id);
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
 
 		return await stub.fetch(actorRequest);
 	}
 
 	async getForId({
 		c,
+		name,
 		actorId,
 	}: GetForIdInput<{ Bindings: Bindings }>): Promise<
 		ActorOutput | undefined
@@ -412,9 +416,14 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 
 	displayInformation(): ManagerDisplayInformation {
 		return {
-			name: "Cloudflare Workers",
-			properties: {},
+			properties: {
+				Driver: "Cloudflare Workers",
+			},
 		};
+	}
+
+	setGetUpgradeWebSocket(): void {
+		// No-op for Cloudflare Workers - WebSocket upgrades are handled by the DO
 	}
 
 	getOrCreateInspectorAccessToken() {

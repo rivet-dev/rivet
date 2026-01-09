@@ -1,10 +1,11 @@
 import { DurableObject, env } from "cloudflare:workers";
 import type { ExecutionContext } from "hono";
 import invariant from "invariant";
-import type { ActorKey, ActorRouter, Registry, RunConfig } from "rivetkit";
+import type { ActorKey, ActorRouter, Registry, RegistryConfig } from "rivetkit";
 import { createActorRouter, createClientWithDriver } from "rivetkit";
 import type { ActorDriver, ManagerDriver } from "rivetkit/driver-helpers";
 import { getInitialActorKvState } from "rivetkit/driver-helpers";
+import type { GetUpgradeWebSocket } from "rivetkit/utils";
 import { stringifyError } from "rivetkit/utils";
 import {
 	ActorGlobalState,
@@ -17,6 +18,7 @@ import { GLOBAL_KV_KEYS } from "./global-kv";
 import type { Bindings } from "./handler";
 import { getCloudflareAmbientEnv } from "./handler";
 import { logger } from "./log";
+import { CloudflareActorsManagerDriver } from "./manager-driver";
 
 export interface ActorHandlerInterface extends DurableObject {
 	create(req: ActorInitRequest): Promise<ActorInitResponse>;
@@ -47,12 +49,9 @@ export type DurableObjectConstructor = new (
 
 export function createActorDurableObject(
 	registry: Registry<any>,
-	rootRunConfig: RunConfig,
+	getUpgradeWebSocket: GetUpgradeWebSocket,
 ): DurableObjectConstructor {
 	const globalState = new CloudflareDurableObjectGlobalState();
-
-	// Configure to use the runner role instead of server role
-	const runConfig = Object.assign({}, rootRunConfig, { role: "runner" });
 
 	/**
 	 * Startup steps:
@@ -170,36 +169,29 @@ export function createActorDurableObject(
 			const actorId = this.ctx.id.toString();
 			globalState.setDOState(actorId, { ctx: this.ctx, env: env });
 
-			// Configure actor driver
-			invariant(runConfig.driver, "runConfig.driver");
-			runConfig.driver.actor =
-				createCloudflareActorsActorDriverBuilder(globalState);
-
-			// Create manager driver (we need this for the actor router)
-			const managerDriver = runConfig.driver.manager(
-				registry.config,
-				runConfig,
-			);
+			// Create manager driver
+			const managerDriver = new CloudflareActorsManagerDriver();
 
 			// Create inline client
-			const inlineClient = createClientWithDriver(
-				managerDriver,
-				runConfig,
-			);
+			const inlineClient = createClientWithDriver(managerDriver);
+
+			// Create actor driver builder
+			const actorDriverBuilder =
+				createCloudflareActorsActorDriverBuilder(globalState);
 
 			// Create actor driver
-			const actorDriver = runConfig.driver.actor(
+			const actorDriver = actorDriverBuilder(
 				registry.config,
-				runConfig,
 				managerDriver,
 				inlineClient,
 			);
 
 			// Create actor router
 			const actorRouter = createActorRouter(
-				runConfig,
+				registry.config,
 				actorDriver,
-				false,
+				getUpgradeWebSocket,
+				registry.config.test?.enabled ?? false,
 			);
 
 			// Save actor with generation

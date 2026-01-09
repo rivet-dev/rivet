@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
-import type { Client, Registry, RunConfig } from "rivetkit";
+import type { Client, Registry } from "rivetkit";
+import { createClientWithDriver } from "rivetkit";
+import { buildManagerRouter } from "rivetkit/driver-helpers";
 import {
 	type ActorHandlerInterface,
 	createActorDurableObject,
@@ -61,26 +63,38 @@ export function createInlineClient<R extends Registry<any>>(
 	// Parse config
 	const config = ConfigSchema.parse(inputConfig);
 
-	// Create config
-	const runConfig = {
-		...config,
-		noWelcome: true,
-		driver: {
-			name: "cloudflare-workers",
-			manager: () => new CloudflareActorsManagerDriver(),
-			// HACK: We can't build the actor driver until we're inside the Durable Object
-			actor: undefined as any,
-		},
-		getUpgradeWebSocket: () => upgradeWebSocket,
-	} satisfies RunConfig;
-
 	// Create Durable Object
-	const ActorHandler = createActorDurableObject(registry, runConfig);
+	const ActorHandler = createActorDurableObject(registry, () => upgradeWebSocket);
 
-	// Create server
-	const { client, fetch } = registry.start(runConfig);
+	// Configure registry for cloudflare-workers
+	const registryConfig = registry.config as any;
+	registryConfig.noWelcome = true;
+	// Disable inspector since it's not supported on Cloudflare Workers
+	registryConfig.inspector = {
+		enabled: false,
+		token: () => "",
+	};
+	// Set manager base path to "/" since the cloudflare handler strips the /rivet prefix
+	registryConfig.managerBasePath = "/";
 
-	return { client, fetch, config, ActorHandler };
+	// Create manager driver
+	const managerDriver = new CloudflareActorsManagerDriver();
+
+	// Build the manager router (has actor management endpoints like /actors)
+	console.log("Building manager router with config:", {
+		managerBasePath: registryConfig.managerBasePath,
+		use: Object.keys(registryConfig.use),
+	});
+	const { router } = buildManagerRouter(
+		registryConfig,
+		managerDriver,
+		() => upgradeWebSocket,
+	);
+
+	// Create client using the manager driver
+	const client = createClientWithDriver<R>(managerDriver);
+
+	return { client, fetch: router.fetch.bind(router), config, ActorHandler };
 }
 
 /**
@@ -114,6 +128,13 @@ export function createHandler<R extends Registry<any>>(
 				);
 				url.pathname = strippedPath;
 				const modifiedRequest = new Request(url.toString(), request);
+				console.log("Forwarding to manager:", {
+					originalPath: request.url,
+					newPath: modifiedRequest.url,
+					hasTarget: modifiedRequest.headers.has("x-rivet-target"),
+					target: modifiedRequest.headers.get("x-rivet-target"),
+					actorId: modifiedRequest.headers.get("x-rivet-actor"),
+				});
 				return fetch(modifiedRequest, env, ctx);
 			}
 

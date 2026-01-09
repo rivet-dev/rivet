@@ -1,18 +1,15 @@
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { Registry, RunConfigInput } from "rivetkit";
+import type { Registry } from "rivetkit";
 import { stringifyError } from "rivetkit/utils";
 import { logger } from "./log";
 
-export const toNextHandler = (
-	registry: Registry<any>,
-	inputConfig: RunConfigInput = {},
-) => {
+export const toNextHandler = (registry: Registry<any>) => {
 	// Don't run server locally since we're using the fetch handler directly
-	inputConfig.disableDefaultServer = true;
+	registry.config.serveManager = false;
 
-	// Configure serverless
-	inputConfig.runnerKind = "serverless";
+	// Set basePath to "/" since Next.js route strips the /api/rivet prefix
+	registry.config.serverless = { ...registry.config.serverless, basePath: "/" };
 
 	if (process.env.NODE_ENV !== "production") {
 		// Auto-configure serverless runner if not in prod
@@ -25,8 +22,10 @@ export const toNextHandler = (
 			process.env.NEXT_PUBLIC_VERCEL_URL ??
 			`http://127.0.0.1:${process.env.PORT ?? 3000}`;
 
-		inputConfig.runEngine = true;
-		inputConfig.autoConfigureServerless = {
+		// Set these on the registry's config directly since the legacy inputConfig
+		// isn't used by the serverless router
+		registry.config.serverless.spawnEngine = true;
+		registry.config.serverless.configureRunnerPool = {
 			url: `${publicUrl}/api/rivet`,
 			minRunners: 0,
 			maxRunners: 100_000,
@@ -41,9 +40,7 @@ export const toNextHandler = (
 	}
 
 	// Next logs this on every request
-	inputConfig.noWelcome = true;
-
-	const { fetch } = registry.start(inputConfig);
+	registry.config.noWelcome = true;
 
 	// Function that Next will call when handling requests
 	const fetchWrapper = async (
@@ -53,15 +50,16 @@ export const toNextHandler = (
 		const { all } = await params;
 
 		const newUrl = new URL(request.url);
-		newUrl.pathname = all.join("/");
+		newUrl.pathname = `/${all.join("/")}`;
 
-		if (process.env.NODE_ENV !== "development") {
-			// Handle request
-			const newReq = new Request(newUrl, request);
-			return await fetch(newReq);
-		} else {
+		// if (process.env.NODE_ENV === "development") {
+		if (false) {
 			// Special request handling for file watching
 			return await handleRequestWithFileWatcher(request, newUrl, fetch);
+		} else {
+			// Handle request
+			const newReq = new Request(newUrl, request);
+			return await registry.handler(newReq);
 		}
 	};
 

@@ -1,8 +1,10 @@
 import invariant from "invariant";
 import { z } from "zod";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import { generateRandomString } from "@/actor/utils";
 import { resolveEndpoint } from "@/client/config";
 import { type Logger, LogLevelSchema } from "@/common/log";
+import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";
 import {
 	EndpointSchema,
@@ -12,6 +14,7 @@ import { getRivetNamespace, getRivetToken, isDev } from "@/utils/env-vars";
 import { type DriverConfig, DriverConfigSchema } from "./driver";
 import { RunnerConfigSchema } from "./runner";
 import { ServerlessConfigSchema } from "./serverless";
+import { DeepReadonly } from "@/utils";
 
 export { DriverConfigSchema, type DriverConfig };
 
@@ -171,7 +174,10 @@ export const RegistryConfigSchema = z
 		}
 
 		// Flatten the endpoint and apply defaults for namespace/token
-		const endpoint = resolvedEndpoint?.endpoint;
+		// If spawnEngine is enabled, set endpoint to the engine endpoint
+		const endpoint = config.serverless?.spawnEngine
+			? ENGINE_ENDPOINT
+			: resolvedEndpoint?.endpoint;
 		const namespace =
 			resolvedEndpoint?.namespace ??
 			config.namespace ??
@@ -182,7 +188,7 @@ export const RegistryConfigSchema = z
 
 		if (config.serverless) {
 			let serveManager: boolean;
-			let advertiseEndpoint: string;
+			let advertiseEndpoint: string | undefined;
 
 			if (endpoint) {
 				// Remote endpoint provided:
@@ -196,9 +202,7 @@ export const RegistryConfigSchema = z
 				// - Start manager server
 				// - Redirect clients to local server
 				serveManager = config.serveManager ?? true;
-				advertiseEndpoint =
-					config.serverless.advertiseEndpoint ??
-					`http://localhost:${config.managerPort}`;
+				advertiseEndpoint = config.serverless.advertiseEndpoint;
 			} else {
 				// Production mode, no endpoint:
 				// - Do not start manager server

@@ -2,7 +2,7 @@
 import { createMiddleware } from "hono/factory";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import { inspectorLogger } from "./log";
-import { RegistryConfig } from "@/registry/config";
+import { RegistryConfig, RegistryConfigInput } from "@/registry/config";
 
 export function compareSecrets(providedSecret: string, validSecret: string) {
 	// Early length check to avoid unnecessary processing
@@ -46,7 +46,7 @@ export const secureInspector = (config: RegistryConfig) =>
 		await next();
 	});
 
-export function getInspectorUrl(config: RegistryConfig): string | undefined {
+export function getInspectorUrl(config: RegistryConfig, managerPort: number): string | undefined {
 	if (!config.inspector.enabled) {
 		return undefined;
 	}
@@ -66,7 +66,7 @@ export function getInspectorUrl(config: RegistryConfig): string | undefined {
 	const endpoint =
 		config.inspector.defaultEndpoint ??
 		(config.managerPort !== 6420
-			? `http://localhost:${config.managerPort}`
+			? `http://localhost:${managerPort}`
 			: undefined);
 	if (endpoint) {
 		url.searchParams.set("u", endpoint);
@@ -88,12 +88,3 @@ export const isInspectorEnabled = (
 	return false;
 };
 
-export const configureInspectorAccessToken = (
-	config: RegistryConfig,
-	managerDriver: ManagerDriver,
-) => {
-	if (!config.inspector.token()) {
-		const token = managerDriver.getOrCreateInspectorAccessToken();
-		config.inspector.token = () => token;
-	}
-};
