@@ -6,9 +6,9 @@ import { waitForClerk } from "@/lib/waitForClerk";
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
-	beforeLoad: async ({ context }) => {
+	beforeLoad: async ({ context, search }) => {
 		await waitForClerk(context.clerk);
-		await redirectToOrganization(context.clerk);
+		await redirectToOrganization(context.clerk, search);
 	},
 });
 

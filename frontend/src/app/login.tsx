@@ -27,7 +27,7 @@ export function Login() {
 	// HACK: redirect if user is already logged in, race condition with clerk
 	useEffect(() => {
 		if (user) {
-			navigate({ to: "/" });
+			navigate({ to: "/", search: true });
 		}
 	}, [user, navigate]);
 
