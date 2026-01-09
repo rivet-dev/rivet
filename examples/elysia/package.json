@@ -5,15 +5,17 @@
 	"type": "module",
 	"scripts": {
 		"dev": "bun --watch src/server.ts",
-		"check-types": "tsc --noEmit"
+		"start": "bun src/server.ts",
+		"check-types": "tsc --noEmit",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
-		"rivetkit": "workspace:*",
+		"rivetkit": "*",
 		"typescript": "^5.5.2"
 	},
 	"dependencies": {
-		"@rivetkit/react": "workspace:*",
+		"@rivetkit/react": "*",
 		"@sinclair/typebox": "^0.34.15",
 		"elysia": "^1.3.5",
 		"react": "^18.2.0",

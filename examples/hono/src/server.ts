@@ -1,9 +1,11 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
 // Start RivetKit
-const { client } = registry.start();
+registry.startRunner();
+const client = createClient<typeof registry>();
 
 // Setup router
 const app = new Hono();

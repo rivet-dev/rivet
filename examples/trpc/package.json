@@ -5,11 +5,13 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx --watch src/server.ts",
+		"start": "tsx src/server.ts",
 		"client": "tsx scripts/client.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"build": "tsc"
 	},
 	"devDependencies": {
-		"rivetkit": "workspace:*",
+		"rivetkit": "*",
 		"@types/node": "^22.13.9",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"

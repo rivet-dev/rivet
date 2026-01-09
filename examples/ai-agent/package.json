@@ -4,12 +4,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:backend": "srvx --import tsx src/server.ts",
 		"dev:frontend": "vite",
-		"build": "vite build",
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"start": "srvx --static=../frontend/dist dist/server.js",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"build:frontend": "vite build",
+		"build:backend": "tsup",
+		"build": "npm run build:backend && npm run build:frontend"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
@@ -17,7 +20,8 @@
 		"@types/react-dom": "^18.2.0",
 		"@vitejs/plugin-react": "^4.2.0",
 		"concurrently": "^8.2.2",
-		"rivetkit": "workspace:*",
+		"srvx": "^0.10.0",
+		"tsup": "^8.5.1",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
@@ -25,10 +29,11 @@
 	},
 	"dependencies": {
 		"@ai-sdk/openai": "^0.0.66",
-		"@rivetkit/react": "workspace:*",
+		"@rivetkit/react": "*",
 		"ai": "^4.0.38",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
+		"rivetkit": "*",
 		"zod": "^3.25.69"
 	},
 	"stableVersion": "0.8.0",
@@ -41,7 +46,7 @@
 			"real-time"
 		],
 		"priority": 100,
-		"frontendPort": 3000
+		"frontendPort": 5173
 	},
 	"license": "MIT"
 }

@@ -3,13 +3,16 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
 	plugins: [react()],
-	root: "src/frontend",
+	root: "frontend",
 	server: {
 		host: "0.0.0.0",
-		port: 3000,
+		port: 5173,
+		proxy: {
+			"/api/rivet/": "http://localhost:3000",
+		},
 	},
 	build: {
-		outDir: "../../dist",
+		outDir: "dist",
 		emptyOutDir: true,
 	},
 });

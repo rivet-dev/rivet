@@ -5,10 +5,12 @@
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
-		"dev:backend": "tsx src/backend/index.ts",
+		"dev:backend": "tsx src/index.ts",
 		"dev:frontend": "vite",
-		"build": "tsc && vite build",
+		"build:frontend": "vite build",
+		"build:backend": "tsup",
 		"preview": "vite preview",
+		"build": "npm run build:backend && npm run build:frontend",
 		"check-types": "tsc --noEmit",
 		"test": "vitest",
 		"test:run": "vitest run"

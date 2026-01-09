@@ -13,8 +13,8 @@
 		"react": "19.1.0",
 		"react-dom": "19.1.0",
 		"next": "16.1.1",
-		"@rivetkit/next-js": "workspace:*",
-		"rivetkit": "workspace:*"
+		"@rivetkit/next-js": "*",
+		"rivetkit": "*"
 	},
 	"devDependencies": {
 		"typescript": "^5",

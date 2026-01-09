@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
 	plugins: [react()],
-	root: "src/frontend",
+	root: "frontend",
 	build: {
 		emptyOutDir: true,
 	},
@@ -11,10 +11,7 @@ export default defineConfig({
 		host: "0.0.0.0",
 		port: 5173,
 		proxy: {
-			"/api": {
-				target: "http://localhost:3001",
-				changeOrigin: true,
-			},
+			"/api/": "http://localhost:3001",
 		},
 	},
 });

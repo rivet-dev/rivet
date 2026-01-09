@@ -8,7 +8,8 @@
 		"deploy": "wrangler deploy",
 		"check-types": "tsc --noEmit",
 		"client-http": "tsx scripts/client-http.ts",
-		"client-rivetkit": "tsx scripts/client-rivetkit.ts"
+		"client-rivetkit": "tsx scripts/client-rivetkit.ts",
+		"build": "tsc"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250129.0",
@@ -18,8 +19,8 @@
 		"wrangler": "^4.22.0"
 	},
 	"dependencies": {
-		"rivetkit": "workspace:*",
-		"@rivetkit/cloudflare-workers": "workspace:*"
+		"rivetkit": "*",
+		"@rivetkit/cloudflare-workers": "*"
 	},
 	"stableVersion": "0.8.0",
 	"template": {
