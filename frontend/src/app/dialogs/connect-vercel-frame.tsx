@@ -46,20 +46,6 @@ const useEndpoint = () => {
 		});
 };
 
-const useNamespace = () => {
-	const routeContext = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
-		select: (ctx) => ctx.dataProvider.engineNamespace,
-	});
-
-	return match(__APP_TYPE__)
-		.with("cloud", () => routeContext)
-		.with("engine", () => "default")
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
-};
-
 export default function CreateProjectFrameContent({
 	onClose,
 }: CreateProjectFrameContentProps) {
@@ -99,7 +85,7 @@ function FormStepper({
 	const provider = useEngineCompatDataProvider();
 	const token = usePublishableToken();
 	const endpoint = useEndpoint();
-	const namespace = useNamespace();
+	const namespace = provider.engineNamespace;
 
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),

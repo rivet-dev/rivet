@@ -54,8 +54,6 @@ export default function EditRunnerConfigFrameContent({
 					.filter(([k, v]) => v.serverless)
 					.map(([k, v]) => [k, config]);
 
-				console.log(otherDcs, [dc, config]);
-
 				await mutateAsync({
 					name,
 					config: {
