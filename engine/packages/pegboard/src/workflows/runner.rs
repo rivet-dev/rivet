@@ -11,7 +11,7 @@ use universaldb::{
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use crate::{keys, metrics, workflows::actor::Allocate};
+use crate::{keys, workflows::actor::Allocate};
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 500;
