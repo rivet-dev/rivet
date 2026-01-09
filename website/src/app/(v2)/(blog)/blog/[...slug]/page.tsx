@@ -24,8 +24,9 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 export async function generateMetadata({
-	params: { slug },
+	params,
 }): Promise<Metadata> {
+	const { slug } = await params;
 	const { description, title, author, published, tags, category, image } =
 		await loadArticle(slug.join("/"));
 
@@ -59,7 +60,8 @@ export async function generateMetadata({
 	};
 }
 
-export default async function BlogPage({ params: { slug } }) {
+export default async function BlogPage({ params }) {
+	const { slug } = await params;
 	const {
 		Content,
 		title,

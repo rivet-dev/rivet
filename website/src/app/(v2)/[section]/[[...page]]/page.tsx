@@ -71,9 +71,9 @@ async function loadContent(path: string[]) {
 export async function generateMetadata({
 	params,
 }: {
-	params: { section: string; page?: string[] };
+	params: Promise<{ section: string; page?: string[] }>;
 }): Promise<Metadata> {
-	const { section, page } = params;
+	const { section, page } = await params;
 	const path = buildPathComponents(section, page);
 	const {
 		component: { title, description },
@@ -92,10 +92,11 @@ export async function generateMetadata({
 }
 
 export default async function CatchAllCorePage({
-	params: { section, page },
+	params,
 }: {
-	params: { section: string; page?: string[] };
+	params: Promise<{ section: string; page?: string[] }>;
 }) {
+	const { section, page } = await params;
 	if (!VALID_SECTIONS.includes(section)) {
 		return notFound();
 	}

@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"dev": "pnpm prebuild && next dev",
-		"build": "pnpm prebuild && next build && next-sitemap",
+		"build": "pnpm prebuild && next build --webpack && next-sitemap",
 		"lint": "next lint",
 		"format": "prettier --write .",
 		"create-article": "vite-node scripts/generateArticle.js",
