@@ -9,34 +9,74 @@
     <a href="https://rivet.gg/discord"><img src="https://img.shields.io/discord/822914074136018994"></a>
 </p>
 
-## Motivation
+## ⚠️ Legal Notice
 
-Rivet Icons are a set of SVG icons that are used in Rivet products. This package is built on top of great Font Awesome icons. Some icons used in our products are from the premium Font Awesome icon set. We've created a package that lets you use premium icons without having to buy a Font Awesome license. This is achieved by swapping premium icons with a simple rectangle.
+**This package is licensed exclusively for use in Rivet products and services.** Using this package in any other product, project, or commercial application is strictly prohibited and may constitute a violation of Font Awesome's Terms of Service and intellectual property rights.
 
+This package includes icons from Font Awesome Pro, which are licensed to Rivet for use in Rivet products only. If you wish to use Font Awesome Pro icons in your own projects, you must obtain your own license from [Font Awesome](https://fontawesome.com/plans).
+
+## Overview
+
+Rivet Icons is an icon library built on Font Awesome that provides pre-generated SVG icons for use in Rivet products. All icons (including Pro icons) are committed to the repository, making this package work out-of-the-box with **no Font Awesome token required** for end users.
+
+## Installation
+
+```bash
+pnpm add @rivet-gg/icons
+```
+
+## Usage
+
+```tsx
+import { Icon, faCheckCircle } from "@rivet-gg/icons";
+
+<Icon icon={faCheckCircle} />
+```
 
 ## Contributing
 
 ### Prerequisites
 
-Obtain a Font Awesome Pro license and set the `FONTAWESOME_PACKAGE_TOKEN` environment variable to your Font Awesome Pro token. This is required to download the premium icons.
+**For maintainers only:** Obtain a Font Awesome Pro license and set the `FONTAWESOME_PACKAGE_TOKEN` environment variable to your Font Awesome Pro token. This is only required when vendoring new icons.
 
 ### Adding new icons
 
-1. Modify `generateManifest.js` to include new icons.
-2. Run `./scripts/generateManifest.js` to generate a new `manifest.json` file.
-    - If you're getting an error: `Could not find package @fortawesome/pro-solid-svg-icons`, 
-3. Commit the changes to the `manifest.json` file.
-4. Run `pnpm rebuild @rivet-gg/icons` to generate a new icon set with the new icons.
+1. Ensure you have a `FONTAWESOME_PACKAGE_TOKEN` environment variable set
+2. Modify [scripts/generate-manifest.js](scripts/generate-manifest.js) to include new icons
+3. Run `pnpm manifest` to generate a new `manifest.json` file
+    - If you're getting an error about missing packages, run `pnpm install` in the `src` folder first
+4. Run `pnpm vendor` to generate icon files:
+    - `src/index.gen.js`
+    - `src/index.gen.ts`
+    - `dist/index.js`
+5. Commit all changes including the generated files
 
 ## Troubleshooting
 
-### Icons not showing, or icons are rectangles
+### Icons not showing up
 
-Some icons used in the open-source Rivet products are part of the premium Font Awesome icon set. We can't share those icons publicly, without violating FA's Terms Of Service. By default, after adding this package to any project, a post install script generates an icon set with all premium icons replaced with simple rectangles. So, you can reference premium icons, but you won't see them. To be able to see premium icons, make sure  an environment variable `FONTAWESOME_PACKAGE_TOKEN` is set when running `pnpm install`. You can re-generate our icon set by running `pnpm rebuild @rivet-gg/icons` if your dependencies are already installed.
+All icons (including Font Awesome Pro icons) are pre-generated and committed to this repository. If icons aren't showing:
 
-### Can't start/build project
-The description of these kinds of errors may vary. This package heavily depends on postinstall scripts from pnpm/npm. Make sure you didn't disable them accidentally. Turn on post-installation script support and run `pnpm install` or `pnpm rebuild @rivet-gg/icons` again. If there is still a problem, please contact us on [Discord](https://rivet.gg/discord").
+1. Make sure you have the peer dependencies installed:
+   - `@fortawesome/fontawesome-svg-core`
+   - `@fortawesome/free-solid-svg-icons`
+   - `@fortawesome/free-brands-svg-icons`
+   - `@fortawesome/react-fontawesome`
+   - `react` and `react-dom`
 
+2. Check that you're importing icons correctly:
+   ```tsx
+   import { Icon, faCheckCircle } from "@rivet-gg/icons";
 
-### `Could not find package @fortawesome/pro-solid-svg-icons` when generating manifest
-Make sure you have installed pro icons. If you're getting an error, you can try to install them manually by running `pnpm add @fortawesome/pro-solid-svg-icons`, or run `pnpm install` in `src` folder. Finally run `./scripts/generateManifest.js` again.
+   <Icon icon={faCheckCircle} />
+   ```
+
+3. If the problem persists, contact us on [Discord](https://rivet.gg/discord)
+
+### For Maintainers: `Could not find package @fortawesome/pro-solid-svg-icons`
+
+This error occurs when running the vendor script without access to Font Awesome Pro packages. Make sure:
+
+1. `FONTAWESOME_PACKAGE_TOKEN` environment variable is set
+2. Run `pnpm install` in the `src` folder to install FA Pro packages
+3. Run `pnpm vendor` again

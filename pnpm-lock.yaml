@@ -2341,25 +2341,22 @@ importers:
       '@fortawesome/react-fontawesome':
         specifier: ^0.2.2
         version: 0.2.6(@fortawesome/fontawesome-svg-core@6.7.2)(react@19.1.1)
-      dedent:
-        specifier: ^1.7.0
-        version: 1.7.0(babel-plugin-macros@3.1.0)
-      local-pkg:
-        specifier: ^0.5.1
-        version: 0.5.1
       react:
         specifier: ^19
         version: 19.1.1
       react-dom:
         specifier: ^19
         version: 19.1.1(react@19.1.1)
-      vite:
-        specifier: ^5.4.20
-        version: 5.4.20(@types/node@25.0.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
     devDependencies:
+      dedent:
+        specifier: ^1.7.0
+        version: 1.7.0(babel-plugin-macros@3.1.0)
       esbuild:
         specifier: ^0.25.9
         version: 0.25.9
+      local-pkg:
+        specifier: ^0.5.1
+        version: 0.5.1
 
   rivetkit-typescript/packages/cloudflare-workers:
     dependencies:
@@ -29360,20 +29357,6 @@ snapshots:
       rollup: 4.50.1
     optionalDependencies:
       '@types/node': 24.7.1
-      fsevents: 2.3.3
-      less: 4.4.1
-      lightningcss: 1.30.2
-      sass: 1.93.2
-      stylus: 0.62.0
-      terser: 5.44.1
-
-  vite@5.4.20(@types/node@25.0.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1):
-    dependencies:
-      esbuild: 0.21.5
-      postcss: 8.5.6
-      rollup: 4.50.1
-    optionalDependencies:
-      '@types/node': 25.0.3
       fsevents: 2.3.3
       less: 4.4.1
       lightningcss: 1.30.2
