@@ -35,7 +35,7 @@
 				"package.json"
 			],
 			"outputs": ["dist/**"],
-			"env": ["FAST_BUILD"]
+			"env": ["FAST_BUILD", "CUSTOM_RIVETKIT_DEVTOOLS_URL"]
 		},
 		"test": {
 			"dependsOn": ["^test", "build"],

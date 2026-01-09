@@ -6,7 +6,8 @@ import * as url from "node:url";
 import { $ } from "execa";
 import { program } from "commander";
 import * as semver from "semver";
-import { updateArtifacts } from "./artifacts";
+import { buildJsArtifacts } from "./build-artifacts";
+import { promoteArtifacts } from "./promote-artifacts";
 import { tagDocker } from "./docker";
 import {
 	createAndPushTag,
@@ -15,30 +16,10 @@ import {
 } from "./git";
 import { publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
+import { assert, assertEquals, assertExists } from "./utils";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
-
-function assert(condition: any, message?: string): asserts condition {
-	if (!condition) {
-		throw new Error(message || "Assertion failed");
-	}
-}
-
-function assertEquals<T>(actual: T, expected: T, message?: string): void {
-	if (actual !== expected) {
-		throw new Error(message || `Expected ${expected}, got ${actual}`);
-	}
-}
-
-function assertExists<T>(
-	value: T | null | undefined,
-	message?: string,
-): asserts value is T {
-	if (value === null || value === undefined) {
-		throw new Error(message || "Value does not exist");
-	}
-}
 
 export interface ReleaseOpts {
 	root: string;
@@ -179,7 +160,7 @@ async function validateReuseVersion(version: string): Promise<void> {
 		AWS_DEFAULT_REGION: "auto",
 	};
 
-	const commitPrefix = `engine/${shortCommit}/`;
+	const commitPrefix = `rivet/${shortCommit}/`;
 	const listResult = await $({
 		env: awsEnv,
 		shell: true,
@@ -270,9 +251,10 @@ const STEPS = [
 	"trigger-workflow",
 	"validate-reuse-version",
 	"run-type-check",
+	"build-js-artifacts",
 	"publish-sdk",
 	"tag-docker",
-	"update-artifacts",
+	"promote-artifacts",
 	"push-tag",
 	"create-github-release",
 	"merge-release",
@@ -299,13 +281,14 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 		"git-push",
 		"trigger-workflow",
 	],
-	// These steps validate the repository before triggering release.
-	"setup-ci": ["validate-reuse-version", "run-type-check"],
+	// These steps validate the repository and build JS artifacts before
+	// triggering release.
+	"setup-ci": ["validate-reuse-version", "run-type-check", "build-js-artifacts"],
 	// These steps run after the required artifacts have been successfully built.
 	"complete-ci": [
 		"publish-sdk",
 		"tag-docker",
-		"update-artifacts",
+		"promote-artifacts",
 		"push-tag",
 		"create-github-release",
 	],
@@ -565,6 +548,11 @@ async function main() {
 		await runTypeCheck(releaseOpts);
 	}
 
+	if (shouldRunStep("build-js-artifacts")) {
+		console.log("==> Building JS Artifacts");
+		await buildJsArtifacts(releaseOpts);
+	}
+
 	if (shouldRunStep("publish-sdk")) {
 		console.log("==> Publishing SDKs");
 		await publishSdk(releaseOpts);
@@ -575,9 +563,9 @@ async function main() {
 		await tagDocker(releaseOpts);
 	}
 
-	if (shouldRunStep("update-artifacts")) {
-		console.log("==> Updating Artifacts");
-		await updateArtifacts(releaseOpts);
+	if (shouldRunStep("promote-artifacts")) {
+		console.log("==> Promoting Artifacts");
+		await promoteArtifacts(releaseOpts);
 	}
 
 	if (shouldRunStep("push-tag")) {

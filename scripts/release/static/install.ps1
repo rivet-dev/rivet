@@ -24,7 +24,7 @@ Write-Host
 Write-Host "> Installing Rivet Engine ${Version}"
 
 # Download CLI
-$DownloadUrl = "https://releases.rivet.gg/engine/${Version}/${FileName}"
+$DownloadUrl = "https://releases.rivet.dev/rivet/${Version}/${FileName}"
 Write-Host
 Write-Host "> Downloading ${DownloadUrl}"
 Invoke-WebRequest $DownloadUrl -OutFile $RivetExe -UseBasicParsing

@@ -16,7 +16,7 @@ import { logger } from "./log";
 export const ENGINE_PORT = 6420;
 export const ENGINE_ENDPOINT = `http://localhost:${ENGINE_PORT}`;
 
-const ENGINE_BASE_URL = "https://releases.rivet.gg/engine";
+const ENGINE_BASE_URL = "https://releases.rivet.dev/rivet";
 const ENGINE_BINARY_NAME = "rivet-engine";
 
 interface EnsureEngineProcessOptions {

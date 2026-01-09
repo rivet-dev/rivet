@@ -1,4 +1,5 @@
 import type { Registry } from "@/registry";
+import { injectDevtools } from "@/devtools/mod";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import {
 	type Client,
@@ -62,5 +63,10 @@ export function createClient<A extends Registry<any>>(
 
 	// Create client
 	const driver = new RemoteManagerDriver(config);
+
+	if (config.devtools) {
+		injectDevtools(config);
+	}
+
 	return createClientWithDriver<A>(driver, config);
 }
