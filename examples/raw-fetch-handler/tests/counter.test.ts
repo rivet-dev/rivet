@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/backend/registry";
+import { registry } from "../src/actors.ts";
 
 describe("Counter Actor", () => {
 	test("fetch handler returns counter state", async (test) => {

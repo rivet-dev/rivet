@@ -2,9 +2,9 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { streamSSE } from "hono/streaming";
-import { deployWithRivetCloud } from "./deploy-with-rivet-cloud";
-import { deployWithRivetSelfHosted } from "./deploy-with-rivet-self-hosted";
-import type { DeployRequest, LogCallback } from "./utils";
+import { deployWithRivetCloud } from "./deploy-with-rivet-cloud.ts";
+import { deployWithRivetSelfHosted } from "./deploy-with-rivet-self-hosted.ts";
+import type { DeployRequest, LogCallback } from "./utils.ts";
 
 const app = new Hono();
 

@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/backend/registry";
+import { registry } from "../src/actors.ts";
 
 describe("multi-region deployment", () => {
 	test("isolates actors by region", async (ctx) => {

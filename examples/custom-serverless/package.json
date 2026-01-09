@@ -4,24 +4,25 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "srvx --import tsx src/server.ts",
+		"dev": "npx srvx --import tsx src/server.ts",
+		"start": "npx srvx --import tsx src/server.ts",
 		"check-types": "tsc --noEmit",
-		"connect": "tsx scripts/connect.ts",
 		"test": "vitest run",
-		"build": "tsup",
-		"start": "srvx dist/server.js"
+		"build": "tsup"
 	},
 	"devDependencies": {
-		"@hono/node-server": "^1.19.7",
-		"@hono/node-ws": "^1.3.0",
 		"@types/node": "^22.13.9",
-		"srvx": "^0.10.0",
+		"tsup": "^8.0.0",
 		"tsx": "^3.12.7",
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
-		"rivetkit": "*"
+		"@hono/node-server": "^1.19.7",
+		"@hono/node-ws": "^1.3.0",
+		"hono": "^4.0.0",
+		"rivetkit": "*",
+		"srvx": "^0.10.0"
 	},
 	"stableVersion": "0.8.0",
 	"template": {

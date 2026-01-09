@@ -39,7 +39,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
 }
 
 // Import registry after environment is set up
-const { registry } = await import("../src/backend/registry");
+const { registry } = await import("../src/actors.ts");
 
 test("AI Agent initializes with conversation ID", async (ctx) => {
 	const { client } = await setupTest(ctx, registry);

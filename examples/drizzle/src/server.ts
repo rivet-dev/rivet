@@ -1,7 +1,6 @@
-// import { registry } from "./registry";
-// import { createMemoryDriver } from "@rivetkit/memory";
-// import { serve } from "@rivetkit/nodejs";
+// import { Hono } from "hono";
+// import { registry } from "./actors.ts";
 
-// serve(registry, {
-// 	driver: createMemoryDriver(),
-// });
+// const app = new Hono();
+// app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+// export default app;

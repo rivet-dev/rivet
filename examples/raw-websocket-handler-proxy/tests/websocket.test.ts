@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/backend/registry.js";
+import { registry } from "../src/actors.ts";
 
 describe("websocket chat", () => {
 	test("should connect and receive init message", async (test) => {
