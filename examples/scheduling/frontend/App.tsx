@@ -1,6 +1,6 @@
 import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { Reminder, Registry } from "../src/registry";
+import type { Reminder, Registry } from "../src/actors.ts";
 
 const { useActor } = createRivetKit<Registry>(`${window.location.origin}/api/rivet`);
 

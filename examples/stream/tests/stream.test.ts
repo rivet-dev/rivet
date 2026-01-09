@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/backend/registry";
+import { registry } from "../src/actors.ts";
 
 test("Stream processor maintains top 3 values", async (ctx) => {
 	const { client } = await setupTest(ctx, registry);

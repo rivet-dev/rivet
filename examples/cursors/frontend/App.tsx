@@ -4,7 +4,7 @@ import type {
 	CursorPosition,
 	TextLabel,
 	registry,
-} from "../src/registry";
+} from "../src/actors.ts";
 
 const { useActor } = createRivetKit<typeof registry>(`${window.location.origin}/api/rivet`);
 
