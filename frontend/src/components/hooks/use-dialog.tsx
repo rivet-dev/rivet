@@ -1,5 +1,6 @@
 "use client";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import {
 	type ComponentProps,
 	type ComponentType,
@@ -9,14 +10,22 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "../ui/button";
 import {
 	Dialog,
 	DialogContent,
 	type DialogProps,
 	DialogTitle,
 } from "../ui/dialog";
-import { IsInModalContext } from "./isomorphic-frame";
+import {
+	Content,
+	Footer,
+	Header,
+	IsInModalContext,
+	Title,
+} from "./isomorphic-frame";
 
 export interface DialogContentProps {
 	onClose?: () => void;
@@ -70,47 +79,68 @@ export const createDialogHook = <
 							}
 						}}
 					>
-						<Suspense
-							fallback={
-								<div className="flex flex-col gap-4">
-									<VisuallyHidden>
-										<DialogTitle>Loading...</DialogTitle>
-									</VisuallyHidden>
-									<div className="flex flex-col">
-										<Skeleton className="w-1/4 h-5" />
-										<Skeleton className="w-3/4 h-5 mt-2" />
-									</div>
+						<QueryErrorResetBoundary>
+							{({ reset }) => (
+								<ErrorBoundary
+									onReset={reset}
+									fallbackRender={({
+										error,
+										resetErrorBoundary,
+									}) => (
+										<DialogErrorFallback
+											error={error}
+											resetError={resetErrorBoundary}
+										/>
+									)}
+								>
+									<Suspense
+										fallback={
+											<div className="flex flex-col gap-4">
+												<VisuallyHidden>
+													<DialogTitle>
+														Loading...
+													</DialogTitle>
+												</VisuallyHidden>
+												<div className="flex flex-col">
+													<Skeleton className="w-1/4 h-5" />
+													<Skeleton className="w-3/4 h-5 mt-2" />
+												</div>
 
-									<div className="flex flex-col gap-2">
-										<Skeleton className="w-1/3 h-5" />
-										<Skeleton className="w-full h-10" />
-									</div>
-									<div className="flex flex-col gap-2">
-										<Skeleton className="w-1/3 h-5" />
-										<Skeleton className="w-full h-10" />
-									</div>
-									<div className="flex flex-col gap-2">
-										<Skeleton className="w-1/3 h-5" />
-										<Skeleton className="w-full h-10" />
-									</div>
-									<div className="flex flex-col gap-2">
-										<Skeleton className="w-1/3 h-5" />
-										<Skeleton className="w-full h-10" />
-									</div>
-									<div className="flex flex-col gap-2">
-										<Skeleton className="w-1/3 h-5" />
-										<Skeleton className="w-full h-10" />
-									</div>
-								</div>
-							}
-						>
-							<Content
-								{...props}
-								onClose={() =>
-									dialogProps?.onOpenChange?.(false)
-								}
-							/>
-						</Suspense>
+												<div className="flex flex-col gap-2">
+													<Skeleton className="w-1/3 h-5" />
+													<Skeleton className="w-full h-10" />
+												</div>
+												<div className="flex flex-col gap-2">
+													<Skeleton className="w-1/3 h-5" />
+													<Skeleton className="w-full h-10" />
+												</div>
+												<div className="flex flex-col gap-2">
+													<Skeleton className="w-1/3 h-5" />
+													<Skeleton className="w-full h-10" />
+												</div>
+												<div className="flex flex-col gap-2">
+													<Skeleton className="w-1/3 h-5" />
+													<Skeleton className="w-full h-10" />
+												</div>
+												<div className="flex flex-col gap-2">
+													<Skeleton className="w-1/3 h-5" />
+													<Skeleton className="w-full h-10" />
+												</div>
+											</div>
+										}
+									>
+										<Content
+											{...props}
+											onClose={() =>
+												dialogProps?.onOpenChange?.(
+													false,
+												)
+											}
+										/>
+									</Suspense>
+								</ErrorBoundary>
+							)}
+						</QueryErrorResetBoundary>
 					</DialogContent>
 				</Dialog>
 			</IsInModalContext.Provider>
@@ -233,3 +263,38 @@ useDialog.Feedback = createDialogHook(
 useDialog.CreateActor = createDialogHook(
 	() => import("../actors/dialogs/create-actor-dialog"),
 );
+
+function DialogErrorFallback({
+	resetError,
+	error,
+}: {
+	resetError: () => void;
+	error: Error;
+}) {
+	return (
+		<>
+			<Header>
+				<Title>
+					{"statusCode" in error && error.statusCode === 404
+						? "Resource not found"
+						: "body" in error &&
+								error.body &&
+								typeof error.body === "object" &&
+								"message" in error.body
+							? String(error.body.message)
+							: error.message}
+				</Title>
+			</Header>
+			<Content>
+				{"statusCode" in error && error.statusCode === 404
+					? "The resource you are looking for does not exist or you do not have access to it."
+					: 'description' in error ? <>{String(error.description)}</> : "An unexpected error occurred. Please try again later."}
+			</Content>
+			<Footer>
+				<Button variant="secondary" onClick={resetError}>
+					Retry
+				</Button>
+			</Footer>
+		</>
+	);
+}

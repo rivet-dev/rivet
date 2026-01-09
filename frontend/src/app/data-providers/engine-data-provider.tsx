@@ -646,7 +646,10 @@ export const createNamespaceContext = ({
 					const config = response.runnerConfigs[opts.name!];
 
 					if (!config) {
-						throw new Error("Runner config not found");
+						throw new FetchError(
+							"Provider Config not found",
+							"The specified provider configuration could not be found.",
+						);
 					}
 
 					return config;
@@ -673,6 +676,15 @@ export const createNamespaceContext = ({
 		},
 	};
 };
+
+class FetchError extends Error {
+	constructor(
+		message: string,
+		public description: string,
+	) {
+		super(message);
+	}
+}
 
 function transformActor(a: Rivet.Actor): Actor {
 	return {

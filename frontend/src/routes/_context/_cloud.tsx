@@ -5,6 +5,7 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
+import { config } from "process";
 import { match } from "ts-pattern";
 import { useDialog } from "@/app/use-dialog";
 import { waitForClerk } from "@/lib/waitForClerk";
@@ -260,6 +261,8 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
+									dc: undefined,
+									config: undefined,
 								}),
 							});
 						}
@@ -278,6 +281,7 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
+									config: undefined,
 								}),
 							});
 						}

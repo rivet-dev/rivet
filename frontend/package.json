@@ -116,6 +116,7 @@
 		"react": "^19.1.1",
 		"react-day-picker": "8.10.1",
 		"react-dom": "^19.1.1",
+		"react-error-boundary": "^6.0.3",
 		"react-hook-form": "^7.62.0",
 		"react-inspector": "^6.0.2",
 		"react-resizable-panels": "^2.1.9",

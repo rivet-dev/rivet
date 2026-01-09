@@ -3,17 +3,22 @@ import { Combobox } from "@/components";
 import { ActorRegion } from "./actor-region";
 import { useDataProvider } from "./data-provider";
 
-interface RegionSelectProps {
-	onValueChange: (value: string) => void;
-	value: string | undefined;
+type RegionSelectProps = {
 	showAuto?: boolean;
-}
+} & (
+	| {
+			onValueChange: (value: string) => void;
+			value: string | undefined;
+			multiple?: false;
+	  }
+	| {
+			onValueChange: (value: string[]) => void;
+			value: string[] | undefined;
+			multiple: true;
+	  }
+);
 
-export function RegionSelect({
-	onValueChange,
-	value,
-	showAuto = true,
-}: RegionSelectProps) {
+export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 	const {
 		data = [],
 		fetchNextPage,
@@ -44,8 +49,7 @@ export function RegionSelect({
 		<Combobox
 			placeholder="Choose a region..."
 			options={regions}
-			value={value}
-			onValueChange={onValueChange}
+			{...props}
 			isLoading={isLoading || isFetchingNextPage}
 			onLoadMore={fetchNextPage}
 			filter={(option, searchMixed) => {

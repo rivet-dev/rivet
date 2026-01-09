@@ -1,5 +1,5 @@
 import {
-	faExclamationTriangle,
+	faHourglassEnd,
 	faPlus,
 	faSignalAlt,
 	faSignalAlt2,
@@ -7,6 +7,7 @@ import {
 	faSignalAlt4,
 	Icon,
 } from "@rivet-gg/icons";
+
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -24,7 +25,7 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 
 interface RunnersTableProps {
 	isLoading?: boolean;
@@ -147,7 +148,9 @@ function Row(runner: Rivet.Runner) {
 					{runner.name}
 				</DiscreteCopyButton>
 			</TableCell>
-			<TableCell>{runner.datacenter}</TableCell>
+			<TableCell>
+				<ActorRegion regionId={runner.datacenter} showLabel />
+			</TableCell>
 
 			<TableCell>
 				{runner.remainingSlots}/{runner.totalSlots}
@@ -189,7 +192,7 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 				trigger={
 					<div className="text-center relative size-8">
 						<Icon
-							icon={faExclamationTriangle}
+							icon={faHourglassEnd}
 							className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
 						/>
 					</div>

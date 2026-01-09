@@ -41,7 +41,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
 					datacenter: values.datacenter,
-					crashPolicy: values.crashPolicy || CrashPolicy.Restart,
+					crashPolicy: values.crashPolicy || CrashPolicy.Sleep,
 					runnerNameSelector: values.runnerNameSelector || "default",
 				});
 				onClose?.();
@@ -49,7 +49,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 			defaultValues={{
 				name,
 				key: getRandomKey(),
-				crashPolicy: CrashPolicy.Restart,
+				crashPolicy: CrashPolicy.Sleep,
 			}}
 		>
 			<DialogHeader>

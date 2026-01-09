@@ -123,36 +123,37 @@ export const CopyButton = forwardRef<HTMLElement, CopyButtonProps>(
 	},
 );
 
-export type DiscreteCopyButtonProps = CopyButtonProps &
-	ComponentProps<typeof Button>;
+export type DiscreteCopyButtonProps = CopyButtonProps & {
+	tooltip?: boolean;
+} & ComponentProps<typeof Button>;
 
 export const DiscreteCopyButton = forwardRef<
 	HTMLElement,
 	DiscreteCopyButtonProps
->(({ children, value, ...props }, ref) => {
-	return (
-		<WithTooltip
-			content="Click to copy"
-			trigger={
-				<CopyButton ref={ref} value={value} {...props}>
-					<Button
-						type="button"
-						variant="ghost"
-						size={props.size}
-						className={cn("max-w-full min-w-0", props.className)}
-						endIcon={
-							<Icon
-								className="group-hover:opacity-100 opacity-0 transition-opacity"
-								icon={faCopy}
-							/>
-						}
-					>
-						{children}
-					</Button>
-				</CopyButton>
-			}
-		/>
+>(({ children, value, tooltip = true, ...props }, ref) => {
+	const content = (
+		<CopyButton ref={ref} value={value} {...props}>
+			<Button
+				type="button"
+				variant="ghost"
+				size={props.size}
+				className={cn("max-w-full min-w-0", props.className)}
+				endIcon={
+					<Icon
+						className="group-hover:opacity-100 opacity-0 transition-opacity"
+						icon={faCopy}
+					/>
+				}
+			>
+				{children}
+			</Button>
+		</CopyButton>
 	);
+
+	if (tooltip) {
+		return <WithTooltip content="Click to copy" trigger={content} />;
+	}
+	return content;
 });
 
 interface ClickToCopyProps {

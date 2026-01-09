@@ -78,21 +78,21 @@ export function ActorError({ error }: { error: Rivet.ActorError }) {
 		.with(P.string, (errMsg) =>
 			match(errMsg)
 				.with("no_capacity", () => (
-					<span>No capacity available to start Actor.</span>
+					<p>No capacity available to start Actor.</p>
 				))
-				.exhaustive(),
+				.otherwise(() => <p>Unknown error: {errMsg}</p>),
 		)
 		.with(P.shape({ runnerPoolError: P.any }), (err) => (
-			<span>
+			<p>
 				Runner Pool Error:{" "}
 				<RunnerPoolError error={err.runnerPoolError} />
-			</span>
+			</p>
 		))
 		.with(P.shape({ runnerNoResponse: P.any }), (err) => (
-			<span>
+			<p>
 				Runner ({err.runnerNoResponse.runnerId}) was allocated but Actor
 				did not respond.
-			</span>
+			</p>
 		))
 		.exhaustive();
 }
