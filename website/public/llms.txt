@@ -32,6 +32,7 @@ https://rivet.dev/blog/2025-11-02-weekly-updates
 https://rivet.dev/blog/2025-11-09-weekly-updates
 https://rivet.dev/blog/2025-11-24-introducing-live-websocket-migration-hibernation
 https://rivet.dev/blog/2025-12-03-ai-generated-backends
+https://rivet.dev/blog/2025-12-28-weekly-updates
 https://rivet.dev/blog/godot-multiplayer-compared-to-unity
 https://rivet.dev/changelog
 https://rivet.dev/changelog.json
@@ -64,6 +65,7 @@ https://rivet.dev/changelog/2025-11-02-weekly-updates
 https://rivet.dev/changelog/2025-11-09-weekly-updates
 https://rivet.dev/changelog/2025-11-24-introducing-live-websocket-migration-hibernation
 https://rivet.dev/changelog/2025-12-03-ai-generated-backends
+https://rivet.dev/changelog/2025-12-28-weekly-updates
 https://rivet.dev/changelog/godot-multiplayer-compared-to-unity
 https://rivet.dev/cloud
 https://rivet.dev/docs/actors
@@ -97,6 +99,7 @@ https://rivet.dev/docs/actors/schedule
 https://rivet.dev/docs/actors/sharing-and-joining-state
 https://rivet.dev/docs/actors/state
 https://rivet.dev/docs/actors/testing
+https://rivet.dev/docs/actors/types
 https://rivet.dev/docs/actors/websocket-handler
 https://rivet.dev/docs/clients/javascript
 https://rivet.dev/docs/clients/next-js

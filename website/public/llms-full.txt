@@ -156,6 +156,27 @@ const counter = actor(,
 
 Actions have a single return value. To stream realtime data in response to an action, use [events](/docs/actors/events).
 
+## Canceling Long-Running Actions
+
+For operations that should be cancelable on-demand, create your own `AbortController` and chain it with `c.abortSignal` for automatic cleanup on actor shutdown.
+
+```typescript
+const chatActor = actor(),
+
+  actions: ),
+        signal: controller.signal
+      });
+
+      return await response.json();
+    },
+
+    cancel: (c) => 
+  }
+});
+```
+
+See [Actor Shutdown Abort Signal](/docs/actors/lifecycle#actor-shutdown-abort-signal) for automatically canceling operations when the actor stops.
+
 ## Using `ActionContext` Externally
 
 When writing complex logic for actions, you may want to extract parts of your implementation into separate helper functions. When doing this, you'll need a way to properly type the context parameter.
@@ -173,7 +194,7 @@ const counter = actor(,
 function incrementCount(c: ActionContextOf) 
 ```
 
-See [helper types](/docs/actors/helper-types) for more details on using `ActionContextOf` and other utility types.
+See [types](/docs/actors/types) for more details on using `ActionContextOf` and other utility types.
 
 ## API Reference
 
@@ -694,8 +715,8 @@ const cachedAuthActor = actor(,
 ## API Reference
 
 - [`AuthIntent`](/typedoc/types/rivetkit.mod.AuthIntent.html) - Authentication intent type
-- [`OnBeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html) - Context for auth checks
-- [`OnConnectContext`](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html) - Context after connection
+- [`BeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html) - Context for auth checks
+- [`ConnectContext`](/typedoc/interfaces/rivetkit.mod.ConnectContext.html) - Context after connection
 ## Clients
 
 # Clients
@@ -1207,7 +1228,7 @@ There are two ways to define the initial state for connections:
 
 ### `onBeforeConnect`
 
-[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
+[API Reference](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html)
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
@@ -1238,7 +1259,7 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
+[API Reference](/typedoc/interfaces/rivetkit.mod.ConnectContext.html)
 
 Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
 
@@ -1326,8 +1347,8 @@ This ensures the underlying network connections close cleanly before continuing.
 - [`Conn`](/typedoc/interfaces/rivetkit.mod.Conn.html) - Connection interface
 - [`ConnInitContext`](/typedoc/interfaces/rivetkit.mod.ConnInitContext.html) - Connection initialization context
 - [`CreateConnStateContext`](/typedoc/interfaces/rivetkit.mod.CreateConnStateContext.html) - Context for creating connection state
-- [`OnBeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html) - Pre-connection lifecycle hook context
-- [`OnConnectContext`](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html) - Post-connection lifecycle hook context
+- [`BeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html) - Pre-connection lifecycle hook context
+- [`ConnectContext`](/typedoc/interfaces/rivetkit.mod.ConnectContext.html) - Post-connection lifecycle hook context
 - [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Typed connection from client side
 ## Design Patterns
 
@@ -1757,16 +1778,16 @@ Create actor state dynamically on each actors' start:
 ```typescript
 // Define vars with initialization logic
 const counter = actor(,
-  
+
   // Define vars using a creation function
-  createVars: (c: InitContext, driver: any) => ;
+  createVars: (c: CreateVarsContext, driver: any) => ;
   },
   
   actions: 
 });
 ```
 
-If accepting arguments to `createVars`, you **must** define the types: `createVars(c: InitContext, driver: any)`
+If accepting arguments to `createVars`, you **must** define the types: `createVars(c: CreateVarsContext, driver: any)`
 
 Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
 
@@ -1813,9 +1834,9 @@ For example, the Redis driver exposes access to the Redis instance:
 
 ```typescript
 const myActor = actor(,
-  
+
   // The second parameter provides driver-specific context
-  createVars: (ctx: InitContext, driver: DriverContext) => (),
+  createVars: (ctx: CreateVarsContext, driver: DriverContext) => (),
   
   actions: 
   }
@@ -1975,7 +1996,35 @@ try  catch (error)
 }
 ```
 
-The original error message and stack trace are logged server-side for debugging. Check your server logs to see the full error details.
+### Server-Side Logging
+
+**All internal errors are logged server-side with full details.** When an internal error occurs, the complete error message, stack trace, and context are written to your server logs. This is where you should look first when debugging internal errors in production.
+
+The client receives only a generic "Internal error" message for security, but you can find the full error details in your server logs including:
+
+- Complete error message
+- Stack trace
+- Request context (actor ID, action name, connection ID, etc.)
+- Timestamp
+
+**Always check your server logs to see the actual error details when debugging internal errors.**
+
+### Exposing Errors to Clients (Development Only)
+
+**Warning:** Only enable error exposure in development environments. In production, this will leak sensitive internal details to clients.
+
+For faster debugging during development, you can automatically expose internal error details to clients. This is enabled when:
+
+- `NODE_ENV=development` - Automatically enabled in development mode
+- `RIVET_EXPOSE_ERRORS=1` - Explicitly enable error exposure
+
+With error exposure enabled, clients will see the full error message instead of the generic "Internal error" response:
+
+```typescript
+// With NODE_ENV=development or RIVET_EXPOSE_ERRORS=1
+try  catch (error) 
+}
+```
 
 ## API Reference
 
@@ -2295,53 +2344,7 @@ These docs have moved to [Low-Level WebSocket Handler](/docs/actors/websocket-ha
 
 # Helper Types
 
-Rivet provides several TypeScript helper types to make it easier to work with actors in a type-safe way.
-
-## `Context` Types
-
-When working with actors, you often need to access the context object outside of the actor's handlers. Rivet provides helper types to extract the context types from actor definitions.
-
-### `ActorContextOf`
-
-Extracts the full actor context type from an actor definition. This is the type of the context object (`c`) available in [lifecycle hooks](/docs/actors/lifecycle) and in [actions](/docs/actors/actions).
-
-```typescript
-const chatRoom = actor(,
-  actions: ,
-  actions: 
-  }
-});
-
-// Now you can use this type elsewhere
-function logMessage(context: ActorContextOf, message: string) );
-}
-```
-
-### `ActionContextOf`
-
-Extracts the action context type from an actor definition. This is the type of the context object (`c`) available in [actions](/docs/actors/actions). This cannot be used in [lifecycle hooks](/docs/actors/lifecycle).
-
-```typescript
-const counterWithProcessing = actor(,
-  actions: 
-  }
-});
-
-function processCounterAction(context: ActionContextOf) 
-```
-
-## API Reference
-
-- [`ActorContextOf`](/typedoc/types/rivetkit.mod.ActorContextOf.html) - Extract context from actor
-- [`ActionContextOf`](/typedoc/types/rivetkit.mod.ActionContextOf.html) - Extract context from action
-- [`ActorConfig`](/typedoc/types/rivetkit.mod.ActorConfig.html) - Actor configuration type
-- [`ActorConfigInput`](/typedoc/types/rivetkit.mod.ActorConfigInput.html) - Actor configuration input
-- [`RegistryActors`](/typedoc/types/rivetkit.mod.RegistryActors.html) - Extract actors from registry
-- [`ExtractActorsFromRegistry`](/typedoc/types/rivetkit.client_mod.ExtractActorsFromRegistry.html) - Utility type
-- [`ExtractRegistryFromClient`](/typedoc/types/rivetkit.client_mod.ExtractRegistryFromClient.html) - Utility type
-- [`AnyActorDefinition`](/typedoc/types/rivetkit.mod.AnyActorDefinition.html) - Any actor definition type
-- [`AnyActorInstance`](/typedoc/types/rivetkit.mod.AnyActorInstance.html) - Any actor instance type
-- [`AnyClient`](/typedoc/types/rivetkit.mod.AnyClient.html) - Any client type
+This page has moved to [Types](/docs/actors/types).
 ## Vanilla HTTP API
 
 # Vanilla HTTP API
@@ -2917,7 +2920,7 @@ There are two ways to define the initial state for connections:
 
 ### `onBeforeConnect`
 
-[API Reference](/typedoc/interfaces/rivetkit.mod.OnBeforeConnectContext.html)
+[API Reference](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html)
 
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
@@ -2948,7 +2951,7 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `onConnect`
 
-[API Reference](/typedoc/interfaces/rivetkit.mod.OnConnectContext.html)
+[API Reference](/typedoc/interfaces/rivetkit.mod.ConnectContext.html)
 
 Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
 
@@ -3123,6 +3126,23 @@ const gameRoom = actor(, scores:  },
 });
 ```
 
+### Actor Shutdown Abort Signal
+
+The `c.abortSignal` provides an `AbortSignal` that fires when the actor is stopping. Use this to cancel ongoing operations when the actor sleeps or is destroyed.
+
+```typescript
+const chatActor = actor(),
+        signal: c.abortSignal
+      });
+
+      return await response.json();
+    }
+  }
+});
+```
+
+See [Canceling Long-Running Actions](/docs/actors/actions#canceling-long-running-actions) for manually canceling operations on-demand.
+
 ### Using `ActorContext` Type Externally
 
 When extracting logic from lifecycle hooks or actions into external functions, you'll often need to define the type of the context parameter. Rivet provides helper types that make it easy to extract and pass these context types to external functions.
@@ -3139,7 +3159,7 @@ function logActorStarted(c: ActorContextOf) `);
 }
 ```
 
-See [Helper Types](/docs/actors/helper-types) for more details on using `ActorContextOf`.
+See [Types](/docs/actors/types) for more details on using `ActorContextOf`.
 
 ## Full Example
 
@@ -3828,7 +3848,7 @@ const counterActor = actor(,
 });
 ```
 
-See also the [raw fetch handler example](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-fetch-handler).
+See also the [raw fetch handler example](https://github.com/rivet-dev/rivet/tree/main/examples/raw-fetch-handler).
 
 ## Sending Requests To Actors
 
@@ -4032,9 +4052,9 @@ const counter = actor(;
 
 Read more about [input parameters](/docs/actors/input) here.
 
-If accepting arguments to `createState`, you **must** define the types: `createSTate(c: InitContext, input: MyType)`
+If accepting arguments to `createState`, you **must** define the types: `createState(c: CreateContext, input: MyType)`
 
-Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
+Otherwise, the return type will not be inferred and `c.state` will be of type `unknown`.
 
 The `createState` function is called once when the actor is first created. See [Lifecycle](/docs/actors/lifecycle) for more details.
 
@@ -4117,7 +4137,7 @@ State is currently constrained to the following types:
 
 ## API Reference
 
-- [`InitContext`](/typedoc/types/rivetkit.mod.InitContext.html) - Context available during actor initialization
+- [`CreateContext`](/typedoc/types/rivetkit.mod.CreateContext.html) - Context available during actor state creation
 - [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context available throughout actor lifecycle
 - [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining actors with state
 ## Testing
@@ -4281,6 +4301,59 @@ Rivet's testing framework automatically handles server setup and teardown, so yo
 - [`test`](/typedoc/functions/rivetkit.mod.test.html) - Test helper function
 - [`createMemoryDriver`](/typedoc/functions/rivetkit.mod.createMemoryDriver.html) - In-memory driver for tests
 - [`createFileSystemDriver`](/typedoc/functions/rivetkit.mod.createFileSystemDriver.html) - Filesystem driver for tests
+## Types
+
+# Types
+
+TypeScript types for working with Rivet Actors. This page covers context types used in lifecycle hooks and actions, as well as helper types for extracting types from actor definitions.
+
+## Context Types
+
+Context types define what properties and methods are available in different parts of the actor lifecycle.
+
+```typescript
+const counter = actor(,
+
+  // CreateContext in createState hook
+  createState: (c, input: ) => ;
+  },
+
+  // ActionContext in actions
+  actions: 
+  }
+});
+```
+
+### Extracting Context Types
+
+When writing helper functions that work with actor contexts, use context extractor types like `CreateContextOf` or `ActionContextOf` to extract the appropriate context type from your actor definition.
+
+```typescript
+const gameRoom = actor(,
+
+  createState: (c, input: ) => ;
+  },
+
+  actions: 
+  }
+});
+
+// Extract CreateContext type for createState hook
+function initializeRoom(
+  context: CreateContextOf,
+  roomId: string
+) `);
+  // context.state is not available here (being created)
+  // context.vars is not available here (not created yet)
+}
+
+// Extract ActionContext type for actions
+function validatePlayer(
+  context: ActionContextOf,
+  playerId: string
+) 
+}
+```
 ## Low-Level WebSocket Handler
 
 # Low-Level WebSocket Handler
@@ -4303,7 +4376,7 @@ const chatActor = actor(,
 });
 ```
 
-See also the [raw WebSocket handler example](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler).
+See also the [raw WebSocket handler example](https://github.com/rivet-dev/rivet/tree/main/examples/raw-websocket-handler).
 
 ## Connecting To Actors
 
@@ -4384,7 +4457,7 @@ app.get("/ws/:id", upgradeWebSocket(async (c) => );
 default app;
 ```
 
-See also the [raw WebSocket handler with proxy example](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
+See also the [raw WebSocket handler with proxy example](https://github.com/rivet-dev/rivet/tree/main/examples/raw-websocket-handler-proxy).
 
 ## Connection & Lifecycle Hooks
 
@@ -4539,8 +4612,8 @@ const actor = useActor(,
 
 Actor object with the following properties:
 - `connection`: The actor connection for calling actions, or `null` if not connected
-- `isConnected`: Boolean indicating if the actor is connected
-- `state`: Current actor state (if available)
+- `connStatus`: The connection status (`"idle"`, `"connecting"`, `"connected"`, or `"disconnected"`)
+- `error`: Error object if the connection failed, or `null`
 - `useEvent(eventName, handler)`: Method to subscribe to actor events
 
 ### `actor.useEvent(eventName, handler)`
@@ -4597,8 +4670,6 @@ function ConditionalActor() );
     
        setEnabled(!enabled)}>
 
-      )}
-    
   );
 }
 ```
@@ -4720,89 +4791,17 @@ The Rivet Rust client provides a way to connect to and interact with actors from
 
 ## API Reference
 
-For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-dev/rivetkit/blob/main/clients/rust).
+For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-dev/rivet/tree/main/rivetkit-rust/packages/client).
 ## Deploying to AWS ECS
 
 # Deploying to AWS ECS
 
-Run your backend on Amazon ECS with Fargate using a simple container image and service definition.
+Run your backend on Amazon ECS with Fargate.
 
-## Guide
+See the [AWS ECS template](https://github.com/rivet-dev/template-aws-ecs) for deployment instructions:
 
-- AWS account with permissions for ECS, ECR, and IAM
-- AWS CLI v2 configured (`aws configure`)
-- An existing VPC with private subnets and security groups for ECS
-- Container registry (ECR) and your backend repository
-
-Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the task definition. They should look something like this:
-
-```bash
-RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
-RIVET_NAMESPACE=your-namespace-id
-RIVET_TOKEN=your-token
-```
-
-Create a `Dockerfile` in your project root:
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY . .
-ENV PORT=8080
-CMD ["node", "server.js"]
-```
-
-Authenticate to ECR, build the image, and push it. Replace the AWS account, region, and repository names with your own.
-
-```bash
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
-docker build -t backend:latest .
-docker tag backend:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/backend:latest
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/backend:latest
-```
-
-Create `backend-task.json` describing the ECS task. Update the ARNs, subnets, and security groups for your environment.
-
-```json
-,
-        ,
-        
-      ]
-    }
-  ]
-}
-```
-
-You do not need to expose a container port. Rivet tunnels traffic directly to your backend.
-
-Register the task definition:
-
-```bash
-aws ecs register-task-definition --cli-input-json file://backend-task.json
-```
-
-Create or reuse an ECS cluster, then launch a service with the new task definition. Substitute your subnet and security group IDs.
-
-```bash
-aws ecs create-cluster --cluster-name backend
-aws ecs create-service \
-  --cluster backend \
-  --service-name backend \
-  --task-definition backend \
-  --desired-count 1 \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration="
-```
-
-Check that the task is running:
-
-```bash
-aws ecs describe-services --cluster backend --services backend --query "services[0].deployments"
-```
-
-Your runner should appear as connected on the Rivet dashboard once the task is healthy.
+- [Deploy with Terraform](https://github.com/rivet-dev/template-aws-ecs#option-a-deploy-with-terraform)
+- [Deploy with AWS CLI](https://github.com/rivet-dev/template-aws-ecs#option-b-deploy-with-aws-cli)
 ## Deploy To Amazon Web Services Lambda
 
 # Deploy To Amazon Web Services Lambda
@@ -4825,7 +4824,7 @@ Advanced setup using createInlineClient.
 - [Cloudflare account](https://dash.cloudflare.com/) with Durable Objects enabled
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) v3
 - A Cloudflare Worker app integrated with RivetKit
-  - See the [Cloudflare Workers quickstart](/docs/actors/quickstart/cloudflare-workers/) or [Cloudflare Workers example](https://github.com/rivet-dev/rivetkit/tree/main/examples/cloudflare-workers) to get started
+  - See the [Cloudflare Workers quickstart](/docs/actors/quickstart/cloudflare-workers/) or [Cloudflare Workers example](https://github.com/rivet-dev/rivet/tree/main/examples/cloudflare-workers) to get started
 
 Your project should have the following files:
 
@@ -4833,7 +4832,7 @@ Your project should have the following files:
 - `src/registry.ts` (or similar actor registry file)
 - `wrangler.json` with proper Durable Objects and KV namespace configuration
 
-If your project is not integrated with RivetKit yet, follow the [Cloudflare Workers quickstart guide](/docs/actors/quickstart/cloudflare-workers/) or see the [Cloudflare Workers example](https://github.com/rivet-dev/rivetkit/tree/main/examples/cloudflare-workers).
+If your project is not integrated with RivetKit yet, follow the [Cloudflare Workers quickstart guide](/docs/actors/quickstart/cloudflare-workers/) or see the [Cloudflare Workers example](https://github.com/rivet-dev/rivet/tree/main/examples/cloudflare-workers).
 
 Deploy to Cloudflare's global network:
 
@@ -4878,9 +4877,9 @@ The Cloudflare Workers driver provides access to the Durable Object state and en
 
 ```typescript
 const myActor = actor(,
-  
+
   // Save the Cloudflare driver context
-  createVars: (ctx: InitContext, driver: DriverContext) => (),
+  createVars: (ctx: CreateVarsContext, driver: DriverContext) => (),
   
   actions: ,
   }
@@ -5166,7 +5165,7 @@ If you're starting from scratch, go to the Connect tab on the Rivet dashboard an
 
 - [Railway account](https://railway.app)
 - Your RivetKit app
-  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivetkit/tree/main/examples)
+  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
 - Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
 
 Ensure your `package.json` has a start script:
@@ -5216,7 +5215,7 @@ Complete example Next.js + RivetKit app.
 - [Vercel account](https://vercel.com/)
 - Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
 - A Next.js app integrated with RivetKit
-  - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js) to get started
+  - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivet/tree/main/examples/next-js) to get started
   - Your project should have the following files:
     - `src/app/api/rivet/[...all]/route.ts`
     - `src/rivet/registry.ts`
@@ -5463,7 +5462,7 @@ actor definitions include the following generic parameters that you'll see frequ
 - rivet uses pino for logging
 - we expose a scoped child logger for each actor at `c.log` that automatically logs the actor id + key
 - this allows you to search lgos easily by actor id without having to log the actor id frequently
-- logs can be configured via the `LOG_LEVEL` env var
+- logs can be configured via the `RIVETKIT_LOG_LEVEL` env var
 
 ### fault tolerance
 
@@ -5917,13 +5916,16 @@ You can configure logging behavior using environment variables:
 
 | Variable | Description | Values | Default |
 | -------- | ----------- | ------ | ------- |
-| `LOG_LEVEL` | Sets the minimum log level to display | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` | `warn` |
-| `LOG_TARGET` | Include the module name that logged the message | `1` to enable, `0` to disable | `0` |
-| `LOG_TIMESTAMP` | Include timestamp in log output | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_LEVEL` | Sets the minimum log level to display | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` | `warn` |
+| `RIVETKIT_LOG_TARGET` | Include the module name that logged the message | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_TIMESTAMP` | Include timestamp in log output | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_MESSAGE` | Enable detailed message logging for debugging | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_ERROR_STACK` | Include stack traces in error output | `1` to enable, `0` to disable | `0` |
+| `RIVETKIT_LOG_HEADERS` | Log HTTP headers in requests | `1` to enable, `0` to disable | `0` |
 
 Example:
 ```bash
-LOG_LEVEL=debug LOG_TARGET=1 LOG_TIMESTAMP=1 node server.js
+RIVETKIT_LOG_LEVEL=debug RIVETKIT_LOG_TARGET=1 RIVETKIT_LOG_TIMESTAMP=1 node server.js
 ```
 
 ### Log Level
