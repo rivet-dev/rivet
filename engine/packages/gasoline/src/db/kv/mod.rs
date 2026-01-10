@@ -1719,12 +1719,15 @@ impl Database for DatabaseKv {
 	) -> WorkflowResult<()> {
 		let start_instant = Instant::now();
 
-		let wrote_to_wake_idx = self
+		let (wrote_to_wake_idx, pending_signal_cleared_count) = self
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.run(|tx| {
 				async move {
+					let start = Instant::now();
+					let tx = tx.with_subspace(self.subspace.clone());
+
 					let sub_workflow_wake_subspace = self
 						.subspace
 						.subspace(&keys::wake::SubWorkflowWakeKey::subspace(workflow_id));
@@ -1742,34 +1745,29 @@ impl Database for DatabaseKv {
 						Serializable,
 					);
 
-					let (wrote_to_wake_idx, tag_keys, wake_deadline_entry) = tokio::try_join!(
+					let (wrote_to_wake_idx, tag_keys, wake_deadline) = tokio::try_join!(
 						// Check for other workflows waiting on this one, wake all
 						async {
 							let mut wrote_to_wake_idx = false;
 
 							while let Some(entry) = stream.try_next().await? {
-								let sub_workflow_wake_key =
-									self.subspace
-										.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())?;
-								let workflow_name =
-									sub_workflow_wake_key.deserialize(entry.value())?;
-
-								let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-									workflow_name,
-									sub_workflow_wake_key.workflow_id,
-									keys::wake::WakeCondition::SubWorkflow {
-										sub_workflow_id: workflow_id,
-									},
-								);
+								let (sub_workflow_wake_key, workflow_name) =
+									tx.read_entry::<keys::wake::SubWorkflowWakeKey>(&entry)?;
 
 								// Add wake condition for workflow
-								tx.set(
-									&self.subspace.pack(&wake_condition_key),
-									&wake_condition_key.serialize(())?,
-								);
+								tx.write(
+									&keys::wake::WorkflowWakeConditionKey::new(
+										workflow_name,
+										sub_workflow_wake_key.workflow_id,
+										keys::wake::WakeCondition::SubWorkflow {
+											sub_workflow_id: workflow_id,
+										},
+									),
+									(),
+								)?;
 
 								// Clear secondary index
-								tx.clear(entry.key());
+								tx.delete(&sub_workflow_wake_key);
 
 								wrote_to_wake_idx = true;
 							}
@@ -1785,32 +1783,27 @@ impl Database for DatabaseKv {
 							Serializable,
 						)
 						.map(|res| {
-							self.subspace
-								.unpack::<keys::workflow::TagKey>(res?.key())
+							tx.unpack::<keys::workflow::TagKey>(res?.key())
 								.map_err(anyhow::Error::from)
 						})
 						.try_collect::<Vec<_>>(),
-						tx.get(&self.subspace.pack(&wake_deadline_key), Serializable),
+						tx.read_opt(&wake_deadline_key, Serializable),
 					)?;
 
 					for key in tag_keys {
-						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+						tx.delete(&keys::workflow::ByNameAndTagKey::new(
 							workflow_name.to_string(),
 							key.k,
 							key.v,
 							workflow_id,
-						);
-						tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+						));
 					}
 
 					// Clear null key
-					{
-						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
-							workflow_name.to_string(),
-							workflow_id,
-						);
-						tx.clear(&self.subspace.pack(&by_name_and_tag_key));
-					}
+					tx.delete(&keys::workflow::ByNameAndTagKey::null(
+						workflow_name.to_string(),
+						workflow_id,
+					));
 
 					// Get and clear the pending deadline wake condition, if any. This could be put in the
 					// `pull_workflows` function (where we clear secondary indexes) but we chose to clear it
@@ -1818,22 +1811,16 @@ impl Database for DatabaseKv {
 					// it inserting more wake conditions. This reduces the load on `pull_workflows`. The
 					// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
 					// wake conditions is because it might be in the future.
-					if let Some(raw) = wake_deadline_entry {
-						let deadline_ts = wake_deadline_key.deserialize(&raw)?;
-
-						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+					if let Some(deadline_ts) = wake_deadline {
+						tx.delete(&keys::wake::WorkflowWakeConditionKey::new(
 							workflow_name.to_string(),
 							workflow_id,
 							keys::wake::WakeCondition::Deadline { deadline_ts },
-						);
-
-						tx.clear(&self.subspace.pack(&wake_condition_key));
+						));
 					}
 
 					// Clear "has wake condition"
-					let has_wake_condition_key =
-						keys::workflow::HasWakeConditionKey::new(workflow_id);
-					tx.clear(&self.subspace.pack(&has_wake_condition_key));
+					tx.delete(&keys::workflow::HasWakeConditionKey::new(workflow_id));
 
 					// Write output
 					let output_key = keys::workflow::OutputKey::new(workflow_id);
@@ -1841,17 +1828,66 @@ impl Database for DatabaseKv {
 					for (i, chunk) in output_key.split_ref(output)?.into_iter().enumerate() {
 						let chunk_key = output_key.chunk(i);
 
-						tx.set(&self.subspace.pack(&chunk_key), &chunk);
+						tx.set(&tx.pack(&chunk_key), &chunk);
+					}
+
+					// Mark all remaining pending signals as ack'd
+					let now = rivet_util::timestamp::now();
+
+					// This subspace contains all pending signals for the workflow
+					let pending_signal_subspace = self.subspace.subspace(
+						&keys::workflow::PendingSignalKey::workflow_subspace(workflow_id),
+					);
+
+					let mut stream = tx.get_ranges_keyvalues(
+						universaldb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&pending_signal_subspace).into()
+						},
+						Serializable,
+					);
+
+					let mut pending_signal_cleared_count = 0;
+
+					loop {
+						if start.elapsed() > EARLY_TXN_TIMEOUT {
+							tracing::warn!(
+								"timed out processing pending signals for complete workflow"
+							);
+							break;
+						}
+
+						let Some(entry) = stream.try_next().await? else {
+							break;
+						};
+
+						let (key, _) = tx.read_entry::<keys::workflow::PendingSignalKey>(&entry)?;
+
+						// Ack signal
+						tx.add_conflict_key(&key, ConflictRangeType::Read)?;
+
+						tx.write(&keys::signal::AckTsKey::new(key.signal_id), now)?;
+
+						update_metric(
+							&tx,
+							Some(keys::metric::GaugeMetric::SignalPending(
+								key.signal_name.to_string(),
+							)),
+							None,
+						);
+
+						// Clear pending signal key
+						tx.delete(&key);
+
+						pending_signal_cleared_count += 1;
 					}
 
 					// Clear lease
-					let lease_key = keys::workflow::LeaseKey::new(workflow_id);
-					tx.clear(&self.subspace.pack(&lease_key));
-					let worker_id_key = keys::workflow::WorkerIdKey::new(workflow_id);
-					tx.clear(&self.subspace.pack(&worker_id_key));
+					tx.delete(&keys::workflow::LeaseKey::new(workflow_id));
+					tx.delete(&keys::workflow::WorkerIdKey::new(workflow_id));
 
 					update_metric(
-						&tx.with_subspace(self.subspace.clone()),
+						&tx,
 						Some(keys::metric::GaugeMetric::WorkflowActive(
 							workflow_name.to_string(),
 						)),
@@ -1860,7 +1896,7 @@ impl Database for DatabaseKv {
 						)),
 					);
 
-					Ok(wrote_to_wake_idx)
+					Ok((wrote_to_wake_idx, pending_signal_cleared_count))
 				}
 			})
 			.custom_instrument(tracing::info_span!("complete_workflows_tx"))
@@ -1872,6 +1908,10 @@ impl Database for DatabaseKv {
 		if wrote_to_wake_idx {
 			self.bump(BumpSubSubject::WorkflowComplete { workflow_id });
 			self.bump(BumpSubSubject::Worker);
+		}
+
+		if pending_signal_cleared_count != 0 {
+			tracing::debug!(count=%pending_signal_cleared_count, "cleared pending signals after workflow completed");
 		}
 
 		let dt = start_instant.elapsed().as_secs_f64();

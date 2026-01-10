@@ -804,6 +804,10 @@ impl PendingSignalKey {
 	pub fn subspace(workflow_id: Id, signal_name: String) -> PendingSignalSubspaceKey {
 		PendingSignalSubspaceKey::new(workflow_id, signal_name)
 	}
+
+	pub fn workflow_subspace(workflow_id: Id) -> PendingSignalSubspaceKey {
+		PendingSignalSubspaceKey::workflow(workflow_id)
+	}
 }
 
 impl FormalKey for PendingSignalKey {
@@ -854,14 +858,21 @@ impl<'de> TupleUnpack<'de> for PendingSignalKey {
 
 pub struct PendingSignalSubspaceKey {
 	workflow_id: Id,
-	signal_name: String,
+	signal_name: Option<String>,
 }
 
 impl PendingSignalSubspaceKey {
 	pub fn new(workflow_id: Id, signal_name: String) -> Self {
 		PendingSignalSubspaceKey {
 			workflow_id,
-			signal_name,
+			signal_name: Some(signal_name),
+		}
+	}
+
+	pub fn workflow(workflow_id: Id) -> Self {
+		PendingSignalSubspaceKey {
+			workflow_id,
+			signal_name: None,
 		}
 	}
 }
@@ -872,14 +883,16 @@ impl TuplePack for PendingSignalSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (
-			WORKFLOW,
-			SIGNAL,
-			self.workflow_id,
-			PENDING,
-			&self.signal_name,
-		);
-		t.pack(w, tuple_depth)
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (WORKFLOW, SIGNAL, self.workflow_id, PENDING);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(signal_name) = &self.signal_name {
+			offset += signal_name.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
 	}
 }
 
