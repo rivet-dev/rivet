@@ -4,7 +4,6 @@ import { ActorStopping } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import { routeWebSocket } from "@/actor/router-websocket-endpoints";
 import { createClientWithDriver } from "@/client/client";
-import { ClientConfigSchema } from "@/client/config";
 import { createInlineWebSocket } from "@/common/inline-websocket-adapter";
 import { noopNext } from "@/common/utils";
 import type {
@@ -21,12 +20,11 @@ import { ManagerInspector } from "@/inspector/manager";
 import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
+import type { DriverConfig, RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
+import type { GetUpgradeWebSocket } from "@/utils";
 import type { FileSystemGlobalState } from "./global-state";
-import { logger } from "./log";
 import { generateActorId } from "./utils";
-import { RegistryConfig, DriverConfig } from "@/registry/config";
-import { GetUpgradeWebSocket } from "@/utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
 	#config: RegistryConfig;
