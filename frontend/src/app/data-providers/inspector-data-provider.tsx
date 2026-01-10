@@ -168,6 +168,9 @@ function transformActor(a: InspectorActor): Actor {
 		destroyedAt: a.destroyedAt
 			? new Date(a.destroyedAt).toISOString()
 			: undefined,
+		connectableAt: a.connectableAt
+			? new Date(a.connectableAt).toISOString()
+			: undefined,
 		startedAt: a.createdAt
 			? new Date(a.createdAt).toISOString()
 			: undefined,
