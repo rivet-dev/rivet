@@ -5,7 +5,7 @@ use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::RoutingFn;
 
-use crate::{errors, shared_state::SharedState};
+use crate::{errors, metrics, shared_state::SharedState};
 
 mod api_public;
 pub mod pegboard_gateway;
@@ -69,6 +69,8 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						)
 						.await?
 						{
+							metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
+
 							return Ok(routing_output);
 						}
 					}
@@ -77,6 +79,8 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 					if let Some(routing_output) =
 						runner::route_request_path_based(&ctx, host, path, headers).await?
 					{
+						metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
+
 						return Ok(routing_output);
 					}
 
@@ -104,6 +108,8 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						if let Some(routing_output) =
 							runner::route_request(&ctx, target, host, path, headers).await?
 						{
+							metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
+
 							return Ok(routing_output);
 						}
 
@@ -118,12 +124,16 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						)
 						.await?
 						{
+							metrics::ROUTE_TOTAL.with_label_values(&["GATEWAY"]).inc();
+
 							return Ok(routing_output);
 						}
 
 						if let Some(routing_output) =
 							api_public::route_request(&ctx, target, host, path).await?
 						{
+							metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
+
 							return Ok(routing_output);
 						}
 					} else {
@@ -131,9 +141,13 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						if let Some(routing_output) =
 							api_public::route_request(&ctx, "api-public", host, path).await?
 						{
+							metrics::ROUTE_TOTAL.with_label_values(&["API"]).inc();
+
 							return Ok(routing_output);
 						}
 					}
+
+					metrics::ROUTE_TOTAL.with_label_values(&["none"]).inc();
 
 					// No matching route found
 					tracing::debug!("No route found for: {host} {path}");

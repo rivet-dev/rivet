@@ -13,4 +13,17 @@ lazy_static::lazy_static! {
 		&["type"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref TRANSACTION_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"udb_transaction_total",
+		"How many transactions have been started.",
+		&["name"],
+		*REGISTRY
+	).unwrap();
+	pub static ref TRANSACTION_PENDING: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"udb_transaction_pending",
+		"How many transactions have been started.",
+		&["name"],
+		*REGISTRY
+	).unwrap();
 }

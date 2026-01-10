@@ -68,7 +68,7 @@ lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
-	pub static ref PROXY_REQUEST_ERROR: IntCounterVec = register_int_counter_vec_with_registry!(
+	pub static ref PROXY_REQUEST_ERROR_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"guard_proxy_request_errors_total",
 		"Total number of errors when proxying requests to actor",
 		&["error"],

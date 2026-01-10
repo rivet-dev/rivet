@@ -457,9 +457,11 @@ async fn allocate_actor_v2(
 
 	let dt = start_instant.elapsed().as_secs_f64();
 	metrics::ACTOR_ALLOCATE_DURATION
-		.with_label_values(&[
-			matches!(res.status, AllocateActorStatus::Allocated { .. }).to_string()
-		])
+		.with_label_values(&[match res.status {
+			AllocateActorStatus::Allocated { .. } => "allocated",
+			AllocateActorStatus::Pending { .. } => "pending",
+			AllocateActorStatus::Sleep { .. } => "sleep",
+		}])
 		.observe(dt);
 
 	state.for_serverless = res.serverless;
