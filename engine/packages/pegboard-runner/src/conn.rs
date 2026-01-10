@@ -254,6 +254,7 @@ impl Init {
 	}
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn handle_init(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
