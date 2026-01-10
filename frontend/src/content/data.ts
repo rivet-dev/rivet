@@ -4,5 +4,5 @@ export const docsLinks = {
 		react: "https://www.rivet.dev/docs/clients/react/",
 		nextjs: "https://www.rivet.dev/docs/clients/next-js/",
 	},
-	runners: "https://www.rivet.gg/docs/self-hosting/connect-backend",
+	runners: "https://www.rivet.dev/docs/self-hosting/connect-backend",
 };

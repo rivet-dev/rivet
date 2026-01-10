@@ -38,7 +38,7 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			dsn: commonEnv().VITE_APP_SENTRY_DSN,
 			tracesSampleRate: 1.0,
 			integrations,
-			tracePropagationTargets: ["localhost", /rivet.gg$/],
+			tracePropagationTargets: ["localhost", /rivet.dev/],
 		});
 	}
 }

@@ -46,12 +46,12 @@ RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-/pnpm/store,tar
 
 # Build arguments for environment variables
 # Use placeholder URLs that pass validation but can be replaced at runtime
-# Format: https://__PLACEHOLDER__.rivet.gg allows easy sed replacement
-ARG VITE_APP_API_URL="https://VITE_APP_API_URL.placeholder.rivet.gg"
-ARG VITE_APP_CLOUD_API_URL="https://VITE_APP_CLOUD_API_URL.placeholder.rivet.gg"
-ARG VITE_APP_ASSETS_URL="https://VITE_APP_ASSETS_URL.placeholder.rivet.gg"
+# Format: https://__PLACEHOLDER__.rivet.dev allows easy sed replacement
+ARG VITE_APP_API_URL="https://VITE_APP_API_URL.placeholder.rivet.dev"
+ARG VITE_APP_CLOUD_API_URL="https://VITE_APP_CLOUD_API_URL.placeholder.rivet.dev"
+ARG VITE_APP_ASSETS_URL="https://VITE_APP_ASSETS_URL.placeholder.rivet.dev"
 ARG VITE_APP_CLERK_PUBLISHABLE_KEY="pk_placeholder_clerk_key"
-ARG VITE_APP_SENTRY_DSN="https://VITE_APP_SENTRY_DSN.placeholder.rivet.gg/0"
+ARG VITE_APP_SENTRY_DSN="https://VITE_APP_SENTRY_DSN.placeholder.rivet.dev/0"
 ARG VITE_APP_SENTRY_PROJECT_ID="0"
 ARG VITE_APP_POSTHOG_API_KEY=""
 ARG VITE_APP_POSTHOG_HOST=""
