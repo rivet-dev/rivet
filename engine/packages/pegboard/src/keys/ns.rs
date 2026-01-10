@@ -169,6 +169,10 @@ impl PendingActorByRunnerNameSelectorKey {
 	) -> PendingActorByRunnerNameSelectorSubspaceKey {
 		PendingActorByRunnerNameSelectorSubspaceKey::new(namespace_id, runner_name_selector)
 	}
+
+	pub fn entire_subspace() -> PendingActorByRunnerNameSelectorSubspaceKey {
+		PendingActorByRunnerNameSelectorSubspaceKey::entire()
+	}
 }
 
 impl FormalKey for PendingActorByRunnerNameSelectorKey {
@@ -219,15 +223,22 @@ impl<'de> TupleUnpack<'de> for PendingActorByRunnerNameSelectorKey {
 }
 
 pub struct PendingActorByRunnerNameSelectorSubspaceKey {
-	pub namespace_id: Id,
-	pub runner_name_selector: String,
+	pub namespace_id: Option<Id>,
+	pub runner_name_selector: Option<String>,
 }
 
 impl PendingActorByRunnerNameSelectorSubspaceKey {
 	pub fn new(namespace_id: Id, runner_name_selector: String) -> Self {
 		PendingActorByRunnerNameSelectorSubspaceKey {
-			namespace_id,
-			runner_name_selector,
+			namespace_id: Some(namespace_id),
+			runner_name_selector: Some(runner_name_selector),
+		}
+	}
+
+	pub fn entire() -> Self {
+		PendingActorByRunnerNameSelectorSubspaceKey {
+			namespace_id: None,
+			runner_name_selector: None,
 		}
 	}
 }
@@ -238,13 +249,20 @@ impl TuplePack for PendingActorByRunnerNameSelectorSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (
-			NAMESPACE,
-			PENDING_ACTOR_BY_RUNNER_NAME_SELECTOR,
-			self.namespace_id,
-			&self.runner_name_selector,
-		);
-		t.pack(w, tuple_depth)
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (NAMESPACE, PENDING_ACTOR_BY_RUNNER_NAME_SELECTOR);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(namespace_id) = &self.namespace_id {
+			offset += namespace_id.pack(w, tuple_depth)?;
+
+			if let Some(runner_name_selector) = &self.runner_name_selector {
+				offset += runner_name_selector.pack(w, tuple_depth)?;
+			}
+		}
+
+		Ok(offset)
 	}
 }
 

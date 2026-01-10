@@ -7,6 +7,8 @@ use rivet_runner_protocol as protocol;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+use crate::metrics;
+
 const GC_INTERVAL: Duration = Duration::from_secs(30);
 const MAX_LAST_SEEN: Duration = Duration::from_secs(30);
 
@@ -63,6 +65,8 @@ impl ActorEventDemuxer {
 			);
 		}
 
+		metrics::INGESTED_EVENTS_TOTAL.inc();
+
 		// Run gc periodically
 		if self.last_gc.elapsed() > GC_INTERVAL {
 			self.last_gc = Instant::now();
@@ -77,6 +81,8 @@ impl ActorEventDemuxer {
 
 				keep
 			});
+
+			metrics::EVENT_MULTIPLEXER_COUNT.set(self.channels.len() as i64);
 		}
 	}
 

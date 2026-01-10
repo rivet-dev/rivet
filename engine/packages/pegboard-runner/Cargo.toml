@@ -17,6 +17,7 @@ http-body-util.workspace = true
 hyper = "1.6"
 hyper-tungstenite.workspace = true
 hyper-util = "0.1"
+lazy_static.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-guard-core.workspace = true

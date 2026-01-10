@@ -116,9 +116,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_tokio_global_queue_depth{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_tokio_global_queue_depth{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -221,9 +221,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_tokio_worker_local_queue_depth{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_tokio_worker_local_queue_depth{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -309,7 +309,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_tokio_task_poll_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_tokio_task_poll_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"}[$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -414,9 +414,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_tokio_worker_overflow_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_tokio_worker_overflow_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -502,7 +502,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_future_schedule_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_future_schedule_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"}[$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
           "range": true,
@@ -607,9 +607,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_tokio_thread_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_tokio_thread_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -712,9 +712,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rate(rivet_tokio_task_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rate(rivet_tokio_task_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"}[$__rate_interval]))",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -817,9 +817,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_tokio_active_task_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_tokio_active_task_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -896,16 +896,16 @@
           "text": "All",
           "value": "$__all"
         },
-        "definition": "label_values(rivet_tokio_thread_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},instance)",
+        "definition": "label_values(rivet_tokio_thread_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},k8s_pod_name)",
         "description": "",
         "includeAll": true,
-        "label": "Instance",
+        "label": "Pod",
         "multi": true,
-        "name": "instance",
+        "name": "k8s_pod_name",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(rivet_tokio_thread_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},instance)",
+          "query": "label_values(rivet_tokio_thread_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},k8s_pod_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,

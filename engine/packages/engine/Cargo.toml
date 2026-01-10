@@ -32,6 +32,7 @@ rivet-cache.workspace = true
 rivet-config.workspace = true
 rivet-guard.workspace = true
 rivet-logs.workspace = true
+rivet-metrics-aggregator.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true
 rivet-service-manager.workspace = true

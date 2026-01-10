@@ -1227,15 +1227,15 @@ impl ProxyService {
 				tracing::debug!("Using default middleware config (no actor_id)");
 				MiddlewareConfig {
 					rate_limit: RateLimitConfig {
-						requests: 100, // 100 requests
-						period: 60,    // per 60 seconds
+						requests: 10000, // 10000 requests
+						period: 60,      // per 60 seconds
 					},
 					max_in_flight: MaxInFlightConfig {
-						amount: 20, // 20 concurrent requests
+						amount: 2000, // 2000 concurrent requests
 					},
 					retry: RetryConfig {
-						max_attempts: 3,       // 3 retry attempts
-						initial_interval: 100, // 100ms initial interval
+						max_attempts: 7,       // 7 retry attempts
+						initial_interval: 150, // 150ms initial interval
 					},
 					timeout: TimeoutConfig {
 						request_timeout: 30, // 30 seconds for requests
@@ -2231,7 +2231,7 @@ impl ProxyService {
 				// Log the error
 				tracing::error!(?err, "Request failed");
 
-				metrics::PROXY_REQUEST_ERROR
+				metrics::PROXY_REQUEST_ERROR_TOTAL
 					.with_label_values(&[&err.to_string()])
 					.inc();
 

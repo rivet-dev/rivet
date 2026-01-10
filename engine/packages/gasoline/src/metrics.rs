@@ -1,4 +1,4 @@
-use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
+use rivet_metrics::{BUCKETS, MICRO_BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
 	pub static ref WORKER_LAST_PING: IntGaugeVec = register_int_gauge_vec_with_registry!(
@@ -89,6 +89,13 @@ lazy_static::lazy_static! {
 		"gasoline_workflow_errors",
 		"All errors made in a workflow.",
 		&["workflow_name", "error"],
+		*REGISTRY
+	).unwrap();
+	pub static ref WORKFLOW_WAKE_DELTA_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_workflow_wake_delta_duration",
+		"Duration from wake condition insertion to pull.",
+		&["workflow_name"],
+		MICRO_BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 

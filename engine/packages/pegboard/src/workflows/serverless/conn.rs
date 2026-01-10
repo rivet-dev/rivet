@@ -163,7 +163,17 @@ async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<Out
 		.await?;
 
 	loop {
-		match outbound_req_inner(ctx, input, &mut term_signal, &mut drain_sub).await {
+		metrics::SERVERLESS_OUTBOUND_REQ_ACTIVE
+			.with_label_values(&[&input.namespace_id.to_string(), &input.runner_name])
+			.inc();
+
+		let res = outbound_req_inner(ctx, input, &mut term_signal, &mut drain_sub).await;
+
+		metrics::SERVERLESS_OUTBOUND_REQ_ACTIVE
+			.with_label_values(&[&input.namespace_id.to_string(), &input.runner_name])
+			.dec();
+
+		match res {
 			// If the outbound req exited successfully, continue with no backoff
 			Ok(OutboundReqOutput::Continue) => {
 				if let Err(err) = ctx

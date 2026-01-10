@@ -113,7 +113,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (error) (rate(rivet_guard_proxy_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval]))",
+          "expr": "sum by (error) (rate(rivet_guard_proxy_request_errors_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"} [$__rate_interval]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -192,7 +192,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_guard_resolve_route_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_guard_resolve_route_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "instant": false,
           "legendFormat": "__auto",
@@ -296,9 +296,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_in_flight_request_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_guard_in_flight_request_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -412,9 +412,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -516,9 +516,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rate(rivet_guard_tcp_connection_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rate(rivet_guard_tcp_connection_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"}[$__rate_interval]))",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -596,7 +596,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_guard_tcp_connection_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_guard_tcp_connection_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "instant": false,
           "legendFormat": "__auto",
@@ -713,9 +713,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_proxy_request_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_guard_proxy_request_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -817,9 +817,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rate(rivet_guard_proxy_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rate(rivet_guard_proxy_request_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"}[$__rate_interval]))",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -897,7 +897,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(rivet_guard_proxy_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"} [$__rate_interval])) by (le)",
+          "expr": "sum(increase(rivet_guard_proxy_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"} [$__rate_interval])) by (le)",
           "format": "heatmap",
           "instant": false,
           "legendFormat": "__auto",
@@ -1014,9 +1014,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_route_cache_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_guard_route_cache_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -1117,9 +1117,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_rate_limiter_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_guard_rate_limiter_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -1220,9 +1220,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (rivet_datacenter, instance) (rivet_guard_in_flight_counter_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",instance=~\"$instance\"})",
+          "expr": "sum by (rivet_datacenter, k8s_pod_name) (rivet_guard_in_flight_counter_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"})",
           "instant": false,
-          "legendFormat": "{{rivet_datacenter}} - {{instance}}",
+          "legendFormat": "{{rivet_datacenter}} - {{k8s_pod_name}}",
           "range": true,
           "refId": "A"
         }
@@ -1300,16 +1300,16 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},instance)",
+        "definition": "label_values(rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},k8s_pod_name)",
         "description": "",
         "includeAll": true,
-        "label": "Instance",
+        "label": "Pod",
         "multi": true,
-        "name": "instance",
+        "name": "k8s_pod_name",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},instance)",
+          "query": "label_values(rivet_guard_tcp_connection_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"},k8s_pod_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
