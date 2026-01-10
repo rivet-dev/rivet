@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_api_builder::ApiCtx;
+use rivet_api_builder::{ApiBadRequest, ApiCtx};
 use rivet_api_types::{namespaces::list::*, pagination::Pagination};
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
@@ -14,9 +14,17 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 			.namespace_ids
 			.map(|x| {
 				x.split(',')
-					.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
-					.collect::<Vec<_>>()
+					.map(|s| {
+						s.trim().parse::<rivet_util::Id>().map_err(|e| {
+							ApiBadRequest {
+								reason: format!("invalid id in `namespace_ids` query: {e}"),
+							}
+							.build()
+						})
+					})
+					.collect::<Result<Vec<_>>>()
 			})
+			.transpose()?
 			.unwrap_or_default(),
 	]
 	.concat();
