@@ -67,9 +67,9 @@ function buildGuardHeadersForHttp(
 ): Headers {
 	const headers = new Headers();
 	// Copy all headers from the original request
-	for (const [key, value] of actorRequest.headers.entries()) {
+	actorRequest.headers.forEach((value, key) => {
 		headers.set(key, value);
-	}
+	});
 	// Add extra headers from config
 	for (const [key, value] of Object.entries(runConfig.headers)) {
 		headers.set(key, value as string);

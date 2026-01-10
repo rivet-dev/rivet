@@ -3,9 +3,14 @@ import type { Player } from "./types.ts";
 
 export type { Player };
 
+interface State {
+	players: Record<string, Player>;
+	region: string;
+}
+
 const gameRoom = actor({
 	// Create initial state with region parameter
-	createState: (_c, input: { region: string }) => ({
+	createState: (_c, input: { region: string }): State => ({
 		players: {} as Record<string, Player>,
 		region: input.region,
 	}),

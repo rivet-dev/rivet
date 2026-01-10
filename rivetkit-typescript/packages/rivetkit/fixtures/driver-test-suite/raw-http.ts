@@ -43,7 +43,10 @@ export const rawHttpActor = actor({
 		}
 
 		if (url.pathname === "/api/headers") {
-			const headers = Object.fromEntries(request.headers.entries());
+			const headers: Record<string, string> = {};
+			request.headers.forEach((value, key) => {
+				headers[key] = value;
+			});
 			return new Response(JSON.stringify(headers), {
 				headers: { "Content-Type": "application/json" },
 			});

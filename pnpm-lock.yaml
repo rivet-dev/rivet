@@ -262,7 +262,7 @@ importers:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
       hono:
-        specifier: ^4.7.10
+        specifier: ^4.11.3
         version: 4.11.3
       react:
         specifier: ^18.2.0
@@ -496,37 +496,6 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
-
-  examples/chat-room-next-js:
-    dependencies:
-      '@rivetkit/next-js':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/next-js
-      next:
-        specifier: 16.1.1
-        version: 16.1.1(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)
-      react:
-        specifier: 19.1.0
-        version: 19.1.0
-      react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit
-    devDependencies:
-      '@types/node':
-        specifier: ^20
-        version: 20.19.13
-      '@types/react':
-        specifier: ^19
-        version: 19.2.2
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.2.2(@types/react@19.2.2)
-      typescript:
-        specifier: ^5
-        version: 5.9.3
 
   examples/cloudflare-workers:
     dependencies:
@@ -909,7 +878,7 @@ importers:
         specifier: ^4.0.38
         version: 4.3.19(react@18.3.1)(zod@4.1.13)
       hono:
-        specifier: ^4.0.0
+        specifier: ^4.11.3
         version: 4.11.3
       react:
         specifier: ^18.2.0
@@ -1649,7 +1618,7 @@ importers:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
       hono:
-        specifier: ^4.0.0
+        specifier: ^4.11.3
         version: 4.11.3
       react:
         specifier: ^18.2.0
@@ -2204,7 +2173,7 @@ importers:
         version: 3.13.12(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -20966,6 +20935,16 @@ snapshots:
       '@codemirror/state': 6.5.2
       '@codemirror/view': 6.38.2
 
+  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
+    dependencies:
+      '@codemirror/autocomplete': 6.19.0
+      '@codemirror/commands': 6.9.0
+      '@codemirror/language': 6.11.3
+      '@codemirror/lint': 6.9.0
+      '@codemirror/search': 6.5.11
+      '@codemirror/state': 6.5.2
+      '@codemirror/view': 6.38.2
+
   '@uiw/codemirror-theme-github@4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
     dependencies:
       '@uiw/codemirror-themes': 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -23207,7 +23186,7 @@ snapshots:
       eslint: 9.39.1(jiti@1.21.7)
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-react: 7.37.5(eslint@9.39.1(jiti@1.21.7))
       eslint-plugin-react-hooks: 7.0.1(eslint@9.39.1(jiti@1.21.7))
@@ -23240,7 +23219,7 @@ snapshots:
       tinyglobby: 0.2.15
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7))
     transitivePeerDependencies:
       - supports-color
 
@@ -23255,7 +23234,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@1.21.7)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)))(eslint@9.39.1(jiti@1.21.7)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9

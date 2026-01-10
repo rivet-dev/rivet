@@ -1,10 +1,10 @@
 import * as yaml from "js-yaml";
 import type { TemplateContext } from "../../context";
-import type { DatacenterConfig } from "../../config";
+import type { Datacenter } from "../../config";
 
 export function generateDatacenterOtelCollector(
 	context: TemplateContext,
-	datacenter: DatacenterConfig,
+	datacenter: Datacenter,
 ) {
 	const clickhouseHost =
 		context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";

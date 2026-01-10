@@ -208,7 +208,7 @@ async function downloadEngineBinaryIfNeeded(
 		const stream = getNodeStream();
 		const fsSync = getNodeFsSync();
 		await stream.pipeline(
-			response.body,
+			response.body as any,
 			fsSync.createWriteStream(tempPath),
 		);
 
