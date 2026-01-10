@@ -49,16 +49,20 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		this.#driverConfig = driverConfig;
 
 		if (this.#config.inspector.enabled) {
-			const startedAt = new Date().toISOString();
 			function transformActor(actorState: schema.ActorState): Actor {
 				return {
 					id: actorState.actorId as ActorId,
 					name: actorState.name,
 					key: actorState.key as string[],
-					startedAt: startedAt,
+					startedAt: actorState.startTs
+						? new Date(Number(actorState.startTs)).toISOString()
+						: undefined,
 					createdAt: new Date(
 						Number(actorState.createdAt),
 					).toISOString(),
+					destroyedAt: actorState.destroyTs
+						? new Date(Number(actorState.destroyTs)).toISOString()
+						: undefined,
 					features: [
 						ActorFeature.State,
 						ActorFeature.Connections,
@@ -93,11 +97,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 						}
 					},
 					getBuilds: async () => {
-						return Object.keys(this.#config.use).map(
-							(name) => ({
-								name,
-							}),
-						);
+						return Object.keys(this.#config.use).map((name) => ({
+							name,
+						}));
 					},
 					createActor: async (input) => {
 						const { actorId } = await this.createActor(input);
@@ -230,21 +232,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			throw new ActorStopping(actorId);
 		}
 
-		try {
-			// Load actor state
-			return {
-				actorId,
-				name: actor.state.name,
-				key: actor.state.key as string[],
-			};
-		} catch (error) {
-			logger().error({
-				msg: "failed to read actor state",
-				actorId,
-				error,
-			});
-			return undefined;
-		}
+		return actorStateToOutput(actor.state);
 	}
 
 	async getWithKey({
@@ -257,11 +245,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		// Check if actor exists
 		const actor = await this.#state.loadActor(actorId);
 		if (actor.state) {
-			return {
-				actorId,
-				name,
-				key,
-			};
+			return actorStateToOutput(actor.state);
 		}
 
 		return undefined;
@@ -274,19 +258,19 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const actorId = generateActorId(input.name, input.key);
 
 		// Use the atomic getOrCreateActor method
-		const actorEntry = await this.#state.loadOrCreateActor(
+		await this.#state.loadOrCreateActor(
 			actorId,
 			input.name,
 			input.key,
 			input.input,
 		);
-		invariant(actorEntry.state, "must have state");
 
-		return {
-			actorId: actorEntry.state.actorId,
-			name: actorEntry.state.name,
-			key: actorEntry.state.key as string[],
-		};
+		// Start the actor immediately so timestamps are set
+		await this.#actorDriver.loadActor(actorId);
+
+		// Reload state to get updated timestamps
+		const state = await this.#state.loadActorStateOrError(actorId);
+		return actorStateToOutput(state);
 	}
 
 	async createActor({ name, key, input }: CreateInput): Promise<ActorOutput> {
@@ -295,11 +279,12 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 		await this.#state.createActor(actorId, name, key, input);
 
-		return {
-			actorId,
-			name,
-			key,
-		};
+		// Start the actor immediately so timestamps are set
+		await this.#actorDriver.loadActor(actorId);
+
+		// Reload state to get updated timestamps
+		const state = await this.#state.loadActorStateOrError(actorId);
+		return actorStateToOutput(state);
 	}
 
 	async listActors({ name }: ListActorsInput): Promise<ActorOutput[]> {
@@ -308,24 +293,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 		for await (const actor of itr) {
 			if (actor.name === name) {
-				actors.push({
-					actorId: actor.actorId,
-					name: actor.name,
-					key: actor.key as string[],
-					createTs: Number(actor.createdAt),
-					startTs:
-						actor.startTs !== null ? Number(actor.startTs) : null,
-					connectableTs:
-						actor.connectableTs !== null
-							? Number(actor.connectableTs)
-							: null,
-					sleepTs:
-						actor.sleepTs !== null ? Number(actor.sleepTs) : null,
-					destroyTs:
-						actor.destroyTs !== null
-							? Number(actor.destroyTs)
-							: null,
-				});
+				actors.push(actorStateToOutput(actor));
 			}
 		}
 
@@ -364,4 +332,18 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
 		this.#getUpgradeWebSocket = getUpgradeWebSocket;
 	}
+}
+
+function actorStateToOutput(state: schema.ActorState): ActorOutput {
+	return {
+		actorId: state.actorId,
+		name: state.name,
+		key: state.key as string[],
+		createTs: Number(state.createdAt),
+		startTs: state.startTs !== null ? Number(state.startTs) : null,
+		connectableTs:
+			state.connectableTs !== null ? Number(state.connectableTs) : null,
+		sleepTs: state.sleepTs !== null ? Number(state.sleepTs) : null,
+		destroyTs: state.destroyTs !== null ? Number(state.destroyTs) : null,
+	};
 }

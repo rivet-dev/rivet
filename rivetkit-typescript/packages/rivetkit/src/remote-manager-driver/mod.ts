@@ -16,6 +16,7 @@ import type {
 	ManagerDisplayInformation,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
+import type { Actor as ApiActor } from "@/manager-api/actors";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath, GetUpgradeWebSocket } from "@/utils";
@@ -125,16 +126,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 			return undefined;
 		}
 
-		const keyRaw = actor.key;
-		invariant(keyRaw, `actor ${actorId} should have key`);
-		const key = deserializeActorKey(keyRaw);
-
-		return {
-			actorId,
-			name,
-			key,
-			error: actor.error ?? undefined,
-		};
+		return apiActorToOutput(actor);
 	}
 
 	async getWithKey({
@@ -155,20 +147,14 @@ export class RemoteManagerDriver implements ManagerDriver {
 			const actor = response.actors[0];
 			if (!actor) return undefined;
 
-			const actorId = actor.actor_id;
-
 			logger().debug({
 				msg: "getWithKey: found actor via api",
-				actorId,
+				actorId: actor.actor_id,
 				name,
 				key,
 			});
 
-			return {
-				actorId,
-				name,
-				key,
-			};
+			return apiActorToOutput(actor);
 		} catch (error) {
 			if (
 				error instanceof EngineApiError &&
@@ -208,21 +194,15 @@ export class RemoteManagerDriver implements ManagerDriver {
 			crash_policy: "sleep",
 		});
 
-		const actorId = actor.actor_id;
-
 		logger().info({
 			msg: "getOrCreateWithKey: actor ready",
-			actorId,
+			actorId: actor.actor_id,
 			name,
 			key,
 			created,
 		});
 
-		return {
-			actorId,
-			name,
-			key,
-		};
+		return apiActorToOutput(actor);
 	}
 
 	async createActor({
@@ -248,15 +228,15 @@ export class RemoteManagerDriver implements ManagerDriver {
 			input: input ? uint8ArrayToBase64(cbor.encode(input)) : undefined,
 			crash_policy: "sleep",
 		});
-		const actorId = result.actor.actor_id;
 
-		logger().info({ msg: "actor created", actorId, name, key });
-
-		return {
-			actorId,
+		logger().info({
+			msg: "actor created",
+			actorId: result.actor.actor_id,
 			name,
 			key,
-		};
+		});
+
+		return apiActorToOutput(result.actor);
 	}
 
 	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
@@ -269,12 +249,7 @@ export class RemoteManagerDriver implements ManagerDriver {
 
 		const response = await listActorsByName(this.#config, name);
 
-		return response.actors.map((actor) => ({
-			actorId: actor.actor_id,
-			name: actor.name,
-			key: deserializeActorKey(actor.key),
-			createTs: actor.create_ts,
-		}));
+		return response.actors.map(apiActorToOutput);
 	}
 
 	async destroyActor(actorId: string): Promise<void> {
@@ -391,4 +366,18 @@ export class RemoteManagerDriver implements ManagerDriver {
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {
 		this.#config.getUpgradeWebSocket = getUpgradeWebSocket;
 	}
+}
+
+function apiActorToOutput(actor: ApiActor): ActorOutput {
+	return {
+		actorId: actor.actor_id,
+		name: actor.name,
+		key: deserializeActorKey(actor.key),
+		createTs: actor.create_ts,
+		startTs: actor.start_ts ?? null,
+		connectableTs: actor.connectable_ts ?? null,
+		sleepTs: actor.sleep_ts ?? null,
+		destroyTs: actor.destroy_ts ?? null,
+		error: actor.error ?? undefined,
+	};
 }
