@@ -3,6 +3,7 @@ use gas::prelude::*;
 
 pub mod cache;
 pub mod errors;
+pub mod metrics;
 pub mod middleware;
 pub mod routing;
 pub mod shared_state;

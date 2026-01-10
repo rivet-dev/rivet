@@ -2231,7 +2231,7 @@ impl ProxyService {
 				// Log the error
 				tracing::error!(?err, "Request failed");
 
-				metrics::PROXY_REQUEST_ERROR
+				metrics::PROXY_REQUEST_ERROR_TOTAL
 					.with_label_values(&[&err.to_string()])
 					.inc();
 

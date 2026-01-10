@@ -3,10 +3,13 @@ use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
 use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::{Arc, atomic::Ordering};
+use std::time::Duration;
 use tokio::sync::watch;
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, UPDATE_PING_INTERVAL, conn::Conn};
+use crate::{LifecycleResult, conn::Conn};
+
+const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Updates the ping of all runners requesting a ping update at once.
 #[tracing::instrument(skip_all)]
@@ -72,7 +75,7 @@ async fn update_runner_ping(ctx: &StandaloneCtx, conn: &Conn) -> Result<()> {
 		})
 		.await?;
 
-	// If runner became eligible again, then pull any pending actors
+	// If runner became eligible again, have the workflow check pending actor queue
 	for notif in res.notifications {
 		if let RunnerEligibility::ReEligible = notif.eligibility {
 			tracing::debug!(runner_id=?notif.runner_id, "runner has become eligible again");

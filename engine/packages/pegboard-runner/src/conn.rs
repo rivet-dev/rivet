@@ -1,6 +1,6 @@
 use std::{
 	sync::{Arc, atomic::AtomicU32},
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use anyhow::Context;
@@ -16,7 +16,7 @@ use rivet_runner_protocol::{self as protocol, versioned};
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
-use crate::{errors::WsError, utils::UrlData};
+use crate::{errors::WsError, metrics, utils::UrlData};
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -39,6 +39,7 @@ pub async fn init_conn(
 		runner_key,
 	}: UrlData,
 ) -> Result<Arc<Conn>> {
+	let start = Instant::now();
 	let namespace_name = namespace.clone();
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input { name: namespace })
@@ -47,129 +48,136 @@ pub async fn init_conn(
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())
 		.with_context(|| format!("namespace not found: {}", namespace_name))?;
 
-	tracing::debug!("new runner connection");
+	tracing::debug!(namespace_id=?namespace.namespace_id, "new runner connection");
 
 	let ws_rx = ws_handle.recv();
 	let mut ws_rx = ws_rx.lock().await;
 
 	// Receive init packet
-	let (runner_name, runner_id, workflow_id, init) = if let Some(msg) =
-		tokio::time::timeout(Duration::from_secs(5), ws_rx.next())
-			.await
-			.map_err(|_| WsError::TimedOutWaitingForInit.build())?
-	{
-		let buf = match msg? {
-			Message::Binary(buf) => buf,
-			Message::Close(_) => return Err(WsError::ConnectionClosed.build()),
-			msg => {
-				tracing::debug!(?msg, "invalid initial message");
-				return Err(WsError::InvalidInitialPacket("must be a binary blob").build());
-			}
-		};
+	let Ok(msg) = tokio::time::timeout(Duration::from_secs(5), ws_rx.next()).await else {
+		return Err(WsError::TimedOutWaitingForInit.build());
+	};
 
-		let init = Init::new(&buf, protocol_version)?;
-
-		// Look up existing runner by key
-		let existing_runner = ctx
-			.op(pegboard::ops::runner::get_by_key::Input {
-				namespace_id: namespace.namespace_id,
-				name: init.name().to_string(),
-				key: runner_key.clone(),
-			})
-			.await
-			.with_context(|| {
-				format!(
-					"failed to get existing runner by key: {}:{}",
-					init.name(),
-					runner_key
-				)
-			})?;
-
-		let runner_id = if let Some(runner) = existing_runner.runner {
-			// IMPORTANT: Before we spawn/get the workflow, we try to update the runner's last ping ts.
-			// This ensures if the workflow is currently checking for expiry that it will not expire
-			// (because we are about to send signals to it) and if it is already expired (but not
-			// completed) we can choose a new runner id.
-			let update_ping_res = ctx
-				.op(pegboard::ops::runner::update_alloc_idx::Input {
-					runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
-						runner_id: runner.runner_id,
-						action: Action::UpdatePing { rtt: 0 },
-					}],
-				})
-				.await
-				.with_context(|| {
-					format!("failed to update ping for runner: {}", runner.runner_id)
-				})?;
-
-			if update_ping_res
-				.notifications
-				.into_iter()
-				.next()
-				.map(|notif| matches!(notif.eligibility, RunnerEligibility::Expired))
-				.unwrap_or_default()
-			{
-				// Runner expired, create a new one
-				Id::new_v1(ctx.config().dc_label())
-			} else {
-				// Use existing runner
-				runner.runner_id
-			}
-		} else {
-			// No existing runner for this key, create a new one
-			Id::new_v1(ctx.config().dc_label())
-		};
-
-		// Spawn a new runner workflow if one doesn't already exist
-		let workflow_id = if protocol::is_mk2(protocol_version) {
-			ctx.workflow(pegboard::workflows::runner2::Input {
-				runner_id,
-				namespace_id: namespace.namespace_id,
-				name: init.name().to_string(),
-				key: runner_key.clone(),
-				version: init.version(),
-				total_slots: init.total_slots(),
-				protocol_version,
-			})
-			.tag("runner_id", runner_id)
-			.unique()
-			.dispatch()
-			.await
-			.with_context(|| {
-				format!(
-					"failed to dispatch runner workflow for runner: {}",
-					runner_id
-				)
-			})?
-		} else {
-			ctx.workflow(pegboard::workflows::runner::Input {
-				runner_id,
-				namespace_id: namespace.namespace_id,
-				name: init.name().to_string(),
-				key: runner_key.clone(),
-				version: init.version(),
-				total_slots: init.total_slots(),
-			})
-			.tag("runner_id", runner_id)
-			.unique()
-			.dispatch()
-			.await
-			.with_context(|| {
-				format!(
-					"failed to dispatch runner workflow for runner: {}",
-					runner_id
-				)
-			})?
-		};
-
-		(init.name().to_string(), runner_id, workflow_id, init)
-	} else {
+	let Some(msg) = msg else {
 		return Err(WsError::ConnectionClosed.build());
+	};
+
+	let buf = match msg? {
+		Message::Binary(buf) => buf,
+		Message::Close(_) => return Err(WsError::ConnectionClosed.build()),
+		msg => {
+			tracing::debug!(?msg, "invalid initial message");
+			return Err(WsError::InvalidInitialPacket("must be a binary blob").build());
+		}
+	};
+
+	let init = Init::new(&buf, protocol_version)?;
+
+	metrics::CONNECTION_TOTAL
+		.with_label_values(&[
+			namespace.namespace_id.to_string().as_str(),
+			init.name(),
+			protocol_version.to_string().as_str(),
+		])
+		.inc();
+	metrics::RECEIVE_INIT_PACKET_DURATION
+		.with_label_values(&[namespace.namespace_id.to_string().as_str(), init.name()])
+		.observe(start.elapsed().as_secs_f64());
+
+	// Look up existing runner by key
+	let existing_runner = ctx
+		.op(pegboard::ops::runner::get_by_key::Input {
+			namespace_id: namespace.namespace_id,
+			name: init.name().to_string(),
+			key: runner_key.clone(),
+		})
+		.await
+		.with_context(|| {
+			format!(
+				"failed to get existing runner by key: {}:{}",
+				init.name(),
+				runner_key
+			)
+		})?;
+
+	let runner_id = if let Some(runner) = existing_runner.runner {
+		// IMPORTANT: Before we spawn/get the workflow, we try to update the runner's last ping ts.
+		// This ensures if the workflow is currently checking for expiry that it will not expire
+		// (because we are about to send signals to it) and if it is already expired (but not
+		// completed) we can choose a new runner id.
+		let update_ping_res = ctx
+			.op(pegboard::ops::runner::update_alloc_idx::Input {
+				runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
+					runner_id: runner.runner_id,
+					action: Action::UpdatePing { rtt: 0 },
+				}],
+			})
+			.await
+			.with_context(|| format!("failed to update ping for runner: {}", runner.runner_id))?;
+
+		if update_ping_res
+			.notifications
+			.into_iter()
+			.next()
+			.map(|notif| matches!(notif.eligibility, RunnerEligibility::Expired))
+			.unwrap_or_default()
+		{
+			// Runner expired, create a new one
+			Id::new_v1(ctx.config().dc_label())
+		} else {
+			// Use existing runner
+			runner.runner_id
+		}
+	} else {
+		// No existing runner for this key, create a new one
+		Id::new_v1(ctx.config().dc_label())
+	};
+
+	// Spawn a new runner workflow if one doesn't already exist
+	let workflow_id = if protocol::is_mk2(protocol_version) {
+		ctx.workflow(pegboard::workflows::runner2::Input {
+			runner_id,
+			namespace_id: namespace.namespace_id,
+			name: init.name().to_string(),
+			key: runner_key.clone(),
+			version: init.version(),
+			total_slots: init.total_slots(),
+			protocol_version,
+		})
+		.tag("runner_id", runner_id)
+		.unique()
+		.dispatch()
+		.await
+		.with_context(|| {
+			format!(
+				"failed to dispatch runner workflow for runner: {}",
+				runner_id
+			)
+		})?
+	} else {
+		ctx.workflow(pegboard::workflows::runner::Input {
+			runner_id,
+			namespace_id: namespace.namespace_id,
+			name: init.name().to_string(),
+			key: runner_key.clone(),
+			version: init.version(),
+			total_slots: init.total_slots(),
+		})
+		.tag("runner_id", runner_id)
+		.unique()
+		.dispatch()
+		.await
+		.with_context(|| {
+			format!(
+				"failed to dispatch runner workflow for runner: {}",
+				runner_id
+			)
+		})?
 	};
 
 	let conn = Arc::new(Conn {
 		namespace_id: namespace.namespace_id,
-		runner_name,
+		runner_name: init.name().to_string(),
 		runner_key,
 		runner_id,
 		workflow_id,
