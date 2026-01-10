@@ -7,6 +7,7 @@ import * as Rivet from "../../api/index";
 import * as core from "../../core";
 import { RivetId } from "./RivetId";
 import { CrashPolicy } from "./CrashPolicy";
+import { ActorError } from "./ActorError";
 
 export const Actor: core.serialization.ObjectSchema<serializers.Actor.Raw, Rivet.Actor> = core.serialization.object({
     actorId: core.serialization.property("actor_id", RivetId),
@@ -15,6 +16,7 @@ export const Actor: core.serialization.ObjectSchema<serializers.Actor.Raw, Rivet
     createTs: core.serialization.property("create_ts", core.serialization.number()),
     datacenter: core.serialization.string(),
     destroyTs: core.serialization.property("destroy_ts", core.serialization.number().optional()),
+    error: ActorError.optional(),
     key: core.serialization.string().optional(),
     name: core.serialization.string(),
     namespaceId: core.serialization.property("namespace_id", RivetId),
@@ -33,6 +35,7 @@ export declare namespace Actor {
         create_ts: number;
         datacenter: string;
         destroy_ts?: number | null;
+        error?: ActorError.Raw | null;
         key?: string | null;
         name: string;
         namespace_id: RivetId.Raw;

@@ -5,17 +5,17 @@
 import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
-import { RunnerConfig } from "./RunnerConfig";
+import { RunnerConfigResponse } from "./RunnerConfigResponse";
 
 export const RunnerConfigsListResponseRunnerConfigsValue: core.serialization.ObjectSchema<
     serializers.RunnerConfigsListResponseRunnerConfigsValue.Raw,
     Rivet.RunnerConfigsListResponseRunnerConfigsValue
 > = core.serialization.object({
-    datacenters: core.serialization.record(core.serialization.string(), RunnerConfig),
+    datacenters: core.serialization.record(core.serialization.string(), RunnerConfigResponse),
 });
 
 export declare namespace RunnerConfigsListResponseRunnerConfigsValue {
     export interface Raw {
-        datacenters: Record<string, RunnerConfig.Raw>;
+        datacenters: Record<string, RunnerConfigResponse.Raw>;
     }
 }

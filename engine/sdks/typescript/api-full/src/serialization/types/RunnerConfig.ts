@@ -11,6 +11,10 @@ export const RunnerConfig: core.serialization.ObjectSchema<serializers.RunnerCon
     core.serialization.object({
         normal: core.serialization.record(core.serialization.string(), core.serialization.unknown()).optional(),
         serverless: RunnerConfigServerless.optional(),
+        drainOnVersionUpgrade: core.serialization.property(
+            "drain_on_version_upgrade",
+            core.serialization.boolean().optional(),
+        ),
         metadata: core.serialization.unknown().optional(),
     });
 
@@ -18,6 +22,7 @@ export declare namespace RunnerConfig {
     export interface Raw {
         normal?: Record<string, unknown> | null;
         serverless?: RunnerConfigServerless.Raw | null;
+        drain_on_version_upgrade?: boolean | null;
         metadata?: unknown | null;
     }
 }

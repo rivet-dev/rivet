@@ -14,6 +14,8 @@ export interface Actor {
     datacenter: string;
     /** Denotes when the actor was destroyed. */
     destroyTs?: number;
+    /** Error details if the actor failed to start. */
+    error?: Rivet.ActorError;
     key?: string;
     name: string;
     namespaceId: Rivet.RivetId;
