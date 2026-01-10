@@ -53,7 +53,7 @@ export function DocsSheet({
 								href={
 									path.startsWith("http")
 										? `${path}?utm_source=engine`
-										: `https://rivet.gg/${path}?utm_source=engine#${hash}`
+										: `https://www.rivet.dev/${path}?utm_source=engine#${hash}`
 								}
 							>
 								Open in new tab
@@ -68,7 +68,7 @@ export function DocsSheet({
 								src={
 									path.startsWith("http")
 										? `${path}?utm_source=engine`
-										: `https://rivet.gg/${path}#${hash}`
+										: `https://www.rivet.dev/${path}#${hash}`
 								}
 								title={title}
 							/>

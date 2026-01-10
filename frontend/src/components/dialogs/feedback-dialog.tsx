@@ -59,7 +59,7 @@ export default function FeedbackDialogContent({
 					<DialogDescription>
 						Join us on{" "}
 						<Link
-							href="https://rivet.gg/discord"
+							href="https://rivet.dev/discord"
 							target="_blank"
 							rel="noreferrer"
 						>

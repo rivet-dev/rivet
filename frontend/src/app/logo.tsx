@@ -4,7 +4,7 @@ export function Logo({ className }: { className?: string }) {
 	return (
 		<img
 			src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
-			alt="Rivet.gg"
+			alt="rivet.dev"
 			className={className}
 		/>
 	);

@@ -6,7 +6,7 @@
 </p>
 <h1 align="center">Rivet Icons</h1>
 <p align="center">
-    <a href="https://rivet.gg/discord"><img src="https://img.shields.io/discord/822914074136018994"></a>
+    <a href="https://www.rivet.dev/discord"><img src="https://img.shields.io/discord/822914074136018994"></a>
 </p>
 
 ## ⚠️ Legal Notice
@@ -71,7 +71,7 @@ All icons (including Font Awesome Pro icons) are pre-generated and committed to 
    <Icon icon={faCheckCircle} />
    ```
 
-3. If the problem persists, contact us on [Discord](https://rivet.gg/discord)
+3. If the problem persists, contact us on [Discord](https://www.rivet.dev/discord)
 
 ### For Maintainers: `Could not find package @fortawesome/pro-solid-svg-icons`
 
