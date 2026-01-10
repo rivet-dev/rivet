@@ -161,7 +161,7 @@ const Sidebar = ({
 					>
 						<img
 							src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
-							alt="Rivet.gg"
+							alt="rivet.dev"
 							className="h-6"
 						/>
 					</Link>
@@ -202,7 +202,7 @@ const Sidebar = ({
 									asChild
 								>
 									<a
-										href="https://rivet.gg/changelog"
+										href="https://www.rivet.dev/changelog"
 										target="_blank"
 										rel="noopener"
 									>
@@ -246,7 +246,7 @@ const Sidebar = ({
 									</Button>
 								))}
 							<DocsSheet
-								path={"https://rivet.gg/docs"}
+								path={"https://www.rivet.dev/docs"}
 								title="Documentation"
 							>
 								<Button
@@ -269,7 +269,7 @@ const Sidebar = ({
 								}
 							>
 								<a
-									href="http://rivet.gg/discord"
+									href="http://www.rivet.dev/discord"
 									target="_blank"
 									rel="noopener noreferrer"
 								>
@@ -288,7 +288,7 @@ const Sidebar = ({
 								}
 							>
 								<a
-									href="http://github.com/rivet-gg/rivet"
+									href="http://github.com/rivet-dev/rivet"
 									target="_blank"
 									rel="noopener noreferrer"
 								>

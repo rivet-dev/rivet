@@ -51,7 +51,7 @@ export function ChangelogEntry({
 			</div>
 
 			<a
-				href={`https://rivet.gg/changelog/${slug}`}
+				href={`https://www.rivet.dev/changelog/${slug}`}
 				target="_blank"
 				rel="noreferrer"
 				className="block"
@@ -62,7 +62,7 @@ export function ChangelogEntry({
 					</PictureFallback>
 					<PictureImage
 						className="size-full object-cover animate-in fade-in-0 duration-300 fill-mode-forwards"
-						src={`https://rivet.gg/${images[0].url}`}
+						src={`https://www.rivet.dev/${images[0].url}`}
 						width={images[0].width}
 						height={images[0].height}
 						alt={"Changelog entry"}
@@ -89,7 +89,7 @@ export function ChangelogEntry({
 								{authors[0].name[0]}
 							</AvatarFallback>
 							<AvatarImage
-								src={`https://rivet.gg/${authors[0].avatar.url}`}
+								src={`https://www.rivet.dev/${authors[0].avatar.url}`}
 								alt={authors[0].name}
 							/>
 						</Avatar>

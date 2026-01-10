@@ -48,7 +48,7 @@ export default function BillingFrameContent() {
 				<Frame.Description>
 					Manage billing for your Rivet Cloud project.{" "}
 					<DocsSheet
-						path="https://www.rivet.gg/pricing"
+						path="https://www.rivet.dev/pricing"
 						title="Billing"
 					>
 						<Link className="cursor-pointer">

@@ -78,11 +78,11 @@ const CATEGORIES = [
 
 export async function loadModulesMeta() {
 	const versionMetaResponse = await fetch(
-		"https://releases.rivet.gg/backend/index.json",
+		"https://releases.rivet.dev/backend/index.json",
 	);
 	const { latestVersion } = await versionMetaResponse.json();
 	const modulesMetaResponse = await fetch(
-		`https://releases.rivet.gg/backend/${latestVersion}/index.json`,
+		`https://releases.rivet.dev/backend/${latestVersion}/index.json`,
 	);
 	return await modulesMetaResponse.json();
 }

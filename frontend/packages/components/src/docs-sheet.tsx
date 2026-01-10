@@ -44,7 +44,7 @@ export function DocsSheet({
 							href={
 								path.startsWith("http")
 									? path
-									: `https://rivet.gg/${path}?utm_source=hub&embed=true#${hash}`
+									: `https://www.rivet.dev/${path}?utm_source=hub&embed=true#${hash}`
 							}
 							target="_blank"
 							rel="noopener noreferrer"
@@ -59,7 +59,7 @@ export function DocsSheet({
 								src={
 									path.startsWith("http")
 										? path
-										: `https://rivet.gg/${path}?embed=true#${hash}`
+										: `https://www.rivet.dev/${path}?embed=true#${hash}`
 								}
 								title={title}
 							/>
