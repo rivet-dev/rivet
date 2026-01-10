@@ -68,6 +68,7 @@ const CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
 interface ActorHandler {
 	actor?: AnyActorInstance;
 	actorStartPromise?: ReturnType<typeof promiseWithResolvers<void>>;
+	alarmTimeout?: LongTimeoutHandle;
 }
 
 export type DriverContext = {};
@@ -79,7 +80,6 @@ export class EngineActorDriver implements ActorDriver {
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
-	#alarmTimeout?: LongTimeoutHandle;
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
 	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
@@ -152,7 +152,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => {},
+			onDisconnected: (_code, _reason) => { },
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -197,17 +197,26 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {
+		const handler = this.#actors.get(actor.id);
+		if (!handler) {
+			logger().warn({
+				msg: "no handler for actor to set alarm",
+			});
+
+			return;
+		}
+
 		// Clear prev timeout
-		if (this.#alarmTimeout) {
-			this.#alarmTimeout.abort();
-			this.#alarmTimeout = undefined;
+		if (handler.alarmTimeout) {
+			handler.alarmTimeout.abort();
+			handler.alarmTimeout = undefined;
 		}
 
 		// Set alarm
 		const delay = Math.max(0, timestamp - Date.now());
-		this.#alarmTimeout = setLongTimeout(() => {
+		handler.alarmTimeout = setLongTimeout(() => {
 			actor.onAlarm();
-			this.#alarmTimeout = undefined;
+			handler.alarmTimeout = undefined;
 		}, delay);
 
 		// TODO: This call may not be needed on ActorInstance.start, but it does help ensure that the local state is synced with the alarm state
@@ -348,7 +357,7 @@ export class EngineActorDriver implements ActorDriver {
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
+			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
