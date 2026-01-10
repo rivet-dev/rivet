@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use rivet_api_builder::ApiCtx;
+use rivet_api_builder::{ApiBadRequest, ApiCtx};
 use rivet_api_types::{actors::list::*, pagination::Pagination};
 
 #[utoipa::path(
@@ -20,9 +20,17 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 			.actor_ids
 			.map(|x| {
 				x.split(',')
-					.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
-					.collect::<Vec<_>>()
+					.map(|s| {
+						s.trim().parse::<rivet_util::Id>().map_err(|e| {
+							ApiBadRequest {
+								reason: format!("invalid id in `actor_ids` query: {e}"),
+							}
+							.build()
+						})
+					})
+					.collect::<Result<Vec<_>>>()
 			})
+			.transpose()?
 			.unwrap_or_default(),
 	]
 	.concat();
