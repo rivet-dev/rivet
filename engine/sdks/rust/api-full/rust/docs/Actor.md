@@ -10,6 +10,7 @@ Name | Type | Description | Notes
 **create_ts** | **i64** | Denotes when the actor was first created. | 
 **datacenter** | **String** |  | 
 **destroy_ts** | Option<**i64**> | Denotes when the actor was destroyed. | [optional]
+**error** | Option<[**models::ActorError**](ActorError.md)> | Error details if the actor failed to start. | [optional]
 **key** | Option<**String**> |  | [optional]
 **name** | **String** |  | 
 **namespace_id** | **String** |  | 

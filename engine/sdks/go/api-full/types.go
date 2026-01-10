@@ -102,10 +102,12 @@ type Actor struct {
 	CreateTs   int64  `json:"create_ts"`
 	Datacenter string `json:"datacenter"`
 	// Denotes when the actor was destroyed.
-	DestroyTs   *int64  `json:"destroy_ts,omitempty"`
-	Key         *string `json:"key,omitempty"`
-	Name        string  `json:"name"`
-	NamespaceId RivetId `json:"namespace_id"`
+	DestroyTs *int64 `json:"destroy_ts,omitempty"`
+	// Error details if the actor failed to start.
+	Error       *ActorError `json:"error,omitempty"`
+	Key         *string     `json:"key,omitempty"`
+	Name        string      `json:"name"`
+	NamespaceId RivetId     `json:"namespace_id"`
 	// Denotes when the actor started waiting for an allocation.
 	PendingAllocationTs *int64 `json:"pending_allocation_ts,omitempty"`
 	// Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to
@@ -132,6 +134,413 @@ func (a *Actor) UnmarshalJSON(data []byte) error {
 }
 
 func (a *Actor) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+type ActorError struct {
+	typeName string
+	// Runner pool-related errors
+	ActorErrorRunnerPoolError *ActorErrorRunnerPoolError
+	stringLiteral             string
+	// Runner was allocated but never started the actor (GC timeout)
+	ActorErrorRunnerNoResponse *ActorErrorRunnerNoResponse
+	// Runner connection was lost (no recent ping, network issue, or crash)
+	ActorErrorRunnerConnectionLost *ActorErrorRunnerConnectionLost
+	// Runner was draining but actor didn't stop in time
+	ActorErrorRunnerDrainingTimeout *ActorErrorRunnerDrainingTimeout
+	// Actor exited with an error and is now sleeping
+	ActorErrorCrashed *ActorErrorCrashed
+}
+
+func NewActorErrorFromActorErrorRunnerPoolError(value *ActorErrorRunnerPoolError) *ActorError {
+	return &ActorError{typeName: "actorErrorRunnerPoolError", ActorErrorRunnerPoolError: value}
+}
+
+func NewActorErrorWithStringLiteral() *ActorError {
+	return &ActorError{typeName: "stringLiteral", stringLiteral: "no_capacity"}
+}
+
+func NewActorErrorFromActorErrorRunnerNoResponse(value *ActorErrorRunnerNoResponse) *ActorError {
+	return &ActorError{typeName: "actorErrorRunnerNoResponse", ActorErrorRunnerNoResponse: value}
+}
+
+func NewActorErrorFromActorErrorRunnerConnectionLost(value *ActorErrorRunnerConnectionLost) *ActorError {
+	return &ActorError{typeName: "actorErrorRunnerConnectionLost", ActorErrorRunnerConnectionLost: value}
+}
+
+func NewActorErrorFromActorErrorRunnerDrainingTimeout(value *ActorErrorRunnerDrainingTimeout) *ActorError {
+	return &ActorError{typeName: "actorErrorRunnerDrainingTimeout", ActorErrorRunnerDrainingTimeout: value}
+}
+
+func NewActorErrorFromActorErrorCrashed(value *ActorErrorCrashed) *ActorError {
+	return &ActorError{typeName: "actorErrorCrashed", ActorErrorCrashed: value}
+}
+
+func (a *ActorError) StringLiteral() string {
+	return a.stringLiteral
+}
+
+func (a *ActorError) UnmarshalJSON(data []byte) error {
+	valueActorErrorRunnerPoolError := new(ActorErrorRunnerPoolError)
+	if err := json.Unmarshal(data, &valueActorErrorRunnerPoolError); err == nil {
+		a.typeName = "actorErrorRunnerPoolError"
+		a.ActorErrorRunnerPoolError = valueActorErrorRunnerPoolError
+		return nil
+	}
+	var valueStringLiteral string
+	if err := json.Unmarshal(data, &valueStringLiteral); err == nil {
+		if valueStringLiteral == "no_capacity" {
+			a.typeName = "stringLiteral"
+			a.stringLiteral = valueStringLiteral
+			return nil
+		}
+	}
+	valueActorErrorRunnerNoResponse := new(ActorErrorRunnerNoResponse)
+	if err := json.Unmarshal(data, &valueActorErrorRunnerNoResponse); err == nil {
+		a.typeName = "actorErrorRunnerNoResponse"
+		a.ActorErrorRunnerNoResponse = valueActorErrorRunnerNoResponse
+		return nil
+	}
+	valueActorErrorRunnerConnectionLost := new(ActorErrorRunnerConnectionLost)
+	if err := json.Unmarshal(data, &valueActorErrorRunnerConnectionLost); err == nil {
+		a.typeName = "actorErrorRunnerConnectionLost"
+		a.ActorErrorRunnerConnectionLost = valueActorErrorRunnerConnectionLost
+		return nil
+	}
+	valueActorErrorRunnerDrainingTimeout := new(ActorErrorRunnerDrainingTimeout)
+	if err := json.Unmarshal(data, &valueActorErrorRunnerDrainingTimeout); err == nil {
+		a.typeName = "actorErrorRunnerDrainingTimeout"
+		a.ActorErrorRunnerDrainingTimeout = valueActorErrorRunnerDrainingTimeout
+		return nil
+	}
+	valueActorErrorCrashed := new(ActorErrorCrashed)
+	if err := json.Unmarshal(data, &valueActorErrorCrashed); err == nil {
+		a.typeName = "actorErrorCrashed"
+		a.ActorErrorCrashed = valueActorErrorCrashed
+		return nil
+	}
+	return fmt.Errorf("%s cannot be deserialized as a %T", data, a)
+}
+
+func (a ActorError) MarshalJSON() ([]byte, error) {
+	switch a.typeName {
+	default:
+		return nil, fmt.Errorf("invalid type %s in %T", a.typeName, a)
+	case "actorErrorRunnerPoolError":
+		return json.Marshal(a.ActorErrorRunnerPoolError)
+	case "stringLiteral":
+		return json.Marshal("no_capacity")
+	case "actorErrorRunnerNoResponse":
+		return json.Marshal(a.ActorErrorRunnerNoResponse)
+	case "actorErrorRunnerConnectionLost":
+		return json.Marshal(a.ActorErrorRunnerConnectionLost)
+	case "actorErrorRunnerDrainingTimeout":
+		return json.Marshal(a.ActorErrorRunnerDrainingTimeout)
+	case "actorErrorCrashed":
+		return json.Marshal(a.ActorErrorCrashed)
+	}
+}
+
+type ActorErrorVisitor interface {
+	VisitActorErrorRunnerPoolError(*ActorErrorRunnerPoolError) error
+	VisitStringLiteral(string) error
+	VisitActorErrorRunnerNoResponse(*ActorErrorRunnerNoResponse) error
+	VisitActorErrorRunnerConnectionLost(*ActorErrorRunnerConnectionLost) error
+	VisitActorErrorRunnerDrainingTimeout(*ActorErrorRunnerDrainingTimeout) error
+	VisitActorErrorCrashed(*ActorErrorCrashed) error
+}
+
+func (a *ActorError) Accept(visitor ActorErrorVisitor) error {
+	switch a.typeName {
+	default:
+		return fmt.Errorf("invalid type %s in %T", a.typeName, a)
+	case "actorErrorRunnerPoolError":
+		return visitor.VisitActorErrorRunnerPoolError(a.ActorErrorRunnerPoolError)
+	case "stringLiteral":
+		return visitor.VisitStringLiteral(a.stringLiteral)
+	case "actorErrorRunnerNoResponse":
+		return visitor.VisitActorErrorRunnerNoResponse(a.ActorErrorRunnerNoResponse)
+	case "actorErrorRunnerConnectionLost":
+		return visitor.VisitActorErrorRunnerConnectionLost(a.ActorErrorRunnerConnectionLost)
+	case "actorErrorRunnerDrainingTimeout":
+		return visitor.VisitActorErrorRunnerDrainingTimeout(a.ActorErrorRunnerDrainingTimeout)
+	case "actorErrorCrashed":
+		return visitor.VisitActorErrorCrashed(a.ActorErrorCrashed)
+	}
+}
+
+// Actor exited with an error and is now sleeping
+type ActorErrorCrashed struct {
+	// Actor exited with an error and is now sleeping
+	Crashed *ActorErrorCrashedCrashed `json:"crashed,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorCrashed) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorCrashed
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorCrashed(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorCrashed) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Actor exited with an error and is now sleeping
+type ActorErrorCrashedCrashed struct {
+	Message *string `json:"message,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorCrashedCrashed) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorCrashedCrashed
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorCrashedCrashed(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorCrashedCrashed) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner connection was lost (no recent ping, network issue, or crash)
+type ActorErrorRunnerConnectionLost struct {
+	// Runner connection was lost (no recent ping, network issue, or crash)
+	RunnerConnectionLost *ActorErrorRunnerConnectionLostRunnerConnectionLost `json:"runner_connection_lost,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerConnectionLost) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerConnectionLost
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerConnectionLost(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerConnectionLost) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner connection was lost (no recent ping, network issue, or crash)
+type ActorErrorRunnerConnectionLostRunnerConnectionLost struct {
+	RunnerId RivetId `json:"runner_id"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerConnectionLostRunnerConnectionLost) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerConnectionLostRunnerConnectionLost
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerConnectionLostRunnerConnectionLost(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerConnectionLostRunnerConnectionLost) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner was draining but actor didn't stop in time
+type ActorErrorRunnerDrainingTimeout struct {
+	// Runner was draining but actor didn't stop in time
+	RunnerDrainingTimeout *ActorErrorRunnerDrainingTimeoutRunnerDrainingTimeout `json:"runner_draining_timeout,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerDrainingTimeout) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerDrainingTimeout
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerDrainingTimeout(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerDrainingTimeout) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner was draining but actor didn't stop in time
+type ActorErrorRunnerDrainingTimeoutRunnerDrainingTimeout struct {
+	RunnerId RivetId `json:"runner_id"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerDrainingTimeoutRunnerDrainingTimeout) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerDrainingTimeoutRunnerDrainingTimeout
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerDrainingTimeoutRunnerDrainingTimeout(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerDrainingTimeoutRunnerDrainingTimeout) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner was allocated but never started the actor (GC timeout)
+type ActorErrorRunnerNoResponse struct {
+	// Runner was allocated but never started the actor (GC timeout)
+	RunnerNoResponse *ActorErrorRunnerNoResponseRunnerNoResponse `json:"runner_no_response,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerNoResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerNoResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerNoResponse(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerNoResponse) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner was allocated but never started the actor (GC timeout)
+type ActorErrorRunnerNoResponseRunnerNoResponse struct {
+	RunnerId RivetId `json:"runner_id"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerNoResponseRunnerNoResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerNoResponseRunnerNoResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerNoResponseRunnerNoResponse(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerNoResponseRunnerNoResponse) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+// Runner pool-related errors
+type ActorErrorRunnerPoolError struct {
+	// Runner pool-related errors
+	RunnerPoolError *RunnerPoolError `json:"runner_pool_error,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorErrorRunnerPoolError) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorErrorRunnerPoolError
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorErrorRunnerPoolError(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorErrorRunnerPoolError) String() string {
 	if len(a._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
 			return value
@@ -727,9 +1136,10 @@ func (r *Runner) String() string {
 }
 
 type RunnerConfig struct {
-	Normal     map[string]interface{}  `json:"normal,omitempty"`
-	Serverless *RunnerConfigServerless `json:"serverless,omitempty"`
-	Metadata   interface{}             `json:"metadata,omitempty"`
+	Normal                map[string]interface{}  `json:"normal,omitempty"`
+	Serverless            *RunnerConfigServerless `json:"serverless,omitempty"`
+	DrainOnVersionUpgrade *bool                   `json:"drain_on_version_upgrade,omitempty"`
+	Metadata              interface{}             `json:"metadata,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -908,6 +1318,39 @@ func (r *RunnerConfigKindServerlessServerless) String() string {
 	return fmt.Sprintf("%#v", r)
 }
 
+type RunnerConfigResponse struct {
+	Normal                map[string]interface{}  `json:"normal,omitempty"`
+	Serverless            *RunnerConfigServerless `json:"serverless,omitempty"`
+	DrainOnVersionUpgrade *bool                   `json:"drain_on_version_upgrade,omitempty"`
+	Metadata              interface{}             `json:"metadata,omitempty"`
+	RunnerPoolError       *RunnerPoolError        `json:"runner_pool_error,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigResponse(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigResponse) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
 type RunnerConfigServerless struct {
 	Headers    map[string]string `json:"headers,omitempty"`
 	MaxRunners int               `json:"max_runners"`
@@ -999,7 +1442,7 @@ func (r *RunnerConfigsListResponse) String() string {
 }
 
 type RunnerConfigsListResponseRunnerConfigsValue struct {
-	Datacenters map[string]*RunnerConfig `json:"datacenters,omitempty"`
+	Datacenters map[string]*RunnerConfigResponse `json:"datacenters,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -1606,6 +2049,332 @@ func (r *RunnerConfigsUpsertResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (r *RunnerConfigsUpsertResponse) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerPoolError struct {
+	typeName string
+	// Serverless: SSE returned non-200 status code (e.g., 404, 500)
+	RunnerPoolErrorServerlessHttpError *RunnerPoolErrorServerlessHttpError
+	stringLiteral                      string
+	// Serverless: SSE connection or network error
+	RunnerPoolErrorServerlessConnectionError *RunnerPoolErrorServerlessConnectionError
+	stringLiteral                            string
+	// Serverless: Runner sent invalid protocol payload
+	RunnerPoolErrorServerlessInvalidPayload *RunnerPoolErrorServerlessInvalidPayload
+	stringLiteral                           string
+}
+
+func NewRunnerPoolErrorFromRunnerPoolErrorServerlessHttpError(value *RunnerPoolErrorServerlessHttpError) *RunnerPoolError {
+	return &RunnerPoolError{typeName: "runnerPoolErrorServerlessHttpError", RunnerPoolErrorServerlessHttpError: value}
+}
+
+func NewRunnerPoolErrorWithStringLiteral() *RunnerPoolError {
+	return &RunnerPoolError{typeName: "stringLiteral", stringLiteral: "serverless_stream_ended_early"}
+}
+
+func NewRunnerPoolErrorFromRunnerPoolErrorServerlessConnectionError(value *RunnerPoolErrorServerlessConnectionError) *RunnerPoolError {
+	return &RunnerPoolError{typeName: "runnerPoolErrorServerlessConnectionError", RunnerPoolErrorServerlessConnectionError: value}
+}
+
+func NewRunnerPoolErrorWithStringLiteral() *RunnerPoolError {
+	return &RunnerPoolError{typeName: "stringLiteral", stringLiteral: "serverless_invalid_base64"}
+}
+
+func NewRunnerPoolErrorFromRunnerPoolErrorServerlessInvalidPayload(value *RunnerPoolErrorServerlessInvalidPayload) *RunnerPoolError {
+	return &RunnerPoolError{typeName: "runnerPoolErrorServerlessInvalidPayload", RunnerPoolErrorServerlessInvalidPayload: value}
+}
+
+func NewRunnerPoolErrorWithStringLiteral() *RunnerPoolError {
+	return &RunnerPoolError{typeName: "stringLiteral", stringLiteral: "internal_error"}
+}
+
+func (r *RunnerPoolError) StringLiteral() string {
+	return r.stringLiteral
+}
+
+func (r *RunnerPoolError) StringLiteral() string {
+	return r.stringLiteral
+}
+
+func (r *RunnerPoolError) StringLiteral() string {
+	return r.stringLiteral
+}
+
+func (r *RunnerPoolError) UnmarshalJSON(data []byte) error {
+	valueRunnerPoolErrorServerlessHttpError := new(RunnerPoolErrorServerlessHttpError)
+	if err := json.Unmarshal(data, &valueRunnerPoolErrorServerlessHttpError); err == nil {
+		r.typeName = "runnerPoolErrorServerlessHttpError"
+		r.RunnerPoolErrorServerlessHttpError = valueRunnerPoolErrorServerlessHttpError
+		return nil
+	}
+	var valueStringLiteral string
+	if err := json.Unmarshal(data, &valueStringLiteral); err == nil {
+		if valueStringLiteral == "serverless_stream_ended_early" {
+			r.typeName = "stringLiteral"
+			r.stringLiteral = valueStringLiteral
+			return nil
+		}
+	}
+	valueRunnerPoolErrorServerlessConnectionError := new(RunnerPoolErrorServerlessConnectionError)
+	if err := json.Unmarshal(data, &valueRunnerPoolErrorServerlessConnectionError); err == nil {
+		r.typeName = "runnerPoolErrorServerlessConnectionError"
+		r.RunnerPoolErrorServerlessConnectionError = valueRunnerPoolErrorServerlessConnectionError
+		return nil
+	}
+	var valueStringLiteral string
+	if err := json.Unmarshal(data, &valueStringLiteral); err == nil {
+		if valueStringLiteral == "serverless_invalid_base64" {
+			r.typeName = "stringLiteral"
+			r.stringLiteral = valueStringLiteral
+			return nil
+		}
+	}
+	valueRunnerPoolErrorServerlessInvalidPayload := new(RunnerPoolErrorServerlessInvalidPayload)
+	if err := json.Unmarshal(data, &valueRunnerPoolErrorServerlessInvalidPayload); err == nil {
+		r.typeName = "runnerPoolErrorServerlessInvalidPayload"
+		r.RunnerPoolErrorServerlessInvalidPayload = valueRunnerPoolErrorServerlessInvalidPayload
+		return nil
+	}
+	var valueStringLiteral string
+	if err := json.Unmarshal(data, &valueStringLiteral); err == nil {
+		if valueStringLiteral == "internal_error" {
+			r.typeName = "stringLiteral"
+			r.stringLiteral = valueStringLiteral
+			return nil
+		}
+	}
+	return fmt.Errorf("%s cannot be deserialized as a %T", data, r)
+}
+
+func (r RunnerPoolError) MarshalJSON() ([]byte, error) {
+	switch r.typeName {
+	default:
+		return nil, fmt.Errorf("invalid type %s in %T", r.typeName, r)
+	case "runnerPoolErrorServerlessHttpError":
+		return json.Marshal(r.RunnerPoolErrorServerlessHttpError)
+	case "stringLiteral":
+		return json.Marshal("serverless_stream_ended_early")
+	case "runnerPoolErrorServerlessConnectionError":
+		return json.Marshal(r.RunnerPoolErrorServerlessConnectionError)
+	case "stringLiteral":
+		return json.Marshal("serverless_invalid_base64")
+	case "runnerPoolErrorServerlessInvalidPayload":
+		return json.Marshal(r.RunnerPoolErrorServerlessInvalidPayload)
+	case "stringLiteral":
+		return json.Marshal("internal_error")
+	}
+}
+
+type RunnerPoolErrorVisitor interface {
+	VisitRunnerPoolErrorServerlessHttpError(*RunnerPoolErrorServerlessHttpError) error
+	VisitStringLiteral(string) error
+	VisitRunnerPoolErrorServerlessConnectionError(*RunnerPoolErrorServerlessConnectionError) error
+	VisitStringLiteral(string) error
+	VisitRunnerPoolErrorServerlessInvalidPayload(*RunnerPoolErrorServerlessInvalidPayload) error
+	VisitStringLiteral(string) error
+}
+
+func (r *RunnerPoolError) Accept(visitor RunnerPoolErrorVisitor) error {
+	switch r.typeName {
+	default:
+		return fmt.Errorf("invalid type %s in %T", r.typeName, r)
+	case "runnerPoolErrorServerlessHttpError":
+		return visitor.VisitRunnerPoolErrorServerlessHttpError(r.RunnerPoolErrorServerlessHttpError)
+	case "stringLiteral":
+		return visitor.VisitStringLiteral(r.stringLiteral)
+	case "runnerPoolErrorServerlessConnectionError":
+		return visitor.VisitRunnerPoolErrorServerlessConnectionError(r.RunnerPoolErrorServerlessConnectionError)
+	case "stringLiteral":
+		return visitor.VisitStringLiteral(r.stringLiteral)
+	case "runnerPoolErrorServerlessInvalidPayload":
+		return visitor.VisitRunnerPoolErrorServerlessInvalidPayload(r.RunnerPoolErrorServerlessInvalidPayload)
+	case "stringLiteral":
+		return visitor.VisitStringLiteral(r.stringLiteral)
+	}
+}
+
+// Serverless: SSE connection or network error
+type RunnerPoolErrorServerlessConnectionError struct {
+	// Serverless: SSE connection or network error
+	ServerlessConnectionError *RunnerPoolErrorServerlessConnectionErrorServerlessConnectionError `json:"serverless_connection_error,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerPoolErrorServerlessConnectionError) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessConnectionError
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerPoolErrorServerlessConnectionError(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerPoolErrorServerlessConnectionError) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+// Serverless: SSE connection or network error
+type RunnerPoolErrorServerlessConnectionErrorServerlessConnectionError struct {
+	Message string `json:"message"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerPoolErrorServerlessConnectionErrorServerlessConnectionError) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessConnectionErrorServerlessConnectionError
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerPoolErrorServerlessConnectionErrorServerlessConnectionError(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerPoolErrorServerlessConnectionErrorServerlessConnectionError) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+// Serverless: SSE returned non-200 status code (e.g., 404, 500)
+type RunnerPoolErrorServerlessHttpError struct {
+	// Serverless: SSE returned non-200 status code (e.g., 404, 500)
+	ServerlessHttpError *RunnerPoolErrorServerlessHttpErrorServerlessHttpError `json:"serverless_http_error,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerPoolErrorServerlessHttpError) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessHttpError
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerPoolErrorServerlessHttpError(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerPoolErrorServerlessHttpError) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+// Serverless: SSE returned non-200 status code (e.g., 404, 500)
+type RunnerPoolErrorServerlessHttpErrorServerlessHttpError struct {
+	Body       string `json:"body"`
+	StatusCode int    `json:"status_code"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerPoolErrorServerlessHttpErrorServerlessHttpError) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessHttpErrorServerlessHttpError
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerPoolErrorServerlessHttpErrorServerlessHttpError(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerPoolErrorServerlessHttpErrorServerlessHttpError) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+// Serverless: Runner sent invalid protocol payload
+type RunnerPoolErrorServerlessInvalidPayload struct {
+	// Serverless: Runner sent invalid protocol payload
+	ServerlessInvalidPayload *RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload `json:"serverless_invalid_payload,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerPoolErrorServerlessInvalidPayload) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessInvalidPayload
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerPoolErrorServerlessInvalidPayload(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerPoolErrorServerlessInvalidPayload) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+// Serverless: Runner sent invalid protocol payload
+type RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload struct {
+	Message string `json:"message"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload) String() string {
 	if len(r._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
 			return value
