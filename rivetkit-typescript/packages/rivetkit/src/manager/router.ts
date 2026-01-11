@@ -39,7 +39,8 @@ import {
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import { type GetUpgradeWebSocket, getEnvUniversal } from "@/utils";
+import type { GetUpgradeWebSocket } from "@/utils";
+import { timingSafeEqual } from "@/utils/crypto";
 import { getNodeEnv } from "@/utils/env-vars";
 import {
 	buildOpenApiRequestBody,
@@ -330,7 +331,7 @@ export function buildManagerRouter(
 						throw new RestrictedFeature("KV store access");
 					}
 					if (
-						compareSecrets(
+						timingSafeEqual(
 							config.token,
 							c.req.header("x-rivet-token") || "",
 						) === false

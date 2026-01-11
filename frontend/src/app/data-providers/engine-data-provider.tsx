@@ -385,6 +385,7 @@ export const createNamespaceContext = ({
 						actorId,
 						// @ts-expect-error
 						INSPECTOR_TOKEN_KV_KEY.toBase64(),
+						{ namespace },
 						{ abortSignal },
 					);
 
