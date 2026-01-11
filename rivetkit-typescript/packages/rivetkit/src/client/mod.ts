@@ -1,5 +1,5 @@
 import type { Registry } from "@/registry";
-import { injectDevtools } from "@/devtools/mod";
+import { injectDevtools } from "@/devtools-loader";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import {
 	type Client,

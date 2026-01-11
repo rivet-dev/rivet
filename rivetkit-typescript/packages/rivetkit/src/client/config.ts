@@ -52,7 +52,7 @@ export const ClientConfigSchemaBase = z.object({
 		.boolean()
 		.default(
 			() =>
-				typeof globalThis.window !== "undefined" &&
+				typeof window !== "undefined" &&
 				window?.location?.hostname === "localhost",
 		),
 });
@@ -137,7 +137,7 @@ export function convertRegistryConfigToClientConfig(
 		// We don't need health checks for internal clients
 		disableMetadataLookup: true,
 		devtools:
-			typeof globalThis.window !== "undefined" &&
+			typeof window !== "undefined" &&
 			window?.location?.hostname === "localhost",
 	};
 }
