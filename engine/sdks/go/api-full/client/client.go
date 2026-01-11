@@ -265,9 +265,7 @@ func (c *Client) ActorsDelete(ctx context.Context, actorId sdk.RivetId, request 
 	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actorId)
 
 	queryParams := make(url.Values)
-	if request.Namespace != nil {
-		queryParams.Add("namespace", fmt.Sprintf("%v", *request.Namespace))
-	}
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}
@@ -287,12 +285,18 @@ func (c *Client) ActorsDelete(ctx context.Context, actorId sdk.RivetId, request 
 	return response, nil
 }
 
-func (c *Client) ActorsKvGet(ctx context.Context, actorId sdk.RivetId, key string) (*sdk.ActorsKvGetResponse, error) {
+func (c *Client) ActorsKvGet(ctx context.Context, actorId sdk.RivetId, key string, request *sdk.ActorsKvGetRequest) (*sdk.ActorsKvGetResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
 	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/kv/keys/%v", actorId, key)
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	var response *sdk.ActorsKvGetResponse
 	if err := c.caller.Call(

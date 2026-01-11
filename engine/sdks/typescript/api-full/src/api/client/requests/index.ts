@@ -3,6 +3,7 @@ export { type ActorsCreateRequest } from "./ActorsCreateRequest";
 export { type ActorsGetOrCreateRequest } from "./ActorsGetOrCreateRequest";
 export { type ActorsListNamesRequest } from "./ActorsListNamesRequest";
 export { type ActorsDeleteRequest } from "./ActorsDeleteRequest";
+export { type ActorsKvGetRequest } from "./ActorsKvGetRequest";
 export { type RunnerConfigsListRequest } from "./RunnerConfigsListRequest";
 export { type RunnerConfigsServerlessHealthCheckRequest } from "./RunnerConfigsServerlessHealthCheckRequest";
 export { type RunnerConfigsUpsertRequestBody } from "./RunnerConfigsUpsertRequestBody";

@@ -8,6 +8,6 @@
  *         namespace: "namespace"
  *     }
  */
-export interface ActorsDeleteRequest {
+export interface ActorsKvGetRequest {
     namespace: string;
 }
