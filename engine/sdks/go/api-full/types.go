@@ -19,7 +19,7 @@ type ActorsCreateRequest struct {
 }
 
 type ActorsDeleteRequest struct {
-	Namespace *string `json:"-"`
+	Namespace string `json:"-"`
 }
 
 type ActorsGetOrCreateRequest struct {
@@ -30,6 +30,10 @@ type ActorsGetOrCreateRequest struct {
 	Key                string      `json:"key"`
 	Name               string      `json:"name"`
 	RunnerNameSelector string      `json:"runner_name_selector"`
+}
+
+type ActorsKvGetRequest struct {
+	Namespace string `json:"-"`
 }
 
 type ActorsListRequest struct {

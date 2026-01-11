@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## actors_kv_get
 
-> models::ActorsKvGetResponse actors_kv_get(actor_id, key)
+> models::ActorsKvGetResponse actors_kv_get(actor_id, key, namespace)
 
 
 ### Parameters
@@ -20,6 +20,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **actor_id** | **String** |  | [required] |
 **key** | **String** |  | [required] |
+**namespace** | **String** |  | [required] |
 
 ### Return type
 

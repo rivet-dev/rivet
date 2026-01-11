@@ -21,7 +21,7 @@ Method | HTTP request | Description
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **actor_id** | **String** |  | [required] |
-**namespace** | Option<**String**> |  |  |
+**namespace** | **String** |  | [required] |
 
 ### Return type
 
