@@ -5,8 +5,13 @@ import { type ActorContextOf, actor, setup } from "rivetkit";
 import { getStreams } from "./shared/streams.ts";
 import type { PromptMessage, ResponseChunk } from "./shared/types.ts";
 
+interface State {
+	conversationId: string;
+	promptStreamOffset: string | undefined;
+}
+
 export const aiAgent = actor({
-	createState: (_c, input: { conversationId: string }) => ({
+	createState: (_c, input: { conversationId: string }): State => ({
 		conversationId: input.conversationId,
 		// Offset tracking for durable stream consumption
 		// undefined means start from the beginning of the stream
