@@ -2,14 +2,21 @@ use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
-	extract::{Extension, Path},
+	extract::{Extension, Path, Query},
 };
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::ctx::ApiCtx;
+
+#[derive(Debug, Deserialize, Serialize, IntoParams)]
+#[serde(deny_unknown_fields)]
+#[into_params(parameter_in = Query)]
+pub struct KvGetQuery {
+	pub namespace: String,
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +39,7 @@ pub struct KvGetResponse {
 	params(
 		("actor_id" = Id, Path),
 		("key" = String, Path),
+		KvGetQuery,
 	),
 	responses(
 		(status = 200, body = KvGetResponse),
@@ -39,15 +47,19 @@ pub struct KvGetResponse {
 	security(("bearer_auth" = [])),
 )]
 #[tracing::instrument(skip_all)]
-pub async fn kv_get(Extension(ctx): Extension<ApiCtx>, Path(path): Path<KvGetPath>) -> Response {
-	match kv_get_inner(ctx, path).await {
+pub async fn kv_get(
+	Extension(ctx): Extension<ApiCtx>,
+	Path(path): Path<KvGetPath>,
+	Query(query): Query<KvGetQuery>,
+) -> Response {
+	match kv_get_inner(ctx, path, query).await {
 		Ok(response) => response,
 		Err(err) => ApiError::from(err).into_response(),
 	}
 }
 
 #[tracing::instrument(skip_all)]
-async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath) -> Result<Response> {
+async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<Response> {
 	use axum::Json;
 
 	ctx.auth().await?;
@@ -57,7 +69,9 @@ async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath) -> Result<Response> {
 			actor_id: path.actor_id,
 			key: path.key,
 		};
-		let peer_query = rivet_api_peer::actors::kv_get::KvGetQuery {};
+		let peer_query = rivet_api_peer::actors::kv_get::KvGetQuery {
+			namespace: query.namespace,
+		};
 		let res = rivet_api_peer::actors::kv_get::kv_get(ctx.into(), peer_path, peer_query).await?;
 
 		Ok(Json(res).into_response())
@@ -71,7 +85,7 @@ async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath) -> Result<Response> {
 				urlencoding::encode(&path.key)
 			),
 			axum::http::Method::GET,
-			Option::<&()>::None,
+			Some(&query),
 			Option::<&()>::None,
 		)
 		.await
