@@ -37,9 +37,10 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			integrations,
 			tunnel: getConfig().sentry?.tunnel,
 			tracePropagationTargets: [
-				/.*\.rivet\.dev/,
-				/.*\.rivet\.gg/,
-				/.*rivet-dev\.vercel\.app/,
+				"api.rivet.dev",
+				"cloud-api.rivet.dev",
+				"api.staging.rivet.dev",
+				"cloud-api.staging.rivet.dev",
 				/localhost/,
 			],
 		});
