@@ -108,6 +108,7 @@ export function getActorStatus(
 		Actor,
 		| "createdAt"
 		| "startedAt"
+		| "connectableAt"
 		| "destroyedAt"
 		| "sleepingAt"
 		| "pendingAllocationAt"
@@ -117,7 +118,7 @@ export function getActorStatus(
 ): ActorStatus {
 	const {
 		createdAt,
-		startedAt,
+		connectableAt,
 		destroyedAt,
 		sleepingAt,
 		pendingAllocationAt,
@@ -133,7 +134,7 @@ export function getActorStatus(
 		return "crash-loop";
 	}
 
-	if (pendingAllocationAt && !startedAt && !destroyedAt) {
+	if (pendingAllocationAt && !connectableAt && !destroyedAt) {
 		return "pending";
 	}
 
@@ -141,19 +142,19 @@ export function getActorStatus(
 		return "sleeping";
 	}
 
-	if (createdAt && !startedAt && !destroyedAt) {
+	if (createdAt && !connectableAt && !destroyedAt) {
 		return "starting";
 	}
 
-	if (createdAt && startedAt && !destroyedAt) {
+	if (createdAt && connectableAt && !destroyedAt) {
 		return "running";
 	}
 
-	if (createdAt && startedAt && destroyedAt) {
+	if (createdAt && connectableAt && destroyedAt) {
 		return "stopped";
 	}
 
-	if (createdAt && !startedAt && destroyedAt) {
+	if (createdAt && !connectableAt && destroyedAt) {
 		return "crashed";
 	}
 
