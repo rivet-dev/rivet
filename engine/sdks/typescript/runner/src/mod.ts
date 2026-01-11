@@ -201,7 +201,7 @@ export class Runner {
 	#actors: Map<string, RunnerActor> = new Map();
 
 	// WebSocket
-	__pegboardWebSocket?: WebSocket;
+	#pegboardWebSocket?: WebSocket;
 	runnerId?: string;
 	#started: boolean = false;
 	#shutdown: boolean = false;
@@ -529,7 +529,7 @@ export class Runner {
 
 		// Close WebSocket
 		if (this.__webSocketReady()) {
-			const pegboardWebSocket = this.__pegboardWebSocket;
+			const pegboardWebSocket = this.#pegboardWebSocket;
 			if (immediate) {
 				// Stop immediately
 				pegboardWebSocket.close(1000, "pegboard.runner_shutdown");
@@ -590,7 +590,7 @@ export class Runner {
 			// the runner has already shut down
 			this.log?.debug({
 				msg: "no runner WebSocket to shutdown or already closed",
-				readyState: this.__pegboardWebSocket?.readyState,
+				readyState: this.#pegboardWebSocket?.readyState,
 			});
 		}
 
@@ -715,8 +715,21 @@ export class Runner {
 			protocols.push(`rivet_token.${this.config.token}`);
 
 		const WS = await importWebSocket();
+
+		// Assertion to clear previous WebSocket
+		if (
+			this.#pegboardWebSocket &&
+			(this.#pegboardWebSocket.readyState === WS.CONNECTING ||
+				this.#pegboardWebSocket.readyState === WS.OPEN)
+		) {
+			this.log?.error(
+				"found duplicate pegboardWebSocket, closing previous",
+			);
+			this.#pegboardWebSocket.close(1000, "duplicate_websocket");
+		}
+
 		const ws = new WS(this.pegboardUrl, protocols) as any as WebSocket;
-		this.__pegboardWebSocket = ws;
+		this.#pegboardWebSocket = ws;
 
 		this.log?.info({
 			msg: "connecting",
@@ -1673,11 +1686,11 @@ export class Runner {
 
 	/** Asserts WebSocket exists and is ready. */
 	__webSocketReady(): this is this & {
-		__pegboardWebSocket: NonNullable<Runner["__pegboardWebSocket"]>;
+		__pegboardWebSocket: NonNullable<Runner["#pegboardWebSocket"]>;
 	} {
 		return (
-			!!this.__pegboardWebSocket &&
-			this.__pegboardWebSocket.readyState === 1
+			!!this.#pegboardWebSocket &&
+			this.#pegboardWebSocket.readyState === 1
 		);
 	}
 
@@ -1689,7 +1702,7 @@ export class Runner {
 
 		const encoded = protocol.encodeToServer(message);
 		if (this.__webSocketReady()) {
-			this.__pegboardWebSocket.send(encoded);
+			this.#pegboardWebSocket.send(encoded);
 		} else {
 			this.log?.error({
 				msg: "WebSocket not available or not open for sending data",
@@ -1780,6 +1793,13 @@ export class Runner {
 		this.log?.debug({
 			msg: `Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
 		});
+
+		if (this.#reconnectTimeout) {
+			this.log?.info(
+				"clearing previous reconnect timeout in schedule reconnect",
+			);
+			clearTimeout(this.#reconnectTimeout);
+		}
 
 		this.#reconnectTimeout = setTimeout(() => {
 			if (!this.#shutdown) {
