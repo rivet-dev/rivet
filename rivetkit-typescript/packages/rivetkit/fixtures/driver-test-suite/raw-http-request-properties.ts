@@ -11,7 +11,10 @@ export const rawHttpRequestPropertiesActor = actor({
 		const method = request.method;
 
 		// Get all headers
-		const headers = Object.fromEntries(request.headers.entries());
+		const headers: Record<string, string> = {};
+		request.headers.forEach((value, key) => {
+			headers[key] = value;
+		});
 
 		// Handle body based on content type
 		const handleBody = async () => {

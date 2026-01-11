@@ -35,9 +35,9 @@ export async function rawHttpFetch(
 
 		// Merge headers - init headers override request headers
 		const mergedHeaders = new Headers(requestHeaders);
-		for (const [key, value] of initHeaders) {
+		initHeaders.forEach((value, key) => {
 			mergedHeaders.set(key, value);
-		}
+		});
 
 		mergedInit = {
 			method: input.method,

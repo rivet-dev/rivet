@@ -474,7 +474,7 @@ export function buildManagerRouter(
 							headers: c.req.raw.headers,
 							body: c.req.raw.body,
 							duplex: "half",
-						}),
+						} as RequestInit),
 					);
 
 					// Return the response directly
