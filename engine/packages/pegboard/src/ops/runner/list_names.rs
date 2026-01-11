@@ -29,10 +29,10 @@ pub async fn pegboard_runner_list_names(ctx: &OperationCtx, input: &Input) -> Re
 			let (start, end) = runner_name_subspace.range();
 
 			let start = if let Some(name) = &input.after_name {
-				tx.pack(&keys::ns::RunnerNameKey::new(
+				universaldb::utils::end_of_key_range(&tx.pack(&keys::ns::RunnerNameKey::new(
 					input.namespace_id,
 					name.clone(),
-				))
+				)))
 			} else {
 				start
 			};

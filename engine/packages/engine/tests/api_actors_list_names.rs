@@ -526,3 +526,166 @@ fn list_names_empty_response_no_cursor() {
 		);
 	});
 }
+
+// MARK: Comprehensive pagination tests
+
+/// This test exhaustively checks that pagination works correctly by iterating
+/// through all pages and verifying no duplicates appear across pages.
+/// This is a regression test for the cursor being inclusive instead of exclusive.
+#[test]
+fn list_names_pagination_no_duplicates_comprehensive() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+
+		// Create actors with sequential names
+		for i in 0..15 {
+			common::api::public::actors_create(
+				ctx.leader_dc().guard_port(),
+				common::api_types::actors::create::CreateQuery {
+					namespace: namespace.clone(),
+				},
+				common::api_types::actors::create::CreateRequest {
+					datacenter: None,
+					name: format!("paginate-actor-{:02}", i),
+					key: Some(common::generate_unique_key()),
+					input: None,
+					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				},
+			)
+			.await
+			.expect("failed to create actor");
+		}
+
+		// Paginate through all results with small page size
+		let mut all_names: HashSet<String> = HashSet::new();
+		let mut cursor: Option<String> = None;
+		let mut page_count = 0;
+
+		loop {
+			let response = common::api::public::actors_list_names(
+				ctx.leader_dc().guard_port(),
+				common::api_types::actors::list_names::ListNamesQuery {
+					namespace: namespace.clone(),
+					limit: Some(4),
+					cursor: cursor.clone(),
+				},
+			)
+			.await
+			.expect("failed to list actor names");
+
+			page_count += 1;
+
+			// Check for duplicates - this is the key assertion for the bug fix
+			for name in response.names.keys() {
+				assert!(
+					!all_names.contains(name),
+					"DUPLICATE FOUND: '{}' appeared on page {} but was already seen. \
+					This indicates the cursor is inclusive instead of exclusive. \
+					All names so far: {:?}",
+					name,
+					page_count,
+					all_names
+				);
+				all_names.insert(name.clone());
+			}
+
+			// Move to next page or break
+			if response.pagination.cursor.is_none() || response.names.is_empty() {
+				break;
+			}
+			cursor = response.pagination.cursor;
+
+			// Safety limit to prevent infinite loops
+			if page_count > 20 {
+				panic!("Too many pages, possible infinite loop");
+			}
+		}
+
+		// Should have found all actor names
+		assert_eq!(
+			all_names.len(),
+			15,
+			"Should find all 15 actor names across pages, found: {}. Names: {:?}",
+			all_names.len(),
+			all_names
+		);
+	});
+}
+
+/// Tests that the cursor correctly advances past boundary conditions.
+/// Creates actors with names that test edge cases in lexicographic ordering.
+#[test]
+fn list_names_pagination_boundary_cases() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+
+		// Create actors with names that have similar prefixes to test boundary conditions
+		let names = vec![
+			"test-a", "test-aa", "test-aaa", "test-ab", "test-b", "test-ba",
+		];
+
+		for name in &names {
+			common::api::public::actors_create(
+				ctx.leader_dc().guard_port(),
+				common::api_types::actors::create::CreateQuery {
+					namespace: namespace.clone(),
+				},
+				common::api_types::actors::create::CreateRequest {
+					datacenter: None,
+					name: name.to_string(),
+					key: Some(common::generate_unique_key()),
+					input: None,
+					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				},
+			)
+			.await
+			.expect("failed to create actor");
+		}
+
+		// Page through with limit=2
+		let mut collected_names: Vec<String> = Vec::new();
+		let mut cursor: Option<String> = None;
+
+		loop {
+			let response = common::api::public::actors_list_names(
+				ctx.leader_dc().guard_port(),
+				common::api_types::actors::list_names::ListNamesQuery {
+					namespace: namespace.clone(),
+					limit: Some(2),
+					cursor: cursor.clone(),
+				},
+			)
+			.await
+			.expect("failed to list actor names");
+
+			// Collect names from this page
+			let page_names: Vec<_> = response.names.keys().cloned().collect();
+			collected_names.extend(page_names);
+
+			if response.pagination.cursor.is_none() || response.names.is_empty() {
+				break;
+			}
+			cursor = response.pagination.cursor;
+		}
+
+		// Filter to just our test names
+		let test_names: HashSet<_> = collected_names
+			.iter()
+			.filter(|n| names.contains(&n.as_str()))
+			.cloned()
+			.collect();
+
+		// All names should be present exactly once
+		assert_eq!(
+			test_names.len(),
+			names.len(),
+			"All test names should be present. Expected {:?}, got {:?}",
+			names,
+			test_names
+		);
+	});
+}

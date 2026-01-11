@@ -30,10 +30,10 @@ pub async fn pegboard_actor_list_names(ctx: &OperationCtx, input: &Input) -> Res
 			let (start, end) = actor_name_subspace.range();
 
 			let start = if let Some(name) = &input.after_name {
-				tx.pack(&keys::ns::ActorNameKey::new(
+				universaldb::utils::end_of_key_range(&tx.pack(&keys::ns::ActorNameKey::new(
 					input.namespace_id,
 					name.clone(),
-				))
+				)))
 			} else {
 				start
 			};
