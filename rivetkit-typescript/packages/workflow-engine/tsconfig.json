@@ -1,0 +1,8 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"outDir": "./dist"
+	},
+	"include": ["src/**/*", "schemas/**/*", "dist/schemas/**/*", "tests/**/*"]
+}
