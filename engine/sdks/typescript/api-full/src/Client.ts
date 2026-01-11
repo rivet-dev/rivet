@@ -472,19 +472,18 @@ export class RivetClient {
      * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @example
-     *     await client.actorsDelete("actor_id")
+     *     await client.actorsDelete("actor_id", {
+     *         namespace: "namespace"
+     *     })
      */
     public async actorsDelete(
         actorId: Rivet.RivetId,
-        request: Rivet.ActorsDeleteRequest = {},
+        request: Rivet.ActorsDeleteRequest,
         requestOptions?: RivetClient.RequestOptions,
     ): Promise<Rivet.ActorsDeleteResponse> {
         const { namespace } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
-        if (namespace != null) {
-            _queryParams["namespace"] = namespace;
-        }
-
+        _queryParams["namespace"] = namespace;
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
@@ -541,16 +540,23 @@ export class RivetClient {
     /**
      * @param {Rivet.RivetId} actorId
      * @param {string} key
+     * @param {Rivet.ActorsKvGetRequest} request
      * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @example
-     *     await client.actorsKvGet("actor_id", "key")
+     *     await client.actorsKvGet("actor_id", "key", {
+     *         namespace: "namespace"
+     *     })
      */
     public async actorsKvGet(
         actorId: Rivet.RivetId,
         key: string,
+        request: Rivet.ActorsKvGetRequest,
         requestOptions?: RivetClient.RequestOptions,
     ): Promise<Rivet.ActorsKvGetResponse> {
+        const { namespace } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
@@ -566,6 +572,7 @@ export class RivetClient {
                 ...requestOptions?.headers,
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
