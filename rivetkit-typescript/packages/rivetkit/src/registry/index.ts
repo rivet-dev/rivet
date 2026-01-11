@@ -5,11 +5,7 @@ import { createClient } from "@/client/mod";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
 import { chooseDefaultDriver } from "@/drivers/default";
 import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
-import {
-	configureInspectorAccessToken,
-	getInspectorUrl,
-	isInspectorEnabled,
-} from "@/inspector/utils";
+import { getInspectorUrl } from "@/inspector/utils";
 import { buildManagerRouter } from "@/manager/router";
 import { configureServerlessRunner } from "@/serverless/configure";
 import { buildServerlessRouter } from "@/serverless/router";
@@ -168,7 +164,6 @@ export class Registry<A extends RegistryActors> {
 
 		// Create manager driver (always needed for actor driver + inline client)
 		const managerDriver = driver.manager(this.#config);
-		configureInspectorAccessToken(config, managerDriver);
 
 		if (config.serveManager) {
 			// Configure getUpgradeWebSocket lazily so we can assign it in crossPlatformServe
@@ -222,11 +217,7 @@ export class Registry<A extends RegistryActors> {
 				...driverLog,
 			});
 			const inspectorUrl = getInspectorUrl(config);
-			if (
-				inspectorUrl &&
-				isInspectorEnabled(config, "manager") &&
-				managerDriver.inspector
-			) {
+			if (inspectorUrl && config.inspector.enabled) {
 				logger().info({
 					msg: "inspector ready",
 					url: inspectorUrl,
@@ -261,11 +252,7 @@ export class Registry<A extends RegistryActors> {
 					const padding = " ".repeat(Math.max(0, 13 - k.length));
 					console.log(`  - ${k}:${padding}${v}`);
 				}
-				if (
-					inspectorUrl &&
-					isInspectorEnabled(config, "manager") &&
-					managerDriver.inspector
-				) {
+				if (inspectorUrl && config.inspector.enabled) {
 					console.log(`  - Inspector:    ${inspectorUrl}`);
 				}
 				console.log();

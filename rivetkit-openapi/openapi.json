@@ -832,6 +832,55 @@
         }
       }
     },
+    "/actors/{actor_id}/kv/keys/{key}": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "actor_id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User error"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
     "/gateway/{actorId}/health": {
       "get": {
         "parameters": [

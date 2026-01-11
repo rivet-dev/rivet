@@ -58,11 +58,11 @@ export default function ConnectManualServerlfullFrameContent({
 	provider,
 }: ConnectManualServerlfullFrameContentProps) {
 	usePrefetchInfiniteQuery({
-		...useEngineCompatDataProvider().regionsQueryOptions(),
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
 	});
 	const { data } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	const prefferedRegionForRailway =
@@ -238,7 +238,9 @@ export const useSelectedDatacenter = () => {
 	const datacenter = useWatch({ name: "datacenter" });
 
 	const { data } = useQuery(
-		useEngineCompatDataProvider().regionQueryOptions(datacenter || "auto"),
+		useEngineCompatDataProvider().datacenterQueryOptions(
+			datacenter || "auto",
+		),
 	);
 
 	return data?.url || engineEnv().VITE_APP_API_URL;

@@ -1,21 +1,13 @@
-import { useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
-	faBolt,
 	faHome,
 	faKey,
 	faLink,
-	faServer,
+	faLinkSlash,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
-import {
-	Link,
-	useMatchRoute,
-	useNavigate,
-	useSearch,
-} from "@tanstack/react-router";
+import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
 import {
 	type ComponentProps,
 	createContext,
@@ -34,7 +26,6 @@ import {
 	Button,
 	type ButtonProps,
 	cn,
-	DocsSheet,
 	type ImperativePanelHandle,
 	Ping,
 	ResizableHandle,
@@ -42,19 +33,19 @@ import {
 	ResizablePanelGroup,
 	ScrollArea,
 	Skeleton,
+	WithTooltip,
 } from "@/components";
-import {
-	useDataProvider,
-	useDataProviderCheck,
-	useInspectorDataProvider,
-} from "@/components/actors";
+import { useDataProvider, useDataProviderCheck } from "@/components/actors";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
-import { useInspectorCredentials } from "./credentials-context";
-import { HelpDropdown } from "./help-dropdown";
+import {
+	useInspectorContext,
+	useInspectorEndpoint,
+	useInspectorStatus,
+} from "./inspector-context";
 import { NamespaceSelect } from "./namespace-select";
 import { UserDropdown } from "./user-dropdown";
 
@@ -245,18 +236,20 @@ const Sidebar = ({
 										</Link>
 									</Button>
 								))}
-							<DocsSheet
-								path={"https://www.rivet.dev/docs"}
-								title="Documentation"
+							<Button
+								className="text-muted-foreground justify-start py-1 h-auto"
+								variant="ghost"
+								size="xs"
+								asChild
 							>
-								<Button
-									className="text-muted-foreground justify-start py-1 h-auto"
-									variant="ghost"
-									size="xs"
+								<a
+									href="https://www.rivet.dev/docs"
+									target="_blank"
+									rel="noopener noreferrer"
 								>
 									Documentation
-								</Button>
-							</DocsSheet>
+								</a>
+							</Button>
 							<Button
 								variant="ghost"
 								className="text-muted-foreground justify-start py-1 h-auto"
@@ -362,23 +355,23 @@ const NamespaceBreadcrumbs = ({
 				className="text-sm py-1.5 h-auto [&>[data-icon]]:size-3"
 				showCreate
 				value={namespaceNameId}
-				onValueChange={(value) => {
+				onValueChange={(value) =>
 					navigate({
 						to: "/ns/$namespace",
 						params: {
 							namespace: value,
 						},
-					});
-				}}
-				onCreateClick={() => {
+					})
+				}
+				onCreateClick={() =>
 					navigate({
 						to: ".",
 						search: (old) => ({
 							...old,
 							modal: "create-ns",
 						}),
-					});
-				}}
+					})
+				}
 			/>
 		</div>
 	);
@@ -394,10 +387,6 @@ const Subnav = () => {
 				}
 			: { to: "/", fuzzy: true },
 	);
-
-	const hasDataProvider = useDataProviderCheck();
-	const dataProvider = useDataProvider();
-	const hasQuery = hasDataProvider && !!dataProvider.buildsQueryOptions;
 
 	if (nsMatch === false) {
 		return null;
@@ -415,14 +404,12 @@ const Subnav = () => {
 					Overview
 				</HeaderLink>
 			) : null}
-			{hasDataProvider && hasQuery ? (
-				<div className="w-full">
-					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
-						Actors
-					</span>
-					<ActorBuildsList />
-				</div>
-			) : null}
+			<div className="w-full">
+				<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
+					Instances
+				</span>
+				<ActorBuildsList />
+			</div>
 		</div>
 	);
 };
@@ -466,17 +453,12 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 }
 
 function ConnectionStatus(): ReactNode {
-	const endpoint = useSearch({
-		from: "/_context",
-		select: (s) => s.u,
-	});
-	const data = useInspectorDataProvider();
-	const { setCredentials } = useInspectorCredentials();
-	const { isLoading, isError, isSuccess } = useQuery(
-		data.statusQueryOptions(),
-	);
+	const endpoint = useInspectorEndpoint();
 
-	if (isLoading) {
+	const { disconnect } = useInspectorContext();
+	const status = useInspectorStatus();
+
+	if (status === "reconnecting") {
 		return (
 			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes">
 				<div className="flex-1">
@@ -488,7 +470,7 @@ function ConnectionStatus(): ReactNode {
 		);
 	}
 
-	if (isError) {
+	if (status === "disconnected") {
 		return (
 			<div className="text-red-500 border p-2 rounded-md flex items-center text-sm justify-between bg-stripes-destructive ">
 				<div className="flex items-center">
@@ -500,26 +482,46 @@ function ConnectionStatus(): ReactNode {
 					</div>
 				</div>
 
-				<Button
-					variant="outline"
-					size="xs"
-					className="ml-2 text-foreground"
-					onClick={() => setCredentials(null)}
-					startIcon={<Icon icon={faLink} />}
-				>
-					Reconnect
-				</Button>
+				<WithTooltip
+					delayDuration={0}
+					trigger={
+						<Button
+							variant="outline"
+							size="icon-sm"
+							className="ml-2 text-foreground"
+							onClick={() => disconnect()}
+						>
+							<Icon icon={faLink} />
+						</Button>
+					}
+					content="Reconnect"
+				/>
 			</div>
 		);
 	}
 
-	if (isSuccess) {
+	if (status === "connected") {
 		return (
-			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes">
+			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes justify-between">
 				<div>
 					<p>Connected</p>
 					<p className="text-muted-foreground text-xs">{endpoint}</p>
 				</div>
+
+				<WithTooltip
+					delayDuration={0}
+					trigger={
+						<Button
+							variant="outline"
+							size="icon-sm"
+							className="ml-2 text-foreground"
+							onClick={() => disconnect()}
+						>
+							<Icon icon={faLinkSlash} />
+						</Button>
+					}
+					content="Disconnect"
+				/>
 			</div>
 		);
 	}

@@ -1,7 +1,11 @@
 import type { Context as HonoContext, Next } from "hono";
 import type { WSContext } from "hono/ws";
+import invariant from "invariant";
 import { MissingActorHeader, WebSocketsNotEnabled } from "@/actor/errors";
-import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
+import {
+	parseWebSocketProtocols,
+	type UpgradeWebSocketArgs,
+} from "@/actor/router-websocket-endpoints";
 import {
 	HEADER_RIVET_ACTOR,
 	HEADER_RIVET_TARGET,
@@ -11,11 +15,10 @@ import {
 	WS_PROTOCOL_TARGET,
 } from "@/common/actor-router-consts";
 import type { UniversalWebSocket } from "@/mod";
-import { GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
+import type { RegistryConfig } from "@/registry/config";
+import { type GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
-import { RegistryConfig } from "@/registry/config";
-import invariant from "invariant";
 
 interface ActorPathInfo {
 	actorId: string;
@@ -41,32 +44,16 @@ async function handleWebSocketGatewayPathBased(
 	// NOTE: Token validation implemented in EE
 
 	// Parse additional configuration from Sec-WebSocket-Protocol header
-	const protocols = c.req.header("sec-websocket-protocol");
-	let encodingRaw: string | undefined;
-	let connParamsRaw: string | undefined;
-
-	if (protocols) {
-		const protocolList = protocols.split(",").map((p) => p.trim());
-		for (const protocol of protocolList) {
-			if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
-				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
-			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {
-				connParamsRaw = decodeURIComponent(
-					protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
-				);
-			}
-		}
-	}
+	const { encoding, connParams } = parseWebSocketProtocols(
+		c.req.header("sec-websocket-protocol"),
+	);
 
 	logger().debug({
 		msg: "proxying websocket to actor via path-based routing",
 		actorId: actorPathInfo.actorId,
 		path: actorPathInfo.remainingPath,
-		encoding: encodingRaw,
+		encoding,
 	});
-
-	const encoding = encodingRaw || "json";
-	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
 
 	return await managerDriver.proxyWebSocket(
 		c,
@@ -218,31 +205,13 @@ async function handleWebSocketGateway(
 		throw new WebSocketsNotEnabled();
 	}
 
-	// Parse configuration from Sec-WebSocket-Protocol header
-	const protocols = c.req.header("sec-websocket-protocol");
 	let target: string | undefined;
 	let actorId: string | undefined;
-	let encodingRaw: string | undefined;
-	let connParamsRaw: string | undefined;
 
-	if (protocols) {
-		const protocolList = protocols.split(",").map((p) => p.trim());
-		for (const protocol of protocolList) {
-			if (protocol.startsWith(WS_PROTOCOL_TARGET)) {
-				target = protocol.substring(WS_PROTOCOL_TARGET.length);
-			} else if (protocol.startsWith(WS_PROTOCOL_ACTOR)) {
-				actorId = decodeURIComponent(
-					protocol.substring(WS_PROTOCOL_ACTOR.length),
-				);
-			} else if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
-				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
-			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {
-				connParamsRaw = decodeURIComponent(
-					protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
-				);
-			}
-		}
-	}
+	// Parse configuration from Sec-WebSocket-Protocol header
+	const { encoding, connParams } = parseWebSocketProtocols(
+		c.req.header("sec-websocket-protocol"),
+	);
 
 	if (target !== "actor") {
 		return c.text("WebSocket upgrade requires target.actor protocol", 400);
@@ -256,11 +225,8 @@ async function handleWebSocketGateway(
 		msg: "proxying websocket to actor",
 		actorId,
 		path: strippedPath,
-		encoding: encodingRaw,
+		encoding,
 	});
-
-	const encoding = encodingRaw || "json";
-	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
 
 	// Include query string if present
 	const pathWithQuery = c.req.url.includes("?")
@@ -271,7 +237,7 @@ async function handleWebSocketGateway(
 		c,
 		pathWithQuery,
 		actorId,
-		encoding as any, // Will be validated by driver
+		encoding,
 		connParams,
 	);
 }

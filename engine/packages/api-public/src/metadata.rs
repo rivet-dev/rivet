@@ -23,7 +23,7 @@ pub struct GetResponse {
 
 /// Returns metadata about the API including runtime and version
 #[utoipa::path(
-	delete,
+	get,
 	operation_id = "metadata_get",
 	path = "/metadata",
 	responses(

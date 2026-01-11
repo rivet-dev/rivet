@@ -28,7 +28,6 @@ import {
 	CodePreview,
 	cn,
 	DiscreteInput,
-	DocsSheet,
 	getConfig,
 	H1,
 	H3,
@@ -44,6 +43,7 @@ import {
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { RegionSelect } from "@/components/actors/region-select";
 import { useRootLayout } from "@/components/actors/root-layout-context";
+import { docsLinks } from "@/content/data";
 import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
@@ -134,7 +134,7 @@ function SecretToken() {
 		dataProvider.engineAdminTokenQueryOptions(),
 	);
 	const { data: regions = [] } = useInfiniteQuery(
-		dataProvider.regionsQueryOptions(),
+		dataProvider.datacentersQueryOptions(),
 	);
 	const [selectedDatacenter, setSelectedDatacenter] = useState<
 		string | undefined
@@ -143,7 +143,7 @@ function SecretToken() {
 	// Set default datacenter when regions are loaded
 	useEffect(() => {
 		if (regions.length > 0 && !selectedDatacenter) {
-			setSelectedDatacenter(regions[0].id);
+			setSelectedDatacenter(regions[0].name);
 		}
 	}, [regions, selectedDatacenter]);
 
@@ -151,7 +151,7 @@ function SecretToken() {
 
 	const endpoint = match(__APP_TYPE__)
 		.with("cloud", () => {
-			const region = regions.find((r) => r.id === selectedDatacenter);
+			const region = regions.find((r) => r.name === selectedDatacenter);
 			return region?.url || cloudEnv().VITE_APP_API_URL;
 		})
 		.with("engine", () => getConfig().apiUrl)
@@ -256,9 +256,10 @@ RIVET_TOKEN=${token || ""}`;
 							icon={faNodeJs}
 							code={() => codeSnippet}
 							footer={
-								<DocsSheet
-									path={"/docs/actors/quickstart/backend"}
-									title={"JavaScript Quickstart"}
+								<a
+									href={docsLinks.quickstart.backend}
+									target="_blank"
+									rel="noopener noreferrer"
 								>
 									<span className="cursor-pointer hover:underline">
 										See JavaScript Documentation{" "}
@@ -267,7 +268,7 @@ RIVET_TOKEN=${token || ""}`;
 											className="text-xs"
 										/>
 									</span>
-								</DocsSheet>
+								</a>
 							}
 						>
 							<CodePreview

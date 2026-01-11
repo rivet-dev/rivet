@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Button, cn } from "@/components";
-import { useActor } from "../actor-queries-context";
+import { useActorInspector } from "../actor-inspector-context";
 import { useDataProvider } from "../data-provider";
 import type { ActorId } from "../queries";
 import { useActorWorkerStatus } from "../worker/actor-worker-context";
@@ -19,26 +19,22 @@ export function ActorConsole({ actorId }: ActorConsoleProps) {
 	const [isOpen, setOpen] = useState(false);
 
 	const status = useActorWorkerStatus();
-	const managerQueries = useDataProvider();
-	const actorQueries = useActor();
-	const { data: { destroyedAt, sleepingAt } = {} } = useQuery(
-		managerQueries.actorWorkerQueryOptions(actorId),
-	);
-	const { isSuccess, isError, isLoading } = useQuery(
-		actorQueries.actorPingQueryOptions(actorId, {
-			enabled: true,
-			refetchInterval: false,
-		}),
+	const actorInspector = useActorInspector();
+
+	const { isLoading: isRpcsLoading, isError: isRpcsError } = useQuery(
+		actorInspector.actorRpcsQueryOptions(actorId),
 	);
 
-	const isBlocked =
-		status.type !== "ready" || !isSuccess || !!destroyedAt || !!sleepingAt;
+	const isBlocked = actorInspector.connectionStatus !== "connected" || isRpcsError || isRpcsLoading;
 
-	const combinedStatus = isError
-		? "error"
-		: isLoading
-			? "pending"
-			: status.type;
+	const combinedStatus =
+		isRpcsError || actorInspector.connectionStatus === "error"
+			? "error"
+			: actorInspector.connectionStatus === "connecting" ||
+					
+					isRpcsLoading
+				? "pending"
+				: status.type;
 
 	return (
 		<motion.div
@@ -53,16 +49,15 @@ export function ActorConsole({ actorId }: ActorConsoleProps) {
 				onClick={() => setOpen((old) => !old)}
 				className={cn(
 					!isOpen ? " border-b-0" : "border-b",
+					isBlocked ? "text-muted-foreground cursor-not-allowed" : "",
 					"border-t border-border border-l-0 border-r-0 rounded-none w-full justify-between min-h-9 disabled:opacity-100 aria-disabled:opacity-100",
 				)}
 				size="sm"
 				endIcon={isBlocked ? undefined : <Icon icon={faChevronDown} />}
 			>
-				<span>
+				<span className="w-full flex justify-between items-center">
 					Console
-					{isBlocked ? null : (
-						<ActorWorkerStatus status={combinedStatus} />
-					)}
+					<ActorWorkerStatus status={combinedStatus} />
 				</span>
 			</Button>
 			<AnimatePresence>

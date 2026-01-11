@@ -24,7 +24,7 @@ export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 		fetchNextPage,
 		isLoading,
 		isFetchingNextPage,
-	} = useInfiniteQuery(useDataProvider().regionsQueryOptions());
+	} = useInfiniteQuery(useDataProvider().datacentersQueryOptions());
 
 	const regions = [
 		...(showAuto
@@ -38,8 +38,8 @@ export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 			: []),
 		...data.map((region) => {
 			return {
-				label: <ActorRegion regionId={region.id} showLabel />,
-				value: region.id,
+				label: <ActorRegion regionId={region.name} showLabel />,
+				value: region.name,
 				region,
 			};
 		}),
@@ -54,10 +54,7 @@ export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 			onLoadMore={fetchNextPage}
 			filter={(option, searchMixed) => {
 				const search = searchMixed.toLowerCase();
-				return (
-					option.region.id.includes(search) ||
-					option.region.name.includes(search)
-				);
+				return option.region.name.toLowerCase().includes(search);
 			}}
 			className="w-full"
 		/>

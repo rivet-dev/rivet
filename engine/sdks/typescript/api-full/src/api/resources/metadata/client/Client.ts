@@ -45,7 +45,7 @@ export class Metadata {
                     (await core.Supplier.get(this._options.environment)),
                 "metadata",
             ),
-            method: "DELETE",
+            method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
@@ -83,7 +83,7 @@ export class Metadata {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling DELETE /metadata.");
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /metadata.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

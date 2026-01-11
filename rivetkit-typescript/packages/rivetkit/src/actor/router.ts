@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import invariant from "invariant";
 import {
 	type ActionOpts,
 	type ActionOutput,
@@ -18,11 +17,9 @@ import {
 	loggerMiddleware,
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
-import {
-	type ActorInspectorRouterEnv,
-	createActorInspectorRouter,
-} from "@/inspector/actor";
-import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
+
+import type { RegistryConfig } from "@/registry/config";
+import type { GetUpgradeWebSocket } from "@/utils";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
@@ -30,8 +27,6 @@ import {
 	parseWebSocketProtocols,
 	routeWebSocket,
 } from "./router-websocket-endpoints";
-import { RegistryConfig } from "@/registry/config";
-import { GetUpgradeWebSocket } from "@/utils";
 
 export type { ActionOpts, ActionOutput, ConnsMessageOpts };
 
@@ -154,13 +149,7 @@ export function createActorRouter(
 	router.post("/action/:action", async (c) => {
 		const actionName = c.req.param("action");
 
-		return handleAction(
-			c,
-			config,
-			actorDriver,
-			actionName,
-			c.env.actorId,
-		);
+		return handleAction(c, config, actorDriver, actionName, c.env.actorId);
 	});
 
 	router.all("/request/*", async (c) => {
@@ -191,28 +180,6 @@ export function createActorRouter(
 			c.env.actorId,
 		);
 	});
-
-	if (isInspectorEnabled(config, "actor")) {
-		router.route(
-			"/inspect",
-			new Hono<
-				ActorInspectorRouterEnv & { Bindings: ActorRouterBindings }
-			>()
-				.use(secureInspector(config), async (c, next) => {
-					const inspector = (
-						await actorDriver.loadActor(c.env.actorId)
-					).inspector;
-					invariant(
-						inspector,
-						"inspector not supported on this platform",
-					);
-
-					c.set("inspector", inspector);
-					return next();
-				})
-				.route("/", createActorInspectorRouter()),
-		);
-	}
 
 	router.notFound(handleRouteNotFound);
 	router.onError(handleRouteError);

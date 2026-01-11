@@ -41,6 +41,7 @@ export function ActorStopButton({ actorId }: ActorStopButtonProps) {
 
 	return (
 		<WithTooltip
+			delayDuration={0}
 			trigger={
 				<Button
 					isLoading={isPending}

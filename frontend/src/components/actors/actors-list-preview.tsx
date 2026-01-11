@@ -75,7 +75,7 @@ export const ActorsListPreview = memo(
 							>
 								<div
 									className={cn(
-										"flex-1 overflow-hidden flex flex-col flex-grow transition-colors ",
+										"flex-1 overflow-hidden flex flex-col flex-grow transition-colors relative",
 										!isSidebarCollapsed &&
 											"border-t border-b border-r border-l my-2 bg-card rounded-lg mr-2",
 									)}

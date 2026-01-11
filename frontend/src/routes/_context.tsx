@@ -3,7 +3,6 @@ import {
 	Outlet,
 	redirect,
 	useNavigate,
-	useParams,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { match } from "ts-pattern";
@@ -57,13 +56,16 @@ export const Route = createFileRoute("/_context")({
 				}),
 				__type: "cloud" as const,
 			}))
-			.with("inspector", () => ({
-				dataProvider: createGlobalInspectorContext({
-					url: (search as z.infer<typeof searchSchema>).u,
-					token: (search as z.infer<typeof searchSchema>).t,
-				}),
-				__type: "inspector" as const,
-			}))
+			.with("inspector", () => {
+				return {
+					dataProvider: createGlobalInspectorContext({
+						url:
+							(search as z.infer<typeof searchSchema>).u ||
+							"http://localhost:6420",
+					}),
+					__type: "inspector" as const,
+				};
+			})
 			.exhaustive();
 	},
 	beforeLoad: async (route) => {
@@ -106,7 +108,6 @@ function RouteComponent() {
 function Modals() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
-	const params = useParams({ strict: false });
 
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
 	const FeedbackDialog = useDialog.Feedback.Dialog;
@@ -118,7 +119,7 @@ function Modals() {
 					open: search.modal === "create-actor",
 					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -134,7 +135,7 @@ function Modals() {
 					open: search.modal === "feedback",
 					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,

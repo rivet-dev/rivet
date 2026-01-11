@@ -11,6 +11,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import {
@@ -31,7 +32,11 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
-import { ActorRegion, RunnerPoolError } from "@/components/actors";
+import {
+	ActorRegion,
+	RunnerPoolError,
+	useEngineCompatDataProvider,
+} from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
 
 interface RunnerConfigsTableProps {
@@ -232,6 +237,7 @@ function StatusCell({
 	return (
 		<TableCell className="w-8 text-center">
 			<WithTooltip
+				delayDuration={0}
 				content={
 					<>
 						<p>Some providers are experiencing errors:</p>
@@ -262,7 +268,7 @@ function StatusCell({
 					</>
 				}
 				trigger={
-					<span className="inline-flex items-center justify-center text-destructive">
+					<span className="inline-flex items-center justify-center text-destructive ml-2.5">
 						<Icon icon={faTriangleExclamation} />
 					</span>
 				}
@@ -408,6 +414,17 @@ function Provider({ metadata }: { metadata: unknown }) {
 }
 
 function Regions({ regions }: { regions: string[] }) {
+	const { data: datacentersCount } = useInfiniteQuery({
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
+		maxPages: Infinity,
+		select: (data) =>
+			data.pages.reduce((acc, page) => acc + page.datacenters?.length, 0),
+	});
+
+	if (regions.length === datacentersCount) {
+		return <span>Global</span>;
+	}
+
 	if (regions.length === 1) {
 		return (
 			<ActorRegion
