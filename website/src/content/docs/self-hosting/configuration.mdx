@@ -49,8 +49,8 @@ interface RivetConfig {
 
   // HTTP/HTTPS traffic handling service
   guard?: {
-    host?: string;              // Default: "::" (IPv6 unspecified)
-    port?: number;              // Default: 6420
+    host?: string;                        // Default: "::" (IPv6 unspecified)
+    port?: number;                        // Default: 6420
     https?: {
       port: number;
       tls: {
@@ -60,6 +60,13 @@ interface RivetConfig {
         api_key_path: string;
       };
     };
+    route_cache_ttl_ms?: number;               // Default: 600000 (10 minutes)
+    proxy_state_cache_ttl_ms?: number;         // Default: 3600000 (1 hour)
+    websocket_close_linger_ms?: number;        // Default: 100
+    websocket_max_message_size?: number;       // Default: 33554432 (32 MiB)
+    websocket_max_outgoing_message_size?: number; // Default: 33554432 (32 MiB)
+    http_max_request_body_size?: number;       // Default: 268435456 (256 MiB)
+    http_request_timeout_secs?: number;        // Default: 360 (6 minutes)
   };
 
   // Public API service configuration
@@ -88,6 +95,20 @@ interface RivetConfig {
     serverless_retry_reset_duration?: number;         // Default: 600000 (ms)
     serverless_backoff_max_exponent?: number;         // Default: 8
     pool_desired_max_override?: number;
+    // Gateway settings
+    gateway_websocket_open_timeout_ms?: number;       // Default: 15000 (ms)
+    gateway_response_start_timeout_ms?: number;       // Default: 15000 (ms)
+    gateway_update_ping_interval_ms?: number;         // Default: 3000 (ms)
+    gateway_gc_interval_ms?: number;                  // Default: 15000 (ms)
+    gateway_tunnel_ping_timeout_ms?: number;          // Default: 30000 (ms)
+    gateway_hws_message_ack_timeout_ms?: number;      // Default: 30000 (ms)
+    gateway_hws_max_pending_size?: number;            // Default: 134217728 (128 MiB)
+    gateway_http_max_request_body_size?: number;      // Default: 134217728 (128 MiB)
+    // Runner settings
+    runner_http_max_response_body_size?: number;      // Default: 134217728 (128 MiB)
+    runner_update_ping_interval_ms?: number;          // Default: 3000 (ms)
+    runner_event_demuxer_gc_interval_ms?: number;     // Default: 30000 (ms)
+    runner_event_demuxer_max_last_seen_ms?: number;   // Default: 30000 (ms)
   };
 
   // Logging configuration

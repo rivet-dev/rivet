@@ -12,31 +12,59 @@ use rivet_guard_core::{
 
 /// Creates a middleware function that can use config and pools
 pub fn create_middleware_function(ctx: StandaloneCtx) -> MiddlewareFn {
-	Arc::new(move |_actor_id: &Id, _headers: &hyper::HeaderMap| {
-		let _ctx = ctx.clone();
+	Arc::new(move |actor_id: &Option<Id>, _headers: &hyper::HeaderMap| {
+		let ctx = ctx.clone();
+		let is_actor_traffic = actor_id.is_some();
 
 		Box::pin(async move {
-			// In a real implementation, you would look up actor-specific middleware settings
-			// For now, we'll just return a standard configuration
+			let guard = ctx.config().guard();
+			let pegboard = ctx.config().pegboard();
 
-			// Create middleware config based on the actor ID
-			// This could be fetched from a database in a real implementation
-			Ok(MiddlewareResponse::Ok(MiddlewareConfig {
-				rate_limit: RateLimitConfig {
-					requests: 100, // 100 requests
-					period: 60,    // per 60 seconds
-				},
-				max_in_flight: MaxInFlightConfig {
-					amount: 20, // 20 concurrent requests
-				},
-				retry: RetryConfig {
-					max_attempts: 7,
-					initial_interval: 150,
-				},
-				timeout: TimeoutConfig {
-					request_timeout: 30, // 30 seconds for requests
-				},
-			}))
+			let config = if is_actor_traffic {
+				// Actor traffic uses gateway_* settings
+				MiddlewareConfig {
+					rate_limit: RateLimitConfig {
+						requests: pegboard.gateway_rate_limit_requests(),
+						period: pegboard.gateway_rate_limit_period_secs(),
+					},
+					max_in_flight: MaxInFlightConfig {
+						amount: pegboard.gateway_max_in_flight(),
+					},
+					retry: RetryConfig {
+						max_attempts: pegboard.gateway_retry_max_attempts(),
+						initial_interval: pegboard.gateway_retry_initial_interval_ms(),
+					},
+					timeout: TimeoutConfig {
+						request_timeout: pegboard.gateway_actor_request_timeout_secs(),
+					},
+					max_incoming_ws_message_size: guard.websocket_max_message_size(),
+					max_outgoing_ws_message_size: guard.websocket_max_outgoing_message_size(),
+					max_http_request_body_size: pegboard.gateway_http_max_request_body_size(),
+				}
+			} else {
+				// API traffic uses api_* settings
+				MiddlewareConfig {
+					rate_limit: RateLimitConfig {
+						requests: pegboard.api_rate_limit_requests(),
+						period: pegboard.api_rate_limit_period_secs(),
+					},
+					max_in_flight: MaxInFlightConfig {
+						amount: pegboard.api_max_in_flight(),
+					},
+					retry: RetryConfig {
+						max_attempts: pegboard.api_retry_max_attempts(),
+						initial_interval: pegboard.api_retry_initial_interval_ms(),
+					},
+					timeout: TimeoutConfig {
+						request_timeout: pegboard.gateway_api_request_timeout_secs(),
+					},
+					max_incoming_ws_message_size: guard.websocket_max_message_size(),
+					max_outgoing_ws_message_size: guard.websocket_max_outgoing_message_size(),
+					max_http_request_body_size: pegboard.api_max_http_request_body_size(),
+				}
+			};
+
+			Ok(MiddlewareResponse::Ok(config))
 		})
 	})
 }
