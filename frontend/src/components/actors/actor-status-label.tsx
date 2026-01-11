@@ -94,7 +94,24 @@ export function ActorError({ error }: { error: Rivet.ActorError }) {
 				did not respond.
 			</p>
 		))
-		.exhaustive();
+		.with(P.shape({ runnerConnectionLost: P.any }), (err) => (
+			<p>
+				Runner ({err.runnerConnectionLost.runnerId}) connection was lost
+				(no recent ping, network issue, or crash).
+			</p>
+		))
+		.with(P.shape({ runnerDrainingTimeout: P.any }), (err) => (
+			<p>
+				Runner ({err.runnerDrainingTimeout.runnerId}) was draining but
+				Actor didn't stop in time.
+			</p>
+		))
+		.with(P.shape({ crashed: P.any }), () => (
+			<p>Actor exited with an error and is now sleeping.</p>
+		))
+		.otherwise(() => {
+			return <p>Unknown error.</p>;
+		});
 }
 
 export function QueriedActorError({ actorId }: { actorId: ActorId }) {
