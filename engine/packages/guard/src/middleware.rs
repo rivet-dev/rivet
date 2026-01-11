@@ -13,7 +13,7 @@ use rivet_guard_core::{
 /// Creates a middleware function that can use config and pools
 pub fn create_middleware_function(ctx: StandaloneCtx) -> MiddlewareFn {
 	Arc::new(move |_actor_id: &Id, _headers: &hyper::HeaderMap| {
-		let _ctx = ctx.clone();
+		let ctx = ctx.clone();
 
 		Box::pin(async move {
 			// In a real implementation, you would look up actor-specific middleware settings
@@ -23,18 +23,18 @@ pub fn create_middleware_function(ctx: StandaloneCtx) -> MiddlewareFn {
 			// This could be fetched from a database in a real implementation
 			Ok(MiddlewareResponse::Ok(MiddlewareConfig {
 				rate_limit: RateLimitConfig {
-					requests: 100, // 100 requests
-					period: 60,    // per 60 seconds
+					requests: 1200, // 1200 requests
+					period: 60,     // per 60 seconds
 				},
 				max_in_flight: MaxInFlightConfig {
-					amount: 20, // 20 concurrent requests
+					amount: 32, // 32 concurrent requests
 				},
 				retry: RetryConfig {
 					max_attempts: 7,
 					initial_interval: 150,
 				},
 				timeout: TimeoutConfig {
-					request_timeout: 30, // 30 seconds for requests
+					request_timeout: ctx.config().guard().http_request_timeout_secs(),
 				},
 			}))
 		})

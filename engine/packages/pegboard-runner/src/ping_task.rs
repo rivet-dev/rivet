@@ -3,10 +3,11 @@ use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
 use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::{Arc, atomic::Ordering};
+use std::time::Duration;
 use tokio::sync::watch;
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, UPDATE_PING_INTERVAL, conn::Conn};
+use crate::{LifecycleResult, conn::Conn};
 
 /// Updates the ping of all runners requesting a ping update at once.
 #[tracing::instrument(skip_all)]
@@ -14,10 +15,11 @@ pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
 	mut ping_abort_rx: watch::Receiver<()>,
+	update_ping_interval: Duration,
 ) -> Result<LifecycleResult> {
 	loop {
 		tokio::select! {
-			_ = tokio::time::sleep(UPDATE_PING_INTERVAL) => {}
+			_ = tokio::time::sleep(update_ping_interval) => {}
 			_ = ping_abort_rx.changed() => {
 				return Ok(LifecycleResult::Aborted);
 			}

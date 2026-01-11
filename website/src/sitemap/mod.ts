@@ -264,6 +264,10 @@ export const sitemap = [
 								href: "/docs/general/cors",
 								// icon: faShareNodes,
 							},
+							{
+								title: "Limits",
+								href: "/docs/actors/limits",
+							},
 						],
 					},
 				],
