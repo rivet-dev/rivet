@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::{Request, Response, StatusCode, body::Incoming as BodyIncoming, header::HeaderName};
 use hyper_tungstenite;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
@@ -23,7 +23,7 @@ use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{
 	client::IntoClientRequest,
-	protocol::{CloseFrame, frame::coding::CloseCode},
+	protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
 };
 use tracing::Instrument;
 use url::Url;
@@ -41,10 +41,6 @@ const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
-
-const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
-const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
-const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(100); // Keep TCP connection open briefly after WebSocket close
 
 /// Response body type that can handle both streaming and buffered responses
 #[derive(Debug)]
@@ -223,11 +219,11 @@ struct RouteCache {
 }
 
 impl RouteCache {
-	fn new() -> Self {
+	fn new(ttl: Duration) -> Self {
 		Self {
 			cache: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(ROUTE_CACHE_TTL)
+				.time_to_live(ttl)
 				.build(),
 		}
 	}
@@ -321,6 +317,11 @@ pub struct ProxyState {
 	port_type: PortType,
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	tasks: Arc<TaskGroup>,
+	// Cached config values
+	websocket_close_linger: Duration,
+	websocket_max_message_size: usize,
+	websocket_max_outgoing_message_size: usize,
+	http_max_request_body_size: usize,
 }
 
 impl ProxyState {
@@ -332,24 +333,38 @@ impl ProxyState {
 		port_type: PortType,
 		clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	) -> Self {
+		let guard_config = config.guard();
+		let route_cache_ttl = Duration::from_millis(guard_config.route_cache_ttl_ms());
+		let proxy_state_cache_ttl = Duration::from_millis(guard_config.proxy_state_cache_ttl_ms());
+		let websocket_close_linger =
+			Duration::from_millis(guard_config.websocket_close_linger_ms());
+		let websocket_max_message_size = guard_config.websocket_max_message_size();
+		let websocket_max_outgoing_message_size =
+			guard_config.websocket_max_outgoing_message_size();
+		let http_max_request_body_size = guard_config.http_max_request_body_size();
+
 		Self {
 			config,
 			routing_fn,
 			cache_key_fn,
 			middleware_fn,
-			route_cache: RouteCache::new(),
+			route_cache: RouteCache::new(route_cache_ttl),
 			rate_limiters: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(PROXY_STATE_CACHE_TTL)
+				.time_to_live(proxy_state_cache_ttl)
 				.build(),
 			in_flight_counters: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(PROXY_STATE_CACHE_TTL)
+				.time_to_live(proxy_state_cache_ttl)
 				.build(),
 			in_flight_requests: Cache::builder().max_capacity(10_000_000).build(),
 			port_type,
 			clickhouse_inserter,
 			tasks: TaskGroup::new(),
+			websocket_close_linger,
+			websocket_max_message_size,
+			websocket_max_outgoing_message_size,
+			http_max_request_body_size,
 		}
 	}
 
@@ -906,6 +921,16 @@ impl ProxyService {
 					}
 				};
 
+				// Check request body size limit
+				let max_request_size = self.state.http_max_request_body_size;
+				if req_body.len() > max_request_size {
+					return Err(errors::RequestBodyTooLarge {
+						size: req_body.len(),
+						max_size: max_request_size,
+					}
+					.build());
+				}
+
 				// Set actual request body size in analytics
 				request_context.client_request_body_bytes = Some(req_body.len() as u64);
 
@@ -970,36 +995,13 @@ impl ProxyService {
 
 							let (parts, body) = resp.into_parts();
 
-							// Check if this is a streaming response by examining headers
-							// let is_streaming = parts.headers.get("content-type")
-							// 	.and_then(|ct| ct.to_str().ok())
-							// 	.map(|ct| ct.contains("text/event-stream") || ct.contains("application/stream"))
-							// 	.unwrap_or(false);
-							let is_streaming = true;
+							// Stream response through without buffering
+							// Response body size limits are enforced in pegboard-runner
+							tracing::debug!("Streaming response through");
+							request_context.guard_response_body_bytes = None;
 
-							if is_streaming {
-								// For streaming responses, pass through the body without buffering
-								tracing::debug!("Detected streaming response, preserving stream");
-
-								// We can't easily calculate response size for streaming, so set it to None
-								request_context.guard_response_body_bytes = None;
-
-								let streaming_body = ResponseBody::Incoming(body);
-								return Ok(Response::from_parts(parts, streaming_body));
-							} else {
-								// For non-streaming responses, buffer as before
-								let body_bytes = match BodyExt::collect(body).await {
-									Ok(collected) => collected.to_bytes(),
-									Err(_) => Bytes::new(),
-								};
-
-								// Set actual response body size in analytics
-								request_context.guard_response_body_bytes =
-									Some(body_bytes.len() as u64);
-
-								let full_body = ResponseBody::Full(Full::new(body_bytes));
-								return Ok(Response::from_parts(parts, full_body));
-							}
+							let streaming_body = ResponseBody::Incoming(body);
+							return Ok(Response::from_parts(parts, streaming_body));
 						}
 						Err(err) => {
 							if !err.is_connect() || attempts >= max_attempts {
@@ -1083,6 +1085,17 @@ impl ProxyService {
 						Bytes::new()
 					}
 				};
+
+				// Check request body size limit
+				let max_request_size = self.state.http_max_request_body_size;
+				if collected_body.len() > max_request_size {
+					return Err(errors::RequestBodyTooLarge {
+						size: collected_body.len(),
+						max_size: max_request_size,
+					}
+					.build());
+				}
+
 				let req_collected = hyper::Request::from_parts(
 					req_parts,
 					Full::<Bytes>::new(collected_body.clone()),
@@ -1258,7 +1271,9 @@ impl ProxyService {
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
 		tracing::debug!(%req_path, "Upgrading client connection to WebSocket");
-		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, None) {
+		let ws_config = WebSocketConfig::default()
+			.max_message_size(Some(self.state.websocket_max_message_size));
+		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, Some(ws_config)) {
 			Ok(x) => {
 				tracing::debug!("Client WebSocket upgrade successful");
 				x
@@ -1399,9 +1414,15 @@ impl ProxyService {
 								return;
 							}
 
+							let upstream_ws_config = WebSocketConfig::default()
+								.max_message_size(Some(state.websocket_max_outgoing_message_size));
 							match tokio::time::timeout(
 								Duration::from_secs(5), // 5 second timeout per connection attempt
-								tokio_tungstenite::connect_async(ws_request),
+								tokio_tungstenite::connect_async_with_config(
+									ws_request,
+									Some(upstream_ws_config),
+									false,
+								),
 							)
 							.await
 							{
@@ -1934,7 +1955,7 @@ impl ProxyService {
 									}
 
 									// Keep TCP connection open briefly to allow client to process close
-									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+									tokio::time::sleep(state.websocket_close_linger).await;
 
 									break;
 								}
@@ -2002,7 +2023,7 @@ impl ProxyService {
 										ws_handle.flush().await?;
 
 										// Keep TCP connection open briefly to allow client to process close
-										tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+										tokio::time::sleep(state.websocket_close_linger).await;
 
 										break;
 									} else {
@@ -2052,7 +2073,7 @@ impl ProxyService {
 											ws_handle.flush().await?;
 
 											// Keep TCP connection open briefly to allow client to process close
-											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+											tokio::time::sleep(state.websocket_close_linger).await;
 
 											break;
 										}
@@ -2071,7 +2092,7 @@ impl ProxyService {
 											ws_handle.flush().await?;
 
 											// Keep TCP connection open briefly to allow client to process close
-											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+											tokio::time::sleep(state.websocket_close_linger).await;
 
 											break;
 										}
@@ -2240,10 +2261,13 @@ impl ProxyService {
 				// HTTP errors in a meaningful way resulting in unhelpful errors for the user
 				if is_websocket {
 					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
-					match hyper_tungstenite::upgrade(mock_req, None) {
+					let ws_config = WebSocketConfig::default()
+						.max_message_size(Some(self.state.websocket_max_message_size));
+					match hyper_tungstenite::upgrade(mock_req, Some(ws_config)) {
 						Ok((client_response, client_ws)) => {
 							tracing::debug!("Client WebSocket upgrade for error proxy successful");
 
+							let state = self.state.clone();
 							self.state.tasks.spawn(
 								async move {
 									let ws_handle = match WebSocketHandle::new(client_ws).await {
@@ -2286,7 +2310,7 @@ impl ProxyService {
 									}
 
 									// Keep TCP connection open briefly to allow client to process close
-									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+									tokio::time::sleep(state.websocket_close_linger).await;
 								}
 								.instrument(tracing::info_span!("ws_error_proxy_task")),
 							);
@@ -2532,6 +2556,7 @@ fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseBody>> {
 				("guard", "service_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "actor_ready_timeout") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "no_route") => StatusCode::NOT_FOUND,
+				("guard", "request_body_too_large") => StatusCode::PAYLOAD_TOO_LARGE,
 				_ => StatusCode::BAD_REQUEST,
 			};
 

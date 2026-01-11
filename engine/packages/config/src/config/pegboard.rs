@@ -86,6 +86,37 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub runner_pool_consecutive_successes_to_clear_error: Option<u32>,
+
+	// === Gateway Settings ===
+	/// WebSocket open/handshake timeout in milliseconds.
+	pub gateway_websocket_open_timeout_ms: Option<u64>,
+	/// Timeout for response to start in milliseconds.
+	pub gateway_response_start_timeout_ms: Option<u64>,
+	/// Ping interval for gateway updates in milliseconds.
+	pub gateway_update_ping_interval_ms: Option<u64>,
+	/// GC interval for in-flight requests in milliseconds.
+	pub gateway_gc_interval_ms: Option<u64>,
+	/// Tunnel ping timeout in milliseconds.
+	pub gateway_tunnel_ping_timeout_ms: Option<i64>,
+	/// Hibernating WebSocket message ack timeout in milliseconds.
+	pub gateway_hws_message_ack_timeout_ms: Option<u64>,
+	/// Max pending message buffer size for hibernating WebSockets in bytes.
+	pub gateway_hws_max_pending_size: Option<u64>,
+	/// Max HTTP request body size in bytes for requests to actors.
+	///
+	/// Note: guard-core also enforces a larger limit (default 256 MiB) as a first line of defense.
+	/// See `Guard::http_max_request_body_size`.
+	pub gateway_http_max_request_body_size: Option<usize>,
+
+	// === Runner Settings ===
+	/// Max HTTP response body size in bytes from actors.
+	pub runner_http_max_response_body_size: Option<usize>,
+	/// Ping interval for runner updates in milliseconds.
+	pub runner_update_ping_interval_ms: Option<u64>,
+	/// GC interval for actor event demuxer in milliseconds.
+	pub runner_event_demuxer_gc_interval_ms: Option<u64>,
+	/// Max time since last seen before actor is considered stale, in milliseconds.
+	pub runner_event_demuxer_max_last_seen_ms: Option<u64>,
 }
 
 impl Pegboard {
@@ -138,5 +169,61 @@ impl Pegboard {
 	pub fn runner_pool_error_consecutive_successes_to_clear(&self) -> u32 {
 		self.runner_pool_consecutive_successes_to_clear_error
 			.unwrap_or(3)
+	}
+
+	// === Gateway Settings ===
+
+	pub fn gateway_websocket_open_timeout_ms(&self) -> u64 {
+		self.gateway_websocket_open_timeout_ms.unwrap_or(15_000)
+	}
+
+	pub fn gateway_response_start_timeout_ms(&self) -> u64 {
+		self.gateway_response_start_timeout_ms
+			.unwrap_or(5 * 60 * 1000) // 5 minutes
+	}
+
+	pub fn gateway_update_ping_interval_ms(&self) -> u64 {
+		self.gateway_update_ping_interval_ms.unwrap_or(3_000)
+	}
+
+	pub fn gateway_gc_interval_ms(&self) -> u64 {
+		self.gateway_gc_interval_ms.unwrap_or(15_000)
+	}
+
+	pub fn gateway_tunnel_ping_timeout_ms(&self) -> i64 {
+		self.gateway_tunnel_ping_timeout_ms.unwrap_or(30_000)
+	}
+
+	pub fn gateway_hws_message_ack_timeout_ms(&self) -> u64 {
+		self.gateway_hws_message_ack_timeout_ms.unwrap_or(30_000)
+	}
+
+	pub fn gateway_hws_max_pending_size(&self) -> u64 {
+		self.gateway_hws_max_pending_size
+			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	pub fn gateway_http_max_request_body_size(&self) -> usize {
+		self.gateway_http_max_request_body_size
+			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	// === Runner Settings ===
+
+	pub fn runner_http_max_response_body_size(&self) -> usize {
+		self.runner_http_max_response_body_size
+			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	pub fn runner_update_ping_interval_ms(&self) -> u64 {
+		self.runner_update_ping_interval_ms.unwrap_or(3_000)
+	}
+
+	pub fn runner_event_demuxer_gc_interval_ms(&self) -> u64 {
+		self.runner_event_demuxer_gc_interval_ms.unwrap_or(30_000)
+	}
+
+	pub fn runner_event_demuxer_max_last_seen_ms(&self) -> u64 {
+		self.runner_event_demuxer_max_last_seen_ms.unwrap_or(30_000)
 	}
 }

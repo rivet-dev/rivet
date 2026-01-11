@@ -23,8 +23,6 @@ mod tunnel_to_ws_task;
 mod utils;
 mod ws_to_tunnel_task;
 
-const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
-
 #[derive(Debug)]
 enum LifecycleResult {
 	Closed,
@@ -155,10 +153,17 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		));
 
 		// Update pings
+		let update_ping_interval = Duration::from_millis(
+			self.ctx
+				.config()
+				.pegboard()
+				.runner_update_ping_interval_ms(),
+		);
 		let ping = tokio::spawn(ping_task::task(
 			self.ctx.clone(),
 			conn.clone(),
 			ping_abort_rx,
+			update_ping_interval,
 		));
 		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
 		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
