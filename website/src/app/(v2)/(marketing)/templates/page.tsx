@@ -40,7 +40,7 @@ export default function Page() {
 
 	return (
 		<TemplatesFilterProvider templates={templates}>
-			<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-white/20 selection:text-white">
+			<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
 				<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-48">
 					<div className="mx-auto max-w-[1200px] px-6 lg:px-8">
 						<div className="text-center">
