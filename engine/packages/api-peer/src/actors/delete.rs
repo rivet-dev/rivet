@@ -32,18 +32,16 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		.next()
 		.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
 
-	// If namespace is provided, verify the actor belongs to it
-	if let Some(namespace_name) = query.namespace {
-		let namespace = ctx
-			.op(namespace::ops::resolve_for_name_global::Input {
-				name: namespace_name,
-			})
-			.await?
-			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+	// Verify the actor belongs to the specified namespace
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace,
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-		if actor.namespace_id != namespace.namespace_id {
-			return Err(pegboard::errors::Actor::NotFound.build());
-		}
+	if actor.namespace_id != namespace.namespace_id {
+		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
 	let res = ctx

@@ -1,6 +1,7 @@
 use anyhow::*;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use gas::prelude::*;
 use pegboard_actor_kv as actor_kv;
 use rivet_api_builder::ApiCtx;
 use rivet_util::Id;
@@ -16,7 +17,9 @@ pub struct KvGetPath {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct KvGetQuery {}
+pub struct KvGetQuery {
+	pub namespace: String,
+}
 
 #[derive(Serialize, ToSchema)]
 #[schema(as = ActorsKvGetResponse)]
@@ -39,7 +42,33 @@ pub struct KvGetResponse {
 	),
 )]
 #[tracing::instrument(skip_all)]
-pub async fn kv_get(ctx: ApiCtx, path: KvGetPath, _query: KvGetQuery) -> Result<KvGetResponse> {
+pub async fn kv_get(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<KvGetResponse> {
+	// Get the actor first to verify it exists
+	let actors_res = ctx
+		.op(pegboard::ops::actor::get::Input {
+			actor_ids: vec![path.actor_id],
+			fetch_error: false,
+		})
+		.await?;
+
+	let actor = actors_res
+		.actors
+		.into_iter()
+		.next()
+		.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
+
+	// Verify the actor belongs to the specified namespace
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace,
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	if actor.namespace_id != namespace.namespace_id {
+		return Err(pegboard::errors::Actor::NotFound.build());
+	}
+
 	// Decode base64 key
 	let key_bytes = BASE64_STANDARD
 		.decode(&path.key)
