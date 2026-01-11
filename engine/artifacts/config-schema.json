@@ -387,6 +387,15 @@
           ],
           "format": "ip"
         },
+        "http_max_request_body_size": {
+          "description": "Max HTTP request body size in bytes (first line of defense).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
         "https": {
           "description": "Enable & configure HTTPS",
           "anyOf": [
@@ -405,6 +414,51 @@
             "null"
           ],
           "format": "uint16",
+          "minimum": 0.0
+        },
+        "proxy_state_cache_ttl_ms": {
+          "description": "Proxy state cache TTL in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "route_cache_ttl_ms": {
+          "description": "Route cache TTL in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "websocket_close_linger_ms": {
+          "description": "Time to keep TCP connection open after WebSocket close, in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "websocket_max_message_size": {
+          "description": "Max incoming WebSocket message size in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "websocket_max_outgoing_message_size": {
+          "description": "Max outgoing WebSocket message size in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
           "minimum": 0.0
         }
       },
@@ -542,6 +596,60 @@
           ],
           "format": "int64"
         },
+        "api_max_http_request_body_size": {
+          "description": "Max HTTP request body size in bytes for API traffic.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "api_max_in_flight": {
+          "description": "Maximum concurrent in-flight requests for API traffic.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "api_rate_limit_period_secs": {
+          "description": "Rate limit for API traffic: period in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "api_rate_limit_requests": {
+          "description": "Rate limit for API traffic: number of requests allowed per period.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "api_retry_initial_interval_ms": {
+          "description": "Initial retry interval for API traffic in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "api_retry_max_attempts": {
+          "description": "Maximum retry attempts for API traffic.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "base_retry_timeout": {
           "description": "Time to delay an actor from rescheduling after a rescheduling failure.\n\nUnit is in milliseconds.\n\n**Experimental**",
           "type": [
@@ -553,6 +661,176 @@
         },
         "default_metadata_poll_interval": {
           "description": "Default metadata poll interval for serverless runners when not specified in runner config.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_actor_request_timeout_secs": {
+          "description": "HTTP request timeout in seconds for actor traffic.\n\nThis is the outer timeout for the entire request lifecycle. Should be slightly longer than `gateway_response_start_timeout_ms` to provide a grace period.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_api_request_timeout_secs": {
+          "description": "HTTP request timeout in seconds for API traffic (api-public).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_gc_interval_ms": {
+          "description": "GC interval for in-flight requests in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_http_max_request_body_size": {
+          "description": "Max HTTP request body size in bytes for requests to actors.\n\nNote: guard-core also enforces a larger limit (default 256 MiB) as a first line of defense. See `Guard::http_max_request_body_size`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "gateway_hws_max_pending_size": {
+          "description": "Max pending message buffer size for hibernating WebSockets in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_hws_message_ack_timeout_ms": {
+          "description": "Hibernating WebSocket message ack timeout in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_max_in_flight": {
+          "description": "Maximum concurrent in-flight requests per actor per IP.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "gateway_rate_limit_period_secs": {
+          "description": "Rate limit: period in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_rate_limit_requests": {
+          "description": "Rate limit: number of requests allowed per period.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_response_start_timeout_ms": {
+          "description": "Timeout for response to start in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_retry_initial_interval_ms": {
+          "description": "Initial retry interval in milliseconds (doubles with each attempt).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_retry_max_attempts": {
+          "description": "Maximum retry attempts for failed requests.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "gateway_tunnel_ping_timeout_ms": {
+          "description": "Tunnel ping timeout in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "gateway_update_ping_interval_ms": {
+          "description": "Ping interval for gateway updates in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_websocket_open_timeout_ms": {
+          "description": "WebSocket open/handshake timeout in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_ws_connect_timeout_secs": {
+          "description": "WebSocket connection attempt timeout in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_ws_flush_timeout_secs": {
+          "description": "WebSocket flush timeout in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_ws_proxy_timeout_secs": {
+          "description": "WebSocket proxy task timeout in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_ws_send_timeout_secs": {
+          "description": "WebSocket send message timeout in seconds.",
           "type": [
             "integer",
             "null"
@@ -611,6 +889,33 @@
           ],
           "format": "int64"
         },
+        "runner_event_demuxer_gc_interval_ms": {
+          "description": "GC interval for actor event demuxer in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "runner_event_demuxer_max_last_seen_ms": {
+          "description": "Max time since last seen before actor is considered stale, in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "runner_http_max_response_body_size": {
+          "description": "Max HTTP response body size in bytes from actors.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
         "runner_lost_threshold": {
           "description": "How long to wait after last ping before forcibly removing a runner from the database and deleting its workflow, evicting all actors.\n\nNote that the runner may still be running and can reconnect.\n\nUnit is in milliseconds.\n\n**Experimental**",
           "type": [
@@ -626,6 +931,15 @@
             "null"
           ],
           "format": "uint32",
+          "minimum": 0.0
+        },
+        "runner_update_ping_interval_ms": {
+          "description": "Ping interval for runner updates in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
           "minimum": 0.0
         },
         "serverless_backoff_max_exponent": {

@@ -1,0 +1,138 @@
+---
+title: "Limits"
+description: "Size limits and constraints for Rivet Actors."
+skill: true
+---
+
+This page documents the limits for Rivet Actors.
+
+There are two types of limits:
+
+- **Soft Limit**: Application-level limit, configurable in RivetKit. These cannot exceed the hard limit.
+- **Hard Limit**: Infrastructure-level limit that cannot be configured.
+
+Soft limits can be configured in RivetKit by passing options to `setup`:
+
+```typescript
+import { setup } from "rivetkit";
+
+const rivet = setup({
+  use: { /* ... */ },
+  maxIncomingMessageSize: 1_048_576,
+  maxOutgoingMessageSize: 10_485_760,
+  // ...
+});
+```
+
+## Limits
+
+### WebSocket
+
+These limits affect actions that use `.connect()` and [low-level WebSockets](/docs/actors/websocket-handler).
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max incoming message size | 64 KB | 32 MiB | Maximum size of incoming WebSocket messages. Soft limit configurable via `maxIncomingMessageSize`. |
+| Max outgoing message size | 1 MB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`. |
+| WebSocket open timeout | — | 15 seconds | Time allowed for WebSocket connection to be established, including `onBeforeConnect` and `createConnState` hooks. Connection is closed if exceeded. |
+| Message ack timeout | — | 30 seconds | Time allowed for message acknowledgment before connection is closed. Only relevant in the case of a network issue and does not affect your application. |
+
+### Hibernating WebSocket
+
+Hibernating WebSockets allow actors to sleep while keeping client connections alive. All WebSocket limits above also apply to hibernating WebSockets. See [WebSocket Hibernation](/docs/actors/websocket-handler#web-socket-hibernation) for details.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max pending buffer size | — | 128 MiB | Total size of all buffered messages per connection while actor is sleeping. |
+| Max pending message count | — | 65,535 | Maximum number of buffered messages per connection while actor is sleeping. |
+| Hibernation timeout | — | 90 seconds | Maximum time an actor has to wake up before the client is disconnected. Only relevant if something is wrong with starting actors. |
+
+### HTTP
+
+These limits affect actions that do not use `.connect()` and [low-level HTTP requests](/docs/actors/request-handler).
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max request body size | — | 128 MiB | Maximum size of HTTP request bodies. |
+| Max response body size | — | 128 MiB | Maximum size of HTTP response bodies. |
+| Request timeout | — | 5 minutes | Maximum time for a request to complete. |
+
+### Networking
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Connection ping timeout | — | 30 seconds | Connection is closed if a ping is not acknowledged within this time. Applies to both HTTP and WebSocket. Only relevant in the case of a network issue and does not affect your application. |
+
+### Queue
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max queue size | 1,000 messages | — | Maximum number of messages in the queue before new messages are rejected. Configurable via `maxQueueSize`. |
+| Max queue message size | 1 MiB | — | Maximum size of each individual queue message. Configurable via `maxQueueMessageSize`. |
+
+### Actor KV Storage
+
+These limits apply to the low-level KV storage interface powering Rivet Actors. They likely do not affect your application, but are documented for completeness.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max key size | — | 2 KB | Maximum size of a single key. |
+| Max value size | — | 128 KB | Maximum size of a single value. |
+| Max keys per operation | — | 128 | Maximum number of keys in a single get/put/delete operation. |
+| Max batch put payload size | — | 976 KB | Maximum total size of all key-value pairs in a single batch put operation. |
+| Max storage size per actor | — | 1 GiB | Maximum total KV storage size for a single actor. |
+| List default limit | — | 16,384 | Default maximum number of keys returned by a list operation. |
+
+### Actor SQLite Storage
+
+These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) available via `this.sql`. SQLite data is stored through the KV layer, so the storage limit is shared with KV storage.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max storage size per actor | — | 1 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
+
+### Actor Input
+
+See [Actor Input](/docs/actors/input) for details.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max actor input size | — | 4 MiB | Maximum size of the input passed when creating an actor. |
+| Max connection params size | — | 4 KB | Maximum size of connection parameters passed when connecting to an actor. |
+| Max actor key component size | — | 128 bytes | Maximum size of each component in an actor key array. |
+| Max actor key total size | — | 1,024 bytes | Maximum total size of the serialized actor key string. |
+| Max actor name length | — | 64 characters | Maximum length for actor and project identifiers. |
+
+### Rate Limiting
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Rate limit | — | 1200 requests/minute | Default rate limit per actor per IP address with a 1 minute time bucket. |
+| Max in-flight requests | — | 32 | Default maximum concurrent requests to an actor per IP address. |
+
+### Timeouts
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Action timeout | 60 seconds | — | Timeout for RPC actions. Configurable via `actionTimeout`. |
+| Create vars timeout | 5 seconds | — | Timeout for `createVars` hook. Configurable via `createVarsTimeout`. |
+| Create conn state timeout | 5 seconds | — | Timeout for `createConnState` hook. Configurable via `createConnStateTimeout`. |
+| On connect timeout | 5 seconds | — | Timeout for `onConnect` hook. Configurable via `onConnectTimeout`. |
+| On sleep timeout | 5 seconds | — | Timeout for `onSleep` hook. Configurable via `onSleepTimeout`. |
+| On destroy timeout | 5 seconds | — | Timeout for `onDestroy` hook. Configurable via `onDestroyTimeout`. |
+| Wait until timeout | 15 seconds | — | Max time to wait for `waitUntil` background promises during shutdown. Configurable via `waitUntilTimeout`. |
+| Run stop timeout | 15 seconds | — | Max time for `run` handler to stop during shutdown. Configurable via `runStopTimeout`. |
+| Sleep timeout | 30 seconds | — | Time of inactivity before actor hibernates. Configurable via `sleepTimeout`. |
+| State save interval | 10 seconds | — | Interval between automatic state saves. Configurable via `stateSaveInterval`. |
+
+### Actor Lifecycle
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Actor start threshold | — | 30 seconds | Maximum time for an actor to start before it is considered lost and rescheduled. |
+| Actor stop threshold | — | 30 seconds | Maximum time for an actor to stop before it is considered lost. |
+
+## Increasing Limits
+
+These limits are sane defaults designed to protect your application from exploits and accidental runaway bugs. If you have a use case that requires different limits, [contact us](https://rivet.dev/contact) to discuss your requirements.
+

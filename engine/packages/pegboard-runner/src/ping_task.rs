@@ -10,18 +10,17 @@ use vbare::OwnedVersionedData;
 
 use crate::{LifecycleResult, conn::Conn};
 
-const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
-
 /// Updates the ping of all runners requesting a ping update at once.
 #[tracing::instrument(name="ping_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
 	mut ping_abort_rx: watch::Receiver<()>,
+	update_ping_interval: Duration,
 ) -> Result<LifecycleResult> {
 	loop {
 		tokio::select! {
-			_ = tokio::time::sleep(UPDATE_PING_INTERVAL) => {}
+			_ = tokio::time::sleep(update_ping_interval) => {}
 			_ = ping_abort_rx.changed() => {
 				return Ok(LifecycleResult::Aborted);
 			}

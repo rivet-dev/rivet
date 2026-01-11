@@ -108,6 +108,76 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub actor_allocation_candidate_sample_size: Option<usize>,
+
+	// === Gateway Settings ===
+	/// WebSocket open/handshake timeout in milliseconds.
+	pub gateway_websocket_open_timeout_ms: Option<u64>,
+	/// Timeout for response to start in milliseconds.
+	pub gateway_response_start_timeout_ms: Option<u64>,
+	/// Ping interval for gateway updates in milliseconds.
+	pub gateway_update_ping_interval_ms: Option<u64>,
+	/// GC interval for in-flight requests in milliseconds.
+	pub gateway_gc_interval_ms: Option<u64>,
+	/// Tunnel ping timeout in milliseconds.
+	pub gateway_tunnel_ping_timeout_ms: Option<i64>,
+	/// Hibernating WebSocket message ack timeout in milliseconds.
+	pub gateway_hws_message_ack_timeout_ms: Option<u64>,
+	/// Max pending message buffer size for hibernating WebSockets in bytes.
+	pub gateway_hws_max_pending_size: Option<u64>,
+	/// Max HTTP request body size in bytes for requests to actors.
+	///
+	/// Note: guard-core also enforces a larger limit (default 256 MiB) as a first line of defense.
+	/// See `Guard::http_max_request_body_size`.
+	pub gateway_http_max_request_body_size: Option<usize>,
+	/// Rate limit: number of requests allowed per period.
+	pub gateway_rate_limit_requests: Option<u64>,
+	/// Rate limit: period in seconds.
+	pub gateway_rate_limit_period_secs: Option<u64>,
+	/// Maximum concurrent in-flight requests per actor per IP.
+	pub gateway_max_in_flight: Option<usize>,
+	/// HTTP request timeout in seconds for actor traffic.
+	///
+	/// This is the outer timeout for the entire request lifecycle.
+	/// Should be slightly longer than `gateway_response_start_timeout_ms` to provide a grace period.
+	pub gateway_actor_request_timeout_secs: Option<u64>,
+	/// HTTP request timeout in seconds for API traffic (api-public).
+	pub gateway_api_request_timeout_secs: Option<u64>,
+	/// Maximum retry attempts for failed requests.
+	pub gateway_retry_max_attempts: Option<u32>,
+	/// Initial retry interval in milliseconds (doubles with each attempt).
+	pub gateway_retry_initial_interval_ms: Option<u64>,
+	/// WebSocket proxy task timeout in seconds.
+	pub gateway_ws_proxy_timeout_secs: Option<u64>,
+	/// WebSocket connection attempt timeout in seconds.
+	pub gateway_ws_connect_timeout_secs: Option<u64>,
+	/// WebSocket send message timeout in seconds.
+	pub gateway_ws_send_timeout_secs: Option<u64>,
+	/// WebSocket flush timeout in seconds.
+	pub gateway_ws_flush_timeout_secs: Option<u64>,
+
+	// === API Settings ===
+	/// Rate limit for API traffic: number of requests allowed per period.
+	pub api_rate_limit_requests: Option<u64>,
+	/// Rate limit for API traffic: period in seconds.
+	pub api_rate_limit_period_secs: Option<u64>,
+	/// Maximum concurrent in-flight requests for API traffic.
+	pub api_max_in_flight: Option<usize>,
+	/// Maximum retry attempts for API traffic.
+	pub api_retry_max_attempts: Option<u32>,
+	/// Initial retry interval for API traffic in milliseconds.
+	pub api_retry_initial_interval_ms: Option<u64>,
+	/// Max HTTP request body size in bytes for API traffic.
+	pub api_max_http_request_body_size: Option<usize>,
+
+	// === Runner Settings ===
+	/// Max HTTP response body size in bytes from actors.
+	pub runner_http_max_response_body_size: Option<usize>,
+	/// Ping interval for runner updates in milliseconds.
+	pub runner_update_ping_interval_ms: Option<u64>,
+	/// GC interval for actor event demuxer in milliseconds.
+	pub runner_event_demuxer_gc_interval_ms: Option<u64>,
+	/// Max time since last seen before actor is considered stale, in milliseconds.
+	pub runner_event_demuxer_max_last_seen_ms: Option<u64>,
 }
 
 impl Pegboard {
@@ -172,5 +242,132 @@ impl Pegboard {
 
 	pub fn actor_allocation_candidate_sample_size(&self) -> usize {
 		self.actor_allocation_candidate_sample_size.unwrap_or(100)
+	}
+
+	// === Gateway Settings ===
+
+	pub fn gateway_websocket_open_timeout_ms(&self) -> u64 {
+		self.gateway_websocket_open_timeout_ms.unwrap_or(15_000)
+	}
+
+	pub fn gateway_response_start_timeout_ms(&self) -> u64 {
+		self.gateway_response_start_timeout_ms
+			.unwrap_or(5 * 60 * 1000) // 5 minutes
+	}
+
+	pub fn gateway_update_ping_interval_ms(&self) -> u64 {
+		self.gateway_update_ping_interval_ms.unwrap_or(3_000)
+	}
+
+	pub fn gateway_gc_interval_ms(&self) -> u64 {
+		self.gateway_gc_interval_ms.unwrap_or(15_000)
+	}
+
+	pub fn gateway_tunnel_ping_timeout_ms(&self) -> i64 {
+		self.gateway_tunnel_ping_timeout_ms.unwrap_or(30_000)
+	}
+
+	pub fn gateway_hws_message_ack_timeout_ms(&self) -> u64 {
+		self.gateway_hws_message_ack_timeout_ms.unwrap_or(30_000)
+	}
+
+	pub fn gateway_hws_max_pending_size(&self) -> u64 {
+		self.gateway_hws_max_pending_size
+			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	pub fn gateway_http_max_request_body_size(&self) -> usize {
+		self.gateway_http_max_request_body_size
+			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	pub fn gateway_rate_limit_requests(&self) -> u64 {
+		self.gateway_rate_limit_requests.unwrap_or(1200)
+	}
+
+	pub fn gateway_rate_limit_period_secs(&self) -> u64 {
+		self.gateway_rate_limit_period_secs.unwrap_or(60)
+	}
+
+	pub fn gateway_max_in_flight(&self) -> usize {
+		self.gateway_max_in_flight.unwrap_or(32)
+	}
+
+	pub fn gateway_actor_request_timeout_secs(&self) -> u64 {
+		self.gateway_actor_request_timeout_secs.unwrap_or(6 * 60) // 6 minutes
+	}
+
+	pub fn gateway_api_request_timeout_secs(&self) -> u64 {
+		self.gateway_api_request_timeout_secs.unwrap_or(60) // 1 minute
+	}
+
+	pub fn gateway_retry_max_attempts(&self) -> u32 {
+		self.gateway_retry_max_attempts.unwrap_or(7)
+	}
+
+	pub fn gateway_retry_initial_interval_ms(&self) -> u64 {
+		self.gateway_retry_initial_interval_ms.unwrap_or(150)
+	}
+
+	pub fn gateway_ws_proxy_timeout_secs(&self) -> u64 {
+		self.gateway_ws_proxy_timeout_secs.unwrap_or(30)
+	}
+
+	pub fn gateway_ws_connect_timeout_secs(&self) -> u64 {
+		self.gateway_ws_connect_timeout_secs.unwrap_or(5)
+	}
+
+	pub fn gateway_ws_send_timeout_secs(&self) -> u64 {
+		self.gateway_ws_send_timeout_secs.unwrap_or(5)
+	}
+
+	pub fn gateway_ws_flush_timeout_secs(&self) -> u64 {
+		self.gateway_ws_flush_timeout_secs.unwrap_or(2)
+	}
+
+	// === API Settings ===
+
+	pub fn api_rate_limit_requests(&self) -> u64 {
+		self.api_rate_limit_requests.unwrap_or(1200)
+	}
+
+	pub fn api_rate_limit_period_secs(&self) -> u64 {
+		self.api_rate_limit_period_secs.unwrap_or(60)
+	}
+
+	pub fn api_max_in_flight(&self) -> usize {
+		self.api_max_in_flight.unwrap_or(32)
+	}
+
+	pub fn api_retry_max_attempts(&self) -> u32 {
+		self.api_retry_max_attempts.unwrap_or(3)
+	}
+
+	pub fn api_retry_initial_interval_ms(&self) -> u64 {
+		self.api_retry_initial_interval_ms.unwrap_or(100)
+	}
+
+	pub fn api_max_http_request_body_size(&self) -> usize {
+		self.api_max_http_request_body_size
+			.unwrap_or(256 * 1024 * 1024) // 256 MiB
+	}
+
+	// === Runner Settings ===
+
+	pub fn runner_http_max_response_body_size(&self) -> usize {
+		self.runner_http_max_response_body_size
+			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	pub fn runner_update_ping_interval_ms(&self) -> u64 {
+		self.runner_update_ping_interval_ms.unwrap_or(3_000)
+	}
+
+	pub fn runner_event_demuxer_gc_interval_ms(&self) -> u64 {
+		self.runner_event_demuxer_gc_interval_ms.unwrap_or(30_000)
+	}
+
+	pub fn runner_event_demuxer_max_last_seen_ms(&self) -> u64 {
+		self.runner_event_demuxer_max_last_seen_ms.unwrap_or(30_000)
 	}
 }

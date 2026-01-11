@@ -9,9 +9,6 @@ use tokio::task::JoinHandle;
 
 use crate::metrics;
 
-const GC_INTERVAL: Duration = Duration::from_secs(30);
-const MAX_LAST_SEEN: Duration = Duration::from_secs(30);
-
 struct Channel {
 	tx: mpsc::UnboundedSender<protocol::mk2::EventWrapper>,
 	handle: JoinHandle<()>,
@@ -23,15 +20,24 @@ pub struct ActorEventDemuxer {
 	runner_id: Id,
 	channels: HashMap<Id, Channel>,
 	last_gc: Instant,
+	gc_interval: Duration,
+	max_last_seen: Duration,
 }
 
 impl ActorEventDemuxer {
 	pub fn new(ctx: StandaloneCtx, runner_id: Id) -> Self {
+		let pegboard_config = ctx.config().pegboard();
+		let gc_interval =
+			Duration::from_millis(pegboard_config.runner_event_demuxer_gc_interval_ms());
+		let max_last_seen =
+			Duration::from_millis(pegboard_config.runner_event_demuxer_max_last_seen_ms());
 		Self {
 			ctx,
 			runner_id,
 			channels: HashMap::new(),
 			last_gc: Instant::now(),
+			gc_interval,
+			max_last_seen,
 		}
 	}
 
@@ -68,11 +74,11 @@ impl ActorEventDemuxer {
 		metrics::INGESTED_EVENTS_TOTAL.inc();
 
 		// Run gc periodically
-		if self.last_gc.elapsed() > GC_INTERVAL {
+		if self.last_gc.elapsed() > self.gc_interval {
 			self.last_gc = Instant::now();
 
 			self.channels.retain(|_, channel| {
-				let keep = channel.last_seen.elapsed() < MAX_LAST_SEEN;
+				let keep = channel.last_seen.elapsed() < self.max_last_seen;
 
 				if !keep {
 					// TODO: Verify aborting is safe here

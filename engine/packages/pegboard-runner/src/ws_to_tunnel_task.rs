@@ -783,6 +783,23 @@ async fn handle_tunnel_message_mk2(
 	ctx: &StandaloneCtx,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
+	// Check response body size limit for HTTP responses
+	if let protocol::mk2::ToServerTunnelMessageKind::ToServerResponseStart(ref resp) =
+		msg.message_kind
+	{
+		if let Some(ref body) = resp.body {
+			let max_response_body_size =
+				ctx.config().pegboard().runner_http_max_response_body_size();
+			if body.len() > max_response_body_size {
+				return Err(errors::ResponseBodyTooLarge {
+					size: body.len(),
+					max_size: max_response_body_size,
+				}
+				.build());
+			}
+		}
+	}
+
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
 
@@ -841,6 +858,21 @@ async fn handle_tunnel_message_mk1(
 		protocol::ToServerTunnelMessageKind::DeprecatedTunnelAck
 	) {
 		return Ok(());
+	}
+
+	// Check response body size limit for HTTP responses
+	if let protocol::ToServerTunnelMessageKind::ToServerResponseStart(ref resp) = msg.message_kind {
+		if let Some(ref body) = resp.body {
+			let max_response_body_size =
+				ctx.config().pegboard().runner_http_max_response_body_size();
+			if body.len() > max_response_body_size {
+				return Err(errors::ResponseBodyTooLarge {
+					size: body.len(),
+					max_size: max_response_body_size,
+				}
+				.build());
+			}
+		}
 	}
 
 	// Publish message to UPS

@@ -8,6 +8,7 @@ use pegboard::ops::runner::update_alloc_idx::Action;
 use rivet_guard_core::{
 	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait, request_context::RequestContext,
 };
+use std::time::Duration;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
@@ -159,7 +160,14 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		));
 
 		// Update pings
-		let ping = tokio::spawn(ping_task::task(ctx.clone(), conn.clone(), ping_abort_rx));
+		let update_ping_interval =
+			Duration::from_millis(ctx.config().pegboard().runner_update_ping_interval_ms());
+		let ping = tokio::spawn(ping_task::task(
+			ctx.clone(),
+			conn.clone(),
+			ping_abort_rx,
+			update_ping_interval,
+		));
 		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
 		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
 		let ping_abort_tx2 = ping_abort_tx.clone();

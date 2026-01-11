@@ -16,11 +16,6 @@ use vbare::OwnedVersionedData;
 
 use crate::{WebsocketPendingLimitReached, metrics};
 
-const GC_INTERVAL: Duration = Duration::from_secs(15);
-const TUNNEL_PING_TIMEOUT: i64 = util::duration::seconds(30);
-const HWS_MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(30);
-const HWS_MAX_PENDING_MSGS_SIZE_PER_REQ: u64 = util::size::mebibytes(1);
-
 pub struct InFlightRequestHandle {
 	pub msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
@@ -83,6 +78,11 @@ pub struct SharedStateInner {
 	receiver_subject: String,
 	in_flight_requests: HashMap<protocol::mk2::RequestId, InFlightRequest>,
 	hibernation_timeout: i64,
+	// Config values
+	gc_interval: Duration,
+	tunnel_ping_timeout: i64,
+	hws_message_ack_timeout: Duration,
+	hws_max_pending_size: u64,
 }
 
 #[derive(Clone)]
@@ -95,12 +95,19 @@ impl SharedState {
 		let receiver_subject =
 			pegboard::pubsub_subjects::GatewayReceiverSubject::new(gateway_id).to_string();
 
+		let pegboard_config = config.pegboard();
 		Self(Arc::new(SharedStateInner {
 			ups,
 			gateway_id,
 			receiver_subject,
 			in_flight_requests: HashMap::new(),
-			hibernation_timeout: config.pegboard().hibernating_request_eligible_threshold(),
+			hibernation_timeout: pegboard_config.hibernating_request_eligible_threshold(),
+			gc_interval: Duration::from_millis(pegboard_config.gateway_gc_interval_ms()),
+			tunnel_ping_timeout: pegboard_config.gateway_tunnel_ping_timeout_ms(),
+			hws_message_ack_timeout: Duration::from_millis(
+				pegboard_config.gateway_hws_message_ack_timeout_ms(),
+			),
+			hws_max_pending_size: pegboard_config.gateway_hws_max_pending_size(),
 		}))
 	}
 
@@ -226,7 +233,7 @@ impl SharedState {
 		if let (Some(hs), true) = (&mut req.hibernation_state, is_ws_message) {
 			hs.total_pending_ws_msgs_size += message_serialized.len() as u64;
 
-			if hs.total_pending_ws_msgs_size > HWS_MAX_PENDING_MSGS_SIZE_PER_REQ
+			if hs.total_pending_ws_msgs_size > self.hws_max_pending_size
 				|| hs.pending_ws_msgs.len() >= u16::MAX as usize
 			{
 				return Err(WebsocketPendingLimitReached {}.build());
@@ -268,7 +275,7 @@ impl SharedState {
 		let now = util::timestamp::now();
 
 		// Verify ping timeout
-		if now.saturating_sub(req.last_pong) > TUNNEL_PING_TIMEOUT {
+		if now.saturating_sub(req.last_pong) > self.tunnel_ping_timeout {
 			tracing::warn!(runner_topic=%req.receiver_subject, "tunnel timeout");
 			return Err(WebSocketServiceTimeout.build());
 		}
@@ -487,7 +494,7 @@ impl SharedState {
 
 	#[tracing::instrument(skip_all)]
 	async fn gc(&self) {
-		let mut interval = tokio::time::interval(GC_INTERVAL);
+		let mut interval = tokio::time::interval(self.gc_interval);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		loop {
@@ -536,7 +543,7 @@ impl SharedState {
 				let reason = 'reason: {
 					if let Some(hs) = &req.hibernation_state {
 						if let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first() {
-							if now.duration_since(earliest_pending_ws_msg.send_instant) > HWS_MESSAGE_ACK_TIMEOUT {
+							if now.duration_since(earliest_pending_ws_msg.send_instant) > self.hws_message_ack_timeout {
 								break 'reason Some(MsgGcReason::WebSocketMessageNotAcked {
 									first_msg_index: earliest_pending_ws_msg.message_index,
 									last_msg_index: req.message_index,

@@ -326,6 +326,10 @@ export const sitemap = [
 								title: "Icons & Names",
 								href: "/docs/actors/appearance",
 							},
+							{
+								title: "Limits",
+								href: "/docs/actors/limits",
+							},
 						],
 					},
 				],

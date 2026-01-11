@@ -4,17 +4,18 @@ use rivet_runner_protocol as protocol;
 use std::time::Duration;
 use tokio::sync::watch;
 
-use super::{LifecycleResult, UPDATE_PING_INTERVAL};
+use super::LifecycleResult;
 use crate::shared_state::SharedState;
 
 pub async fn task(
 	shared_state: SharedState,
 	request_id: protocol::RequestId,
 	mut ping_abort_rx: watch::Receiver<()>,
+	update_ping_interval: Duration,
 ) -> Result<LifecycleResult> {
 	loop {
 		tokio::select! {
-			_ = tokio::time::sleep(UPDATE_PING_INTERVAL) => {}
+			_ = tokio::time::sleep(update_ping_interval) => {}
 			_ = ping_abort_rx.changed() => {
 				return Ok(LifecycleResult::Aborted);
 			}
