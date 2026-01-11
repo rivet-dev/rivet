@@ -4,9 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Button, cn } from "@/components";
 import { useActorInspector } from "../actor-inspector-context";
-import { useDataProvider } from "../data-provider";
 import type { ActorId } from "../queries";
-import { useActorWorkerStatus } from "../worker/actor-worker-context";
 import { ActorWorkerStatus } from "../worker/actor-worker-status";
 import { ActorConsoleInput } from "./actor-console-input";
 import { ActorConsoleLogs } from "./actor-console-logs";
@@ -18,23 +16,23 @@ interface ActorConsoleProps {
 export function ActorConsole({ actorId }: ActorConsoleProps) {
 	const [isOpen, setOpen] = useState(false);
 
-	const status = useActorWorkerStatus();
 	const actorInspector = useActorInspector();
 
 	const { isLoading: isRpcsLoading, isError: isRpcsError } = useQuery(
 		actorInspector.actorRpcsQueryOptions(actorId),
 	);
 
-	const isBlocked = actorInspector.connectionStatus !== "connected" || isRpcsError || isRpcsLoading;
+	const isBlocked =
+		actorInspector.connectionStatus !== "connected" ||
+		isRpcsLoading ||
+		isRpcsError;
 
 	const combinedStatus =
 		isRpcsError || actorInspector.connectionStatus === "error"
 			? "error"
-			: actorInspector.connectionStatus === "connecting" ||
-					
-					isRpcsLoading
+			: actorInspector.connectionStatus === "connecting" || isRpcsLoading
 				? "pending"
-				: status.type;
+				: "ready";
 
 	return (
 		<motion.div

@@ -76,6 +76,7 @@ export type { AnyConn, Conn } from "./conn/mod";
 export type { ActorDefinition, AnyActorDefinition } from "./definition";
 export { lookupInRegistry } from "./definition";
 export { UserError, type UserErrorOptions } from "./errors";
+export { KEYS as KV_KEYS } from "./instance/kv";
 export type { AnyActorInstance } from "./instance/mod";
 export {
 	type ActorRouter,

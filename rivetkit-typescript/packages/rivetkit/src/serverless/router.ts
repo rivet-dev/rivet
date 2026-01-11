@@ -1,18 +1,13 @@
 import invariant from "invariant";
 import { InvalidRequest } from "@/actor/errors";
-import { createRouter } from "@/utils/router";
+import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
-import { logger } from "./log";
 import { ServerlessStartHeadersSchema } from "@/manager/router-schema";
-import { DriverConfig } from "@/registry/config";
-import { RegistryConfig } from "@/registry/config";
-import { createClient } from "@/client/mod";
-import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
-import {
-	ClientConfigSchema,
-	convertRegistryConfigToClientConfig,
-} from "@/client/config";
 import { createClientWithDriver } from "@/mod";
+import type { DriverConfig, RegistryConfig } from "@/registry/config";
+import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
+import { createRouter } from "@/utils/router";
+import { logger } from "./log";
 
 export function buildServerlessRouter(
 	driverConfig: DriverConfig,

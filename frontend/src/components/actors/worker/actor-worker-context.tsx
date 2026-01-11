@@ -6,6 +6,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
@@ -77,6 +78,12 @@ export const ActorWorkerContextProvider = ({
 		() => new ActorWorkerContainer(),
 	);
 
+	const engineTokenRef = useRef(engineToken);
+
+	useEffect(() => {
+		engineTokenRef.current = engineToken;
+	}, [engineToken]);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: we want to create worker on each of those props change
 	useEffect(() => {
 		const ctrl = new AbortController();
@@ -88,7 +95,7 @@ export const ActorWorkerContextProvider = ({
 				name,
 				signal: ctrl.signal,
 				rpcs: rpcs ?? [],
-				engineToken,
+				engineToken: engineTokenRef.current,
 				runnerName: runner,
 				namespace,
 				inspectorToken,
@@ -106,7 +113,6 @@ export const ActorWorkerContextProvider = ({
 		rpcs,
 		name,
 		endpoint,
-		engineToken,
 		inspectorToken,
 		namespace,
 		runner,

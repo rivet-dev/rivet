@@ -19,9 +19,9 @@ import type {
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
 import { handleWebSocketInspectorConnect } from "@/inspector/handler";
-import { compareSecrets } from "@/inspector/utils";
 import type { RegistryConfig } from "@/registry/config";
 import { promiseWithResolvers } from "@/utils";
+import { timingSafeEqual } from "@/utils/crypto";
 import type { ConnDriver } from "./conn/driver";
 import { createRawWebSocketDriver } from "./conn/drivers/raw-websocket";
 import { createWebSocketDriver } from "./conn/drivers/websocket";
@@ -130,7 +130,7 @@ export async function routeWebSocket(
 
 			if (
 				!inspectorToken ||
-				!compareSecrets(actor.inspectorToken, inspectorToken)
+				!timingSafeEqual(actor.inspectorToken, inspectorToken)
 			) {
 				throw "WebSocket Inspector Unauthorized: invalid token";
 			}
