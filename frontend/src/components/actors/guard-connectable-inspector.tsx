@@ -22,7 +22,6 @@ import { getConfig, useConfig } from "../lib/config";
 import { ls } from "../lib/utils";
 import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
-import { Code } from "../ui/typography";
 import { useFiltersValue } from "./actor-filters-context";
 import {
 	actorWakeUpMutationOptions,

@@ -45,7 +45,6 @@ export const QueriedActorStatusLabel = ({
 	const { data: status = "unknown", isError } = useQuery(
 		useDataProvider().actorStatusQueryOptions(actorId),
 	);
-	console.log(status);
 	return (
 		<>
 			<ActorStatusLabel status={isError ? "unknown" : status} />
