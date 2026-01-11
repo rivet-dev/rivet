@@ -34,6 +34,11 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: tracing::SubCommand,
 	},
+	/// Epoxy debug commands
+	Epoxy {
+		#[clap(subcommand)]
+		command: epoxy::SubCommand,
+	},
 	/// Allows inspection of UDB data
 	Udb(udb::Opts),
 	/// UDB key utilities
@@ -48,6 +53,7 @@ impl SubCommand {
 			SubCommand::Workflow { command } => command.execute(config).await,
 			SubCommand::Config { command } => command.execute(config).await,
 			SubCommand::Tracing { command } => command.execute(config).await,
+			SubCommand::Epoxy { command } => command.execute(config).await,
 			SubCommand::Udb(opts) => opts.execute(config).await,
 			SubCommand::UdbKeys(opts) => opts.execute(),
 		}
