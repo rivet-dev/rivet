@@ -11,11 +11,10 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import {
 	Button,
-	CopyArea,
 	DiscreteCopyButton,
 	DropdownMenu,
 	DropdownMenuContent,
@@ -34,7 +33,6 @@ import {
 } from "@/components";
 import { ActorRegion, RunnerPoolError } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
-import { hasMetadataProvider } from "./data-providers/engine-data-provider";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;

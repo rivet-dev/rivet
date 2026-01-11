@@ -6,7 +6,7 @@ use utoipa::{IntoParams, ToSchema};
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
 pub struct DeleteQuery {
-	pub namespace: Option<String>,
+	pub namespace: String,
 }
 
 #[derive(Serialize, Deserialize)]
