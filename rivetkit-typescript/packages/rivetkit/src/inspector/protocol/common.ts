@@ -14,6 +14,7 @@ export enum ActorFeature {
 	Metrics = "metrics",
 	EventsMonitoring = "events-monitoring",
 	Database = "database",
+	Kv = "kv",
 }
 
 export const ActorLogEntry = z.object({
