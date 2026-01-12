@@ -24,15 +24,17 @@ export function versionOrCommitToRef(versionOrCommit: string): string {
 }
 
 /**
- * Fetches a git ref from the remote. For tags, fetches all tags. For commits, fetches the specific commit.
+ * Fetches a git ref from the remote. For tags, fetches all tags. For commits, fetches all branches.
  */
 export async function fetchGitRef(ref: string): Promise<void> {
 	if (ref.startsWith("v")) {
 		console.log(`Fetching tags...`);
 		await $({ stdio: "inherit" })`git fetch --tags --force`;
 	} else {
-		console.log(`Fetching commit ${ref}...`);
-		await $({ stdio: "inherit" })`git fetch origin ${ref}`;
+		// Git doesn't allow fetching commits directly by SHA, so fetch all branches
+		// to ensure the commit is reachable.
+		console.log(`Fetching branches to find commit ${ref}...`);
+		await $({ stdio: "inherit" })`git fetch origin`;
 	}
 }
 
