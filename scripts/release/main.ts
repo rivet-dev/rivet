@@ -16,7 +16,7 @@ import {
 } from "./git";
 import { publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
-import { assert, assertEquals, assertExists } from "./utils";
+import { assert, assertEquals, assertExists, versionOrCommitToRef } from "./utils";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -103,23 +103,25 @@ async function shouldTagAsLatest(newVersion: string): Promise<boolean> {
 }
 
 async function validateReuseVersion(version: string): Promise<void> {
-	console.log(`Validating that version ${version} exists...`);
+	console.log(`Validating that ${version} exists...`);
 
 	// Fetch tags to ensure we have the latest
 	// Use --force to overwrite local tags that conflict with remote
 	console.log(`Fetching tags...`);
 	await $({ stdio: "inherit" })`git fetch --tags --force`;
 
-	// Get short commit from version tag
+	const ref = versionOrCommitToRef(version);
+
+	// Get short commit from ref
 	let shortCommit: string;
 	try {
-		const result = await $`git rev-parse v${version}`;
+		const result = await $`git rev-parse ${ref}`;
 		const fullCommit = result.stdout.trim();
 		shortCommit = fullCommit.slice(0, 7);
-		console.log(`✅ Found tag v${version} (commit ${shortCommit})`);
+		console.log(`✅ Found ${ref} (commit ${shortCommit})`);
 	} catch (error) {
 		throw new Error(
-			`Version ${version} does not exist in git. Make sure the tag v${version} exists in the remote repository.`,
+			`${version} does not exist in git. Make sure ${ref} exists in the repository.`,
 		);
 	}
 
@@ -308,8 +310,8 @@ async function main() {
 			"Override the commit to pull artifacts from (defaults to current commit)",
 		)
 		.option(
-			"--reuse-engine-version <version>",
-			"Reuse artifacts and Docker images from a previous version instead of building",
+			"--reuse-engine-version <version-or-commit>",
+			"Reuse artifacts and Docker images from a previous version (e.g., 2.0.33) or git revision (e.g., bb7f292)",
 		)
 		.option("--latest", "Tag version as the latest version", true)
 		.option("--no-latest", "Do not tag version as the latest version")
