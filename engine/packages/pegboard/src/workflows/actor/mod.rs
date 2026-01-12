@@ -877,32 +877,46 @@ async fn handle_stopped(
 	tracing::debug!(?variant, "actor stopped");
 
 	let force_reschedule = match &variant {
-		StoppedVariant::Normal { code, .. } => {
+		StoppedVariant::Normal {
+			code: protocol::mk2::StopCode::Ok,
+			..
+		} => {
 			// Reset retry count on successful exit
-			if let protocol::mk2::StopCode::Ok = code {
-				state.reschedule_state = Default::default();
-			}
+			state.reschedule_state = Default::default();
+
+			false
+		}
+		StoppedVariant::Normal {
+			code: protocol::mk2::StopCode::Error,
+			message,
+		} => {
+			ctx.v(3)
+				.activity(runtime::SetFailureReasonInput {
+					failure_reason: FailureReason::Crashed {
+						message: message.clone(),
+					},
+				})
+				.await?;
 
 			false
 		}
 		StoppedVariant::Lost {
-			force_reschedule, ..
-		} => *force_reschedule,
-	};
+			force_reschedule,
+			failure_reason,
+		} => {
+			// Set runner failure reason if actor was lost unexpectedly.
+			// This is set early (before crash policy handling) because it applies to all crash policies.
+			if let Some(failure_reason) = &failure_reason {
+				ctx.v(3)
+					.activity(runtime::SetFailureReasonInput {
+						failure_reason: failure_reason.clone(),
+					})
+					.await?;
+			}
 
-	// Set runner failure reason if actor was lost unexpectedly.
-	// This is set early (before crash policy handling) because it applies to all crash policies.
-	if let StoppedVariant::Lost {
-		failure_reason: Some(failure_reason),
-		..
-	} = &variant
-	{
-		ctx.v(3)
-			.activity(runtime::SetFailureReasonInput {
-				failure_reason: failure_reason.clone(),
-			})
-			.await?;
-	}
+			*force_reschedule
+		}
+	};
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
@@ -1056,21 +1070,7 @@ async fn handle_stopped(
 
 				state.sleeping = true;
 
-				// Set Crashed failure reason for actual crashes.
-				// Runner failure reasons are already set at the start of handle_stopped.
-				if let StoppedVariant::Normal {
-					code: protocol::mk2::StopCode::Error,
-					message,
-				} = &variant
-				{
-					ctx.v(3)
-						.activity(runtime::SetFailureReasonInput {
-							failure_reason: FailureReason::Crashed {
-								message: message.clone(),
-							},
-						})
-						.await?;
-				}
+				ctx.removed::<Activity<runtime::SetFailureReason>>().await?;
 
 				ctx.activity(runtime::SetSleepingInput {
 					actor_id: input.actor_id,

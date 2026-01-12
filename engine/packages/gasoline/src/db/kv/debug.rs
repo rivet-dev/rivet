@@ -660,14 +660,14 @@ impl DatabaseDebug for DatabaseKv {
 						let output_subspace = self.subspace.subspace(&output_key);
 
 						let (
-							workflow_name,
+							workflow_name_entry,
 							is_running,
 							has_wake_condition,
 							is_silenced,
 							has_output,
 							error,
 						) = tokio::try_join!(
-							tx.read(&name_key, Serializable),
+							tx.read_opt(&name_key, Serializable),
 							tx.exists(&worker_id_key, Serializable),
 							tx.exists(&has_wake_condition_key, Serializable),
 							tx.exists(&silence_ts_key, Serializable),
@@ -687,6 +687,11 @@ impl DatabaseDebug for DatabaseKv {
 							},
 							tx.read_opt(&error_key, Serializable),
 						)?;
+
+						let Some(workflow_name) = workflow_name_entry else {
+							tracing::warn!("workflow {workflow_id} does not exist");
+							continue;
+						};
 
 						if is_running || is_silenced {
 							continue;

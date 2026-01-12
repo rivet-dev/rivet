@@ -1128,7 +1128,6 @@ pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<(
 		state.start_ts = Some(util::timestamp::now());
 	}
 	state.connectable_ts = Some(util::timestamp::now());
-	state.failure_reason = None;
 
 	ctx.udb()?
 		.run(|tx| async move {
