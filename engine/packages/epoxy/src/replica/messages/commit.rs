@@ -2,7 +2,7 @@ use anyhow::Result;
 use epoxy_protocol::protocol;
 use universaldb::Transaction;
 
-use crate::replica::ballot;
+use crate::{metrics, replica::ballot};
 
 // EPaxos Step 24
 #[tracing::instrument(skip_all)]
@@ -39,6 +39,10 @@ pub async fn commit(
 		tracing::debug!(?replica_id, ?instance, "skipping kv commit");
 		None
 	};
+
+	metrics::COMMIT_TOTAL
+		.with_label_values(&[if cmd_err.is_none() { "ok" } else { "cmd_err" }])
+		.inc();
 
 	tracing::debug!(?replica_id, ?instance, ?cmd_err, "committed");
 

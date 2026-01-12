@@ -3,8 +3,8 @@ use epoxy_protocol::protocol;
 use universaldb::Transaction;
 use universaldb::utils::{FormalKey, IsolationLevel::*};
 
-use crate::keys;
 use crate::replica::{ballot, utils};
+use crate::{keys, metrics};
 
 #[tracing::instrument(skip_all)]
 pub async fn lead_consensus(
@@ -54,6 +54,8 @@ pub async fn lead_consensus(
 		slot_id,
 	};
 	crate::replica::update_log(tx, replica_id, log_entry, &instance).await?;
+
+	metrics::INSTANCE_NUMBER.set(instance.slot_id as i64);
 
 	// Return payload
 	Ok(protocol::Payload {

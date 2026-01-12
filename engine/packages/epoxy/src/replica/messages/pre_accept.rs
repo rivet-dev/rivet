@@ -3,7 +3,10 @@ use epoxy_protocol::protocol;
 use std::cmp;
 use universaldb::Transaction;
 
-use crate::replica::{ballot, utils};
+use crate::{
+	metrics,
+	replica::{ballot, utils},
+};
 
 #[tracing::instrument(skip_all)]
 pub async fn pre_accept(
@@ -27,6 +30,13 @@ pub async fn pre_accept(
 	let validation =
 		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &current_ballot, &instance)
 			.await?;
+
+	if !validation.is_valid {
+		metrics::PRE_ACCEPT_TOTAL
+			.with_label_values(&["invalid_ballot"])
+			.inc();
+	}
+
 	ensure!(
 		validation.is_valid,
 		"ballot validation failed for pre_accept: incoming ballot {:?} is not greater than stored ballot {:?} for instance {:?} (comparison: {:?})",
@@ -56,6 +66,8 @@ pub async fn pre_accept(
 		ballot: current_ballot,
 	};
 	crate::replica::update_log(tx, replica_id, log_entry, &instance).await?;
+
+	metrics::PRE_ACCEPT_TOTAL.with_label_values(&["ok"]).inc();
 
 	// EPaxos Step 9
 	Ok(protocol::PreAcceptResponse {
