@@ -22,10 +22,13 @@ import { ActorClearEventsLogButton } from "./actor-clear-events-log-button";
 import { useActorDetailsSettings } from "./actor-details-settings";
 import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
 import { ActorEventsList } from "./actor-events-list";
-import { useActor } from "./actor-queries-context";
-import { type ActorId, useActorEventsStream } from "./queries";
+import {
+	type TransformedInspectorEvent,
+	useActorInspector,
+} from "./actor-inspector-context";
+import type { ActorId } from "./queries";
 
-export type EventsTypeFilter = "action" | "subscription" | "broadcast" | "send";
+export type EventsTypeFilter = TransformedInspectorEvent["body"]["tag"];
 
 interface ActorEventsProps {
 	actorId: ActorId;
@@ -34,18 +37,16 @@ interface ActorEventsProps {
 export function ActorEvents({ actorId }: ActorEventsProps) {
 	const [search, setSearch] = useState("");
 	const [logsFilter, setLogsFilter] = useState<EventsTypeFilter[]>([
-		"action",
-		"subscription",
-		"broadcast",
-		"send",
+		"ActionEvent",
+		"SubscribeEvent",
+		"BroadcastEvent",
+		"FiredEvent",
 	]);
 
-	const [isLive, setIsLive] = useState(true);
 	const ref = useRef<HTMLDivElement>(null);
-	// useActorEventsStream(actorId, { enabled: isLive });
 	const [settings] = useActorDetailsSettings();
 
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
 	const { data } = useQuery(actorQueries.actorEventsQueryOptions(actorId));
 	const { onScroll } = useScrollToBottom(ref, [data]);
 
@@ -74,25 +75,25 @@ export function ActorEvents({ actorId }: ActorEventsProps) {
 						className="gap-0 text-xs p-2 border-r"
 					>
 						<ToggleGroupItem
-							value="action"
+							value="ActionEvent"
 							className="text-xs border border-r-0 rounded-se-none rounded-ee-none"
 						>
 							Action
 						</ToggleGroupItem>
 						<ToggleGroupItem
-							value="subscription"
+							value="SubscribeEvent"
 							className="text-xs border rounded-none"
 						>
 							Subscription
 						</ToggleGroupItem>
 						<ToggleGroupItem
-							value="broadcast"
+							value="BroadcastEvent"
 							className="text-xs border rounded-none"
 						>
 							Broadcast
 						</ToggleGroupItem>
 						<ToggleGroupItem
-							value="send"
+							value="FiredEvent"
 							className=" text-xs border rounded-es-none rounded-ss-none border-l-0"
 						>
 							Send
@@ -101,24 +102,9 @@ export function ActorEvents({ actorId }: ActorEventsProps) {
 					<div className="flex items-center gap-2 pl-2">
 						<ActorDetailsSettingsButton />
 						<ActorClearEventsLogButton actorId={actorId} />
-						<WithTooltip
-							content={
-								isLive
-									? "Pause events stream"
-									: "Resume events stream"
-							}
-							trigger={
-								<Button
-									variant="outline"
-									size="icon-sm"
-									onClick={() => setIsLive((prev) => !prev)}
-								>
-									<Icon icon={isLive ? faPause : faPlay} />
-								</Button>
-							}
-						/>
+
 						<div className="h-full flex items-center">
-							{isLive ? <LiveBadge /> : <PauseBadge />}
+							<LiveBadge />
 						</div>
 					</div>
 				</div>
@@ -126,7 +112,7 @@ export function ActorEvents({ actorId }: ActorEventsProps) {
 			<div className="flex-1 min-h-0 overflow-hidden flex relative">
 				<ScrollArea
 					viewportRef={ref}
-					onScroll={onScroll}
+					viewportProps={{ onScroll }}
 					className="w-full h-full min-h-0"
 				>
 					<div
@@ -170,8 +156,9 @@ function useScrollToBottom(
 	deps: unknown[],
 ) {
 	const [settings] = useActorDetailsSettings();
-	const follow = useRef(true);
-	const shouldFollow = () => settings.autoFollowLogs && follow.current;
+	const [follow, setFollow] = useState(true);
+	const shouldFollow = () => settings.autoFollowLogs && follow;
+	const shouldScanForNew = useRef(false);
 	useResizeObserver({
 		// @ts-expect-error -- TS2322 -- Type 'HTMLDivElement' is not assignable to type 'Element | null'.
 		ref,
@@ -181,7 +168,7 @@ function useScrollToBottom(
 				requestAnimationFrame(() => {
 					ref.current?.scrollTo({
 						top: ref.current.scrollHeight,
-						behavior: "smooth",
+						behavior: "instant",
 					});
 				});
 			}
@@ -189,9 +176,13 @@ function useScrollToBottom(
 	});
 
 	const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-		follow.current =
+		if (shouldScanForNew.current) {
+			return;
+		}
+		setFollow(
 			e.currentTarget.scrollHeight - e.currentTarget.scrollTop <=
-			e.currentTarget.clientHeight;
+				e.currentTarget.clientHeight,
+		);
 	}, []);
 
 	useEffect(
@@ -199,16 +190,19 @@ function useScrollToBottom(
 			if (!shouldFollow()) {
 				return () => {};
 			}
+			shouldScanForNew.current = true;
 			// https://github.com/TanStack/virtual/issues/537
 			const rafId = requestAnimationFrame(() => {
 				ref.current?.scrollTo({
 					top: ref.current.scrollHeight,
-					behavior: "smooth",
+					behavior: "instant",
 				});
+				shouldScanForNew.current = false;
 			});
 
 			return () => {
 				cancelAnimationFrame(rafId);
+				shouldScanForNew.current = false;
 			};
 		},
 		// biome-ignore lint/correctness/useExhaustiveDependencies: deps is passed from caller

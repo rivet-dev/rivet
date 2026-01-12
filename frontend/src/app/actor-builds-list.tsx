@@ -24,7 +24,7 @@ export function ActorBuildsList() {
 				) : null}
 				{data?.map((build) => (
 					<Button
-						key={build.name}
+						key={build.id}
 						className={cn(
 							"text-muted-foreground justify-start font-medium px-1",
 							"data-active:text-foreground data-active:bg-accent",
@@ -51,7 +51,7 @@ export function ActorBuildsList() {
 								search: (old) => ({
 									...old,
 									actorId: undefined,
-									n: [build.name],
+									n: [build.id],
 								}),
 							});
 						}}
@@ -62,11 +62,11 @@ export function ActorBuildsList() {
 							search={(old) => ({
 								...old,
 								actorId: undefined,
-								n: [build.name],
+								n: [build.id],
 							})}
 						>
 							<span className="text-ellipsis overflow-hidden whitespace-nowrap">
-								{build.name}
+								{build.id}
 							</span>
 						</Link>
 					</Button>

@@ -7,15 +7,9 @@ import { FilterOp } from "../ui/filters";
 import { ActorTabs } from "./actors-actor-details";
 import { useActorsView } from "./actors-view-context-provider";
 import { useDataProvider } from "./data-provider";
-import type { ActorFeature, ActorId } from "./queries";
+import type { ActorId } from "./queries";
 
-export function ActorNotFound({
-	actorId,
-	features = [],
-}: {
-	features?: ActorFeature[];
-	actorId?: ActorId;
-}) {
+export function ActorNotFound({ actorId }: { actorId?: ActorId }) {
 	const { copy } = useActorsView();
 
 	const navigate = useNavigate();
@@ -30,7 +24,7 @@ export function ActorNotFound({
 
 	return (
 		<div className="flex flex-col h-full flex-1">
-			<ActorTabs disabled features={features} className="relative">
+			<ActorTabs disabled className="relative">
 				<div className="flex text-center text-foreground flex-1 justify-center items-center flex-col relative gap-2">
 					{!isLoading ? (
 						<>

@@ -1,12 +1,10 @@
 import { fromJs } from "esast-util-from-js";
 import { toJs } from "estree-util-to-js";
-import { createActorInspectorClient } from "rivetkit/inspector";
 import {
 	createHighlighterCore,
 	createOnigurumaEngine,
 	type HighlighterCore,
 } from "shiki";
-import { match } from "ts-pattern";
 import {
 	type InitMessage,
 	MessageSchema,
@@ -104,6 +102,9 @@ const createConsole = (id: string) => {
 };
 
 let init: null | Omit<InitMessage, "type"> = null;
+let actionIdCounter = 0;
+
+const actions = new Map<number, PromiseWithResolvers<unknown>>();
 
 addEventListener("message", async (event) => {
 	const { success, error, data } = MessageSchema.safeParse(event.data);
@@ -118,6 +119,21 @@ addEventListener("message", async (event) => {
 		respond({
 			type: "ready",
 		});
+		return;
+	}
+
+	if (data.type === "actionResponse") {
+		const action = actions.get(data.id);
+		if (!action) {
+			console.error("No such action", data.id);
+			return;
+		}
+		if (data.data.success) {
+			action.resolve(data.data.result);
+		} else {
+			action.reject(new Error(data.data.error || "Unknown error"));
+		}
+		actions.delete(data.id);
 		return;
 	}
 
@@ -177,44 +193,21 @@ function respond(msg: Response) {
 async function callAction({ name, args }: { name: string; args: unknown[] }) {
 	if (!init) throw new Error("Actor not initialized");
 
-	const url = new URL(`inspect`, init.endpoint).href;
+	const actionId = actionIdCounter++;
 
-	const additionalHeaders = match(__APP_TYPE__)
-		.with("engine", () => {
-			return init?.engineToken
-				? { "X-Rivet-Token": init.engineToken || "" }
-				: ({} as Record<string, string>);
-		})
-		.otherwise(() => ({}));
+	const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+	actions.set(actionId, { promise, resolve, reject });
 
-	// we need to build this from scratch because we don't have access to
-	// createInspectorActorContext in the worker
-	// and we want to avoid bundling the entire RivetKit here, issues with @react-refresh
-	const client = createActorInspectorClient(url, {
-		headers: {
-			Authorization: init.inspectorToken
-				? `Bearer ${init.inspectorToken}`
-				: "",
-			"x-rivet-target": "actor",
-			"x-rivet-actor": init.id,
-			"X-RivetKit-Query": JSON.stringify({
-				getForId: { actorId: init.id },
-			}),
-			...additionalHeaders,
-		},
+	respond({
+		type: "invokeAction",
+		id: actionId,
+		data: { name, args },
 	});
 
-	const response = await client.action.$post({
-		json: { name, params: args },
-	});
-
-	if (!response.ok) {
-		try {
-			return await response.json();
-		} catch {
-			return await response.text();
-		}
+	try {
+		const result = await promise;
+		return result;
+	} finally {
+		actions.delete(actionId);
 	}
-
-	return (await response.json()).result;
 }

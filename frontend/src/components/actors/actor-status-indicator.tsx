@@ -11,7 +11,7 @@ export const QueriedActorStatusIndicator = ({
 }: {
 	actorId: ActorId;
 } & ComponentPropsWithRef<"span">) => {
-	const { data: status, isError } = useQuery(
+	const { data: status = "unknown", isError } = useQuery(
 		useDataProvider().actorStatusQueryOptions(actorId),
 	);
 

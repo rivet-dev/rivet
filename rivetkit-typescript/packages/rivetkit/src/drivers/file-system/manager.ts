@@ -17,16 +17,14 @@ import type {
 	ListActorsInput,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
-import { ManagerInspector } from "@/inspector/manager";
-import { type Actor, ActorFeature, type ActorId } from "@/inspector/mod";
 import type { ManagerDisplayInformation } from "@/manager/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
+import type { DriverConfig, RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
+import type { GetUpgradeWebSocket } from "@/utils";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
 import { generateActorId } from "./utils";
-import { RegistryConfig, DriverConfig } from "@/registry/config";
-import { GetUpgradeWebSocket } from "@/utils";
 
 export class FileSystemManagerDriver implements ManagerDriver {
 	#config: RegistryConfig;
@@ -37,8 +35,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	#actorDriver: ActorDriver;
 	#actorRouter: ActorRouter;
 
-	inspector?: ManagerInspector;
-
 	constructor(
 		config: RegistryConfig,
 		state: FileSystemGlobalState,
@@ -47,75 +43,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		this.#config = config;
 		this.#state = state;
 		this.#driverConfig = driverConfig;
-
-		if (this.#config.inspector.enabled) {
-			function transformActor(actorState: schema.ActorState): Actor {
-				return {
-					id: actorState.actorId as ActorId,
-					name: actorState.name,
-					key: actorState.key as string[],
-					startedAt: actorState.startTs
-						? new Date(Number(actorState.startTs)).toISOString()
-						: undefined,
-					createdAt: new Date(
-						Number(actorState.createdAt),
-					).toISOString(),
-					destroyedAt: actorState.destroyTs
-						? new Date(Number(actorState.destroyTs)).toISOString()
-						: undefined,
-					features: [
-						ActorFeature.State,
-						ActorFeature.Connections,
-						ActorFeature.Console,
-						ActorFeature.EventsMonitoring,
-						ActorFeature.Database,
-					],
-				};
-			}
-
-			this.inspector = new ManagerInspector(() => {
-				return {
-					getAllActors: async ({ cursor, limit }) => {
-						const itr = this.#state.getActorsIterator({ cursor });
-						const actors: Actor[] = [];
-
-						for await (const actor of itr) {
-							actors.push(transformActor(actor));
-							if (limit && actors.length >= limit) {
-								break;
-							}
-						}
-						return actors;
-					},
-					getActorById: async (id) => {
-						try {
-							const result =
-								await this.#state.loadActorStateOrError(id);
-							return transformActor(result);
-						} catch {
-							return null;
-						}
-					},
-					getBuilds: async () => {
-						return Object.keys(this.#config.use).map((name) => ({
-							name,
-						}));
-					},
-					createActor: async (input) => {
-						const { actorId } = await this.createActor(input);
-						try {
-							const result =
-								await this.#state.loadActorStateOrError(
-									actorId,
-								);
-							return transformActor(result);
-						} catch {
-							return null;
-						}
-					},
-				};
-			});
-		}
 
 		// Actors run on the same node as the manager, so we create a dummy actor router that we route requests to
 		const inlineClient = createClientWithDriver(this);
@@ -307,6 +234,13 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		return actors;
 	}
 
+	async kvGet(actorId: string, key: Uint8Array): Promise<string | null> {
+		const response = await this.#state.kvBatchGet(actorId, [key]);
+		return response[0] !== null
+			? new TextDecoder().decode(response[0])
+			: null;
+	}
+
 	displayInformation(): ManagerDisplayInformation {
 		return {
 			properties: {
@@ -323,10 +257,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			instances: this.#state.actorCountOnStartup,
 			data: this.#state.storagePath,
 		};
-	}
-
-	getOrCreateInspectorAccessToken() {
-		return this.#state.getOrCreateInspectorAccessToken();
 	}
 
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {

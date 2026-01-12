@@ -11,7 +11,7 @@ export function BuildPrefiller() {
 		return (
 			<Navigate
 				to="."
-				search={(search) => ({ ...search, n: [data[0].name] })}
+				search={(search) => ({ ...search, n: [data[0].id] })}
 			/>
 		);
 	}

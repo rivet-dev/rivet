@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
-import { Button, DocsSheet, Frame, Link } from "@/components";
+import { Button, Frame, Link } from "@/components";
 import { queryClient } from "@/queries/global";
 import {
 	CommunityPlan,
@@ -47,14 +47,15 @@ export default function BillingFrameContent() {
 				<Frame.Title>{project.displayName} billing</Frame.Title>
 				<Frame.Description>
 					Manage billing for your Rivet Cloud project.{" "}
-					<DocsSheet
-						path="https://www.rivet.dev/pricing"
-						title="Billing"
-					>
-						<Link className="cursor-pointer">
+					<Link asChild className="cursor-pointer">
+						<a
+							target="_blank"
+							rel="noopener noreferrer"
+							href="https://www.rivet.dev/pricing"
+						>
 							Learn more about billing.
-						</Link>
-					</DocsSheet>
+						</a>
+					</Link>
 				</Frame.Description>
 			</Frame.Header>
 			<Frame.Content>

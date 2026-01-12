@@ -375,7 +375,7 @@ col-span-full flex-1"
 export const Regions = () => {
 	const { control } = useFormContext<FormValues>();
 	const { data, hasNextPage, fetchNextPage } = useInfiniteQuery({
-		...useEngineCompatDataProvider().regionsQueryOptions(),
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		maxPages: Infinity,
 	});
 
@@ -390,22 +390,24 @@ export const Regions = () => {
 			<div className="space-y-4">
 				{data?.map((region) => (
 					<FormField
-						key={region.id}
+						key={region.name}
 						control={control}
-						name={`regions.${region.id}`}
+						name={`regions.${region.name}`}
 						render={({ field }) => (
 							<>
 								<div className="flex items-start gap-3">
 									<Checkbox
-										id={`region-${region.id}`}
+										id={`region-${region.name}`}
 										checked={field.value ?? false}
 										name={field.name}
 										onCheckedChange={field.onChange}
 									/>
 									<div className="grid gap-2">
-										<Label htmlFor={`region-${region.id}`}>
+										<Label
+											htmlFor={`region-${region.name}`}
+										>
 											<ActorRegion
-												regionId={region.id}
+												regionId={region.name}
 												showLabel
 											/>
 										</Label>

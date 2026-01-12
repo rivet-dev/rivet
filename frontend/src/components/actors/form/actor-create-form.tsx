@@ -1,3 +1,4 @@
+import { Rivet } from "@rivetkit/engine-api-full";
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
@@ -17,7 +18,6 @@ import { AllRunnerSelect } from "../all-runner-select";
 import { BuildSelect } from "../build-select";
 import { CrashPolicySelect } from "../crash-policy-select";
 import { useEngineCompatDataProvider } from "../data-provider";
-import { CrashPolicy as CrashPolicyEnum } from "../queries";
 import { RegionSelect } from "../region-select";
 
 const jsonValid = z.custom<string>(
@@ -43,7 +43,7 @@ export const formSchema = z
 
 		datacenter: z.string(),
 		runnerNameSelector: z.string(),
-		crashPolicy: z.nativeEnum(CrashPolicyEnum),
+		crashPolicy: z.nativeEnum(Rivet.CrashPolicy),
 	})
 	.partial({ datacenter: true, runnerNameSelector: true, crashPolicy: true });
 
@@ -218,7 +218,7 @@ export const PrefillActorName = () => {
 
 	const { data: name, isSuccess } = useSuspenseInfiniteQuery({
 		...useEngineCompatDataProvider().buildsQueryOptions(),
-		select: (data) => data.pages[0].builds[0].name,
+		select: (data) => Object.keys(data.pages[0].names)[0],
 	});
 
 	const watchedValue = watch("name");

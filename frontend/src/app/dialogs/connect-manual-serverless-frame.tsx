@@ -68,12 +68,12 @@ export default function ConnectManualServerlessFrameContent({
 	onClose,
 }: ConnectManualServerlessFrameContentProps) {
 	usePrefetchInfiniteQuery({
-		...useEngineCompatDataProvider().regionsQueryOptions(),
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
 	});
 
 	const { data: datacenters } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	return <FormStepper onClose={onClose} datacenters={datacenters} />;
@@ -170,7 +170,7 @@ function FormStepper({
 				success: false,
 				requestLifespan: 900,
 				datacenters: Object.fromEntries(
-					datacenters.map((dc) => [dc.id, true]),
+					datacenters.map((dc) => [dc.name, true]),
 				),
 			}}
 			content={{

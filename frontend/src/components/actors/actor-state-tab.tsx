@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 import { DocsSheet } from "../docs-sheet";
 import { Button } from "../ui/button";
 import { ActorEditableState } from "./actor-editable-state";
-import { useActor } from "./actor-queries-context";
+import { useActorInspector } from "./actor-inspector-context";
 import { useActorsView } from "./actors-view-context-provider";
 import type { ActorId } from "./queries";
 
@@ -14,9 +14,10 @@ interface ActorStateTabProps {
 export function ActorStateTab({ actorId }: ActorStateTabProps) {
 	const { links } = useActorsView();
 
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
+
 	const {
-		data: state,
+		data: { isEnabled: isStateEnabled } = { isEnabled: false },
 		isError,
 		isLoading,
 	} = useQuery(actorQueries.actorStateQueryOptions(actorId));
@@ -35,23 +36,29 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 		return <Info>Loading state...</Info>;
 	}
 
-	if (!state?.enabled) {
+	if (!isStateEnabled) {
 		return (
 			<Info>
 				<p>
 					State Preview is not enabled for this Actor. <br /> You can
 					enable it by providing a valid state constructor.
 				</p>
-				<DocsSheet title="State" path={links.state}>
-					<Button variant="outline">Documentation</Button>
-				</DocsSheet>
+				<Button variant="outline" asChild>
+					<a
+						href={links.state}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						Documentation
+					</a>
+				</Button>
 			</Info>
 		);
 	}
 
 	return (
 		<div className="flex-1 w-full min-h-0 h-full flex flex-col">
-			<ActorEditableState actorId={actorId} state={state.state} />
+			<ActorEditableState actorId={actorId} />
 		</div>
 	);
 }

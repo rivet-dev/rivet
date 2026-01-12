@@ -8,11 +8,11 @@ import type {
 	ListActorsInput,
 	ManagerDriver,
 } from "@/manager/driver";
+import { buildManagerRouter } from "@/manager/router";
+import { type RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 import { LegacyRunnerConfigSchema } from "@/registry/config/legacy-runner";
 import { VERSION } from "@/utils";
 import { toJsonSchema } from "./schema-utils";
-import { buildManagerRouter } from "@/manager/router";
-import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 
 async function main() {
 	const config: RegistryConfig = RegistryConfigSchema.parse({
@@ -36,7 +36,6 @@ async function main() {
 		proxyRequest: unimplemented,
 		proxyWebSocket: unimplemented,
 		displayInformation: unimplemented,
-		getOrCreateInspectorAccessToken: unimplemented,
 		setGetUpgradeWebSocket: unimplemented,
 	};
 
