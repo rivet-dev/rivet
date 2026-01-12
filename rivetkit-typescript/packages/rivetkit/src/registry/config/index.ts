@@ -166,7 +166,7 @@ export const RegistryConfigSchema = z
 				ctx.addIssue({
 					code: "custom",
 					message:
-						"advertiseEndpoint is required in production mode without endpoint",
+						"must specify either endpoint or advertiseEndpoint when in production mode",
 					path: ["advertiseEndpoint"],
 				});
 			}
@@ -212,7 +212,7 @@ export const RegistryConfigSchema = z
 			serveManager = config.serveManager ?? false;
 			invariant(
 				config.serverless.advertiseEndpoint,
-				"advertiseEndpoint is required in production mode without endpoint",
+				"advertiseEndpoint not specified in production mode",
 			);
 			advertiseEndpoint = config.serverless.advertiseEndpoint;
 		}

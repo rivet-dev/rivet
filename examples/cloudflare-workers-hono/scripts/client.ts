@@ -1,5 +1,5 @@
 async function main() {
-	const endpoint = process.env.RIVETKIT_ENDPOINT || "http://localhost:8787";
+	const endpoint = process.env.RIVET_ENDPOINT || "http://localhost:8787";
 	const res = await fetch(`${endpoint}/increment/foo`, {
 		method: "POST",
 	});
