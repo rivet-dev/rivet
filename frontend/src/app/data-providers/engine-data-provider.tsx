@@ -6,7 +6,7 @@ import {
 	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
-import { INSPECTOR_TOKEN_KV_KEY } from "rivetkit/inspector";
+import { KV_KEYS } from "rivetkit";
 import z from "zod";
 import { getConfig, ls } from "@/components";
 import type { ActorId } from "@/components/actors";
@@ -383,8 +383,10 @@ export const createNamespaceContext = ({
 				queryFn: async ({ signal: abortSignal }) => {
 					const response = await client.actorsKvGet(
 						actorId,
-						// @ts-expect-error
-						INSPECTOR_TOKEN_KV_KEY.toBase64(),
+						KV_KEYS
+							// @ts-expect-error
+							.toBase64(),
+						{ namespace },
 						{ abortSignal },
 					);
 
