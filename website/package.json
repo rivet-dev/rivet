@@ -3,7 +3,7 @@
 	"version": "2.0.21",
 	"private": true,
 	"scripts": {
-		"dev": "pnpm prebuild && next dev",
+		"dev": "pnpm prebuild && next dev --webpack",
 		"build": "pnpm prebuild && next build --webpack && next-sitemap",
 		"lint": "next lint",
 		"format": "prettier --write .",
