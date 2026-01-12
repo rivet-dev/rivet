@@ -50,29 +50,32 @@ console.log(result); // The value returned by the action
 Learn more about [communicating with actors from the frontend](/docs/actors/communicating-between-actors).
 
 </Tab>
-<Tab title="Backend (registry.start)">
+<Tab title="Backend (registry.handler)">
 
 ```typescript {{"title":"server.ts"}}
 import { setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
 import { Hono } from "hono";
-import { serve } from "@hono/node-server";
 
 const registry = setup({
   use: { counter }
 });
 
-const { client } = registry.start();
+const client = createClient<typeof registry>();
 
 const app = new Hono();
 
+// Mount Rivet handler
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
 // Use the client to call actions on a request
-app.get("/foo", () => {
-	const counter = await client.counter.getOrCreate();
+app.get("/foo", async (c) => {
+	const counter = client.counter.getOrCreate();
 	const result = await counter.increment(42);
-	c.text(result);
+	return c.text(String(result));
 });
 
-serve(app);
+export default app;
 ```
 
 Learn more about [communicating with actors from the backend](/docs/actors/communicating-between-actors).

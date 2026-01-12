@@ -68,14 +68,15 @@ RIVETKIT_LOG_LEVEL=debug RIVETKIT_LOG_TARGET=1 RIVETKIT_LOG_TIMESTAMP=1 node ser
 
 ### Log Level
 
-You can configure the log level programmatically when running your server:
+You can configure the log level programmatically when setting up your registry:
 
 ```typescript
-registry.start({
+const registry = setup({
+	use: { counter },
 	logging: {
 		logLevel: "debug"
 	}
-})
+});
 ```
 
 ### Custom Pino Logger
@@ -92,11 +93,12 @@ const customLogger = pino({
   }
 });
 
-registry.start({
+const registry = setup({
+	use: { counter },
 	logging: {
 		baseLogger: customLogger,  // Use your custom Pino logger
 	}
-})
+});
 ```
 
 If using a custom base logger, you must manually configure your own log level in the Pino logger.
@@ -108,8 +110,9 @@ For more advanced Pino configuration options, see the [Pino API documentation](h
 You can disable the default RivetKit welcome message with:
 
 ```typescript
-registry.start({
+const registry = setup({
+	use: { counter },
 	noWelcome: true
-})
+});
 ```
 

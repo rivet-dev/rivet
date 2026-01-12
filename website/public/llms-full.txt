@@ -44,14 +44,17 @@ Learn more about [communicating with actors from the frontend](/docs/actors/comm
 const registry = setup(
 });
 
-const  = registry.start();
+const client = createClient();
 
 const app = new Hono();
 
-// Use the client to call actions on a request
-app.get("/foo", () => );
+// Mount Rivet handler
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 
-serve(app);
+// Use the client to call actions on a request
+app.get("/foo", async (c) => );
+
+default app;
 ```
 
 Learn more about [communicating with actors from the backend](/docs/actors/communicating-between-actors).
@@ -749,7 +752,7 @@ Clients are used to get and communicate with actors from your application. Clien
 		From your backend server that hosts the registry:
 
 		```typescript
-		const  = registry.start();
+		const client = createClient();
 		```
 
 		From within an actor to communicate with other actors:
@@ -1823,27 +1826,6 @@ Use `state` when:
 
 - The data must be preserved across actor sleeps, restarts, updates, or crashes
 - The information is essential to the actor's core functionality and business logic
-
-## Advanced
-
-### Accessing Driver Context
-
-The `createVars` function receives a second parameter that provides access to driver-specific context. This allows you to access driver-specific functionality.
-
-For example, the Redis driver exposes access to the Redis instance:
-
-```typescript
-const myActor = actor(,
-
-  // The second parameter provides driver-specific context
-  createVars: (ctx: CreateVarsContext, driver: DriverContext) => (),
-  
-  actions: 
-  }
-});
-```
-
-Consult the documentation for each driver to learn more about their respective `DriverContext` types.
 ## Errors
 
 # Errors
@@ -3295,6 +3277,8 @@ console.log("Actor metadata:", metadata);
 
 Get started with Rivet Actors in Node.js and Bun
 
+## Steps
+
 ```sh
 npm install rivetkit
 ```
@@ -3311,85 +3295,13 @@ const registry = setup(,
 });
 ```
 
-Choose your preferred web framework:
-
-```ts }
-// Start Rivet
-const  = registry.start();
-```
-
-```ts }
-// Start Rivet
-const  = registry.start();
-
-// Setup Hono app
-const app = new Hono();
-
-// Example API endpoint
-app.post("/increment/:name", async (c) => );
-});
-
-// Start server
-serve(app);
-```
-
-```ts }
-// Start Rivet
-const  = registry.start();
-
-// Setup Express app
-const app = express();
-app.use(express.json());
-
-// Example API endpoints
-app.post("/increment/:name", async (req, res) =>  = req.params;
-
-      const counter = client.counter.getOrCreate(name);
-      const newCount = await counter.increment(1);
-      
-      res.json();
-});
-
-app.listen(8080, () => );
-```
-
-```ts }
-// Start Rivet
-const  = registry.start();
-
-// Setup Elysia app
-const app = new Elysia()
-	.mount("/registry", handler)
-	.post("/increment/:name", async () =>  = params;
-
-		const counter = client.counter.getOrCreate(name);
-		const newCount = await counter.increment(1);
-
-		return ;
-	})
-	.listen(8080);
-
-console.log("Server running at http://localhost:8080");
-```
-
-```sh }
-npx tsx --watch server.ts
-```
-
-```sh }
-bun --watch server.ts
-```
-
-Your server is now running at `http://localhost:8080`
-
 This code can run either in your frontend or within your backend:
 
 ```ts }
-// Create typed client
-const client = createClient("http://localhost:8080");
+const client = createClient();
 
-// Use the counter actor directly
-const counter = client.counter.getOrCreate(["my-counter"]);
+// Get or create a counter actor for the key "my-counter"
+const counter = client.counter.getOrCreate("my-counter");
 
 // Call actions
 const count = await counter.increment(3);
@@ -3399,7 +3311,7 @@ console.log("New count:", count);
 const currentCount = await counter.getCount();
 console.log("Current count:", currentCount);
 
-// Listen to real-time events
+// Listen to realtime events
 const connection = counter.connect();
 connection.on("countChanged", (newCount) => );
 
@@ -3414,6 +3326,7 @@ const  = createRivetKit();
 
 function Counter() );
 
+	// Listen to realtime events
 	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => ;
@@ -3429,23 +3342,7 @@ function Counter() );
 
 See the [React documentation](/docs/clients/react) for more information.
 
-```rust }
-use rivetkit_client::;
-use serde_json::json;
-
-#[tokio::main]
-async fn main() -> Result> ", count);
-    }).await;
-    
-    // Call increment action
-    let result = counter.action("increment", vec![json!(1)]).await?;
-    println!("New count: ", result);
-    
-    Ok(())
-}
-```
-
-See the [Rust client documentation](/docs/clients/rust) for more information.
+## Configuration Options
 ## Cloudflare Workers Quickstart
 
 # Cloudflare Workers Quickstart
@@ -3471,7 +3368,7 @@ const registry = setup(,
 Choose your preferred web framework:
 
 ```ts }
-// The `/rivet` endpoint is automatically exposed here for external clients
+// The `/api/rivet` endpoint is automatically exposed here for external clients
 const  = createHandler(registry);
 ;
 ```
@@ -3482,13 +3379,13 @@ const app = new Hono } }>();
 app.post("/increment/:name", async (c) => );
 });
 
-// The `/rivet` endpoint is automatically exposed here for external clients
+// The `/api/rivet` endpoint is automatically exposed here for external clients
 const  = createHandler(registry, );
 ;
 ```
 
 ```ts }
-// The `/rivet` endpoint is automatically mounted on this router for external clients
+// The `/api//rivet` endpoint is automatically mounted on this router for external clients
 const  = createHandler(registry, ), ,
 			});
 		}
@@ -3510,8 +3407,8 @@ default ), ,
 			});
 		}
 
-		// Optional: Mount /rivet path to access actors from external clients
-		if (url.pathname.startsWith("/rivet")) 
+		// Optional: Mount /api/rivet path to access actors from external clients
+		if (url.pathname.startsWith("/api/rivet")) 
 
 		return new Response("Not Found", );
 	},
@@ -3567,13 +3464,13 @@ See the [Cloudflare Workers deployment guide](/docs/connect/cloudflare-workers) 
 
 ## Configuration Options
 
-### Connect Frontend To The Rivet Actor
+### Connect To The Rivet Actor
 
-Create a type-safe client to connect from your frontend:
+Create a type-safe client to connect from your frontend or another service:
 
 ```ts }
 // Create typed client (use your deployed URL)
-const client = createClient("https://your-app.workers.dev/rivet");
+const client = createClient("https://your-app.workers.dev/api/rivet");
 
 // Use the counter actor directly
 const counter = client.counter.getOrCreate(["my-counter"]);
@@ -3597,7 +3494,7 @@ await connection.increment(1);
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 ```tsx }
-const  = createRivetKit("https://your-app.workers.dev/rivet");
+const  = createRivetKit("https://your-app.workers.dev/api/rivet");
 
 function Counter() );
 
@@ -3634,7 +3531,7 @@ async fn main() -> Result> ", count);
 
 See the [Rust client documentation](/docs/clients/rust) for more information.
 
-	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
+	Cloudflare Workers mounts the Rivet endpoint on `/api/rivet` by default.
 ## Quickstart
 
 # Quickstart
@@ -3677,7 +3574,7 @@ const maxDuration = 300;
 const  = toNextHandler(registry);
 ```
 
-Create a file at `src/components/Counter.tsx` to use the actor in a component:
+Create a Counter component and add it to your page:
 
 ```tsx }
 "use client";
@@ -3688,6 +3585,7 @@ const  = createRivetKit(
 
 function Counter() );
 
+	// Listen to realtime events
 	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => ;
@@ -3701,20 +3599,20 @@ function Counter() );
 }
 ```
 
-Import the `Counter` component in your page or layout to use it.
+```tsx }
+default function Home() 
+```
 
-For more examples on connecting to your actors using React, check the [React documentation for RivetKit](/docs/clients/react).
+For information about the Next.js client API, see the [React Client API Reference](/docs/clients/react).
 
-See the [Vercel deployment guide](/docs/connect/vercel) for detailed instructions on deploying your RivetKit app to Vercel.
-
-## API Reference
-
-For detailed information about the Next.js client API, see the [React Client API Reference](/docs/clients/react).
+See the [Vercel deployment guide](/docs/connect/vercel) for detailed instructions on deploying your Rivet app to Vercel.
 ## React Quickstart
 
 # React Quickstart
 
-Build real-time React applications with Rivet Actors
+Build realtime React applications with Rivet Actors
+
+## Steps
 
 ```sh
 npm install rivetkit @rivetkit/react
@@ -3732,44 +3630,28 @@ const registry = setup(,
 });
 ```
 
-Start a server to run your actors:
-
-```ts }
-// Run server with default configuration
-registry.start();
-```
-
 Set up your React application:
 
 ```tsx }
 const  = createRivetKit();
 
-function App() );
+function Counter() );
 
+	// Listen to realtime events
 	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => ;
 
 	return (
 		
-			Rivet Counter
 			Count: 
-
-					Counter Name:
-					 setCounterName(e.target.value)}
-						style=}
-					/>
-
 			Increment
-
-				Connection Status: 
-				Try opening multiple tabs to see real-time sync.
-
+		
 	);
 }
-
-default App;
 ```
+
+For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
 
 Configure Vite for development:
 
@@ -3782,29 +3664,15 @@ Start both the backend and frontend:
 
 **Terminal 1**: Start the backend
 
-```sh Backend
-npx tsx --watch backend/server.ts
-```
-
 **Terminal 2**: Start the frontend
 
-```sh Frontend  
+```sh Frontend
 npx vite
 ```
 
-Open `http://localhost:5173` in your browser. Try opening multiple tabs to see real-time sync in action.
+Open `http://localhost:5173` in your browser. Try opening multiple tabs to see realtime sync in action.
 
 ## Configuration Options
-
-### Add Your Own Backend Endpoints
-
-Add custom HTTP endpoints alongside your actors to handle additional business logic, authentication, and integrations with external services.
-
-See [backend quickstart](/docs/actors/quickstart/backend) for more information.
-
-## API Reference
-
-For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
 ## Low-Level HTTP Request Handler
 
 # Low-Level HTTP Request Handler
@@ -3941,10 +3809,6 @@ This page has moved to [design patterns](/docs/actors/design-patterns).
 # Schedule
 
 Scheduling is used to trigger events in the future. The actor scheduler is like `setTimeout`, except the timeout will persist even if the actor restarts, upgrades, or crashes.
-
-	Scheduling is supported on the Rivet Cloud, Cloudflare Workers, file system, and memory drivers.
-
-	Follow [this issue](https://github.com/rivet-dev/rivetkit/issues/1095) for Redis support.
 
 ## Use Cases
 
@@ -4914,12 +4778,9 @@ npm install rivetkit hono
 Update your server code to run the registry serverless with Deno.
 
 ```typescript }
-const  = registry.start(/api`,
-});
-
 // Freestyle uses Deno under the hood for web deployments
 // @ts-ignore
-Deno.serve(fetch);
+Deno.serve((request: Request) => registry.handler(request));
 ```
 
 Deploy your application to Freestyle with the correct configuration. Create a deployment script or add this to your existing deployment process:
@@ -5052,9 +4913,7 @@ Please see the [VM & Bare Metal](/docs/connect/vm-and-bare-metal) guide.
 
 Rivet supports deployment to a wide range of platforms, from serverless functions to self-hosted infrastructure.
 
-      ))}
-
-))}
+  ))}
 ## Deploying to Kubernetes
 
 # Deploying to Kubernetes
@@ -5206,22 +5065,56 @@ _Supabase is coming soon_
 
 # Deploying to Vercel
 
-Deploy your Next.js + RivetKit app to [Vercel](https://vercel.com/).
-
-Complete example Next.js + RivetKit app.
+Deploy your RivetKit app to [Vercel](https://vercel.com/).
 
 ## Guide
 
 - [Vercel account](https://vercel.com/)
-- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
-- A Next.js app integrated with RivetKit
-  - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivet/tree/main/examples/next-js) to get started
-  - Your project should have the following files:
-    - `src/app/api/rivet/[...all]/route.ts`
-    - `src/rivet/registry.ts`
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/self-hosting)
+
+Make sure your project is configured correctly for Vercel deployment.
+
+Your Next.js project should have the following structure:
+
+- `src/app/api/rivet/[...all]/route.ts`: RivetKit route handler
+- `src/actors.ts`: Actor definitions and registry
+
+See the [Next.js quickstart](/docs/actors/quickstart/next-js) or the [Next.js template](/templates/next-js) to get started.
+
+Your Hono project needs:
+
+1. A `vercel.json` file with the Hono framework specified:
+
+```json }
+
+```
+
+2. Your server file must import from `"hono"` for Vercel to recognize the framework:
+
+```ts }
+// You MUST for Vercel to detect this as a Hono app
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+default app;
+```
+
+3. Use `.ts` file extensions in imports and configure your `tsconfig.json`:
+
+```json }
+
+}
+```
+
+See the [Hello World template](/templates/hello-world) for a complete example.
+
+For more details on Hono deployments, see [Vercel's Hono documentation](https://vercel.com/docs/frameworks/backend/hono).
+
+Vercel currently supports Next.js and Hono frameworks for RivetKit deployments.
+
+For other frameworks, consider deploying to [Railway](/docs/connect/railway), [Kubernetes](/docs/connect/kubernetes), or another platform.
 
 1. Connect your GitHub project to Vercel
-2. Select your repository containing your Next.js + RivetKit app
+2. Select your repository containing your RivetKit app
 3. Vercel will deploy your app
 
 More information on deployments are available in [Vercel's docs](https://vercel.com/docs/deployments).
@@ -5930,11 +5823,12 @@ RIVETKIT_LOG_LEVEL=debug RIVETKIT_LOG_TARGET=1 RIVETKIT_LOG_TIMESTAMP=1 node ser
 
 ### Log Level
 
-You can configure the log level programmatically when running your server:
+You can configure the log level programmatically when setting up your registry:
 
 ```typescript
-registry.start(
-})
+const registry = setup(,
+	logging: 
+});
 ```
 
 ### Custom Pino Logger
@@ -5945,8 +5839,9 @@ You can also provide a custom Pino base logger for more advanced logging configu
 const customLogger = pino(
 });
 
-registry.start(
-})
+const registry = setup(,
+	logging: 
+});
 ```
 
 If using a custom base logger, you must manually configure your own log level in the Pino logger.
@@ -5958,7 +5853,179 @@ For more advanced Pino configuration options, see the [Pino API documentation](h
 You can disable the default RivetKit welcome message with:
 
 ```typescript
-registry.start()
+const registry = setup(,
+	noWelcome: true
+});
+```
+## Runtime Modes
+
+# Runtime Modes
+
+RivetKit supports two runtime modes for running your actors:
+
+- **Serverless**: Default mode. Responds to HTTP requests and scales automatically.
+- **Runners**: Background processes without HTTP endpoints. Only needed for advanced scenarios.
+
+## Serverless
+
+Serverless is the default and recommended mode. Rivet sends HTTP requests to your backend to run actor logic, allowing your infrastructure to scale automatically.
+
+### Benefits
+
+- **Platform support**: Works with serverless platforms (Vercel, Cloudflare Workers, etc.)
+- **Scale to zero**: No cost when idle
+- **Edge deployments**: Easier to deploy to edge locations
+- **Preview deployments**: Integrates with preview deployments on platforms like Vercel and Railway
+- **Efficient autoscaling**: Request-based autoscaling can be faster and more efficient than CPU-based autoscaling depending on the platform
+
+### Example
+
+```typescript }
+default registry.serve();
+```
+
+```typescript }
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+default app;
+```
+
+See [Server Setup](/docs/general/server-setup/) for more configuration options.
+
+### Architecture
+
+When a client creates an actor, it sends a request to the Rivet Engine. The engine then calls `GET /api/rivet/start` on your serverless backend to run the actor.
+
+### Advanced
+
+#### Endpoints
+
+Rivet exposes the following endpoints:
+
+- `GET /api/rivet/metadata`: Validates configuration
+- `GET /api/rivet/start`: Runs an actor
+
+You should never call these endpoints yourself, this is included purely for comprehension of how Rivet works under the hood.
+
+#### Timeouts
+
+Serverless platforms like Vercel have function timeouts. Rivet handles this automatically by migrating actors between function invocations, preserving state through `ctx.state`. Write your code as if it runs forever, Rivet handles the rest.
+
+Read more about [how we handle timeouts](/blog/2025-10-20-how-we-built-websocket-servers-for-vercel-functions/#timeouts-and-failover).
+
+## Runners
+
+Runners run actors as long-running background processes without exposing an HTTP endpoint.
+
+### When to Use Runners
+
+- **No HTTP server**: Your app does not or cannot expose an HTTP server
+- **No load balancer**: You don't have a load balancer to distribute HTTP requests across your servers
+- **Custom scaling**: You have custom scaling requirements
+
+### Example
+
+```typescript }
+registry.startRunner();
+```
+
+The runner runs in the background, ready to run actors.
+
+### Architecture
+
+On startup, your backend calls `registry.startRunner()` which opens a persistent connection to the Rivet Engine. When a client creates an actor, the engine sends a command through this connection to start the actor on your backend.
+
+## Comparison
+
+| Mode | Method | Use Case |
+|------|--------|----------|
+| Serverless | `registry.serve()` | Default, recommended for most deployments |
+| Serverless | `registry.handler()` | Integrating with existing routers (Hono, Elysia, etc.) |
+| Runner | `registry.startRunner()` | Long-running processes without HTTP endpoints |
+## Server Setup
+
+# Server Setup
+
+Different ways to run your RivetKit server.
+
+## Methods of Running Your Server
+
+### With Fetch Handlers
+
+A [fetch handler](https://wintercg.org/) is a function that takes a `Request` and returns a `Response`. This is the standard pattern used by Cloudflare Workers, Deno Deploy, Bun, and other modern runtimes.
+
+The simplest setup uses `registry.serve()`:
+
+```ts }
+default registry.serve();
+```
+
+To integrate with a router like [Hono](https://hono.dev/) or [Elysia](https://elysiajs.com/), use `registry.handler()`:
+
+```ts }
+const app = new Hono();
+app.get("/health", (c) => c.text("OK"));
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+default app;
+```
+
+```ts }
+const app = new Elysia()
+  .get("/health", () => "OK")
+  .all("/api/rivet/*", () => registry.handler(request));
+
+default app;
+```
+
+Then run your server:
+
+```bash }
+npx srvx server.ts
+```
+
+```bash }
+bun server.ts
+```
+
+```bash }
+deno run --allow-net --allow-read --allow-env server.ts
+```
+
+	[srvx](https://srvx.h3.dev/) is a universal server runner for fetch handlers. It compiles TypeScript on-the-fly for Node.js and can be used in production. Bun and Deno support fetch handlers and TypeScript natively.
+
+### Explicit HTTP Server
+
+If you need to explicitly start the HTTP server instead of using the fetch handler pattern:
+
+Using `@whatwg-node/server` to adapt the fetch handler to Node's HTTP server:
+
+```ts }
+const handler = createServerAdapter(registry.serve().fetch);
+const server = createServer(handler);
+server.listen(3000);
+```
+
+Using Bun's native server:
+
+```ts }
+Bun.serve();
+```
+
+Using Deno's native server:
+
+```ts }
+Deno.serve(, (request) => registry.handler(request));
+```
+
+Using Hono with `@hono/node-server`:
+
+```ts }
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+serve();
 ```
 ## Overview
 

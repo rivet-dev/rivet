@@ -6,7 +6,8 @@ const client = createClient<typeof registry>();
 
 const app = new Hono();
 
-// Example HTTP endpoint
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
 app.post("/increment/:name", async (c) => {
 	const name = c.req.param("name");
 
@@ -15,7 +16,5 @@ app.post("/increment/:name", async (c) => {
 
 	return c.text(`New Count: ${newCount}`);
 });
-
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 
 export default app;
