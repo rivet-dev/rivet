@@ -5,6 +5,7 @@ import type { ReleaseOpts } from "./main";
 import {
 	copyReleasesPath,
 	deleteReleasesPath,
+	fetchGitRef,
 	listReleasesObjects,
 	uploadContentToReleases,
 	versionOrCommitToRef,
@@ -15,9 +16,8 @@ export async function promoteArtifacts(opts: ReleaseOpts) {
 	let sourceCommit = opts.commit;
 	if (opts.reuseEngineVersion) {
 		console.log(`==> Reusing artifacts from ${opts.reuseEngineVersion}`);
-		console.log(`==> Fetching tags...`);
-		await $({ stdio: "inherit" })`git fetch --tags`;
 		const ref = versionOrCommitToRef(opts.reuseEngineVersion);
+		await fetchGitRef(ref);
 		const result = await $`git rev-parse ${ref}`;
 		sourceCommit = result.stdout.trim().slice(0, 7);
 		console.log(`==> Source commit: ${sourceCommit}`);

@@ -23,6 +23,19 @@ export function versionOrCommitToRef(versionOrCommit: string): string {
 	return versionOrCommit;
 }
 
+/**
+ * Fetches a git ref from the remote. For tags, fetches all tags. For commits, fetches the specific commit.
+ */
+export async function fetchGitRef(ref: string): Promise<void> {
+	if (ref.startsWith("v")) {
+		console.log(`Fetching tags...`);
+		await $({ stdio: "inherit" })`git fetch --tags --force`;
+	} else {
+		console.log(`Fetching commit ${ref}...`);
+		await $({ stdio: "inherit" })`git fetch origin ${ref}`;
+	}
+}
+
 interface ReleasesS3Config {
 	awsEnv: Record<string, string>;
 	endpointUrl: string;
