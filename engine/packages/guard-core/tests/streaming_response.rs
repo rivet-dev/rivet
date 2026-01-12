@@ -1,6 +1,5 @@
 mod common;
 
-use anyhow::bail;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{BodyExt, Full};
@@ -246,15 +245,15 @@ fn create_streaming_routing_fn(server_addr: SocketAddr) -> RoutingFn {
 						path: path.to_string(),
 					};
 
-					Ok(RoutingOutput::Route(RouteConfig {
+					return Ok(RoutingOutput::Route(RouteConfig {
 						targets: vec![target],
 						timeout: RoutingTimeout {
 							routing_timeout: 30, // 30 seconds for routing timeout
 						},
-					}))
+					}));
 				}
 
-				bail!("bad path");
+				Err(anyhow::anyhow!("bad path"))
 			})
 		},
 	)

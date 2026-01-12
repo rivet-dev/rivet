@@ -121,8 +121,8 @@ fn test_error_chaining() {
 // Test struct without formatted description (from derive.rs)
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
-	"namespace",
-	"invalid_name",
+	"test",
+	"namespace_invalid_name",
 	"
 	Invalid namespace name.
 	
@@ -144,8 +144,8 @@ fn test_struct_without_formatted_description() {
 	.build();
 	let rivet_error = RivetError::extract(&error);
 
-	assert_eq!(rivet_error.group(), "namespace");
-	assert_eq!(rivet_error.code(), "invalid_name");
+	assert_eq!(rivet_error.group(), "test");
+	assert_eq!(rivet_error.code(), "namespace_invalid_name");
 	assert!(rivet_error.message().contains("Invalid namespace name"));
 	assert!(rivet_error.meta.is_some());
 
@@ -159,8 +159,8 @@ fn test_struct_without_formatted_description() {
 // Test multiline description formatting (from derive.rs)
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
-	"api",
-	"rate_limited",
+	"test",
+	"api_rate_limited",
 	"
 	Rate limit exceeded.
 	
@@ -184,8 +184,8 @@ fn test_multiline_descriptions() {
 	.build();
 	let rivet_error = RivetError::extract(&error);
 
-	assert_eq!(rivet_error.group(), "api");
-	assert_eq!(rivet_error.code(), "rate_limited");
+	assert_eq!(rivet_error.group(), "test");
+	assert_eq!(rivet_error.code(), "api_rate_limited");
 	assert_eq!(
 		rivet_error.message(),
 		"Rate limit exceeded. Limit: 100, resets at: 1234567890"

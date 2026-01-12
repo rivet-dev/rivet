@@ -141,7 +141,7 @@ pub async fn find_dc_for_actor_creation(
 		// Use user-configured DC
 		ctx.config()
 			.dc_for_name(dc_name)
-			.ok_or_else(|| crate::errors::Datacenter::NotFound.build())?
+			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
 			.datacenter_label
 	} else {
 		// Find the nearest DC with runners
