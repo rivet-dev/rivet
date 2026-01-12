@@ -1,16 +1,12 @@
 import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { ClientConfigSchema } from "@/client/config";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import type {
-	ActorOutput,
-	ListActorsInput,
 	ManagerDriver,
 } from "@/manager/driver";
 import { buildManagerRouter } from "@/manager/router";
 import { type RegistryConfig, RegistryConfigSchema } from "@/registry/config";
-import { LegacyRunnerConfigSchema } from "@/registry/config/legacy-runner";
 import { VERSION } from "@/utils";
 import { toJsonSchema } from "./schema-utils";
 
@@ -26,18 +22,19 @@ async function main() {
 	// const registry = setup(registryConfig);
 
 	const managerDriver: ManagerDriver = {
-		getForId: unimplemented,
-		getWithKey: unimplemented,
-		getOrCreateWithKey: unimplemented,
-		createActor: unimplemented,
-		listActors: unimplemented,
-		sendRequest: unimplemented,
-		openWebSocket: unimplemented,
-		proxyRequest: unimplemented,
-		proxyWebSocket: unimplemented,
-		displayInformation: unimplemented,
-		setGetUpgradeWebSocket: unimplemented,
-	};
+        getForId: unimplemented,
+        getWithKey: unimplemented,
+        getOrCreateWithKey: unimplemented,
+        createActor: unimplemented,
+        listActors: unimplemented,
+        sendRequest: unimplemented,
+        openWebSocket: unimplemented,
+        proxyRequest: unimplemented,
+        proxyWebSocket: unimplemented,
+        displayInformation: unimplemented,
+        setGetUpgradeWebSocket: unimplemented,
+        kvGet: unimplemented,
+    };
 
 	// const client = createClientWithDriver(
 	// 	managerDriver,

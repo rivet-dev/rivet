@@ -3,6 +3,7 @@ import type { Actions, ActorConfig } from "./config";
 import type { ActionContextOf, ActorContext } from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
 import { ActorInstance } from "./instance/mod";
+import { DeepMutable } from "@/utils";
 
 export type AnyActorDefinition = ActorDefinition<
 	any,

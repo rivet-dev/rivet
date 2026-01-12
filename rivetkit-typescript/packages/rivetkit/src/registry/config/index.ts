@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 import { resolveEndpoint } from "@/client/config";
 import { type Logger, LogLevelSchema } from "@/common/log";
+import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";
 import {
 	EndpointSchema,
@@ -12,6 +13,7 @@ import { getRivetNamespace, getRivetToken, isDev } from "@/utils/env-vars";
 import { type DriverConfig, DriverConfigSchema } from "./driver";
 import { RunnerConfigSchema } from "./runner";
 import { ServerlessConfigSchema } from "./serverless";
+import { DeepReadonly } from "@/utils";
 
 export { DriverConfigSchema, type DriverConfig };
 
@@ -155,23 +157,26 @@ export const RegistryConfigSchema = z
 				});
 			}
 
-			// clientEndpoint required in production without endpoint
+			// advertiseEndpoint required in production without endpoint
 			if (
 				!isDevEnv &&
 				!resolvedEndpoint &&
-				!config.serverless.clientEndpoint
+				!config.serverless.advertiseEndpoint
 			) {
 				ctx.addIssue({
 					code: "custom",
 					message:
-						"clientEndpoint is required in production mode without endpoint",
-					path: ["clientEndpoint"],
+						"advertiseEndpoint is required in production mode without endpoint",
+					path: ["advertiseEndpoint"],
 				});
 			}
 		}
 
 		// Flatten the endpoint and apply defaults for namespace/token
-		const endpoint = resolvedEndpoint?.endpoint;
+		// If spawnEngine is enabled, set endpoint to the engine endpoint
+		const endpoint = config.serverless?.spawnEngine
+			? ENGINE_ENDPOINT
+			: resolvedEndpoint?.endpoint;
 		const namespace =
 			resolvedEndpoint?.namespace ??
 			config.namespace ??
@@ -185,32 +190,31 @@ export const RegistryConfigSchema = z
 		// - If dev mode without endpoint: start manager server
 		// - If prod mode without endpoint: do not start manager server
 		let serveManager: boolean;
-		let clientEndpoint: string;
+		let advertiseEndpoint: string | undefined;
 
 		if (endpoint) {
 			// Remote endpoint provided:
 			// - Do not start manager server
 			// - Redirect clients to remote endpoint
 			serveManager = config.serveManager ?? false;
-			clientEndpoint = config.serverless.clientEndpoint ?? endpoint;
+			advertiseEndpoint =
+				config.serverless.advertiseEndpoint ?? endpoint;
 		} else if (isDevEnv) {
 			// Development mode, no endpoint:
 			// - Start manager server
 			// - Redirect clients to local server
 			serveManager = config.serveManager ?? true;
-			clientEndpoint =
-				config.serverless.clientEndpoint ??
-				`http://localhost:${config.managerPort}`;
+			advertiseEndpoint = config.serverless.advertiseEndpoint;
 		} else {
 			// Production mode, no endpoint:
 			// - Do not start manager server
 			// - Use file system driver
 			serveManager = config.serveManager ?? false;
 			invariant(
-				config.serverless.clientEndpoint,
-				"clientEndpoint is required in production mode without endpoint",
+				config.serverless.advertiseEndpoint,
+				"advertiseEndpoint is required in production mode without endpoint",
 			);
-			clientEndpoint = config.serverless.clientEndpoint;
+			advertiseEndpoint = config.serverless.advertiseEndpoint;
 		}
 
 		// If endpoint is set or spawning engine, we'll use engine driver - disable manager inspector
@@ -224,15 +228,16 @@ export const RegistryConfigSchema = z
 
 		return {
 			...config,
-			serverless: {
-				...config.serverless,
-				clientEndpoint,
-			},
 			endpoint,
 			namespace,
 			token,
 			serveManager,
+			advertiseEndpoint,
 			inspector,
+			serverless: {
+				...config.serverless,
+				advertiseEndpoint,
+			},
 		};
 	});
 
