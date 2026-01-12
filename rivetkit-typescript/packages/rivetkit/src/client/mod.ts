@@ -1,5 +1,5 @@
-import type { Registry } from "@/registry";
 import { injectDevtools } from "@/devtools-loader";
+import type { Registry } from "@/registry";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import {
 	type Client,
@@ -22,13 +22,14 @@ export {
 	ManagerError,
 } from "@/client/errors";
 export type { CreateRequest } from "@/manager/protocol/query";
+export { KEYS as KV_KEYS } from "../actor/instance/kv";
 export type { ActorActionFunction } from "./actor-common";
 export type {
 	ActorConn,
+	ActorConnStatus,
 	ConnectionStateCallback,
 	EventUnsubscribe,
 	StatusChangeCallback,
-	ActorConnStatus,
 } from "./actor-conn";
 export { ActorConnRaw } from "./actor-conn";
 export type { ActorHandle } from "./actor-handle";
