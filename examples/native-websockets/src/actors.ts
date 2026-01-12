@@ -1,4 +1,4 @@
-import { actor, setup, type UniversalWebSocket } from "rivetkit";
+import { actor, setup, type UniversalWebSocket, type RivetMessageEvent } from "rivetkit";
 
 interface Vars {
 	websockets: Map<string, UniversalWebSocket>;
@@ -64,7 +64,7 @@ export const cursorRoom = actor({
 		);
 
 		// Handle incoming messages
-		websocket.addEventListener("message", (event) => {
+		websocket.addEventListener("message", (event: RivetMessageEvent) => {
 			try {
 				const message = JSON.parse(event.data as string);
 

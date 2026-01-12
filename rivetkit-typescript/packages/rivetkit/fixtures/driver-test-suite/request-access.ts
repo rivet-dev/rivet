@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, type RivetMessageEvent } from "rivetkit";
 
 /**
  * Test fixture to verify request object access in all lifecycle hooks
@@ -136,7 +136,7 @@ export const requestAccessActor = actor({
 		);
 
 		// Echo messages back
-		websocket.addEventListener("message", (event) => {
+		websocket.addEventListener("message", (event: RivetMessageEvent) => {
 			websocket.send(event.data);
 		});
 	},
