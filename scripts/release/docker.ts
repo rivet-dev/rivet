@@ -1,5 +1,5 @@
 import { $ } from "execa";
-import { versionOrCommitToRef } from "./utils";
+import { fetchGitRef, versionOrCommitToRef } from "./utils";
 
 const REPOS = [
 	{ name: "rivetkit/engine", prefix: "slim", main: true },
@@ -16,10 +16,8 @@ export async function tagDocker(opts: {
 	let sourceCommit = opts.commit;
 	if (opts.reuseEngineVersion) {
 		console.log(`==> Reusing artifacts from ${opts.reuseEngineVersion}`);
-		// Fetch tags to ensure we have the version tag
-		console.log(`==> Fetching tags...`);
-		await $({ stdio: "inherit" })`git fetch --tags`;
 		const ref = versionOrCommitToRef(opts.reuseEngineVersion);
+		await fetchGitRef(ref);
 		const result = await $`git rev-parse ${ref}`;
 		sourceCommit = result.stdout.trim().slice(0, 7);
 		console.log(`==> Source commit: ${sourceCommit}`);

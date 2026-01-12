@@ -16,7 +16,7 @@ import {
 } from "./git";
 import { publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
-import { assert, assertEquals, assertExists, versionOrCommitToRef } from "./utils";
+import { assert, assertEquals, assertExists, fetchGitRef, versionOrCommitToRef } from "./utils";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -105,12 +105,8 @@ async function shouldTagAsLatest(newVersion: string): Promise<boolean> {
 async function validateReuseVersion(version: string): Promise<void> {
 	console.log(`Validating that ${version} exists...`);
 
-	// Fetch tags to ensure we have the latest
-	// Use --force to overwrite local tags that conflict with remote
-	console.log(`Fetching tags...`);
-	await $({ stdio: "inherit" })`git fetch --tags --force`;
-
 	const ref = versionOrCommitToRef(version);
+	await fetchGitRef(ref);
 
 	// Get short commit from ref
 	let shortCommit: string;
