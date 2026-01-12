@@ -3,7 +3,7 @@ import type { registry } from "../src/registry";
 
 // Create RivetKit client
 const client = createClient<typeof registry>(
-	process.env.RIVETKIT_ENDPOINT ?? "http://localhost:8787/rivet",
+	process.env.RIVET_ENDPOINT ?? "http://localhost:8787/rivet",
 );
 
 async function main() {
