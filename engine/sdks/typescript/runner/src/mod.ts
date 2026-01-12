@@ -528,8 +528,8 @@ export class Runner {
 		this.#kvRequests.clear();
 
 		// Close WebSocket
-		if (this.__webSocketReady()) {
-			const pegboardWebSocket = this.#pegboardWebSocket;
+		const pegboardWebSocket = this.getPegboardWebSocketIfReady();
+		if (pegboardWebSocket) {
 			if (immediate) {
 				// Stop immediately
 				pegboardWebSocket.close(1000, "pegboard.runner_shutdown");
@@ -1634,7 +1634,7 @@ export class Runner {
 
 			this.#kvRequests.set(requestId, requestEntry);
 
-			if (this.__webSocketReady()) {
+			if (this.getPegboardWebSocketIfReady()) {
 				// Send immediately
 				this.#sendSingleKvRequest(requestId);
 			}
@@ -1667,7 +1667,7 @@ export class Runner {
 	}
 
 	#processUnsentKvRequests() {
-		if (!this.__webSocketReady()) {
+		if (!this.getPegboardWebSocketIfReady()) {
 			return;
 		}
 
@@ -1685,13 +1685,15 @@ export class Runner {
 	}
 
 	/** Asserts WebSocket exists and is ready. */
-	__webSocketReady(): this is this & {
-		__pegboardWebSocket: NonNullable<Runner["#pegboardWebSocket"]>;
-	} {
-		return (
+	getPegboardWebSocketIfReady(): WebSocket | undefined {
+		if (
 			!!this.#pegboardWebSocket &&
 			this.#pegboardWebSocket.readyState === 1
-		);
+		) {
+			return this.#pegboardWebSocket;
+		} else {
+			return undefined;
+		}
 	}
 
 	__sendToServer(message: protocol.ToServer) {
@@ -1701,8 +1703,9 @@ export class Runner {
 		});
 
 		const encoded = protocol.encodeToServer(message);
-		if (this.__webSocketReady()) {
-			this.#pegboardWebSocket.send(encoded);
+		const pegboardWebSocket = this.getPegboardWebSocketIfReady();
+		if (pegboardWebSocket) {
+			pegboardWebSocket.send(encoded);
 		} else {
 			this.log?.error({
 				msg: "WebSocket not available or not open for sending data",

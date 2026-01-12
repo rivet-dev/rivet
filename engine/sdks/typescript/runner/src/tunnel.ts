@@ -478,7 +478,7 @@ export class Tunnel {
 		messageKind: protocol.ToServerTunnelMessageKind,
 	) {
 		// Buffer message if not connected
-		if (!this.#runner.__webSocketReady()) {
+		if (!this.#runner.getPegboardWebSocketIfReady()) {
 			this.log?.debug({
 				msg: "buffering tunnel message, socket not connected to engine",
 				requestId: idToStr(requestId),
@@ -917,7 +917,7 @@ export class Tunnel {
 	) {
 		// NOTE: This method is safe to be async since we will not receive any
 		// further WebSocket events until we send a ToServerWebSocketOpen
-		// tunnel message. We can do any async logic we need to between thoes two events.
+		// tunnel message. We can do any async logic we need to between those two events.
 		//
 		// Sending a ToServerWebSocketClose will terminate the WebSocket early.
 
