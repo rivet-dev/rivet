@@ -1,4 +1,4 @@
-import { actor, setup, type UniversalWebSocket } from "rivetkit";
+import { actor, setup, type UniversalWebSocket, type RivetMessageEvent, type RivetCloseEvent } from "rivetkit";
 
 export interface CursorPosition {
 	userId: string;
@@ -95,7 +95,7 @@ export const cursorRoom = actor({
 		);
 
 		// Handle incoming messages
-		websocket.addEventListener("message", (event) => {
+		websocket.addEventListener("message", (event: RivetMessageEvent) => {
 			try {
 				const message = JSON.parse(event.data as string);
 
