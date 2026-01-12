@@ -43,12 +43,18 @@ export async function lookupMetadataCached(
 			minTimeout: 500,
 			maxTimeout: 15_000,
 			onFailedAttempt: (error) => {
-				logger().warn({
-					msg: "failed to fetch metadata, retrying",
-					endpoint,
-					attempt: error.attemptNumber,
-					error: stringifyError(error),
-				});
+				// Skip logging warning on first attempt since this attempt
+				// fails if called immediately on startup. This is because the
+				// runtime startup is an async operation that will not be
+				// available on the first tick.
+				if (error.attemptNumber > 1) {
+					logger().warn({
+						msg: "failed to fetch metadata, retrying",
+						endpoint,
+						attempt: error.attemptNumber,
+						error: stringifyError(error),
+					});
+				}
 			},
 		},
 	);
