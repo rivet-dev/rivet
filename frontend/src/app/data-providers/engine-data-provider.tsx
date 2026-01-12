@@ -6,7 +6,7 @@ import {
 	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
-import { KV_KEYS } from "rivetkit";
+import { KV_KEYS } from "rivetkit/client";
 import z from "zod";
 import { getConfig, ls } from "@/components";
 import type { ActorId } from "@/components/actors";
