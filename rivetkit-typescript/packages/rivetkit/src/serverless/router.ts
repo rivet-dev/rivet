@@ -94,7 +94,7 @@ export function buildServerlessRouter(
 				c,
 				config,
 				{ serverless: {} },
-				config.serverless.clientEndpoint,
+				config.serverless.advertiseEndpoint,
 			),
 		);
 	});

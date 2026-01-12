@@ -1,19 +1,19 @@
 import z from "zod";
 import { EncodingSchema } from "@/actor/protocol/serde";
+import { type GetUpgradeWebSocket } from "@/utils";
+import {
+	getRivetEngine,
+	getRivetEndpoint,
+	getRivetToken,
+	getRivetNamespace,
+	getRivetRunner,
+} from "@/utils/env-vars";
 import type { RegistryConfig } from "@/registry/config";
-import type { GetUpgradeWebSocket } from "@/utils";
 import {
 	EndpointSchema,
 	type ParsedEndpoint,
 	zodCheckDuplicateCredentials,
 } from "@/utils/endpoint-parser";
-import {
-	getRivetEndpoint,
-	getRivetEngine,
-	getRivetNamespace,
-	getRivetRunner,
-	getRivetToken,
-} from "@/utils/env-vars";
 
 /**
  * Base client config schema without transforms so it can be merged in to other schemas.

@@ -48,7 +48,7 @@ Choose your preferred web framework:
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
-// The `/rivet` endpoint is automatically exposed here for external clients
+// The `/api/rivet` endpoint is automatically exposed here for external clients
 const { handler, ActorHandler } = createHandler(registry);
 export { handler as default, ActorHandler };
 ```
@@ -71,16 +71,16 @@ app.post("/increment/:name", async (c) => {
 	return c.json({ count: newCount });
 });
 
-// The `/rivet` endpoint is automatically exposed here for external clients
+// The `/api/rivet` endpoint is automatically exposed here for external clients
 const { handler, ActorHandler } = createHandler(registry, { fetch: app.fetch });
 export { handler as default, ActorHandler };
 ```
 
-```ts {{"title":"No Router"}}
+```ts {{"title":"Manual Routing"}}
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
-// The `/rivet` endpoint is automatically mounted on this router for external clients
+// The `/api//rivet` endpoint is automatically mounted on this router for external clients
 const { handler, ActorHandler } = createHandler(registry, {
 	fetch: async (request, env, ctx) => {
 		const url = new URL(request.url);
@@ -133,9 +133,9 @@ export default {
 			});
 		}
 
-		// Optional: Mount /rivet path to access actors from external clients
-		if (url.pathname.startsWith("/rivet")) {
-			const strippedPath = url.pathname.substring("/rivet".length);
+		// Optional: Mount /api/rivet path to access actors from external clients
+		if (url.pathname.startsWith("/api/rivet")) {
+			const strippedPath = url.pathname.substring("/api/rivet".length);
 			url.pathname = strippedPath;
 			const modifiedRequest = new Request(url.toString(), request);
 			return rivetFetch(modifiedRequest, env, ctx);
@@ -248,7 +248,7 @@ import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 // Create typed client (use your deployed URL)
-const client = createClient<typeof registry>("https://your-app.workers.dev/rivet");
+const client = createClient<typeof registry>("https://your-app.workers.dev/api/rivet");
 
 // Use the counter actor directly
 const counter = client.counter.getOrCreate(["my-counter"]);
@@ -282,7 +282,7 @@ import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
 import type { registry } from "./registry";
 
-const { useActor } = createRivetKit<typeof registry>("https://your-app.workers.dev/rivet");
+const { useActor } = createRivetKit<typeof registry>("https://your-app.workers.dev/api/rivet");
 
 function Counter() {
 	const [count, setCount] = useState(0);
@@ -320,7 +320,7 @@ use serde_json::json;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new(
-        "https://your-app.workers.dev/rivet",
+        "https://your-app.workers.dev/api/rivet",
         TransportKind::Sse,
         EncodingKind::Json
     );
@@ -351,6 +351,6 @@ See the [Rust client documentation](/docs/clients/rust) for more information.
 </Tabs>
 
 <Note>
-	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
+	Cloudflare Workers mounts the Rivet endpoint on `/api/rivet` by default.
 </Note>
 

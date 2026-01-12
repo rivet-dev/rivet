@@ -243,6 +243,9 @@ export function createTestInlineClientDriver(
 		setGetUpgradeWebSocket: (getUpgradeWebSocketInner) => {
 			getUpgradeWebSocket = getUpgradeWebSocketInner;
 		},
+		kvGet: (_actorId: string, _key: Uint8Array) => {
+			throw new Error("kvGet not impelmented on inline client driver");
+		},
 	} satisfies ManagerDriver;
 }
 

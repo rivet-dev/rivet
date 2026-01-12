@@ -12,9 +12,9 @@ import {
 	importNodeDependencies,
 } from "@/utils/node";
 import { logger } from "./log";
+import { ENGINE_ENDPOINT, ENGINE_PORT } from "./constants";
 
-export const ENGINE_PORT = 6420;
-export const ENGINE_ENDPOINT = `http://localhost:${ENGINE_PORT}`;
+export { ENGINE_ENDPOINT, ENGINE_PORT };
 
 const ENGINE_BASE_URL = "https://releases.rivet.dev/rivet";
 const ENGINE_BINARY_NAME = "rivet-engine";
@@ -42,14 +42,7 @@ export async function ensureEngineProcess(
 	await ensureDirectoryExists(varDir);
 	await ensureDirectoryExists(logsDir);
 
-	const executableName =
-		process.platform === "win32"
-			? `${ENGINE_BINARY_NAME}-${options.version}.exe`
-			: `${ENGINE_BINARY_NAME}-${options.version}`;
-	const binaryPath = path.join(binDir, executableName);
-	await downloadEngineBinaryIfNeeded(binaryPath, options.version, varDir);
-
-	// Check if the engine is already running on the port
+	// Check if the engine is already running on the port before downloading
 	if (await isEngineRunning()) {
 		try {
 			const health = await waitForEngineHealth();
@@ -68,6 +61,13 @@ export async function ensureEngineProcess(
 			);
 		}
 	}
+
+	const executableName =
+		process.platform === "win32"
+			? `${ENGINE_BINARY_NAME}-${options.version}.exe`
+			: `${ENGINE_BINARY_NAME}-${options.version}`;
+	const binaryPath = path.join(binDir, executableName);
+	await downloadEngineBinaryIfNeeded(binaryPath, options.version, varDir);
 	// Create log file streams with timestamp in the filename
 	const timestamp = new Date()
 		.toISOString()
