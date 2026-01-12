@@ -15,9 +15,6 @@ export function Hosting() {
 				hosting provider of choice:
 			</p>
 
-			<p>
-				<b>Hosting Providers</b>
-			</p>
 			<CardGroup>
 				{hostingProviders
 					.filter((x) => !x.specializedPlatform)

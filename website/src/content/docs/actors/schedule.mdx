@@ -2,12 +2,6 @@
 
 Scheduling is used to trigger events in the future. The actor scheduler is like `setTimeout`, except the timeout will persist even if the actor restarts, upgrades, or crashes.
 
-<Warning>
-	Scheduling is supported on the Rivet Cloud, Cloudflare Workers, file system, and memory drivers.
-
-	Follow [this issue](https://github.com/rivet-dev/rivetkit/issues/1095) for Redis support.
-</Warning>
-
 ## Use Cases
 
 Scheduling is helpful for long-running timeouts like month-long billing periods or account trials.
