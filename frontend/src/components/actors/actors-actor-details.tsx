@@ -14,6 +14,7 @@ import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDatabaseTab } from "./actor-db-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorEventsTab } from "./actor-events-tab";
+import { ActorKvTab } from "./actor-kv-tab";
 import { ActorLogsTab } from "./actor-logs-tab";
 import { ActorMetricsTab } from "./actor-metrics-tab";
 import { ActorStateTab } from "./actor-state-tab";
@@ -122,6 +123,7 @@ export function ActorTabs({
 	const supportsMetrics = features?.includes(ActorFeature.Metrics);
 	const supportsEvents = features?.includes(ActorFeature.EventsMonitoring);
 	const supportsDatabase = features?.includes(ActorFeature.Database);
+	const supportsKv = features?.includes(ActorFeature.Kv);
 
 	const defaultTab = supportsState ? "state" : "logs";
 	const value = disabled ? undefined : tab || defaultTab;
@@ -172,6 +174,15 @@ export function ActorTabs({
 								className="text-xs px-3 py-1 pb-2"
 							>
 								Database
+							</TabsTrigger>
+						) : null}
+						{supportsKv ? (
+							<TabsTrigger
+								disabled={disabled}
+								value="kv"
+								className="text-xs px-3 py-1 pb-2"
+							>
+								KV
 							</TabsTrigger>
 						) : null}
 						{supportsLogs ? (
@@ -267,6 +278,16 @@ export function ActorTabs({
 						>
 							{guardContent || (
 								<ActorDatabaseTab actorId={actorId} />
+							)}
+						</TabsContent>
+					) : null}
+					{supportsKv ? (
+						<TabsContent
+							value="kv"
+							className="min-h-0 flex-1 mt-0"
+						>
+							{guardContent || (
+								<ActorKvTab actorId={actorId} />
 							)}
 						</TabsContent>
 					) : null}

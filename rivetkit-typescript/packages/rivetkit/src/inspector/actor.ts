@@ -301,6 +301,17 @@ interface ActorInspectorAccessors {
 	getRpcs: () => Promise<string[]>;
 	getConnections: () => Promise<Connection[]>;
 	executeAction: (name: string, params?: unknown[]) => Promise<unknown>;
+	getKvEntries: (options: {
+		prefix?: string;
+		limit?: number;
+		reverse?: boolean;
+	}) => Promise<
+		Array<{
+			key: string;
+			value: string;
+			updateTs: number;
+		}>
+	>;
 }
 
 interface ActorInspectorEmitterEvents {
