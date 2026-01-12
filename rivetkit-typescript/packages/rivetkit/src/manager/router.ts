@@ -4,12 +4,13 @@ import * as cbor from "cbor-x";
 import type { Hono } from "hono";
 import invariant from "invariant";
 import { z } from "zod";
-import { Forbidden, RestrictedFeature, Unsupported } from "@/actor/errors";
+import { Forbidden, RestrictedFeature } from "@/actor/errors";
 
 import { serializeActorKey } from "@/actor/keys";
 
 import type { Encoding } from "@/client/mod";
 import {
+	HEADER_RIVET_TOKEN,
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
@@ -22,7 +23,6 @@ import type {
 	TestInlineDriverCallRequest,
 	TestInlineDriverCallResponse,
 } from "@/driver-test-suite/test-inline-client-driver";
-import { compareSecrets } from "@/inspector/utils";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -39,7 +39,8 @@ import {
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
-import { type GetUpgradeWebSocket, getEnvUniversal } from "@/utils";
+import type { GetUpgradeWebSocket } from "@/utils";
+import { timingSafeEqual } from "@/utils/crypto";
 import { getNodeEnv } from "@/utils/env-vars";
 import {
 	buildOpenApiRequestBody,
@@ -330,9 +331,9 @@ export function buildManagerRouter(
 						throw new RestrictedFeature("KV store access");
 					}
 					if (
-						compareSecrets(
+						timingSafeEqual(
 							config.token,
-							c.req.header("x-rivet-token") || "",
+							c.req.header(HEADER_RIVET_TOKEN) || "",
 						) === false
 					) {
 						throw new Forbidden();
