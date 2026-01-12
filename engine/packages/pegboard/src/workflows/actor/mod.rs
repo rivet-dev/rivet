@@ -14,6 +14,8 @@ pub use runtime::AllocationOverride;
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
+/// How long an actor with crash_policy Restart should wait pending before setting itself to sleep.
+const RESTART_PENDING_TIMEOUT_MS: i64 = util::duration::seconds(60);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
@@ -1053,13 +1055,19 @@ async fn handle_stopped(
 
 		match (input.crash_policy, graceful_exit) {
 			(CrashPolicy::Restart, false) => {
-				match runtime::reschedule_actor(ctx, &input, state, AllocationOverride::None)
-					.await?
+				match runtime::reschedule_actor(
+					ctx,
+					&input,
+					state,
+					AllocationOverride::PendingTimeout {
+						pending_timeout: RESTART_PENDING_TIMEOUT_MS,
+					},
+				)
+				.await?
 				{
 					runtime::SpawnActorOutput::Allocated { .. } => {}
-					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
-					// policy is `Restart`.
-					runtime::SpawnActorOutput::Sleep | runtime::SpawnActorOutput::Destroy => {
+					runtime::SpawnActorOutput::Sleep => {}
+					runtime::SpawnActorOutput::Destroy => {
 						// Destroyed early
 						return Ok(StoppedResult::Destroy);
 					}
