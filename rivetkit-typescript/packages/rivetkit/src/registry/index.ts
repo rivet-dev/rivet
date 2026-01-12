@@ -1,9 +1,5 @@
 import type { Client } from "@/client/client";
 import { createClient } from "@/client/mod";
-import { chooseDefaultDriver } from "@/drivers/default";
-import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
-import { getInspectorUrl } from "@/inspector/utils";
-import { buildManagerRouter } from "@/manager/router";
 import { isDev } from "@/utils/env-vars";
 import {
 	type RegistryActors,
@@ -45,13 +41,30 @@ export class Registry<A extends RegistryActors> {
 		return RegistryConfigSchema.parse(this.#config);
 	}
 
-	// HACK: We need to be able to call `registry.handler` cheaply without
-	// re-initializing the runtime every time. We lazily create the runtime and
-	// store it here for future calls to `registry.handler`.
-	#cachedServerlessRuntime?: Runtime<A>;
+	// Shared runtime instance
+	#runtime?: Runtime<A>;
+	#runtimePromise?: Promise<Runtime<A>>;
 
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
+
+		// Auto-prepare on next tick (gives time for sync config modification)
+		setTimeout(() => {
+			// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
+			this.#ensureRuntime();
+		}, 0);
+	}
+
+	/** Creates runtime if not already created. Idempotent. */
+	#ensureRuntime(): Promise<Runtime<A>> {
+		if (!this.#runtimePromise) {
+			this.#runtimePromise = Runtime.create(this);
+			// biome-ignore lint/nursery/noFloatingPromises: bg task
+			this.#runtimePromise.then((rt) => {
+				this.#runtime = rt;
+			});
+		}
+		return this.#runtimePromise;
 	}
 
 	/**
@@ -64,8 +77,10 @@ export class Registry<A extends RegistryActors> {
 	 * export default app;
 	 * ```
 	 */
-	public handler(request: Request): Response | Promise<Response> {
-		return this.#ensureServerlessInitialized().handler(request);
+	public async handler(request: Request): Promise<Response> {
+		const runtime = await this.#ensureRuntime();
+		runtime.startServerless();
+		return await runtime.handleServerlessRequest(request);
 	}
 
 	/**
@@ -80,19 +95,12 @@ export class Registry<A extends RegistryActors> {
 		return { fetch: this.handler.bind(this) };
 	}
 
-	/** Lazily initializes serverless state on first request, caches for subsequent calls. */
-	#ensureServerlessInitialized(): Runtime<A> {
-		if (!this.#cachedServerlessRuntime) {
-			this.#cachedServerlessRuntime = new Runtime(this, "serverless");
-		}
-		return this.#cachedServerlessRuntime;
-	}
-
 	/**
 	 * Starts an actor runner for standalone server deployments.
 	 */
 	public startRunner() {
-		new Runtime(this, "runner");
+		// biome-ignore lint/nursery/noFloatingPromises: bg task
+		this.#ensureRuntime().then((runtime) => runtime.startRunner());
 	}
 
 	// MARK: Legacy
@@ -155,9 +163,9 @@ export class Registry<A extends RegistryActors> {
 	#legacyStartNormal(
 		config: LegacyRunnerConfig,
 	): LegacyStartServerOutput<this> {
-		// Start the runner
-		// Note: Legacy config is ignored - all config should now be passed to setup()
-		const runtime = new Runtime(this, "runner");
+		// Start the runner (fire-and-forget to maintain sync API)
+		// biome-ignore lint/nursery/noFloatingPromises: legacy sync API
+		this.#ensureRuntime().then((runtime) => runtime.startRunner());
 
 		// Create client for the legacy return value
 		const client = createClient<this>({
@@ -167,17 +175,9 @@ export class Registry<A extends RegistryActors> {
 			headers: config.headers,
 		});
 
-		// Configure getUpgradeWebSocket as undefined for this legacy path
-		// since it's only used when actually serving
-		const { router } = buildManagerRouter(
-			runtime.config,
-			runtime.managerDriver,
-			undefined, // getUpgradeWebSocket
-		);
-
 		return {
 			client,
-			fetch: router.fetch,
+			fetch: this.handler.bind(this),
 		};
 	}
 }
