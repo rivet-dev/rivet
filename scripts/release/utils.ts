@@ -103,11 +103,13 @@ export async function copyReleasesPath(
 	targetPath: string,
 ): Promise<void> {
 	const { awsEnv, endpointUrl } = await getReleasesS3Config();
+	// Use sync instead of cp --recursive because R2 doesn't support the
+	// x-amz-tagging-directive header that cp sends.
 	await $({
 		env: awsEnv,
 		shell: true,
 		stdio: "inherit",
-	})`aws s3 cp s3://rivet-releases/${sourcePath} s3://rivet-releases/${targetPath} --recursive --copy-props none --endpoint-url ${endpointUrl}`;
+	})`aws s3 sync s3://rivet-releases/${sourcePath} s3://rivet-releases/${targetPath} --endpoint-url ${endpointUrl}`;
 }
 
 export function assertEquals<T>(actual: T, expected: T, message?: string): void {
