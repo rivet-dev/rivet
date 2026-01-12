@@ -7,6 +7,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import imgLogo from "@/images/rivet-logos/icon-white.svg";
+import imgYC from "@/images/logos/yc.svg";
+import imgA16z from "@/images/logos/a16z.svg";
 import {
 	Icon,
 	faBluesky,
@@ -154,6 +156,21 @@ function SmallPrint() {
 								<Icon icon={item.icon} aria-hidden="true" />
 							</Link>
 						))}
+					</div>
+
+					{/* Investor badges */}
+					<div>
+						<p className="mb-2 text-xs text-white">Backed by</p>
+						<div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+							<div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+								<Image src={imgYC} alt="Y Combinator" className="h-4 w-auto" />
+								<span>Y Combinator</span>
+							</div>
+							<div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+								<Image src={imgA16z} alt="a16z" className="h-3 w-auto" />
+								<span>a16z Speedrun</span>
+							</div>
+						</div>
 					</div>
 				</div>
 
