@@ -13,10 +13,15 @@ export async function promoteArtifacts(opts: ReleaseOpts) {
 	// Determine which commit to use for source artifacts
 	let sourceCommit = opts.commit;
 	if (opts.reuseEngineVersion) {
-		console.log(`==> Reusing artifacts from version ${opts.reuseEngineVersion}`);
+		console.log(`==> Reusing artifacts from ${opts.reuseEngineVersion}`);
 		console.log(`==> Fetching tags...`);
 		await $({ stdio: "inherit" })`git fetch --tags`;
-		const result = await $`git rev-parse v${opts.reuseEngineVersion}`;
+		// If it contains a dot, treat it as a version tag (e.g., "2.0.33" -> "v2.0.33").
+		// Otherwise, treat it as a git revision (e.g., "bb7f292").
+		const ref = opts.reuseEngineVersion.includes(".")
+			? `v${opts.reuseEngineVersion}`
+			: opts.reuseEngineVersion;
+		const result = await $`git rev-parse ${ref}`;
 		sourceCommit = result.stdout.trim().slice(0, 7);
 		console.log(`==> Source commit: ${sourceCommit}`);
 	}
