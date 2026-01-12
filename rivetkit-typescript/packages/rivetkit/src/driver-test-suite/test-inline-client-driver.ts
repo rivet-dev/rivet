@@ -17,7 +17,7 @@ import {
 	WS_TEST_PROTOCOL_PATH,
 } from "@/common/actor-router-consts";
 import type { UniversalEventSource } from "@/common/eventsource-interface";
-import { noopNext, type DeconstructedError } from "@/common/utils";
+import { type DeconstructedError, noopNext } from "@/common/utils";
 import { importWebSocket } from "@/common/websocket";
 import {
 	type ActorOutput,
@@ -33,8 +33,8 @@ import {
 import type { ActorQuery } from "@/manager/protocol/query";
 import type { UniversalWebSocket } from "@/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
+import type { GetUpgradeWebSocket } from "@/utils";
 import { logger } from "./log";
-import { GetUpgradeWebSocket } from "@/utils";
 
 export interface TestInlineDriverCallRequest {
 	encoding: Encoding;
@@ -240,8 +240,6 @@ export function createTestInlineClientDriver(
 		displayInformation(): ManagerDisplayInformation {
 			return { properties: {} };
 		},
-		// TODO:
-		getOrCreateInspectorAccessToken: () => "",
 		setGetUpgradeWebSocket: (getUpgradeWebSocketInner) => {
 			getUpgradeWebSocket = getUpgradeWebSocketInner;
 		},

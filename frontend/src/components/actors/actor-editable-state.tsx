@@ -1,4 +1,5 @@
 import { faRotateLeft, faSave, Icon } from "@rivet-gg/icons";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -13,8 +14,9 @@ import {
 	EditorView,
 	JsonCode,
 } from "@/components/code-mirror";
+import { useActorInspector } from "./actor-inspector-context";
 import { ActorStateChangeIndicator } from "./actor-state-change-indicator";
-import { type ActorId, useActorStatePatchMutation } from "./queries";
+import type { ActorId } from "./queries";
 
 const isValidJson = (json: string | null): json is string => {
 	if (!json) return false;
@@ -28,34 +30,31 @@ const isValidJson = (json: string | null): json is string => {
 
 interface ActorEditableStateProps {
 	actorId: ActorId;
-	state: unknown;
 }
 
-export function ActorEditableState({
-	state,
-	actorId,
-}: ActorEditableStateProps) {
+export function ActorEditableState({ actorId }: ActorEditableStateProps) {
+	const actorInspector = useActorInspector();
+	const { data: { state } = {} } = useQuery(
+		actorInspector.actorStateQueryOptions(actorId),
+	);
+
 	const [isEditing, setIsEditing] = useState(false);
 	const [value, setValue] = useState<string | null>(null);
-
 	const ref = useRef<CodeMirrorRef>(null);
-
 	const formatted = useMemo(() => {
 		return JSON.stringify(state, null, 2);
 	}, [state]);
-
 	const isValid = isValidJson(value) ? JSON.parse(value) : false;
 
-	const { mutateAsync, isPending } = useActorStatePatchMutation(actorId);
-
-	// useActorStateStream(actorId);
+	const { mutateAsync, isPending } = useMutation(
+		actorInspector.actorStatePatchMutation(actorId),
+	);
 
 	return (
 		<>
 			<div className="flex justify-between items-center border-b gap-1 p-2 h-[45px]">
 				<div className="flex items-center justify-start gap-1">
 					{isEditing ? <PauseBadge /> : <LiveBadge />}
-
 					<ActorStateChangeIndicator state={state} />
 				</div>
 				<div className="flex gap-2">

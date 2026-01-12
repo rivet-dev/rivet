@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 import { Button, ScrollArea } from "@/components";
-import { useActor } from "../actor-queries-context";
+import { useActorInspector } from "../actor-inspector-context";
 import type { ActorId } from "../queries";
 import { useActorWorker } from "../worker/actor-worker-context";
 import { ActorConsoleMessage } from "./actor-console-message";
@@ -14,9 +14,9 @@ interface ActorConsoleInputProps {
 export function ActorConsoleInput({ actorId }: ActorConsoleInputProps) {
 	const worker = useActorWorker();
 
-	const actorQueries = useActor();
-	const { data: { rpcs = [] } = {} } = useQuery(
-		actorQueries.actorRpcsQueryOptions(actorId),
+	const actorInspector = useActorInspector();
+	const { data: rpcs = [] } = useQuery(
+		actorInspector.actorRpcsQueryOptions(actorId),
 	);
 
 	const ref = useRef<ReplInputRef>(null);

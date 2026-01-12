@@ -38,8 +38,8 @@ export async function shouldDisplayActors(context: {
 			context.dataProvider.buildsQueryOptions(),
 		);
 
-		const hasBuilds = infiniteBuilds.pages.some(
-			(page) => page.builds.length > 0,
+		const hasNames = infiniteBuilds.pages.some(
+			(page) => Object.keys(page.names).length > 0,
 		);
 
 		const infiniteRunnerConfigs =
@@ -51,7 +51,7 @@ export async function shouldDisplayActors(context: {
 			(page) => Object.keys(page.runnerConfigs).length > 0,
 		);
 
-		if (!hasBuilds && !hasRunnerConfigs) {
+		if (!hasNames && !hasRunnerConfigs) {
 			return undefined;
 		}
 

@@ -1,66 +1,34 @@
-import {
-	CatchBoundary,
-	useNavigate,
-	useRouteContext,
-	useSearch,
-} from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { match } from "ts-pattern";
+import { CatchBoundary, useNavigate, useSearch } from "@tanstack/react-router";
+import { useLayoutEffect, useRef } from "react";
 import { askForLocalNetworkAccess } from "@/lib/permissions";
 import { Actors } from "./actors";
 import { BuildPrefiller } from "./build-prefiller";
 import { Connect } from "./connect";
-import { InspectorCredentialsProvider } from "./credentials-context";
-import { createClient } from "./data-providers/inspector-data-provider";
+import { useInspectorContext } from "./inspector-context";
 import { Logo } from "./logo";
 import { RouteLayout } from "./route-layout";
 
 export function InspectorRoot() {
-	const alreadyConnected = useRouteContext({
-		from: "/_context/",
-		select: (ctx) =>
-			match(ctx)
-				.with({ __type: "inspector" }, (c) =>
-					"connectedInPreflight" in c
-						? c.connectedInPreflight
-						: false,
-				)
-				.otherwise(() => null),
-	});
-	const navigate = useNavigate();
+	const { isInspectorAvailable, connect } = useInspectorContext();
 	const search = useSearch({ from: "/_context" });
-	const [credentials, setCredentials] = useState<null | {
-		url: string;
-		token: string;
-	}>(alreadyConnected ? { url: search.u!, token: search.t! } : null);
 
 	const formRef = useRef<HTMLFormElement>(null);
 
-	useEffect(() => {
-		if (search.t) {
-			formRef.current?.requestSubmit();
-		}
-	}, [search.t]);
+	useLayoutEffect(() => {
+		formRef.current?.submit();
+	}, []);
 
-	const ctxValue = useMemo(() => {
-		return { credentials, setCredentials };
-	}, [credentials]);
-
-	if (credentials || alreadyConnected) {
+	if (isInspectorAvailable) {
 		return (
-			<InspectorCredentialsProvider value={ctxValue}>
-				<RouteLayout>
-					<Actors actorId={search.actorId} />
-					<CatchBoundary
-						getResetKey={() =>
-							search.n?.join(",") ?? "no-build-name"
-						}
-						errorComponent={() => null}
-					>
-						{!search.n ? <BuildPrefiller /> : null}
-					</CatchBoundary>
-				</RouteLayout>
-			</InspectorCredentialsProvider>
+			<RouteLayout>
+				<Actors actorId={search.actorId} />
+				<CatchBoundary
+					getResetKey={() => search.n?.join(",") ?? "no-build-name"}
+					errorComponent={() => null}
+				>
+					{!search.n ? <BuildPrefiller /> : null}
+				</CatchBoundary>
+			</RouteLayout>
 		);
 	}
 
@@ -75,7 +43,7 @@ export function InspectorRoot() {
 							await askForLocalNetworkAccess();
 
 						if (!hasLocalNetworkAccess) {
-							form.setError("token", {
+							form.setError("url", {
 								message:
 									"Local network access is required to connect to local RivetKit. Please enable local network access in your browser settings and try again.",
 							});
@@ -83,32 +51,17 @@ export function InspectorRoot() {
 						}
 
 						try {
-							const client = createClient({
-								url: values.username,
-								token: values.token,
+							const response = await fetch(values.url, {
+								method: "OPTIONS",
 							});
-							const resp = await client.ping.$get();
-							if (!resp.ok) {
-								throw resp;
+							if (!response.ok) {
+								throw new Error("CORS preflight failed");
 							}
-							await navigate({
-								to: "/",
-								search: (old) => {
-									return {
-										...old,
-										u: values.username,
-										t: values.token,
-									};
-								},
-							});
-							setCredentials({
-								url: values.username,
-								token: values.token,
-							});
+
+							await connect({ url: values.url });
 						} catch {
-							form.setError("token", {
-								message:
-									"Failed to connect. Please check your URL and token.",
+							form.setError("url", {
+								message: "localhost.cors.error",
 							});
 						}
 					}}

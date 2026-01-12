@@ -31,6 +31,11 @@ export const WS_PROTOCOL_ACTOR = "rivet_actor.";
 export const WS_PROTOCOL_ENCODING = "rivet_encoding.";
 export const WS_PROTOCOL_CONN_PARAMS = "rivet_conn_params.";
 export const WS_PROTOCOL_TOKEN = "rivet_token.";
+/**
+ * Used to pass an inspector token for connecting to the inspector.
+ * Only used internally by Rivet.
+ */
+export const WS_PROTOCOL_INSPECTOR_TOKEN = "rivet_inspector_token.";
 
 // MARK: WebSocket Inline Test Protocol Prefixes
 export const WS_TEST_PROTOCOL_PATH = "test_path.";

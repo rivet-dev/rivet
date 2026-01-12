@@ -219,7 +219,9 @@ function SharedSettingsForm({
 			<EditRunnerConfigForm.Headers />
 			<EditRunnerConfigForm.Regions />
 			<div className="flex justify-end mt-4">
-				<EditRunnerConfigForm.Submit allowPristine>Save</EditRunnerConfigForm.Submit>
+				<EditRunnerConfigForm.Submit allowPristine>
+					Save
+				</EditRunnerConfigForm.Submit>
 			</div>
 		</EditRunnerConfigForm.Form>
 	);
@@ -235,7 +237,7 @@ function DatacenterSettingsForm({
 	const provider = useEngineCompatDataProvider();
 
 	const { data: datacenters } = useSuspenseInfiniteQuery({
-		...provider.regionsQueryOptions(),
+		...provider.datacentersQueryOptions(),
 		maxPages: Infinity,
 	});
 
@@ -255,14 +257,14 @@ function DatacenterSettingsForm({
 			defaultValues={{
 				datacenters: Object.fromEntries(
 					Object.values(datacenters).map((dc) => [
-						dc.id,
+						dc.name,
 						{
-							...(data.datacenters[dc.id]?.serverless ||
+							...(data.datacenters[dc.name]?.serverless ||
 								defaultServerlessConfig),
-							enable: !!data.datacenters[dc.id]?.serverless,
+							enable: !!data.datacenters[dc.name]?.serverless,
 							headers: Object.entries(
-								data.datacenters[dc.id]?.serverless?.headers ||
-									{},
+								data.datacenters[dc.name]?.serverless
+									?.headers || {},
 							).map(([key, value]) => [key, value]),
 						},
 					]),
@@ -306,8 +308,8 @@ function DatacenterSettingsForm({
 			<Accordion type="multiple" className="w-full">
 				{datacenters.map((dc) => (
 					<DatacenterAccordion
-						key={dc.id}
-						regionId={dc.id}
+						key={dc.name}
+						regionId={dc.name}
 						name={name}
 					/>
 				))}
@@ -389,7 +391,7 @@ function SelectDatacenterSettingsSource({
 	const provider = useEngineCompatDataProvider();
 
 	const { data: datacenters } = useSuspenseInfiniteQuery({
-		...provider.regionsQueryOptions(),
+		...provider.datacentersQueryOptions(),
 		maxPages: Infinity,
 	});
 
@@ -398,7 +400,8 @@ function SelectDatacenterSettingsSource({
 	});
 
 	const availableDatacenters = datacenters.filter(
-		(dc) => dc.id !== currentRegionId && runnerConfig.datacenters[dc.id],
+		(dc) =>
+			dc.name !== currentRegionId && runnerConfig.datacenters[dc.name],
 	);
 
 	if (availableDatacenters.length === 0) {
@@ -420,8 +423,8 @@ function SelectDatacenterSettingsSource({
 				placeholder="Select datacenter"
 				className="w-auto min-w-[200px]"
 				options={availableDatacenters.map((dc) => ({
-					value: dc.id,
-					label: <ActorRegion regionId={dc.id} showLabel />,
+					value: dc.name,
+					label: <ActorRegion regionId={dc.name} showLabel />,
 				}))}
 			/>
 		</div>

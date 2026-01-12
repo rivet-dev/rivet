@@ -62,7 +62,7 @@ function SecretToken() {
 		dataProvider.engineAdminTokenQueryOptions(),
 	);
 	const { data: regions = [] } = useInfiniteQuery(
-		dataProvider.regionsQueryOptions(),
+		dataProvider.datacentersQueryOptions(),
 	);
 	const [selectedDatacenter, setSelectedDatacenter] = useState<
 		string | undefined
@@ -71,7 +71,7 @@ function SecretToken() {
 	// Set default datacenter when regions are loaded
 	useEffect(() => {
 		if (regions.length > 0 && !selectedDatacenter) {
-			setSelectedDatacenter(regions[0].id);
+			setSelectedDatacenter(regions[0].name);
 		}
 	}, [regions, selectedDatacenter]);
 
@@ -79,7 +79,7 @@ function SecretToken() {
 
 	const endpoint = match(__APP_TYPE__)
 		.with("cloud", () => {
-			const region = regions.find((r) => r.id === selectedDatacenter);
+			const region = regions.find((r) => r.name === selectedDatacenter);
 			return region?.url || cloudEnv().VITE_APP_API_URL;
 		})
 		.with("engine", () => getConfig().apiUrl)

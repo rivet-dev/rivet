@@ -151,6 +151,24 @@ const FormDescription = React.forwardRef<
 });
 FormDescription.displayName = "FormDescription";
 
+const FORM_MESSAGE_ID_MAPS = {
+	"localhost.cors.error": (
+		<>
+			Please check your URL and CORS settings.
+			<br />
+			If you're using Chromium based browser,{" "}
+			<a
+				href="https://developer.chrome.com/blog/local-network-access"
+				target="_blank"
+				rel="noreferrer"
+				className="underline"
+			>
+				read more about Localhost CORS issues on Chrome Blog.
+			</a>
+		</>
+	),
+};
+
 const FormMessage = React.forwardRef<
 	HTMLParagraphElement,
 	React.HTMLAttributes<HTMLParagraphElement>
@@ -163,6 +181,12 @@ const FormMessage = React.forwardRef<
 		return null;
 	}
 
+	const message =
+		typeof body === "string"
+			? FORM_MESSAGE_ID_MAPS[body as keyof typeof FORM_MESSAGE_ID_MAPS] ||
+				body
+			: body;
+
 	return (
 		<p
 			ref={ref}
@@ -170,7 +194,7 @@ const FormMessage = React.forwardRef<
 			className={cn("text-sm font-medium text-destructive", className)}
 			{...props}
 		>
-			{body}
+			{message}
 		</p>
 	);
 });

@@ -24,16 +24,7 @@ const defaultEnabled = () => {
 
 export const InspectorConfigSchema = z
 	.object({
-		enabled: z
-			.boolean()
-			.or(
-				z.object({
-					actor: z.boolean().optional().default(true),
-					manager: z.boolean().optional().default(true),
-				}),
-			)
-			.optional()
-			.default(defaultEnabled),
+		enabled: z.boolean().default(defaultEnabled),
 
 		/**
 		 * Token used to access the Inspector.

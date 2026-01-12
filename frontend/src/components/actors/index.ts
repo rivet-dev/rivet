@@ -1,6 +1,4 @@
-export * from "./actor-context";
 export * from "./actor-not-found";
-export * from "./actor-queries-context";
 export * from "./actor-region";
 export * from "./actor-status-indicator";
 export * from "./actor-status-label";

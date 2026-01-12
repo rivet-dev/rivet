@@ -7,7 +7,7 @@ import {
 } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { hasProvider } from "@/app/data-providers/engine-data-provider";
-import { CodeFrame, CodeGroup, CodePreview, DocsSheet } from "@/components";
+import { CodeFrame, CodeGroup, CodePreview } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 
 interface PublishableTokenCodeGroupProps {
@@ -35,16 +35,18 @@ export function PublishableTokenCodeGroup({
 			language="typescript"
 			title="Next.js"
 			icon={faNextjs}
+			code={() => nextJsCode({ token, endpoint, namespace })}
 			footer={
-				<DocsSheet
-					path={"/docs/actors/quickstart/next-js"}
-					title={"Next.js Quickstart"}
+				<a
+					href="https://rivet.dev/docs/actors/quickstart/next-js"
+					target="_blank"
+					rel="noopener noreferrer"
 				>
 					<span className="cursor-pointer hover:underline">
 						See Next.js Documentation{" "}
 						<Icon icon={faChevronRight} className="text-xs" />
 					</span>
-				</DocsSheet>
+				</a>
 			}
 		>
 			<CodePreview
@@ -59,16 +61,18 @@ export function PublishableTokenCodeGroup({
 			language="typescript"
 			title="React"
 			icon={faReact}
+			code={() => reactCode({ token, endpoint, namespace })}
 			footer={
-				<DocsSheet
-					path={"/docs/actors/quickstart/react"}
-					title={"React Quickstart"}
+				<a
+					href="https://rivet.dev/docs/actors/quickstart/react"
+					target="_blank"
+					rel="noopener noreferrer"
 				>
 					<span className="cursor-pointer hover:underline">
 						See React Documentation{" "}
 						<Icon icon={faChevronRight} className="text-xs" />
 					</span>
-				</DocsSheet>
+				</a>
 			}
 		>
 			<CodePreview
@@ -83,16 +87,24 @@ export function PublishableTokenCodeGroup({
 			language="typescript"
 			title="JavaScript"
 			icon={faNodeJs}
+			code={() =>
+				javascriptCode({
+					token,
+					endpoint,
+					namespace,
+				})
+			}
 			footer={
-				<DocsSheet
-					path={"/docs/actors/quickstart/backend"}
-					title={"JavaScript Quickstart"}
+				<a
+					href="https://rivet.dev/docs/actors/quickstart/backend"
+					target="_blank"
+					rel="noopener noreferrer"
 				>
 					<span className="cursor-pointer hover:underline">
 						See JavaScript Documentation{" "}
 						<Icon icon={faChevronRight} className="text-xs" />
 					</span>
-				</DocsSheet>
+				</a>
 			}
 		>
 			<CodePreview

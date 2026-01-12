@@ -24,7 +24,7 @@ export function useRailwayTemplateLink({
 
 const useDatacenterEndpoint = ({ datacenter }: { datacenter: string }) => {
 	const { data } = useQuery(
-		useEngineCompatDataProvider().regionQueryOptions(datacenter),
+		useEngineCompatDataProvider().datacenterQueryOptions(datacenter),
 	);
 	return data?.url || engineEnv().VITE_APP_API_URL;
 };

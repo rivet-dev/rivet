@@ -6,11 +6,10 @@ import { type TestContext, vi } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import { configureInspectorAccessToken } from "@/inspector/utils";
-import { createClientWithDriver, type Registry } from "@/mod";
-import { logger } from "./log";
-import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 import { buildManagerRouter } from "@/manager/router";
+import { createClientWithDriver, type Registry } from "@/mod";
+import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
+import { logger } from "./log";
 
 export interface SetupTestResult<A extends Registry<any>> {
 	client: Client<A>;
@@ -46,7 +45,6 @@ export async function setupTest<A extends Registry<any>>(
 	// 	managerDriver,
 	// 	ClientConfigSchema.parse({}),
 	// );
-	configureInspectorAccessToken(registry.config, managerDriver);
 	const { router } = buildManagerRouter(
 		registry.config,
 		managerDriver,
