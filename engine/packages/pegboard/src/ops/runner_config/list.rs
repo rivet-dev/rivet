@@ -35,10 +35,12 @@ pub async fn pegboard_runner_config_list(
 					.range();
 
 				let start = if let Some(name) = &input.after_name {
-					tx.pack(&keys::runner_config::ByVariantKey::new(
-						input.namespace_id,
-						variant,
-						name.clone(),
+					universaldb::utils::end_of_key_range(&tx.pack(
+						&keys::runner_config::ByVariantKey::new(
+							input.namespace_id,
+							variant,
+							name.clone(),
+						),
 					))
 				} else {
 					start
@@ -51,9 +53,8 @@ pub async fn pegboard_runner_config_list(
 					.range();
 
 				let start = if let Some(name) = &input.after_name {
-					tx.pack(&keys::runner_config::DataKey::new(
-						input.namespace_id,
-						name.clone(),
+					universaldb::utils::end_of_key_range(&tx.pack(
+						&keys::runner_config::DataKey::new(input.namespace_id, name.clone()),
 					))
 				} else {
 					start
