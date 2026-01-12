@@ -7,6 +7,7 @@ import {
 	deleteReleasesPath,
 	listReleasesObjects,
 	uploadContentToReleases,
+	versionOrCommitToRef,
 } from "./utils";
 
 export async function promoteArtifacts(opts: ReleaseOpts) {
@@ -16,11 +17,7 @@ export async function promoteArtifacts(opts: ReleaseOpts) {
 		console.log(`==> Reusing artifacts from ${opts.reuseEngineVersion}`);
 		console.log(`==> Fetching tags...`);
 		await $({ stdio: "inherit" })`git fetch --tags`;
-		// If it contains a dot, treat it as a version tag (e.g., "2.0.33" -> "v2.0.33").
-		// Otherwise, treat it as a git revision (e.g., "bb7f292").
-		const ref = opts.reuseEngineVersion.includes(".")
-			? `v${opts.reuseEngineVersion}`
-			: opts.reuseEngineVersion;
+		const ref = versionOrCommitToRef(opts.reuseEngineVersion);
 		const result = await $`git rev-parse ${ref}`;
 		sourceCommit = result.stdout.trim().slice(0, 7);
 		console.log(`==> Source commit: ${sourceCommit}`);

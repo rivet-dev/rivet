@@ -7,6 +7,22 @@ export function assert(condition: any, message?: string): asserts condition {
 	}
 }
 
+/**
+ * Converts a version string or commit hash to a git ref.
+ * If the input contains a dot, it's treated as a version (e.g., "2.0.33" -> "v2.0.33").
+ * Otherwise, it's treated as a git revision and returned as-is (e.g., "bb7f292").
+ */
+export function versionOrCommitToRef(versionOrCommit: string): string {
+	if (versionOrCommit.includes(".")) {
+		assert(
+			!versionOrCommit.startsWith("v"),
+			`Version should not start with "v" (got "${versionOrCommit}", use "${versionOrCommit.slice(1)}" instead)`,
+		);
+		return `v${versionOrCommit}`;
+	}
+	return versionOrCommit;
+}
+
 interface ReleasesS3Config {
 	awsEnv: Record<string, string>;
 	endpointUrl: string;
