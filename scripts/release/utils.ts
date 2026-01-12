@@ -24,17 +24,22 @@ export function versionOrCommitToRef(versionOrCommit: string): string {
 }
 
 /**
- * Fetches a git ref from the remote. For tags, fetches all tags. For commits, fetches all branches.
+ * Fetches a git ref from the remote. For tags, fetches all tags. For commits, unshallows the repo.
  */
 export async function fetchGitRef(ref: string): Promise<void> {
 	if (ref.startsWith("v")) {
 		console.log(`Fetching tags...`);
 		await $({ stdio: "inherit" })`git fetch --tags --force`;
 	} else {
-		// Git doesn't allow fetching commits directly by SHA, so fetch all branches
-		// to ensure the commit is reachable.
-		console.log(`Fetching branches to find commit ${ref}...`);
-		await $({ stdio: "inherit" })`git fetch origin`;
+		// Git doesn't allow fetching commits directly by SHA, and CI often uses
+		// shallow clones. Unshallow the repo to ensure the commit is available.
+		console.log(`Unshallowing repo to find commit ${ref}...`);
+		try {
+			await $({ stdio: "inherit" })`git fetch --unshallow origin`;
+		} catch {
+			// Already unshallowed, just fetch
+			await $({ stdio: "inherit" })`git fetch origin`;
+		}
 	}
 }
 
