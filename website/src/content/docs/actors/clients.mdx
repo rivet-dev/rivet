@@ -43,9 +43,10 @@ Clients are used to get and communicate with actors from your application. Clien
 		From your backend server that hosts the registry:
 
 		```typescript
-		import { registry } from "./registry";
+		import { createClient } from "rivetkit/client";
+		import type { registry } from "./registry";
 
-		const { client } = registry.start();
+		const client = createClient<typeof registry>();
 		```
 	</Tab>
 

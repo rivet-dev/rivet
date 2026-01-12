@@ -1,15 +1,6 @@
-import { InstallPackage } from "@/components/docs/InstallPackage";
-import { faGithub } from "@rivet-gg/icons";
-
 # Deploying to Vercel
 
-Deploy your Next.js + RivetKit app to [Vercel](https://vercel.com/).
-
-<CardGroup>
-<Card title="View Example on GitHub" href="https://github.com/rivet-dev/rivet/tree/main/examples/next-js" target="_blank" icon={faGithub}>
-Complete example Next.js + RivetKit app.
-</Card>
-</CardGroup>
+Deploy your RivetKit app to [Vercel](https://vercel.com/).
 
 ## Guide
 
@@ -17,18 +8,82 @@ Complete example Next.js + RivetKit app.
 <Step title="Prerequisites">
 
 - [Vercel account](https://vercel.com/)
-- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
-- A Next.js app integrated with RivetKit
-  - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivet/tree/main/examples/next-js) to get started
-  - Your project should have the following files:
-    - `src/app/api/rivet/[...all]/route.ts`
-    - `src/rivet/registry.ts`
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/self-hosting)
+
+</Step>
+<Step title="Prepare Your Application">
+
+Make sure your project is configured correctly for Vercel deployment.
+
+<Tabs>
+
+<Tab title="Next.js">
+
+Your Next.js project should have the following structure:
+
+- `src/app/api/rivet/[...all]/route.ts`: RivetKit route handler
+- `src/actors.ts`: Actor definitions and registry
+
+See the [Next.js quickstart](/docs/actors/quickstart/next-js) or the [Next.js template](/templates/next-js) to get started.
+
+</Tab>
+
+<Tab title="Hono">
+
+Your Hono project needs:
+
+1. A `vercel.json` file with the Hono framework specified:
+
+```json {{"title":"vercel.json"}}
+{
+  "framework": "hono"
+}
+```
+
+2. Your server file must import from `"hono"` for Vercel to recognize the framework:
+
+```ts {{"title":"src/server.ts"}}
+// You MUST import from "hono" for Vercel to detect this as a Hono app
+import { Hono } from "hono";
+import { registry } from "./actors.ts";
+
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+export default app;
+```
+
+3. Use `.ts` file extensions in imports and configure your `tsconfig.json`:
+
+```json {{"title":"tsconfig.json"}}
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
+  }
+}
+```
+
+See the [Hello World template](/templates/hello-world) for a complete example.
+
+For more details on Hono deployments, see [Vercel's Hono documentation](https://vercel.com/docs/frameworks/backend/hono).
+
+</Tab>
+
+<Tab title="Other">
+
+Vercel currently supports Next.js and Hono frameworks for RivetKit deployments.
+
+For other frameworks, consider deploying to [Railway](/docs/connect/railway), [Kubernetes](/docs/connect/kubernetes), or another platform.
+
+</Tab>
+
+</Tabs>
 
 </Step>
 <Step title="Deploy to Vercel">
 
 1. Connect your GitHub project to Vercel
-2. Select your repository containing your Next.js + RivetKit app
+2. Select your repository containing your RivetKit app
 3. Vercel will deploy your app
 
 More information on deployments are available in [Vercel's docs](https://vercel.com/docs/deployments).

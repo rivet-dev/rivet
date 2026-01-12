@@ -122,6 +122,8 @@ https://rivet.dev/docs/general/cors
 https://rivet.dev/docs/general/docs-for-llms
 https://rivet.dev/docs/general/edge
 https://rivet.dev/docs/general/logging
+https://rivet.dev/docs/general/runtime-modes
+https://rivet.dev/docs/general/server-setup
 https://rivet.dev/docs/index
 https://rivet.dev/docs/meta/submit-template
 https://rivet.dev/docs/quickstart

@@ -66,19 +66,16 @@ import {
 	faVialCircleCheck,
 } from "@rivet-gg/icons";
 import type { DeployOption } from "@/data/deploy/shared";
-import { deployGroups, deployOptions } from "@/data/deploy/shared";
+import { deployOptions } from "@/data/deploy/shared";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
-const deploySidebarSections: SidebarItem[] = deployGroups.map(
-	({ title: groupTitle, items }) => ({
-		title: groupTitle,
-		pages: items.map(({ title, href, icon, badge }) => ({
-			title,
-			href,
-			icon,
-			badge,
-		})),
+const deploySidebarPages: SidebarItem[] = deployOptions.map(
+	({ title, href, icon, badge }) => ({
+		title,
+		href,
+		icon,
+		badge,
 	}),
 );
 
@@ -398,7 +395,23 @@ export const sitemap = [
 					},
 				]
 			},
-			...deploySidebarSections,
+			{
+				title: "Platforms",
+				pages: deploySidebarPages,
+			},
+			{
+				title: "Configuration",
+				pages: [
+					{
+						title: "Runtime Modes",
+						href: "/docs/general/runtime-modes",
+					},
+					{
+						title: "Server Setup",
+						href: "/docs/general/server-setup",
+					},
+				],
+			},
 		],
 	},
 	{

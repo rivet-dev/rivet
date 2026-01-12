@@ -1,8 +1,13 @@
 import { Hosting } from "@/components/docs/Hosting";
+import { StepSetupServer } from "@/components/docs/StepSetupServer";
+import { StepRunServer } from "@/components/docs/StepRunServer";
+import { ConfigurationOptions } from "@/components/docs/ConfigurationOptions";
 
 # React Quickstart
 
-Build real-time React applications with Rivet Actors
+Build realtime React applications with Rivet Actors
+
+## Steps
 
 <Steps>
 <Step title="Install Dependencies">
@@ -40,14 +45,7 @@ export const registry = setup({
 
 <Step title="Setup Backend Server">
 
-Start a server to run your actors:
-
-```ts {{"title":"backend/server.ts"}}
-import { registry } from "./registry";
-
-// Run server with default configuration
-registry.start();
-```
+<StepSetupServer />
 
 </Step>
 
@@ -55,57 +53,40 @@ registry.start();
 
 Set up your React application:
 
-```tsx {{"title":"frontend/App.tsx"}}
+```tsx {{"title":"Counter.tsx"}}
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
-import type { registry } from "../backend/registry";
+import type { registry } from "./registry";
 
 const { useActor } = createRivetKit<typeof registry>();
 
-function App() {
+function Counter() {
 	const [count, setCount] = useState(0);
-	const [counterName, setCounterName] = useState("test-counter");
 
+	// Get or create a counter actor for the key "my-counter"
 	const counter = useActor({
 		name: "counter",
-		key: [counterName],
+		key: ["my-counter"]
 	});
 
+	// Listen to realtime events
 	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => {
+		// Call actions
 		await counter.connection?.increment(1);
 	};
 
 	return (
-		<div style={{ padding: "2rem" }}>
-			<h1>Rivet Counter</h1>
-			<h2>Count: {count}</h2>
-
-			<div style={{ marginBottom: "1rem" }}>
-				<label>
-					Counter Name:
-					<input
-						type="text"
-						value={counterName}
-						onChange={(e) => setCounterName(e.target.value)}
-						style={{ marginLeft: "0.5rem", padding: "0.25rem" }}
-					/>
-				</label>
-			</div>
-
+		<div>
+			<p>Count: {count}</p>
 			<button onClick={increment}>Increment</button>
-
-			<div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
-				<p>Connection Status: {counter.isConnected ? "Connected" : "Disconnected"}</p>
-				<p>Try opening multiple tabs to see real-time sync.</p>
-			</div>
 		</div>
 	);
 }
-
-export default App;
 ```
+
+For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
 
 </Step>
 
@@ -133,17 +114,15 @@ Start both the backend and frontend:
 
 **Terminal 1**: Start the backend
 
-```sh Backend
-npx tsx --watch backend/server.ts
-```
+<StepRunServer file="backend/server.ts" showDescription={false} />
 
 **Terminal 2**: Start the frontend
 
-```sh Frontend  
+```sh Frontend
 npx vite
 ```
 
-Open `http://localhost:5173` in your browser. Try opening multiple tabs to see real-time sync in action.
+Open `http://localhost:5173` in your browser. Try opening multiple tabs to see realtime sync in action.
 
 </Step>
 
@@ -157,13 +136,4 @@ Open `http://localhost:5173` in your browser. Try opening multiple tabs to see r
 
 ## Configuration Options
 
-### Add Your Own Backend Endpoints
-
-Add custom HTTP endpoints alongside your actors to handle additional business logic, authentication, and integrations with external services.
-
-See [backend quickstart](/docs/actors/quickstart/backend) for more information.
-
-## API Reference
-
-For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
-
+<ConfigurationOptions />

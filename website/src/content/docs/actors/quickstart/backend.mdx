@@ -1,8 +1,13 @@
 import { Hosting } from "@/components/docs/Hosting";
+import { StepSetupServer } from "@/components/docs/StepSetupServer";
+import { StepRunServer } from "@/components/docs/StepRunServer";
+import { ConfigurationOptions } from "@/components/docs/ConfigurationOptions";
 
 # Node.js & Bun Quickstart
 
 Get started with Rivet Actors in Node.js and Bun
+
+## Steps
 
 <Steps>
 <Step title="Install Rivet">
@@ -40,113 +45,13 @@ export const registry = setup({
 
 <Step title="Setup Server">
 
-Choose your preferred web framework:
-
-<CodeGroup>
-
-```ts {{"title":"Standalone"}}
-import { registry } from "./registry";
-import { Hono } from "hono";
-import { serve } from "@hono/node-server";
-
-// Start Rivet
-const { client } = registry.start();
-```
-
-```ts {{"title":"Hono"}}
-import { registry } from "./registry";
-import { Hono } from "hono";
-import { serve } from "@hono/node-server";
-
-// Start Rivet
-const { client } = registry.start();
-
-// Setup Hono app
-const app = new Hono();
-
-// Example API endpoint
-app.post("/increment/:name", async (c) => {
-	const name = c.req.param("name");
-
-	// Get or create actor and call action
-	const counter = client.counter.getOrCreate(name);
-	const newCount = await counter.increment(1);
-
-	return c.json({ count: newCount });
-});
-
-// Start server
-serve(app);
-```
-
-```ts {{"title":"Express.js"}}
-import { registry } from "./registry";
-import express from "express";
-
-// Start Rivet
-const { client } = registry.start();
-
-// Setup Express app
-const app = express();
-app.use(express.json());
-
-// Example API endpoints
-app.post("/increment/:name", async (req, res) => {
-	const { name } = req.params;
-
-      const counter = client.counter.getOrCreate(name);
-      const newCount = await counter.increment(1);
-      
-      res.json({ count: newCount });
-});
-
-app.listen(8080, () => {
-	console.log("Server running at http://localhost:8080");
-});
-```
-
-```ts {{"title":"Elysia"}}
-import { registry } from "./registry";
-import { Elysia } from "elysia";
-
-// Start Rivet
-const { client } = registry.start();
-
-// Setup Elysia app
-const app = new Elysia()
-	.mount("/registry", handler)
-	.post("/increment/:name", async ({ params, body }) => {
-		const { name } = params;
-
-		const counter = client.counter.getOrCreate(name);
-		const newCount = await counter.increment(1);
-
-		return { count: newCount };
-	})
-	.listen(8080);
-
-console.log("Server running at http://localhost:8080");
-```
-
-</CodeGroup>
+<StepSetupServer />
 
 </Step>
 
 <Step title="Run Server">
 
-<CodeGroup>
-
-```sh {{"title":"Node.js"}}
-npx tsx --watch server.ts
-```
-
-```sh {{"title":"Bun"}}
-bun --watch server.ts
-```
-
-</CodeGroup>
-
-Your server is now running at `http://localhost:8080`
+<StepRunServer />
 
 </Step>
 
@@ -162,11 +67,10 @@ This code can run either in your frontend or within your backend:
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
-// Create typed client
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>();
 
-// Use the counter actor directly
-const counter = client.counter.getOrCreate(["my-counter"]);
+// Get or create a counter actor for the key "my-counter"
+const counter = client.counter.getOrCreate("my-counter");
 
 // Call actions
 const count = await counter.increment(3);
@@ -176,7 +80,7 @@ console.log("New count:", count);
 const currentCount = await counter.getCount();
 console.log("Current count:", currentCount);
 
-// Listen to real-time events
+// Listen to realtime events
 const connection = counter.connect();
 connection.on("countChanged", (newCount) => {
 	console.log("Count changed:", newCount);
@@ -202,14 +106,17 @@ const { useActor } = createRivetKit<typeof registry>();
 function Counter() {
 	const [count, setCount] = useState(0);
 
+	// Get or create a counter actor for the key "my-counter"
 	const counter = useActor({
 		name: "counter",
 		key: ["my-counter"]
 	});
 
+	// Listen to realtime events
 	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => {
+		// Call actions
 		await counter.connection?.increment(1);
 	};
 
@@ -226,43 +133,6 @@ See the [React documentation](/docs/clients/react) for more information.
 
 </Tab>
 
-<Tab title="Rust">
-
-```rust {{"title":"main.rs"}}
-use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
-use serde_json::json;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new(
-        "http://localhost:8080",
-        TransportKind::Sse,
-        EncodingKind::Json
-    );
-    
-    // Get or create counter actor
-    let options = GetOrCreateOptions::default();
-    let counter = client.get("counter", ["my-counter"].into(), options)?
-        .connect();
-    
-    // Subscribe to events
-    counter.on_event("countChanged", |args| {
-        let count = args[0].as_i64().unwrap();
-        println!("Count updated: {}", count);
-    }).await;
-    
-    // Call increment action
-    let result = counter.action("increment", vec![json!(1)]).await?;
-    println!("New count: {}", result);
-    
-    Ok(())
-}
-```
-
-See the [Rust client documentation](/docs/clients/rust) for more information.
-
-</Tab>
-
 </Tabs>
 
 </Step>
@@ -274,4 +144,8 @@ See the [Rust client documentation](/docs/clients/rust) for more information.
 </Step>
 
 </Steps>
+
+## Configuration Options
+
+<ConfigurationOptions />
 

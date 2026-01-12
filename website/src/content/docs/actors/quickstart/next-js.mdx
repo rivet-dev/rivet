@@ -63,8 +63,9 @@ export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
 
 <Step title="Use the Actor in a component">
 
-Create a file at `src/components/Counter.tsx` to use the actor in a component:
+Create a Counter component and add it to your page:
 
+<CodeGroup>
 ```tsx {{"title":"src/components/Counter.tsx"}}
 "use client";
 
@@ -79,14 +80,17 @@ export const { useActor } = createRivetKit<typeof registry>(
 export function Counter() {
 	const [count, setCount] = useState(0);
 
+	// Get or create a counter actor for the key "my-counter"
 	const counter = useActor({
 		name: "counter",
-		key: ["test"],
+		key: ["my-counter"]
 	});
 
+	// Listen to realtime events
 	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => {
+		// Call actions
 		await counter.connection?.increment(1);
 	};
 
@@ -99,20 +103,29 @@ export function Counter() {
 }
 ```
 
-<Note>Import the `Counter` component in your page or layout to use it.</Note>
+```tsx {{"title":"src/app/page.tsx"}}
+import { Counter } from "@/components/Counter";
 
-For more examples on connecting to your actors using React, check the [React documentation for RivetKit](/docs/clients/react).
+export default function Home() {
+	return (
+		<main>
+			<h1>My App</h1>
+			<Counter />
+		</main>
+	);
+}
+```
+</CodeGroup>
+
+For information about the Next.js client API, see the [React Client API Reference](/docs/clients/react).
 
 </Step>
 
 <Step title="Deploy to Vercel">
 
-See the [Vercel deployment guide](/docs/connect/vercel) for detailed instructions on deploying your RivetKit app to Vercel.
+See the [Vercel deployment guide](/docs/connect/vercel) for detailed instructions on deploying your Rivet app to Vercel.
 
 </Step>
 
 </Steps>
 
-## API Reference
-
-For detailed information about the Next.js client API, see the [React Client API Reference](/docs/clients/react).

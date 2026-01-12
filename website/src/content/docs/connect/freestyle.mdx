@@ -29,22 +29,10 @@ Update your server code to run the registry serverless with Deno.
 
 ```typescript {{"title":"server.ts"}}
 import { registry } from "./registry";
-import { createEngineDriver } from "npm:rivetkit/engine";
-import { upgradeWebSocket } from "hono/deno";
-
-const { fetch } = registry.start({
-	// Lets us serve the registry via our Deno.serve
-	// as supported by Freestyle.
-	disableDefaultServer: true,
-	getUpgradeWebSocket: () => upgradeWebSocket,
-	
-	// Provide RivetKit address of our server
-	overrideServerAddress: `${process.env.FREESTYLE_ENDPOINT ?? "http://localhost:8080"}/api`,
-});
 
 // Freestyle uses Deno under the hood for web deployments
 // @ts-ignore
-Deno.serve(fetch);
+Deno.serve((request: Request) => registry.handler(request));
 ```
 
 </Step>
