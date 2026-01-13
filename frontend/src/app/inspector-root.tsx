@@ -1,5 +1,5 @@
-import { CatchBoundary, useNavigate, useSearch } from "@tanstack/react-router";
-import { useLayoutEffect, useRef } from "react";
+import { CatchBoundary, useSearch } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { askForLocalNetworkAccess } from "@/lib/permissions";
 import { Actors } from "./actors";
 import { BuildPrefiller } from "./build-prefiller";
@@ -14,8 +14,8 @@ export function InspectorRoot() {
 
 	const formRef = useRef<HTMLFormElement>(null);
 
-	useLayoutEffect(() => {
-		formRef.current?.submit();
+	useEffect(() => {
+		formRef.current?.requestSubmit();
 	}, []);
 
 	if (isInspectorAvailable) {
