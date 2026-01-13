@@ -61,10 +61,11 @@ export default function ConnectQuickRailwayFrameContent({
 
 	const prefferedRegionForRailway =
 		data.find((region) => region.name.toLowerCase().includes("us-west"))
-			?.id ||
+			?.name ||
 		data.find((region) => region.name.toLowerCase().includes("us-east"))
-			?.id ||
-		data.find((region) => region.name.toLowerCase().includes("ore"))?.id ||
+			?.name ||
+		data.find((region) => region.name.toLowerCase().includes("ore"))
+			?.name ||
 		"auto";
 
 	return (

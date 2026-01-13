@@ -148,12 +148,14 @@ const useVercelTemplateLink = () => {
 	return useMemo(() => {
 		const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
 		const env = [
+			"RIVET_ENDPOINT",
 			"NEXT_PUBLIC_RIVET_ENDPOINT",
 			"NEXT_PUBLIC_RIVET_TOKEN",
 			"NEXT_PUBLIC_RIVET_NAMESPACE",
 		].join(",");
 		const projectName = "rivetkit-vercel";
 		const envDefaults = {
+			RIVET_ENDPOINT: endpoint,
 			NEXT_PUBLIC_RIVET_ENDPOINT: endpoint,
 			NEXT_PUBLIC_RIVET_TOKEN: token,
 			NEXT_PUBLIC_RIVET_NAMESPACE: dataProvider.engineNamespace,

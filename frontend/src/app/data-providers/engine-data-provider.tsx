@@ -270,10 +270,13 @@ export const createNamespaceContext = ({
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
-					if (lastPage.actors.length < RECORDS_PER_PAGE) {
-						return undefined;
-					}
-					return lastPage.pagination.cursor;
+					// TEMPORARILY DISABLED PAGINATION
+					// FIXME(@NathanFlurry)
+					return undefined;
+					// if (lastPage.actors.length < RECORDS_PER_PAGE) {
+					// 	return undefined;
+					// }
+					// return lastPage.pagination.cursor;
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,

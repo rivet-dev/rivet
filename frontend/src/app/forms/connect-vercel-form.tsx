@@ -65,6 +65,14 @@ export const stepper = defineStepper(
 		schema: z.object({}),
 	},
 	{
+		id: "variables",
+		title: "Configure Environment Variables",
+		assist: false,
+		next: "Next",
+		optional: true,
+		schema: z.object({}),
+	},
+	{
 		id: "deploy",
 		title: "Deploy to Vercel",
 		assist: true,
@@ -296,6 +304,7 @@ export function EnvVariables() {
 			prefix="NEXT_PUBLIC"
 			endpoint={useSelectedDatacenter()}
 			kind="serverless"
+			prefixlessEndpint
 			runnerName={useWatch({ name: "runnerName" }) as string}
 		/>
 	);
