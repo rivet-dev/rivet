@@ -89,11 +89,12 @@ export async function uploadDirToReleases(
 	remotePath: string,
 ): Promise<void> {
 	const { awsEnv, endpointUrl } = await getReleasesS3Config();
+	// Use --checksum-algorithm CRC32 for R2 compatibility (matches CI upload in release.yaml)
 	await $({
 		env: awsEnv,
 		shell: true,
 		stdio: "inherit",
-	})`aws s3 sync ${localPath} s3://rivet-releases/${remotePath} --endpoint-url ${endpointUrl}`;
+	})`aws s3 cp ${localPath} s3://rivet-releases/${remotePath} --recursive --checksum-algorithm CRC32 --endpoint-url ${endpointUrl}`;
 }
 
 export async function uploadContentToReleases(
@@ -134,18 +135,39 @@ export async function deleteReleasesPath(remotePath: string): Promise<void> {
 	})`aws s3 rm s3://rivet-releases/${remotePath} --recursive --endpoint-url ${endpointUrl}`;
 }
 
+/**
+ * Copies objects from one S3 path to another within the releases bucket.
+ *
+ * NOTE: We implement our own recursive copy instead of using `aws s3 cp --recursive`
+ * because of a Cloudflare R2 bug. R2 doesn't support the `x-amz-tagging-directive`
+ * header, which the AWS CLI sends even with `--copy-props none` for small files.
+ * Using `s3api copy-object` directly avoids this header.
+ *
+ * See: https://community.cloudflare.com/t/r2-s3-compat-doesnt-support-net-sdk-for-copy-operations-due-to-tagging-header/616867
+ */
 export async function copyReleasesPath(
 	sourcePath: string,
 	targetPath: string,
 ): Promise<void> {
 	const { awsEnv, endpointUrl } = await getReleasesS3Config();
-	// Use sync instead of cp --recursive because R2 doesn't support the
-	// x-amz-tagging-directive header that cp sends.
-	await $({
+
+	const listResult = await $({
 		env: awsEnv,
-		shell: true,
-		stdio: "inherit",
-	})`aws s3 sync s3://rivet-releases/${sourcePath} s3://rivet-releases/${targetPath} --endpoint-url ${endpointUrl}`;
+	})`aws s3api list-objects --bucket rivet-releases --prefix ${sourcePath} --endpoint-url ${endpointUrl}`;
+
+	const objects = JSON.parse(listResult.stdout);
+	if (!objects.Contents?.length) {
+		throw new Error(`No objects found under ${sourcePath}`);
+	}
+
+	for (const obj of objects.Contents) {
+		const sourceKey = obj.Key;
+		const targetKey = sourceKey.replace(sourcePath, targetPath);
+		console.log(`  ${sourceKey} -> ${targetKey}`);
+		await $({
+			env: awsEnv,
+		})`aws s3api copy-object --bucket rivet-releases --key ${targetKey} --copy-source rivet-releases/${sourceKey} --endpoint-url ${endpointUrl}`;
+	}
 }
 
 export function assertEquals<T>(actual: T, expected: T, message?: string): void {
