@@ -383,7 +383,7 @@ export const createNamespaceContext = ({
 				queryFn: async ({ signal: abortSignal }) => {
 					const response = await client.actorsKvGet(
 						actorId,
-						KV_KEYS
+						KV_KEYS.INSPECTOR_TOKEN
 							// @ts-expect-error
 							.toBase64(),
 						{ namespace },
