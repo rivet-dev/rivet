@@ -37,6 +37,8 @@ import type { ActorId, ActorStatus } from "./queries";
 
 const InspectorGuardContext = createContext<ReactNode | null>(null);
 
+const RIVET_KIT_MIN_VERSION = "2.0.35";
+
 export const useInspectorGuard = () => useContext(InspectorGuardContext);
 
 interface GuardConnectableInspectorProps {
@@ -152,9 +154,16 @@ function ActorContextProvider(props: {
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const { isError, token, metadata, error } = useActorInspectorData(
-		props.actorId,
-	);
+	const { isError, token, isLoading, metadata, error } =
+		useActorInspectorData(props.actorId);
+
+	if (isLoading) {
+		return (
+			<InspectorGuardContext.Provider value={<ConnectingInspector />}>
+				{props.children}
+			</InspectorGuardContext.Provider>
+		);
+	}
 
 	if (!token || !metadata || isError) {
 		return (
@@ -165,8 +174,10 @@ function ActorContextProvider(props: {
 						<p>
 							Please ensure the Inspector is enabled for your
 							Actor and that you're using RivetKit version{" "}
-							<b className="font-mono-console">2.0.34</b> or
-							newer.
+							<b className="font-mono-console">
+								{RIVET_KIT_MIN_VERSION}
+							</b>{" "}
+							or newer.
 						</p>
 						<p>
 							Current RivetKit version:{" "}
@@ -216,7 +227,7 @@ function ActorInspectorProvider({
 			credentials={{ url: url, inspectorToken, token: "" }}
 			actorId={actorId}
 		>
-			<InspectorGuard>{children}</InspectorGuard>
+			<InspectorGuard actorId={actorId}>{children}</InspectorGuard>
 		</InspectorProvider>
 	);
 }
@@ -322,7 +333,7 @@ function ActorEngineProvider({
 			credentials={{ ...credentials, inspectorToken }}
 			actorId={actorId}
 		>
-			<InspectorGuard>{children}</InspectorGuard>
+			<InspectorGuard actorId={actorId}>{children}</InspectorGuard>
 		</InspectorProvider>
 	);
 }
@@ -394,8 +405,44 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 	);
 }
 
-function InspectorGuard({ children }: { children: ReactNode }) {
-	const { connectionStatus } = useActorInspector();
+function ConnectingInspector() {
+	return (
+		<Info>
+			<div className="flex items-center">
+				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+				Connecting to Inspector...
+			</div>
+		</Info>
+	);
+}
+
+function InspectorGuard({
+	actorId,
+	children,
+}: {
+	actorId: ActorId;
+	children: ReactNode;
+}) {
+	const {
+		connectionStatus,
+		isInspectorAvailable,
+		actorMetadataQueryOptions,
+	} = useActorInspector();
+
+	const { isLoading } = useQuery(actorMetadataQueryOptions(actorId));
+
+	if (isLoading) {
+		return (
+			<InspectorGuardContext.Provider value={<ConnectingInspector />}>
+				{children}
+			</InspectorGuardContext.Provider>
+		);
+	}
+
+	if (!isInspectorAvailable) {
+		return <OutdatedInspector>{children}</OutdatedInspector>;
+	}
+
 	if (connectionStatus === "error") {
 		return (
 			<InspectorGuardContext.Provider
@@ -420,5 +467,25 @@ function InspectorGuard({ children }: { children: ReactNode }) {
 			{connectionStatus !== "connected" && <ShimmerLine />}
 			{children}
 		</>
+	);
+}
+
+function OutdatedInspector({ children }: { children: ReactNode }) {
+	return (
+		<InspectorGuardContext.Provider
+			value={
+				<Info>
+					<p>
+						Please upgrade your Actor to RivetKit version{" "}
+						<b className="font-mono-console">
+							{RIVET_KIT_MIN_VERSION}
+						</b>{" "}
+						to use the Inspector.
+					</p>
+				</Info>
+			}
+		>
+			{children}
+		</InspectorGuardContext.Provider>
 	);
 }

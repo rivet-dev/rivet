@@ -1,6 +1,7 @@
 import { faBooks, Icon } from "@rivet-gg/icons";
 import { Button, ScrollArea } from "@/components";
 import { ActorGeneral } from "./actor-general";
+import { ActorRunner } from "./actor-runner";
 import type { ActorId } from "./queries";
 
 interface ActorConfigTabProps {

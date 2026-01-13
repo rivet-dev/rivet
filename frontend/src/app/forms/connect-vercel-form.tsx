@@ -304,7 +304,7 @@ export function EnvVariables() {
 			prefix="NEXT_PUBLIC"
 			endpoint={useSelectedDatacenter()}
 			kind="serverless"
-			prefixlessEndpint
+			prefixlessEndpoint
 			runnerName={useWatch({ name: "runnerName" }) as string}
 		/>
 	);
