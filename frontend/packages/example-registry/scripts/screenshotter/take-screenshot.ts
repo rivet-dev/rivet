@@ -76,7 +76,8 @@ async function takeScreenshot(
 	}
 
 	// Build server URL from the specified port
-	const serverUrl = `http://127.0.0.1:${frontendPort}`;
+	// Use localhost instead of 127.0.0.1 to match Vite's default binding
+	const serverUrl = `http://localhost:${frontendPort}`;
 	console.log(`🔗 Using server URL: ${serverUrl}`);
 
 	// Start dev server

@@ -62,6 +62,9 @@ COPY rivetkit-typescript ./rivetkit-typescript
 # Copy engine SDK packages (needed by rivetkit)
 COPY engine/sdks/typescript ./engine/sdks/typescript
 
+# Copy shared packages (needed by engine SDK)
+COPY shared ./shared
+
 # Copy example-registry package (for puppeteer and screenshot script)
 COPY frontend/packages/example-registry ./frontend/packages/example-registry
 
