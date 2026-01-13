@@ -16,6 +16,7 @@ use crate::{
 	ctx::WorkflowCtx,
 	db::{BumpSubSubject, DatabaseHandle},
 	error::WorkflowError,
+	metrics,
 	registry::RegistryHandle,
 };
 
@@ -73,7 +74,12 @@ impl Worker {
 
 		let cache = rivet_cache::CacheInner::from_env(&self.config, self.pools.clone())?;
 
-		let mut bump_sub = { self.db.bump_sub(BumpSubSubject::Worker).await? };
+		// We use ready_chunks because multiple bumps in a row should be processed as 1 bump
+		let mut bump_sub = self
+			.db
+			.bump_sub(BumpSubSubject::Worker)
+			.await?
+			.ready_chunks(1024);
 
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -102,8 +108,13 @@ impl Worker {
 			tokio::select! {
 				_ = tick_interval.tick() => {},
 				res = bump_sub.next() => {
-					if res.is_none() {
-						break Err(WorkflowError::SubscriptionUnsubscribed.into());
+					match res {
+						Some(bumps) => {
+							metrics::WORKER_BUMPS_PER_TICK
+								.with_label_values(&[self.worker_id.to_string().as_str()])
+								.observe(bumps.len() as f64);
+						}
+						None => break Err(WorkflowError::SubscriptionUnsubscribed.into()),
 					}
 
 					tick_interval.reset();
