@@ -170,7 +170,7 @@ async function downloadEngineBinaryIfNeeded(
 
 	const { targetTriplet, extension } = resolveTargetTriplet();
 	const remoteFile = `${ENGINE_BINARY_NAME}-${targetTriplet}${extension}`;
-	const downloadUrl = `${ENGINE_BASE_URL}/${version}/${remoteFile}`;
+	const downloadUrl = `${ENGINE_BASE_URL}/${version}/engine/${remoteFile}`;
 	logger().info({
 		msg: "downloading engine binary",
 		url: downloadUrl,

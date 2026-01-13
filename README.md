@@ -92,16 +92,16 @@ View more options & deployment guides in the [**self-hosting documentation**](ht
 docker run -p 6420:6420 rivetkit/engine
 
 # macOS (Apple Silicon)
-curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/rivet-engine-aarch64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
+curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-aarch64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
 
 # macOS (Intel)
-curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/rivet-engine-x86_64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
+curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-x86_64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
 
 # Linux (x86)
-curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/rivet-engine-x86_64-unknown-linux-musl" && chmod +x rivet-engine && ./rivet-engine start
+curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-x86_64-unknown-linux-musl" && chmod +x rivet-engine && ./rivet-engine start
 
 # Windows (x86_64)
-curl.exe -o rivet-engine.exe "https://releases.rivet.dev/rivet/latest/rivet-engine-x86_64-pc-windows-gnu.exe"
+curl.exe -o rivet-engine.exe "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-x86_64-pc-windows-gnu.exe"
 .\rivet-engine.exe start
 ```
 
