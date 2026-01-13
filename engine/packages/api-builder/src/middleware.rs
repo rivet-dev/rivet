@@ -3,7 +3,7 @@ use std::{net::SocketAddr, time::Instant};
 use anyhow::Result;
 use axum::{
 	body::{Body, HttpBody},
-	extract::{ConnectInfo, State},
+	extract::{ConnectInfo, MatchedPath, State},
 	http::{Request, StatusCode},
 	middleware::Next,
 	response::Response,
@@ -67,6 +67,11 @@ pub async fn http_logging_middleware(
 		ray_id = %request_ids.ray_id,
 		req_id = %request_ids.req_id,
 	);
+	req_span.set_attribute("http.request.method", req.method().to_string());
+	req_span.set_attribute("http.path", req.uri().to_string());
+	if let Some(path) = req.extensions().get::<MatchedPath>() {
+		req_span.set_attribute("http.route", path.as_str().to_string());
+	}
 	req_span.add_link(current_span_ctx);
 
 	// Extract headers for logging
@@ -121,6 +126,8 @@ pub async fn http_logging_middleware(
 
 		let status = response.status();
 		let status_code = status.as_u16();
+
+		tracing::Span::current().set_attribute("http.response.status_code", status_code as i64);
 
 		let error = response.extensions().get::<ErrorExt>();
 

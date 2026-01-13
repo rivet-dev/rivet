@@ -12,6 +12,7 @@ use rivet_api_builder::{RequestIds, X_RIVET_RAY_ID};
 use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_util::Id;
 use serde_json;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use rivet_runner_protocol as protocol;
 use std::{
@@ -2009,9 +2010,10 @@ impl ProxyService {
 		let request_ids = RequestIds::new(self.state.config.dc_label());
 		req.extensions_mut().insert(request_ids);
 
-		tracing::Span::current()
-			.record("req_id", request_ids.req_id.to_string())
-			.record("ray_id", request_ids.ray_id.to_string());
+		let current_span = tracing::Span::current();
+
+		current_span.record("req_id", request_ids.req_id.to_string());
+		current_span.record("ray_id", request_ids.ray_id.to_string());
 
 		// Extract request information for logging and analytics before consuming the request
 		let incoming_ray_id = req
@@ -2032,6 +2034,9 @@ impl ProxyService {
 			.map(|x| x.to_string())
 			.unwrap_or_else(|| req.uri().path().to_string());
 		let method = req.method().clone();
+
+		current_span.set_attribute("http.request.method", method.to_string());
+		current_span.set_attribute("http.path", uri_string.clone());
 
 		let user_agent = req
 			.headers()
@@ -2212,6 +2217,8 @@ impl ProxyService {
 		}
 
 		let status = res.status().as_u16();
+
+		current_span.set_attribute("http.response.status_code", status as i64);
 
 		let content_length = res
 			.headers()
