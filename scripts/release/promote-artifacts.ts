@@ -23,10 +23,10 @@ export async function promoteArtifacts(opts: ReleaseOpts) {
 		console.log(`==> Source commit: ${sourceCommit}`);
 	}
 
-	// Promote engine artifacts (uploaded by CI in release.yaml)
+	// Promote engine artifacts (uploaded by CI in release.yaml to rivet/{commit}/engine/)
 	await promotePath(opts, sourceCommit, "engine");
 
-	// Promote devtools artifacts (uploaded by build-artifacts.ts in setup phase)
+	// Promote devtools artifacts (uploaded by build-artifacts.ts to rivet/{commit}/devtools/)
 	await promotePath(opts, sourceCommit, "devtools");
 
 	// Upload install scripts
