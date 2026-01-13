@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import z from "zod";
 import {
 	createDefaultGlobalContext,
 	type DefaultDataProvider,
@@ -47,10 +48,10 @@ export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 			return queryOptions({
 				...global.statusQueryOptions(),
 				queryFn: async () => {
-					const response = await fetch(opts.url || "");
-					if (!response.ok) {
-						throw new Error("Failed to fetch status");
+					if (!opts.url) {
+						throw new Error("No inspector URL provided");
 					}
+					await getInspectorClientEndpoint(opts.url);
 					return true;
 				},
 				enabled: Boolean(opts.url),
@@ -58,3 +59,44 @@ export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 		},
 	} satisfies DefaultDataProvider;
 };
+
+export async function getInspectorClientEndpoint(url: string) {
+	const rivetkitEndpoint = url.replace(/\/+$/, "");
+
+	const finalUrl =
+		(await tryMetadata(`${rivetkitEndpoint}`)) ||
+		(await tryMetadata(`${rivetkitEndpoint}/api/rivet`));
+
+	if (!finalUrl) {
+		throw new Error("Failed to reach client endpoint");
+	}
+
+	const finalResponse = await fetch(finalUrl, { method: "OPTIONS" });
+	if (!finalResponse.ok) {
+		throw new Error("Failed to reach client endpoint");
+	}
+
+	return finalUrl;
+}
+
+const metadataSchema = z.object({
+	runtime: z.string().optional(),
+	version: z.string().optional(),
+	clientEndpoint: z.string().optional(),
+});
+
+async function tryMetadata(url: string) {
+	try {
+		const response = await fetch(`${url}/metadata`);
+		if (!response.ok) {
+			throw new Error("Failed to fetch metadata");
+		}
+
+		const data = await response.json();
+		const parsed = metadataSchema.parse(data);
+
+		return parsed.clientEndpoint || url;
+	} catch {
+		return null;
+	}
+}

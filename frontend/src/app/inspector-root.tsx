@@ -4,6 +4,7 @@ import { askForLocalNetworkAccess } from "@/lib/permissions";
 import { Actors } from "./actors";
 import { BuildPrefiller } from "./build-prefiller";
 import { Connect } from "./connect";
+import { getInspectorClientEndpoint } from "./data-providers/inspector-data-provider";
 import { useInspectorContext } from "./inspector-context";
 import { Logo } from "./logo";
 import { RouteLayout } from "./route-layout";
@@ -51,14 +52,11 @@ export function InspectorRoot() {
 						}
 
 						try {
-							const response = await fetch(values.url, {
-								method: "OPTIONS",
-							});
-							if (!response.ok) {
-								throw new Error("CORS preflight failed");
-							}
+							const realUrl = await getInspectorClientEndpoint(
+								values.url,
+							);
 
-							await connect({ url: values.url });
+							await connect({ url: realUrl });
 						} catch {
 							form.setError("url", {
 								message: "localhost.cors.error",
