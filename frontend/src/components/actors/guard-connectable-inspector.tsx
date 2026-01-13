@@ -152,11 +152,11 @@ function ActorContextProvider(props: {
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const { token, metadata, isError, error } = useActorInspectorData(
+	const { isError, token, metadata, error } = useActorInspectorData(
 		props.actorId,
 	);
 
-	if (isError) {
+	if (!token || !metadata || isError) {
 		return (
 			<InspectorGuardContext.Provider
 				value={
