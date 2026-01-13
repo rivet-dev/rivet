@@ -22,6 +22,9 @@ import {
 const footer = {
 	product: [
 		{ name: "Actors", href: "/docs/actors" },
+		{ name: "Pricing", href: "/cloud#pricing" },
+		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
+		{ name: "Sales", href: "/sales" },
 	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
@@ -37,9 +40,7 @@ const footer = {
 			name: "Rivet vs Cloudflare Workers",
 			href: "/rivet-vs-cloudflare-workers",
 		},
-		{ name: "Pricing", href: "/cloud#pricing" },
-		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
-		{ name: "Sales", href: "/sales" },
+		{ name: "YC & Speedrun Deal", href: "/startups" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
 		{ name: "Press Kit", href: "https://releases.rivet.dev/press-kit.zip" },
 	],
@@ -162,11 +163,11 @@ function SmallPrint() {
 					<div>
 						<p className="mb-2 text-xs text-white">Backed by</p>
 						<div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
-							<div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+							<div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
 								<Image src={imgYC} alt="Y Combinator" className="h-4 w-auto" />
 								<span>Y Combinator</span>
 							</div>
-							<div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+							<div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
 								<Image src={imgA16z} alt="a16z" className="h-3 w-auto" />
 								<span>a16z Speedrun</span>
 							</div>
