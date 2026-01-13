@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button, ScrollArea } from "@/components";
 import { useActorInspector } from "../actor-inspector-context";
 import type { ActorId } from "../queries";
@@ -20,6 +20,8 @@ export function ActorConsoleInput({ actorId }: ActorConsoleInputProps) {
 	);
 
 	const ref = useRef<ReplInputRef>(null);
+	const [history, setHistory] = useState<string[]>([]);
+	const [historyIndex, setHistoryIndex] = useState(-1);
 
 	return (
 		<div className="border-t w-full max-h-20 flex flex-col">
@@ -30,7 +32,43 @@ export function ActorConsoleInput({ actorId }: ActorConsoleInputProps) {
 						className="w-full"
 						rpcs={rpcs}
 						onRun={(code) => {
+							if (code.trim()) {
+								setHistory((prev) => [...prev, code]);
+								setHistoryIndex(-1);
+							}
 							worker.run(code);
+						}}
+						onHistoryUp={() => {
+							if (history.length === 0) return;
+							const newIndex =
+								historyIndex === -1
+									? history.length - 1
+									: Math.max(0, historyIndex - 1);
+							setHistoryIndex(newIndex);
+							if (ref.current?.view) {
+								replaceCode(
+									ref.current.view,
+									history[newIndex],
+								);
+							}
+						}}
+						onHistoryDown={() => {
+							if (historyIndex === -1) return;
+							const newIndex = historyIndex + 1;
+							if (newIndex >= history.length) {
+								setHistoryIndex(-1);
+								if (ref.current?.view) {
+									replaceCode(ref.current.view, "");
+								}
+							} else {
+								setHistoryIndex(newIndex);
+								if (ref.current?.view) {
+									replaceCode(
+										ref.current.view,
+										history[newIndex],
+									);
+								}
+							}
 						}}
 					/>
 				</ActorConsoleMessage>
