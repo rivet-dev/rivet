@@ -200,9 +200,6 @@ function processReadme(content: string, exampleName: string): string {
 }
 
 async function main() {
-	console.log("TEMPORARILY DISABLED");
-	return;
-
 	const { screenshotsOnly, screenshotOptions } = parseArgs();
 
 	// Path to examples directory (from example-registry package)

@@ -446,13 +446,14 @@ This is enforced by the tsconfig options `allowImportingTsExtensions` and `rewri
 
 The following issues need to be fixed across examples:
 
-- [ ] Rename `src/registry.ts` to `src/actors.ts` in all examples
-- [ ] Update all relative imports to use `.ts` extensions (ESM compliance)
+- [x] Rename `src/registry.ts` to `src/actors.ts` in all examples
+- [ ] Update all relative imports to use `.ts` extensions (ESM compliance) - only cloudflare examples remaining
 - [ ] Add `allowImportingTsExtensions` and `rewriteRelativeImportExtensions` to tsconfig.json
-- [ ] Remove unused `tsup.config.ts` from examples using vite-plugin-srvx
-- [ ] Remove unused `tsup` devDependency from examples using vite-plugin-srvx
-- [ ] Move `srvx` from devDependencies to dependencies (used by `start` script)
-- [ ] Move `@hono/node-server` and `@hono/node-ws` from devDependencies to dependencies
-- [ ] Remove unused `concurrently` devDependency from examples using vite-plugin-srvx
-- [ ] Remove `scripts/` directories with CLI client scripts
-- [ ] Remove `prompts` and `@types/prompts` devDependencies
+- [x] Remove unused `tsup.config.ts` from examples using vite-plugin-srvx
+- [x] Remove unused `tsup` devDependency from examples using vite-plugin-srvx
+- [x] Move `srvx` from devDependencies to dependencies (used by `start` script)
+- [x] Move `@hono/node-server` and `@hono/node-ws` from devDependencies to dependencies
+- [x] Remove unused `concurrently` devDependency from examples using vite-plugin-srvx
+- [ ] Remove `scripts/` directories with CLI client scripts - only cloudflare/next-js examples remaining
+- [x] Remove `prompts` and `@types/prompts` devDependencies
+- [x] Migrate all frontend examples to use vite-plugin-srvx
