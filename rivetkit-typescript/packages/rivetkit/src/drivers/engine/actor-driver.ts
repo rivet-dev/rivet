@@ -46,6 +46,7 @@ import {
 	promiseWithResolvers,
 	setLongTimeout,
 	stringifyError,
+	VERSION,
 } from "@/utils";
 import { logger } from "./log";
 
@@ -146,7 +147,7 @@ export class EngineActorDriver implements ActorDriver {
 			runnerName: config.runner.runnerName,
 			runnerKey: config.runner.runnerKey ?? crypto.randomUUID(),
 			metadata: {
-				inspectorToken: this.#config.inspector.token(),
+				rivetkit: { version: VERSION },
 			},
 			prepopulateActorNames: buildActorNames(config),
 			onConnected: () => {
