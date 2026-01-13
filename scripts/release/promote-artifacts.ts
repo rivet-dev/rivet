@@ -23,11 +23,11 @@ export async function promoteArtifacts(opts: ReleaseOpts) {
 		console.log(`==> Source commit: ${sourceCommit}`);
 	}
 
-	// Promote engine artifacts
-	await promotePath(opts, sourceCommit, { name: "Engine", required: true });
+	// Promote engine artifacts (uploaded by CI in release.yaml)
+	await promotePath(opts, sourceCommit, "engine");
 
-	// Promote devtools artifacts
-	await promotePath(opts, sourceCommit, { name: "DevTools", subPath: "devtools", required: false });
+	// Promote devtools artifacts (uploaded by build-artifacts.ts in setup phase)
+	await promotePath(opts, sourceCommit, "devtools");
 
 	// Upload install scripts
 	await uploadInstallScripts(opts, opts.version);
@@ -36,58 +36,6 @@ export async function promoteArtifacts(opts: ReleaseOpts) {
 	}
 }
 
-interface PromoteOptions {
-	name: string;
-	subPath?: string;
-	required: boolean;
-}
-
-async function promotePath(
-	opts: ReleaseOpts,
-	sourceCommit: string,
-	{ name, subPath, required }: PromoteOptions,
-) {
-	console.log(`==> Promoting ${name} Artifacts`);
-
-	const pathSuffix = subPath ? `/${subPath}` : "";
-	const commitPrefix = `rivet/${sourceCommit}${pathSuffix}/`;
-
-	console.log(`Checking for ${name.toLowerCase()} at ${commitPrefix}`);
-	let commitFiles;
-	try {
-		commitFiles = await listReleasesObjects(commitPrefix);
-	} catch {
-		if (required) {
-			throw new Error(`No files found under ${commitPrefix}`);
-		}
-		console.log(`⚠️  No ${name} artifacts found at ${commitPrefix}, skipping`);
-		return;
-	}
-
-	if (!Array.isArray(commitFiles?.Contents) || commitFiles.Contents.length === 0) {
-		if (required) {
-			throw new Error(`No files found under ${commitPrefix}`);
-		}
-		console.log(`⚠️  No ${name} artifacts found at ${commitPrefix}, skipping`);
-		return;
-	}
-
-	// Copy to version directory
-	await copyPath(commitPrefix, `rivet/${opts.version}${pathSuffix}/`);
-
-	// Copy to latest directory if applicable
-	if (opts.latest) {
-		await copyPath(commitPrefix, `rivet/latest${pathSuffix}/`);
-	}
-
-	console.log(`✅ ${name} artifacts promoted successfully`);
-}
-
-async function copyPath(sourcePrefix: string, targetPrefix: string) {
-	console.log(`Copying ${sourcePrefix} -> ${targetPrefix}`);
-	await deleteReleasesPath(targetPrefix);
-	await copyReleasesPath(sourcePrefix, targetPrefix);
-}
 
 async function uploadInstallScripts(opts: ReleaseOpts, version: string) {
 	const installScriptPaths = [
@@ -103,5 +51,27 @@ async function uploadInstallScripts(opts: ReleaseOpts, version: string) {
 
 		console.log(`Uploading install script: ${uploadKey}`);
 		await uploadContentToReleases(scriptContent, uploadKey);
+	}
+}
+
+async function copyPath(sourcePrefix: string, targetPrefix: string) {
+	console.log(`Copying ${sourcePrefix} -> ${targetPrefix}`);
+	await deleteReleasesPath(targetPrefix);
+	await copyReleasesPath(sourcePrefix, targetPrefix);
+}
+
+/** S3-to-S3 copy from rivet/{commit}/{name}/ to rivet/{version}/{name}/ */
+async function promotePath(opts: ReleaseOpts, sourceCommit: string, name: string) {
+	console.log(`==> Promoting ${name} artifacts`);
+
+	const sourcePrefix = `rivet/${sourceCommit}/${name}/`;
+	const commitFiles = await listReleasesObjects(sourcePrefix);
+	if (!Array.isArray(commitFiles?.Contents) || commitFiles.Contents.length === 0) {
+		throw new Error(`No files found under ${sourcePrefix}`);
+	}
+
+	await copyPath(sourcePrefix, `rivet/${opts.version}/${name}/`);
+	if (opts.latest) {
+		await copyPath(sourcePrefix, `rivet/latest/${name}/`);
 	}
 }

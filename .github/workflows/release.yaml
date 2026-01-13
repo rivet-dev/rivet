@@ -164,9 +164,9 @@ jobs:
           # Must specify --checksum-algorithm for compatibility with R2
           aws s3 cp \
             "${BINARY_PATH}" \
-            "s3://engine/${COMMIT_SHA_SHORT}/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}" \
+            "s3://rivet-releases/rivet/${COMMIT_SHA_SHORT}/engine/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}" \
             --region auto \
-            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases \
+            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com \
             --checksum-algorithm CRC32
 
   docker:
