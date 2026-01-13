@@ -8,11 +8,13 @@ export function EnvVariables({
 	runnerName,
 	endpoint,
 	kind,
+	prefixlessEndpint = false,
 }: {
 	prefix?: string;
 	runnerName?: string;
 	endpoint: string;
 	kind: "serverless" | "serverfull";
+	prefixlessEndpint?: boolean;
 }) {
 	return (
 		<div>
@@ -26,6 +28,10 @@ export function EnvVariables({
 				<Label asChild className="text-muted-foreground text-xs mb-1">
 					<p>Value</p>
 				</Label>
+
+				{prefixlessEndpint ? (
+					<RivetEndpointEnv endpoint={endpoint} />
+				) : null}
 				<RivetEndpointEnv prefix={prefix} endpoint={endpoint} />
 				<RivetTokenEnv prefix={prefix} kind={kind} />
 				<RivetNamespaceEnv prefix={prefix} />
