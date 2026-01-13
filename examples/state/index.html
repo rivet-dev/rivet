@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Agent Example</title>
+    <title>Quickstart: State</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -11,13 +11,44 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
-        .ai-chat {
+        .chat-container {
             max-width: 800px;
             margin: 0 auto;
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             overflow: hidden;
+        }
+        .header {
+            background: #007bff;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2em;
+        }
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        .user-input {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .user-input label {
+            font-weight: 500;
+        }
+        .user-input input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
         }
         .messages {
             height: 400px;
@@ -26,58 +57,33 @@
             border-bottom: 1px solid #eee;
         }
         .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .message-header {
             display: flex;
-            margin-bottom: 16px;
-            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 8px;
         }
-        .message.user {
-            justify-content: flex-end;
+        .message-sender {
+            font-weight: bold;
+            color: #007bff;
         }
-        .message.assistant {
-            justify-content: flex-start;
+        .message-timestamp {
+            font-size: 0.85em;
+            color: #666;
         }
-        .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #007bff;
-            color: white;
-            font-size: 18px;
-            flex-shrink: 0;
-        }
-        .message.user .avatar {
-            background: #28a745;
-            margin-left: 10px;
-        }
-        .message.assistant .avatar {
-            background: #007bff;
-            margin-right: 10px;
-        }
-        .content {
-            max-width: 60%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            background: #f1f1f1;
-            word-wrap: break-word;
-        }
-        .message.user .content {
-            background: #007bff;
-            color: white;
-        }
-        .message.assistant .content {
-            background: #f1f1f1;
-        }
-        .message.loading .content {
-            background: #e9ecef;
-            font-style: italic;
+        .message-text {
+            color: #333;
         }
         .empty-message {
             text-align: center;
             color: #666;
             padding: 40px;
+            font-style: italic;
         }
         .input-area {
             display: flex;
@@ -99,6 +105,7 @@
             border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
+            font-weight: 500;
         }
         .input-area button:disabled {
             background: #ccc;
@@ -107,10 +114,16 @@
         .input-area button:hover:not(:disabled) {
             background: #0056b3;
         }
+        .input-area .clear-button {
+            background: #dc3545;
+        }
+        .input-area .clear-button:hover:not(:disabled) {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <script type="module" src="/main.tsx"></script>
+    <script type="module" src="/frontend/main.tsx"></script>
 </body>
 </html>

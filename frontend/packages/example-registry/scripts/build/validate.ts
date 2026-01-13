@@ -92,15 +92,9 @@ export function validateRivetKitVersions(
 	for (const [pkgName, version] of Object.entries(allDeps)) {
 		// Check if it's a rivetkit or @rivetkit/* package
 		if (pkgName === "rivetkit" || pkgName.startsWith("@rivetkit/")) {
-			// Allow workspace:* for monorepo development
-			if (version === "workspace:*") {
-				continue;
-			}
-
-			// Otherwise, must be exactly "latest"
-			if (version !== "latest") {
+			if (version !== "*") {
 				throw new Error(
-					`Package version validation failed for ${exampleName}: Package "${pkgName}" version must be "latest" (found "${version}")`,
+					`Package version validation failed for ${exampleName}: Package "${pkgName}" version must be "*" (found "${version}")`,
 				);
 			}
 		}
