@@ -22,4 +22,4 @@ To facilitate state management on the runner side (specifically via RivetKit), e
 
 When a client websocket closes during hibernation, this value is cleared.
 
-When a runner receives a CommandStartActor message via the runner protocol, it contains information about which hiberating requests are still active.
+When a runner receives a CommandStartActor message via the runner protocol, it contains information about which hibernating requests are still active.
