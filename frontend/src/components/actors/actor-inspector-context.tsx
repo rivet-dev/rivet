@@ -195,6 +195,9 @@ export const createDefaultActorInspectorContext = ({
 	actorMetadataQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			queryKey: ["actor", actorId, "metadata"],
+			retry: 0,
+			retryDelay: 5_000,
+			refetchInterval: 5_000,
 			queryFn: async () => {
 				return api.getMetadata();
 			},
@@ -285,6 +288,9 @@ export const actorMetadataQueryOptions = ({
 }) =>
 	queryOptions({
 		queryKey: ["actor", actorId, "metadata"],
+		retry: 0,
+		retryDelay: 5_000,
+		refetchInterval: 1_000,
 		queryFn: async () => {
 			return getActorMetadata({ actorId, credentials });
 		},
@@ -328,8 +334,6 @@ export const ActorInspectorProvider = ({
 
 	const { isSuccess: isActorMetadataSuccess } = useQuery({
 		...actorMetadataQueryOptions({ actorId, credentials }),
-		retry: 0,
-		refetchInterval: 5_000,
 	});
 
 	const { isSuccess: isActorDataSuccess } = useActorInspectorData(actorId);
