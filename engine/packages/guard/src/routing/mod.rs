@@ -28,13 +28,16 @@ pub struct ActorPathInfo {
 
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(skip_all)]
-pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) -> RoutingFn {
+pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
+	let ctx = ctx.clone();
 	Arc::new(
 		move |hostname: &str,
 		      path: &str,
+		      ray_id: Id,
+		      req_id: Id,
 		      port_type: rivet_guard_core::proxy_service::PortType,
 		      headers: &hyper::HeaderMap| {
-			let ctx = ctx.clone();
+			let ctx = ctx.with_ray(ray_id, req_id).unwrap();
 			let shared_state = shared_state.clone();
 
 			Box::pin(

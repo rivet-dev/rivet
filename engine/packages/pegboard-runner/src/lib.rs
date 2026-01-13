@@ -7,7 +7,6 @@ use hyper::{Response, StatusCode};
 use pegboard::ops::runner::update_alloc_idx::Action;
 use rivet_guard_core::{
 	WebSocketHandle, custom_serve::CustomServeTrait, proxy_service::ResponseBody,
-	request_context::RequestContext,
 };
 use rivet_runner_protocol as protocol;
 use tokio::sync::watch;
@@ -46,7 +45,8 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 	async fn handle_request(
 		&self,
 		_req: hyper::Request<http_body_util::Full<hyper::body::Bytes>>,
-		_request_context: &mut RequestContext,
+		_ray_id: Id,
+		_req_id: Id,
 		_request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Pegboard runner ws doesn't handle regular HTTP requests
@@ -66,12 +66,15 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		ws_handle: WebSocketHandle,
 		_headers: &hyper::HeaderMap,
 		path: &str,
-		_request_context: &mut RequestContext,
-		_unique_request_id: protocol::RequestId,
+		ray_id: Id,
+		req_id: Id,
+		_request_id: protocol::RequestId,
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
+		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+
 		// Get UPS
-		let ups = self.ctx.ups().context("failed to get UPS instance")?;
+		let ups = ctx.ups().context("failed to get UPS instance")?;
 
 		// Parse URL to extract parameters
 		let url = url::Url::parse(&format!("ws://placeholder/{path}"))
@@ -82,7 +85,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		tracing::debug!(?path, "tunnel ws connection established");
 
 		// Create connection
-		let conn = conn::init_conn(&self.ctx, ws_handle.clone(), url_data)
+		let conn = conn::init_conn(&ctx, ws_handle.clone(), url_data)
 			.await
 			.context("failed to initialize runner connection")?;
 
@@ -145,7 +148,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		let (ping_abort_tx, ping_abort_rx) = watch::channel(());
 
 		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
-			self.ctx.clone(),
+			ctx.clone(),
 			conn.clone(),
 			sub,
 			eviction_sub,
@@ -153,7 +156,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		));
 
 		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(
-			self.ctx.clone(),
+			ctx.clone(),
 			conn.clone(),
 			ws_handle.recv(),
 			eviction_sub2,
@@ -161,11 +164,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		));
 
 		// Update pings
-		let ping = tokio::spawn(ping_task::task(
-			self.ctx.clone(),
-			conn.clone(),
-			ping_abort_rx,
-		));
+		let ping = tokio::spawn(ping_task::task(ctx.clone(), conn.clone(), ping_abort_rx));
 		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
 		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
 		let ping_abort_tx2 = ping_abort_tx.clone();

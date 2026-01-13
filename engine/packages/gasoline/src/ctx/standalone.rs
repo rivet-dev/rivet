@@ -67,6 +67,23 @@ impl StandaloneCtx {
 	}
 
 	#[tracing::instrument(skip_all)]
+	pub fn with_ray(&self, ray_id: Id, req_id: Id) -> WorkflowResult<Self> {
+		let mut ctx = StandaloneCtx::new(
+			self.db.clone(),
+			self.config.clone(),
+			self.pools.clone(),
+			self.cache.clone(),
+			&self.name,
+			ray_id,
+			req_id,
+		)?;
+
+		ctx.from_workflow = self.from_workflow;
+
+		Ok(ctx)
+	}
+
+	#[tracing::instrument(skip_all)]
 	pub fn new_from_activity(ctx: &ActivityCtx, req_id: Id) -> WorkflowResult<Self> {
 		let mut ctx = StandaloneCtx::new(
 			ctx.db().clone(),
