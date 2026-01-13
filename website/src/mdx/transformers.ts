@@ -34,11 +34,9 @@ function parseTemplateVariable(fullMatch: string): TemplateVariable | null {
  * - {{variable.name:"default-value"}} - variable with default value
  */
 export function transformerTemplateVariables(): ShikiTransformer {
-	console.log("Using template variable transformer");
 	return {
 		name: "template-variables",
 		tokens(tokens) {
-			console.log("Processing tokens with template variable transformer");
 			const newLines: ThemedToken[][] = [];
 
 			for (const line of tokens) {
@@ -68,11 +66,6 @@ function splitTokenForTemplateVariables(token: ThemedToken): ThemedToken[] {
 		// No template variables, return original token
 		return [token];
 	}
-
-	console.log(
-		"Found template variable matches:",
-		matches.map((m) => m[0]),
-	);
 
 	const resultTokens: ThemedToken[] = [];
 	let lastIndex = 0;

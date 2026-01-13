@@ -1,0 +1,18 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { Header } from '@/components/v2/Header';
+
+interface Props {
+	title: string;
+	description?: string;
+	canonicalUrl?: string;
+	ogImage?: string;
+}
+
+const { title, description, canonicalUrl, ogImage } = Astro.props;
+---
+
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage}>
+	<Header variant="floating" client:load />
+	<slot />
+</BaseLayout>

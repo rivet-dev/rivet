@@ -1,19 +1,18 @@
 "use client";
+import { usePathname } from "@/hooks/usePathname";
 import { ActiveLink } from "@/components/ActiveLink";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
-import Image from "next/image";
-import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
 import { Bot, Gamepad2, FileText, Workflow, Database } from "lucide-react";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
 import { LogoContextMenu } from "./LogoContextMenu";
+import { DocsTabs } from "@/components/DocsTabs";
 
 interface TextNavItemProps {
 	href: string;
@@ -36,13 +35,12 @@ function TextNavItem({
 			)}
 		>
 			<RivetHeader.NavItem asChild>
-				<Link
-					href={href}
+				<a href={href}
 					className="text-white"
 					aria-current={ariaCurrent}
 				>
 					{children}
-				</Link>
+				</a>
 			</RivetHeader.NavItem>
 		</div>
 	);
@@ -115,7 +113,7 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 						{solutions.map((solution) => {
 							const IconComponent = solution.icon;
 							return (
-								<Link
+								<a
 									key={solution.href}
 									href={solution.href}
 									className="group flex items-start gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer -m-3"
@@ -131,7 +129,7 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 											{solution.description}
 										</div>
 									</div>
-								</Link>
+								</a>
 							);
 						})}
 					</div>
@@ -147,6 +145,7 @@ interface HeaderProps {
 	mobileSidebar?: ReactNode;
 	variant?: "floating" | "full-width";
 	learnMode?: boolean;
+	showDocsTabs?: boolean;
 }
 
 export function Header({
@@ -155,8 +154,12 @@ export function Header({
 	mobileSidebar,
 	variant = "full-width",
 	learnMode = false,
+	showDocsTabs = false,
 }: HeaderProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
+
+	// Use DocsTabs as subnav if showDocsTabs is true
+	const effectiveSubnav = showDocsTabs ? <DocsTabs /> : subnav;
 
 	useEffect(() => {
 		if (variant === "floating") {
@@ -199,20 +202,18 @@ export function Header({
 						logo={
 							<div className="hidden md:block">
 								<LogoContextMenu>
-									<Link href="/">
-										<Image
-											src={logoUrl.src || logoUrl}
+									<a href="/">
+										<img src={logoUrl.src}
 											width={80}
 											height={24}
 											className="ml-1 w-20"
 											alt="Rivet logo"
-											unoptimized
 										/>
-									</Link>
+									</a>
 								</LogoContextMenu>
 							</div>
 						}
-						subnav={subnav}
+						subnav={effectiveSubnav}
 						support={null}
 						links={
 							<div className="flex flex-row items-center">
@@ -221,23 +222,21 @@ export function Header({
 									asChild
 									className="p-2 mr-4"
 								>
-									<Link
-										href="https://rivet.dev/discord"
+									<a href="https://rivet.dev/discord"
 										className="text-white/90"
 									>
 										<Icon
 											icon={faDiscord}
 											className="drop-shadow-md"
 										/>
-									</Link>
+									</a>
 								</RivetHeader.NavItem>
 								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
-								<Link
-									href="https://dashboard.rivet.dev"
+								<a href="https://dashboard.rivet.dev"
 									className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 								>
 									Sign In
-								</Link>
+								</a>
 							</div>
 						}
 						mobileBreadcrumbs={
@@ -293,27 +292,25 @@ export function Header({
 				"sticky top-0 z-50 bg-neutral-950",
 				"[&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
 				// 0 padding on bottom for larger screens when subnav is showing
-				subnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
+				effectiveSubnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
 				// Learn mode styling
 				learnMode && "bg-[#1c1917] border-b border-[#44403c]",
 			)}
 			logo={
 				<div className="hidden md:block">
 					<LogoContextMenu>
-						<Link href="/">
-							<Image
-								src={logoUrl.src || logoUrl}
+						<a href="/">
+							<img src={logoUrl.src}
 								width={80}
 								height={24}
 								className="ml-1 w-20"
 								alt="Rivet logo"
-								unoptimized
 							/>
-						</Link>
+						</a>
 					</LogoContextMenu>
 				</div>
 			}
-			subnav={subnav}
+			subnav={effectiveSubnav}
 			support={<></>}
 			links={
 				<div className="flex flex-row items-center">
@@ -323,17 +320,16 @@ export function Header({
 						</div>
 					)}
 					<RivetHeader.NavItem asChild className="p-2 mr-4">
-						<Link href="https://rivet.dev/discord" className="text-white/90">
+						<a href="https://rivet.dev/discord" className="text-white/90">
 							<Icon icon={faDiscord} className="drop-shadow-md" />
-						</Link>
+						</a>
 					</RivetHeader.NavItem>
 					<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
-					<Link
-						href="https://dashboard.rivet.dev"
+					<a href="https://dashboard.rivet.dev"
 						className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 					>
 						Sign In
-					</Link>
+					</a>
 				</div>
 			}
 			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
@@ -372,7 +368,6 @@ export function Header({
 
 function DocsMobileNavigation({ tree }) {
 	const pathname = usePathname() || "";
-	const router = useRouter();
 	const isDocsPage = pathname.startsWith("/docs");
 
 	// Determine current section based on pathname
@@ -429,9 +424,9 @@ function DocsMobileNavigation({ tree }) {
 									{solutions.map((solution) => (
 										<DropdownMenuItem
 											key={solution.href}
-											onClick={() => router.push(solution.href)}
+											asChild
 										>
-											{solution.label}
+											<a href={solution.href}>{solution.label}</a>
 										</DropdownMenuItem>
 									))}
 								</DropdownMenuContent>
@@ -440,9 +435,9 @@ function DocsMobileNavigation({ tree }) {
 					);
 				}
 				return (
-					<Link key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
+					<a key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
 						{label}
-					</Link>
+					</a>
 				);
 			})}
 
@@ -463,9 +458,9 @@ function DocsMobileNavigation({ tree }) {
 							{sections.map(({ id, label, href }) => (
 								<DropdownMenuItem
 									key={id}
-									onClick={() => router.push(href)}
+									asChild
 								>
-									{label}
+									<a href={href}>{label}</a>
 								</DropdownMenuItem>
 							))}
 						</DropdownMenuContent>

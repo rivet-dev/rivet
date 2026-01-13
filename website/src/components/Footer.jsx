@@ -1,10 +1,8 @@
 "use client";
+import { usePathname } from "@/hooks/usePathname";
 import { Button } from "@/components/Button";
 import routes from "@/generated/routes.json";
 import clsx from "clsx";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import imgLogo from "@/images/rivet-logos/icon-white.svg";
 import imgYC from "@/images/logos/yc.svg";
@@ -140,7 +138,7 @@ function SmallPrint() {
 				{/* Brands & links */}
 				<div className="space-y-8 xl:col-span-3">
 					{/* Logo */}
-					<Image className="size-12" src={imgLogo} alt="Rivet" />
+					<img className="size-12" src={imgLogo.src} alt="Rivet" />
 					<p className="text-sm leading-6 text-gray-300">
 						Build and scale stateful workloads
 					</p>
@@ -148,14 +146,14 @@ function SmallPrint() {
 					{/* Social */}
 					<div className="flex space-x-6">
 						{footer.social.map((item) => (
-							<Link
+							<a
 								key={item.name}
 								href={item.href}
 								className="text-xl text-gray-500 hover:text-gray-400"
 							>
 								<span className="sr-only">{item.name}</span>
 								<Icon icon={item.icon} aria-hidden="true" />
-							</Link>
+							</a>
 						))}
 					</div>
 
@@ -164,11 +162,11 @@ function SmallPrint() {
 						<p className="mb-2 text-xs text-white">Backed by</p>
 						<div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
 							<div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
-								<Image src={imgYC} alt="Y Combinator" className="h-4 w-auto" />
+								<img src={imgYC.src} alt="Y Combinator" className="h-4 w-auto" />
 								<span>Y Combinator</span>
 							</div>
 							<div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
-								<Image src={imgA16z} alt="a16z" className="h-3 w-auto" />
+								<img src={imgA16z.src} alt="a16z" className="h-3 w-auto" />
 								<span>a16z Speedrun</span>
 							</div>
 						</div>
@@ -184,13 +182,12 @@ function SmallPrint() {
 						<ul role="list" className="mt-3 space-y-2">
 							{footer.product.map((item) => (
 								<li key={item.name}>
-									<Link
-										href={item.href}
+									<a href={item.href}
 										target={item.target}
 										className="text-sm leading-4 text-gray-300 hover:text-white"
 									>
 										{item.name}
-									</Link>
+									</a>
 								</li>
 							))}
 						</ul>
@@ -202,13 +199,12 @@ function SmallPrint() {
 						<ul role="list" className="mt-3 space-y-2">
 							{footer.devs.map((item) => (
 								<li key={item.name}>
-									<Link
-										href={item.href}
+									<a href={item.href}
 										target={item.target}
 										className="text-sm leading-4 text-gray-300 hover:text-white"
 									>
 										{item.name}
-									</Link>
+									</a>
 								</li>
 							))}
 						</ul>
@@ -220,8 +216,7 @@ function SmallPrint() {
 						<ul role="list" className="mt-3 space-y-2">
 							{footer.resources.map((item) => (
 								<li key={item.name}>
-									<Link
-										href={item.href}
+									<a href={item.href}
 										target={item.newTab ? "_blank" : null}
 										className={clsx(
 											"text-sm leading-4 text-gray-300 hover:text-white",
@@ -240,7 +235,7 @@ function SmallPrint() {
 												{item.badge}
 											</span>
 										)}
-									</Link>
+									</a>
 								</li>
 							))}
 						</ul>
@@ -252,12 +247,11 @@ function SmallPrint() {
 						<ul role="list" className="mt-3 space-y-2">
 							{footer.legal.map((item) => (
 								<li key={item.name}>
-									<Link
-										href={item.href}
+									<a href={item.href}
 										className="text-sm leading-4 text-gray-300 hover:text-white"
 									>
 										{item.name}
-									</Link>
+									</a>
 								</li>
 							))}
 						</ul>

@@ -9,7 +9,6 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 
 import { faComment } from "@fortawesome/free-solid-svg-icons/faComment";
-import Link from "next/link";
 
 export const HeaderPopupSolutionsMenu = () => {
 	return (
@@ -20,18 +19,18 @@ export const HeaderPopupSolutionsMenu = () => {
 				className="h-full justify-start"
 				startIcon={<Icon icon={faArrowPointer} />}
 			>
-				<Link href="/examples" target="_blank">
+				<a href="/examples" target="_blank">
 					Cursors
-				</Link>
+				</a>
 			</Button>
 			<Button
 				variant="secondary"
 				className="h-full justify-start"
 				startIcon={<Icon icon={faComment} />}
 			>
-				<Link href="/examples" target="_blank">
+				<a href="/examples" target="_blank">
 					Chat App
-				</Link>
+				</a>
 			</Button>
 			<Button
 				variant="secondary"
@@ -39,9 +38,9 @@ export const HeaderPopupSolutionsMenu = () => {
 				target="_blank"
 				startIcon={<Icon icon={faWifiSlash} />}
 			>
-				<Link href="/examples" target="_blank">
+				<a href="/examples" target="_blank">
 					Local-first Sync
-				</Link>
+				</a>
 			</Button>
 			<Button
 				variant="secondary"
@@ -49,9 +48,9 @@ export const HeaderPopupSolutionsMenu = () => {
 				target="_blank"
 				startIcon={<Icon icon={faSparkles} />}
 			>
-				<Link href="/examples" target="_blank">
+				<a href="/examples" target="_blank">
 					AI Agent
-				</Link>
+				</a>
 			</Button>
 			<Button
 				variant="secondary"
@@ -59,9 +58,9 @@ export const HeaderPopupSolutionsMenu = () => {
 				target="_blank"
 				startIcon={<Icon icon={faDiscord} />}
 			>
-				<Link href="/examples" target="_blank">
+				<a href="/examples" target="_blank">
 					Discord Activities
-				</Link>
+				</a>
 			</Button>
 		</div>
 	);

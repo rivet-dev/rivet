@@ -3,10 +3,7 @@ import {
 	Button,
 	cn,
 	ScrollArea,
-	Tabs,
-	TabsContent,
-	TabsList,
-	TabsTrigger,
+	TooltipProvider,
 	WithTooltip,
 } from "@rivet-gg/components";
 import { faCopy, faFile, Icon } from "@rivet-gg/icons";
@@ -21,7 +18,7 @@ import { AutofillCodeBlock } from "@/components/v2/AutofillCodeBlock";
 import { AutofillFooter } from "@/components/v2/AutofillFooter";
 import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
 
-const languageNames = {
+const languageNames: Record<string, string> = {
 	csharp: "C#",
 	cpp: "C++",
 	go: "Go",
@@ -55,6 +52,9 @@ interface CodeGroupProps {
 const getChildIdx = (child: ReactElement) =>
 	child.props?.file || child.props?.title || child.props?.language || "text";
 
+const getDisplayName = (child: ReactElement) =>
+	child.props?.title || languageNames[child.props?.language] || "Code";
+
 export function CodeGroup({ children, className }: CodeGroupProps) {
 	const tabChildren = Children.toArray(children).filter(
 		(child): child is ReactElement => isValidElement(child),
@@ -67,37 +67,55 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 	return (
 		<div
 			className={cn("code-group group my-4 overflow-hidden rounded-md border bg-neutral-950", className)}
-			data-code-group
+			data-code-group-container
 		>
-			<Tabs defaultValue={getChildIdx(tabChildren[0])}>
-				<ScrollArea
-					className="w-full"
-					viewportProps={{ className: "[&>div]:!table" }}
+			<div className="overflow-x-auto">
+				<div
+					data-code-group-tabs
+					className="inline-flex text-muted-foreground border-b border-neutral-800 w-full"
 				>
-					<TabsList>
-						{tabChildren.map((child) => {
-							const idx = getChildIdx(child);
-							const displayName = child.props.title || languageNames[child.props.language];
-							return (
-								<TabsTrigger key={idx} value={idx}>
-									{displayName || "Code"}
-								</TabsTrigger>
-							);
-						})}
-					</TabsList>
-				</ScrollArea>
-				{tabChildren.map((child) => {
+					{tabChildren.map((child, index) => {
+						const idx = getChildIdx(child);
+						const displayName = getDisplayName(child);
+						return (
+							<button
+								key={idx}
+								type="button"
+								data-code-group-trigger={idx}
+								className={cn(
+									"relative inline-flex min-h-[2.75rem] items-center justify-center whitespace-nowrap",
+									"rounded-none border-b-2 bg-transparent px-4 py-2.5 text-sm font-semibold",
+									"ring-offset-background transition-none",
+									"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+									"disabled:pointer-events-none disabled:opacity-50",
+									index === 0
+										? "border-b-primary text-white"
+										: "border-b-transparent text-muted-foreground",
+								)}
+							>
+								{displayName}
+							</button>
+						);
+					})}
+				</div>
+			</div>
+			<div data-code-group-content-container className="pt-2">
+				{tabChildren.map((child, index) => {
 					const idx = getChildIdx(child);
 					return (
-						<TabsContent key={idx} value={idx}>
+						<div
+							key={idx}
+							data-code-group-content={idx}
+							className={index === 0 ? "" : "hidden"}
+						>
 							{cloneElement(child, {
 								isInGroup: true,
 								...child.props,
 							})}
-						</TabsContent>
+						</div>
 					);
 				})}
-			</Tabs>
+			</div>
 		</div>
 	);
 }
@@ -110,6 +128,7 @@ interface PreProps {
 	children?: ReactElement;
 	autofill?: boolean;
 	code?: string;
+	highlightedCode?: string;
 	flush?: boolean;
 }
 export const pre = ({
@@ -120,6 +139,7 @@ export const pre = ({
 	isInGroup,
 	autofill,
 	code,
+	highlightedCode,
 	flush,
 }: PreProps) => {
 	const codeBlock = (
@@ -129,9 +149,17 @@ export const pre = ({
 		)}>
 			<div className="bg-neutral-950 text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
-					{children
-						? cloneElement(children, { escaped: true })
-						: null}
+					{highlightedCode ? (
+						<span
+							className="not-prose code [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0"
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: it's generated from shiki
+							dangerouslySetInnerHTML={{ __html: highlightedCode }}
+						/>
+					) : code ? (
+						<pre className="not-prose code whitespace-pre-wrap">{code}</pre>
+					) : children ? (
+						cloneElement(children, { escaped: true })
+					) : null}
 				</ScrollArea>
 			</div>
 
@@ -151,16 +179,18 @@ export const pre = ({
 					)}
 					{autofill && <AutofillFooter />}
 				</div>
-				<WithTooltip
-					trigger={
-						<CopyCodeTrigger>
-							<Button size="icon-sm" variant="ghost">
-								<Icon icon={faCopy} />
-							</Button>
-						</CopyCodeTrigger>
-					}
-					content="Copy code"
-				/>
+				<TooltipProvider>
+					<WithTooltip
+						trigger={
+							<CopyCodeTrigger>
+								<Button size="icon-sm" variant="ghost" data-copy-code>
+									<Icon icon={faCopy} />
+								</Button>
+							</CopyCodeTrigger>
+						}
+						content="Copy code"
+					/>
+				</TooltipProvider>
 			</div>
 		</div>
 	);
@@ -175,20 +205,67 @@ export const pre = ({
 
 export { pre as Code };
 
+// Helper to extract string content from children (handles Astro MDX quirks)
+function extractTextContent(children: unknown): string | null {
+	if (typeof children === 'string') {
+		return children;
+	}
+	if (children === null || children === undefined) {
+		return '';
+	}
+	if (Array.isArray(children)) {
+		const extracted = children.map(extractTextContent);
+		// If any child couldn't be extracted, return null
+		if (extracted.some(e => e === null)) return null;
+		return extracted.join('');
+	}
+	// If it's a React element with props.children or props.dangerouslySetInnerHTML
+	if (typeof children === 'object' && children !== null) {
+		const obj = children as Record<string, unknown>;
+		if ('props' in obj && typeof obj.props === 'object' && obj.props !== null) {
+			const props = obj.props as Record<string, unknown>;
+			if ('dangerouslySetInnerHTML' in props && typeof props.dangerouslySetInnerHTML === 'object') {
+				const html = props.dangerouslySetInnerHTML as { __html?: string };
+				if (html.__html) return html.__html;
+			}
+			if ('children' in props) {
+				return extractTextContent(props.children);
+			}
+		}
+		// Check for direct __html property
+		if ('__html' in obj && typeof obj.__html === 'string') {
+			return obj.__html;
+		}
+	}
+	// Return null to indicate extraction failed - will fall back to rendering children directly
+	return null;
+}
+
 export const code = ({ children, escaped }) => {
+	const textContent = extractTextContent(children);
+
+	// If we couldn't extract text content, render children directly
+	// This handles Astro MDX's compiled element format
+	if (textContent === null) {
+		if (escaped) {
+			return <span className="not-prose code">{children}</span>;
+		}
+		return <code>{children}</code>;
+	}
+
 	if (escaped) {
 		return (
 			<span
 				className="not-prose code"
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: it's generated from markdown
-				dangerouslySetInnerHTML={{ __html: children }}
+				dangerouslySetInnerHTML={{ __html: textContent }}
 			/>
 		);
 	}
 	return (
 		<code
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: it's generated from markdown
-			dangerouslySetInnerHTML={{ __html: escapeHTML(children) }}
+			dangerouslySetInnerHTML={{ __html: escapeHTML(textContent) }}
 		/>
 	);
 };

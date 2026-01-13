@@ -6,14 +6,21 @@ interface NavigationStateContextType {
 	isOpen: (itemId: string) => boolean;
 	setIsOpen: (itemId: string, open: boolean) => void;
 	toggleOpen: (itemId: string) => void;
+	isHydrated: boolean;
 }
 
 const NavigationStateContext = createContext<NavigationStateContextType | undefined>(undefined);
 
 export function useNavigationState() {
 	const context = useContext(NavigationStateContext);
+	// Return default no-op values during SSR when no provider is available
 	if (!context) {
-		throw new Error("useNavigationState must be used within a NavigationStateProvider");
+		return {
+			isOpen: () => false,
+			setIsOpen: () => {},
+			toggleOpen: () => {},
+			isHydrated: false,
+		};
 	}
 	return context;
 }
@@ -54,7 +61,8 @@ export function NavigationStateProvider({ children }: NavigationStateProviderPro
 	}, [openStates, isHydrated]);
 
 	const isOpen = useCallback((itemId: string) => {
-		return openStates[itemId] ?? false;
+		// Default to true (open) for items that haven't been explicitly set
+		return openStates[itemId] ?? true;
 	}, [openStates]);
 
 	const setIsOpen = useCallback((itemId: string, open: boolean) => {
@@ -67,16 +75,18 @@ export function NavigationStateProvider({ children }: NavigationStateProviderPro
 	const toggleOpen = useCallback((itemId: string) => {
 		setOpenStates(prev => ({
 			...prev,
-			[itemId]: !prev[itemId],
+			// Default to true (open) if not set, so toggle will close it
+			[itemId]: !(prev[itemId] ?? true),
 		}));
 	}, []);
 
 	return (
-		<NavigationStateContext.Provider 
+		<NavigationStateContext.Provider
 			value={{
 				isOpen,
 				setIsOpen,
 				toggleOpen,
+				isHydrated,
 			}}
 		>
 			{children}

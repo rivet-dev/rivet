@@ -1,0 +1,28 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { Header } from '@/components/v2/Header';
+
+interface Props {
+	title: string;
+	description?: string;
+	canonicalUrl?: string;
+	ogImage?: string;
+	publishedTime?: string;
+	keywords?: string[];
+}
+
+const { title, description, canonicalUrl, ogImage, publishedTime, keywords } = Astro.props;
+---
+
+<BaseLayout
+	title={title}
+	description={description}
+	canonicalUrl={canonicalUrl}
+	ogImage={ogImage}
+	ogType="article"
+	publishedTime={publishedTime}
+	keywords={keywords}
+>
+	<Header active="blog" variant="floating" client:load />
+	<slot />
+</BaseLayout>

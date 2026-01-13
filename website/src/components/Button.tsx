@@ -1,6 +1,5 @@
 import { Icon, type IconProp } from "@rivet-gg/icons";
 import clsx from "clsx";
-import Link from "next/link";
 
 function ArrowIcon(props) {
 	return (

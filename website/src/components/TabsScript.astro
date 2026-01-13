@@ -1,0 +1,165 @@
+---
+// This script handles tab switching for Tabs, CodeGroup, and Accordion components in MDX content
+// Since Astro doesn't hydrate React components in MDX by default, we use vanilla JS
+---
+
+<script>
+	// Initialize tabs by moving buttons and content into place
+	function initializeTabs() {
+		const tabContainers = document.querySelectorAll('[data-tabs-container]');
+		tabContainers.forEach((container) => {
+			const tabsList = container.querySelector('[data-tabs-list]');
+			const contentContainer = container.querySelector('[data-tabs-content-container]');
+			const source = container.querySelector('[data-tabs-source]');
+
+			if (!tabsList || !contentContainer || !source) return;
+
+			// Already initialized
+			if (tabsList.children.length > 0) return;
+
+			const tabItems = source.querySelectorAll('[data-tab-item]');
+			tabItems.forEach((item, index) => {
+				const button = item.querySelector('[data-tab-trigger]');
+				const content = item.querySelector('[data-tab-content]');
+
+				if (button && content) {
+					// Move button to tabs list
+					tabsList.appendChild(button.cloneNode(true));
+
+					// Move content to content container
+					const contentClone = content.cloneNode(true) as HTMLElement;
+					contentClone.setAttribute('data-tab-title', item.getAttribute('data-tab-title') || '');
+					contentContainer.appendChild(contentClone);
+				}
+			});
+
+			// Set first tab as active
+			const firstButton = tabsList.querySelector('[data-tab-trigger]');
+			const firstContent = contentContainer.querySelector('[data-tab-content]');
+			if (firstButton) {
+				firstButton.classList.add('border-b-primary', 'text-white');
+				firstButton.classList.remove('border-b-transparent', 'text-muted-foreground');
+			}
+			if (firstContent) {
+				firstContent.classList.remove('hidden');
+			}
+		});
+	}
+
+	// Run on page load and after view transitions
+	initializeTabs();
+	document.addEventListener('astro:after-swap', initializeTabs);
+
+	// Use event delegation - only need one listener on document
+	if (!(window as any).__tabsListenerAdded) {
+		(window as any).__tabsListenerAdded = true;
+
+		document.addEventListener('click', (event) => {
+			const target = event.target as HTMLElement;
+
+			// Handle Tabs component
+			const tabTrigger = target.closest('[data-tab-trigger]');
+			if (tabTrigger) {
+				const tabTitle = tabTrigger.getAttribute('data-tab-trigger');
+				if (!tabTitle) return;
+
+				const tabsContainer = tabTrigger.closest('[data-tabs-container]');
+				if (!tabsContainer) return;
+
+				// Update trigger styles (underline style)
+				const triggers = tabsContainer.querySelectorAll('[data-tab-trigger]');
+				triggers.forEach((trigger) => {
+					const isActive = trigger.getAttribute('data-tab-trigger') === tabTitle;
+					if (isActive) {
+						trigger.classList.add('border-b-primary', 'text-white');
+						trigger.classList.remove('border-b-transparent', 'text-muted-foreground');
+					} else {
+						trigger.classList.remove('border-b-primary', 'text-white');
+						trigger.classList.add('border-b-transparent', 'text-muted-foreground');
+					}
+				});
+
+				// Show/hide tab content
+				const contentContainer = tabsContainer.querySelector('[data-tabs-content-container]');
+				if (!contentContainer) return;
+
+				const contents = contentContainer.querySelectorAll('[data-tab-content]');
+				contents.forEach((content) => {
+					const contentTitle = content.getAttribute('data-tab-title');
+					if (contentTitle === tabTitle) {
+						content.classList.remove('hidden');
+					} else {
+						content.classList.add('hidden');
+					}
+				});
+				return;
+			}
+
+			// Handle CodeGroup component
+			const codeGroupTrigger = target.closest('[data-code-group-trigger]');
+			if (codeGroupTrigger) {
+				const triggerId = codeGroupTrigger.getAttribute('data-code-group-trigger');
+				if (!triggerId) return;
+
+				const codeGroupContainer = codeGroupTrigger.closest('[data-code-group-container]');
+				if (!codeGroupContainer) return;
+
+				// Update trigger styles (underline style, same as Tabs)
+				const triggers = codeGroupContainer.querySelectorAll('[data-code-group-trigger]');
+				triggers.forEach((trigger) => {
+					const isActive = trigger.getAttribute('data-code-group-trigger') === triggerId;
+					if (isActive) {
+						trigger.classList.add('border-b-primary', 'text-white');
+						trigger.classList.remove('border-b-transparent', 'text-muted-foreground');
+					} else {
+						trigger.classList.remove('border-b-primary', 'text-white');
+						trigger.classList.add('border-b-transparent', 'text-muted-foreground');
+					}
+				});
+
+				// Show/hide code content
+				const contentContainer = codeGroupContainer.querySelector('[data-code-group-content-container]');
+				if (!contentContainer) return;
+
+				const contents = contentContainer.querySelectorAll('[data-code-group-content]');
+				contents.forEach((content) => {
+					const contentId = content.getAttribute('data-code-group-content');
+					if (contentId === triggerId) {
+						content.classList.remove('hidden');
+					} else {
+						content.classList.add('hidden');
+					}
+				});
+				return;
+			}
+
+			// Handle Accordion component
+			const accordionTrigger = target.closest('[data-accordion-trigger]');
+			if (accordionTrigger) {
+				const container = accordionTrigger.closest('[data-accordion-container]');
+				if (!container) return;
+
+				const isOpen = container.getAttribute('data-accordion-open') === 'true';
+				const content = container.querySelector('[data-accordion-content]');
+				const iconClosed = container.querySelector('[data-accordion-icon-closed]');
+				const iconOpen = container.querySelector('[data-accordion-icon-open]');
+
+				if (isOpen) {
+					// Close
+					container.setAttribute('data-accordion-open', 'false');
+					accordionTrigger.setAttribute('aria-expanded', 'false');
+					content?.classList.add('hidden');
+					iconClosed?.classList.remove('hidden');
+					iconOpen?.classList.add('hidden');
+				} else {
+					// Open
+					container.setAttribute('data-accordion-open', 'true');
+					accordionTrigger.setAttribute('aria-expanded', 'true');
+					content?.classList.remove('hidden');
+					iconClosed?.classList.add('hidden');
+					iconOpen?.classList.remove('hidden');
+				}
+			}
+		});
+	}
+</script>

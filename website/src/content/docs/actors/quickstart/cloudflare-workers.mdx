@@ -311,43 +311,6 @@ See the [React documentation](/docs/clients/react) for more information.
 
 </Tab>
 
-<Tab title="Rust">
-
-```rust {{"title":"main.rs"}}
-use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
-use serde_json::json;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new(
-        "https://your-app.workers.dev/api/rivet",
-        TransportKind::Sse,
-        EncodingKind::Json
-    );
-
-    // Get or create counter actor
-    let options = GetOrCreateOptions::default();
-    let counter = client.get("counter", ["my-counter"].into(), options)?
-        .connect();
-
-    // Subscribe to events
-    counter.on_event("countChanged", |args| {
-        let count = args[0].as_i64().unwrap();
-        println!("Count updated: {}", count);
-    }).await;
-
-    // Call increment action
-    let result = counter.action("increment", vec![json!(1)]).await?;
-    println!("New count: {}", result);
-
-    Ok(())
-}
-```
-
-See the [Rust client documentation](/docs/clients/rust) for more information.
-
-</Tab>
-
 </Tabs>
 
 <Note>

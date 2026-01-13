@@ -5,12 +5,11 @@ import { Button, cn } from "@rivet-gg/components";
 import { Icon, faActors } from "@rivet-gg/icons";
 import type { ComponentProps, ReactNode } from "react";
 
-import Link from "next/link";
 
 export const HeaderPopupProductMenu = () => {
 	return (
 		<div className="grid h-full grid-cols-3 grid-rows-3 gap-4 overflow-hidden pb-2">
-			<Link href="/docs" className="col-span-2 row-span-3 ">
+			<a href="/docs" className="col-span-2 row-span-3 ">
 				<Item
 					onMouseEnter={(e) =>
 						e.currentTarget.querySelector("video")?.play()
@@ -43,7 +42,7 @@ export const HeaderPopupProductMenu = () => {
 						/>
 					</video>
 				</Item>
-			</Link>
+			</a>
 
 			<Button
 				variant="secondary"
@@ -51,18 +50,18 @@ export const HeaderPopupProductMenu = () => {
 				className="col-start-3 h-full justify-start"
 				startIcon={<Icon icon={faCodeBranch} />}
 			>
-				<Link href="https://github.com/rivet-dev/rivet" target="_blank">
+				<a href="https://github.com/rivet-dev/rivet" target="_blank">
 					Community Edition
-				</Link>
+				</a>
 			</Button>
 			<Button
 				variant="secondary"
 				className="col-start-3 h-full justify-start"
 				startIcon={<Icon icon={faCloud} />}
 			>
-				<Link href="https://dashboard.rivet.dev" target="_blank">
+				<a href="https://dashboard.rivet.dev" target="_blank">
 					Rivet Cloud
-				</Link>
+				</a>
 			</Button>
 			<Button
 				variant="secondary"
@@ -70,7 +69,7 @@ export const HeaderPopupProductMenu = () => {
 				target="_blank"
 				startIcon={<Icon icon={faBriefcase} />}
 			>
-				<Link href="/sales">Rivet Enterprise</Link>
+				<a href="/sales">Rivet Enterprise</a>
 			</Button>
 		</div>
 	);

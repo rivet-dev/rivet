@@ -1,11 +1,10 @@
 import backdrop from "@/images/effects/backdrop.svg";
-import Image from "next/image";
 
 export function GridPattern({ width, height, ...props }) {
 	// let patternId = useId();
 
 	return (
-		<Image src={backdrop} width={width} height={height} {...props} alt="" />
+		<img src={backdrop} width={width} height={height} {...props} alt="" />
 	);
 	// return (
 	//   <svg aria-hidden='true' {...props}>

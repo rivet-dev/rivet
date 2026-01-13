@@ -1,6 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import forestAnderson from "@/authors/forest-anderson/avatar.jpeg";
 import nathanFlurry from "@/authors/nathan-flurry/avatar.jpeg";
 import nicholasKissel from "@/authors/nicholas-kissel/avatar.jpeg";
@@ -32,7 +29,7 @@ export const AUTHORS = {
 		avatar: forestAnderson,
 		url: "https://twitter.com/angelonfira",
 	},
-};
+} as const;
 
 export const CATEGORIES = {
 	changelog: {
@@ -53,73 +50,7 @@ export const CATEGORIES = {
 	frogs: {
 		name: "Frogs",
 	},
-};
+} as const;
 
-export async function loadArticlesMeta() {
-	const dir = path.join(process.cwd(), "src/posts");
-
-	const dirs = await fs.readdir(dir, { recursive: true });
-	const files = dirs.filter((file) => file.endsWith("page.mdx"));
-
-	const posts = files.map((file) => file.replace(/\/page\.mdx$/, ""));
-
-	return posts;
-}
-
-export async function generateArticlesPageParams() {
-	const meta = await loadArticlesMeta();
-
-	return meta.map((slug) => {
-		return { slug: [slug] };
-	});
-}
-
-export async function loadArticles() {
-	const meta = await loadArticlesMeta();
-
-	return Promise.all(meta.map(loadArticle));
-}
-
-export async function loadArticleImage(slug: string) {
-	try {
-		return await import(`@/posts/${slug}/image.png`);
-	} catch {
-		try {
-			return await import(`@/posts/${slug}/image.jpg`);
-		} catch {
-			return await import(`@/posts/${slug}/image.gif`);
-		}
-	}
-}
-
-export async function loadArticle(slug: string) {
-	const [{ default: Content, ...article }, { default: image }] =
-		await Promise.all([
-			import(`@/posts/${slug}/page.mdx`),
-			loadArticleImage(slug),
-		]);
-
-	const author = AUTHORS[article.author];
-	if (!author) {
-		throw new Error(
-			`Unknown author: ${article.author}, please use one of ${Object.keys(AUTHORS).join(", ")}`,
-		);
-	}
-
-	const category = CATEGORIES[article.category];
-	if (!category) {
-		throw new Error(
-			`Unknown category: ${article.category}, please use one of ${Object.keys(CATEGORIES).join(", ")}`,
-		);
-	}
-
-	return {
-		slug,
-		...article,
-		published: new Date(article.published),
-		category: { ...category, id: article.category },
-		Content,
-		author,
-		image,
-	};
-}
+export type AuthorId = keyof typeof AUTHORS;
+export type CategoryId = keyof typeof CATEGORIES;

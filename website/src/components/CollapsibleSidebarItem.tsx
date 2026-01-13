@@ -1,11 +1,11 @@
 "use client";
 
+import { usePathname } from "@/hooks/usePathname";
 import type { SidebarItem, SidebarSection } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
 import { Icon, faChevronDown } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
-import { usePathname } from "next/navigation";
-import { type ReactNode, useMemo, useEffect, useState } from "react";
+import { type ReactNode, useMemo, useEffect, useState, useRef } from "react";
 import { normalizePath } from "@/lib/normalizePath";
 import { useNavigationState } from "@/providers/NavigationStateProvider";
 
@@ -26,13 +26,15 @@ export function CollapsibleSidebarItem({
 	const { isOpen, setIsOpen, toggleOpen } = useNavigationState();
 	const hasActiveChild = findActiveItem(item.pages, pathname) !== null;
 	const isCurrent = false; // Never highlight collapsible sections themselves
-	const [shouldAnimate, setShouldAnimate] = useState(false);
+
+	// Only animate after user interaction, not on mount or navigation
+	const hasInteracted = useRef(false);
 
 	const itemId = useMemo(() => {
 		return parentPath ? `${parentPath}.${item.title}` : item.title;
 	}, [parentPath, item.title]);
 
-	// Determine initial open state
+	// Determine initial open state from localStorage
 	const getInitialState = () => {
 		try {
 			const savedStates = localStorage.getItem("rivet-navigation-state");
@@ -58,17 +60,16 @@ export function CollapsibleSidebarItem({
 		if (globalIsOpen !== isItemOpen) {
 			setIsOpen(itemId, isItemOpen);
 		}
-		// Enable animations after initial mount
-		setShouldAnimate(true);
 	}, []);
 
-	// Update local state when global state changes
+	// Update local state when global state changes (without animation)
 	useEffect(() => {
 		const globalIsOpen = isOpen(itemId);
-		if (globalIsOpen !== isItemOpen && shouldAnimate) {
+		if (globalIsOpen !== isItemOpen) {
+			hasInteracted.current = false; // Disable animation for sync
 			setIsItemOpen(globalIsOpen);
 		}
-	}, [isOpen, itemId, isItemOpen, shouldAnimate]);
+	}, [isOpen, itemId, isItemOpen]);
 
 	const getPaddingClass = (level: number) => {
 		switch (level) {
@@ -93,6 +94,7 @@ export function CollapsibleSidebarItem({
 				)}
 				data-active={isCurrent ? true : undefined}
 				onClick={() => {
+					hasInteracted.current = true;
 					toggleOpen(itemId);
 					setIsItemOpen(!isItemOpen);
 				}}
@@ -116,10 +118,9 @@ export function CollapsibleSidebarItem({
 						open: { rotateZ: 0 },
 						closed: { rotateZ: "-90deg" },
 					}}
-					initial={isItemOpen ? "open" : "closed"}
-					animate={
-						shouldAnimate ? (isItemOpen ? "open" : "closed") : false
-					}
+					initial={false}
+					animate={isItemOpen ? "open" : "closed"}
+					transition={{ duration: hasInteracted.current ? 0.2 : 0 }}
 					className="ml-2 inline-block flex-shrink-0 opacity-70"
 				>
 					<Icon icon={faChevronDown} className="w-3 h-3" />
@@ -131,14 +132,10 @@ export function CollapsibleSidebarItem({
 					open: { height: "auto", opacity: 1 },
 					closed: { height: 0, opacity: 0 },
 				}}
-				initial={isItemOpen ? "open" : "closed"}
-				animate={
-					shouldAnimate ? (isItemOpen ? "open" : "closed") : false
-				}
+				initial={false}
+				animate={isItemOpen ? "open" : "closed"}
 				transition={{
-					opacity: isItemOpen ? { delay: 0.05 } : {},
-					height: !isItemOpen ? { delay: 0.05 } : {},
-					duration: 0.2,
+					duration: hasInteracted.current ? 0.2 : 0,
 				}}
 			>
 				{children}

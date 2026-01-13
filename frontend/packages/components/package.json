@@ -63,6 +63,7 @@
 		"@sentry/react": "^8.55.0",
 		"@shikijs/langs": "^3.12.2",
 		"@tailwindcss/container-queries": "^0.1.1",
+		"@tailwindcss/typography": "^0.5.19",
 		"@tanstack/react-table": "^8.21.3",
 		"@tanstack/react-virtual": "^3.13.12",
 		"@uiw/codemirror-extensions-basic-setup": "^4.25.1",
@@ -91,6 +92,15 @@
 		"tailwindcss-animate": "^1.0.7",
 		"usehooks-ts": "^3.1.1",
 		"zod": "^3.25.76"
+	},
+	"peerDependencies": {
+		"lodash": "^4.0.0",
+		"posthog-js": "^1.0.0"
+	},
+	"peerDependenciesMeta": {
+		"posthog-js": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@types/mime": "^4.0.0",

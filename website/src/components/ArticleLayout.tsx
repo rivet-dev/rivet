@@ -3,7 +3,6 @@ import { OtherArticlesList } from "@/components/OtherArticlesList";
 import { Prose } from "@/components/Prose";
 import { TableOfContents } from "@/components/TableOfContents";
 import type { ArticleInfo } from "@/lib/articles/metadata";
-import Image from "next/image";
 import type { ReactNode } from "react";
 
 interface ArticleLayoutProps {
@@ -21,8 +20,7 @@ export const ArticleLayout = ({ children, info }: ArticleLayoutProps) => {
 					</p>
 					{/* Author */}
 					<div className="relative flex items-center gap-x-3">
-						<Image
-							src={info.author.avatar}
+						<img src={info.author.avatar}
 							width={50}
 							height={50}
 							alt={info.author.name}

@@ -1,13 +1,11 @@
 import type { ArticleInfo } from "@/lib/articles/metadata";
 import { formatTimestamp } from "@/lib/formatDate";
-import Image from "next/image";
 
 export function ArticleHeader({ title, date, author, images }: ArticleInfo) {
 	return (
 		<header>
 			<div className="relative w-full">
-				<Image
-					src={images.hero.image}
+				<img src={images.hero.image}
 					alt={images.hero.alt}
 					className="aspect-[2/1] w-full object-cover"
 				/>
