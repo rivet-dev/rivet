@@ -1,3 +1,4 @@
+import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { LiveBadge, ScrollArea } from "@/components";
 import { useActorInspector } from "./actor-inspector-context";
@@ -29,7 +30,14 @@ export function ActorConnectionsTab({ actorId }: ActorConnectionsTabProps) {
 	}
 
 	if (isLoading) {
-		return <Info>Loading connections...</Info>;
+		return (
+			<Info>
+				<div className="flex items-center">
+					<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+					Loading Connections...
+				</div>
+			</Info>
+		);
 	}
 
 	return (

@@ -1,3 +1,4 @@
+import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { ActorEvents } from "./actor-events";
 import { useActorInspector } from "./actor-inspector-context";
@@ -26,6 +27,17 @@ export function ActorEventsTab({ actorId }: ActorEventsTabProps) {
 		);
 	}
 
+	if (isLoading) {
+		return (
+			<Info>
+				<div className="flex items-center">
+					<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+					Loading Events...
+				</div>
+			</Info>
+		);
+	}
+
 	if (isError) {
 		return (
 			<Info>
@@ -34,10 +46,6 @@ export function ActorEventsTab({ actorId }: ActorEventsTabProps) {
 				See console/logs for more details.
 			</Info>
 		);
-	}
-
-	if (isLoading) {
-		return <Info>Loading...</Info>;
 	}
 
 	return <ActorEvents actorId={actorId} />;

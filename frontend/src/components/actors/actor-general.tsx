@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
 import { cn, Dd, DiscreteCopyButton, Dl, Dt, Flex } from "@/components";
+import { useActorInspector } from "./actor-inspector-context";
 import { ActorRegion } from "./actor-region";
 import { QueriedActorStatus } from "./actor-status";
 import { QueriedActorStatusAdditionalInfo } from "./actor-status-label";
@@ -15,13 +16,13 @@ export interface ActorGeneralProps {
 export function ActorGeneral({ actorId }: ActorGeneralProps) {
 	const {
 		data: {
-			region,
+			datacenter,
 			keys,
-			createdAt,
-			destroyedAt,
-			connectableAt,
-			pendingAllocationAt,
-			sleepingAt,
+			createTs,
+			destroyTs,
+			connectableTs,
+			pendingAllocationTs,
+			sleepTs,
 			crashPolicy,
 			runner,
 		} = {},
@@ -37,7 +38,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						<ActorRegion
 							className="justify-start"
 							showLabel
-							regionId={region}
+							regionId={datacenter}
 						/>
 					</Dd>
 					<Dt>ID</Dt>
@@ -74,83 +75,147 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						</Flex>
 					</Dd>
 					<Dt>Runner</Dt>
-					<Dd>{runner}</Dd>
+					<Dd
+						className={cn({
+							"text-muted-foreground": !runner,
+						})}
+					>
+						{runner || "n/a"}
+					</Dd>
 					<Dt>Crash Policy</Dt>
-					<Dd>{crashPolicy}</Dd>
+					<Dd
+						className={cn({
+							"text-muted-foreground": !crashPolicy,
+						})}
+					>
+						{crashPolicy || "n/a"}
+					</Dd>
 					<Dt>Created</Dt>
-					<Dd className={cn({ "text-muted-foreground": !createdAt })}>
+					<Dd className={cn({ "text-muted-foreground": !createTs })}>
 						<DiscreteCopyButton
 							size="xs"
-							value={createdAt ? formatISO(createdAt) : "n/a"}
+							value={createTs ? formatISO(createTs) : "n/a"}
 							className="-mx-2"
 						>
-							{createdAt ? formatISO(createdAt) : "n/a"}
+							{createTs ? formatISO(createTs) : "n/a"}
 						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Pending Allocation</Dt>
 					<Dd
 						className={cn({
-							"text-muted-foreground": !pendingAllocationAt,
+							"text-muted-foreground": !pendingAllocationTs,
 						})}
 					>
 						<DiscreteCopyButton
 							size="xs"
 							value={
-								pendingAllocationAt
-									? formatISO(pendingAllocationAt)
+								pendingAllocationTs
+									? formatISO(pendingAllocationTs)
 									: "n/a"
 							}
 							className="-mx-2"
 						>
-							{pendingAllocationAt
-								? formatISO(pendingAllocationAt)
+							{pendingAllocationTs
+								? formatISO(pendingAllocationTs)
 								: "n/a"}
 						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Connectable</Dt>
 					<Dd
 						className={cn({
-							"text-muted-foreground": !connectableAt,
+							"text-muted-foreground": !connectableTs,
 						})}
 					>
 						<DiscreteCopyButton
 							size="xs"
 							className="-mx-2"
 							value={
-								connectableAt ? formatISO(connectableAt) : "n/a"
+								connectableTs ? formatISO(connectableTs) : "n/a"
 							}
 						>
-							{connectableAt ? formatISO(connectableAt) : "n/a"}
+							{connectableTs ? formatISO(connectableTs) : "n/a"}
 						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Sleeping</Dt>
-					<Dd
-						className={cn({ "text-muted-foreground": !sleepingAt })}
-					>
+					<Dd className={cn({ "text-muted-foreground": !sleepTs })}>
 						<DiscreteCopyButton
 							size="xs"
 							className="-mx-2"
-							value={sleepingAt ? formatISO(sleepingAt) : "n/a"}
+							value={sleepTs ? formatISO(sleepTs) : "n/a"}
 						>
-							{sleepingAt ? formatISO(sleepingAt) : "n/a"}
+							{sleepTs ? formatISO(sleepTs) : "n/a"}
 						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Destroyed</Dt>
 					<Dd
 						className={cn({
-							"text-muted-foreground": !destroyedAt,
+							"text-muted-foreground": !destroyTs,
 						})}
 					>
 						<DiscreteCopyButton
 							size="xs"
 							className="-mx-2"
-							value={destroyedAt ? formatISO(destroyedAt) : "n/a"}
+							value={destroyTs ? formatISO(destroyTs) : "n/a"}
 						>
-							{destroyedAt ? formatISO(destroyedAt) : "n/a"}
+							{destroyTs ? formatISO(destroyTs) : "n/a"}
 						</DiscreteCopyButton>
 					</Dd>
+					<Versions actorId={actorId} />
 				</Dl>
 			</Flex>
 		</div>
+	);
+}
+
+function Versions({ actorId }: { actorId: ActorId }) {
+	const { data } = useQuery(
+		useDataProvider().actorStatusQueryOptions(actorId),
+	);
+
+	const { data: metadata } = useQuery(
+		useDataProvider().metadataQueryOptions(),
+	);
+
+	const inspector = useActorInspector();
+
+	if (data === "running" && inspector.isInspectorAvailable) {
+		return (
+			<>
+				<Dt>Runner version:</Dt>
+				<Dd>{metadata?.version}</Dd>
+				<ActorVersions actorId={actorId} />
+			</>
+		);
+	}
+
+	return (
+		<>
+			<Dt>Runner version:</Dt>
+			<Dd>{metadata?.version}</Dd>
+			<Dt>Actor version:</Dt>
+			<Dd>
+				<span className="text-muted-foreground">n/a</span>
+			</Dd>
+		</>
+	);
+}
+
+function ActorVersions({ actorId }: { actorId: ActorId }) {
+	const inspector = useActorInspector();
+
+	const { data: actorMetadata } = useQuery({
+		...inspector.actorMetadataQueryOptions(actorId),
+		enabled: inspector.isInspectorAvailable,
+	});
+
+	return (
+		<>
+			<Dt>Actor version:</Dt>
+			<Dd>
+				{actorMetadata?.version || (
+					<span className="text-muted-foreground">n/a</span>
+				)}
+			</Dd>
+		</>
 	);
 }

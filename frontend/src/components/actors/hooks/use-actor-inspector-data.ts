@@ -13,6 +13,7 @@ export const useActorInspectorData = (actorId: ActorId) => {
 		metadata: metadata.data,
 		isSuccess: metadata.isSuccess && inspectorToken.isSuccess,
 		isError: metadata.isError || inspectorToken.isError,
+		isLoading: metadata.isLoading || inspectorToken.isLoading,
 		error: metadata.error || inspectorToken.error,
 	};
 };

@@ -1,3 +1,4 @@
+import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { DocsSheet } from "../docs-sheet";
@@ -33,7 +34,14 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 	}
 
 	if (isLoading) {
-		return <Info>Loading state...</Info>;
+		return (
+			<Info>
+				<div className="flex items-center">
+					<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+					Loading State Editor...
+				</div>
+			</Info>
+		);
 	}
 
 	if (!isStateEnabled) {
