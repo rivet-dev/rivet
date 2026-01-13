@@ -19,7 +19,7 @@ import {
 import { noopNext } from "@/common/utils";
 
 import type { RegistryConfig } from "@/registry/config";
-import type { GetUpgradeWebSocket } from "@/utils";
+import { type GetUpgradeWebSocket, VERSION } from "@/utils";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
@@ -35,6 +35,11 @@ interface ActorRouterBindings {
 }
 
 export type ActorRouter = Hono<{ Bindings: ActorRouterBindings }>;
+
+export interface MetadataResponse {
+	runtime: string;
+	version: string;
+}
 
 /**
  * Creates a router that runs on the partitioned instance.
@@ -75,6 +80,13 @@ export function createActorRouter(
 
 	router.get("/health", (c) => {
 		return c.text("ok");
+	});
+
+	router.get("/metadata", async (c) => {
+		return c.json({
+			runtime: "rivetkit",
+			version: VERSION,
+		} satisfies MetadataResponse);
 	});
 
 	if (isTest) {
