@@ -87,6 +87,7 @@ pub async fn setup_single_datacenter(
 		host: None,
 		port: Some(guard_port),
 		https: None,
+		..Default::default()
 	});
 
 	// Use short timeouts for tests

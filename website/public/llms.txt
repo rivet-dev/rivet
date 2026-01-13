@@ -87,6 +87,7 @@ https://rivet.dev/docs/actors/http-api
 https://rivet.dev/docs/actors/input
 https://rivet.dev/docs/actors/keys
 https://rivet.dev/docs/actors/lifecycle
+https://rivet.dev/docs/actors/limits
 https://rivet.dev/docs/actors/metadata
 https://rivet.dev/docs/actors/quickstart
 https://rivet.dev/docs/actors/quickstart/backend

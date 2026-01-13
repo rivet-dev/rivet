@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::{Request, Response, StatusCode, body::Incoming as BodyIncoming, header::HeaderName};
 use hyper_tungstenite;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
@@ -23,7 +23,7 @@ use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{
 	client::IntoClientRequest,
-	protocol::{CloseFrame, frame::coding::CloseCode},
+	protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
 };
 use tracing::Instrument;
 use url::Url;
@@ -41,10 +41,6 @@ const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
-
-const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
-const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
-const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(100); // Keep TCP connection open briefly after WebSocket close
 
 /// Response body type that can handle both streaming and buffered responses
 #[derive(Debug)]
@@ -178,6 +174,12 @@ pub struct MiddlewareConfig {
 	pub max_in_flight: MaxInFlightConfig,
 	pub retry: RetryConfig,
 	pub timeout: TimeoutConfig,
+	/// Max incoming WebSocket message size in bytes.
+	pub max_incoming_ws_message_size: usize,
+	/// Max outgoing WebSocket message size in bytes.
+	pub max_outgoing_ws_message_size: usize,
+	/// Max HTTP request body size in bytes.
+	pub max_http_request_body_size: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -210,7 +212,7 @@ pub enum MiddlewareResponse {
 
 pub type MiddlewareFn = Arc<
 	dyn for<'a> Fn(
-			&'a Id,
+			&'a Option<Id>,
 			&'a hyper::HeaderMap,
 		) -> futures::future::BoxFuture<'a, Result<MiddlewareResponse>>
 		+ Send
@@ -223,11 +225,11 @@ struct RouteCache {
 }
 
 impl RouteCache {
-	fn new() -> Self {
+	fn new(ttl: Duration) -> Self {
 		Self {
 			cache: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(ROUTE_CACHE_TTL)
+				.time_to_live(ttl)
 				.build(),
 		}
 	}
@@ -321,6 +323,11 @@ pub struct ProxyState {
 	port_type: PortType,
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	tasks: Arc<TaskGroup>,
+	// Cached config values
+	websocket_close_linger: Duration,
+	/// Fallback WebSocket max message size (used for error proxy path).
+	/// Per-route values come from MiddlewareConfig.
+	websocket_max_message_size: usize,
 }
 
 impl ProxyState {
@@ -332,25 +339,39 @@ impl ProxyState {
 		port_type: PortType,
 		clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	) -> Self {
+		let guard_config = config.guard();
+		let route_cache_ttl = Duration::from_millis(guard_config.route_cache_ttl_ms());
+		let proxy_state_cache_ttl = Duration::from_millis(guard_config.proxy_state_cache_ttl_ms());
+		let websocket_close_linger =
+			Duration::from_millis(guard_config.websocket_close_linger_ms());
+		let websocket_max_message_size = guard_config.websocket_max_message_size();
+
 		Self {
 			config,
 			routing_fn,
 			cache_key_fn,
 			middleware_fn,
-			route_cache: RouteCache::new(),
+			route_cache: RouteCache::new(route_cache_ttl),
 			rate_limiters: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(PROXY_STATE_CACHE_TTL)
+				.time_to_live(proxy_state_cache_ttl)
 				.build(),
 			in_flight_counters: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(PROXY_STATE_CACHE_TTL)
+				.time_to_live(proxy_state_cache_ttl)
 				.build(),
 			in_flight_requests: Cache::builder().max_capacity(10_000_000).build(),
 			port_type,
 			clickhouse_inserter,
 			tasks: TaskGroup::new(),
+			websocket_close_linger,
+			websocket_max_message_size,
 		}
+	}
+
+	/// Creates a WebSocket config for client connections.
+	fn client_websocket_config(max_message_size: usize) -> WebSocketConfig {
+		WebSocketConfig::default().max_message_size(Some(max_message_size))
 	}
 
 	#[tracing::instrument(skip(self))]
@@ -460,7 +481,7 @@ impl ProxyState {
 	#[tracing::instrument(skip_all)]
 	async fn get_middleware_config(
 		&self,
-		actor_id: &Id,
+		actor_id: &Option<Id>,
 		headers: &hyper::HeaderMap,
 	) -> Result<MiddlewareConfig> {
 		// Call the middleware function with a timeout
@@ -473,43 +494,64 @@ impl ProxyState {
 			Ok(result) => match result? {
 				MiddlewareResponse::Ok(config) => Ok(config),
 				MiddlewareResponse::NotFound => {
-					// Default values if middleware not found for this actor
-					Ok(MiddlewareConfig {
-						rate_limit: RateLimitConfig {
-							requests: 100, // 100 requests
-							period: 60,    // per 60 seconds
-						},
-						max_in_flight: MaxInFlightConfig {
-							amount: 20, // 20 concurrent requests
-						},
-						retry: RetryConfig {
-							max_attempts: 3,       // 3 retry attempts
-							initial_interval: 100, // 100ms initial interval
-						},
-						timeout: TimeoutConfig {
-							request_timeout: 30, // 30 seconds for requests
-						},
-					})
+					// Fallback to config-based defaults if middleware not found
+					Ok(self.default_middleware_config(actor_id.is_some()))
 				}
 			},
 			Err(_) => {
-				// Default values if middleware times out
-				Ok(MiddlewareConfig {
-					rate_limit: RateLimitConfig {
-						requests: 100, // 100 requests
-						period: 60,    // per 60 seconds
-					},
-					max_in_flight: MaxInFlightConfig {
-						amount: 20, // 20 concurrent requests
-					},
-					retry: RetryConfig {
-						max_attempts: 3,       // 3 retry attempts
-						initial_interval: 100, // 100ms initial interval
-					},
-					timeout: TimeoutConfig {
-						request_timeout: 30, // 30 seconds for requests
-					},
-				})
+				// Fallback to config-based defaults if middleware times out
+				tracing::warn!("middleware timed out, using fallback config");
+				Ok(self.default_middleware_config(actor_id.is_some()))
+			}
+		}
+	}
+
+	/// Returns default middleware config based on whether this is actor traffic or API traffic.
+	fn default_middleware_config(&self, is_actor_traffic: bool) -> MiddlewareConfig {
+		let guard = self.config.guard();
+		let pegboard = self.config.pegboard();
+
+		if is_actor_traffic {
+			// Actor traffic uses gateway_* settings
+			MiddlewareConfig {
+				rate_limit: RateLimitConfig {
+					requests: pegboard.gateway_rate_limit_requests(),
+					period: pegboard.gateway_rate_limit_period_secs(),
+				},
+				max_in_flight: MaxInFlightConfig {
+					amount: pegboard.gateway_max_in_flight(),
+				},
+				retry: RetryConfig {
+					max_attempts: pegboard.gateway_retry_max_attempts(),
+					initial_interval: pegboard.gateway_retry_initial_interval_ms(),
+				},
+				timeout: TimeoutConfig {
+					request_timeout: pegboard.gateway_actor_request_timeout_secs(),
+				},
+				max_incoming_ws_message_size: guard.websocket_max_message_size(),
+				max_outgoing_ws_message_size: guard.websocket_max_outgoing_message_size(),
+				max_http_request_body_size: pegboard.gateway_http_max_request_body_size(),
+			}
+		} else {
+			// API traffic uses api_* settings
+			MiddlewareConfig {
+				rate_limit: RateLimitConfig {
+					requests: pegboard.api_rate_limit_requests(),
+					period: pegboard.api_rate_limit_period_secs(),
+				},
+				max_in_flight: MaxInFlightConfig {
+					amount: pegboard.api_max_in_flight(),
+				},
+				retry: RetryConfig {
+					max_attempts: pegboard.api_retry_max_attempts(),
+					initial_interval: pegboard.api_retry_initial_interval_ms(),
+				},
+				timeout: TimeoutConfig {
+					request_timeout: pegboard.gateway_api_request_timeout_secs(),
+				},
+				max_incoming_ws_message_size: guard.websocket_max_message_size(),
+				max_outgoing_ws_message_size: guard.websocket_max_outgoing_message_size(),
+				max_http_request_body_size: pegboard.api_max_http_request_body_size(),
 			}
 		}
 	}
@@ -521,15 +563,15 @@ impl ProxyState {
 		actor_id: &Option<Id>,
 		headers: &hyper::HeaderMap,
 	) -> Result<bool> {
-		let Some(actor_id) = *actor_id else {
+		let Some(inner_actor_id) = *actor_id else {
 			// No rate limiting when actor_id is None
 			return Ok(true);
 		};
 
 		// Get actor-specific middleware config
-		let middleware_config = self.get_middleware_config(&actor_id, headers).await?;
+		let middleware_config = self.get_middleware_config(actor_id, headers).await?;
 
-		let cache_key = (actor_id, ip_addr);
+		let cache_key = (inner_actor_id, ip_addr);
 
 		// Get existing limiter or create a new one
 		let limiter_arc = if let Some(existing_limiter) = self.rate_limiters.get(&cache_key).await {
@@ -563,11 +605,11 @@ impl ProxyState {
 		headers: &hyper::HeaderMap,
 	) -> Result<Option<protocol::RequestId>> {
 		// Check in-flight limit if actor_id is present
-		if let Some(actor_id) = *actor_id {
+		if let Some(inner_actor_id) = *actor_id {
 			// Get actor-specific middleware config
-			let middleware_config = self.get_middleware_config(&actor_id, headers).await?;
+			let middleware_config = self.get_middleware_config(actor_id, headers).await?;
 
-			let cache_key = (actor_id, ip_addr);
+			let cache_key = (inner_actor_id, ip_addr);
 
 			// Get existing counter or create a new one
 			let counter_arc = if let Some(existing_counter) =
@@ -842,32 +884,11 @@ impl ProxyService {
 		client_ip: std::net::IpAddr,
 		actor_id: Option<Id>,
 	) -> Result<Response<ResponseBody>> {
-		// Get middleware config for this actor if it exists
-		let middleware_config = if let ResolveRouteOutput::Target(target) = &resolved_route
-			&& let Some(actor_id) = &target.actor_id
-		{
-			self.state
-				.get_middleware_config(actor_id, req.headers())
-				.await?
-		} else {
-			// Default middleware config for targets without actor_id
-			MiddlewareConfig {
-				rate_limit: RateLimitConfig {
-					requests: 100, // 100 requests
-					period: 60,    // per 60 seconds
-				},
-				max_in_flight: MaxInFlightConfig {
-					amount: 20, // 20 concurrent requests
-				},
-				retry: RetryConfig {
-					max_attempts: 3,       // 3 retry attempts
-					initial_interval: 100, // 100ms initial interval
-				},
-				timeout: TimeoutConfig {
-					request_timeout: 30, // 30 seconds for requests
-				},
-			}
-		};
+		// Get middleware config (works for both actor and non-actor traffic)
+		let middleware_config = self
+			.state
+			.get_middleware_config(&actor_id, req.headers())
+			.await?;
 
 		let host = req
 			.headers()
@@ -905,6 +926,15 @@ impl ProxyService {
 						Bytes::new()
 					}
 				};
+
+				// Check request body size limit (per-route configurable)
+				if req_body.len() > middleware_config.max_http_request_body_size {
+					return Err(errors::RequestBodyTooLarge {
+						size: req_body.len(),
+						max_size: middleware_config.max_http_request_body_size,
+					}
+					.build());
+				}
 
 				// Set actual request body size in analytics
 				request_context.client_request_body_bytes = Some(req_body.len() as u64);
@@ -970,36 +1000,13 @@ impl ProxyService {
 
 							let (parts, body) = resp.into_parts();
 
-							// Check if this is a streaming response by examining headers
-							// let is_streaming = parts.headers.get("content-type")
-							// 	.and_then(|ct| ct.to_str().ok())
-							// 	.map(|ct| ct.contains("text/event-stream") || ct.contains("application/stream"))
-							// 	.unwrap_or(false);
-							let is_streaming = true;
+							// Stream response through without buffering
+							// Response body size limits are enforced in pegboard-runner
+							tracing::debug!("Streaming response through");
+							request_context.guard_response_body_bytes = None;
 
-							if is_streaming {
-								// For streaming responses, pass through the body without buffering
-								tracing::debug!("Detected streaming response, preserving stream");
-
-								// We can't easily calculate response size for streaming, so set it to None
-								request_context.guard_response_body_bytes = None;
-
-								let streaming_body = ResponseBody::Incoming(body);
-								return Ok(Response::from_parts(parts, streaming_body));
-							} else {
-								// For non-streaming responses, buffer as before
-								let body_bytes = match BodyExt::collect(body).await {
-									Ok(collected) => collected.to_bytes(),
-									Err(_) => Bytes::new(),
-								};
-
-								// Set actual response body size in analytics
-								request_context.guard_response_body_bytes =
-									Some(body_bytes.len() as u64);
-
-								let full_body = ResponseBody::Full(Full::new(body_bytes));
-								return Ok(Response::from_parts(parts, full_body));
-							}
+							let streaming_body = ResponseBody::Incoming(body);
+							return Ok(Response::from_parts(parts, streaming_body));
 						}
 						Err(err) => {
 							if !err.is_connect() || attempts >= max_attempts {
@@ -1083,6 +1090,16 @@ impl ProxyService {
 						Bytes::new()
 					}
 				};
+
+				// Check request body size limit (per-route configurable)
+				if collected_body.len() > middleware_config.max_http_request_body_size {
+					return Err(errors::RequestBodyTooLarge {
+						size: collected_body.len(),
+						max_size: middleware_config.max_http_request_body_size,
+					}
+					.build());
+				}
+
 				let req_collected = hyper::Request::from_parts(
 					req_parts,
 					Full::<Bytes>::new(collected_body.clone()),
@@ -1215,34 +1232,11 @@ impl ProxyService {
 		let req_method = req.method().clone();
 		let ray_id = req.extensions().get::<RequestIds>().map(|x| x.ray_id);
 
-		// Get middleware config for this actor if it exists
-		let middleware_config = match &actor_id {
-			Some(actor_id) => {
-				self.state
-					.get_middleware_config(actor_id, &req_headers)
-					.await?
-			}
-			None => {
-				// Default middleware config for targets without actor_id
-				tracing::debug!("Using default middleware config (no actor_id)");
-				MiddlewareConfig {
-					rate_limit: RateLimitConfig {
-						requests: 100, // 100 requests
-						period: 60,    // per 60 seconds
-					},
-					max_in_flight: MaxInFlightConfig {
-						amount: 20, // 20 concurrent requests
-					},
-					retry: RetryConfig {
-						max_attempts: 3,       // 3 retry attempts
-						initial_interval: 100, // 100ms initial interval
-					},
-					timeout: TimeoutConfig {
-						request_timeout: 30, // 30 seconds for requests
-					},
-				}
-			}
-		};
+		// Get middleware config (works for both actor and non-actor traffic)
+		let middleware_config = self
+			.state
+			.get_middleware_config(&actor_id, &req_headers)
+			.await?;
 
 		// Set up retry with backoff from middleware config
 		let max_attempts = middleware_config.retry.max_attempts;
@@ -1258,20 +1252,23 @@ impl ProxyService {
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
 		tracing::debug!(%req_path, "Upgrading client connection to WebSocket");
-		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, None) {
-			Ok(x) => {
-				tracing::debug!("Client WebSocket upgrade successful");
-				x
-			}
-			Err(err) => {
-				tracing::error!(?err, "Failed to upgrade client WebSocket");
-				return Err(errors::ConnectionError {
-					error_message: format!("Failed to upgrade client WebSocket: {}", err),
-					remote_addr: self.remote_addr.to_string(),
+		let client_ws_config =
+			ProxyState::client_websocket_config(middleware_config.max_incoming_ws_message_size);
+		let (client_response, client_ws) =
+			match hyper_tungstenite::upgrade(req, Some(client_ws_config)) {
+				Ok(x) => {
+					tracing::debug!("Client WebSocket upgrade successful");
+					x
 				}
-				.build());
-			}
-		};
+				Err(err) => {
+					tracing::error!(?err, "Failed to upgrade client WebSocket");
+					return Err(errors::ConnectionError {
+						error_message: format!("Failed to upgrade client WebSocket: {}", err),
+						remote_addr: self.remote_addr.to_string(),
+					}
+					.build());
+				}
+			};
 
 		// Log response status and headers
 		tracing::debug!(
@@ -1287,6 +1284,14 @@ impl ProxyService {
 		// Clone needed values for the spawned task
 		let state = self.state.clone();
 		let remote_addr = self.remote_addr;
+		let max_outgoing_ws_message_size = middleware_config.max_outgoing_ws_message_size;
+
+		// Extract WebSocket timeout config values from pegboard config
+		let pegboard = self.state.config.pegboard();
+		let ws_proxy_timeout_secs = pegboard.gateway_ws_proxy_timeout_secs();
+		let ws_connect_timeout_secs = pegboard.gateway_ws_connect_timeout_secs();
+		let ws_send_timeout_secs = pegboard.gateway_ws_send_timeout_secs();
+		let ws_flush_timeout_secs = pegboard.gateway_ws_flush_timeout_secs();
 
 		// Spawn a new task to handle the WebSocket bidirectional communication
 		match target {
@@ -1295,7 +1300,7 @@ impl ProxyService {
 				self.state.tasks.spawn(
 					async move {
 						// Set up a timeout for the entire operation
-						let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
+						let timeout_duration = Duration::from_secs(ws_proxy_timeout_secs);
 						tracing::debug!(
 							"WebSocket proxy task started with {}s timeout",
 							timeout_duration.as_secs()
@@ -1399,9 +1404,15 @@ impl ProxyService {
 								return;
 							}
 
+							let upstream_ws_config = WebSocketConfig::default()
+								.max_message_size(Some(max_outgoing_ws_message_size));
 							match tokio::time::timeout(
-								Duration::from_secs(5), // 5 second timeout per connection attempt
-								tokio_tungstenite::connect_async(ws_request),
+								Duration::from_secs(ws_connect_timeout_secs),
+								tokio_tungstenite::connect_async_with_config(
+									ws_request,
+									Some(upstream_ws_config),
+									false,
+								),
 							)
 							.await
 							{
@@ -1437,8 +1448,9 @@ impl ProxyService {
 								}
 								Err(_) => {
 									tracing::debug!(
-										"WebSocket request attempt {} timed out after 5s",
-										attempts
+										"WebSocket request attempt {} timed out after {}s",
+										attempts,
+										ws_connect_timeout_secs
 									);
 								}
 							}
@@ -1615,7 +1627,7 @@ impl ProxyService {
 												// Send the message with a timeout
 												tracing::trace!("Sending message to upstream server");
 												let send_result = tokio::time::timeout(
-													Duration::from_secs(5),
+													Duration::from_secs(ws_send_timeout_secs),
 													sink.send(upstream_msg)
 												).await;
 
@@ -1625,7 +1637,7 @@ impl ProxyService {
 														// Flush the sink with a timeout
 														tracing::trace!("Flushing upstream sink");
 														let flush_result = tokio::time::timeout(
-															Duration::from_secs(2),
+															Duration::from_secs(ws_flush_timeout_secs),
 															sink.flush()
 														).await;
 
@@ -1647,7 +1659,7 @@ impl ProxyService {
 														break;
 													},
 													Err(_) => {
-														tracing::trace!("Timeout sending message to upstream after 5s");
+														tracing::trace!("Timeout sending message to upstream after {}s", ws_send_timeout_secs);
 														let _ = shutdown_tx.send(true);
 														break;
 													}
@@ -1766,7 +1778,7 @@ impl ProxyService {
 												// Send the message with a timeout
 												tracing::trace!("Sending message to client");
 												let send_result = tokio::time::timeout(
-													Duration::from_secs(5),
+													Duration::from_secs(ws_send_timeout_secs),
 													sink.send(client_msg)
 												).await;
 
@@ -1776,7 +1788,7 @@ impl ProxyService {
 														// Flush the sink with a timeout
 														tracing::trace!("Flushing client sink");
 														let flush_result = tokio::time::timeout(
-															Duration::from_secs(2),
+															Duration::from_secs(ws_flush_timeout_secs),
 															sink.flush()
 														).await;
 
@@ -1798,7 +1810,7 @@ impl ProxyService {
 														break;
 													},
 													Err(_) => {
-														tracing::trace!("Timeout sending message to client after 5s");
+														tracing::trace!("Timeout sending message to client after {}s", ws_send_timeout_secs);
 														let _ = shutdown_tx.send(true);
 														break;
 													}
@@ -1934,7 +1946,7 @@ impl ProxyService {
 									}
 
 									// Keep TCP connection open briefly to allow client to process close
-									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+									tokio::time::sleep(state.websocket_close_linger).await;
 
 									break;
 								}
@@ -2002,7 +2014,7 @@ impl ProxyService {
 										ws_handle.flush().await?;
 
 										// Keep TCP connection open briefly to allow client to process close
-										tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+										tokio::time::sleep(state.websocket_close_linger).await;
 
 										break;
 									} else {
@@ -2052,7 +2064,7 @@ impl ProxyService {
 											ws_handle.flush().await?;
 
 											// Keep TCP connection open briefly to allow client to process close
-											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+											tokio::time::sleep(state.websocket_close_linger).await;
 
 											break;
 										}
@@ -2071,7 +2083,7 @@ impl ProxyService {
 											ws_handle.flush().await?;
 
 											// Keep TCP connection open briefly to allow client to process close
-											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+											tokio::time::sleep(state.websocket_close_linger).await;
 
 											break;
 										}
@@ -2240,10 +2252,13 @@ impl ProxyService {
 				// HTTP errors in a meaningful way resulting in unhelpful errors for the user
 				if is_websocket {
 					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
-					match hyper_tungstenite::upgrade(mock_req, None) {
+					let error_ws_config =
+						ProxyState::client_websocket_config(self.state.websocket_max_message_size);
+					match hyper_tungstenite::upgrade(mock_req, Some(error_ws_config)) {
 						Ok((client_response, client_ws)) => {
 							tracing::debug!("Client WebSocket upgrade for error proxy successful");
 
+							let state = self.state.clone();
 							self.state.tasks.spawn(
 								async move {
 									let ws_handle = match WebSocketHandle::new(client_ws).await {
@@ -2286,7 +2301,7 @@ impl ProxyService {
 									}
 
 									// Keep TCP connection open briefly to allow client to process close
-									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+									tokio::time::sleep(state.websocket_close_linger).await;
 								}
 								.instrument(tracing::info_span!("ws_error_proxy_task")),
 							);
@@ -2532,6 +2547,7 @@ fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseBody>> {
 				("guard", "service_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "actor_ready_timeout") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "no_route") => StatusCode::NOT_FOUND,
+				("guard", "request_body_too_large") => StatusCode::PAYLOAD_TOO_LARGE,
 				_ => StatusCode::BAD_REQUEST,
 			};
 

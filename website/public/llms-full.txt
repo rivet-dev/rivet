@@ -3196,6 +3196,78 @@ const counter = actor(),
 
 default counter;
 ```
+## Limits
+
+# Limits
+
+This page documents the limits for Rivet Actors, including WebSocket message sizes and connection limits.
+
+## WebSocket Limits
+
+### Message Size Limits
+
+WebSocket message sizes are controlled at two levels: the **Rivet Engine** (infrastructure level) and **RivetKit** (application level).
+
+#### Rivet Engine Limits (Infrastructure)
+
+These limits are configured on the Rivet Engine and apply to all WebSocket traffic. They are not directly configurable by application developers but can be adjusted by self-hosted operators.
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| Max incoming message size | 32 MiB | Maximum size of an incoming WebSocket message from clients |
+| Max outgoing message size | Unlimited | No limit on outgoing message size (uses tungstenite defaults) |
+| Max pending buffer size (hibernating) | 128 MiB | Maximum buffered message size for hibernating WebSocket connections |
+| Max pending messages (hibernating) | 65,535 | Maximum number of pending messages for hibernating WebSocket connections |
+
+For self-hosted deployments, these limits can be configured via the `guard.websocket_max_message_size` and `pegboard.gateway_hws_max_pending_size` configuration options. See the [self-hosting configuration](/docs/self-hosting/configuration) documentation.
+
+#### RivetKit Limits (Application)
+
+These limits are configured in your RivetKit application and control the message sizes your actors can send and receive. These provide an additional layer of protection on top of the Rivet Engine limits.
+
+| Limit | Default | Configurable | Description |
+|-------|---------|--------------|-------------|
+| `maxIncomingMessageSize` | 64 KB | Yes | Maximum size of messages received by actors |
+| `maxOutgoingMessageSize` | 1 MB | Yes | Maximum size of messages sent by actors |
+
+**Configuration Example:**
+
+```typescript
+const rivet = new Rivet();
+```
+
+The RivetKit limits cannot exceed the Rivet Engine limits. If you set `maxIncomingMessageSize` higher than the engine's 32 MiB limit, messages will still be rejected at the engine level.
+
+### Connection Limits
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| WebSocket open timeout | 15 seconds | Time allowed for WebSocket handshake to complete |
+| Response start timeout | 15 seconds | Time allowed for actor to begin responding |
+| Tunnel ping timeout | 30 seconds | Time before a connection is considered dead if no pong received |
+| Hibernation timeout | 90 seconds | Time before a hibernating request is considered disconnected |
+
+### Hibernating WebSocket Limits
+
+When a WebSocket connection is hibernating (actor is sleeping), messages are buffered until the actor wakes up:
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| Max pending buffer size | 128 MiB | Total size of all buffered messages per request |
+| Max pending message count | 65,535 | Maximum number of buffered messages per request |
+| Message ack timeout | 30 seconds | Time allowed for message acknowledgment before connection is closed |
+
+If these limits are exceeded, the WebSocket connection will be closed with an error.
+
+## Comparison with Cloudflare Durable Objects
+
+For users familiar with Cloudflare Durable Objects, here's how Rivet's limits compare:
+
+| Limit | Rivet | Cloudflare Durable Objects |
+|-------|-------|---------------------------|
+| Max incoming WebSocket message | 32 MiB | 32 MiB |
+| Max outgoing WebSocket message | Unlimited | Not documented |
+| Hibernation buffer | 128 MiB | Not documented |
 ## Metadata
 
 # Metadata
@@ -6134,6 +6206,10 @@ interface RivetConfig ;
   // HTTP/HTTPS traffic handling service
   guard?: ;
     };
+    route_cache_ttl_ms?: number;          // Default: 600000 (10 minutes)
+    proxy_state_cache_ttl_ms?: number;    // Default: 3600000 (1 hour)
+    websocket_close_linger_ms?: number;   // Default: 100
+    websocket_max_message_size?: number;  // Default: 33554432 (32 MiB)
   };
 
   // Public API service configuration

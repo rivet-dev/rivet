@@ -33,10 +33,6 @@ pub mod shared_state;
 mod tunnel_to_ws_task;
 mod ws_to_tunnel_task;
 
-const WEBSOCKET_OPEN_TIMEOUT: Duration = Duration::from_secs(15);
-const RESPONSE_START_TIMEOUT: Duration = Duration::from_secs(15);
-const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
-
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
 	"guard",
@@ -44,6 +40,18 @@ const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
 	"Reached limit on pending websocket messages, aborting connection."
 )]
 pub struct WebsocketPendingLimitReached;
+
+#[derive(RivetError, Serialize, Deserialize)]
+#[error(
+	"guard",
+	"request_body_too_large",
+	"Request body too large.",
+	"Request body size {size} bytes exceeds maximum allowed {max_size} bytes."
+)]
+pub struct RequestBodyTooLarge {
+	pub size: usize,
+	pub max_size: usize,
+}
 
 #[derive(Debug)]
 enum LifecycleResult {
@@ -154,6 +162,20 @@ impl CustomServeTrait for PegboardGateway {
 			.context("failed to read body")?
 			.to_bytes();
 
+		// Check request body size limit for requests to actors
+		let max_request_body_size = self
+			.ctx
+			.config()
+			.pegboard()
+			.gateway_http_max_request_body_size();
+		if body_bytes.len() > max_request_body_size {
+			return Err(RequestBodyTooLarge {
+				size: body_bytes.len(),
+				max_size: max_request_body_size,
+			}
+			.build());
+		}
+
 		let udb = self.ctx.udb()?;
 		let runner_id = self.runner_id;
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
@@ -247,7 +269,13 @@ impl CustomServeTrait for PegboardGateway {
 
 			Err(ServiceUnavailable.build())
 		};
-		let response_start = tokio::time::timeout(RESPONSE_START_TIMEOUT, fut)
+		let response_start_timeout = Duration::from_millis(
+			self.ctx
+				.config()
+				.pegboard()
+				.gateway_response_start_timeout_ms(),
+		);
+		let response_start = tokio::time::timeout(response_start_timeout, fut)
 			.await
 			.map_err(|_| {
 				tracing::warn!("timed out waiting for response start from runner");
@@ -401,7 +429,13 @@ impl CustomServeTrait for PegboardGateway {
 				Err(WebSocketServiceUnavailable.build())
 			};
 
-			let open_msg = tokio::time::timeout(WEBSOCKET_OPEN_TIMEOUT, fut)
+			let websocket_open_timeout = Duration::from_millis(
+				self.ctx
+					.config()
+					.pegboard()
+					.gateway_websocket_open_timeout_ms(),
+			);
+			let open_msg = tokio::time::timeout(websocket_open_timeout, fut)
 				.await
 				.map_err(|_| {
 					tracing::warn!("timed out waiting for websocket open from runner");
@@ -444,10 +478,17 @@ impl CustomServeTrait for PegboardGateway {
 			ws_rx,
 			ws_to_tunnel_abort_rx,
 		));
+		let update_ping_interval = Duration::from_millis(
+			self.ctx
+				.config()
+				.pegboard()
+				.gateway_update_ping_interval_ms(),
+		);
 		let ping = tokio::spawn(ping_task::task(
 			self.shared_state.clone(),
 			request_id,
 			ping_abort_rx,
+			update_ping_interval,
 		));
 		let keepalive = if can_hibernate {
 			Some(tokio::spawn(keepalive_task::task(
