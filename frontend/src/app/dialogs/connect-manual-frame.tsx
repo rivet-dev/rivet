@@ -1,12 +1,6 @@
 import { faServer, Icon } from "@rivet-gg/icons";
 import { useState } from "react";
-import {
-	type DialogContentProps,
-	Frame,
-	Tabs,
-	ToggleGroup,
-	ToggleGroupItem,
-} from "@/components";
+import { type DialogContentProps, Frame } from "@/components";
 import { RunnerConfigToggleGroup } from "../runner-config-toggle-group";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 import ConnectManualServerlessFrameContent from "./connect-manual-serverless-frame";
@@ -16,7 +10,7 @@ interface CreateProjectFrameContentProps extends DialogContentProps {}
 export default function CreateProjectFrameContent({
 	onClose,
 }: CreateProjectFrameContentProps) {
-	const [mode, setMode] = useState("serverfull");
+	const [mode, setMode] = useState("serverless");
 
 	return (
 		<>

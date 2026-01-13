@@ -15,12 +15,12 @@ export function RunnerConfigToggleGroup({
 		<div
 			id={id}
 			className={cn(
-				"flex mx-auto items-center justify-center",
+				"flex mx-auto items-center justify-center mb-4",
 				className,
 			)}
 		>
 			<ToggleGroup
-				defaultValue="serverfull"
+				defaultValue="serverless"
 				type="single"
 				className="border rounded-md gap-0 w-full"
 				value={mode}
@@ -41,7 +41,7 @@ export function RunnerConfigToggleGroup({
 					value="serverfull"
 					className="border-l rounded-none w-full"
 				>
-					Dedicated
+					Runners
 				</ToggleGroupItem>
 			</ToggleGroup>
 		</div>

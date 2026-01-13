@@ -19,7 +19,7 @@ import {
 	Frame,
 	getConfig,
 } from "@/components";
-import { type Region, useEngineCompatDataProvider } from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
@@ -118,6 +118,15 @@ function FormStepper({
 						endpoint={endpoint}
 						namespace={namespace}
 					/>
+				),
+				variables: () => (
+					<>
+						<p>
+							Set these variables in Settings &gt; Environment
+							Variables in the Vercel dashboard.
+						</p>
+						<ConnectVercelForm.EnvVariables />
+					</>
 				),
 				deploy: () => <StepDeploy />,
 			}}
