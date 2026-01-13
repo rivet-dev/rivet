@@ -28,6 +28,21 @@ export const templates: Template[] = [
     "priority": 100
   },
   {
+    "name": "hello-world",
+    "displayName": "Hello World",
+    "description": "A minimal example demonstrating RivetKit with a real-time counter shared across multiple clients.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "starter"
+    ],
+    "noFrontend": false,
+    "priority": 100
+  },
+  {
     "name": "chat-room",
     "displayName": "Chat Room",
     "description": "Example project demonstrating real-time messaging and actor state management.",
@@ -161,21 +176,6 @@ export const templates: Template[] = [
     "priority": 1000
   },
   {
-    "name": "chat-room-next-js",
-    "displayName": "Chat Room (Next.js)",
-    "description": "Next.js chat room demonstrating real-time messaging with actor state management.",
-    "technologies": [
-      "rivet",
-      "next-js",
-      "react",
-      "typescript"
-    ],
-    "tags": [
-      "real-time"
-    ],
-    "noFrontend": false
-  },
-  {
     "name": "cloudflare-workers",
     "displayName": "Cloudflare Workers",
     "description": "Example project demonstrating Cloudflare Workers deployment.",
@@ -240,18 +240,6 @@ export const templates: Template[] = [
     "noFrontend": true
   },
   {
-    "name": "deno",
-    "displayName": "Deno Example",
-    "description": "Example project demonstrating basic actor state management and RPC calls using Deno runtime.",
-    "technologies": [
-      "rivet",
-      "deno",
-      "typescript"
-    ],
-    "tags": [],
-    "noFrontend": true
-  },
-  {
     "name": "drizzle",
     "displayName": "Drizzle Integration",
     "description": "Demonstrates Drizzle ORM integration with Rivet Actors for type-safe database operations.",
@@ -272,7 +260,6 @@ export const templates: Template[] = [
     "technologies": [
       "rivet",
       "elysia",
-      "bun",
       "typescript"
     ],
     "tags": [],
@@ -295,18 +282,6 @@ export const templates: Template[] = [
     "noFrontend": false
   },
   {
-    "name": "express",
-    "displayName": "Express Integration",
-    "description": "Example project demonstrating Express web framework integration.",
-    "technologies": [
-      "rivet",
-      "express",
-      "typescript"
-    ],
-    "tags": [],
-    "noFrontend": true
-  },
-  {
     "name": "hono",
     "displayName": "Hono Integration",
     "description": "Example project demonstrating Hono web framework integration.",
@@ -316,21 +291,6 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
-  },
-  {
-    "name": "hono-bun",
-    "displayName": "Hono + Bun",
-    "description": "Example demonstrating Hono web framework with Bun runtime and React frontend integration.",
-    "technologies": [
-      "rivet",
-      "hono",
-      "bun",
-      "typescript"
-    ],
-    "tags": [
-      "starter"
-    ],
     "noFrontend": true
   },
   {
@@ -387,19 +347,6 @@ export const templates: Template[] = [
       "starter"
     ],
     "noFrontend": false
-  },
-  {
-    "name": "node",
-    "displayName": "Node.js",
-    "description": "Minimal Node.js example demonstrating basic actor state management.",
-    "technologies": [
-      "rivet",
-      "typescript"
-    ],
-    "tags": [
-      "starter"
-    ],
-    "noFrontend": true
   },
   {
     "name": "raw-websocket-handler-proxy",

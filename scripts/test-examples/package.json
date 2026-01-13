@@ -1,0 +1,15 @@
+{
+	"name": "test-examples",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "tsx test-examples.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^4.7.1",
+		"typescript": "^5.5.2"
+	}
+}

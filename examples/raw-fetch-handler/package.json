@@ -1,48 +1,43 @@
 {
-	"name": "example-raw-fetch-handler",
-	"version": "2.0.21",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev:backend": "srvx --import tsx src/server.ts",
-		"dev:frontend": "vite",
-		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-		"start": "srvx --static=../frontend/dist dist/server.js",
-		"check-types": "tsc --noEmit",
-		"test": "vitest",
-		"build:frontend": "vite build",
-		"build:backend": "tsup",
-		"build": "npm run build:backend && npm run build:frontend"
-	},
-	"devDependencies": {
-		"@types/node": "^22.10.6",
-		"@types/react": "^18.3.18",
-		"@types/react-dom": "^18.3.5",
-		"@vitejs/plugin-react": "^4.3.4",
-		"concurrently": "^9.1.2",
-		"tsup": "^8.5.1",
-		"tsx": "^4.20.0",
-		"typescript": "^5.7.3",
-		"vite": "^5.4.19",
-		"vitest": "^3.1.1"
-	},
-	"dependencies": {
-		"@hono/node-server": "^1.19.1",
-		"@hono/node-ws": "^1.3.0",
-		"@rivetkit/react": "*",
-		"hono": "^4.6.18",
-		"react": "^18.3.1",
-		"react-dom": "^18.3.1",
-		"rivetkit": "*",
-		"srvx": "^0.10.0"
-	},
-	"template": {
-		"technologies": [
-			"typescript"
-		],
-		"tags": [],
-		"priority": 1000,
-		"frontendPort": 5173
-	},
-	"license": "MIT"
+  "name": "example-raw-fetch-handler",
+  "version": "2.0.21",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "vite build && vite build --mode server",
+    "start": "srvx --static=public/ dist/server.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.6",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.19",
+    "vitest": "^3.1.1",
+    "vite-plugin-srvx": "^1.0.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.1",
+    "@hono/node-ws": "^1.3.0",
+    "@rivetkit/react": "*",
+    "hono": "^4.6.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rivetkit": "*",
+    "srvx": "^0.10.0"
+  },
+  "template": {
+    "technologies": [
+      "typescript"
+    ],
+    "tags": [],
+    "priority": 1000,
+    "frontendPort": 5173
+  },
+  "license": "MIT"
 }
