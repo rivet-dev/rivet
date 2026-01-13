@@ -34,10 +34,12 @@ interface ReplInputProps {
 	className: string;
 	rpcs: string[];
 	onRun: (code: string) => void;
+	onHistoryUp?: () => void;
+	onHistoryDown?: () => void;
 }
 
 export const ReplInput = forwardRef<ReplInputRef, ReplInputProps>(
-	({ rpcs, onRun, className }, ref) => {
+	({ rpcs, onRun, onHistoryUp, onHistoryDown, className }, ref) => {
 		const rivetKeymap = keymap.of([
 			{
 				key: "Enter",
@@ -51,6 +53,20 @@ export const ReplInput = forwardRef<ReplInputRef, ReplInputProps>(
 						},
 						annotations: [External.of(true)],
 					});
+					return true;
+				},
+			},
+			{
+				key: "ArrowUp",
+				run: () => {
+					onHistoryUp?.();
+					return true;
+				},
+			},
+			{
+				key: "ArrowDown",
+				run: () => {
+					onHistoryDown?.();
 					return true;
 				},
 			},
