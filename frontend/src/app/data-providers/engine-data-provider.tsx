@@ -270,13 +270,10 @@ export const createNamespaceContext = ({
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
-					// TEMPORARILY DISABLED PAGINATION
-					// FIXME(@NathanFlurry)
-					return undefined;
-					// if (lastPage.actors.length < RECORDS_PER_PAGE) {
-					// 	return undefined;
-					// }
-					// return lastPage.pagination.cursor;
+					if (lastPage.actors.length < RECORDS_PER_PAGE) {
+						return undefined;
+					}
+					return lastPage.pagination.cursor;
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
@@ -302,7 +299,12 @@ export const createNamespaceContext = ({
 
 					return data;
 				},
-				getNextPageParam: (lastPage) => lastPage.pagination?.cursor,
+				getNextPageParam: (lastPage) => {
+					// TEMPORARILY DISABLED PAGINATION
+					// FIXME(@NathanFlurry)
+					return undefined;
+					// return lastPage.pagination?.cursor;
+				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
