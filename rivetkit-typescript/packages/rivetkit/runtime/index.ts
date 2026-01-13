@@ -90,6 +90,11 @@ export class Runtime<A extends RegistryActors> {
 		const driver = chooseDefaultDriver(config);
 		const managerDriver = driver.manager(config);
 
+		invariant(
+			!(config.serverless.spawnEngine && config.serveManager),
+			"cannot specify spawnEngine and serveManager together",
+		);
+
 		// Start main server. This is either:
 		// - Manager: Run a server in-process on port 6420 that mimics the
 		//   engine's API for development.
@@ -105,11 +110,6 @@ export class Runtime<A extends RegistryActors> {
 		// BEFORE `startServerless` is called.
 		let managerPort: number | undefined;
 		if (config.serverless.spawnEngine) {
-			invariant(
-				!config.serveManager,
-				"cannot specify spawnEngine and serveManager together",
-			);
-
 			managerPort = ENGINE_PORT;
 			logger().debug({
 				msg: "spawning engine",
@@ -131,6 +131,12 @@ export class Runtime<A extends RegistryActors> {
 			);
 
 			managerPort = await findFreePort(config.managerPort);
+
+			logger().debug({
+				msg: "serving manager",
+				port: managerPort,
+			});
+
 			const out = await crossPlatformServe(
 				config,
 				managerPort,

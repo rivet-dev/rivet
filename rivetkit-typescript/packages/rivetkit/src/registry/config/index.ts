@@ -204,7 +204,9 @@ export const RegistryConfigSchema = z
 			// - Start manager server
 			// - Redirect clients to local server
 			serveManager = config.serveManager ?? true;
-			advertiseEndpoint = config.serverless.advertiseEndpoint;
+			advertiseEndpoint =
+				config.serverless.advertiseEndpoint ??
+				(serveManager ? `http://localhost:${config.managerPort}` : undefined);
 		} else {
 			// Production mode, no endpoint:
 			// - Do not start manager server
