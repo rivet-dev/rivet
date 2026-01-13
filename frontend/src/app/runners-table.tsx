@@ -127,7 +127,7 @@ function RowSkeleton() {
 	);
 }
 
-function Row(runner: Rivet.Runner) {
+export function Row(runner: Rivet.Runner) {
 	return (
 		<TableRow key={runner.runnerId}>
 			<TableCell className="size-8">

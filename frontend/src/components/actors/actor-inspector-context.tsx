@@ -2,6 +2,7 @@ import {
 	mutationOptions,
 	type QueryClient,
 	queryOptions,
+	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
 import * as cbor from "cbor-x";
@@ -16,6 +17,7 @@ import {
 } from "rivetkit/inspector";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+import z from "zod";
 import { type ConnectionStatus, useWebSocket } from "../hooks/use-websocket";
 import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId } from "./queries";
@@ -44,6 +46,7 @@ interface ActorInspectorApi {
 	getState: () => Promise<{ isEnabled: boolean; state: unknown }>;
 	getRpcs: () => Promise<string[]>;
 	clearEvents: () => Promise<void>;
+	getMetadata: () => Promise<{ version: string }>;
 }
 
 export const createDefaultActorInspectorContext = ({
@@ -188,6 +191,15 @@ export const createDefaultActorInspectorContext = ({
 			},
 		});
 	},
+
+	actorMetadataQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			queryKey: ["actor", actorId, "metadata"],
+			queryFn: async () => {
+				return api.getMetadata();
+			},
+		});
+	},
 });
 
 const computeActorUrl = ({ url, actorId }: { url: string; actorId: ActorId }) =>
@@ -237,9 +249,50 @@ export const actorWakeUpQueryOptions = ({
 		},
 	});
 
+const getActorMetadata = async ({
+	actorId,
+	credentials,
+}: {
+	actorId: ActorId;
+	credentials: { url: string; token: string };
+}) => {
+	const response = await fetch(
+		new URL(`${computeActorUrl({ ...credentials, actorId })}/metadata`)
+			.href,
+		{
+			headers: {
+				"X-Rivet-Target": "actor",
+				"X-Rivet-Actor": actorId,
+				"x-rivet-token": credentials.token,
+			},
+		},
+	);
+
+	if (!response.ok) {
+		throw new Error(
+			`Failed to fetch actor metadata: ${response.statusText}`,
+		);
+	}
+	return z.object({ version: z.string() }).parse(await response.json());
+};
+
+export const actorMetadataQueryOptions = ({
+	actorId,
+	credentials,
+}: {
+	actorId: ActorId;
+	credentials: { url: string; token: string };
+}) =>
+	queryOptions({
+		queryKey: ["actor", actorId, "metadata"],
+		queryFn: async () => {
+			return getActorMetadata({ actorId, credentials });
+		},
+	});
+
 export type ActorInspectorContext = ReturnType<
 	typeof createDefaultActorInspectorContext
-> & { connectionStatus: ConnectionStatus };
+> & { connectionStatus: ConnectionStatus; isInspectorAvailable: boolean };
 
 const ActorInspectorContext = createContext({} as ActorInspectorContext);
 
@@ -273,8 +326,15 @@ export const ActorInspectorProvider = ({
 
 	const actionsManager = useRef(new ActionsManager());
 
-	const f = useActorInspectorData(actorId);
-	const { isSuccess } = f;
+	const { isSuccess: isActorMetadataSuccess } = useQuery({
+		...actorMetadataQueryOptions({ actorId, credentials }),
+		retry: 0,
+		refetchInterval: 5_000,
+	});
+
+	const { isSuccess: isActorDataSuccess } = useActorInspectorData(actorId);
+
+	const isInspectorAvailable = isActorMetadataSuccess && isActorDataSuccess;
 
 	const onMessage = useMemo(() => {
 		return createMessageHandler({ queryClient, actorId, actionsManager });
@@ -283,8 +343,12 @@ export const ActorInspectorProvider = ({
 	const { sendMessage, reconnect, status } = useWebSocket(
 		`${computeActorUrl({ ...credentials, actorId })}/inspector/connect`,
 		protocols,
-		{ onMessage, enabled: isSuccess },
+		{ onMessage, enabled: isInspectorAvailable },
 	);
+
+	const getActorMetadataProxy = useRef(async () => {
+		return getActorMetadata({ actorId, credentials });
+	});
 
 	const api = useMemo(() => {
 		return {
@@ -405,17 +469,22 @@ export const ActorInspectorProvider = ({
 
 				return promise;
 			},
+
+			getMetadata() {
+				return getActorMetadataProxy.current();
+			},
 		} satisfies ActorInspectorApi;
 	}, [sendMessage, reconnect]);
 
 	const value = useMemo(() => {
 		return {
 			connectionStatus: status,
+			isInspectorAvailable,
 			...createDefaultActorInspectorContext({
 				api,
 			}),
 		};
-	}, [api, status]);
+	}, [api, status, isInspectorAvailable]);
 
 	return (
 		<ActorInspectorContext.Provider value={value}>
