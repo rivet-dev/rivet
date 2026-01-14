@@ -26,10 +26,15 @@ pub struct Output {
 /// WARNING: This will incorrectly return `None` in the rare case that all of the nodes that have
 /// committed the value are offline.
 ///
+/// This only reads committed values (from the COMMITTED_VALUE keyspace) and cached values (from
+/// the OPTIMISTIC_CACHED_VALUE keyspace, which caches committed values from remote datacenters).
+/// Values are only written to COMMITTED_VALUE after the EPaxos commit phase, so all values
+/// returned have achieved consensus.
+///
 /// This works by:
-/// 1. Attempt to read value from optimistic cache
-/// 2. If not in cache, attempt to read value locally
-/// 3. If not locally, reach out to any datacenter, then cache & return the first datacenter that has a value
+/// 1. Attempt to read committed value locally
+/// 2. If not locally, check the optimistic cache
+/// 3. If not in cache, reach out to any datacenter, then cache & return the first datacenter that has a value
 ///
 /// This means that if the value changes, the value will be inconsistent across all datacenters --
 /// even if it has a quorum.
