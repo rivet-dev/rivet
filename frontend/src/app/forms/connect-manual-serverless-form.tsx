@@ -39,7 +39,8 @@ import { VisibilitySensor } from "@/components/visibility-sensor";
 export const endpointSchema = z
 	.string()
 	.nonempty("Endpoint is required")
-	.url("Please enter a valid URL");
+	.url("Please enter a valid URL")
+	.endsWith("/api/rivet", "Endpoint must end with /api/rivet");
 
 export const configurationSchema = z.object({
 	runnerName: z.string().min(1, "Runner name is required"),
