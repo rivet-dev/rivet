@@ -2,29 +2,27 @@ import { faRailway, Icon } from "@rivet-gg/icons";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
-	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-	type DialogContentProps,
-	Frame,
-} from "@/components";
+import { type DialogContentProps, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
-import { engineEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
-import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
 import { EnvVariables } from "../env-variables";
+import {
+	configurationSchema,
+	deploymentSchema,
+} from "../forms/connect-manual-serverless-form";
 import { StepperForm } from "../forms/stepper-form";
-import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
+import { useEndpoint } from "./connect-manual-serverfull-frame";
+import {
+	buildServerlessConfig,
+	ConfigurationAccordion,
+} from "./connect-manual-serverless-frame";
 
 const stepper = defineStepper(
 	{
@@ -32,28 +30,17 @@ const stepper = defineStepper(
 		title: "Configure",
 		assist: false,
 		next: "Next",
-		schema: z.object({
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenter: z.string().min(1, "Please select a region"),
-		}),
+		schema: z.object({}),
 	},
 	{
 		id: "step-2",
 		title: "Deploy to Railway",
 		assist: false,
-		schema: z.object({}),
-		next: "Next",
-	},
-	{
-		id: "step-3",
-		title: "Wait for the Runner to connect",
-		assist: true,
 		schema: z.object({
-			success: z.boolean().refine((v) => v === true, {
-				message: "Runner must be connected to proceed",
-			}),
+			...configurationSchema.shape,
+			...deploymentSchema.shape,
 		}),
-		next: "Add",
+		next: "Done",
 	},
 );
 
@@ -66,18 +53,6 @@ export default function ConnectRailwayFrameContent({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
 	});
-	const { data } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().datacentersQueryOptions(),
-	);
-
-	const prefferedRegionForRailway =
-		data.find((region) => region.name.toLowerCase().includes("us-west"))
-			?.name ||
-		data.find((region) => region.name.toLowerCase().includes("us-east"))
-			?.name ||
-		data.find((region) => region.name.toLowerCase().includes("ore"))
-			?.name ||
-		"auto";
 
 	return (
 		<>
@@ -89,22 +64,21 @@ export default function ConnectRailwayFrameContent({
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<FormStepper
-					onClose={onClose}
-					defaultDatacenter={prefferedRegionForRailway}
-				/>
+				<FormStepper onClose={onClose} />
 			</Frame.Content>
 		</>
 	);
 }
 
-function FormStepper({
-	onClose,
-	defaultDatacenter,
-}: {
-	onClose?: () => void;
-	defaultDatacenter: string;
-}) {
+function FormStepper({ onClose }: { onClose?: () => void }) {
+	usePrefetchInfiniteQuery({
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
+		pages: Infinity,
+	});
+
+	const { data: datacenters } = useSuspenseInfiniteQuery(
+		useEngineCompatDataProvider().datacentersQueryOptions(),
+	);
 	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
@@ -130,25 +104,31 @@ function FormStepper({
 		<StepperForm
 			{...stepper}
 			onSubmit={async ({ values }) => {
+				const payload = await buildServerlessConfig(provider, values, {
+					provider: "railway",
+				});
+
 				await mutateAsync({
 					name: values.runnerName,
-					config: {
-						[values.datacenter]: {
-							normal: {},
-							metadata: { provider: "railway" },
-						},
-					},
+					config: payload,
 				});
 			}}
 			defaultValues={{
 				runnerName: "default",
-				success: true,
-				datacenter: defaultDatacenter,
+				slotsPerRunner: 1,
+				minRunners: 1,
+				maxRunners: 10_000,
+				runnerMargin: 0,
+				requestLifespan: 55,
+				headers: [],
+				success: false,
+				datacenters: Object.fromEntries(
+					datacenters.map((dc) => [dc.name, true]),
+				),
 			}}
 			content={{
 				"step-1": () => <Step1 />,
-				"step-2": () => <Step2 />,
-				"step-3": () => <Step3 />,
+				"step-2": () => <StepDeploy />,
 			}}
 		/>
 	);
@@ -157,68 +137,57 @@ function FormStepper({
 function Step1() {
 	return (
 		<>
-			<div>
-				We're going to help you deploy a RivetKit project to Railway and
-				connect it to Rivet.
-			</div>
-			<Accordion type="single" collapsible>
-				<AccordionItem value="item-1">
-					<AccordionTrigger className="text-sm">
-						Advanced
-					</AccordionTrigger>
-					<AccordionContent className="space-y-4 px-1 pt-2">
-						<ConnectRailwayForm.RunnerName />
-						<ConnectRailwayForm.Datacenter />
-					</AccordionContent>
-				</AccordionItem>
-			</Accordion>
-		</>
-	);
-}
-
-function Step2() {
-	return (
-		<>
-			<p>Deploy any RivetKit app to Railway.</p>
-			<p>Or use our Railway template to get started quickly.</p>
-			<DeployToRailwayButton />
 			<p>
-				Set the following environment variables in your Railway project
-				settings.
+				If you have not deployed a project, see the{" "}
+				<a
+					href="https://www.rivet.dev/docs/connect/railway"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="underline hover:text-foreground"
+				>
+					Railway quickstart guide
+				</a>
+				.
+			</p>
+			<p>
+				Set these variables in Settings &gt; Variables in the Railway
+				dashboard.
 			</p>
 			<EnvVariables
 				kind="serverfull"
-				endpoint={useSelectedDatacenter()}
+				prefixlessEndpoint
+				prefix="VITE"
+				endpoint={useEndpoint()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>
 		</>
 	);
 }
 
-function Step3() {
-	return <ConnectRailwayForm.ConnectionCheck provider="railway" />;
-}
-
-function DeployToRailwayButton() {
-	const runnerName = useWatch({ name: "runnerName" });
-
-	const url = useRailwayTemplateLink({
-		runnerName: runnerName || "default",
-		datacenter: useWatch({ name: "datacenter" }) || "auto",
-	});
-
+function StepDeploy() {
 	return (
-		<a
-			href={url}
-			target="_blank"
-			rel="noreferrer"
-			className="inline-block h-10"
-		>
-			<img
-				height={40}
-				src="https://railway.com/button.svg"
-				alt="Deploy to Railway"
-			/>
-		</a>
+		<>
+			<p>
+				Deploy your code to Railway and paste your deployment's
+				endpoint:
+			</p>
+			<div className="mt-2">
+				<ConnectRailwayForm.Endpoint placeholder="https://my-rivet-app.up.railway.app" />
+				<ConfigurationAccordion />
+				<p className="text-muted-foreground text-sm">
+					Need help deploying? See{" "}
+					<a
+						href="https://docs.railway.com/guides/deployments"
+						target="_blank"
+						rel="noreferrer"
+						className="underline"
+					>
+						Railway's deployment documentation
+					</a>
+					.
+				</p>
+			</div>
+			<ConnectRailwayForm.ConnectionCheck provider="Railway" />
+		</>
 	);
 }

@@ -1,13 +1,10 @@
 import z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { defineStepper } from "@/components/ui/stepper";
-import { useSelectedDatacenter } from "../dialogs/connect-manual-serverfull-frame";
-
-const endpointSchema = z
-	.string()
-	.nonempty("Endpoint is required")
-	.url("Please enter a valid URL")
-	.endsWith("/api/rivet", "Endpoint must end with /api/rivet");
+import {
+	configurationSchema,
+	deploymentSchema,
+} from "./connect-manual-serverless-form";
 
 export const stepper = defineStepper(
 	{
@@ -16,18 +13,8 @@ export const stepper = defineStepper(
 		assist: false,
 		next: "Next",
 		schema: z.object({
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenters: z
-				.record(z.boolean())
-				.refine(
-					(data) => Object.values(data).some(Boolean),
-					"At least one datacenter must be selected",
-				),
-			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
-			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
+			...configurationSchema.omit({ requestLifespan: true }).shape,
+			plan: z.string().min(1, "Please select a Vercel plan"),
 		}),
 	},
 	{
@@ -35,10 +22,7 @@ export const stepper = defineStepper(
 		title: "Configure Vercel endpoint",
 		assist: true,
 		next: "Done",
-		schema: z.object({
-			success: z.boolean().refine((val) => val, "Connection failed"),
-			endpoint: endpointSchema,
-		}),
+		schema: deploymentSchema,
 	},
 );
 
@@ -59,5 +43,7 @@ export const Headers = ConnectVercelForm.Headers;
 export const Endpoint = ConnectVercelForm.Endpoint;
 
 export const ConnectionCheck = ConnectVercelForm.ConnectionCheck;
+
+export const Plan = ConnectVercelForm.Plan;
 
 export const EnvVariables = ConnectVercelForm.EnvVariables;

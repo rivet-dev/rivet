@@ -1,17 +1,7 @@
-import * as ConnectManualServerlfullForm from "@/app/forms/connect-manual-serverfull-form";
+import * as ConnectManualServerlessForm from "@/app/forms/connect-manual-serverless-form";
 
-export const RunnerName = ConnectManualServerlfullForm.RunnerName;
-export const Datacenter = () => {
-	return (
-		<ConnectManualServerlfullForm.Datacenter
-			message={
-				<>
-					You can find the region your Railway runners are running in
-					under <i>Settings &gt; Deploy</i>
-				</>
-			}
-		/>
-	);
-};
+export const RunnerName = ConnectManualServerlessForm.RunnerName;
+export const Datacenters = ConnectManualServerlessForm.Datacenters;
 
-export const ConnectionCheck = ConnectManualServerlfullForm.ConnectionCheck;
+export const ConnectionCheck = ConnectManualServerlessForm.ConnectionCheck;
+export const Endpoint = ConnectManualServerlessForm.Endpoint;

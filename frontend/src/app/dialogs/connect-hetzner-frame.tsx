@@ -1,6 +1,6 @@
 import { faHetznerH, Icon } from "@rivet-gg/icons";
 import { type DialogContentProps, Frame } from "@/components";
-import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
+import ConnectManualServerlessFrameContent from "./connect-manual-serverless-frame";
 
 interface ConnectHetznerFrameContentProps extends DialogContentProps {}
 
@@ -18,7 +18,7 @@ export default function ConnectHetznerFrameContent({
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<ConnectManualServerlfullFrameContent
+				<ConnectManualServerlessFrameContent
 					provider="hetzner"
 					onClose={onClose}
 				/>

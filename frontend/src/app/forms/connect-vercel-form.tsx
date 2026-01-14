@@ -18,37 +18,13 @@ import {
 	SelectValue,
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
-import { useSelectedDatacenter } from "../dialogs/connect-manual-serverfull-frame";
-import { EnvVariables as EnvVariablesSection } from "../env-variables";
-
-const endpointSchema = z
-	.string()
-	.nonempty("Endpoint is required")
-	.url("Please enter a valid URL")
-	.endsWith("/api/rivet", "Endpoint must end with /api/rivet");
+import { useEndpoint } from "../dialogs/connect-manual-serverfull-frame";
+import {
+	EnvVariables as EnvVariablesSection,
+	useRivetDsn,
+} from "../env-variables";
 
 export const stepper = defineStepper(
-	// {
-	// 	id: "initial-info",
-	// 	title: "Configure",
-	// 	assist: false,
-	// 	next: "Next",
-	// 	schema: z.object({
-	// 		plan: z.string().min(1, "Please select a Vercel plan"),
-	// 		runnerName: z.string().min(1, "Runner name is required"),
-	// 		datacenters: z
-	// 			.record(z.boolean())
-	// 			.refine(
-	// 				(data) => Object.values(data).some(Boolean),
-	// 				"At least one datacenter must be selected",
-	// 			),
-	// 		headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-	// 		slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-	// 		maxRunners: z.coerce.number().min(1, "Must be at least 1"),
-	// 		minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-	// 		runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
-	// 	}),
-	// },
 	{
 		id: "api-route",
 		title: "Add API Route",
@@ -78,20 +54,10 @@ export const stepper = defineStepper(
 		assist: true,
 		next: "Done",
 		schema: z.object({
-			success: z.boolean().refine((val) => val, "Connection failed"),
-			endpoint: endpointSchema,
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenters: z
-				.record(z.boolean())
-				.refine(
-					(data) => Object.values(data).some(Boolean),
-					"At least one datacenter must be selected",
-				),
-			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
-			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
+			...ConnectManualServerlessForm.deploymentSchema.shape,
+			...ConnectManualServerlessForm.configurationSchema.omit({
+				requestLifespan: true,
+			}).shape,
 			plan: z.string().min(1, "Please select a Vercel plan"),
 		}),
 	},
@@ -147,20 +113,6 @@ export const SlotsPerRunner = ConnectManualServerlessForm.SlotsPerRunner;
 export const RunnerMargin = ConnectManualServerlessForm.RunnerMargin;
 
 export const Headers = ConnectManualServerlessForm.Headers;
-
-// export const PLAN_TO_MAX_DURATION: Record<string, number> = {
-// 	hobby: 300,
-// 	pro: 800,
-// 	enterprise: 800,
-// };
-//
-// const integrationCode = ({ plan }: { plan: string }) =>
-// 	`import { toNextHandler } from "@rivetkit/next-js";
-// import { registry } from "@/rivet/registry";
-//
-// export const maxDuration = ${PLAN_TO_MAX_DURATION[plan] || 60};	// [!code highlight]
-//
-// export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);`;
 
 const integrationCode = ({ plan }: { plan: string }) =>
 	`import { toNextHandler } from "@rivetkit/next-js";
@@ -257,23 +209,17 @@ export const Endpoint = ConnectManualServerlessForm.Endpoint;
 
 export const ConnectionCheck = ConnectManualServerlessForm.ConnectionCheck;
 
-export const FrontendIntegrationCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => {
+export const FrontendIntegrationCode = () => {
+	const endpoint = useRivetDsn({
+		endpoint: useEndpoint(),
+		kind: "serverless",
+	});
 	const clientCode = `"use client";
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
 export const { useActor } = createRivetKit<typeof registry>({
 	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	token: "${token}",
 });
 `;
 
@@ -302,7 +248,7 @@ export function EnvVariables() {
 	return (
 		<EnvVariablesSection
 			prefix="NEXT_PUBLIC"
-			endpoint={useSelectedDatacenter()}
+			endpoint={useEndpoint()}
 			kind="serverless"
 			prefixlessEndpoint
 			runnerName={useWatch({ name: "runnerName" }) as string}

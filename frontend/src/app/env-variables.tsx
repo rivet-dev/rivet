@@ -30,11 +30,13 @@ export function EnvVariables({
 				</Label>
 
 				{prefixlessEndpoint ? (
-					<RivetEndpointEnv endpoint={endpoint} />
+					<RivetEndpointEnv endpoint={endpoint} kind={kind} />
 				) : null}
-				<RivetEndpointEnv prefix={prefix} endpoint={endpoint} />
-				<RivetTokenEnv prefix={prefix} kind={kind} />
-				<RivetNamespaceEnv prefix={prefix} />
+				<RivetEndpointEnv
+					prefix={prefix}
+					endpoint={endpoint}
+					kind={kind}
+				/>
 				<RivetRunnerEnv prefix={prefix} runnerName={runnerName} />
 			</div>
 			<div className="mt-2 flex justify-end">
@@ -90,43 +92,35 @@ function RivetRunnerEnv({
 	);
 }
 
-function RivetTokenEnv({
-	prefix,
+export const useRivetDsn = ({
+	endpoint,
 	kind,
 }: {
-	prefix?: string;
+	endpoint: string;
 	kind: "serverless" | "serverfull";
-}) {
+}) => {
+	const dataProvider = useEngineCompatDataProvider();
 	const publishableToken = usePublishableToken();
 	const adminToken = useAdminToken();
+	const token = kind === "serverless" ? publishableToken : adminToken;
 
-	return (
-		<>
-			<DiscreteInput
-				aria-label="environment variable key"
-				value={`${prefix ? `${prefix}_` : ""}RIVET_TOKEN`}
-				show
-			/>
+	const dsn = `https://${token}:${dataProvider.engineNamespace}@${endpoint
+		.replace("https://", "")
+		.replace("http://", "")}`;
 
-			<DiscreteInput
-				aria-label="environment variable value"
-				value={
-					(kind === "serverless" ? publishableToken : adminToken) ||
-					""
-				}
-				show
-			/>
-		</>
-	);
-}
+	return dsn;
+};
 
 function RivetEndpointEnv({
 	prefix,
 	endpoint,
+	kind,
 }: {
 	prefix?: string;
 	endpoint: string;
+	kind: "serverless" | "serverfull";
 }) {
+	const dsn = useRivetDsn({ endpoint, kind });
 	return (
 		<>
 			<DiscreteInput
@@ -136,25 +130,7 @@ function RivetEndpointEnv({
 			/>
 			<DiscreteInput
 				aria-label="environment variable value"
-				value={endpoint}
-				show
-			/>
-		</>
-	);
-}
-
-function RivetNamespaceEnv({ prefix }: { prefix?: string }) {
-	const dataProvider = useEngineCompatDataProvider();
-	return (
-		<>
-			<DiscreteInput
-				aria-label="environment variable key"
-				value={`${prefix ? `${prefix}_` : ""}RIVET_NAMESPACE`}
-				show
-			/>
-			<DiscreteInput
-				aria-label="environment variable value"
-				value={dataProvider.engineNamespace || ""}
+				value={dsn}
 				show
 			/>
 		</>
