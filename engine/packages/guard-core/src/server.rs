@@ -28,7 +28,6 @@ pub async fn run_server(
 	cache_key_fn: CacheKeyFn,
 	middleware_fn: MiddlewareFn,
 	cert_resolver_fn: Option<CertResolverFn>,
-	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 ) -> Result<()> {
 	// Set up HTTP server
 	let http_addr: std::net::SocketAddr = (config.guard().host(), config.guard().port()).into();
@@ -38,7 +37,6 @@ pub async fn run_server(
 		cache_key_fn.clone(),
 		middleware_fn.clone(),
 		crate::proxy_service::PortType::Http,
-		clickhouse_inserter.clone(),
 	));
 	let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 
@@ -53,7 +51,6 @@ pub async fn run_server(
 			cache_key_fn.clone(),
 			middleware_fn.clone(),
 			crate::proxy_service::PortType::Https,
-			clickhouse_inserter.clone(),
 		));
 		let listener = tokio::net::TcpListener::bind(https_addr).await?;
 

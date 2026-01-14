@@ -4,7 +4,6 @@ pub mod custom_serve;
 pub mod errors;
 pub mod metrics;
 pub mod proxy_service;
-pub mod request_context;
 mod server;
 mod task_group;
 pub mod types;

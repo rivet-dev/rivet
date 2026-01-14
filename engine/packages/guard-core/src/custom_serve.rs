@@ -4,11 +4,11 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
 use rivet_runner_protocol as protocol;
+use rivet_util::Id;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 
 use crate::WebSocketHandle;
 use crate::proxy_service::ResponseBody;
-use crate::request_context::RequestContext;
 
 pub enum HibernationResult {
 	Continue,
@@ -22,7 +22,8 @@ pub trait CustomServeTrait: Send + Sync {
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
-		request_context: &mut RequestContext,
+		ray_id: Id,
+		req_id: Id,
 		request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>>;
 
@@ -32,9 +33,10 @@ pub trait CustomServeTrait: Send + Sync {
 		_websocket: WebSocketHandle,
 		_headers: &hyper::HeaderMap,
 		_path: &str,
-		_request_context: &mut RequestContext,
+		_ray_id: Id,
+		_req_id: Id,
 		// Identifies the websocket across retries.
-		_unique_request_id: protocol::RequestId,
+		_request_id: protocol::RequestId,
 		// True if this websocket is reconnecting after hibernation.
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
@@ -45,7 +47,9 @@ pub trait CustomServeTrait: Send + Sync {
 	async fn handle_websocket_hibernation(
 		&self,
 		_websocket: WebSocketHandle,
-		_unique_request_id: protocol::RequestId,
+		_ray_id: Id,
+		_req_id: Id,
+		_request_id: protocol::RequestId,
 	) -> Result<HibernationResult> {
 		bail!("service does not support websocket hibernation");
 	}

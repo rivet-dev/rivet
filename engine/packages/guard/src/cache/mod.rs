@@ -14,7 +14,7 @@ use crate::routing::X_RIVET_TARGET;
 
 /// Creates the main cache key function that handles all incoming requests
 #[tracing::instrument(skip_all)]
-pub fn create_cache_key_function(_ctx: StandaloneCtx) -> CacheKeyFn {
+pub fn create_cache_key_function() -> CacheKeyFn {
 	Arc::new(move |hostname, path, method, _port_type, headers| {
 		tracing::debug!("building cache key");
 

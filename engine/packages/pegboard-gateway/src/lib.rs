@@ -11,7 +11,6 @@ use rivet_guard_core::{
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
 	proxy_service::{ResponseBody, is_ws_hibernate},
-	request_context::RequestContext,
 	websocket_handle::WebSocketReceiver,
 };
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
@@ -85,9 +84,12 @@ impl CustomServeTrait for PegboardGateway {
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
-		_request_context: &mut RequestContext,
+		ray_id: Id,
+		req_id: Id,
 		request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
+		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 
@@ -154,11 +156,10 @@ impl CustomServeTrait for PegboardGateway {
 			.context("failed to read body")?
 			.to_bytes();
 
-		let udb = self.ctx.udb()?;
+		let udb = ctx.udb()?;
 		let runner_id = self.runner_id;
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
-			self.ctx
-				.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
+			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			// Read runner protocol version
 			udb.run(|tx| async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
@@ -289,10 +290,13 @@ impl CustomServeTrait for PegboardGateway {
 		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
 		_path: &str,
-		_request_context: &mut RequestContext,
+		ray_id: Id,
+		req_id: Id,
 		request_id: protocol::RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
+		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+
 		// Extract headers
 		let mut request_headers = HashableMap::new();
 		for (name, value) in headers {
@@ -301,11 +305,10 @@ impl CustomServeTrait for PegboardGateway {
 			}
 		}
 
-		let udb = self.ctx.udb()?;
+		let udb = ctx.udb()?;
 		let runner_id = self.runner_id;
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
-			self.ctx
-				.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
+			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			// Read runner protocol version
 			udb.run(|tx| async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
@@ -452,7 +455,7 @@ impl CustomServeTrait for PegboardGateway {
 		let keepalive = if can_hibernate {
 			Some(tokio::spawn(keepalive_task::task(
 				self.shared_state.clone(),
-				self.ctx.clone(),
+				ctx.clone(),
 				self.actor_id,
 				self.shared_state.gateway_id(),
 				request_id,
@@ -603,8 +606,12 @@ impl CustomServeTrait for PegboardGateway {
 	async fn handle_websocket_hibernation(
 		&self,
 		client_ws: WebSocketHandle,
+		ray_id: Id,
+		req_id: Id,
 		request_id: protocol::RequestId,
 	) -> Result<HibernationResult> {
+		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+
 		// Immediately rewake if we have pending messages
 		if self
 			.shared_state
@@ -620,7 +627,7 @@ impl CustomServeTrait for PegboardGateway {
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
 		let keepalive_handle = tokio::spawn(keepalive_task::task(
 			self.shared_state.clone(),
-			self.ctx.clone(),
+			ctx.clone(),
 			self.actor_id,
 			self.shared_state.gateway_id(),
 			request_id,
@@ -636,13 +643,12 @@ impl CustomServeTrait for PegboardGateway {
 			Ok(HibernationResult::Continue) => {}
 			Ok(HibernationResult::Close) | Err(_) => {
 				// No longer an active hibernating request, delete entry
-				self.ctx
-					.op(pegboard::ops::actor::hibernating_request::delete::Input {
-						actor_id: self.actor_id,
-						gateway_id: self.shared_state.gateway_id(),
-						request_id,
-					})
-					.await?;
+				ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
+					actor_id: self.actor_id,
+					gateway_id: self.shared_state.gateway_id(),
+					request_id,
+				})
+				.await?;
 			}
 		}
 
