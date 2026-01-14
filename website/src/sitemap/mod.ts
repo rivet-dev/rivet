@@ -402,12 +402,16 @@ export const sitemap = [
 				title: "Configuration",
 				pages: [
 					{
+						title: "Endpoints",
+						href: "/docs/connect/endpoints",
+					},
+					{
 						title: "Runtime Modes",
 						href: "/docs/general/runtime-modes",
 					},
 					{
-						title: "Server Setup",
-						href: "/docs/general/server-setup",
+						title: "HTTP Server",
+						href: "/docs/general/http-server",
 					},
 				],
 			},
@@ -434,11 +438,6 @@ export const sitemap = [
 						title: "Configuration",
 						href: "/docs/self-hosting/configuration",
 						// icon: faGear,
-					},
-					{
-						title: "Connect Backend",
-						href: "/docs/self-hosting/connect-backend",
-						// icon: faNetworkWired,
 					},
 					{
 						title: "Multi-Region",

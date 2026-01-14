@@ -42,7 +42,7 @@ export default app;
 
 </CodeGroup>
 
-See [Server Setup](/docs/general/server-setup/) for more configuration options.
+See [Server Setup](/docs/general/http-server/) for more configuration options.
 
 ### Architecture
 
@@ -92,6 +92,46 @@ The runner runs in the background, ready to run actors.
 On startup, your backend calls `registry.startRunner()` which opens a persistent connection to the Rivet Engine. When a client creates an actor, the engine sends a command through this connection to start the actor on your backend.
 
 <img src={imgRunners.src} alt="Runners architecture diagram" />
+
+### Configuration
+
+#### Runner Pool
+
+Use `RIVET_RUNNER` to assign runners to a pool. This lets you control which runners handle specific actors.
+
+```bash
+RIVET_RUNNER=gpu-workers
+```
+
+```typescript
+const registry = setup({
+  actors: { myActor },
+  runner: {
+    runner: "gpu-workers",
+  },
+});
+```
+
+#### Runner Key
+
+Use `RIVET_RUNNER_KEY` to uniquely identify a runner. If another runner connects with the same key, the previous one is disconnected. This handles zombie runners that weren't shut down gracefully.
+
+```bash
+RIVET_RUNNER_KEY=worker-abc123
+```
+
+```typescript
+const registry = setup({
+  actors: { myActor },
+  runner: {
+    runnerKey: "worker-abc123",
+  },
+});
+```
+
+<Tip>
+  Generate a unique runner key using: `uuidgen` or `openssl rand -hex 16`
+</Tip>
 
 ## Comparison
 
