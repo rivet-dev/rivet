@@ -1,27 +1,23 @@
 import { faVercel, Icon } from "@rivet-gg/icons";
+import type { Rivet } from "@rivetkit/engine-api-full";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
-	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import { useMemo } from "react";
 import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-	type DialogContentProps,
-	ExternalLinkCard,
-	Frame,
-} from "@/components";
-import { type Region, useEngineCompatDataProvider } from "@/components/actors";
-import { usePublishableToken } from "@/queries/accessors";
+import { type DialogContentProps, ExternalLinkCard, Frame } from "@/components";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
+import { useRivetDsn } from "../env-variables";
 import { StepperForm } from "../forms/stepper-form";
-import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
+import { useEndpoint } from "./connect-manual-serverfull-frame";
+import {
+	buildServerlessConfig,
+	ConfigurationAccordion,
+} from "./connect-manual-serverless-frame";
 import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 
 const { stepper } = ConnectVercelForm;
@@ -62,7 +58,7 @@ function FormStepper({
 	onClose,
 }: {
 	onClose?: () => void;
-	datacenters: Region[];
+	datacenters: Rivet.Datacenter[];
 }) {
 	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
@@ -95,28 +91,13 @@ function FormStepper({
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
-				const selectedDatacenters = Object.entries(values.datacenters)
-					.filter(([, selected]) => selected)
-					.map(([id]) => id);
-
-				const config = {
-					serverless: {
-						url: values.endpoint,
-						maxRunners: values.maxRunners,
-						slotsPerRunner: values.slotsPerRunner,
-						runnersMargin: values.runnerMargin,
-						requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
-						headers: Object.fromEntries(
-							values.headers.map(([key, value]) => [key, value]),
-						),
+				const payload = await buildServerlessConfig(
+					provider,
+					{
+						...values,
+						requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5,
 					},
-					metadata: {
-						provider: "vercel",
-					},
-				};
-
-				const payload = Object.fromEntries(
-					selectedDatacenters.map((dc) => [dc, config]),
+					{ provider: "vercel" },
 				);
 
 				await mutateAsync({
@@ -132,6 +113,7 @@ function FormStepper({
 				runnerMargin: 0,
 				headers: [],
 				success: false,
+				plan: "hobby",
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),
 				),
@@ -141,28 +123,21 @@ function FormStepper({
 }
 
 const useVercelTemplateLink = () => {
-	const dataProvider = useEngineCompatDataProvider();
-	const token = usePublishableToken();
-	const endpoint = useSelectedDatacenter();
+	const endpoint = useEndpoint();
+
+	const dsn = useRivetDsn({ endpoint, kind: "serverless" });
 
 	return useMemo(() => {
 		const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
-		const env = [
-			"RIVET_ENDPOINT",
-			"NEXT_PUBLIC_RIVET_ENDPOINT",
-			"NEXT_PUBLIC_RIVET_TOKEN",
-			"NEXT_PUBLIC_RIVET_NAMESPACE",
-		].join(",");
+		const env = ["RIVET_ENDPOINT", "NEXT_PUBLIC_RIVET_ENDPOINT"].join(",");
 		const projectName = "rivetkit-vercel";
 		const envDefaults = {
-			RIVET_ENDPOINT: endpoint,
-			NEXT_PUBLIC_RIVET_ENDPOINT: endpoint,
-			NEXT_PUBLIC_RIVET_TOKEN: token,
-			NEXT_PUBLIC_RIVET_NAMESPACE: dataProvider.engineNamespace,
+			RIVET_ENDPOINT: dsn,
+			NEXT_PUBLIC_RIVET_ENDPOINT: dsn,
 		};
 
 		return `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repositoryUrl)}&env=${env}&project-name=${projectName}&repository-name=${projectName}&envDefaults=${encodeURIComponent(JSON.stringify(envDefaults))}`;
-	}, [dataProvider.engineNamespace, endpoint, token]);
+	}, [dsn]);
 };
 
 function StepInitialInfo() {
@@ -188,25 +163,29 @@ function StepInitialInfo() {
 function StepDeploy() {
 	return (
 		<>
+			<p>
+				Deploy your code to Vercel and paste your deployment's endpoint:
+			</p>
 			<div className="mt-2">
 				<ConnectVercelForm.Endpoint />
-				<Accordion type="single" collapsible>
-					<AccordionItem value="item-1">
-						<AccordionTrigger className="text-sm">
-							Advanced
-						</AccordionTrigger>
-						<AccordionContent className="space-y-4 px-1 pt-2">
-							<ConnectVercelForm.RunnerName />
-							<ConnectVercelForm.Datacenters />
-							<ConnectVercelForm.Headers />
-							<ConnectVercelForm.SlotsPerRunner />
-							<ConnectVercelForm.MinRunners />
-							<ConnectVercelForm.MaxRunners />
-							<ConnectVercelForm.RunnerMargin />
-						</AccordionContent>
-					</AccordionItem>
-				</Accordion>
+				<ConfigurationAccordion
+					requestLifespan={false}
+					prefixFields={<ConnectVercelForm.Plan />}
+				/>
+				<p className="text-muted-foreground text-sm">
+					Need help deploying? See{" "}
+					<a
+						href="https://vercel.com/docs/deployments"
+						target="_blank"
+						rel="noreferrer"
+						className="underline"
+					>
+						Vercel's deployment documentation
+					</a>
+					.
+				</p>
 			</div>
+
 			<ConnectVercelForm.ConnectionCheck provider="Vercel" />
 		</>
 	);

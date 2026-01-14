@@ -224,7 +224,7 @@ function Step2({ provider }: { provider: string }) {
 
 			<EnvVariables
 				kind="serverfull"
-				endpoint={useSelectedDatacenter()}
+				endpoint={useEndpoint()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>
 		</>
@@ -235,7 +235,7 @@ function Step3() {
 	return <ConnectRailwayForm.ConnectionCheck provider="railway" />;
 }
 
-export const useSelectedDatacenter = () => {
+export const useEndpoint = () => {
 	const datacenter = useWatch({ name: "datacenter" });
 
 	const { data } = useQuery(

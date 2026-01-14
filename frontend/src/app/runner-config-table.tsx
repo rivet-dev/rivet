@@ -1,7 +1,10 @@
 import {
+	faAws,
 	faCog,
 	faCogs,
 	faEllipsisVertical,
+	faGoogleCloud,
+	faHetznerH,
 	faNextjs,
 	faPencil,
 	faRailway,
@@ -397,14 +400,22 @@ function Provider({ metadata }: { metadata: unknown }) {
 		if (metadata.provider === "hetzner") {
 			return (
 				<div className="whitespace-nowrap">
-					<Icon icon={faCogs} className="mr-1" /> Hetzner
+					<Icon icon={faHetznerH} className="mr-1" /> Hetzner
+				</div>
+			);
+		}
+		if (metadata.provider === "aws") {
+			return (
+				<div className="whitespace-nowrap">
+					<Icon icon={faAws} className="mr-1" /> AWS ECS
 				</div>
 			);
 		}
 		if (metadata.provider === "gcp") {
 			return (
 				<div className="whitespace-nowrap">
-					<Icon icon={faCog} className="mr-1" /> Google Cloud Run
+					<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud
+					Run
 				</div>
 			);
 		}
