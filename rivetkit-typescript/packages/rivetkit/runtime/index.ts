@@ -22,6 +22,11 @@ import type { Registry } from "@/registry";
 /** Tracks whether the runtime was started as serverless or runner. */
 export type StartKind = "serverless" | "runner";
 
+function logLine(label: string, value: string): void {
+	const padding = " ".repeat(Math.max(0, 13 - label.length));
+	console.log(`  - ${label}:${padding}${value}`);
+}
+
 /**
  * Manages the lifecycle of RivetKit.
  *
@@ -206,37 +211,45 @@ export class Runtime<A extends RegistryActors> {
 			: undefined;
 
 		console.log();
-		console.log(`  RivetKit ${pkg.version} (${this.#driver.displayName})`);
+		console.log(
+			`  RivetKit ${pkg.version} (${this.#driver.displayName} - ${this.#startKind === "serverless" ? "Serverless" : "Runner"})`,
+		);
 
-		if (this.#startKind === "serverless") {
-			const shouldShowEndpoint =
-				this.#config.serveManager ||
-				this.#config.serverless.spawnEngine;
-			if (
-				this.#config.publicEndpoint &&
-				shouldShowEndpoint
-			) {
-				console.log(
-					`  - Endpoint:     ${this.#config.publicEndpoint}`,
-				);
-			}
-			if (this.#config.serverless.spawnEngine) {
-				const padding = " ".repeat(Math.max(0, 13 - "Engine".length));
-				console.log(
-					`  - Engine:${padding}v${this.#config.serverless.engineVersion}`,
-				);
-			}
+		// Show namespace
+		if (this.#config.namespace !== "default") {
+			logLine("Namespace", this.#config.namespace);
 		}
 
+		// Show backend endpoint (where we connect to engine)
+		if (this.#config.endpoint) {
+			const endpointType = this.#config.serverless.spawnEngine
+				? "local native"
+				: this.#config.serveManager
+					? "local manager"
+					: "remote";
+			logLine("Endpoint", `${this.#config.endpoint} (${endpointType})`);
+		}
+
+		// Show public endpoint (where clients connect)
+		if (this.#startKind === "serverless" && this.#config.publicEndpoint) {
+			logLine("Client", this.#config.publicEndpoint);
+		}
+
+		// Show inspector
+		if (inspectorUrl && this.#config.inspector.enabled) {
+			logLine("Inspector", inspectorUrl);
+		}
+
+		// Show actor count
+		const actorCount = Object.keys(this.#config.use).length;
+		logLine("Actors", actorCount.toString());
+
+		// Show driver-specific info
 		const displayInfo = this.#managerDriver.displayInformation();
 		for (const [k, v] of Object.entries(displayInfo.properties)) {
-			const padding = " ".repeat(Math.max(0, 13 - k.length));
-			console.log(`  - ${k}:${padding}${v}`);
+			logLine(k, v);
 		}
 
-		if (inspectorUrl && this.#config.inspector.enabled) {
-			console.log(`  - Inspector:    ${inspectorUrl}`);
-		}
 		console.log();
 	}
 
