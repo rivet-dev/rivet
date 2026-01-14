@@ -216,7 +216,7 @@ export const RegistryConfigSchema = z
 		// In dev mode, fall back to localhost if serving manager
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && serveManager
+			(isDevEnv && (serveManager || config.serverless.spawnEngine)
 				? `http://localhost:${config.managerPort}`
 				: undefined);
 		// We extract publicNamespace to validate that it matches the backend
