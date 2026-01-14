@@ -389,7 +389,7 @@ impl PubSubDriver for PostgresDriver {
 		let encoded = BASE64.encode(payload);
 		let hashed = self.hash_subject(subject);
 
-		tracing::debug!("attempting to get connection for publish");
+		tracing::trace!("attempting to get connection for publish");
 
 		// Wait for listen connection to be ready first if this channel has subscribers
 		// This ensures that if we're reconnecting, the LISTEN is re-registered before NOTIFY

@@ -7,7 +7,9 @@ pub enum GaugeMetric {
 	WorkflowSleeping(String),
 	WorkflowDead(String, String),
 	WorkflowComplete(String),
+	// Deprecated
 	SignalPending(String),
+	SignalPending2(String),
 }
 
 impl GaugeMetric {
@@ -18,6 +20,7 @@ impl GaugeMetric {
 			GaugeMetric::WorkflowDead(_, _) => GaugeMetricVariant::WorkflowDead,
 			GaugeMetric::WorkflowComplete(_) => GaugeMetricVariant::WorkflowComplete,
 			GaugeMetric::SignalPending(_) => GaugeMetricVariant::SignalPending,
+			GaugeMetric::SignalPending2(_) => GaugeMetricVariant::SignalPending2,
 		}
 	}
 }
@@ -28,9 +31,12 @@ enum GaugeMetricVariant {
 	WorkflowSleeping = 1,
 	WorkflowDead = 2,
 	WorkflowComplete = 3,
+	// Deprecated
 	SignalPending = 4,
+	SignalPending2 = 5,
 }
 
+/// Stores gauge metrics for global database usage.
 #[derive(Debug)]
 pub struct GaugeMetricKey {
 	pub metric: GaugeMetric,
@@ -79,6 +85,7 @@ impl TuplePack for GaugeMetricKey {
 			}
 			GaugeMetric::WorkflowComplete(workflow_name) => workflow_name.pack(w, tuple_depth)?,
 			GaugeMetric::SignalPending(signal_name) => signal_name.pack(w, tuple_depth)?,
+			GaugeMetric::SignalPending2(signal_name) => signal_name.pack(w, tuple_depth)?,
 		};
 
 		std::result::Result::Ok(offset)
@@ -144,12 +151,23 @@ impl<'de> TupleUnpack<'de> for GaugeMetricKey {
 					},
 				)
 			}
+			GaugeMetricVariant::SignalPending2 => {
+				let (input, signal_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					GaugeMetricKey {
+						metric: GaugeMetric::SignalPending2(signal_name),
+					},
+				)
+			}
 		};
 
 		std::result::Result::Ok((input, v))
 	}
 }
 
+/// Used to list all global gauge metrics.
 pub struct GaugeMetricSubspaceKey {}
 
 impl GaugeMetricSubspaceKey {

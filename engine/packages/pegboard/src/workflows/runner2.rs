@@ -11,7 +11,7 @@ use universaldb::{
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use crate::{keys, metrics, workflows::actor::Allocate};
+use crate::{keys, workflows::actor::Allocate};
 
 const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
 
