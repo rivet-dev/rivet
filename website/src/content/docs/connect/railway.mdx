@@ -41,7 +41,6 @@ Railway will automatically deploy your RivetKit app on every git push.
 
 Detailed steps are available on [Railway's docs](https://docs.railway.com/quick-start).
 
-<Note>You do not need to expose a container port. Rivet tunnels traffic directly to your backend.</Note>
 </Step>
 <Step title="Set Environment Variables">
 
@@ -55,9 +54,19 @@ To add your environment variables:
 
 Detailed steps are available on [Railway's docs](https://docs.railway.com/guides/variables#service-variables).
 </Step>
-<Step title="Verify Deployment">
+<Step title="Connect to Rivet">
 
-You should see your runner connected on the Connect tab of your Rivet Dashboard. Now you can create and connect to your Rivet Actors.
+1. In your Railway project, go to **Settings > Networking**
+2. Click **Create Custom Domain**
+3. Click **Create Domain** to generate a Railway domain (e.g. `my-app.railway.app`)
+4. On the Rivet dashboard, paste your domain with the `/api/rivet` path into the connect form (e.g. `https://my-app.railway.app/api/rivet`)
+5. Click "Done"
+
+</Step>
+<Step title="Test Your Deployment">
+
+Visit your Railway frontend to see everything working.
+
 </Step>
 
 </Steps>
