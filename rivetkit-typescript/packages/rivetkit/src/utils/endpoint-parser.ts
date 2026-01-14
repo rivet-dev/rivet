@@ -6,8 +6,21 @@ export interface ParsedEndpoint {
 	token: string | undefined;
 }
 
+export interface TryParseEndpointOptions {
+	/** The endpoint URL string to parse */
+	endpoint: string;
+	/** Path prefix for error messages (default: ["endpoint"]) */
+	path?: (string | number)[];
+	/** Namespace from config, to check for duplicate specification */
+	namespace?: string;
+	/** Token from config, to check for duplicate specification */
+	token?: string;
+}
+
 /**
  * Parses an endpoint URL that may contain auth syntax for namespace and token.
+ *
+ * Uses ctx.addIssue for clean error reporting in Zod transforms.
  *
  * Supports formats like:
  * - `https://namespace:token@api.rivet.dev`
@@ -17,47 +30,82 @@ export interface ParsedEndpoint {
  *
  * Query strings and fragments are not allowed as they may conflict with
  * runtime parameters.
+ *
+ * @param ctx - Zod refinement context for error reporting
+ * @param options - Parsing options including endpoint, path, and config values
+ * @returns ParsedEndpoint on success, undefined on error (after adding issues to ctx)
  */
-export function zodParseEndpoint(endpoint: string): ParsedEndpoint {
+export function tryParseEndpoint(
+	ctx: z.RefinementCtx,
+	options: TryParseEndpointOptions,
+): ParsedEndpoint | undefined {
+	const { endpoint, path = ["endpoint"], namespace: configNamespace, token: configToken } = options;
 	// Parse the URL
-	const url = new URL(endpoint);
+	let url: URL;
+	try {
+		url = new URL(endpoint);
+	} catch {
+		ctx.addIssue({
+			code: "custom",
+			message: `invalid URL: ${endpoint}`,
+			path,
+		});
+		return undefined;
+	}
 
 	// Reject query strings
 	if (url.search) {
-		throw new z.ZodError([
-			{
-				code: "custom",
-				message: "endpoint cannot contain a query string",
-				path: ["endpoint"],
-			},
-		]);
+		ctx.addIssue({
+			code: "custom",
+			message: "endpoint cannot contain a query string",
+			path,
+		});
+		return undefined;
 	}
 
 	// Reject fragments
 	if (url.hash) {
-		throw new z.ZodError([
-			{
-				code: "custom",
-				message: "endpoint cannot contain a fragment",
-				path: ["endpoint"],
-			},
-		]);
+		ctx.addIssue({
+			code: "custom",
+			message: "endpoint cannot contain a fragment",
+			path,
+		});
+		return undefined;
 	}
 
 	// Extract namespace and token from username and password
 	// URL stores these as percent-encoded, so we need to decode them
-	const namespace = url.username ? decodeURIComponent(url.username) : undefined;
+	const namespace = url.username
+		? decodeURIComponent(url.username)
+		: undefined;
 	const token = url.password ? decodeURIComponent(url.password) : undefined;
 
 	// Reject token without namespace (e.g., https://:token@api.rivet.dev)
 	if (token && !namespace) {
-		throw new z.ZodError([
-			{
-				code: "custom",
-				message: "endpoint cannot have a token without a namespace",
-				path: ["endpoint"],
-			},
-		]);
+		ctx.addIssue({
+			code: "custom",
+			message: "endpoint cannot have a token without a namespace",
+			path,
+		});
+		return undefined;
+	}
+
+	// Check for duplicate credentials (specified both in URL and config)
+	if (namespace && configNamespace) {
+		ctx.addIssue({
+			code: "custom",
+			message:
+				"cannot specify namespace both in endpoint URL and as a separate config option",
+			path: ["namespace"],
+		});
+	}
+	if (token && configToken) {
+		ctx.addIssue({
+			code: "custom",
+			message:
+				"cannot specify token both in endpoint URL and as a separate config option",
+			path: ["token"],
+		});
 	}
 
 	// Strip auth from the URL by clearing username and password
@@ -72,48 +120,5 @@ export function zodParseEndpoint(endpoint: string): ParsedEndpoint {
 		namespace,
 		token,
 	};
-}
-
-/**
- * Zod schema that parses an endpoint URL string and extracts namespace/token from HTTP auth syntax.
- *
- * Input: `"https://namespace:token@api.rivet.dev/path"`
- * Output: `{ endpoint: "https://api.rivet.dev/path", namespace: "namespace", token: "token" }`
- */
-export const EndpointSchema = z.string().transform((endpoint): ParsedEndpoint => {
-	return zodParseEndpoint(endpoint);
-});
-
-export type EndpointSchemaInput = z.input<typeof EndpointSchema>;
-export type EndpointSchemaOutput = z.output<typeof EndpointSchema>;
-
-/**
- * Zod refinement that validates namespace/token aren't specified both in the endpoint URL
- * and as separate config options.
- */
-export function zodCheckDuplicateCredentials(
-	resolvedEndpoint: ParsedEndpoint,
-	config: { namespace?: string; token?: string },
-	ctx: z.RefinementCtx,
-): void {
-	// Check if endpoint contains namespace but namespace is also specified in config
-	if (resolvedEndpoint.namespace && config.namespace) {
-		ctx.addIssue({
-			code: "custom",
-			message:
-				"cannot specify namespace both in endpoint URL and as a separate config option",
-			path: ["namespace"],
-		});
-	}
-
-	// Check if endpoint contains token but token is also specified in config
-	if (resolvedEndpoint.token && config.token) {
-		ctx.addIssue({
-			code: "custom",
-			message:
-				"cannot specify token both in endpoint URL and as a separate config option",
-			path: ["token"],
-		});
-	}
 }
 

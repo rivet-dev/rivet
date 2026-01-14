@@ -29,6 +29,12 @@ export const getRivetRunnerVersion = (): number | undefined => {
 	const value = getEnvUniversal("RIVET_RUNNER_VERSION");
 	return value !== undefined ? parseInt(value, 10) : undefined;
 };
+export const getRivetPublicEndpoint = (): string | undefined =>
+	getEnvUniversal("RIVET_PUBLIC_ENDPOINT");
+export const getRivetPublicToken = (): string | undefined =>
+	getEnvUniversal("RIVET_PUBLIC_TOKEN");
+// There is no RIVET_PUBLIC_NAMESPACE because the frontend and backend cannot
+// use different namespaces
 
 // RivetKit configuration
 export const getRivetkitInspectorToken = (): string | undefined =>

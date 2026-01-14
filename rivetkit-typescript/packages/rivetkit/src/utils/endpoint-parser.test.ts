@@ -1,189 +1,202 @@
 import { describe, expect, test } from "vitest";
-import { zodParseEndpoint, EndpointSchema } from "./endpoint-parser";
+import type { z } from "zod";
+import { tryParseEndpoint } from "./endpoint-parser";
 
-describe("zodParseEndpoint", () => {
-	describe("full auth syntax", () => {
-		test("parses namespace and token from endpoint", () => {
-			const result = zodParseEndpoint("https://foo:bar@api.rivet.dev");
-			expect(result.endpoint).toBe("https://api.rivet.dev/");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBe("bar");
+// Helper to create a mock Zod refinement context for testing
+function createMockCtx(): { ctx: z.RefinementCtx; issues: z.ZodIssue[] } {
+	const issues: z.ZodIssue[] = [];
+	const ctx = {
+		addIssue: (issue: z.IssueData) => {
+			issues.push(issue as z.ZodIssue);
+		},
+		path: [],
+		value: undefined,
+		issues: [],
+	} as unknown as z.RefinementCtx;
+	return { ctx, issues };
+}
+
+describe("tryParseEndpoint", () => {
+	describe("basic parsing", () => {
+		test("parses endpoint with full auth", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://foo:bar@api.rivet.dev",
+			});
+			expect(issues).toHaveLength(0);
+			expect(result).toEqual({
+				endpoint: "https://api.rivet.dev/",
+				namespace: "foo",
+				token: "bar",
+			});
 		});
 
-		test("parses with port", () => {
-			const result = zodParseEndpoint("https://foo:bar@api.rivet.dev:8080");
-			expect(result.endpoint).toBe("https://api.rivet.dev:8080/");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBe("bar");
+		test("parses endpoint with namespace only", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://foo@api.rivet.dev",
+			});
+			expect(issues).toHaveLength(0);
+			expect(result).toEqual({
+				endpoint: "https://api.rivet.dev/",
+				namespace: "foo",
+				token: undefined,
+			});
 		});
 
-		test("parses with path", () => {
-			const result = zodParseEndpoint("https://foo:bar@api.rivet.dev/v1/actors");
-			expect(result.endpoint).toBe("https://api.rivet.dev/v1/actors");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBe("bar");
-		});
-
-		test("throws on query string", () => {
-			expect(() =>
-				zodParseEndpoint("https://foo:bar@api.rivet.dev?region=us-east"),
-			).toThrow("endpoint cannot contain a query string");
-		});
-
-		test("throws on fragment", () => {
-			expect(() =>
-				zodParseEndpoint("https://foo:bar@api.rivet.dev#section"),
-			).toThrow("endpoint cannot contain a fragment");
-		});
-
-		test("handles percent-encoded characters in namespace", () => {
-			const result = zodParseEndpoint("https://foo%40bar:token@api.rivet.dev");
-			expect(result.endpoint).toBe("https://api.rivet.dev/");
-			expect(result.namespace).toBe("foo@bar");
-			expect(result.token).toBe("token");
-		});
-
-		test("handles percent-encoded characters in token", () => {
-			const result = zodParseEndpoint("https://foo:bar%3Abaz@api.rivet.dev");
-			expect(result.endpoint).toBe("https://api.rivet.dev/");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBe("bar:baz");
-		});
-	});
-
-	describe("namespace only (no token)", () => {
-		test("parses namespace without token", () => {
-			const result = zodParseEndpoint("https://foo@api.rivet.dev");
-			expect(result.endpoint).toBe("https://api.rivet.dev/");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBeUndefined();
-		});
-
-		test("parses namespace without token with path", () => {
-			const result = zodParseEndpoint("https://foo@api.rivet.dev/v1/actors");
-			expect(result.endpoint).toBe("https://api.rivet.dev/v1/actors");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBeUndefined();
-		});
-	});
-
-	describe("no auth", () => {
 		test("parses endpoint without auth", () => {
-			const result = zodParseEndpoint("https://api.rivet.dev");
-			expect(result.endpoint).toBe("https://api.rivet.dev/");
-			expect(result.namespace).toBeUndefined();
-			expect(result.token).toBeUndefined();
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://api.rivet.dev",
+			});
+			expect(issues).toHaveLength(0);
+			expect(result).toEqual({
+				endpoint: "https://api.rivet.dev/",
+				namespace: undefined,
+				token: undefined,
+			});
 		});
 
-		test("parses endpoint without auth with path", () => {
-			const result = zodParseEndpoint("https://api.rivet.dev/v1/actors");
-			expect(result.endpoint).toBe("https://api.rivet.dev/v1/actors");
-			expect(result.namespace).toBeUndefined();
-			expect(result.token).toBeUndefined();
-		});
-
-		test("throws on query string without auth", () => {
-			expect(() =>
-				zodParseEndpoint("https://api.rivet.dev?region=us-east"),
-			).toThrow("endpoint cannot contain a query string");
-		});
-	});
-
-	describe("http protocol", () => {
-		test("parses http endpoint with auth", () => {
-			const result = zodParseEndpoint("http://foo:bar@localhost:6420");
-			expect(result.endpoint).toBe("http://localhost:6420/");
-			expect(result.namespace).toBe("foo");
-			expect(result.token).toBe("bar");
-		});
-
-		test("parses http endpoint without auth", () => {
-			const result = zodParseEndpoint("http://localhost:6420");
-			expect(result.endpoint).toBe("http://localhost:6420/");
-			expect(result.namespace).toBeUndefined();
-			expect(result.token).toBeUndefined();
+		test("preserves path", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://foo:bar@api.rivet.dev/v1/actors",
+			});
+			expect(issues).toHaveLength(0);
+			expect(result).toEqual({
+				endpoint: "https://api.rivet.dev/v1/actors",
+				namespace: "foo",
+				token: "bar",
+			});
 		});
 	});
 
-	describe("error handling", () => {
-		test("throws on invalid URL", () => {
-			expect(() => zodParseEndpoint("not-a-url")).toThrow();
+	describe("validation errors", () => {
+		test("adds issue for invalid URL", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, { endpoint: "not-a-url" });
+			expect(result).toBeUndefined();
+			expect(issues).toHaveLength(1);
+			expect(issues[0]?.message).toContain("invalid URL");
 		});
 
-		test("throws on empty string", () => {
-			expect(() => zodParseEndpoint("")).toThrow();
+		test("adds issue for query string", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://foo:bar@api.rivet.dev?region=us",
+			});
+			expect(result).toBeUndefined();
+			expect(issues).toHaveLength(1);
+			expect(issues[0]?.message).toBe("endpoint cannot contain a query string");
 		});
 
-		test("throws on token without namespace", () => {
-			expect(() => zodParseEndpoint("https://:token@api.rivet.dev")).toThrow(
+		test("adds issue for fragment", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://foo:bar@api.rivet.dev#section",
+			});
+			expect(result).toBeUndefined();
+			expect(issues).toHaveLength(1);
+			expect(issues[0]?.message).toBe("endpoint cannot contain a fragment");
+		});
+
+		test("adds issue for token without namespace", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://:token@api.rivet.dev",
+			});
+			expect(result).toBeUndefined();
+			expect(issues).toHaveLength(1);
+			expect(issues[0]?.message).toBe(
 				"endpoint cannot have a token without a namespace",
 			);
 		});
 	});
-});
 
-describe("EndpointSchema", () => {
-	test("parses endpoint with full auth", () => {
-		const result = EndpointSchema.parse("https://foo:bar@api.rivet.dev");
-		expect(result).toEqual({
-			endpoint: "https://api.rivet.dev/",
-			namespace: "foo",
-			token: "bar",
+	describe("duplicate credential checking", () => {
+		test("adds issue when namespace in URL and config", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://url-ns@api.rivet.dev",
+				path: ["endpoint"],
+				namespace: "config-ns",
+			});
+			// Still returns result, but adds issue
+			expect(result).toEqual({
+				endpoint: "https://api.rivet.dev/",
+				namespace: "url-ns",
+				token: undefined,
+			});
+			expect(issues).toHaveLength(1);
+			expect(issues[0]?.message).toContain(
+				"cannot specify namespace both in endpoint URL and as a separate config option",
+			);
+			expect(issues[0]?.path).toEqual(["namespace"]);
+		});
+
+		test("adds issue when token in URL and config", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://ns:url-token@api.rivet.dev",
+				path: ["endpoint"],
+				token: "config-token",
+			});
+			// Still returns result, but adds issue
+			expect(result).toEqual({
+				endpoint: "https://api.rivet.dev/",
+				namespace: "ns",
+				token: "url-token",
+			});
+			expect(issues).toHaveLength(1);
+			expect(issues[0]?.message).toContain(
+				"cannot specify token both in endpoint URL and as a separate config option",
+			);
+			expect(issues[0]?.path).toEqual(["token"]);
+		});
+
+		test("adds issues for both namespace and token duplicates", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://url-ns:url-token@api.rivet.dev",
+				path: ["endpoint"],
+				namespace: "config-ns",
+				token: "config-token",
+			});
+			expect(result).toBeDefined();
+			expect(issues).toHaveLength(2);
+		});
+
+		test("no issue when namespace only in URL", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://url-ns@api.rivet.dev",
+				path: ["endpoint"],
+				token: "config-token",
+			});
+			expect(result).toBeDefined();
+			expect(issues).toHaveLength(0);
+		});
+
+		test("no issue when namespace only in config", () => {
+			const { ctx, issues } = createMockCtx();
+			const result = tryParseEndpoint(ctx, {
+				endpoint: "https://api.rivet.dev",
+				path: ["endpoint"],
+				namespace: "config-ns",
+			});
+			expect(result).toBeDefined();
+			expect(issues).toHaveLength(0);
 		});
 	});
 
-	test("parses endpoint with namespace only", () => {
-		const result = EndpointSchema.parse("https://foo@api.rivet.dev");
-		expect(result).toEqual({
-			endpoint: "https://api.rivet.dev/",
-			namespace: "foo",
-			token: undefined,
-		});
-	});
-
-	test("parses endpoint without auth", () => {
-		const result = EndpointSchema.parse("https://api.rivet.dev");
-		expect(result).toEqual({
-			endpoint: "https://api.rivet.dev/",
-			namespace: undefined,
-			token: undefined,
-		});
-	});
-
-	test("preserves path", () => {
-		const result = EndpointSchema.parse(
-			"https://foo:bar@api.rivet.dev/v1/actors",
-		);
-		expect(result).toEqual({
-			endpoint: "https://api.rivet.dev/v1/actors",
-			namespace: "foo",
-			token: "bar",
-		});
-	});
-
-	test("throws on query string", () => {
-		expect(() =>
-			EndpointSchema.parse("https://foo:bar@api.rivet.dev?region=us"),
-		).toThrow();
-	});
-
-	test("throws on fragment", () => {
-		expect(() =>
-			EndpointSchema.parse("https://foo:bar@api.rivet.dev#section"),
-		).toThrow();
-	});
-
-	test("throws on invalid URL", () => {
-		expect(() => EndpointSchema.parse("not-a-url")).toThrow();
-	});
-
-	test("works with optional()", () => {
-		const schema = EndpointSchema.optional();
-		expect(schema.parse(undefined)).toBeUndefined();
-		expect(schema.parse("https://foo:bar@api.rivet.dev")).toEqual({
-			endpoint: "https://api.rivet.dev/",
-			namespace: "foo",
-			token: "bar",
+	describe("custom path", () => {
+		test("uses custom path in error issues", () => {
+			const { ctx, issues } = createMockCtx();
+			tryParseEndpoint(ctx, {
+				endpoint: "not-a-url",
+				path: ["serverless", "publicEndpoint"],
+			});
+			expect(issues[0]?.path).toEqual(["serverless", "publicEndpoint"]);
 		});
 	});
 });

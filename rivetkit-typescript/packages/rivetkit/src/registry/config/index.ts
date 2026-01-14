@@ -1,15 +1,16 @@
-import invariant from "invariant";
 import { z } from "zod";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
-import { resolveEndpoint } from "@/client/config";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";
+import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
-	EndpointSchema,
-	zodCheckDuplicateCredentials,
-} from "@/utils/endpoint-parser";
-import { getRivetNamespace, getRivetToken, isDev } from "@/utils/env-vars";
+	getRivetEndpoint,
+	getRivetEngine,
+	getRivetNamespace,
+	getRivetToken,
+	isDev,
+} from "@/utils/env-vars";
 import { type DriverConfig, DriverConfigSchema } from "./driver";
 import { RunnerConfigSchema } from "./runner";
 import { ServerlessConfigSchema } from "./serverless";
@@ -78,9 +79,27 @@ export const RegistryConfigSchema = z
 		// getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
 		// MARK: Runner Configuration
-		endpoint: EndpointSchema.optional(),
-		token: z.string().optional(),
-		namespace: z.string().optional(),
+		/**
+		 * Endpoint to connect to for Rivet Engine.
+		 *
+		 * Supports URL auth syntax for namespace and token:
+		 * - `https://namespace:token@api.rivet.dev`
+		 * - `https://namespace@api.rivet.dev`
+		 *
+		 * Can also be set via RIVET_ENDPOINT environment variables.
+		 */
+		endpoint: z
+			.string()
+			.optional()
+			.transform((val) => val ?? getRivetEngine() ?? getRivetEndpoint()),
+		token: z
+			.string()
+			.optional()
+			.transform((val) => val ?? getRivetToken()),
+		namespace: z
+			.string()
+			.optional()
+			.transform((val) => val ?? getRivetNamespace()),
 		headers: z.record(z.string(), z.string()).optional().default({}),
 
 		// MARK: Client
@@ -121,103 +140,90 @@ export const RegistryConfigSchema = z
 	})
 	.transform((config, ctx) => {
 		const isDevEnv = isDev();
-		const resolvedEndpoint = resolveEndpoint(config.endpoint);
 
-		// Validate duplicate credentials
-		if (resolvedEndpoint) {
-			zodCheckDuplicateCredentials(resolvedEndpoint, config, ctx);
-		}
+		// Parse endpoint string (env var fallback is applied via transform above)
+		const parsedEndpoint = config.endpoint
+			? tryParseEndpoint(ctx, {
+					endpoint: config.endpoint,
+					path: ["endpoint"],
+					namespace: config.namespace,
+					token: config.token,
+				})
+			: undefined;
 
-		if (resolvedEndpoint && config.serveManager) {
+		if (parsedEndpoint && config.serveManager) {
 			ctx.addIssue({
 				code: "custom",
 				message: "cannot specify both endpoint and serveManager",
 			});
 		}
 
-		if (config.serverless) {
-			// Can't spawn engine AND connect to remote endpoint
-			if (config.serverless.spawnEngine && resolvedEndpoint) {
-				ctx.addIssue({
-					code: "custom",
-					message: "cannot specify both spawnEngine and endpoint",
-				});
-			}
+		// Can't spawn engine AND connect to remote endpoint
+		if (config.serverless.spawnEngine && parsedEndpoint) {
+			ctx.addIssue({
+				code: "custom",
+				message: "cannot specify both spawnEngine and endpoint",
+			});
+		}
 
-			// configureRunnerPool requires an engine (via endpoint or spawnEngine)
-			if (
-				config.serverless.configureRunnerPool &&
-				!resolvedEndpoint &&
-				!config.serverless.spawnEngine
-			) {
-				ctx.addIssue({
-					code: "custom",
-					message:
-						"configureRunnerPool requires either endpoint or spawnEngine",
-				});
-			}
-
-			// advertiseEndpoint required in production without endpoint
-			if (
-				!isDevEnv &&
-				!resolvedEndpoint &&
-				!config.serverless.advertiseEndpoint
-			) {
-				ctx.addIssue({
-					code: "custom",
-					message:
-						"must specify either endpoint or advertiseEndpoint when in production mode",
-					path: ["advertiseEndpoint"],
-				});
-			}
+		// configureRunnerPool requires an engine (via endpoint or spawnEngine)
+		if (
+			config.serverless.configureRunnerPool &&
+			!parsedEndpoint &&
+			!config.serverless.spawnEngine
+		) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"configureRunnerPool requires either endpoint or spawnEngine",
+			});
 		}
 
 		// Flatten the endpoint and apply defaults for namespace/token
 		// If spawnEngine is enabled, set endpoint to the engine endpoint
-		const endpoint = config.serverless?.spawnEngine
+		const endpoint = config.serverless.spawnEngine
 			? ENGINE_ENDPOINT
-			: resolvedEndpoint?.endpoint;
+			: parsedEndpoint?.endpoint;
+		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
 		const namespace =
-			resolvedEndpoint?.namespace ??
-			config.namespace ??
-			getRivetNamespace() ??
-			"default";
-		const token =
-			resolvedEndpoint?.token ?? config.token ?? getRivetToken();
+			parsedEndpoint?.namespace ?? config.namespace ?? "default";
+		// Token priority: parsed from endpoint URL > config value (includes env var)
+		const token = parsedEndpoint?.token ?? config.token;
 
-		// Logic:
-		// - If endpoint provided: do not start manager server
-		// - If dev mode without endpoint: start manager server
-		// - If prod mode without endpoint: do not start manager server
-		let serveManager: boolean;
-		let advertiseEndpoint: string | undefined;
+		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
+		const parsedPublicEndpoint = config.serverless.publicEndpoint
+			? tryParseEndpoint(ctx, {
+					endpoint: config.serverless.publicEndpoint,
+					path: ["serverless", "publicEndpoint"],
+				})
+			: undefined;
 
-		if (endpoint) {
-			// Remote endpoint provided:
-			// - Do not start manager server
-			// - Redirect clients to remote endpoint
-			serveManager = config.serveManager ?? false;
-			advertiseEndpoint =
-				config.serverless.advertiseEndpoint ?? endpoint;
-		} else if (isDevEnv) {
-			// Development mode, no endpoint:
-			// - Start manager server
-			// - Redirect clients to local server
-			serveManager = config.serveManager ?? true;
-			advertiseEndpoint =
-				config.serverless.advertiseEndpoint ??
-				(serveManager ? `http://localhost:${config.managerPort}` : undefined);
-		} else {
-			// Production mode, no endpoint:
-			// - Do not start manager server
-			// - Use file system driver
-			serveManager = config.serveManager ?? false;
-			invariant(
-				config.serverless.advertiseEndpoint,
-				"advertiseEndpoint not specified in production mode",
-			);
-			advertiseEndpoint = config.serverless.advertiseEndpoint;
+		// Validate that publicEndpoint namespace matches backend namespace if specified
+		if (
+			parsedPublicEndpoint?.namespace &&
+			parsedPublicEndpoint.namespace !== namespace
+		) {
+			ctx.addIssue({
+				code: "custom",
+				message: `publicEndpoint namespace "${parsedPublicEndpoint.namespace}" must match backend namespace "${namespace}"`,
+				path: ["serverless", "publicEndpoint"],
+			});
 		}
+
+		// Determine serveManager: default to true in dev mode without endpoint, false otherwise
+		const serveManager = config.serveManager ?? (isDevEnv && !endpoint);
+
+		// In dev mode, fall back to localhost if serving manager
+		const publicEndpoint =
+			parsedPublicEndpoint?.endpoint ??
+			(isDevEnv && serveManager
+				? `http://localhost:${config.managerPort}`
+				: undefined);
+		// We extract publicNamespace to validate that it matches the backend
+		// namespace (see validation above), not for functional use.
+		const publicNamespace = parsedPublicEndpoint?.namespace;
+		const publicToken =
+			parsedPublicEndpoint?.token ?? config.serverless.publicToken;
 
 		// If endpoint is set or spawning engine, we'll use engine driver - disable manager inspector
 		const willUseEngine = !!endpoint || config.serverless.spawnEngine;
@@ -234,11 +240,13 @@ export const RegistryConfigSchema = z
 			namespace,
 			token,
 			serveManager,
-			advertiseEndpoint,
+			publicEndpoint,
+			publicNamespace,
+			publicToken,
 			inspector,
 			serverless: {
 				...config.serverless,
-				advertiseEndpoint,
+				publicEndpoint,
 			},
 		};
 	});

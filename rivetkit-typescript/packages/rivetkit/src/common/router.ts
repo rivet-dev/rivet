@@ -130,6 +130,14 @@ export interface MetadataResponse {
 	 * This is also helpful for setting up clean redirects as needed.
 	 **/
 	clientEndpoint?: string;
+	/**
+	 * Namespace that the client should use when connecting.
+	 **/
+	clientNamespace?: string;
+	/**
+	 * Token that the client should use when connecting.
+	 **/
+	clientToken?: string;
 }
 
 export function handleMetadataRequest(
@@ -137,6 +145,8 @@ export function handleMetadataRequest(
 	config: RegistryConfig,
 	runnerKind: MetadataRunnerKind,
 	clientEndpoint: string | undefined,
+	clientNamespace: string | undefined,
+	clientToken: string | undefined,
 ) {
 	const response: MetadataResponse = {
 		runtime: "rivetkit",
@@ -146,6 +156,8 @@ export function handleMetadataRequest(
 		},
 		actorNames: buildActorNames(config),
 		clientEndpoint,
+		clientNamespace,
+		clientToken,
 	};
 
 	return c.json(response);
