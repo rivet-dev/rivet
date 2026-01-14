@@ -44,5 +44,11 @@ export default defineConfig({
 		ssr: {
 			noExternal: ['@rivet-gg/components', '@rivet-gg/icons'],
 		},
+		server: {
+			fs: {
+				// Allow serving files from the monorepo root for artifacts
+				allow: ['..'],
+			},
+		},
 	},
 });

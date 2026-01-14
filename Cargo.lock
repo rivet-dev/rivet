@@ -4375,6 +4375,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-api-public-openapi-gen"
+version = "2.0.33"
+dependencies = [
+ "rivet-api-public",
+ "serde_json",
+ "utoipa",
+]
+
+[[package]]
 name = "rivet-api-types"
 version = "2.0.33"
 dependencies = [
@@ -4507,15 +4516,6 @@ dependencies = [
  "serde_bare",
  "vbare",
  "vbare-compiler",
-]
-
-[[package]]
-name = "rivet-dump-openapi"
-version = "2.0.33"
-dependencies = [
- "rivet-api-public",
- "serde_json",
- "utoipa",
 ]
 
 [[package]]

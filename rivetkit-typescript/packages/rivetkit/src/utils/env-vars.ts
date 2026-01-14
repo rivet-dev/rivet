@@ -1,4 +1,7 @@
-// TODO: briefly document this file is used for consolidating all env vars that affect rivet's behavior
+// This file consolidates all environment variables that affect RivetKit's behavior.
+//
+// IMPORTANT: When adding or modifying environment variables here, also update the
+// documentation at: docs/general/registry-configuration.mdx
 
 import { getEnvUniversal } from "@/utils";
 

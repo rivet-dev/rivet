@@ -2,7 +2,7 @@
 	"$schema": "https://turbo.build/schema.json",
 	"extends": ["//"],
 	"tasks": {
-		"dump-openapi": {
+		"manager-openapi-gen": {
 			"inputs": [
 				"package.json",
 				"packages/rivetkit/src/manager/router.ts"
@@ -16,6 +16,24 @@
 			],
 			"dependsOn": ["build:schema"]
 		},
+		"registry-config-schema-gen": {
+			"inputs": [
+				"package.json",
+				"scripts/registry-config-schema-gen.ts",
+				"scripts/schema-utils.ts",
+				"src/registry/config/index.ts"
+			],
+			"dependsOn": []
+		},
+		"actor-config-schema-gen": {
+			"inputs": [
+				"package.json",
+				"scripts/actor-config-schema-gen.ts",
+				"scripts/schema-utils.ts",
+				"src/actor/config.ts"
+			],
+			"dependsOn": []
+		},
 		"build:schema": {
 			"dependsOn": ["^build"],
 			"inputs": ["schemas/**/*.bare", "scripts/compile-bare.ts"],
@@ -24,7 +42,7 @@
 		"build": {
 			"dependsOn": [
 				"^build",
-				"dump-openapi",
+				"manager-openapi-gen",
 				"dump-asyncapi",
 				"build:schema"
 			],

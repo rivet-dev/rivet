@@ -14,7 +14,7 @@ members = [
   "engine/packages/clickhouse-inserter",
   "engine/packages/clickhouse-user-query",
   "engine/packages/config",
-  "engine/packages/dump-openapi",
+  "engine/packages/api-public-openapi-gen",
   "engine/packages/engine",
   "engine/packages/env",
   "engine/packages/epoxy",
@@ -375,8 +375,8 @@ members = [
     [workspace.dependencies.rivet-config]
     path = "engine/packages/config"
 
-    [workspace.dependencies.rivet-dump-openapi]
-    path = "engine/packages/dump-openapi"
+    [workspace.dependencies.rivet-api-public-openapi-gen]
+    path = "engine/packages/api-public-openapi-gen"
 
     [workspace.dependencies.rivet-engine]
     path = "engine/packages/engine"

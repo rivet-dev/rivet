@@ -1,0 +1,210 @@
+{
+  "description": "Configuration schema for RivetKit registry. This is typically passed to the setup() function.",
+  "type": "object",
+  "properties": {
+    "use": {
+      "description": "Actor definitions. Keys are actor names, values are actor definitions.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "maxIncomingMessageSize": {
+      "description": "Maximum size of incoming WebSocket messages in bytes. Default: 65536",
+      "type": "number"
+    },
+    "maxOutgoingMessageSize": {
+      "description": "Maximum size of outgoing WebSocket messages in bytes. Default: 1048576",
+      "type": "number"
+    },
+    "noWelcome": {
+      "description": "Disable the welcome message on startup. Default: false",
+      "type": "boolean"
+    },
+    "logging": {
+      "description": "Logging configuration.",
+      "type": "object",
+      "properties": {
+        "level": {
+          "description": "Log level for RivetKit. Default: 'warn'",
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal",
+            "silent"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "endpoint": {
+      "description": "Endpoint URL to connect to Rivet Engine. Supports URL auth syntax: https://namespace:token@api.rivet.dev. Can also be set via RIVET_ENDPOINT environment variable.",
+      "type": "string"
+    },
+    "token": {
+      "description": "Authentication token for Rivet Engine. Can also be set via RIVET_TOKEN environment variable.",
+      "type": "string"
+    },
+    "namespace": {
+      "description": "Namespace to use. Default: 'default'. Can also be set via RIVET_NAMESPACE environment variable.",
+      "type": "string"
+    },
+    "headers": {
+      "description": "Additional headers to include in requests to Rivet Engine.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "serveManager": {
+      "description": "Whether to start the local manager server. Auto-determined based on endpoint and NODE_ENV if not specified.",
+      "type": "boolean"
+    },
+    "managerBasePath": {
+      "description": "Base path for the manager API. Default: '/'",
+      "type": "string"
+    },
+    "managerPort": {
+      "description": "Port to run the manager on. Default: 6420",
+      "type": "number"
+    },
+    "inspector": {
+      "description": "Inspector configuration for debugging and development.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Whether to enable the Rivet Inspector. Defaults to true in development mode.",
+          "type": "boolean"
+        },
+        "token": {
+          "description": "Token used to access the Inspector.",
+          "type": "string"
+        },
+        "defaultEndpoint": {
+          "description": "Default RivetKit server endpoint for Rivet Inspector to connect to.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "serverless": {
+      "description": "Configuration for serverless deployment mode.",
+      "type": "object",
+      "properties": {
+        "spawnEngine": {
+          "description": "Downloads and starts the full Rust engine process. Auto-enabled in development mode when no endpoint is provided. Default: false",
+          "type": "boolean"
+        },
+        "engineVersion": {
+          "description": "Version of the engine to download. Defaults to the current RivetKit version.",
+          "type": "string"
+        },
+        "configureRunnerPool": {
+          "description": "Automatically configure serverless runners in the engine.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "Name of the runner pool.",
+              "type": "string"
+            },
+            "url": {
+              "description": "URL of the serverless platform to configure runners.",
+              "type": "string"
+            },
+            "headers": {
+              "description": "Headers to include in requests to the serverless platform.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "maxRunners": {
+              "description": "Maximum number of runners in the pool.",
+              "type": "number"
+            },
+            "minRunners": {
+              "description": "Minimum number of runners to keep warm.",
+              "type": "number"
+            },
+            "requestLifespan": {
+              "description": "Maximum lifespan of a request in milliseconds.",
+              "type": "number"
+            },
+            "runnersMargin": {
+              "description": "Buffer margin for scaling runners.",
+              "type": "number"
+            },
+            "slotsPerRunner": {
+              "description": "Number of actor slots per runner.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "Additional metadata to pass to the serverless platform.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false
+        },
+        "basePath": {
+          "description": "Base path for serverless API routes. Default: '/api/rivet'",
+          "type": "string"
+        },
+        "publicEndpoint": {
+          "description": "The endpoint that clients should connect to. Supports URL auth syntax: https://namespace:token@api.rivet.dev",
+          "type": "string"
+        },
+        "publicToken": {
+          "description": "Token that clients should use when connecting via the public endpoint.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "runner": {
+      "description": "Configuration for runner mode.",
+      "type": "object",
+      "properties": {
+        "totalSlots": {
+          "description": "Total number of actor slots available. Default: 100000",
+          "type": "number"
+        },
+        "runnerName": {
+          "description": "Name of this runner. Default: 'default'",
+          "type": "string"
+        },
+        "runnerKey": {
+          "description": "Authentication key for the runner.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Version number of this runner. Default: 1",
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "use"
+  ],
+  "additionalProperties": false,
+  "title": "RivetKit Registry Configuration"
+}

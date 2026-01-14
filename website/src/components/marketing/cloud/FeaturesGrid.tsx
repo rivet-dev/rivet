@@ -211,7 +211,7 @@ export const FeaturesGrid = () => {
 				</>
 			),
 			faIcon: faLayerGroup,
-			href: "/docs/connect/endpoints",
+			href: "/docs/general/endpoints",
 			useCases: ["Railway", "Vercel", "any platform"],
 		},
 		//{
