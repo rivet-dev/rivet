@@ -3,7 +3,7 @@ use epoxy_protocol::protocol;
 use universaldb::Transaction;
 use universaldb::utils::{FormalKey, IsolationLevel::*};
 
-use crate::keys;
+use crate::{keys, metrics};
 
 /// Get the current ballot for this replica
 #[tracing::instrument(skip_all)]
@@ -49,6 +49,9 @@ pub async fn increment_ballot(
 	let serialized = ballot_key.serialize(current_ballot.clone())?;
 
 	tx.set(&packed_key, &serialized);
+
+	metrics::BALLOT_EPOCH.set(current_ballot.epoch as i64);
+	metrics::BALLOT_NUMBER.set(current_ballot.ballot as i64);
 
 	Ok(current_ballot)
 }
@@ -119,6 +122,10 @@ pub async fn validate_and_update_ballot_for_instance(
 		tx.set(&packed_key, &serialized);
 
 		tracing::debug!(?ballot, ?instance, "updated highest ballot for instance");
+	}
+
+	if !is_valid {
+		metrics::BALLOT_REJECTIONS_TOTAL.inc();
 	}
 
 	Ok(BallotValidationResult {

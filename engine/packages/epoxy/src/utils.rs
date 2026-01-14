@@ -1,5 +1,6 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
+use std::fmt;
 use universaldb::{Transaction, utils::IsolationLevel::*};
 
 #[derive(Clone, Copy, Debug)]
@@ -8,6 +9,17 @@ pub enum QuorumType {
 	Slow,
 	All,
 	Any,
+}
+
+impl fmt::Display for QuorumType {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			QuorumType::Fast => write!(f, "fast"),
+			QuorumType::Slow => write!(f, "slow"),
+			QuorumType::All => write!(f, "all"),
+			QuorumType::Any => write!(f, "any"),
+		}
+	}
 }
 
 pub enum ReplicaFilter {

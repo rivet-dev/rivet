@@ -4,8 +4,9 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use epoxy_protocol::protocol::{self, Path, Payload, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
+use std::time::Instant;
 
-use crate::{http_client, replica, utils};
+use crate::{http_client, metrics, replica, utils};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ProposalResult {
@@ -31,6 +32,7 @@ pub struct Input {
 
 #[operation]
 pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<ProposalResult> {
+	let start = Instant::now();
 	let replica_id = ctx.config().epoxy_replica_id();
 
 	// Read config
@@ -71,9 +73,9 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 		.await
 		.context("failed deciding path")?;
 
-	match path {
+	let res = match path {
 		Path::PathFast(protocol::PathFast { payload }) => {
-			commit(ctx, &config, replica_id, payload, input.purge_cache).await
+			commit(ctx, &config, replica_id, payload, input.purge_cache).await?
 		}
 		Path::PathSlow(protocol::PathSlow { payload }) => {
 			run_paxos_accept(
@@ -84,9 +86,20 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 				payload,
 				input.purge_cache,
 			)
-			.await
+			.await?
 		}
-	}
+	};
+
+	metrics::PROPOSAL_DURATION.observe(start.elapsed().as_secs_f64());
+	metrics::PROPOSALS_TOTAL
+		.with_label_values(&[if let ProposalResult::Committed = res {
+			"ok"
+		} else {
+			"err"
+		}])
+		.inc();
+
+	Ok(res)
 }
 
 #[tracing::instrument(skip_all)]

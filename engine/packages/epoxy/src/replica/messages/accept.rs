@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use epoxy_protocol::protocol;
 use universaldb::Transaction;
 
-use crate::replica::ballot;
+use crate::{metrics, replica::ballot};
 
 #[tracing::instrument(skip_all)]
 pub async fn accept(
@@ -24,6 +24,13 @@ pub async fn accept(
 	let validation =
 		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &current_ballot, &instance)
 			.await?;
+
+	if !validation.is_valid {
+		metrics::ACCEPT_TOTAL
+			.with_label_values(&["invalid_ballot"])
+			.inc();
+	}
+
 	ensure!(
 		validation.is_valid,
 		"ballot validation failed for accept: incoming ballot {:?} is not greater than stored ballot {:?} for instance {:?} (comparison: {:?})",
@@ -42,6 +49,8 @@ pub async fn accept(
 		ballot: current_ballot,
 	};
 	crate::replica::update_log(tx, replica_id, log_entry, &instance).await?;
+
+	metrics::ACCEPT_TOTAL.with_label_values(&["ok"]).inc();
 
 	// EPaxos Step 19
 	Ok(protocol::AcceptResponse {

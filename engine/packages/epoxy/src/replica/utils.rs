@@ -5,7 +5,7 @@ use std::{cmp::Ordering, collections::HashSet};
 use universaldb::prelude::*;
 use universaldb::{KeySelector, RangeOption, Transaction, options::StreamingMode};
 
-use crate::keys;
+use crate::{keys, metrics};
 
 // Helper function to find interference for a key
 #[tracing::instrument(skip_all)]
@@ -48,6 +48,10 @@ pub async fn find_interference(
 				slot_id: key.instance_slot_id,
 			});
 		}
+	}
+
+	if !interf.is_empty() {
+		metrics::INTERFERENCE_DETECTED_TOTAL.inc();
 	}
 
 	interf.sort_by(sort_instances);

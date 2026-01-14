@@ -2,11 +2,45 @@ use anyhow::*;
 use epoxy_protocol::protocol::{self};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
+use std::time::Instant;
 
-use crate::{ops, replica};
+use crate::{metrics, ops, replica};
 
 #[tracing::instrument(skip_all)]
 pub async fn message_request(
+	ctx: &ApiCtx,
+	request: protocol::Request,
+) -> Result<protocol::Response> {
+	let start = Instant::now();
+	let request_type = match &request.kind {
+		protocol::RequestKind::UpdateConfigRequest(_) => "update_config",
+		protocol::RequestKind::PrepareRequest(_) => "prepare",
+		protocol::RequestKind::PreAcceptRequest(_) => "pre_accept",
+		protocol::RequestKind::AcceptRequest(_) => "accept",
+		protocol::RequestKind::CommitRequest(_) => "commit",
+		protocol::RequestKind::DownloadInstancesRequest(_) => "download_instances",
+		protocol::RequestKind::HealthCheckRequest => "health_check",
+		protocol::RequestKind::CoordinatorUpdateReplicaStatusRequest(_) => {
+			"coordinator_update_replica_status"
+		}
+		protocol::RequestKind::BeginLearningRequest(_) => "begin_learning",
+		protocol::RequestKind::KvGetRequest(_) => "kv_get",
+		protocol::RequestKind::KvPurgeRequest(_) => "kv_purge",
+	};
+	let res = message_request_inner(ctx, request).await;
+
+	metrics::REQUEST_DURATION
+		.with_label_values(&[request_type])
+		.observe(start.elapsed().as_secs_f64());
+	metrics::REQUESTS_TOTAL
+		.with_label_values(&[request_type, if res.is_ok() { "ok" } else { "err" }])
+		.inc();
+
+	res
+}
+
+#[tracing::instrument(skip_all)]
+async fn message_request_inner(
 	ctx: &ApiCtx,
 	request: protocol::Request,
 ) -> Result<protocol::Response> {

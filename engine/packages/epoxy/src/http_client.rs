@@ -10,7 +10,7 @@ use rivet_api_builder::ApiCtx;
 use std::future::Future;
 use vbare::OwnedVersionedData;
 
-use crate::utils;
+use crate::{metrics, utils};
 
 /// Find the API replica URL for a given replica ID in the topology
 fn find_replica_address(
@@ -91,6 +91,17 @@ where
 			break;
 		}
 	}
+
+	metrics::QUORUM_ATTEMPTS_TOTAL
+		.with_label_values(&[
+			quorum_type.to_string().as_str(),
+			if successful_responses.len() == target_responses {
+				"ok"
+			} else {
+				"insufficient_responses"
+			},
+		])
+		.inc();
 
 	Ok(successful_responses)
 }

@@ -5,6 +5,7 @@ pub mod errors;
 pub mod http_client;
 pub mod http_routes;
 pub mod keys;
+pub mod metrics;
 pub mod ops;
 pub mod replica;
 pub mod types;
