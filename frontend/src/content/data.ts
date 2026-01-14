@@ -10,4 +10,5 @@ export const docsLinks = {
 		react: "https://www.rivet.dev/docs/actors/quickstart/react",
 		nextjs: "https://www.rivet.dev/docs/actors/quickstart/next-js",
 	},
+	runtimeModes: "https://www.rivet.dev/docs/general/runtime-modes/",
 };

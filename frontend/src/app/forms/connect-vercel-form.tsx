@@ -218,9 +218,7 @@ export const FrontendIntegrationCode = () => {
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
-export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${endpoint}",
-});
+export const { useActor } = createRivetKit<typeof registry>();
 `;
 
 	return (
@@ -247,10 +245,7 @@ export const { useActor } = createRivetKit<typeof registry>({
 export function EnvVariables() {
 	return (
 		<EnvVariablesSection
-			prefix="NEXT_PUBLIC"
 			endpoint={useEndpoint()}
-			kind="serverless"
-			prefixlessEndpoint
 			runnerName={useWatch({ name: "runnerName" }) as string}
 		/>
 	);
