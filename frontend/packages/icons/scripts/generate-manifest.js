@@ -10,6 +10,7 @@
 //
 
 import fs from "node:fs";
+import { join } from "node:path";
 import { getPackageInfo, importModule, resolveModule } from "local-pkg";
 import {
 	PATHS,
@@ -20,7 +21,9 @@ import {
 	checkEnvironment,
 	setupSourceDirectory,
 	configureFontAwesomeRegistry,
+	checkForCustomKitUpdates,
 	installFontAwesomePackages,
+	cleanupGeneratedFiles,
 } from "./shared-utils.js";
 
 // ============================================================================
@@ -36,6 +39,11 @@ const FA_PACKAGES = [
 ];
 
 const CUSTOM_KITS = ["@awesome.me/kit-63db24046b/icons/kit/custom"];
+
+// Legacy kit paths use the old JS format (not ES modules)
+const LEGACY_CUSTOM_KITS = [
+	"@awesome.me/kit-63db24046b/icons/js/custom-icons-duotone.js",
+];
 
 // Track globally registered icons to avoid duplicates
 const registeredIcons = new Set();
@@ -222,6 +230,57 @@ async function registerCustomKit(kitPath) {
 	};
 }
 
+/**
+ * Registers icons from a legacy Font Awesome kit JS file
+ * @param {string} kitPath - Path to the legacy kit JS file
+ * @returns {Promise<Record<string, {icons: Array}>>}
+ */
+async function registerLegacyCustomKit(kitPath) {
+	log("📦", `Processing legacy kit: ${kitPath}...`);
+
+	// Find the package in node_modules
+	const jsFilePath = join(PATHS.srcNodeModules, kitPath);
+
+	if (!fs.existsSync(jsFilePath)) {
+		throw new Error(`Could not find legacy kit file: ${jsFilePath}`);
+	}
+
+	// Read and parse the JS file to extract icon definitions
+	const jsContent = fs.readFileSync(jsFilePath, "utf-8");
+
+	// The legacy format has icons defined as: "iconName": [width, height, aliases, unicode, svgPathData]
+	// We need to extract icon names from this format
+	const iconRegex = /"([a-z0-9-]+)":\s*\[\d+,\s*\d+,\s*\[[^\]]*\],\s*"[^"]+"/g;
+	const foundIcons = [];
+	let skippedCount = 0;
+	let match;
+
+	while ((match = iconRegex.exec(jsContent)) !== null) {
+		const iconBaseName = match[1];
+
+		// Skip if already registered
+		if (registeredIcons.has(iconBaseName)) {
+			skippedCount++;
+			continue;
+		}
+
+		const iconName = faCamelCase(iconBaseName);
+		registeredIcons.add(iconBaseName);
+		foundIcons.push({ icon: iconName, aliases: [iconName] });
+	}
+
+	log(
+		"✅",
+		`Found ${foundIcons.length} legacy icons${skippedCount > 0 ? ` (skipped ${skippedCount} duplicates)` : ""}`,
+	);
+
+	return {
+		[kitPath]: {
+			icons: foundIcons,
+		},
+	};
+}
+
 // ============================================================================
 // MAIN
 // ============================================================================
@@ -229,64 +288,85 @@ async function registerCustomKit(kitPath) {
 async function main() {
 	console.log("\n🔨 Rivet Icons Manifest Generator\n");
 
-	// Setup phase
+	// Check environment before creating any files
 	checkEnvironment();
+
+	// Setup and generate with guaranteed cleanup
 	setupSourceDirectory();
-	configureFontAwesomeRegistry();
-	installFontAwesomePackages();
+	try {
+		configureFontAwesomeRegistry();
+		checkForCustomKitUpdates();
+		installFontAwesomePackages();
 
-	console.log();
+		console.log();
 
-	const manifest = {};
-	let totalIcons = 0;
+		const manifest = {};
+		let totalIcons = 0;
 
-	// Register Font Awesome packages
-	log("📚", "Registering Font Awesome packages...");
-	for (const packageName of FA_PACKAGES) {
-		try {
-			const packageManifest = await registerFontAwesomePackage(packageName);
-			Object.assign(manifest, packageManifest);
-			totalIcons += packageManifest[packageName].icons.length;
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			error(`Failed to register ${packageName}: ${message}`);
-			throw err;
+		// Register Font Awesome packages
+		log("📚", "Registering Font Awesome packages...");
+		for (const packageName of FA_PACKAGES) {
+			try {
+				const packageManifest = await registerFontAwesomePackage(packageName);
+				Object.assign(manifest, packageManifest);
+				totalIcons += packageManifest[packageName].icons.length;
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				error(`Failed to register ${packageName}: ${message}`);
+				throw err;
+			}
 		}
-	}
 
-	console.log();
+		console.log();
 
-	// Register custom kits
-	log("🎨", "Registering custom kits...");
-	for (const kitPath of CUSTOM_KITS) {
-		try {
-			const kitManifest = await registerCustomKit(kitPath);
-			Object.assign(manifest, kitManifest);
-			totalIcons += kitManifest[kitPath].icons.length;
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			error(`Failed to register custom kit ${kitPath}: ${message}`);
-			throw err;
+		// Register custom kits
+		log("🎨", "Registering custom kits...");
+		for (const kitPath of CUSTOM_KITS) {
+			try {
+				const kitManifest = await registerCustomKit(kitPath);
+				Object.assign(manifest, kitManifest);
+				totalIcons += kitManifest[kitPath].icons.length;
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				error(`Failed to register custom kit ${kitPath}: ${message}`);
+				throw err;
+			}
 		}
+
+		// Register legacy custom kits (duotone, etc.)
+		for (const kitPath of LEGACY_CUSTOM_KITS) {
+			try {
+				const kitManifest = await registerLegacyCustomKit(kitPath);
+				Object.assign(manifest, kitManifest);
+				totalIcons += kitManifest[kitPath].icons.length;
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				error(`Failed to register legacy kit ${kitPath}: ${message}`);
+				throw err;
+			}
+		}
+
+		console.log();
+
+		// Write manifest to file
+		log("💾", "Writing manifest.json...");
+		const manifestJson = JSON.stringify(manifest, null, 2);
+		fs.writeFileSync(PATHS.manifest, manifestJson);
+
+		const sizeKB = (Buffer.byteLength(manifestJson, "utf8") / 1024).toFixed(2);
+		log("✅", `Manifest written (${sizeKB} KB)`);
+
+		// Success summary
+		console.log("\n🎉 Done!");
+		console.log(`📊 Total icons registered: ${totalIcons}`);
+		console.log(`📦 Total packages: ${Object.keys(manifest).length}`);
+		console.log("\n💡 Next step:");
+		console.log("   Run 'pnpm vendor' to generate icon files from this manifest");
+		console.log();
+	} finally {
+		console.log();
+		cleanupGeneratedFiles();
 	}
-
-	console.log();
-
-	// Write manifest to file
-	log("💾", "Writing manifest.json...");
-	const manifestJson = JSON.stringify(manifest, null, 2);
-	fs.writeFileSync(PATHS.manifest, manifestJson);
-
-	const sizeKB = (Buffer.byteLength(manifestJson, "utf8") / 1024).toFixed(2);
-	log("✅", `Manifest written (${sizeKB} KB)`);
-
-	// Success summary
-	console.log("\n🎉 Done!");
-	console.log(`📊 Total icons registered: ${totalIcons}`);
-	console.log(`📦 Total packages: ${Object.keys(manifest).length}`);
-	console.log("\n💡 Next step:");
-	console.log("   Run 'pnpm vendor' to generate icon files from this manifest");
-	console.log();
 }
 
 // Run the script

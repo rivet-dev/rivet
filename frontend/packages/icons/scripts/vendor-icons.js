@@ -23,6 +23,7 @@ import {
 	setupSourceDirectory,
 	configureFontAwesomeRegistry,
 	installFontAwesomePackages,
+	cleanupGeneratedFiles,
 } from "./shared-utils.js";
 
 // ============================================================================
@@ -96,6 +97,58 @@ function processCustomPackage(pkg, icons) {
 }
 
 /**
+ * Process legacy custom packages (duotone icons from JS files)
+ * These need to be inlined as the legacy format isn't ES module compatible
+ * @param {string} pkg
+ * @param {Array<{icon: string, aliases: string[]}>} icons
+ */
+function processLegacyCustomPackage(pkg, icons) {
+	// Read the legacy JS file and extract icon definitions
+	const jsFilePath = join(PATHS.srcNodeModules, pkg);
+	const jsContent = fs.readFileSync(jsFilePath, "utf-8");
+
+	// Extract the icons object from the file
+	// The format is: var icons = { "iconName": [width, height, aliases, unicode, pathData], ... }
+	const iconsMatch = jsContent.match(/var\s+icons\s*=\s*(\{[\s\S]*?\});/);
+	if (!iconsMatch) {
+		return { code: "", count: 0 };
+	}
+
+	let code = "";
+	let count = 0;
+
+	const iconsObj = JSON.parse(iconsMatch[1]);
+
+	for (const { icon } of icons) {
+		// Convert faIconName back to icon-name
+		const baseName = icon
+			.replace(/^fa/, "")
+			.replace(/([A-Z])/g, "-$1")
+			.toLowerCase()
+			.replace(/^-/, "");
+
+		const iconData = iconsObj[baseName];
+		if (!iconData) {
+			continue;
+		}
+
+		// Create an inline icon definition
+		// FontAwesome icon format: [width, height, aliases, unicode, pathData]
+		const [width, height, , unicode, pathData] = iconData;
+		const iconDef = {
+			prefix: "fakd",
+			iconName: baseName,
+			icon: [width, height, [], unicode, pathData],
+		};
+
+		code += `export const ${icon} = ${JSON.stringify(iconDef)};\n`;
+		count++;
+	}
+
+	return { code, count };
+}
+
+/**
  * @param {string} pkg
  * @param {Array<{icon: string, aliases: string[]}>} icons
  * @param {Set<string>} existingExports
@@ -137,18 +190,24 @@ function generateIconExports(manifest) {
 	const stats = { custom: 0, pro: 0, free: 0, fallback: 0 };
 
 	for (const [pkg, { icons }] of Object.entries(manifest)) {
-		const isCustom = pkg.startsWith("@awesome.me/kit-");
+		const isLegacyCustom = pkg.endsWith(".js");
+		const isCustom = pkg.startsWith("@awesome.me/kit-") && !isLegacyCustom;
 		const isPro = pkg.startsWith("@fortawesome/pro-");
 
-		const result = isCustom
-			? processCustomPackage(pkg, icons)
-			: processStandardPackage(pkg, icons, existingExports);
+		let result;
+		if (isLegacyCustom) {
+			result = processLegacyCustomPackage(pkg, icons);
+		} else if (isCustom) {
+			result = processCustomPackage(pkg, icons);
+		} else {
+			result = processStandardPackage(pkg, icons, existingExports);
+		}
 
 		iconCode += result.code;
 		totalIcons += result.count;
 
 		// Track stats
-		if (isCustom) stats.custom += result.count;
+		if (isCustom || isLegacyCustom) stats.custom += result.count;
 		else if (isPro) stats.pro += result.count;
 		else stats.free += result.count;
 	}
@@ -250,35 +309,42 @@ async function bundleWithEsbuild() {
 async function main() {
 	console.log("\n🚀 Rivet Icons Vendor Script\n");
 
-	// Setup phase
+	// Check environment before creating any files
 	checkEnvironment();
+
+	// Setup and generate with guaranteed cleanup
 	setupSourceDirectory();
-	configureFontAwesomeRegistry();
-	installFontAwesomePackages();
+	try {
+		configureFontAwesomeRegistry();
+		installFontAwesomePackages();
 
-	console.log();
+		console.log();
 
-	// Generation phase
-	const manifest = loadManifest();
-	const iconExports = generateIconExports(manifest);
-	generateJavaScriptFile(iconExports);
-	generateTypeScriptFile(iconExports);
+		// Generation phase
+		const manifest = loadManifest();
+		const iconExports = generateIconExports(manifest);
+		generateJavaScriptFile(iconExports);
+		generateTypeScriptFile(iconExports);
 
-	console.log();
+		console.log();
 
-	// Bundle phase
-	await bundleWithEsbuild();
+		// Bundle phase
+		await bundleWithEsbuild();
 
-	// Success!
-	console.log("\n🎉 Done! All files generated and ready to commit:");
-	console.log("   - src/index.gen.js");
-	console.log("   - src/index.gen.ts");
-	console.log("   - dist/index.js");
-	console.log("\n💡 Next steps:");
-	console.log("   1. Review the generated files");
-	console.log("   2. Commit them to git");
-	console.log("   3. Consumers can now use the package without any FA token!");
-	console.log();
+		// Success!
+		console.log("\n🎉 Done! All files generated and ready to commit:");
+		console.log("   - src/index.gen.js");
+		console.log("   - src/index.gen.ts");
+		console.log("   - dist/index.js");
+		console.log("\n💡 Next steps:");
+		console.log("   1. Review the generated files");
+		console.log("   2. Commit them to git");
+		console.log("   3. Consumers can now use the package without any FA token!");
+		console.log();
+	} finally {
+		console.log();
+		cleanupGeneratedFiles();
+	}
 }
 
 // Run the script

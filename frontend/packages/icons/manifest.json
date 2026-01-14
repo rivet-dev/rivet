@@ -23946,5 +23946,15 @@
         ]
       }
     ]
+  },
+  "@awesome.me/kit-63db24046b/icons/js/custom-icons-duotone.js": {
+    "icons": [
+      {
+        "icon": "faHono",
+        "aliases": [
+          "faHono"
+        ]
+      }
+    ]
   }
 }

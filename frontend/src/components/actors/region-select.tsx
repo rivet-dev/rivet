@@ -30,7 +30,7 @@ export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 		...(showAuto
 			? [
 					{
-						label: <span>Automatic (Recommended)</span>,
+						label: <span>Automatic</span>,
 						value: "auto",
 						region: { id: "auto", name: "Automatic" },
 					},
