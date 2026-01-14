@@ -10,6 +10,13 @@ pub struct Input {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct RunnerPoolErrorCacheEntry {
+	namespace_id: Id,
+	runner_name: String,
+	error: Option<RunnerPoolError>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunnerPoolErrorEntry {
 	pub namespace_id: Id,
 	pub runner_name: String,
@@ -25,7 +32,8 @@ pub async fn pegboard_runner_config_get_error(
 		return Ok(Vec::new());
 	}
 
-	ctx.cache()
+	let entries = ctx
+		.cache()
 		.clone()
 		.request()
 		// Short TTL since errors can change quickly
@@ -43,13 +51,24 @@ pub async fn pegboard_runner_config_get_error(
 				Ok(cache)
 			},
 		)
-		.await
+		.await?
+		.into_iter()
+		.filter_map(|entry| {
+			entry.error.map(|error| RunnerPoolErrorEntry {
+				namespace_id: entry.namespace_id,
+				runner_name: entry.runner_name,
+				error,
+			})
+		})
+		.collect();
+
+	Ok(entries)
 }
 
 async fn runner_config_get_error_inner(
 	ctx: &OperationCtx,
 	runners: Vec<(Id, String)>,
-) -> Result<Vec<RunnerPoolErrorEntry>> {
+) -> Result<Vec<RunnerPoolErrorCacheEntry>> {
 	let queries: Vec<(&str, serde_json::Value)> = runners
 		.iter()
 		.map(|(namespace_id, runner_name)| {
@@ -108,13 +127,11 @@ async fn runner_config_get_error_inner(
 			}
 		};
 
-		if let Some(active_error) = &state.active_error {
-			result.push(RunnerPoolErrorEntry {
-				namespace_id: *namespace_id,
-				runner_name: runner_name.clone(),
-				error: active_error.error.clone(),
-			});
-		}
+		result.push(RunnerPoolErrorCacheEntry {
+			namespace_id: *namespace_id,
+			runner_name: runner_name.clone(),
+			error: state.active_error.as_ref().map(|err| err.error.clone()),
+		});
 	}
 
 	Ok(result)
