@@ -16,7 +16,7 @@ import { tryParseEndpoint } from "@/utils/endpoint-parser";
  *
  * In browser: uses current origin + /api/rivet
  *
- * Server-side: uses localhost:6420
+ * Server-side: uses 127.0.0.1:6420
  */
 function getDefaultEndpoint(): string {
 	if (typeof window !== "undefined" && window.location?.origin) {
@@ -38,7 +38,7 @@ export const ClientConfigSchemaBase = z.object({
 	 *
 	 * Can also be set via RIVET_ENDPOINT environment variables.
 	 *
-	 * Defaults to current origin + /api/rivet in browser, or localhost:6420 server-side.
+	 * Defaults to current origin + /api/rivet in browser, or 127.0.0.1:6420 server-side.
 	 */
 	endpoint: z
 		.string()
@@ -88,7 +88,8 @@ export const ClientConfigSchemaBase = z.object({
 		.default(
 			() =>
 				typeof window !== "undefined" &&
-				window?.location?.hostname === "localhost",
+				(window?.location?.hostname === "127.0.0.1" ||
+					window.location?.hostname === "localhost"),
 		),
 });
 
@@ -144,6 +145,7 @@ export function convertRegistryConfigToClientConfig(
 		disableMetadataLookup: true,
 		devtools:
 			typeof window !== "undefined" &&
-			window?.location?.hostname === "localhost",
+			(window?.location?.hostname === "127.0.0.1" ||
+				window?.location?.hostname === "localhost"),
 	};
 }
