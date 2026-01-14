@@ -9,7 +9,7 @@ use universalpubsub as ups;
 use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, conn::Conn, errors};
+use crate::{LifecycleResult, conn::Conn, errors, metrics};
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -21,6 +21,7 @@ pub async fn task(
 ) -> Result<LifecycleResult> {
 	loop {
 		match recv_msg(
+			&conn,
 			&mut tunnel_sub,
 			&mut eviction_sub,
 			&mut tunnel_to_ws_abort_rx,
@@ -40,6 +41,7 @@ pub async fn task(
 }
 
 async fn recv_msg(
+	conn: &Conn,
 	tunnel_sub: &mut Subscriber,
 	eviction_sub: &mut Subscriber,
 	tunnel_to_ws_abort_rx: &mut watch::Receiver<()>,
@@ -55,6 +57,15 @@ async fn recv_msg(
 		}
 		_ = eviction_sub.next() => {
 			tracing::debug!("runner evicted");
+
+			metrics::EVICTION_TOTAL
+				.with_label_values(&[
+					conn.namespace_id.to_string().as_str(),
+					&conn.runner_name,
+					conn.protocol_version.to_string().as_str(),
+				])
+				.inc();
+
 			return Err(errors::WsError::Eviction.build());
 		}
 		_ = tunnel_to_ws_abort_rx.changed() => {

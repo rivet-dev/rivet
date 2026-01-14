@@ -22,6 +22,12 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			true,
 		),
 		Service::new(
+			"metrics_aggregator",
+			ServiceKind::Standalone,
+			|config, pools| Box::pin(rivet_metrics_aggregator::start(config, pools)),
+			true,
+		),
+		Service::new(
 			"bootstrap",
 			ServiceKind::Oneshot,
 			|config, pools| Box::pin(rivet_bootstrap::start(config, pools)),
