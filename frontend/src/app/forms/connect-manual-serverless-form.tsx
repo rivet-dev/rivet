@@ -472,6 +472,9 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 			enabled,
 			retry: 0,
 			refetchInterval: 3_000,
+			meta: {
+				reportType: "runner-config-health-check",
+			},
 		});
 
 	const {
