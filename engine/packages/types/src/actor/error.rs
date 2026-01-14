@@ -14,11 +14,11 @@ pub enum RunnerPoolError {
 	/// Serverless: SSE connection or network error
 	ServerlessConnectionError { message: String },
 
-	/// Serverless: Runner sent invalid base64 in SSE message
-	ServerlessInvalidBase64,
-
-	/// Serverless: Runner sent invalid protocol payload
-	ServerlessInvalidPayload { message: String },
+	/// Serverless: Runner sent invalid payload
+	ServerlessInvalidSsePayload {
+		message: String,
+		raw_payload: Option<String>,
+	},
 
 	/// Internal error
 	InternalError,
