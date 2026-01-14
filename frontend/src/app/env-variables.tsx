@@ -1,20 +1,20 @@
-import { Button, CopyButton, DiscreteInput } from "@/components";
+import { match } from "ts-pattern";
+import { Button, CopyButton, DiscreteInput, getConfig } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { Label } from "@/components/ui/label";
+import { cloudEnv } from "@/lib/env";
 import { useAdminToken, usePublishableToken } from "@/queries/accessors";
 
 export function EnvVariables({
-	prefix,
 	runnerName,
 	endpoint,
-	kind,
-	prefixlessEndpoint = false,
+	showRunnerName = true,
+	showEndpoint = true,
 }: {
-	prefix?: string;
 	runnerName?: string;
-	endpoint: string;
-	kind: "serverless" | "serverfull";
-	prefixlessEndpoint?: boolean;
+	endpoint?: string;
+	showRunnerName?: boolean;
+	showEndpoint?: boolean;
 }) {
 	return (
 		<div>
@@ -29,15 +29,9 @@ export function EnvVariables({
 					<p>Value</p>
 				</Label>
 
-				{prefixlessEndpoint ? (
-					<RivetEndpointEnv endpoint={endpoint} kind={kind} />
-				) : null}
-				<RivetEndpointEnv
-					prefix={prefix}
-					endpoint={endpoint}
-					kind={kind}
-				/>
-				<RivetRunnerEnv prefix={prefix} runnerName={runnerName} />
+				{showEndpoint && <RivetPublicEndpointEnv endpoint={endpoint} />}
+				{showEndpoint && <RivetRunnerEndpointEnv endpoint={endpoint} />}
+				{showRunnerName && <RivetRunnerEnv runnerName={runnerName} />}
 			</div>
 			<div className="mt-2 flex justify-end">
 				<CopyButton
@@ -96,31 +90,60 @@ export const useRivetDsn = ({
 	endpoint,
 	kind,
 }: {
-	endpoint: string;
-	kind: "serverless" | "serverfull";
+	endpoint?: string;
+	kind: "publishable" | "secret";
 }) => {
+	const apiEndpoint =
+		endpoint ||
+		match(__APP_TYPE__)
+			.with("cloud", () => cloudEnv().VITE_APP_API_URL)
+			.with("engine", () => getConfig().apiUrl)
+			.otherwise(() => getConfig().apiUrl);
 	const dataProvider = useEngineCompatDataProvider();
 	const publishableToken = usePublishableToken();
 	const adminToken = useAdminToken();
-	const token = kind === "serverless" ? publishableToken : adminToken;
+	const token = kind === "publishable" ? publishableToken : adminToken;
 
-	const dsn = `https://${dataProvider.engineNamespace}:${token}@${endpoint
+	const dsn = `https://${dataProvider.engineNamespace}:${token}@${apiEndpoint
 		.replace("https://", "")
 		.replace("http://", "")}`;
 
 	return dsn;
 };
 
-function RivetEndpointEnv({
+export function RivetPublicEndpointEnv({
 	prefix,
 	endpoint,
-	kind,
 }: {
 	prefix?: string;
-	endpoint: string;
-	kind: "serverless" | "serverfull";
+	endpoint?: string;
 }) {
-	const dsn = useRivetDsn({ endpoint, kind });
+	const dsn = useRivetDsn({ endpoint, kind: "publishable" });
+	return (
+		<>
+			<DiscreteInput
+				aria-label="environment variable key"
+				value={`${prefix ? `${prefix}_` : ""}RIVET_PUBLIC_ENDPOINT`}
+				show
+			/>
+			<DiscreteInput
+				aria-label="environment variable value"
+				value={dsn}
+				show
+			/>
+		</>
+	);
+}
+
+export function RivetRunnerEndpointEnv({
+	prefix,
+	endpoint,
+}: {
+	prefix?: string;
+	runnerName?: string;
+	endpoint?: string;
+}) {
+	const dsn = useRivetDsn({ endpoint, kind: "secret" });
 	return (
 		<>
 			<DiscreteInput

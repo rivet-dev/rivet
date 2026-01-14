@@ -10,17 +10,7 @@ import { hasProvider } from "@/app/data-providers/engine-data-provider";
 import { CodeFrame, CodeGroup, CodePreview } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 
-interface PublishableTokenCodeGroupProps {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}
-
-export function PublishableTokenCodeGroup({
-	token,
-	endpoint,
-	namespace,
-}: PublishableTokenCodeGroupProps) {
+export function PublishableTokenCodeGroup() {
 	const dataProvider = useEngineCompatDataProvider();
 	const { data: configs } = useInfiniteQuery({
 		...dataProvider.runnerConfigsQueryOptions(),
@@ -35,7 +25,7 @@ export function PublishableTokenCodeGroup({
 			language="typescript"
 			title="Next.js"
 			icon={faNextjs}
-			code={() => nextJsCode({ token, endpoint, namespace })}
+			code={() => nextJsCode()}
 			footer={
 				<a
 					href="https://rivet.dev/docs/actors/quickstart/next-js"
@@ -49,10 +39,7 @@ export function PublishableTokenCodeGroup({
 				</a>
 			}
 		>
-			<CodePreview
-				code={nextJsCode({ token, endpoint, namespace })}
-				language="typescript"
-			/>
+			<CodePreview code={nextJsCode()} language="typescript" />
 		</CodeFrame>
 	);
 
@@ -61,7 +48,7 @@ export function PublishableTokenCodeGroup({
 			language="typescript"
 			title="React"
 			icon={faReact}
-			code={() => reactCode({ token, endpoint, namespace })}
+			code={() => reactCode()}
 			footer={
 				<a
 					href="https://rivet.dev/docs/actors/quickstart/react"
@@ -75,10 +62,7 @@ export function PublishableTokenCodeGroup({
 				</a>
 			}
 		>
-			<CodePreview
-				code={reactCode({ token, endpoint, namespace })}
-				language="typescript"
-			/>
+			<CodePreview code={reactCode()} language="typescript" />
 		</CodeFrame>
 	);
 
@@ -87,13 +71,7 @@ export function PublishableTokenCodeGroup({
 			language="typescript"
 			title="JavaScript"
 			icon={faNodeJs}
-			code={() =>
-				javascriptCode({
-					token,
-					endpoint,
-					namespace,
-				})
-			}
+			code={() => javascriptCode()}
 			footer={
 				<a
 					href="https://rivet.dev/docs/actors/quickstart/backend"
@@ -107,14 +85,7 @@ export function PublishableTokenCodeGroup({
 				</a>
 			}
 		>
-			<CodePreview
-				code={javascriptCode({
-					token,
-					endpoint,
-					namespace,
-				})}
-				language="typescript"
-			/>
+			<CodePreview code={javascriptCode()} language="typescript" />
 		</CodeFrame>
 	);
 
@@ -127,57 +98,18 @@ export function PublishableTokenCodeGroup({
 	);
 }
 
-const javascriptCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => `import { createClient } from "rivetkit/client";
+const javascriptCode = () => `import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
-const client = createClient<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	// This token is safe to publish on your frontend
-	token: "${token}",
-});`;
+const client = createClient<typeof registry>();`;
 
-const reactCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => `import { createRivetKit } from "@rivetkit/react";
+const reactCode = () => `import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
-export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	// This token is safe to publish on your frontend
-	token: "${token}",
-});`;
+export const { useActor } = createRivetKit<typeof registry>();`;
 
-const nextJsCode = ({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) => `"use client";
+const nextJsCode = () => `"use client";
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
-export const { useActor } = createRivetKit<typeof registry>({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	// This token is safe to publish on your frontend
-	token: "${token}",
-});`;
+export const { useActor } = createRivetKit<typeof registry>();`;

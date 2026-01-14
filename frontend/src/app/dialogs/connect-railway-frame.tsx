@@ -154,9 +154,6 @@ function Step1() {
 				dashboard.
 			</p>
 			<EnvVariables
-				kind="serverfull"
-				prefixlessEndpoint
-				prefix="VITE"
 				endpoint={useEndpoint()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>

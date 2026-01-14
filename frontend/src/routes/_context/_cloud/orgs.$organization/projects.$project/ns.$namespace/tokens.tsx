@@ -1,26 +1,35 @@
+import { AccordionItem } from "@radix-ui/react-accordion";
 import {
 	faChevronRight,
-	faCopy,
+	faHono,
 	faNodeJs,
 	faPlus,
 	faQuestionCircle,
 	faTrash,
 	Icon,
 } from "@rivet-gg/icons";
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import {
+	useMutation,
+	usePrefetchInfiniteQuery,
+	useQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import {
 	createFileRoute,
 	useParams,
 	useRouteContext,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 import { match } from "ts-pattern";
+import { EnvVariables, useRivetDsn } from "@/app/env-variables";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import { SidebarToggle } from "@/app/sidebar-toggle";
 import { useDialog } from "@/app/use-dialog";
 import {
+	Accordion,
+	AccordionContent,
+	AccordionTrigger,
 	Badge,
 	Button,
 	CodeFrame,
@@ -39,13 +48,19 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
 } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import {
+	useDataProvider,
+	useEngineCompatDataProvider,
+} from "@/components/actors";
 import { RegionSelect } from "@/components/actors/region-select";
 import { useRootLayout } from "@/components/actors/root-layout-context";
 import { docsLinks } from "@/content/data";
 import { cloudEnv } from "@/lib/env";
-import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 
 export const Route = createFileRoute(
@@ -56,6 +71,10 @@ export const Route = createFileRoute(
 
 function RouteComponent() {
 	const { isSidebarCollapsed } = useRootLayout();
+
+	const dataProvider = useDataProvider();
+
+	usePrefetchInfiniteQuery(dataProvider.datacentersQueryOptions());
 
 	return (
 		<div
@@ -82,72 +101,186 @@ function RouteComponent() {
 				</p>
 			</div>
 			<hr className="mb-6" />
-			<div className="px-4">
-				<PublishableToken />
+			<div className="px-4 max-w-5xl mx-auto">
 				<SecretToken />
-				<CloudApiTokens />
+				<Accordion type="single" collapsible>
+					<AccordionItem value="advanced">
+						<AccordionTrigger>Advanced</AccordionTrigger>
+						<AccordionContent>
+							<PublishableToken />
+							<CloudApiTokens />
+						</AccordionContent>
+					</AccordionItem>
+				</Accordion>
 			</div>
 		</div>
 	);
 }
 
 function PublishableToken() {
-	const dataProvider = useEngineCompatDataProvider();
-	const token = usePublishableToken();
-
-	const namespace = dataProvider.engineNamespace;
-
-	const endpoint = match(__APP_TYPE__)
-		.with("cloud", () => cloudEnv().VITE_APP_API_URL)
-		.with("engine", () => getConfig().apiUrl)
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
+	const dsn = useRivetDsn({ kind: "publishable" });
 
 	return (
 		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg bg-muted/10">
 			<div className="flex gap-2 items-center mb-2 mt-6">
-				<H3>Client Token</H3>
+				<H3>Manual Client Configuration</H3>
 			</div>
 			<p className="mb-6 text-muted-foreground">
-				Connect to your actors using the Rivet client token. This can be
-				used either on your frontend or backend.
+				Manually configuring the client is only required for{" "}
+				<a
+					href="https://www.rivet.dev/docs/general/runtime-modes/#runners"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="underline"
+				>
+					Runner Runtime Mode
+				</a>{" "}
+				or clients that need to be configured to connect directly to
+				Rivet.
 			</p>
 			<div className="space-y-8">
-				<DiscreteInput value={token || ""} show />
+				<DiscreteInput value={dsn || ""} show />
 
-				{token ? (
-					<PublishableTokenCodeGroup
-						token={token}
-						endpoint={endpoint}
-						namespace={namespace}
-					/>
-				) : null}
+				<PublishableTokenCodeGroup />
 			</div>
 		</div>
 	);
 }
 
 function SecretToken() {
-	const dataProvider = useEngineCompatDataProvider();
-	const { data: token, isLoading: isTokenLoading } = useQuery(
-		dataProvider.engineAdminTokenQueryOptions(),
+	return (
+		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
+			<div className="flex gap-2 items-center mb-2 mt-6">
+				<H3>Backend Configuration</H3>
+			</div>
+			<p className="mb-6 text-muted-foreground">
+				Used by Rivet to run your actors. Choose between Serverless
+				mode, where Rivet sends HTTP requests to your backend, or
+				Runners mode, where Rivet runs your actors as long-running
+				background processes.
+			</p>
+
+			<Tabs defaultValue="serverless">
+				<TabsList>
+					<TabsTrigger value="serverless">Serverless</TabsTrigger>
+					<TabsTrigger value="runners">Runners</TabsTrigger>
+				</TabsList>
+				<TabsContent value="serverless">
+					<ServerlessModeInfo />
+				</TabsContent>
+				<TabsContent value="runners">
+					<RunnersModeInfo />
+				</TabsContent>
+			</Tabs>
+		</div>
 	);
-	const { data: regions = [] } = useInfiniteQuery(
+}
+
+const serverlessCodeSnippet = `import { registry } from "./registry";
+
+export default registry.serve();`;
+
+const serverlessCodeSnippetHono = `import { Hono } from "hono";
+import { registry } from "./registry";
+
+const app = new Hono();
+
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));`;
+
+function ServerlessModeInfo() {
+	return (
+		<div className="space-y-8">
+			<p>
+				Serverless is the default and recommended mode. Rivet sends HTTP
+				requests to your backend to run actor logic, allowing your
+				infrastructure to scale automatically. Read more about{" "}
+				<b>Runtime Modes</b> in the
+				<a
+					href={docsLinks.runtimeModes}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="ml-1 underline"
+				>
+					documentation
+				</a>
+				.
+			</p>
+			<div className="space-y-2">
+				<Label>Environment Variables</Label>
+				<EnvVariables showRunnerName={false} />
+			</div>
+			<CodeGroup>
+				{[
+					<CodeFrame
+						key="javascript"
+						language="typescript"
+						title="Direct"
+						icon={faNodeJs}
+						code={() => serverlessCodeSnippet}
+						footer={
+							<a
+								href={docsLinks.quickstart.backend}
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								<span className="cursor-pointer hover:underline">
+									See JavaScript Documentation{" "}
+									<Icon
+										icon={faChevronRight}
+										className="text-xs"
+									/>
+								</span>
+							</a>
+						}
+					>
+						<CodePreview
+							className="w-full min-w-0"
+							language="typescript"
+							code={serverlessCodeSnippet}
+						/>
+					</CodeFrame>,
+					<CodeFrame
+						key="hono"
+						language="typescript"
+						title="Hono"
+						icon={faHono}
+						code={() => serverlessCodeSnippetHono}
+						footer={
+							<a
+								href={docsLinks.quickstart.backend}
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								<span className="cursor-pointer hover:underline">
+									See JavaScript Documentation{" "}
+									<Icon
+										icon={faChevronRight}
+										className="text-xs"
+									/>
+								</span>
+							</a>
+						}
+					>
+						<CodePreview
+							className="w-full min-w-0"
+							language="typescript"
+							code={serverlessCodeSnippetHono}
+						/>
+					</CodeFrame>,
+				]}
+			</CodeGroup>
+		</div>
+	);
+}
+
+function RunnersModeInfo() {
+	const dataProvider = useEngineCompatDataProvider();
+	const { data: regions = [] } = useSuspenseInfiniteQuery(
 		dataProvider.datacentersQueryOptions(),
 	);
-	const [selectedDatacenter, setSelectedDatacenter] = useState<
-		string | undefined
-	>(undefined);
-
-	// Set default datacenter when regions are loaded
-	useEffect(() => {
-		if (regions.length > 0 && !selectedDatacenter) {
-			setSelectedDatacenter(regions[0].name);
-		}
-	}, [regions, selectedDatacenter]);
-
-	const namespace = dataProvider.engineNamespace;
+	const [selectedDatacenter, setSelectedDatacenter] = useState<string>(
+		() => regions[0]?.name,
+	);
 
 	const endpoint = match(__APP_TYPE__)
 		.with("cloud", () => {
@@ -162,124 +295,67 @@ function SecretToken() {
 	const codeSnippet = `import { registry } from "./registry";
 
 // Automatically reads token from env
-registry.start();`;
-
+registry.startRunner();`;
 	return (
-		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
-			<div className="flex gap-2 items-center mb-2 mt-6">
-				<H3>Runner Token</H3>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Used by runners (servers that run your actors) to authenticate
-				with Rivet. Serverless providers do not need to use this token.
+		<div className="space-y-8">
+			<p>
+				Runners run actors as long-running background processes without
+				exposing an HTTP endpoint. Read more about <b>Runtime Modes</b>{" "}
+				in the
+				<a
+					href={docsLinks.runtimeModes}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="ml-1 underline"
+				>
+					documentation
+				</a>
+				.
 			</p>
-			<div className="space-y-8">
-				<div className="space-y-2">
-					<Label>Datacenter</Label>
-					<RegionSelect
-						showAuto={false}
-						value={selectedDatacenter}
-						onValueChange={setSelectedDatacenter}
-					/>
-				</div>
-				<div className="space-y-2">
-					<Label>Environment Variables</Label>
-					<div className="gap-1 items-center grid grid-cols-2">
-						<Label
-							asChild
-							className="text-muted-foreground text-xs mb-1"
-						>
-							<p>Key</p>
-						</Label>
-						<Label
-							asChild
-							className="text-muted-foreground text-xs mb-1"
-						>
-							<p>Value</p>
-						</Label>
-						<DiscreteInput
-							aria-label="environment variable key"
-							value="RIVET_ENDPOINT"
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable value"
-							value={endpoint}
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable key"
-							value="RIVET_NAMESPACE"
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable value"
-							value={namespace}
-							show
-						/>
-						<DiscreteInput
-							aria-label="environment variable key"
-							value="RIVET_TOKEN"
-							show
-						/>
-						{isTokenLoading ? (
-							<Skeleton className="w-full h-10" />
-						) : (
-							<DiscreteInput
-								aria-label="environment variable value"
-								value={token || ""}
-							/>
-						)}
-					</div>
-					<div className="flex justify-end">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => {
-								const envVars = `RIVET_ENDPOINT=${endpoint}
-RIVET_NAMESPACE=${namespace}
-RIVET_TOKEN=${token || ""}`;
-								navigator.clipboard.writeText(envVars);
-								toast.success("Copied to clipboard");
-							}}
-						>
-							Copy all raw
-						</Button>
-					</div>
-				</div>
-				<CodeGroup>
-					{[
-						<CodeFrame
-							key="javascript"
-							language="typescript"
-							title="JavaScript"
-							icon={faNodeJs}
-							code={() => codeSnippet}
-							footer={
-								<a
-									href={docsLinks.quickstart.backend}
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									<span className="cursor-pointer hover:underline">
-										See JavaScript Documentation{" "}
-										<Icon
-											icon={faChevronRight}
-											className="text-xs"
-										/>
-									</span>
-								</a>
-							}
-						>
-							<CodePreview
-								className="w-full min-w-0"
-								language="typescript"
-								code={codeSnippet}
-							/>
-						</CodeFrame>,
-					]}
-				</CodeGroup>
+			<div className="space-y-2">
+				<Label>Datacenter</Label>
+				<RegionSelect
+					showAuto={false}
+					value={selectedDatacenter}
+					onValueChange={setSelectedDatacenter}
+				/>
 			</div>
+			<div className="space-y-2">
+				<Label>Environment Variables</Label>
+				<EnvVariables endpoint={endpoint} showRunnerName={false} />
+			</div>
+			<CodeGroup>
+				{[
+					<CodeFrame
+						key="javascript"
+						language="typescript"
+						title="JavaScript"
+						icon={faNodeJs}
+						code={() => codeSnippet}
+						footer={
+							<a
+								href={docsLinks.quickstart.backend}
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								<span className="cursor-pointer hover:underline">
+									See JavaScript Documentation{" "}
+									<Icon
+										icon={faChevronRight}
+										className="text-xs"
+									/>
+								</span>
+							</a>
+						}
+					>
+						<CodePreview
+							className="w-full min-w-0"
+							language="typescript"
+							code={codeSnippet}
+						/>
+					</CodeFrame>,
+				]}
+			</CodeGroup>
 		</div>
 	);
 }

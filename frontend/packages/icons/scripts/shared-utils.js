@@ -37,7 +37,7 @@ const PATHS = {
 
 const FA_PACKAGES_CONFIG = {
 	// Custom kit with Rivet-specific icons
-	"@awesome.me/kit-63db24046b": "1.0.27",
+	"@awesome.me/kit-63db24046b": "1.0.28",
 	// Pro packages (regular and solid styles)
 	"@fortawesome/pro-regular-svg-icons": "6.6.0",
 	"@fortawesome/pro-solid-svg-icons": "6.6.0",
@@ -69,8 +69,7 @@ function error(message) {
  * @param {string} message
  */
 function exitWithError(message) {
-	error(message);
-	process.exit(1);
+	throw new Error(message);
 }
 
 /**
@@ -136,11 +135,45 @@ function configureFontAwesomeRegistry() {
 	log("✅", "Registry configured");
 }
 
+function checkForCustomKitUpdates() {
+	log("🔍", "Checking for custom kit updates...");
+
+	const customKits = Object.entries(FA_PACKAGES_CONFIG).filter(([pkg]) =>
+		pkg.startsWith("@awesome.me/"),
+	);
+
+	for (const [packageName, currentVersion] of customKits) {
+		const result = spawnSync("npm", ["view", packageName, "version"], {
+			cwd: PATHS.src,
+			env: { ...process.env },
+			encoding: "utf-8",
+		});
+
+		if (result.status !== 0 || !result.stdout) {
+			error(`Failed to check latest version for ${packageName}`);
+			continue;
+		}
+
+		const latestVersion = result.stdout.trim();
+		if (latestVersion !== currentVersion) {
+			console.log();
+			console.log("⚠️  ========================================");
+			console.log(`⚠️  UPDATE AVAILABLE: ${packageName}`);
+			console.log(`⚠️  Current: ${currentVersion} → Latest: ${latestVersion}`);
+			console.log(`⚠️  Update FA_PACKAGES_CONFIG in shared-utils.js`);
+			console.log("⚠️  ========================================");
+			console.log();
+		} else {
+			log("✅", `${packageName} is up to date (${currentVersion})`);
+		}
+	}
+}
+
 function installFontAwesomePackages() {
 	log("📦", "Installing Font Awesome Pro packages...");
 	log("⏳", "This may take a minute...");
 
-	const result = spawnSync("npm", ["install", "--no-package-lock", "--silent"], {
+	const result = spawnSync("npm", ["install", "--no-package-lock", "--force", "--silent"], {
 		stdio: "inherit",
 		cwd: PATHS.src,
 		env: { ...process.env, CI: "0" },
@@ -151,6 +184,27 @@ function installFontAwesomePackages() {
 	}
 
 	log("✅", "Packages installed");
+}
+
+function cleanupGeneratedFiles() {
+	log("🧹", "Cleaning up generated files...");
+
+	const filesToRemove = [
+		join(PATHS.src, ".npmrc"),
+		join(PATHS.src, "package.json"),
+	];
+
+	for (const file of filesToRemove) {
+		if (fs.existsSync(file)) {
+			fs.unlinkSync(file);
+		}
+	}
+
+	if (fs.existsSync(PATHS.srcNodeModules)) {
+		fs.rmSync(PATHS.srcNodeModules, { recursive: true, force: true });
+	}
+
+	log("✅", "Cleanup complete");
 }
 
 // ============================================================================
@@ -167,5 +221,7 @@ export {
 	checkEnvironment,
 	setupSourceDirectory,
 	configureFontAwesomeRegistry,
+	checkForCustomKitUpdates,
 	installFontAwesomePackages,
+	cleanupGeneratedFiles,
 };
