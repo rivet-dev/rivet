@@ -403,3 +403,27 @@ export class Forbidden extends ActorError {
 		this.statusCode = 403;
 	}
 }
+
+export class EndpointMismatch extends ActorError {
+	constructor(expected: string, received: string) {
+		super(
+			"config",
+			"endpoint_mismatch",
+			`Endpoint mismatch: expected "${expected}", received "${received}"`,
+			{ public: true, metadata: { expected, received } },
+		);
+		this.statusCode = 400;
+	}
+}
+
+export class NamespaceMismatch extends ActorError {
+	constructor(expected: string, received: string) {
+		super(
+			"config",
+			"namespace_mismatch",
+			`Namespace mismatch: expected "${expected}", received "${received}"`,
+			{ public: true, metadata: { expected, received } },
+		);
+		this.statusCode = 400;
+	}
+}
