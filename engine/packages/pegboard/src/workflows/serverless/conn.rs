@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use futures_util::{FutureExt, StreamExt};
 use gas::prelude::*;

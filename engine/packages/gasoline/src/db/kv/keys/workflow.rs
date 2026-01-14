@@ -1189,3 +1189,127 @@ impl<'de> TupleUnpack<'de> for SilenceTsKey {
 		Ok((input, v))
 	}
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GaugeMetric {
+	SignalPending(String),
+}
+
+impl GaugeMetric {
+	fn variant(&self) -> GaugeMetricVariant {
+		match self {
+			GaugeMetric::SignalPending(_) => GaugeMetricVariant::SignalPending,
+		}
+	}
+}
+
+#[derive(strum::FromRepr)]
+enum GaugeMetricVariant {
+	SignalPending = 0,
+}
+
+/// Stores gauge metrics for a single workflow.
+#[derive(Debug)]
+pub struct GaugeMetricKey {
+	pub workflow_id: Id,
+	pub metric: GaugeMetric,
+}
+
+impl GaugeMetricKey {
+	pub fn new(workflow_id: Id, metric: GaugeMetric) -> Self {
+		GaugeMetricKey {
+			workflow_id,
+			metric,
+		}
+	}
+
+	pub fn subspace(workflow_id: Id) -> GaugeMetricSubspaceKey {
+		GaugeMetricSubspaceKey::new(workflow_id)
+	}
+}
+
+impl FormalKey for GaugeMetricKey {
+	// IMPORTANT: Uses LE bytes, not BE
+	/// Count.
+	type Value = usize;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(usize::from_le_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_le_bytes().to_vec())
+	}
+}
+
+impl TuplePack for GaugeMetricKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (
+			WORKFLOW,
+			METRIC,
+			self.workflow_id,
+			self.metric.variant() as usize,
+		);
+		offset += t.pack(w, tuple_depth)?;
+
+		offset += match &self.metric {
+			GaugeMetric::SignalPending(signal_name) => signal_name.pack(w, tuple_depth)?,
+		};
+
+		Ok(offset)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for GaugeMetricKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, variant)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let variant = GaugeMetricVariant::from_repr(variant).ok_or_else(|| {
+			PackError::Message(format!("invalid metric variant `{variant}` in key").into())
+		})?;
+
+		let (input, v) = match variant {
+			GaugeMetricVariant::SignalPending => {
+				let (input, signal_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					GaugeMetricKey {
+						workflow_id,
+						metric: GaugeMetric::SignalPending(signal_name),
+					},
+				)
+			}
+		};
+
+		Ok((input, v))
+	}
+}
+
+/// Used to list all gauge metrics for a workflow.
+pub struct GaugeMetricSubspaceKey {
+	workflow_id: Id,
+}
+
+impl GaugeMetricSubspaceKey {
+	pub fn new(workflow_id: Id) -> Self {
+		GaugeMetricSubspaceKey { workflow_id }
+	}
+}
+
+impl TuplePack for GaugeMetricSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (WORKFLOW, METRIC, self.workflow_id);
+		t.pack(w, tuple_depth)
+	}
+}
