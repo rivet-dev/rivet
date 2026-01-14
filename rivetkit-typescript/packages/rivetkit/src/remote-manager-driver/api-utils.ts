@@ -17,7 +17,10 @@ export class EngineApiError extends Error {
 	}
 }
 
+// TODO: Remove getEndpoint, but it's used in a lot of places
 export function getEndpoint(config: ClientConfig | RegistryConfig) {
+	// Endpoint is always defined for ClientConfig (has default in schema).
+	// RegistryConfig may not have endpoint if using local manager.
 	return config.endpoint ?? "http://127.0.0.1:6420";
 }
 

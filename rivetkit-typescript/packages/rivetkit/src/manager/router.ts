@@ -590,7 +590,14 @@ export function buildManagerRouter(
 		router.get("/health", (c) => handleHealthRequest(c));
 
 		router.get("/metadata", (c) =>
-			handleMetadataRequest(c, config, { normal: {} }, undefined),
+			handleMetadataRequest(
+				c,
+				config,
+				{ normal: {} },
+				config.publicEndpoint,
+				config.publicNamespace,
+				config.publicToken,
+			),
 		);
 
 		managerDriver.modifyManagerRouter?.(config, router as unknown as Hono);

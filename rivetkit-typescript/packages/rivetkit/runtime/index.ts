@@ -82,6 +82,9 @@ export class Runtime<A extends RegistryActors> {
 			configureDefaultLogger(config.logging?.level);
 		}
 
+		// This should be unreachable: Zod defaults serveManager to false when
+		// spawnEngine is enabled (since endpoint gets set to ENGINE_ENDPOINT).
+		// We check anyway as a safety net for explicit misconfiguration.
 		invariant(
 			!(config.serverless.spawnEngine && config.serveManager),
 			"cannot specify both spawnEngine and serveManager",
@@ -89,11 +92,6 @@ export class Runtime<A extends RegistryActors> {
 
 		const driver = chooseDefaultDriver(config);
 		const managerDriver = driver.manager(config);
-
-		invariant(
-			!(config.serverless.spawnEngine && config.serveManager),
-			"cannot specify spawnEngine and serveManager together",
-		);
 
 		// Start main server. This is either:
 		// - Manager: Run a server in-process on port 6420 that mimics the
@@ -215,11 +213,11 @@ export class Runtime<A extends RegistryActors> {
 				this.#config.serveManager ||
 				this.#config.serverless.spawnEngine;
 			if (
-				this.#config.serverless.advertiseEndpoint &&
+				this.#config.publicEndpoint &&
 				shouldShowEndpoint
 			) {
 				console.log(
-					`  - Endpoint:     ${this.#config.serverless.advertiseEndpoint}`,
+					`  - Endpoint:     ${this.#config.publicEndpoint}`,
 				);
 			}
 			if (this.#config.serverless.spawnEngine) {

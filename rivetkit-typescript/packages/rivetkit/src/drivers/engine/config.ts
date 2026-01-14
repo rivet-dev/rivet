@@ -12,7 +12,10 @@ import { getRivetRunnerKey } from "@/utils/env-vars";
  */
 export const EngineConfigSchemaBase = ClientConfigSchemaBase.extend({
 	/** Unique key for this runner. Runners connecting a given key will replace any other runner connected with the same key. */
-	runnerKey: z.string().optional(),
+	runnerKey: z
+		.string()
+		.optional()
+		.transform((val) => val ?? getRivetRunnerKey()),
 
 	/** How many actors this runner can run. */
 	totalSlots: z.number().default(100_000),
@@ -31,10 +34,10 @@ export type EngineConfigInput = z.input<typeof EngineConfigSchema>;
 
 export function transformEngineConfig(
 	config: z.infer<typeof EngineConfigSchemaBase>,
-	ctx?: z.RefinementCtx,
+	ctx: z.RefinementCtx,
 ) {
 	return {
 		...transformClientConfig(config, ctx),
-		runnerKey: config.runnerKey ?? getRivetRunnerKey(),
+		runnerKey: config.runnerKey,
 	};
 }

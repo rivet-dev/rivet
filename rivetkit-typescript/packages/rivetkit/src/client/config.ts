@@ -9,24 +9,59 @@ import {
 	getRivetRunner,
 } from "@/utils/env-vars";
 import type { RegistryConfig } from "@/registry/config";
-import {
-	EndpointSchema,
-	type ParsedEndpoint,
-	zodCheckDuplicateCredentials,
-} from "@/utils/endpoint-parser";
+import { tryParseEndpoint } from "@/utils/endpoint-parser";
+
+/**
+ * Gets the default endpoint for the client.
+ *
+ * In browser: uses current origin + /api/rivet
+ *
+ * Server-side: uses localhost:6420
+ */
+function getDefaultEndpoint(): string {
+	if (typeof window !== "undefined" && window.location?.origin) {
+		return `${window.location.origin}/api/rivet`;
+	}
+	return "http://127.0.0.1:6420";
+}
 
 /**
  * Base client config schema without transforms so it can be merged in to other schemas.
  */
 export const ClientConfigSchemaBase = z.object({
-	/** Endpoint to connect to for Rivet Engine or RivetKit manager API. */
-	endpoint: EndpointSchema.optional(),
+	/**
+	 * Endpoint to connect to for Rivet Engine or RivetKit manager API.
+	 *
+	 * Supports URL auth syntax for namespace and token:
+	 * - `https://namespace:token@api.rivet.dev`
+	 * - `https://namespace@api.rivet.dev`
+	 *
+	 * Can also be set via RIVET_ENDPOINT environment variables.
+	 *
+	 * Defaults to current origin + /api/rivet in browser, or localhost:6420 server-side.
+	 */
+	endpoint: z
+		.string()
+		.optional()
+		.transform(
+			(val) =>
+				val ??
+				getRivetEngine() ??
+				getRivetEndpoint() ??
+				getDefaultEndpoint(),
+		),
 
 	/** Token to use to authenticate with the API. */
-	token: z.string().optional(),
+	token: z
+		.string()
+		.optional()
+		.transform((val) => val ?? getRivetToken()),
 
 	/** Namespace to connect to. */
-	namespace: z.string().optional(),
+	namespace: z
+		.string()
+		.optional()
+		.transform((val) => val ?? getRivetNamespace()),
 
 	/** Name of the runner. This is used to group together runners in to different pools. */
 	runnerName: z.string().default(() => getRivetRunner() ?? "default"),
@@ -65,51 +100,22 @@ export type ClientConfig = z.infer<typeof ClientConfigSchema>;
 
 export type ClientConfigInput = z.input<typeof ClientConfigSchema>;
 
-export function resolveEndpoint(
-	parsedEndpoint: ParsedEndpoint | undefined,
-): ParsedEndpoint | undefined {
-	if (parsedEndpoint) {
-		return parsedEndpoint;
-	}
-
-	const envEndpoint = getRivetEngine() ?? getRivetEndpoint();
-	if (envEndpoint) {
-		return EndpointSchema.parse(envEndpoint);
-	}
-
-	return undefined;
-}
-
-export function validateClientConfig(
-	resolvedEndpoint: ParsedEndpoint | undefined,
+export function transformClientConfig(
 	config: z.infer<typeof ClientConfigSchemaBase>,
 	ctx: z.RefinementCtx,
 ) {
-	if (resolvedEndpoint) {
-		zodCheckDuplicateCredentials(resolvedEndpoint, config, ctx);
-	}
-}
-
-export function transformClientConfig(
-	config: z.infer<typeof ClientConfigSchemaBase>,
-	ctx?: z.RefinementCtx,
-) {
-	const resolvedEndpoint = resolveEndpoint(config.endpoint);
-
-	// Validate if context is provided (when called from Zod transform)
-	if (ctx) {
-		validateClientConfig(resolvedEndpoint, config, ctx);
-	}
+	const parsedEndpoint = tryParseEndpoint(ctx, {
+		endpoint: config.endpoint,
+		path: ["endpoint"],
+		namespace: config.namespace,
+		token: config.token,
+	});
 
 	return {
 		...config,
-		endpoint: resolvedEndpoint?.endpoint,
-		namespace:
-			resolvedEndpoint?.namespace ??
-			config.namespace ??
-			getRivetNamespace() ??
-			"default",
-		token: resolvedEndpoint?.token ?? config.token ?? getRivetToken(),
+		endpoint: parsedEndpoint?.endpoint,
+		namespace: parsedEndpoint?.namespace ?? config.namespace ?? "default",
+		token: parsedEndpoint?.token ?? config.token,
 	};
 }
 

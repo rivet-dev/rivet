@@ -83,6 +83,8 @@ const metadataSchema = z.object({
 	runtime: z.string().optional(),
 	version: z.string().optional(),
 	clientEndpoint: z.string().optional(),
+	clientNamespace: z.string().optional(),
+	clientToken: z.string().optional(),
 });
 
 async function tryMetadata(url: string) {

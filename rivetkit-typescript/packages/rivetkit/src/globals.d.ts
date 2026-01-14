@@ -16,6 +16,7 @@ declare global {
 	interface Window {
 		location?: {
 			hostname?: string;
+			origin?: string;
 		};
 		__rivetkit?: unknown[];
 	}
