@@ -23,11 +23,11 @@ pub fn create_middleware_function(ctx: StandaloneCtx) -> MiddlewareFn {
 			// This could be fetched from a database in a real implementation
 			Ok(MiddlewareResponse::Ok(MiddlewareConfig {
 				rate_limit: RateLimitConfig {
-					requests: 100, // 100 requests
-					period: 60,    // per 60 seconds
+					requests: 10000, // 10000 requests
+					period: 60,      // per 60 seconds
 				},
 				max_in_flight: MaxInFlightConfig {
-					amount: 20, // 20 concurrent requests
+					amount: 2000, // 2000 concurrent requests
 				},
 				retry: RetryConfig {
 					max_attempts: 7,

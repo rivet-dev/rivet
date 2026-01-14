@@ -15,7 +15,7 @@ use universalpubsub::PublishOpts;
 use universalpubsub::Subscriber;
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors};
+use crate::{LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, metrics};
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -57,6 +57,7 @@ pub async fn task_inner(
 
 	loop {
 		match recv_msg(
+			&conn,
 			&mut ws_rx,
 			&mut eviction_sub2,
 			&mut ws_to_tunnel_abort_rx,
@@ -78,6 +79,7 @@ pub async fn task_inner(
 }
 
 async fn recv_msg(
+	conn: &Conn,
 	ws_rx: &mut MutexGuard<'_, WebSocketReceiver>,
 	eviction_sub2: &mut Subscriber,
 	ws_to_tunnel_abort_rx: &mut watch::Receiver<()>,
@@ -94,6 +96,15 @@ async fn recv_msg(
 		}
 		_ = eviction_sub2.next() => {
 			tracing::debug!("runner evicted");
+
+			metrics::EVICTION_TOTAL
+				.with_label_values(&[
+					conn.namespace_id.to_string().as_str(),
+					&conn.runner_name,
+					conn.protocol_version.to_string().as_str(),
+				])
+				.inc();
+
 			return Err(errors::WsError::Eviction.build());
 		}
 		_ = ws_to_tunnel_abort_rx.changed() => {

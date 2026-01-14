@@ -22,6 +22,7 @@ tower.workspace = true
 # TODO: Make this use workspace version
 hyper = "1.6.0"
 indoc.workspace = true
+lazy_static.workspace = true
 once_cell.workspace = true
 pegboard-gateway.workspace = true
 pegboard-runner.workspace = true

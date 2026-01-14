@@ -10,7 +10,6 @@ use rivet_guard_core::{
 	request_context::RequestContext,
 };
 use rivet_runner_protocol as protocol;
-use std::time::Duration;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
@@ -18,12 +17,11 @@ use universalpubsub::PublishOpts;
 mod actor_event_demuxer;
 mod conn;
 mod errors;
+mod metrics;
 mod ping_task;
 mod tunnel_to_ws_task;
 mod utils;
 mod ws_to_tunnel_task;
-
-const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
 
 #[derive(Debug)]
 enum LifecycleResult {
@@ -133,6 +131,14 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 				eviction_sub2.next().await
 			},
 		)?;
+
+		metrics::CONNECTION_ACTIVE
+			.with_label_values(&[
+				conn.namespace_id.to_string().as_str(),
+				&conn.runner_name,
+				conn.protocol_version.to_string().as_str(),
+			])
+			.inc();
 
 		let (tunnel_to_ws_abort_tx, tunnel_to_ws_abort_rx) = watch::channel(());
 		let (ws_to_tunnel_abort_tx, ws_to_tunnel_abort_rx) = watch::channel(());

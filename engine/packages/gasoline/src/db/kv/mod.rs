@@ -1180,7 +1180,21 @@ impl Database for DatabaseKv {
 
 					// Collect name and deadline ts for each wf id
 					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();
+					let now = rivet_util::timestamp::now();
 					for wake_key in &wake_keys {
+						// Record time difference between when the wake condition was created and when it was
+						// pulled (here). We ignore deadline wake conditions because their ts value is not
+						// representative of when it was created, but rather when it should wake.
+						if !matches!(
+							wake_key.condition,
+							keys::wake::WakeCondition::Deadline { .. }
+						) {
+							// TODO: This will record metrics even if the txn fails, which is wrong
+							metrics::WORKFLOW_WAKE_DELTA_DURATION
+								.with_label_values(&[&wake_key.workflow_name])
+								.observe(wake_key.ts.saturating_sub(now).max(0) as f64 / 1000.0);
+						}
+
 						let Some(wf) = dedup_workflows.get_mut(&wake_key.workflow_id) else {
 							dedup_workflows.insert(
 								wake_key.workflow_id,
@@ -1865,7 +1879,7 @@ impl Database for DatabaseKv {
 							tx.read_entry::<keys::workflow::GaugeMetricKey>(&entry)?;
 
 						// Ignore negatives and zero
-						if isize::from_le_bytes(metric_count.to_le_bytes()) <= 0 {
+						if metric_count as isize <= 0 {
 							continue;
 						}
 
