@@ -62,9 +62,13 @@ const canonicalUrl = `https://rivet.gg${fullPath}`;
 // Create markdown path for the dropdown
 const markdownPath = `docs/${entry.id}`;
 const componentSourcePath = `docs/${entry.id}.mdx`;
+
+// Build OG image URL
+const ogSlug = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');
+const ogImage = `https://rivet.gg/og/docs/${ogSlug}.png`;
 ---
 
-<DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl}>
+<DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage}>
 	<aside class="hidden lg:block border-r">
 		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} client:load />}
 	</aside>

@@ -6,12 +6,13 @@ interface Props {
 	title: string;
 	description?: string;
 	canonicalUrl?: string;
+	ogImage?: string;
 }
 
-const { title, description, canonicalUrl } = Astro.props;
+const { title, description, canonicalUrl, ogImage } = Astro.props;
 ---
 
-<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage}>
 	<Header variant="full-width" showDocsTabs={true} client:load />
 	<div class="w-full relative z-10 font-sans">
 		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs-no-sidebar lg:grid-cols-docs" style="--header-height: 3.5rem;">
