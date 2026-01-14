@@ -41,6 +41,7 @@ serde.workspace = true
 tokio-rustls.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
+tracing-opentelemetry.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
 url.workspace = true

@@ -4705,6 +4705,7 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
  "uuid",
