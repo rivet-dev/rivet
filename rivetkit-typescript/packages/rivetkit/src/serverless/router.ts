@@ -1,5 +1,9 @@
 import invariant from "invariant";
-import { InvalidRequest } from "@/actor/errors";
+import {
+	EndpointMismatch,
+	InvalidRequest,
+	NamespaceMismatch,
+} from "@/actor/errors";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
 import { ServerlessStartHeadersSchema } from "@/manager/router-schema";
@@ -47,6 +51,22 @@ export function buildServerlessRouter(
 				runnerName,
 				namespace,
 			});
+
+			// Validate endpoint and namespace match config to catch
+			// misconfiguration or malicious requests.
+			//
+			// Only verify if namespace matches if endpoint configured since
+			// configuring an endpoint indicates you want to assert the
+			// incoming serverless requests.
+			if (config.endpoint) {
+				if (endpoint !== config.endpoint) {
+					throw new EndpointMismatch(config.endpoint, endpoint);
+				}
+
+				if (namespace !== config.namespace) {
+					throw new NamespaceMismatch(config.namespace, namespace);
+				}
+			}
 
 			// Convert config to runner config
 			const newConfig: RegistryConfig = {
