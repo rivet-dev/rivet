@@ -2,7 +2,7 @@ export function ConfigurationOptions() {
 	return (
 		<ul>
 			<li>
-				<a href="/docs/general/server-setup">Server Setup</a>: Different ways to run your server with serve(), handler(), or framework adapters.
+				<a href="/docs/general/http-server">Server Setup</a>: Different ways to run your server with serve(), handler(), or framework adapters.
 			</li>
 			<li>
 				<a href="/docs/actors/clients">Clients</a>: Connect to actors from JavaScript, React, or other platforms.
