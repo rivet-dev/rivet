@@ -37,6 +37,7 @@ declare module "@tanstack/react-query" {
 		queryMeta: {
 			mightRequireAuth?: boolean;
 			statusCheck?: boolean;
+			reportType?: string;
 		};
 	}
 }
