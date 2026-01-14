@@ -7,6 +7,13 @@ lazy_static::lazy_static! {
 		&["worker_id"],
 		*REGISTRY
 	).unwrap();
+	pub static ref WORKER_BUMPS_PER_TICK: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_worker_bumps_per_tick",
+		"Amount of bump messages received in a single worker tick.",
+		&["worker_id"],
+		vec![1.0, 2.0, 3.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0],
+		*REGISTRY
+	).unwrap();
 	pub static ref LAST_PULL_WORKFLOWS_DURATION: GaugeVec = register_gauge_vec_with_registry!(
 		"gasoline_last_pull_workflows_duration",
 		"Last duration of pulling workflow data.",
