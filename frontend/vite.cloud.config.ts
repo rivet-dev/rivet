@@ -18,6 +18,7 @@ export default defineConfig((config) => {
   script.async = false;
   script.onload = function(){
     Plain.init({
+      requireAuthentication: true,
       appId: 'liveChatApp_01K5D3WHR3CGKA56RPRMBB7FX0',
 	  hideLauncher: true,
 	  theme: 'dark',
