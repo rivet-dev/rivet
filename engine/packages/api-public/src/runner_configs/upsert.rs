@@ -96,7 +96,7 @@ async fn upsert_inner(
 
 	// Check for leftover datacenters in the body, this means those datacenters don't exist
 	if !body.datacenters.is_empty() {
-		return Err(crate::errors::Datacenter::NotFound.build());
+		return Err(rivet_api_util::errors::Datacenter::NotFound.build());
 	}
 
 	let any_endpoint_config_changed = futures_util::stream::iter(dcs)

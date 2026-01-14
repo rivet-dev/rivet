@@ -5,7 +5,7 @@ use rivet_api_builder::{ApiCtx, ErrorResponse, RawErrorResponse, X_RIVET_RAY_ID}
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 
-mod errors;
+pub mod errors;
 
 pub use axum::http::{HeaderMap, Method};
 
