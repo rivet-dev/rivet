@@ -585,6 +585,9 @@ pub enum AllocationOverride {
 	None,
 	/// Forces actors with CrashPolicy::Sleep to pend instead of sleep.
 	DontSleep { pending_timeout: Option<i64> },
+	/// If an allocation results in pending, it will be put to sleep if it is not allocated after this
+	/// timeout.
+	PendingTimeout { pending_timeout: i64 },
 }
 
 #[derive(Debug)]
@@ -760,14 +763,17 @@ pub async fn spawn_actor(
 				}
 			}
 
-			let signal = if let AllocationOverride::DontSleep {
-				pending_timeout: Some(timeout),
-			} = allocation_override
-			{
-				ctx.listen_with_timeout::<PendingAllocation>(timeout)
-					.await?
-			} else {
-				Some(ctx.listen::<PendingAllocation>().await?)
+			let signal = match allocation_override {
+				AllocationOverride::DontSleep {
+					pending_timeout: Some(timeout),
+				}
+				| AllocationOverride::PendingTimeout {
+					pending_timeout: timeout,
+				} => {
+					ctx.listen_with_timeout::<PendingAllocation>(timeout)
+						.await?
+				}
+				_ => Some(ctx.listen::<PendingAllocation>().await?),
 			};
 
 			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
