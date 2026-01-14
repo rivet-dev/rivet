@@ -19,6 +19,7 @@ rivet-api-builder.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-pools.workspace = true
+rivet-metrics.workspace = true
 rivet-util.workspace = true
 serde.workspace = true
 serde_bare.workspace = true

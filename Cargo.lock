@@ -1517,6 +1517,7 @@ dependencies = [
  "rivet-api-builder",
  "rivet-config",
  "rivet-error",
+ "rivet-metrics",
  "rivet-pools",
  "rivet-runtime",
  "rivet-test-deps",
