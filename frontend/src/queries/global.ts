@@ -4,6 +4,7 @@ import {
 	QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
+import posthog from "posthog-js";
 import { toast } from "@/components";
 import { isRivetApiError } from "@/lib/errors";
 import { modal } from "@/utils/modal-utils";
@@ -18,6 +19,14 @@ const queryCache = new QueryCache({
 		) {
 			modal.open("ProvideEngineCredentials", { dismissible: false });
 			return;
+		}
+
+		if (query.meta?.reportType) {
+			posthog.capture(query.meta.reportType, {
+				type: "error",
+				error,
+				queryKey: query.queryKey,
+			});
 		}
 	},
 	onSuccess(data, query) {
@@ -50,9 +59,7 @@ export const changelogQueryOptions = () => {
 		queryKey: ["changelog", __APP_BUILD_ID__],
 		staleTime: 1 * 60 * 60 * 1000, // 1 hour
 		queryFn: async () => {
-			const response = await fetch(
-				"https://rivet.dev/changelog.json",
-			);
+			const response = await fetch("https://rivet.dev/changelog.json");
 			if (!response.ok) {
 				throw new Error("Failed to fetch changelog");
 			}
