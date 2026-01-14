@@ -1,5 +1,4 @@
 use rivet_error::*;
-use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 
 #[derive(RivetError, Serialize, Deserialize)]
@@ -7,10 +6,9 @@ use serde::{Deserialize, Serialize};
 	"guard",
 	"rate_limit",
 	"Too many requests. Try again later.",
-	"Too many requests to '{method} {path}' (actor_id: {actor_id:?}) from IP {ip}."
+	"Too many requests to '{method} {path}' from IP {ip}."
 )]
 pub struct RateLimit {
-	pub actor_id: Option<Id>,
 	pub method: String,
 	pub path: String,
 	pub ip: String,

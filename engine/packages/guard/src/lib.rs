@@ -33,9 +33,9 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	shared_state.start().await?;
 
 	// Create handlers
-	let routing_fn = routing::create_routing_function(ctx.clone(), shared_state.clone());
-	let cache_key_fn = cache::create_cache_key_function(ctx.clone());
-	let middleware_fn = middleware::create_middleware_function(ctx.clone());
+	let routing_fn = routing::create_routing_function(&ctx, shared_state.clone());
+	let cache_key_fn = cache::create_cache_key_function();
+	let middleware_fn = middleware::create_middleware_function();
 	let cert_resolver = tls::create_cert_resolver(&ctx).await?;
 
 	if let Some(_) = &cert_resolver {
@@ -46,14 +46,12 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 
 	// Start the server
 	tracing::info!("starting proxy server");
-	let clickhouse_inserter = ctx.clickhouse_inserter().ok();
 	rivet_guard_core::run_server(
 		config,
 		routing_fn,
 		cache_key_fn,
 		middleware_fn,
 		cert_resolver,
-		clickhouse_inserter,
 	)
 	.await
 }

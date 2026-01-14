@@ -175,7 +175,6 @@ async fn route_request_inner(
 
 		return Ok(Some(RoutingOutput::Route(RouteConfig {
 			targets: vec![RouteTarget {
-				actor_id: Some(actor_id),
 				host: peer_dc
 					.proxy_url_host()
 					.context("bad peer dc proxy url host")?

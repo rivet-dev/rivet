@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::*;
-use gas::prelude::*;
 use rivet_guard_core::{
 	MiddlewareFn,
 	proxy_service::{
@@ -11,10 +9,8 @@ use rivet_guard_core::{
 };
 
 /// Creates a middleware function that can use config and pools
-pub fn create_middleware_function(ctx: StandaloneCtx) -> MiddlewareFn {
-	Arc::new(move |_actor_id: &Id, _headers: &hyper::HeaderMap| {
-		let _ctx = ctx.clone();
-
+pub fn create_middleware_function() -> MiddlewareFn {
+	Arc::new(move |_headers: &hyper::HeaderMap| {
 		Box::pin(async move {
 			// In a real implementation, you would look up actor-specific middleware settings
 			// For now, we'll just return a standard configuration
@@ -30,8 +26,8 @@ pub fn create_middleware_function(ctx: StandaloneCtx) -> MiddlewareFn {
 					amount: 2000, // 2000 concurrent requests
 				},
 				retry: RetryConfig {
-					max_attempts: 7,
-					initial_interval: 150,
+					max_attempts: 7,       // 7 retry attempts
+					initial_interval: 150, // 150ms initial interval
 				},
 				timeout: TimeoutConfig {
 					request_timeout: 30, // 30 seconds for requests
