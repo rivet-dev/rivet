@@ -649,7 +649,7 @@ pub(crate) async fn allocate_pending_actors(
 	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
 
 	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
-	let (allocations, pending_actor_count) = ctx
+	let allocations = ctx
 		.udb()?
 		.run(|tx| async move {
 			let start = Instant::now();
@@ -671,7 +671,6 @@ pub(crate) async fn allocate_pending_actors(
 				// the one we choose
 				Snapshot,
 			);
-			let mut pending_actor_count = 0;
 			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
 			'queue_loop: loop {
@@ -683,8 +682,6 @@ pub(crate) async fn allocate_pending_actors(
 				let Some(queue_entry) = queue_stream.try_next().await? else {
 					break;
 				};
-
-				pending_actor_count += 1;
 
 				let (queue_key, generation) =
 					tx.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?;
@@ -801,19 +798,14 @@ pub(crate) async fn allocate_pending_actors(
 						},
 					});
 
-					pending_actor_count -= 1;
 					continue 'queue_loop;
 				}
 			}
 
-			Ok((allocations, pending_actor_count))
+			Ok(allocations)
 		})
 		.custom_instrument(tracing::info_span!("runner_allocate_pending_actors_tx"))
 		.await?;
-
-	metrics::ACTOR_PENDING_ALLOCATION
-		.with_label_values(&[&input.namespace_id.to_string(), &input.name.to_string()])
-		.set(pending_actor_count as i64);
 
 	Ok(AllocatePendingActorsOutput { allocations })
 }
@@ -856,12 +848,6 @@ async fn drain_older_versions(
 	ctx: &ActivityCtx,
 	input: &DrainOlderVersionsInput,
 ) -> Result<crate::ops::runner::drain::Output> {
-	tracing::info!(
-		namespace_id = %input.namespace_id,
-		name = %input.name,
-		version = input.version,
-		"drain_older_versions activity called"
-	);
 	ctx.op(crate::ops::runner::drain::Input {
 		namespace_id: input.namespace_id,
 		name: input.name.clone(),
