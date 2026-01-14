@@ -205,7 +205,6 @@ export class Runner {
 	runnerId?: string;
 	#started: boolean = false;
 	#shutdown: boolean = false;
-	#shuttingDown: boolean = false;
 	#reconnectAttempt: number = 0;
 	#reconnectTimeout?: NodeJS.Timeout;
 
@@ -480,20 +479,19 @@ export class Runner {
 	// MARK: Shutdown
 	async shutdown(immediate: boolean, exit: boolean = false) {
 		// Prevent concurrent shutdowns
-		if (this.#shuttingDown) {
+		if (this.#shutdown) {
 			this.log?.debug({
 				msg: "shutdown already in progress, ignoring",
 			});
 			return;
 		}
-		this.#shuttingDown = true;
+		this.#shutdown = true;
 
 		this.log?.info({
 			msg: "starting shutdown",
 			immediate,
 			exit,
 		});
-		this.#shutdown = true;
 
 		// Clear reconnect timeout
 		if (this.#reconnectTimeout) {
@@ -918,22 +916,17 @@ export class Runner {
 		});
 
 		ws.addEventListener("close", async (ev) => {
-			const closeError = parseWebSocketCloseReason(ev.reason);
-			if (
-				closeError?.group === "ws" &&
-				closeError?.error === "eviction"
-			) {
-				this.log?.info("runner websocket evicted");
-
-				this.#config.onDisconnected(ev.code, ev.reason);
-
-				await this.shutdown(true);
-			} else {
+			if (!this.#shutdown) {
+				const closeError = parseWebSocketCloseReason(ev.reason);
 				if (
-					closeError?.group === "pegboard" &&
-					closeError?.error === "runner_shutdown"
+					closeError?.group === "ws" &&
+					closeError?.error === "eviction"
 				) {
-					this.log?.info("runner shutdown");
+					this.log?.info("runner websocket evicted");
+
+					this.#config.onDisconnected(ev.code, ev.reason);
+
+					await this.shutdown(true);
 				} else {
 					this.log?.warn({
 						msg: "runner disconnected",
@@ -941,18 +934,16 @@ export class Runner {
 						reason: ev.reason.toString(),
 						closeError,
 					});
+
+					this.#config.onDisconnected(ev.code, ev.reason);
 				}
 
-				this.#config.onDisconnected(ev.code, ev.reason);
-			}
+				// Clear ack interval on close
+				if (this.#ackInterval) {
+					clearInterval(this.#ackInterval);
+					this.#ackInterval = undefined;
+				}
 
-			// Clear ack interval on close
-			if (this.#ackInterval) {
-				clearInterval(this.#ackInterval);
-				this.#ackInterval = undefined;
-			}
-
-			if (!this.#shutdown) {
 				// Start runner lost timeout if we have a threshold and are not shutting down
 				if (
 					!this.#runnerLostTimeout &&
@@ -977,6 +968,10 @@ export class Runner {
 
 				// Attempt to reconnect if not stopped
 				this.#scheduleReconnect();
+			} else {
+				this.log?.info("websocket closed");
+
+				this.#config.onDisconnected(ev.code, ev.reason);
 			}
 		});
 	}
