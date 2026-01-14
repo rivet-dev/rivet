@@ -4316,7 +4316,7 @@ dependencies = [
  "axum 0.8.4",
  "base64 0.22.1",
  "epoxy",
- "futures-util",
+ "epoxy-protocol",
  "gasoline",
  "indexmap 2.10.0",
  "namespace",
