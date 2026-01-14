@@ -9,6 +9,7 @@ use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
 use rivet_runtime::TermSignal;
 use rivet_types::runner_configs::RunnerConfigKind;
+use rivet_util::safe_slice;
 use tokio::time::Duration;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
@@ -299,40 +300,32 @@ async fn outbound_req_inner(
 	let stream_handler = async {
 		while let Some(event) = source.next().await {
 			match event {
-				Ok(sse::Event::Open) => {}
-				Ok(sse::Event::Message(msg)) => {
-					if runner_id.is_none() {
-						let data = match BASE64.decode(msg.data) {
-							Ok(data) => data,
-							Err(err) => {
-								report_error(
-									ctx,
-									input.namespace_id,
-									&input.runner_name,
-									RunnerPoolError::ServerlessInvalidBase64,
-								)
-								.await;
-								return Err(anyhow::anyhow!("invalid base64 message: {err}"));
-							}
-						};
-						let payload = match protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data) {
-							Ok(payload) => payload,
-							Err(err) => {
-								report_error(
-									ctx,
-									input.namespace_id,
-									&input.runner_name,
-									RunnerPoolError::ServerlessInvalidPayload {
-										message: err.to_string(),
-									},
-								)
-								.await;
-								return Err(anyhow::anyhow!("invalid payload: {err}"));
-							}
-						};
+				Ok(event) => {
+					// Parse payload
+					let payload = match parse_to_serverless_server_event(&event) {
+						Ok(Some(x)) => x,
+						Ok(None) => continue,
+						Err(err) => {
+							report_error(
+								ctx,
+								input.namespace_id,
+								&input.runner_name,
+								RunnerPoolError::ServerlessInvalidSsePayload {
+									message: err.to_string(),
+									raw_payload: get_raw_event_data(&event)
+										.map(|x| safe_slice(x, 0, 512).to_string()),
+								},
+							)
+							.await;
 
-						match payload {
-							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
+							return Err(err);
+						}
+					};
+
+					// Handle message
+					match payload {
+						protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
+							if runner_id.is_none() {
 								runner_id =
 									Some(Id::parse(&init.runner_id).context("invalid runner id")?);
 								*runner_protocol_version2 = Some(init.runner_protocol_version);
@@ -478,20 +471,16 @@ async fn finish_non_critical_draining(
 	let wait_for_shutdown_fut = async move {
 		while let Some(event) = source.next().await {
 			match event {
-				Ok(sse::Event::Open) => {}
-				Ok(sse::Event::Message(msg)) => {
-					// If runner_id is none at this point it means we did not send the stopping signal yet, so
-					// send it now
-					if runner_id.is_none() {
-						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
-						let payload =
-						protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(
-							&data,
-						)
-						.context("invalid payload")?;
+				Ok(event) => {
+					let Some(payload) = parse_to_serverless_server_event(&event)? else {
+						continue;
+					};
 
-						match payload {
-							protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
+					match payload {
+						protocol::mk2::ToServerlessServer::ToServerlessServerInit(init) => {
+							// If runner_id is none at this point it means we did not send the stopping signal yet, so
+							// send it now
+							if runner_id.is_none() {
 								let runner_id_local =
 									Id::parse(&init.runner_id).context("invalid runner id")?;
 								runner_id = Some(runner_id_local);
@@ -645,5 +634,39 @@ async fn report_success(ctx: &ActivityCtx, namespace_id: Id, runner_name: &str) 
 		.await
 	{
 		tracing::warn!(?err, "failed to report serverless success");
+	}
+}
+
+/// Parse SSE event into ToServerlessServer and handle all event types.
+fn parse_to_serverless_server_event(
+	event: &reqwest_eventsource::Event,
+) -> Result<Option<protocol::mk2::ToServerlessServer>> {
+	match event {
+		sse::Event::Open => Ok(None),
+		sse::Event::Message(msg) => match msg.event.as_str() {
+			"ping" => Ok(None),
+			"message" => {
+				let data = BASE64.decode(&msg.data).context("invalid base64 message")?;
+				let payload =
+					protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(
+						&data,
+					)
+					.context("invalid payload")?;
+
+				Ok(Some(payload))
+			}
+			event => {
+				tracing::warn!(event, "received unknown serverless sse message event kind");
+				Ok(None)
+			}
+		},
+	}
+}
+
+/// Get the data from the event, if exists.
+fn get_raw_event_data(event: &reqwest_eventsource::Event) -> Option<&str> {
+	match event {
+		reqwest_eventsource::Event::Open => None,
+		reqwest_eventsource::Event::Message(ev) => Some(&ev.data),
 	}
 }
