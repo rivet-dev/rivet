@@ -1,6 +1,5 @@
 'use client';
 import { Button } from '@rivet-gg/components';
-import Link from 'next/link';
 
 import { Tag } from '@/components/Tag';
 import { Icon, faLink } from '@rivet-gg/icons';
@@ -23,9 +22,9 @@ function Anchor({ id, children }) {
   return (
     <div className='group absolute -left-10 top-1 h-full pr-10'>
       <Button className='not-prose relative hidden group-hover:flex' size='icon-sm' variant='outline' asChild>
-        <Link href={`#${id}`}>
+        <a href={`#${id}`}>
           <Icon icon={faLink} />
-        </Link>
+        </a>
       </Button>
     </div>
   );
@@ -45,9 +44,9 @@ export function Heading({ level = 2, children, id, tag, label, anchor = true, ..
         {...props}>
         {anchor ? <Anchor id={id} /> : null}
         {anchor ? (
-          <Link className='group text-inherit no-underline hover:text-inherit' href={`#${id}`}>
+          <a className='group text-inherit no-underline hover:text-inherit' href={`#${id}`}>
             {children}
-          </Link>
+          </a>
         ) : (
           children
         )}

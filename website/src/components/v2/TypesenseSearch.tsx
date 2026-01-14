@@ -2,18 +2,17 @@
 
 import Typesense from "typesense";
 import { Button, Dialog, DialogPortal, Kbd, cn } from "@rivet-gg/components";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const searchClient = new Typesense.Client({
 	nodes: [
 		{
-			host: process.env.NEXT_PUBLIC_TYPESENSE_HOST || "localhost",
-			port: Number(process.env.NEXT_PUBLIC_TYPESENSE_PORT) || 443,
-			protocol: process.env.NEXT_PUBLIC_TYPESENSE_PROTOCOL || "https",
+			host: import.meta.env.PUBLIC_TYPESENSE_HOST || "localhost",
+			port: Number(import.meta.env.PUBLIC_TYPESENSE_PORT) || 443,
+			protocol: import.meta.env.PUBLIC_TYPESENSE_PROTOCOL || "https",
 		},
 	],
-	apiKey: process.env.NEXT_PUBLIC_TYPESENSE_SEARCH_API_KEY || "xyz",
+	apiKey: import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY || "xyz",
 	connectionTimeoutSeconds: 2,
 });
 
@@ -36,11 +35,10 @@ export function TypesenseSearch() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [inputFocused, setInputFocused] = useState(false);
-	const router = useRouter();
 
 	const hasRequiredKeys = !!(
-		process.env.NEXT_PUBLIC_TYPESENSE_HOST &&
-		process.env.NEXT_PUBLIC_TYPESENSE_SEARCH_API_KEY
+		import.meta.env.PUBLIC_TYPESENSE_HOST &&
+		import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY
 	);
 
 	if (!hasRequiredKeys) {
@@ -48,7 +46,7 @@ export function TypesenseSearch() {
 	}
 
 	const handleResultClick = (result: SearchResult) => {
-		router.push(result.url);
+		window.location.href = result.url;
 		setIsOpen(false);
 		setQuery("");
 	};
@@ -102,7 +100,7 @@ export function TypesenseSearch() {
 			try {
 				const searchResults = await searchClient
 					.collections(
-						process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION_NAME ||
+						import.meta.env.PUBLIC_TYPESENSE_COLLECTION_NAME ||
 						"rivet-docs",
 					)
 					.documents()

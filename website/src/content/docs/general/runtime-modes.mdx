@@ -48,7 +48,7 @@ See [Server Setup](/docs/general/server-setup/) for more configuration options.
 
 When a client creates an actor, it sends a request to the Rivet Engine. The engine then calls `GET /api/rivet/start` on your serverless backend to run the actor.
 
-<Image src={imgServerless} alt="Serverless architecture diagram" />
+<img src={imgServerless.src} alt="Serverless architecture diagram" />
 
 ### Advanced
 
@@ -91,7 +91,7 @@ The runner runs in the background, ready to run actors.
 
 On startup, your backend calls `registry.startRunner()` which opens a persistent connection to the Rivet Engine. When a client creates an actor, the engine sends a command through this connection to start the actor on your backend.
 
-<Image src={imgRunners} alt="Runners architecture diagram" />
+<img src={imgRunners.src} alt="Runners architecture diagram" />
 
 ## Comparison
 

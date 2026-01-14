@@ -2,7 +2,6 @@ import { Button } from "@/components/Button";
 import imgBlockLeft from "@/images/effects/leftBlock.png";
 import imgBlockRight from "@/images/effects/rightBlock.png";
 import { Icon, faPhone, faRocketLaunch } from "@rivet-gg/icons";
-import Image from "next/image";
 
 export default function LevelUpSection() {
 	return (
@@ -10,8 +9,7 @@ export default function LevelUpSection() {
 			<div className="mx-auto flex h-full max-w-screen-xl flex-row items-center justify-between">
 				{/* Left Image Container */}
 				<div className="flex h-full flex-1 items-center justify-end">
-					<Image
-						src={imgBlockLeft}
+					<img src={imgBlockLeft}
 						alt="Left Image"
 						className="h-auto w-full" // Adjust size as necessary
 					/>
@@ -47,8 +45,7 @@ export default function LevelUpSection() {
 
 				{/* Right Image Container */}
 				<div className="flex h-full flex-1 items-center justify-start">
-					<Image
-						src={imgBlockRight}
+					<img src={imgBlockRight}
 						alt="Right Image"
 						className="h-auto w-full" // Adjust size as necessary
 					/>

@@ -33,9 +33,9 @@
 	}
 	header @cors_json Access-Control-Allow-Origin {header.Origin}
 
-	# Cache static assets aggressively
+	# Cache static assets aggressively (Astro outputs to _astro/)
 	@static {
-		path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+		path /_astro/* *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
 	}
 	header @static Cache-Control "public, max-age=31536000, immutable"
 
@@ -50,7 +50,7 @@
 		respond "healthy" 200
 	}
 
-	# Main site handler - Next.js static export with directory index
+	# Main site handler - Astro static export with directory index
 	handle {
 		try_files {path} {path}/ {path}/index.html
 		file_server

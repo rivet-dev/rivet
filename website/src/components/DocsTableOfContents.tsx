@@ -3,7 +3,6 @@
 import { remToPx } from "@/lib/remToPx";
 import { cn } from "@rivet-gg/components";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { useEffect } from "react";
 import { Newsletter } from "./Newsletter";
@@ -91,15 +90,14 @@ function useCurrentSection(tableOfContents = []) {
 function NavLink({ id, isActive, children }) {
 	return (
 		<>
-			<Link
-				href={`#${id}`}
+			<a href={`#${id}`}
 				aria-current={isActive ? "page" : undefined}
 				className={cn(
 					"group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm text-muted-foreground hover:underline aria-current-page:text-foreground",
 				)}
 			>
 				<span className="truncate">{children}</span>
-			</Link>
+			</a>
 		</>
 	);
 }
@@ -144,7 +142,7 @@ function Tree({ sections, isActive, depth = 0 }) {
 								</NavLink>
 							</div>
 
-							{section.children.length > 0 ? (
+							{section.children && section.children.length > 0 ? (
 								<div className="relative pl-3">
 									<Tree
 										sections={section.children}

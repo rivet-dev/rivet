@@ -4,7 +4,6 @@ import { Heading } from "@/components/Heading";
 import { Icon } from "@rivet-gg/icons";
 
 import { Button, cn } from "@rivet-gg/components";
-import Link from "next/link";
 
 export function Resource({ children, ...props }) {
 	// Adds line break opportunities after periods
@@ -28,14 +27,14 @@ export function Resource({ children, ...props }) {
 			startIcon={<Icon icon={props.icon} />}
 			asChild
 		>
-			<Link>
+			<a>
 				<span className="pt-4 font-bold">{titleSegments}</span>
 				{children && (
 					<div className="text-muted-foreground mt-2 min-w-0 text-wrap text-sm leading-5">
 						{children}
 					</div>
 				)}
-			</Link>
+			</a>
 		</Button>
 	);
 }

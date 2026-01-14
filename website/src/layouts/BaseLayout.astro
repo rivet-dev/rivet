@@ -1,0 +1,108 @@
+---
+import '@/styles/main.css';
+import '@fortawesome/fontawesome-svg-core/styles.css';
+import { ViewTransitions } from 'astro:transitions';
+import { EmbedDetector } from '@/components/EmbedDetector';
+import { Footer } from '@/components/Footer';
+import { Providers } from '@/components/Providers';
+import { TooltipProvider } from '@rivet-gg/components';
+import CopyCodeScript from '@/components/CopyCodeScript.astro';
+import TabsScript from '@/components/TabsScript.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+	canonicalUrl?: string;
+	ogImage?: string;
+	ogType?: string;
+	publishedTime?: string;
+	keywords?: string[];
+}
+
+const {
+	title,
+	description = "Rivet is a library for long-lived processes with durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
+	canonicalUrl,
+	ogImage = "https://rivet.gg/promo/og.png",
+	ogType = "website",
+	publishedTime,
+	keywords,
+} = Astro.props;
+
+const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+
+		{canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+
+		<!-- Twitter -->
+		<meta name="twitter:site" content="@rivet_dev" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImage} />
+
+		<!-- Open Graph -->
+		<meta property="og:type" content={ogType} />
+		<meta property="og:locale" content="en_US" />
+		<meta property="og:url" content={canonicalUrl || siteUrl} />
+		<meta property="og:site_name" content="Rivet" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={ogImage} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		{publishedTime && <meta property="article:published_time" content={publishedTime} />}
+
+		{keywords && <meta name="keywords" content={keywords.join(', ')} />}
+
+		<!-- Fonts -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+		<link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+		<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+		<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+
+		<!-- Favicons -->
+		<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?20240925" />
+		<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png?20240925" />
+		<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png?20240925" />
+		<link rel="manifest" href="/icons/site.webmanifest?20240925" />
+		<link rel="mask-icon" href="/icons/safari-pinned-tab.svg?20240925" color="#5bbad5" />
+		<meta name="msapplication-TileColor" content="#0c0a09" />
+		<meta name="theme-color" content="#0c0a09" />
+
+		<!-- Analytics -->
+		<script is:inline src="https://analytics.ahrefs.com/analytics.js" data-key="9b9IZaKPAs/KhRrWrBjsrw"></script>
+
+		<!-- Google Analytics -->
+		<script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-GHX1328ZFD"></script>
+		<script is:inline>
+			window.dataLayer = window.dataLayer || [];
+			function gtag(){dataLayer.push(arguments);}
+			gtag('js', new Date());
+			gtag('config', 'G-GHX1328ZFD');
+		</script>
+
+		<ViewTransitions />
+	</head>
+	<body class="dark">
+		<TooltipProvider client:load>
+			<Providers client:load>
+				<slot />
+			</Providers>
+		</TooltipProvider>
+		<EmbedDetector client:load />
+		<Footer client:load />
+		<CopyCodeScript />
+		<TabsScript />
+	</body>
+</html>

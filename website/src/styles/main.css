@@ -392,3 +392,9 @@
 		}
 	}
 }
+
+/* Disable view transition animations while keeping prefetch */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation: none;
+}

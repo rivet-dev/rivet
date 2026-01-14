@@ -1,5 +1,5 @@
-import type { ArticleInfo } from "@/lib/articles/metadata";
-import Link from "next/link";
+import { getCollection, render } from 'astro:content';
+import { AUTHORS } from '@/lib/article';
 
 interface OtherArticlesListProps {
 	currentSlug: string;
@@ -8,48 +8,51 @@ interface OtherArticlesListProps {
 export const OtherArticlesList = async ({
 	currentSlug,
 }: OtherArticlesListProps) => {
-	const routes = await import("@/generated/routes.json");
+	const posts = await getCollection('posts');
 
-	const articles = Object.fromEntries(
-		Object.entries(routes.pages).filter(
-			([path]) => path.startsWith("/blog") && !path.endsWith(currentSlug),
-		),
+	// Filter out the current post and sort by date
+	const otherPosts = posts
+		.filter(post => {
+			const slug = post.id.replace(/\/page$/, '');
+			return slug !== currentSlug;
+		})
+		.sort((a, b) => b.data.published.getTime() - a.data.published.getTime());
+
+	// Get titles from headings
+	const articlesWithTitles = await Promise.all(
+		otherPosts.map(async (post) => {
+			const { headings } = await render(post);
+			const title = headings.find(h => h.depth === 1)?.text || post.id;
+			const slug = post.id.replace(/\/page$/, '');
+			const author = AUTHORS[post.data.author];
+
+			return {
+				slug,
+				title,
+				author,
+				date: post.data.published,
+			};
+		})
 	);
-
-	const richArticlesEntries: [string, ArticleInfo][] = await Promise.all(
-		Object.entries(articles).map(async ([path, page]) => {
-			const post = await import(
-				`../app/(legacy)/blog/(posts)/${path.replace("/blog/", "")}/page.mdx`
-			);
-			return [path, { ...page, ...post.info } as ArticleInfo];
-		}),
-	);
-
-	richArticlesEntries.sort(
-		([, a], [, b]) => b.date.getTime() - a.date.getTime(),
-	);
-
-	const richArticles: Record<string, ArticleInfo> =
-		Object.fromEntries(richArticlesEntries);
 
 	const formatter = new Intl.DateTimeFormat("en", {});
 
 	return (
 		<ul className="mt-2 hidden text-sm text-cream-100 xl:block">
-			{Object.entries(richArticles).map(([path, article]) => {
+			{articlesWithTitles.map((article) => {
 				return (
-					<li key={path} className="mb-3 flex">
-						<Link href={path} className="hover:text-cream-300">
+					<li key={article.slug} className="mb-3 flex">
+						<a href={`/blog/${article.slug}/`} className="hover:text-cream-300">
 							<p className="text-xs leading-tight">
 								{article.title}
 							</p>
 							<div className="text-2xs text-charcole-800">
 								{article.author.name} @{" "}
 								<i>
-									{formatter.format(new Date(article.date))}
+									{formatter.format(article.date)}
 								</i>
 							</div>
-						</Link>
+						</a>
 					</li>
 				);
 			})}

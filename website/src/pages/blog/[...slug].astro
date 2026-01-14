@@ -1,0 +1,171 @@
+---
+import { getCollection, render } from 'astro:content';
+import BlogLayout from '@/layouts/BlogLayout.astro';
+import { ArticleSocials } from '@/components/ArticleSocials';
+import { Comments } from '@/components/Comments';
+import { DocsTableOfContents } from '@/components/DocsTableOfContents';
+import { Prose } from '@/components/Prose';
+import { formatTimestamp } from '@/lib/formatDate';
+import { AUTHORS, CATEGORIES } from '@/lib/article';
+import { AuthorAvatar } from '@/components/AuthorAvatar';
+import { Icon, faBluesky, faCalendarDay, faChevronRight, faGithub, faXTwitter } from '@rivet-gg/icons';
+import clsx from 'clsx';
+import * as mdxComponents from '@/components/mdx';
+
+export async function getStaticPaths() {
+	const posts = await getCollection('posts');
+
+	// Import all post images eagerly
+	const images = import.meta.glob<{ default: ImageMetadata }>(
+		'/src/content/posts/*/image.{png,jpg,gif}',
+		{ eager: true }
+	);
+
+	return posts
+		.filter((post) => post.data.category !== 'changelog')
+		.map((entry) => {
+			const slug = entry.id.replace(/\/page$/, '');
+			const imagePath = Object.keys(images).find((p) => p.includes(slug));
+			const image = imagePath ? images[imagePath].default : null;
+			return {
+				params: { slug },
+				props: { entry, image },
+			};
+		});
+}
+
+const { entry, image } = Astro.props;
+const { Content, headings } = await render(entry);
+
+const slug = entry.id.replace(/\/page$/, '');
+const author = AUTHORS[entry.data.author];
+const category = { ...CATEGORIES[entry.data.category], id: entry.data.category };
+
+// Get title from first h1 heading
+const title = headings.find((h) => h.depth === 1)?.text || slug;
+const description = entry.data.description || '';
+
+// Build table of contents
+const tableOfContents = headings
+	.filter((h) => h.depth === 2 || h.depth === 3)
+	.reduce((acc, h) => {
+		if (h.depth === 2) {
+			acc.push({ title: h.text, id: h.slug, children: [] });
+		} else if (acc.length > 0) {
+			acc[acc.length - 1].children.push({ title: h.text, id: h.slug, children: [] });
+		}
+		return acc;
+	}, [] as any[]);
+
+const isTechnical = category.name === 'Technical' || category.name === 'Guide';
+
+// Load other articles
+const allPosts = await getCollection('posts');
+const filteredOtherPosts = allPosts
+	.filter((p) => p.id !== entry.id)
+	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime())
+	.slice(0, 3);
+
+// Render each to extract title from headings
+const otherArticles = await Promise.all(
+	filteredOtherPosts.map(async (p) => {
+		const s = p.id.replace(/\/page$/, '');
+		const cat = { ...CATEGORIES[p.data.category], id: p.data.category };
+		const { headings: h } = await render(p);
+		const t = h.find((x) => x.depth === 1)?.text || s;
+		return { slug: s, title: t, category: cat, published: p.data.published };
+	})
+);
+---
+
+<BlogLayout
+	title={title}
+	description={description}
+	canonicalUrl={`https://rivet.gg/blog/${slug}/`}
+	ogImage={image?.src}
+	publishedTime={entry.data.published.toISOString()}
+	keywords={entry.data.keywords}
+>
+	<div
+		class={clsx('mx-auto mt-20 w-full max-w-6xl px-4 md:mt-32', {
+			'max-w-[1440px]': isTechnical,
+		})}
+		style="--header-height: 5rem;"
+	>
+		<ul class="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
+			<li><a href="/blog/">Blog</a></li>
+			<li class="flex items-center"><Icon className="h-2.5 w-auto" icon={faChevronRight} /></li>
+			<li>{category.name}</li>
+			<li class="flex items-center"><Icon className="h-2.5 w-auto" icon={faChevronRight} /></li>
+			<li class="text-foreground font-semibold">{title}</li>
+		</ul>
+		<div class="flex flex-col gap-8 pb-6 lg:flex-row">
+			<aside class="order-1 mt-2 flex min-w-0 max-w-s flex-1 flex-col gap-2">
+				<div class="top-header sticky pt-2">
+					<p class="mb-2 text-sm font-semibold">Posted by</p>
+					<div class="mb-4 flex items-center gap-2">
+						<AuthorAvatar className="mt-1 size-14" name={author.name} avatarSrc={author.avatar.src} client:load />
+						<div class="flex flex-col">
+							<h3 class="font-bold">{author.name}</h3>
+							<p class="text-muted-foreground text-sm">{author.role}</p>
+							<p class="flex gap-2 text-xs text-muted-foreground mt-1">
+								{(author.socials?.twitter || author.url) && (
+									<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer">
+										<Icon icon={faXTwitter} />
+									</a>
+								)}
+								{author.socials?.bluesky && (
+									<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer">
+										<Icon icon={faBluesky} />
+									</a>
+								)}
+								{author.socials?.github && (
+									<a href={author.socials.github} target="_blank" rel="noopener noreferrer">
+										<Icon icon={faGithub} />
+									</a>
+								)}
+							</p>
+						</div>
+					</div>
+					<div class="text-muted-foreground mb-6 flex items-center gap-2 text-sm">
+						<Icon icon={faCalendarDay} />
+						<time class="text-sm">{formatTimestamp(entry.data.published)}</time>
+					</div>
+					<p class="mb-2 hidden text-sm font-semibold lg:block">Other articles</p>
+					<ul class="text-muted-foreground hidden list-disc pl-5 text-sm lg:block">
+						{otherArticles.map((article) => (
+							<li class="py-1">
+								<a href={article.category.id === 'changelog' ? `/changelog/${article.slug}/` : `/blog/${article.slug}/`}>
+									{article.title || article.slug}
+								</a>
+							</li>
+						))}
+					</ul>
+				</div>
+			</aside>
+			<Prose
+				as="article"
+				className={clsx('order-3 mt-4 w-full flex-shrink-0 lg:order-2', {
+					'xl:max-w-[1000px]': isTechnical,
+					'max-w-prose': !isTechnical,
+				})}
+			>
+				{image && (
+					<img src={image.src} alt="Promo Image" class="rounded-xl border border-white/10" />
+				)}
+				<Content components={mdxComponents} />
+				<ArticleSocials title={title} client:load />
+			</Prose>
+			<aside class="order-2 min-w-0 max-w-xs flex-1 lg:order-3">
+				<DocsTableOfContents tableOfContents={tableOfContents} client:load />
+			</aside>
+		</div>
+	</div>
+	<Comments
+		className={clsx('mx-auto w-full mb-8', {
+			'xl:max-w-[1000px]': isTechnical,
+			'max-w-prose': !isTechnical,
+		})}
+		client:load
+	/>
+</BlogLayout>

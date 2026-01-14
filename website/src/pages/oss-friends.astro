@@ -1,0 +1,54 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+
+// Fetch OSS friends data at build time
+let items: any[] = [];
+try {
+	const res = await fetch("https://formbricks.com/api/oss-friends");
+	const data = await res.json();
+	items = data.data || [];
+} catch (e) {
+	console.warn("Failed to fetch OSS friends:", e);
+}
+---
+
+<MarketingLayout
+	title="Open Source Friends - Rivet"
+	description="Other companies whose code & culture mirrors that at Rivet."
+	canonicalUrl="https://rivet.gg/oss-friends/"
+>
+	<div class="bg-black">
+		<div class="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
+			<div class="mx-auto max-w-2xl text-center">
+				<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
+					Rivet's{" "}
+					<span class="text-white">
+						Open Source
+					</span>{" "}
+					Friends
+				</h1>
+				<p class="mt-6 text-lg leading-8 text-gray-300">
+					Other companies whose code & culture mirrors that at Rivet.
+				</p>
+			</div>
+
+			<div class="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-2">
+				{items.map((friend: any, index: number) => (
+					<a
+						href={friend.href}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="flex flex-col overflow-hidden bg-[#080808] p-6 border-2 border-[#2B2B2B] hover:border-white/30 transition-colors"
+					>
+						<div class="mb-2 font-display text-xl font-bold">
+							{friend.name}
+						</div>
+						<p class="text-gray-300 mt-0 text-sm">
+							{friend.description}
+						</p>
+					</a>
+				))}
+			</div>
+		</div>
+	</div>
+</MarketingLayout>

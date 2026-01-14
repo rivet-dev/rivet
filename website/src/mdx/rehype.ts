@@ -106,7 +106,9 @@ function rehypeShiki() {
 						theme: theme.name,
 						transformers,
 					});
-					textNode.value = result;
+					// Store the highlighted HTML in a property instead of the text node
+					// This prevents MDX from interpreting the HTML as JSX
+					node.properties.highlightedCode = result;
 				} catch (error) {
 					console.error("[rehypeShiki] Error highlighting code:", error);
 				}

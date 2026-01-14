@@ -1,6 +1,5 @@
 import { Button } from "@/components/Button";
 import { AnimatePresence, motion } from "framer-motion";
-import Image from "next/image";
 import { useState } from "react";
 
 import imgBackendEditor from "@/images/product/backend-editor.png";
@@ -121,8 +120,7 @@ function ProductPageContents({ page, scale }) {
 			</p>
 			<div className="flex flex-grow items-center justify-center overflow-hidden">
 				<div className="flex h-full items-center justify-center">
-					<Image
-						src={page.image}
+					<img src={page.image}
 						alt={`${page.name} Image`}
 						className="max-h-full w-auto rounded border-2 border-cream-100/10 object-contain"
 						width={500}

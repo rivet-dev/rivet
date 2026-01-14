@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 export function LandingHeader() {
 	const [isScrolled, setIsScrolled] = useState(false);
@@ -29,43 +28,39 @@ export function LandingHeader() {
 		>
 			<div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
 				<div className="flex h-20 items-center justify-between">
-					<Link href="/" className="flex items-center gap-2">
+					<a href="/" className="flex items-center gap-2">
 						<svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#FF4500' }}>
 							<path d="M4 4H20V12H4V4Z" fill="currentColor" />
 							<path d="M4 14H10V20H4V14Z" fill="currentColor" />
 							<path d="M14 14H20V20H14V14Z" fill="currentColor" />
 						</svg>
 						<span className="font-heading text-xl font-bold" style={{ color: '#FAFAFA' }}>Rivet</span>
-					</Link>
+					</a>
 					<nav className="hidden md:flex items-center gap-6">
-						<Link
-							href="/docs"
+						<a href="/docs"
 							className="text-sm font-medium transition-colors"
 							style={{ color: '#A0A0A0' }}
 						>
 							Docs
-						</Link>
-						<Link
-							href="/blog"
+						</a>
+						<a href="/blog"
 							className="text-sm font-medium transition-colors"
 							style={{ color: '#A0A0A0' }}
 						>
 							Blog
-						</Link>
-						<Link
-							href="https://github.com/rivet-gg/rivet"
+						</a>
+						<a href="https://github.com/rivet-gg/rivet"
 							className="text-sm font-medium transition-colors"
 							style={{ color: '#A0A0A0' }}
 						>
 							GitHub →
-						</Link>
-						<Link
-							href="/docs/quickstart/"
+						</a>
+						<a href="/docs/quickstart/"
 							className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 hover:bg-orange-600"
 							style={{ backgroundColor: '#FF4500' }}
 						>
 							Get Started
-						</Link>
+						</a>
 					</nav>
 					<div className="md:hidden">
 						<button style={{ color: '#A0A0A0' }}>

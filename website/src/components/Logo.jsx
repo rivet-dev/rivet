@@ -1,19 +1,16 @@
-import Image from "next/image";
-
-import textBlack from "@/images/rivet-logos/icon-black.svg";
+import textBlack from "@/images/rivet-logos/icon-text-black.svg";
+import textWhite from "@/images/rivet-logos/icon-text-white.svg";
 
 export function Logo({ ...props }) {
 	return (
 		<div {...props}>
-			<Image
-				src={textBlack}
+			<img src={textBlack.src}
 				alt="Rivet"
 				className="h-full w-auto dark:hidden"
 			/>
-			<Image
-				src={textWhite}
+			<img src={textWhite.src}
 				alt="Rivet"
-				className="light:hidden h-full w-auto"
+				className="hidden dark:block h-full w-auto"
 			/>
 		</div>
 	);
