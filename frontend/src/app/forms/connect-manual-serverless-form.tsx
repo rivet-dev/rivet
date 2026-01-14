@@ -36,11 +36,31 @@ import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
-const endpointSchema = z
+export const endpointSchema = z
 	.string()
 	.nonempty("Endpoint is required")
-	.url("Please enter a valid URL")
-	.endsWith("/api/rivet", "Endpoint must end with /api/rivet");
+	.url("Please enter a valid URL");
+
+export const configurationSchema = z.object({
+	runnerName: z.string().min(1, "Runner name is required"),
+	datacenters: z
+		.record(z.boolean())
+		.refine(
+			(data) => Object.values(data).some(Boolean),
+			"At least one datacenter must be selected",
+		),
+	headers: z.array(z.tuple([z.string(), z.string()])).default([]),
+	slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
+	maxRunners: z.coerce.number().min(1, "Must be at least 1"),
+	minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
+	runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
+	requestLifespan: z.coerce.number().min(0, "Must be 0 or greater"),
+});
+
+export const deploymentSchema = z.object({
+	success: z.boolean().refine((val) => val, "Connection failed"),
+	endpoint: endpointSchema,
+});
 
 export const stepper = defineStepper(
 	{
@@ -48,21 +68,7 @@ export const stepper = defineStepper(
 		title: "Configure",
 		assist: false,
 		next: "Next",
-		schema: z.object({
-			plan: z.string().min(1, "Please select a Vercel plan"),
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenters: z
-				.record(z.boolean())
-				.refine(
-					(data) => Object.values(data).some(Boolean),
-					"At least one datacenter must be selected",
-				),
-			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
-			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
-		}),
+		schema: configurationSchema,
 	},
 	{
 		id: "step-2",
@@ -76,10 +82,7 @@ export const stepper = defineStepper(
 		title: "Deploy to Vercel",
 		assist: true,
 		next: "Done",
-		schema: z.object({
-			success: z.boolean().refine((val) => val, "Connection failed"),
-			endpoint: endpointSchema,
-		}),
+		schema: deploymentSchema,
 	},
 );
 
@@ -163,6 +166,7 @@ export const MinRunners = ({ className }: { className?: string }) => {
 							type="number"
 							{...field}
 							value={field.value || ""}
+							min={0}
 						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
@@ -189,6 +193,7 @@ export const MaxRunners = ({ className }: { className?: string }) => {
 							type="number"
 							{...field}
 							value={field.value || ""}
+							min={0}
 						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
@@ -218,6 +223,7 @@ export const SlotsPerRunner = ({ className }: { className?: string }) => {
 							type="number"
 							{...field}
 							value={field.value || ""}
+							min={0}
 						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
@@ -240,7 +246,12 @@ export const RunnerMargin = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Runner Margin</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						The number of extra runners to keep running to handle
@@ -265,7 +276,12 @@ export const RequestLifespan = ({ className }: { className?: string }) => {
 						Request Lifespan (seconds)
 					</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						The maximum duration (in seconds) that a request can run
@@ -472,12 +488,13 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 				<motion.div
 					layoutId="msg"
 					className={cn(
-						"text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-center",
-						isSuccess && "text-primary-foreground",
-						isError && "text-destructive-foreground",
+						"border rounded-md text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-safe-center transition-colors p-4",
+						isSuccess && "text-primary-foreground border-primary",
+						(isError || isRefetchError || isLoadingError) &&
+							"text-destructive-foreground border-destructive",
 					)}
 					initial={{ height: 0, opacity: 0.5 }}
-					animate={{ height: "8rem", opacity: 1 }}
+					animate={{ minHeight: "8rem", height: "auto", opacity: 1 }}
 				>
 					{isSuccess ? (
 						<>
@@ -504,17 +521,6 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 									provider={provider}
 								/>
 							) : null}
-							<p>
-								Endpoint{" "}
-								<a
-									className="underline"
-									href={endpoint}
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									{endpoint}
-								</a>
-							</p>
 						</div>
 					) : (
 						<div className="flex flex-col items-center gap-2">

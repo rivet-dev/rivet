@@ -170,7 +170,7 @@ function StepPanel<const Steps extends Step[]>({
 	stepper,
 	step,
 	content,
-	showPrevious,
+	showPrevious = true,
 	showControls = true,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
@@ -186,7 +186,7 @@ function StepPanel<const Steps extends Step[]>({
 			{showControls ? (
 				<Stepper.Controls>
 					{step.assist ? <NeedHelpButton /> : null}
-					{showPrevious ? (
+					{showPrevious && !stepper.isFirst ? (
 						<Button
 							type="button"
 							variant="outline"

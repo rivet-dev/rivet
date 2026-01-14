@@ -5,16 +5,23 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
+import type { ComponentProps, ReactNode } from "react";
 import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
-import type { DialogContentProps } from "@/components";
-import { type Region, useEngineCompatDataProvider } from "@/components/actors";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+	type DialogContentProps,
+} from "@/components";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { queryClient } from "@/queries/global";
 import { EnvVariables } from "../env-variables";
 import { StepperForm } from "../forms/stepper-form";
-import { useSelectedDatacenter } from "./connect-manual-serverfull-frame";
+import { useEndpoint } from "./connect-manual-serverfull-frame";
 
 const stepper = defineStepper(
 	{
@@ -22,21 +29,7 @@ const stepper = defineStepper(
 		title: "Configure",
 		assist: false,
 		next: "Next",
-		schema: z.object({
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenters: z
-				.record(z.boolean())
-				.refine(
-					(data) => Object.values(data).some(Boolean),
-					"At least one datacenter must be selected",
-				),
-			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-			maxRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
-			requestLifespan: z.coerce.number().min(0, "Must be 0 or greater"),
-		}),
+		schema: ConnectServerlessForm.configurationSchema,
 	},
 	{
 		id: "step-2",
@@ -49,23 +42,18 @@ const stepper = defineStepper(
 		id: "step-3",
 		title: "Confirm Connection",
 		assist: false,
-		schema: z.object({
-			endpoint: z
-				.string()
-				.nonempty("Endpoint is required")
-				.url("Please enter a valid URL"),
-			success: z.boolean().refine((v) => v === true, {
-				message: "Runner must be connected to proceed",
-			}),
-		}),
+		schema: ConnectServerlessForm.deploymentSchema,
 		next: "Add",
 	},
 );
 
-interface ConnectManualServerlessFrameContentProps extends DialogContentProps {}
+interface ConnectManualServerlessFrameContentProps extends DialogContentProps {
+	provider?: string;
+}
 
 export default function ConnectManualServerlessFrameContent({
 	onClose,
+	provider,
 }: ConnectManualServerlessFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
@@ -76,24 +64,28 @@ export default function ConnectManualServerlessFrameContent({
 		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
-	return <FormStepper onClose={onClose} datacenters={datacenters} />;
+	return (
+		<FormStepper
+			onClose={onClose}
+			datacenters={datacenters}
+			provider={provider}
+		/>
+	);
 }
 
 function FormStepper({
 	onClose,
 	datacenters,
+	provider,
 }: {
 	onClose?: () => void;
-	datacenters: Region[];
+	datacenters: Rivet.Datacenter[];
+	provider?: string;
 }) {
-	const provider = useEngineCompatDataProvider();
-
-	const { data } = useSuspenseInfiniteQuery({
-		...provider.runnerConfigsQueryOptions(),
-	});
+	const dataProvider = useEngineCompatDataProvider();
 
 	const { mutateAsync } = useMutation({
-		...provider.upsertRunnerConfigMutationOptions(),
+		...dataProvider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
 			confetti({
 				angle: 60,
@@ -107,7 +99,7 @@ function FormStepper({
 			});
 
 			await queryClient.invalidateQueries(
-				provider.runnerConfigsQueryOptions(),
+				dataProvider.runnerConfigsQueryOptions(),
 			);
 			onClose?.();
 		},
@@ -116,44 +108,13 @@ function FormStepper({
 		<StepperForm
 			{...stepper}
 			onSubmit={async ({ values }) => {
-				let existing: Record<string, Rivet.RunnerConfig> = {};
-				try {
-					const runnerConfig = await queryClient.fetchQuery(
-						provider.runnerConfigQueryOptions({
-							name: values.runnerName,
-						}),
-					);
-					existing = runnerConfig?.datacenters || {};
-				} catch {
-					existing = {};
-				}
-
-				const selectedDatacenters = Object.entries(values.datacenters)
-					.filter(([, selected]) => selected)
-					.map(([id]) => id);
-
-				const config = {
-					serverless: {
-						url: values.endpoint,
-						maxRunners: values.maxRunners,
-						slotsPerRunner: values.slotsPerRunner,
-						runnersMargin: values.runnerMargin,
-						requestLifespan: values.requestLifespan,
-						headers: Object.fromEntries(
-							values.headers.map(([key, value]) => [key, value]),
-						),
+				const payload = await buildServerlessConfig(
+					dataProvider,
+					values,
+					{
+						provider,
 					},
-					metadata: {
-						provider: "custom",
-					},
-				};
-
-				const payload = {
-					...existing,
-					...Object.fromEntries(
-						selectedDatacenters.map((dc) => [dc, config]),
-					),
-				};
+				);
 
 				await mutateAsync({
 					name: values.runnerName,
@@ -176,23 +137,64 @@ function FormStepper({
 			content={{
 				"step-1": () => <Step1 />,
 				"step-2": () => <Step2 />,
-				"step-3": () => <Step3 />,
+				"step-3": () => <Step3 provider={provider} />,
 			}}
 		/>
 	);
 }
 
+export const buildServerlessConfig = async (
+	dataProvider: ReturnType<typeof useEngineCompatDataProvider>,
+	values: z.infer<
+		typeof ConnectServerlessForm.configurationSchema &
+			typeof ConnectServerlessForm.deploymentSchema
+	>,
+	{ provider }: { provider?: string } = {},
+): Promise<Record<string, Rivet.RunnerConfig>> => {
+	let existing: Record<string, Rivet.RunnerConfig> = {};
+	try {
+		const runnerConfig = await queryClient.fetchQuery(
+			dataProvider.runnerConfigQueryOptions({
+				name: values.runnerName,
+			}),
+		);
+		existing = runnerConfig?.datacenters || {};
+	} catch {
+		existing = {};
+	}
+
+	const selectedDatacenters = Object.entries(values.datacenters)
+		.filter(([, selected]) => selected)
+		.map(([id]) => id);
+
+	const config = {
+		serverless: {
+			url: values.endpoint,
+			maxRunners: values.maxRunners,
+			slotsPerRunner: values.slotsPerRunner,
+			runnersMargin: values.runnerMargin,
+			requestLifespan: values.requestLifespan,
+			headers: Object.fromEntries(
+				values.headers.map(([key, value]) => [key, value]),
+			),
+		},
+		metadata: {
+			provider: provider || "custom",
+		},
+	};
+
+	const payload = {
+		...existing,
+		...Object.fromEntries(selectedDatacenters.map((dc) => [dc, config])),
+	};
+
+	return payload;
+};
+
 function Step1() {
 	return (
 		<div className="space-y-4">
-			<ConnectServerlessForm.RunnerName />
-			<ConnectServerlessForm.Datacenters />
-			<ConnectServerlessForm.Headers />
-			<ConnectServerlessForm.SlotsPerRunner />
-			<ConnectServerlessForm.MaxRunners />
-			<ConnectServerlessForm.MinRunners />
-			<ConnectServerlessForm.RunnerMargin />
-			<ConnectServerlessForm.RequestLifespan />
+			<Configuration />
 		</div>
 	);
 }
@@ -203,18 +205,75 @@ function Step2() {
 			<p>Set the following environment variables.</p>
 			<EnvVariables
 				kind="serverless"
-				endpoint={useSelectedDatacenter()}
+				endpoint={useEndpoint()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>
 		</>
 	);
 }
 
-function Step3() {
+function Step3({ provider }: { provider?: string }) {
+	const providerDisplayName = provider
+		? provider.charAt(0).toUpperCase() + provider.slice(1)
+		: undefined;
 	return (
 		<>
 			<ConnectServerlessForm.Endpoint placeholder="https://your-serverless-endpoint.com/api/rivet" />
-			<ConnectServerlessForm.ConnectionCheck provider="Your serverless provider" />
+			<ConnectServerlessForm.ConnectionCheck
+				provider={providerDisplayName || "Your serverless provider"}
+			/>
 		</>
+	);
+}
+
+export function Configuration({
+	runnerName = true,
+	datacenters = true,
+	headers = true,
+	slotsPerRunner = true,
+	minRunners = true,
+	maxRunners = true,
+	runnerMargin = true,
+	requestLifespan = true,
+}: {
+	runnerName?: boolean;
+	datacenters?: boolean;
+	headers?: boolean;
+	slotsPerRunner?: boolean;
+	minRunners?: boolean;
+	maxRunners?: boolean;
+	runnerMargin?: boolean;
+	requestLifespan?: boolean;
+}) {
+	return (
+		<>
+			{runnerName && <ConnectServerlessForm.RunnerName />}
+			{datacenters && <ConnectServerlessForm.Datacenters />}
+			{headers && <ConnectServerlessForm.Headers />}
+			{slotsPerRunner && <ConnectServerlessForm.SlotsPerRunner />}
+			{minRunners && <ConnectServerlessForm.MinRunners />}
+			{maxRunners && <ConnectServerlessForm.MaxRunners />}
+			{runnerMargin && <ConnectServerlessForm.RunnerMargin />}
+			{requestLifespan && <ConnectServerlessForm.RequestLifespan />}
+		</>
+	);
+}
+
+export function ConfigurationAccordion({
+	prefixFields,
+	...props
+}: ComponentProps<typeof Configuration> & { prefixFields?: ReactNode }) {
+	return (
+		<Accordion type="single" collapsible>
+			<AccordionItem value="item-1">
+				<AccordionTrigger className="text-sm">
+					Advanced
+				</AccordionTrigger>
+				<AccordionContent className="space-y-4 px-1 pt-2">
+					{prefixFields}
+					<Configuration {...props} />
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
 	);
 }

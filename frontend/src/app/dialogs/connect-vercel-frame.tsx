@@ -1,50 +1,24 @@
 import { faVercel, Icon } from "@rivet-gg/icons";
+import type { Rivet } from "@rivetkit/engine-api-full";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
-import { match } from "ts-pattern";
-import type z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-	type DialogContentProps,
-	Frame,
-	getConfig,
-} from "@/components";
+import { type DialogContentProps, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
-import { cloudEnv } from "@/lib/env";
-import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
-import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
+import { StepperForm } from "../forms/stepper-form";
+import { buildServerlessConfig, ConfigurationAccordion } from "./connect-manual-serverless-frame";
 
 const { stepper } = ConnectVercelForm;
-
-type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
 export const VERCEL_SERVERLESS_MAX_DURATION = 300;
 
 interface CreateProjectFrameContentProps extends DialogContentProps {}
-
-const useEndpoint = () => {
-	return match(__APP_TYPE__)
-		.with("cloud", () => {
-			return cloudEnv().VITE_APP_API_URL;
-		})
-		.with("engine", () => {
-			return getConfig().apiUrl;
-		})
-		.otherwise(() => {
-			throw new Error("Not in a valid context");
-		});
-};
 
 export default function CreateProjectFrameContent({
 	onClose,
@@ -80,12 +54,9 @@ function FormStepper({
 	onClose,
 }: {
 	onClose?: () => void;
-	datacenters: Region[];
+	datacenters: Rivet.Datacenter[];
 }) {
 	const provider = useEngineCompatDataProvider();
-	const token = usePublishableToken();
-	const endpoint = useEndpoint();
-	const namespace = provider.engineNamespace;
 
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
@@ -110,15 +81,8 @@ function FormStepper({
 		<StepperForm
 			{...stepper}
 			content={{
-				// "initial-info": () => <StepInitialInfo />,
 				"api-route": () => <StepApiRoute />,
-				frontend: () => (
-					<StepFrontend
-						token={token}
-						endpoint={endpoint}
-						namespace={namespace}
-					/>
-				),
+				frontend: () => <StepFrontend />,
 				variables: () => (
 					<>
 						<p>
@@ -131,29 +95,15 @@ function FormStepper({
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
-				const selectedDatacenters = Object.entries(values.datacenters)
-					.filter(([, selected]) => selected)
-					.map(([id]) => id);
-
-				const config = {
-					serverless: {
-						url: values.endpoint,
-						maxRunners: values.maxRunners,
-						slotsPerRunner: values.slotsPerRunner,
-						runnersMargin: values.runnerMargin,
-						requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
-						headers: Object.fromEntries(
-							values.headers.map(([key, value]) => [key, value]),
-						),
-					},
-					metadata: {
-						provider: "vercel",
-					},
-				};
-
-				const payload = Object.fromEntries(
-					selectedDatacenters.map((dc) => [dc, config]),
-				);
+				const payload =
+					await buildServerlessConfig(
+						provider,
+						{
+							...values,
+							requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5,
+						},
+						{ provider: "vercel" },
+					);
 
 				await mutateAsync({
 					name: values.runnerName,
@@ -177,51 +127,13 @@ function FormStepper({
 	);
 }
 
-// function StepInitialInfo() {
-// 	return (
-// 		<>
-// 			<ConnectVercelForm.Plan />
-// 			<Accordion type="single" collapsible>
-// 				<AccordionItem value="item-1">
-// 					<AccordionTrigger className="text-sm">
-// 						Advanced
-// 					</AccordionTrigger>
-// 					<AccordionContent className="space-y-4 px-1 pt-2">
-// 						<ConnectVercelForm.RunnerName />
-// 						<ConnectVercelForm.Datacenters />
-// 						<ConnectVercelForm.Headers />
-// 						<ConnectVercelForm.SlotsPerRunner />
-// 						<ConnectVercelForm.MinRunners />
-// 						<ConnectVercelForm.MaxRunners />
-// 						<ConnectVercelForm.RunnerMargin />
-// 					</AccordionContent>
-// 				</AccordionItem>
-// 			</Accordion>
-// 		</>
-// 	);
-// }
-
 function StepApiRoute() {
 	const plan = useWatch({ name: "plan" });
 	return <ConnectVercelForm.IntegrationCode plan={plan || "hobby"} />;
 }
 
-function StepFrontend({
-	token,
-	endpoint,
-	namespace,
-}: {
-	token: string;
-	endpoint: string;
-	namespace: string;
-}) {
-	return (
-		<ConnectVercelForm.FrontendIntegrationCode
-			token={token}
-			endpoint={endpoint}
-			namespace={namespace}
-		/>
-	);
+function StepFrontend() {
+	return <ConnectVercelForm.FrontendIntegrationCode />;
 }
 
 function StepDeploy() {
@@ -232,36 +144,25 @@ function StepDeploy() {
 			</p>
 			<div className="mt-2">
 				<ConnectVercelForm.Endpoint />
-				<Accordion type="single" collapsible>
-					<AccordionItem value="item-1">
-						<AccordionTrigger className="text-sm">
-							Advanced
-						</AccordionTrigger>
-						<AccordionContent className="space-y-4 px-1 pt-2">
-							<ConnectVercelForm.RunnerName />
-							<ConnectVercelForm.Datacenters />
-							<ConnectVercelForm.Headers />
-							<ConnectVercelForm.SlotsPerRunner />
-							<ConnectVercelForm.MinRunners />
-							<ConnectVercelForm.MaxRunners />
-							<ConnectVercelForm.RunnerMargin />
-						</AccordionContent>
-					</AccordionItem>
-				</Accordion>
+				<ConfigurationAccordion
+					requestLifespan={false}
+					prefixFields={<ConnectVercelForm.Plan />}
+				/>
+				<p className="text-muted-foreground text-sm">
+					Need help deploying? See{" "}
+					<a
+						href="https://vercel.com/docs/deployments"
+						target="_blank"
+						rel="noreferrer"
+						className="underline"
+					>
+						Vercel's deployment documentation
+					</a>
+					.
+				</p>
 			</div>
+
 			<ConnectVercelForm.ConnectionCheck provider="Vercel" />
-			<p className="text-muted-foreground text-sm">
-				Need help deploying? See{" "}
-				<a
-					href="https://vercel.com/docs/deployments"
-					target="_blank"
-					rel="noreferrer"
-					className="underline"
-				>
-					Vercel's deployment documentation
-				</a>
-				.
-			</p>
 		</>
 	);
 }
