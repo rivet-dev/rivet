@@ -977,7 +977,7 @@ impl Database for DatabaseKv {
 	}
 
 	/// Returns the first incomplete workflow with the given name and tags, first meaning the one with the
-	/// lowest id value (interpreted as u128) because its in a KV store. There is no way to get any other
+	/// lowest id value (by internal representation) because its in a KV store. There is no way to get any other
 	/// workflow besides the first.
 	#[tracing::instrument(skip_all, fields(%workflow_name))]
 	async fn find_workflow(
