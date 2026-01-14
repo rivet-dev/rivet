@@ -59,7 +59,7 @@ export function buildServerlessRouter(
 			// configuring an endpoint indicates you want to assert the
 			// incoming serverless requests.
 			if (config.endpoint) {
-				if (endpoint !== config.endpoint) {
+				if (!endpointsMatch(endpoint, config.endpoint)) {
 					throw new EndpointMismatch(config.endpoint, endpoint);
 				}
 
@@ -120,4 +120,43 @@ export function buildServerlessRouter(
 			),
 		);
 	});
+}
+
+/**
+ * Normalizes a URL for comparison by extracting protocol, host, port, and pathname.
+ * Normalizes 127.0.0.1 and 0.0.0.0 to localhost for consistent comparison.
+ * Returns null if the URL is invalid.
+ */
+export function normalizeEndpointUrl(url: string): string | null {
+	try {
+		const parsed = new URL(url);
+		// Normalize pathname by removing trailing slash (except for root)
+		const pathname =
+			parsed.pathname === "/" ? "/" : parsed.pathname.replace(/\/+$/, "");
+		// Normalize loopback addresses to localhost
+		const hostname =
+			parsed.hostname === "127.0.0.1" || parsed.hostname === "0.0.0.0"
+				? "localhost"
+				: parsed.hostname;
+		// Reconstruct host with normalized hostname and port
+		const host = parsed.port ? `${hostname}:${parsed.port}` : hostname;
+		// Reconstruct normalized URL with protocol, host, and pathname
+		return `${parsed.protocol}//${host}${pathname}`;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Compares two endpoint URLs after normalization.
+ * Returns true if they match (same protocol, host, port, and path).
+ */
+export function endpointsMatch(a: string, b: string): boolean {
+	const normalizedA = normalizeEndpointUrl(a);
+	const normalizedB = normalizeEndpointUrl(b);
+	if (normalizedA === null || normalizedB === null) {
+		// If either URL is invalid, fall back to string comparison
+		return a === b;
+	}
+	return normalizedA === normalizedB;
 }

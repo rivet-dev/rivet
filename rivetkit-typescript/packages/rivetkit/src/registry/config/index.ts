@@ -213,11 +213,11 @@ export const RegistryConfigSchema = z
 		// Determine serveManager: default to true in dev mode without endpoint, false otherwise
 		const serveManager = config.serveManager ?? (isDevEnv && !endpoint);
 
-		// In dev mode, fall back to localhost if serving manager
+		// In dev mode, fall back to 127.0.0.1 if serving manager
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
 			(isDevEnv && (serveManager || config.serverless.spawnEngine)
-				? `http://localhost:${config.managerPort}`
+				? `http://127.0.0.1:${config.managerPort}`
 				: undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
