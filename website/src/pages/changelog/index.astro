@@ -1,0 +1,110 @@
+---
+import { getCollection, render } from 'astro:content';
+import BlogLayout from '@/layouts/BlogLayout.astro';
+import { formatTimestamp } from '@/lib/formatDate';
+import { AUTHORS, CATEGORIES } from '@/lib/article';
+import { Badge, Button } from '@rivet-gg/components';
+import { AuthorAvatar } from '@/components/AuthorAvatar';
+import { Icon, faRss } from '@rivet-gg/icons';
+
+const posts = await getCollection('posts');
+
+// Import all post images eagerly
+const images = import.meta.glob<{ default: ImageMetadata }>(
+	'/src/content/posts/*/image.{png,jpg,gif}',
+	{ eager: true }
+);
+
+// Filter only changelog posts and sort by date
+const filteredPosts = posts
+	.filter((post) => post.data.category === 'changelog')
+	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime());
+
+// Render each post to extract title from headings
+const changelogPosts = await Promise.all(
+	filteredPosts.map(async (post) => {
+		const slug = post.id.replace(/\/page$/, '');
+		const imagePath = Object.keys(images).find((p) => p.includes(slug));
+		const image = imagePath ? images[imagePath].default : null;
+		const author = AUTHORS[post.data.author];
+		const category = { ...CATEGORIES[post.data.category], id: post.data.category };
+
+		// Get title from first h1 heading
+		const { headings } = await render(post);
+		const title = headings.find((h) => h.depth === 1)?.text || slug;
+
+		return { ...post, slug, image, author, category, title };
+	})
+);
+---
+
+<BlogLayout title="Changelog - Rivet">
+	<div class="mx-auto mt-20 w-full max-w-6xl px-8 md:mt-32" style="--header-height: 5rem;">
+		<div class="mt-8 flex w-full items-center justify-between">
+			<h1 class="text-6xl font-bold">Changelog</h1>
+			<Button asChild>
+				<a href="/rss/feed.xml">
+					<Icon icon={faRss} className="mr-2" />
+					RSS Feed
+				</a>
+			</Button>
+		</div>
+		<div class="mb-8 mt-4 flex items-center justify-start">
+			<div class="bg-card rounded-md border">
+				<a
+					href="/blog/"
+					class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+				>
+					All Posts
+				</a>
+				<a
+					href="/changelog/"
+					class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+				>
+					Changelog
+				</a>
+			</div>
+		</div>
+		<div class="mb-8 mt-8 grid grid-cols-1 gap-8 md:grid-cols-3">
+			{changelogPosts.map((article) => (
+				<a href={`/changelog/${article.slug}/`} class="size-full">
+					<article class="bg-card hover:border-primary flex size-full flex-col items-start justify-between rounded-md border p-4 transition-colors">
+						<div>
+							{article.image && (
+								<div class="relative w-full">
+									<img
+										src={article.image.src}
+										alt="hero"
+										class="aspect-[2/1] w-full rounded-md border object-cover"
+									/>
+								</div>
+							)}
+							<div class="mt-3 flex items-center gap-x-3 text-xs">
+								<time datetime={article.data.published.toISOString()} class="text-muted-foreground">
+									{formatTimestamp(article.data.published)}
+								</time>
+								<Badge variant="outline">{article.category.name}</Badge>
+							</div>
+							<div class="group relative">
+								<h3 class="mt-2 text-lg font-bold leading-6">
+									{article.title}
+								</h3>
+								<p class="text-muted-foreground mt-3 line-clamp-3 text-sm leading-6">
+									{article.data.description || ''}
+								</p>
+							</div>
+						</div>
+						<div class="max-w-xl">
+							<div class="relative mt-4 flex items-center gap-x-4">
+								<AuthorAvatar name={article.author.name} avatarSrc={article.author.avatar.src} client:load />
+								<div class="text-sm">
+									<div class="font-semibold">{article.author.name}</div>
+								</div>
+							</div>
+						</div>
+					</article>
+				</a>
+			))}
+		</div>
+	</div>
+</BlogLayout>

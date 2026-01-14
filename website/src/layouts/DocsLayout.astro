@@ -1,0 +1,21 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { Header } from '@/components/v2/Header';
+
+interface Props {
+	title: string;
+	description?: string;
+	canonicalUrl?: string;
+}
+
+const { title, description, canonicalUrl } = Astro.props;
+---
+
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
+	<Header variant="full-width" showDocsTabs={true} client:load />
+	<div class="w-full relative z-10 font-sans">
+		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs-no-sidebar lg:grid-cols-docs" style="--header-height: 3.5rem;">
+			<slot />
+		</div>
+	</div>
+</BaseLayout>

@@ -1,0 +1,47 @@
+---
+import { getCollection, render } from 'astro:content';
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import { RedesignedHero } from '@/components/marketing/sections/RedesignedHero';
+import { StatsSection } from '@/components/marketing/sections/StatsSection';
+import { ConceptSection } from '@/components/marketing/sections/ConceptSection';
+import { CodeWalkthrough } from '@/components/marketing/sections/CodeWalkthrough';
+import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
+import { FeaturesSection } from '@/components/marketing/sections/FeaturesSection';
+import { SolutionsSection } from '@/components/marketing/sections/SolutionsSection';
+import { HostingSection } from '@/components/marketing/sections/HostingSection';
+import { IntegrationsSection } from '@/components/marketing/sections/IntegrationsSection';
+import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
+import { ScrollObserver } from '@/components/ScrollObserver';
+
+// Get latest changelog title
+const posts = await getCollection('posts');
+const changelogEntries = posts.filter((p) => p.data.category === 'changelog');
+const latest = changelogEntries.sort(
+	(a, b) => b.data.published.getTime() - a.data.published.getTime()
+)[0];
+
+let latestChangelogTitle = '';
+if (latest) {
+	const { headings } = await render(latest);
+	latestChangelogTitle = headings.find((h) => h.depth === 1)?.text || '';
+}
+---
+
+<MarketingLayout title="Rivet - Stateful Backends. Finally Solved.">
+	<ScrollObserver client:load>
+		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+			<main>
+				<RedesignedHero latestChangelogTitle={latestChangelogTitle} client:load />
+				<StatsSection client:visible />
+				<ConceptSection client:visible />
+				<CodeWalkthrough client:visible />
+				<FeaturesSection client:visible />
+				<IntegrationsSection client:visible />
+				<ObservabilitySection client:visible />
+				<SolutionsSection client:visible />
+				<HostingSection client:visible />
+				<RedesignedCTA client:visible />
+			</main>
+		</div>
+	</ScrollObserver>
+</MarketingLayout>

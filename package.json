@@ -40,5 +40,11 @@
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@clerk/shared": "3.27.1"
+	},
+	"pnpm": {
+		"overrides": {
+			"react": "19.1.0",
+			"react-dom": "19.1.0"
+		}
 	}
 }

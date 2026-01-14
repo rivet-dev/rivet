@@ -2,7 +2,6 @@
 
 import grainDark from "@/images/effects/grain-dark.png";
 import clsx from "clsx";
-import Link from "next/link";
 
 export function PatternButton({ children, highlight, ...props }) {
 	const Component = props.href ? Link : "button";

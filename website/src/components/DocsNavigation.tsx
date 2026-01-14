@@ -1,6 +1,7 @@
 import { ActiveLink } from "@/components/ActiveLink";
 import { CollapsibleSidebarItem } from "@/components/CollapsibleSidebarItem";
 import { DynamicNavWrapper } from "@/components/DynamicNavWrapper";
+import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
 import routes from "@/generated/routes.json";
 import type { SidebarItem } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
@@ -175,9 +176,11 @@ export function NavLink({
 
 export function DocsNavigation({ sidebar }: { sidebar: SidebarItem[] }) {
 	return (
-		<DynamicNavWrapper className="sticky text-white pl-8 pr-6 py-6 overflow-y-auto">
-			<Tree pages={sidebar} />
-		</DynamicNavWrapper>
+		<NavigationStateProvider>
+			<DynamicNavWrapper className="sticky text-white pl-8 pr-6 py-6 overflow-y-auto">
+				<Tree pages={sidebar} />
+			</DynamicNavWrapper>
+		</NavigationStateProvider>
 	);
 }
 

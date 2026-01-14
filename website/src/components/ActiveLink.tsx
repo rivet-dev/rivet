@@ -1,34 +1,40 @@
 "use client";
-import Link, { type LinkProps } from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { ReactNode, AnchorHTMLAttributes } from "react";
 import { normalizePath } from "@/lib/normalizePath";
+import { useState, useEffect } from "react";
 
-export interface ActiveLinkProps<T> extends LinkProps<T> {
+export interface ActiveLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 	isActive?: boolean;
 	children?: ReactNode;
 	tree?: ReactNode;
 	includeChildren?: boolean;
 }
 
-export function ActiveLink<T>({
+export function ActiveLink({
 	isActive: isActiveOverride,
 	tree,
 	includeChildren,
+	children,
 	...props
-}: ActiveLinkProps<T>) {
-	const pathname = usePathname() || "";
+}: ActiveLinkProps) {
+	const [pathname, setPathname] = useState("");
+
+	useEffect(() => {
+		setPathname(window.location.pathname);
+	}, []);
 
 	const isActive =
 		isActiveOverride ||
-		normalizePath(pathname) === normalizePath(String(props.href)) ||
+		normalizePath(pathname) === normalizePath(String(props.href || "")) ||
 		(includeChildren &&
 			normalizePath(pathname).startsWith(
-				normalizePath(String(props.href)),
+				normalizePath(String(props.href || "")),
 			));
 	return (
 		<>
-			<Link<T> {...props} aria-current={isActive ? "page" : undefined} />
+			<a {...props} aria-current={isActive ? "page" : undefined}>
+				{children}
+			</a>
 			{isActive && tree ? tree : null}
 		</>
 	);

@@ -1,7 +1,5 @@
-"use client";
 import { Icon, faCaretDown, faCaretRight } from "@rivet-gg/icons";
 import { clsx } from "clsx";
-import { useState } from "react";
 
 function getAccordionStyleFromVariant(variant) {
 	if (variant === "minimalist") {
@@ -30,33 +28,67 @@ export function Accordion({
 	description,
 	defaultOpen = false,
 	icon,
-	onChange,
 	variant = "rounded",
 	children,
 }) {
-	const [open, setOpen] = useState(defaultOpen);
-
-	const onClickOpen = (open) => {
-		setOpen(open);
-		if (onChange) {
-			onChange(open);
-		}
-	};
-
 	const { parentClass, coverClass, contentClass } =
 		getAccordionStyleFromVariant(variant);
 
 	return (
-		<div key={title} role="listitem" className={parentClass}>
-			<AccordionCover
-				title={title}
-				description={description}
-				open={open}
-				setOpen={onClickOpen}
-				icon={icon}
-				coverClass={coverClass}
-			/>
-			<div className={clsx(contentClass, !open && "hidden")}>
+		<div
+			role="listitem"
+			className={parentClass}
+			data-accordion-container
+			data-accordion-open={defaultOpen ? "true" : "false"}
+		>
+			<button
+				type="button"
+				data-accordion-trigger
+				className={clsx(
+					"not-prose flex w-full flex-row content-center items-center",
+					coverClass,
+				)}
+				aria-controls={title + "Children"}
+				aria-expanded={defaultOpen}
+			>
+				<div className="mr-0.5">
+					<Icon
+						icon={faCaretRight}
+						data-accordion-icon-closed
+						className={clsx(
+							"h-3 w-3 text-charcole-800 opacity-75 dark:text-cream-100",
+							defaultOpen && "hidden"
+						)}
+					/>
+					<Icon
+						icon={faCaretDown}
+						data-accordion-icon-open
+						className={clsx(
+							"h-3 w-3 text-charcole-800 opacity-75 dark:text-cream-100",
+							!defaultOpen && "hidden"
+						)}
+					/>
+				</div>
+				{icon ? (
+					<div className="h-4 w-4 fill-charcole-800 text-charcole-800 dark:fill-cream-100 dark:text-cream-100">
+						{icon}
+					</div>
+				) : null}
+				<div className="text-left leading-tight">
+					<p className="m-0 font-medium text-charcole-900 dark:text-cream-200">
+						{title}
+					</p>
+					{description ? (
+						<p className="m-0 text-charcole-900 dark:text-cream-200">
+							{description}
+						</p>
+					) : null}
+				</div>
+			</button>
+			<div
+				data-accordion-content
+				className={clsx(contentClass, !defaultOpen && "hidden")}
+			>
 				{children}
 			</div>
 		</div>
@@ -75,50 +107,5 @@ export function AccordionGroup({ children }) {
 		>
 			{children}
 		</div>
-	);
-}
-
-function AccordionCover({
-	title,
-	description,
-	open,
-	setOpen,
-	icon,
-	coverClass,
-}) {
-	// In rounded style, we round the button itself so when a web browser in keyboard navigation mode
-	// highlights the button the highlight will follow the corners.
-	return (
-		<button
-			onClick={() => setOpen(!open)}
-			className={clsx(
-				"not-prose flex w-full flex-row content-center items-center",
-				coverClass,
-			)}
-			aria-controls={title + "Children"}
-			aria-expanded={open}
-		>
-			<div className="mr-0.5">
-				<Icon
-					icon={open ? faCaretDown : faCaretRight}
-					className="h-3 w-3 text-charcole-800 opacity-75 dark:text-cream-100"
-				/>
-			</div>
-			{icon ? (
-				<div className="h-4 w-4 fill-charcole-800 text-charcole-800 dark:fill-cream-100 dark:text-cream-100">
-					{icon}
-				</div>
-			) : null}
-			<div className="text-left leading-tight">
-				<p className="m-0 font-medium text-charcole-900 dark:text-cream-200">
-					{title}
-				</p>
-				{description ? (
-					<p className="m-0 text-charcole-900 dark:text-cream-200">
-						{description}
-					</p>
-				) : null}
-			</div>
-		</button>
 	);
 }

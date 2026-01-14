@@ -1,7 +1,6 @@
 import clsx from "clsx";
 import type { PropsWithChildren } from "react";
 import { Icon, faArrowRight } from "@rivet-gg/icons";
-import Link from "next/link";
 
 interface CardProps extends PropsWithChildren<{ className?: string }> {
 	title?: string;
@@ -60,9 +59,9 @@ export function Card({
 
 	if (href) {
 		return (
-			<Link href={href} className="flex group w-full" target={target}>
+			<a href={href} className="flex group w-full" target={target}>
 				{content}
-			</Link>
+			</a>
 		);
 	}
 

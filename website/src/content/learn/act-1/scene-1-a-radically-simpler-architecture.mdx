@@ -1,6 +1,8 @@
-export const title = "A Radically Simpler Architecture";
-export const act = "Act I";
-export const subtitle = "Why actors eliminate complexity instead of managing it";
+---
+title: "A Radically Simpler Architecture"
+act: "Act I"
+subtitle: "Why actors eliminate complexity instead of managing it"
+---
 
 import {
 	Narrative,
@@ -9,7 +11,7 @@ import {
 	Separator,
 	ActEnd,
 	Image,
-} from "@/app/(v2)/learn/components/mdx";
+} from "@/components/learn/mdx";
 
 import oldArch from "./scene-1/old-arch.png";
 import actorArch from "./scene-1/actor-arch.png";
@@ -36,7 +38,7 @@ Worse, these are bugs you can't unit test for. They're emergent behaviors that o
 
 Yet it's accepted as _the way things must be_. Nobody got fired for adding Kafka, Redis, and RabbitMQ to the stack. The fact that each one brings its own failure modes is assumed to be the growing pains of any successful business.
 
-<Image src={oldArch} alt="Traditional backend architecture with separate layers for web server, cache, database, and message queue" />
+<img src={oldArch.src} alt="Traditional backend architecture with separate layers for web server, cache, database, and message queue" />
 
 <Separator />
 
@@ -70,7 +72,7 @@ They're like mini-servers: they can accept and respond to network requests and e
 
 In addition to performance and complexity benefits, this architecture **eliminates entire categories of bugs by design.** No network to the database means no network partitions. No shared state means no race conditions. No locks means no deadlocks.
 
-<Image src={actorArch} alt="Actor architecture showing compute and state combined in isolated actors" className="max-h-[500px]" />
+<img src={actorArch.src} alt="Actor architecture showing compute and state combined in isolated actors" className="max-h-[500px]" />
 
 ## The 4 Properties That Eliminate Complexity
 
@@ -86,7 +88,7 @@ Debugging becomes straightforward: the actor's state is the single source of tru
 
 As your app grows, new features affect a limited number of actors which have a limited scope. Changes don't ripple through shared state across services or risk breaking unrelated parts of your system.
 
-<Image src={isolatedState} alt="Diagram showing actors with isolated state that cannot be accessed by other processes" className="max-h-[500px]" />
+<img src={isolatedState.src} alt="Diagram showing actors with isolated state that cannot be accessed by other processes" className="max-h-[500px]" />
 
 ### Message-Based Communication
 
@@ -96,7 +98,7 @@ Messages sent to actors are **automatically queued and processed sequentially**.
 
 Crucially, **actors frequently talk to each other** to build larger systems that scale well. We'll be talking a lot about patterns like this in this course.
 
-<Image src={messagePassing} alt="Diagram showing actors communicating through messages and events" className="max-h-[500px]" />
+<img src={messagePassing.src} alt="Diagram showing actors communicating through messages and events" className="max-h-[500px]" />
 
 ### Location Transparency
 
@@ -104,7 +106,7 @@ Actors can run on any machine in a cluster and still **send messages between act
 
 The same code will run whether you have 1 or 1,000 machines without complex network configuration, DNS, or pub/sub systems.
 
-<Image src={locationTransparency} alt="Diagram showing actors communicating across different machines in a cluster" />
+<img src={locationTransparency.src} alt="Diagram showing actors communicating across different machines in a cluster" />
 
 ### Horizontal Scaling
 
@@ -112,7 +114,7 @@ Actors are designed to transparently interact with other actors regardless of wh
 
 Load spreads naturally since actors are small, lightweight units. No complex sharding logic or coordination needed.
 
-<Image src={horizontalScaling} alt="Diagram showing actors distributed across multiple machines for horizontal scaling" className="max-h-[500px]" />
+<img src={horizontalScaling.src} alt="Diagram showing actors distributed across multiple machines for horizontal scaling" className="max-h-[500px]" />
 
 <Separator />
 

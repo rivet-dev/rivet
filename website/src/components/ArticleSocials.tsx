@@ -7,10 +7,15 @@ import {
 	faRssSquare,
 	faXTwitter,
 } from "@rivet-gg/icons";
-import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 
 export function ArticleSocials({ title }) {
-	const pathname = usePathname();
+	const [pathname, setPathname] = useState("");
+
+	useEffect(() => {
+		setPathname(window.location.pathname);
+	}, []);
+
 	const siteUrl = getSiteUrl();
 	const articleUrl = siteUrl + pathname;
 	return (

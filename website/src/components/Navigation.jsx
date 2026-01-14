@@ -1,35 +1,32 @@
 "use client";
+import { usePathname } from "@/hooks/usePathname";
 import routes from "@/generated/routes.json";
 import { faBooks, faCoin, faNewspaper } from "@rivet-gg/icons";
 import clsx from "clsx";
 import { motion } from "framer-motion";
-import Link from "next/link";
 
 import { Button } from "@/components/Button";
 import { useIsInsideMobileNavigation } from "@/components/MobileNavigation";
 import { ActiveSectionMarker } from "@/components/TableOfContents";
 import { Tag } from "@/components/Tag";
-import { usePathname } from "next/navigation";
 import { normalizePath } from "@/lib/normalizePath";
 
 function TopLevelNavItem({ href, target, children }) {
 	return (
 		<li className="lg:hidden">
-			<Link
-				href={href}
+			<a href={href}
 				target={target}
 				className="block py-1 text-sm text-charcole-400 transition hover:text-white"
 			>
 				{children}
-			</Link>
+			</a>
 		</li>
 	);
 }
 
 function NavLink({ href, tag, active, isAnchorLink = false, children }) {
 	return (
-		<Link
-			href={href}
+		<a href={href}
 			aria-current={active ? "page" : undefined}
 			className={clsx(
 				"flex justify-between gap-2 py-1 pr-3 text-sm transition",
@@ -43,7 +40,7 @@ function NavLink({ href, tag, active, isAnchorLink = false, children }) {
 					{tag}
 				</Tag>
 			)}
-		</Link>
+		</a>
 	);
 }
 

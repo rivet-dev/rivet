@@ -1,7 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ComponentProps } from "react";
-import Link from "next/link";
 
 type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
 
@@ -15,7 +14,7 @@ const vanillaComponents: ReactMarkdownProps["components"] = {
 				</a>
 			);
 		}
-		return <Link href={href || "#"}>{children}</Link>;
+		return <a href={href || "#"}>{children}</a>;
 	},
 	pre: ({ children }) => (
 		<pre className="overflow-x-auto rounded-md bg-zinc-900 p-4 text-sm">
@@ -44,10 +43,11 @@ const vanillaComponents: ReactMarkdownProps["components"] = {
  * Vanilla markdown renderer for standard markdown without MDX.
  * Use this for rendering GitHub-style markdown (e.g., README files).
  */
-export function VanillaMarkdown({ children }: { children: string }) {
+export function VanillaMarkdown({ children, content }: { children?: string; content?: string }) {
+	const markdown = content || children || '';
 	return (
 		<ReactMarkdown remarkPlugins={[remarkGfm]} components={vanillaComponents}>
-			{children}
+			{markdown}
 		</ReactMarkdown>
 	);
 }

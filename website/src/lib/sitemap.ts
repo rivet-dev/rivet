@@ -1,7 +1,6 @@
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
-import type { Route } from "next";
 
-type Href = string | Route;
+type Href = string;
 type Page = {
 	title?: string;
 	href: Href;

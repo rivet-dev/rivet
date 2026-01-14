@@ -1,0 +1,12 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import StartupsPage from '@/components/marketing/startups/StartupsPage';
+---
+
+<MarketingLayout
+	title="Startups - Rivet"
+	description="50% off Rivet Cloud for YC and a16z Speedrun companies. Build stateful serverless applications at startup speed."
+	canonicalUrl="https://rivet.gg/startups/"
+>
+	<StartupsPage client:load />
+</MarketingLayout>

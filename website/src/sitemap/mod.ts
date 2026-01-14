@@ -54,7 +54,6 @@ import {
 	faSitemap,
 	faSliders,
 	faSlidersHSquare,
-	faSquareBinary,
 	faSquareInfo,
     faSquareRootVariable,
 	faSquareSliders,

@@ -1,0 +1,48 @@
+import { defineConfig } from 'astro/config';
+import mdx from '@astrojs/mdx';
+import react from '@astrojs/react';
+import tailwind from '@astrojs/tailwind';
+import sitemap from '@astrojs/sitemap';
+
+import { remarkPlugins } from './src/mdx/remark';
+import { rehypePlugins } from './src/mdx/rehype';
+import { generateRoutes } from './src/integrations/generate-routes';
+
+export default defineConfig({
+	site: 'https://rivet.gg',
+	output: 'static',
+	trailingSlash: 'ignore',
+	prefetch: {
+		prefetchAll: true,
+		defaultStrategy: 'hover',
+	},
+	build: {
+		assets: '_astro',
+		format: 'directory',
+	},
+	markdown: {
+		syntaxHighlight: false,
+		remarkPlugins,
+		rehypePlugins,
+	},
+	integrations: [
+		generateRoutes(),
+		mdx({
+			syntaxHighlight: false,
+			remarkPlugins,
+			rehypePlugins,
+		}),
+		react(),
+		tailwind({
+			applyBaseStyles: false,
+		}),
+		sitemap({
+			filter: (page) => !page.includes('/api/') && !page.includes('/internal/'),
+		}),
+	],
+	vite: {
+		ssr: {
+			noExternal: ['@rivet-gg/components', '@rivet-gg/icons'],
+		},
+	},
+});

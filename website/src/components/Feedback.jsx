@@ -4,20 +4,26 @@ import { Transition } from "@headlessui/react";
 import { CheckIcon } from "@heroicons/react/20/solid";
 import { faGithub } from "@rivet-gg/icons";
 import clsx from "clsx";
-import { useRouter } from "next/router";
 import { usePostHog } from "posthog-js/react";
 import { Fragment, forwardRef, useEffect, useState } from "react";
 
+function usePathname() {
+	const [pathname, setPathname] = useState("");
+	useEffect(() => {
+		setPathname(window.location.pathname);
+	}, []);
+	return pathname;
+}
+
 export function Feedback() {
 	const posthog = usePostHog();
-
-	const router = useRouter();
-	const feedbackKey = `feedback:${router.pathname}`;
+	const pathname = usePathname();
+	const feedbackKey = `feedback:${pathname}`;
 	const [submitted, setSubmitted] = useState(false);
 
 	// Populate submitted
 	useEffect(() => {
-		if (localStorage.getItem(feedbackKey)) {
+		if (feedbackKey && localStorage.getItem(feedbackKey)) {
 			setSubmitted(true);
 		}
 	}, [feedbackKey]);
@@ -28,7 +34,7 @@ export function Feedback() {
 
 		// Send event
 		posthog?.capture("page_feedback", {
-			page: router.pathname,
+			page: pathname,
 			helpful: event.nativeEvent.submitter.dataset.response === "yes",
 		});
 
@@ -57,16 +63,15 @@ export function Feedback() {
 					enterTo="opacity-100"
 					enter="delay-150 duration-300"
 				>
-					<FeedbackThanks />
+					<FeedbackThanks pathname={pathname} />
 				</Transition>
 			</div>
 		</div>
 	);
 }
 
-function EditButton() {
-	const router = useRouter();
-	const href = `https://github.com/rivet-dev/website/edit/main/src/pages${router.pathname}.mdx`;
+function EditButton({ pathname }) {
+	const href = `https://github.com/rivet-dev/website/edit/main/src/pages${pathname}.mdx`;
 
 	return (
 		<Button
@@ -103,7 +108,7 @@ const FeedbackForm = forwardRef(function FeedbackForm({ onSubmit }, ref) {
 			<div className="flex-1" />
 
 			{/* Right */}
-			<EditButton />
+			<EditButton pathname={usePathname()} />
 		</form>
 	);
 });
@@ -113,14 +118,13 @@ function FeedbackButton(props) {
 		<Button
 			type="submit"
 			variant="text-subtle"
-			// className='px-3 text-sm font-medium text-charcole-600 transition dark:text-cream-100 hover:bg-white/5 hover:text-white'
 			className="font-bold"
 			{...props}
 		/>
 	);
 }
 
-const FeedbackThanks = forwardRef(function FeedbackThanks(_props, ref) {
+const FeedbackThanks = forwardRef(function FeedbackThanks({ pathname }, ref) {
 	return (
 		<div
 			ref={ref}
@@ -139,7 +143,7 @@ const FeedbackThanks = forwardRef(function FeedbackThanks(_props, ref) {
 			<div className="flex-1" />
 
 			{/* Right */}
-			<EditButton />
+			<EditButton pathname={pathname} />
 		</div>
 	);
 });

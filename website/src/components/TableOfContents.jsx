@@ -4,7 +4,6 @@ import { useNavigation } from "@/hooks/useNavigation";
 import { remToPx } from "@/lib/remToPx";
 import clsx from "clsx";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { useEffect } from "react";
 
@@ -97,8 +96,7 @@ function useCurrentSection(tableOfContents = []) {
 function NavLink({ id, isActive, isAnchorLink = false, children }) {
 	return (
 		<>
-			<Link
-				href={`#${id}`}
+			<a href={`#${id}`}
 				aria-current={isActive ? "page" : undefined}
 				className={clsx(
 					"flex justify-between gap-2 py-1 pr-3 text-sm transition",
@@ -109,7 +107,7 @@ function NavLink({ id, isActive, isAnchorLink = false, children }) {
 				)}
 			>
 				<span className="truncate">{children}</span>
-			</Link>
+			</a>
 		</>
 	);
 }

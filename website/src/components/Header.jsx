@@ -1,9 +1,8 @@
 "use client";
+import { usePathname } from "@/hooks/usePathname";
 import { Popover, Transition } from "@headlessui/react";
 import clsx from "clsx";
 import { motion, useScroll, useTransform } from "framer-motion";
-import Image from "next/image";
-import Link from "next/link";
 import { forwardRef } from "react";
 import { Fragment } from "react";
 
@@ -26,7 +25,6 @@ import {
 	faRhombus,
 	faSquare,
 } from "@rivet-gg/icons";
-import { usePathname } from "next/navigation";
 
 const ICONS = {
 	godot: faHexagon,
@@ -41,8 +39,7 @@ function TopLevelNavItem({ href, target, initHref, icon, children }) {
 
 	const current = pathname?.startsWith(href);
 	return (
-		<Link
-			href={initHref ?? href}
+		<a href={initHref ?? href}
 			target={target}
 			className={clsx(
 				current
@@ -53,7 +50,7 @@ function TopLevelNavItem({ href, target, initHref, icon, children }) {
 		>
 			{icon ? <Icon icon={icon} /> : null}
 			<span className="font-display text-lg">{children}</span>
-		</Link>
+		</a>
 	);
 }
 
@@ -101,10 +98,10 @@ function TopLevelNavPopoverSolution({ icon, href, title, description }) {
 				/>
 			</div>
 			<div>
-				<Link href={href} className="font-semibold text-gray-900">
+				<a href={href} className="font-semibold text-gray-900">
 					{title}
 					<span className="absolute inset-0" />
-				</Link>
+				</a>
 				<p className="mt-1 text-gray-600">{description}</p>
 			</div>
 		</div>
@@ -113,7 +110,7 @@ function TopLevelNavPopoverSolution({ icon, href, title, description }) {
 
 function TopLevelNavPopoverCallToAction({ icon, href, title }) {
 	return (
-		<Link
+		<a
 			key={title}
 			href={href}
 			className="flex items-center justify-center gap-x-2.5 p-3 font-semibold text-gray-900 hover:bg-gray-100"
@@ -124,7 +121,7 @@ function TopLevelNavPopoverCallToAction({ icon, href, title }) {
 				aria-hidden="true"
 			/>
 			{title}
-		</Link>
+		</a>
 	);
 }
 
@@ -174,25 +171,22 @@ export const Header = forwardRef(function Header(
 							<MobileNavigation navigation={navigation} />
 						</div>
 
-						<Link href="/" aria-label="Home" className="xl:hidden">
-							<Image
-								src={imgLogo}
+						<a href="/" aria-label="Home" className="xl:hidden">
+							<img src={imgLogo.src}
 								alt="Rivet"
 								className="h-6 w-auto"
 							/>
-						</Link>
+						</a>
 
-						<Link
-							href="/"
+						<a href="/"
 							aria-label="Home"
 							className="hidden xl:block"
 						>
-							<Image
-								src={imgLogoText}
+							<img src={imgLogoText.src}
 								alt="Rivet"
 								className="h-6 w-auto"
 							/>
-						</Link>
+						</a>
 
 						<div className="hidden items-center gap-1 lg:flex">
 							<TopLevelNavItem href="/docs">Docs</TopLevelNavItem>
@@ -212,7 +206,7 @@ export const Header = forwardRef(function Header(
 							[faDiscord, "https://rivet.dev/discord"],
 							[faGithub, "https://github.com/rivet-dev/rivet"],
 						].map(([icon, href]) => (
-							<Link
+							<a
 								className="flex items-center justify-center p-1 opacity-75 transition hover:opacity-100"
 								key={href}
 								href={href}
@@ -222,7 +216,7 @@ export const Header = forwardRef(function Header(
 									icon={icon}
 									className="text-lg text-cream-100"
 								/>
-							</Link>
+							</a>
 						))}
 						{/* </div> */}
 
@@ -256,7 +250,7 @@ export const Header = forwardRef(function Header(
 
 							{/* Tabs */}
 							{(navigation.tabs || tabs).map((tab) => (
-								<Link
+								<a
 									key={tab.title}
 									href={tab.href}
 									className={clsx(
@@ -282,7 +276,7 @@ export const Header = forwardRef(function Header(
 									) : null}
 									<span>{tab.title}</span>
 									<StatusBadge status={tab.status} />
-								</Link>
+								</a>
 							))}
 						</nav>
 					</div>

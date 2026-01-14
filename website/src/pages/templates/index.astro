@@ -1,0 +1,40 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import { templates, type Technology, type Tag } from '@/data/templates/shared';
+import { TemplatesPageContent } from '@/components/templates/TemplatesPageContent';
+
+// Get unique tags from all templates
+function getAllTags(): Tag[] {
+	const tagsSet = new Set<Tag>();
+	templates.forEach((template) => {
+		template.tags.forEach((tag) => tagsSet.add(tag as Tag));
+	});
+	return Array.from(tagsSet).sort();
+}
+
+// Get unique technologies from all templates
+function getAllTechnologies(): Technology[] {
+	const techSet = new Set<Technology>();
+	templates.forEach((template) => {
+		template.technologies.forEach((tech) => techSet.add(tech as Technology));
+	});
+	return Array.from(techSet).sort();
+}
+
+const allTags = getAllTags();
+const allTechnologies = getAllTechnologies();
+---
+
+<MarketingLayout
+	title="Templates - Rivet"
+	description="Explore Rivet templates and examples to quickly start building with Rivet Actors. Find templates for AI agents, real-time apps, games, and more."
+	canonicalUrl="https://rivet.gg/templates/"
+>
+	<main class="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-white/20 selection:text-white">
+		<TemplatesPageContent
+			allTags={allTags}
+			allTechnologies={allTechnologies}
+			client:load
+		/>
+	</main>
+</MarketingLayout>
