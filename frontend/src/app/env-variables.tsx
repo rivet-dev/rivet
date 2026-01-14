@@ -104,7 +104,7 @@ export const useRivetDsn = ({
 	const adminToken = useAdminToken();
 	const token = kind === "serverless" ? publishableToken : adminToken;
 
-	const dsn = `https://${token}:${dataProvider.engineNamespace}@${endpoint
+	const dsn = `https://${dataProvider.engineNamespace}:${token}@${endpoint
 		.replace("https://", "")
 		.replace("http://", "")}`;
 
