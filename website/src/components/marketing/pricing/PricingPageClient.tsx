@@ -581,6 +581,8 @@ const Pricing = () => {
     const usagePricing = [
         { resource: "Awake Actors", price: "$0.05", unit: "per 1k awake actor-hours" },
         { resource: "State Storage", price: "$0.40", unit: "per GB-month" },
+        { resource: "Reads*", price: "$0.001", unit: "per million reads" },
+        { resource: "Writes*", price: "$1", unit: "per million writes" },
         { resource: "Egress", price: "$0.15", unit: "per GB" },
         { resource: "Compute", price: "BYO", unit: "Paid to your provider" },
     ];
@@ -684,7 +686,7 @@ const Pricing = () => {
                                 <p className="text-zinc-400 text-sm">Metered costs for scaling beyond plan limits.</p>
                             </div>
                             
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {usagePricing.map((item, i) => (
                                     <div key={i} className="group p-6 rounded-xl border border-white/10 bg-white/[0.02] flex flex-col items-center text-center hover:border-white/20 transition-colors backdrop-blur-sm">
                                         <div className="text-zinc-500 text-[10px] uppercase tracking-widest font-medium mb-3">{item.resource}</div>
@@ -693,6 +695,7 @@ const Pricing = () => {
                                     </div>
                                 ))}
                             </div>
+                            <p className="text-zinc-500 text-xs mt-4 text-center">* Reads and writes to persisted actor state, not in-memory operations within an actor</p>
                         </div>
 
                         <ComparisonTable />
