@@ -26,13 +26,14 @@ import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
 import { getLogMessage } from "@/utils/env-vars";
 import type { ActorDefinitionActions } from "./actor-common";
-import { queryActor } from "./actor-query";
+import { checkForSchedulingError, queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { logger } from "./log";
 import {
 	type WebSocketMessage as ConnMessage,
 	messageLength,
+	parseWebSocketCloseReason,
 	sendHttpRequest,
 } from "./utils";
 
@@ -387,9 +388,9 @@ enc
 				});
 			}
 		});
-		ws.addEventListener("close", (ev) => {
+		ws.addEventListener("close", async (ev) => {
 			try {
-				this.#handleOnClose(ev);
+				await this.#handleOnClose(ev);
 			} catch (err) {
 				logger().error({
 					msg: "error in websocket close handler",
@@ -519,27 +520,24 @@ enc
 					metadata,
 				});
 
-				// Check if this is an actor scheduling error
-				let errorToThrow: Error;
-				if (
-					group === "guard" &&
-					(code === "actor_ready_timeout" ||
-						code === "actor_runner_failed") &&
-					this.#actorId
-				) {
-					// Try to fetch actor details to get more specific error info
-					const schedulingError =
-						await this.#checkForSchedulingError();
-					errorToThrow =
-						schedulingError ??
-						new errors.ActorError(group, code, message, metadata);
-				} else {
-					errorToThrow = new errors.ActorError(
+				// Check if this is an actor scheduling error and try to get more details
+				let errorToThrow = new errors.ActorError(
+					group,
+					code,
+					message,
+					metadata,
+				);
+				if (errors.isSchedulingError(group, code) && this.#actorId) {
+					const schedulingError = await checkForSchedulingError(
 						group,
 						code,
-						message,
-						metadata,
+						this.#actorId,
+						this.#actorQuery,
+						this.#driver,
 					);
+					if (schedulingError) {
+						errorToThrow = schedulingError;
+					}
 				}
 
 				// If we have an onOpenPromise, reject it with the error
@@ -553,10 +551,7 @@ enc
 					this.#actionsInFlight.delete(id);
 				}
 
-				// Dispatch to error handler if it's an ActorError
-				if (errorToThrow instanceof errors.ActorError) {
-					this.#dispatchActorError(errorToThrow);
-				}
+				this.#dispatchActorError(errorToThrow);
 			}
 		} else if (response.body.tag === "ActionResponse") {
 			// Action response OK
@@ -587,7 +582,7 @@ enc
 	}
 
 	/** Called by the onclose event from drivers. */
-	#handleOnClose(event: Event | CloseEvent) {
+	async #handleOnClose(event: Event | CloseEvent) {
 		// We can't use `event instanceof CloseEvent` because it's not defined in NodeJS
 		const closeEvent = event as CloseEvent;
 		const wasClean = closeEvent.wasClean;
@@ -609,12 +604,55 @@ enc
 			this.#rejectPendingPromises(new errors.ActorConnDisposed(), true);
 		} else {
 			this.#setConnStatus("disconnected");
-			this.#rejectPendingPromises(
-				new Error(
-					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${closeEvent.reason})`,
-				),
-				false,
-			);
+
+			// Build error from close event
+			let error: Error;
+			const reason = closeEvent.reason || "";
+			const parsed = parseWebSocketCloseReason(reason);
+
+			if (parsed) {
+				const { group, code } = parsed;
+
+				// Check if this is a scheduling error
+				if (errors.isSchedulingError(group, code) && this.#actorId) {
+					const schedulingError = await checkForSchedulingError(
+						group,
+						code,
+						this.#actorId,
+						this.#actorQuery,
+						this.#driver,
+					);
+					if (schedulingError) {
+						error = schedulingError;
+					} else {
+						error = new errors.ActorError(
+							group,
+							code,
+							`Connection closed: ${reason}`,
+							undefined,
+						);
+					}
+				} else {
+					error = new errors.ActorError(
+						group,
+						code,
+						`Connection closed: ${reason}`,
+						undefined,
+					);
+				}
+			} else {
+				// Default error for non-structured close reasons
+				error = new Error(
+					`${wasClean ? "Connection closed" : "Connection lost"} (code: ${closeEvent.code}, reason: ${reason})`,
+				);
+			}
+
+			this.#rejectPendingPromises(error, false);
+
+			// Dispatch to error handler if it's an ActorError
+			if (error instanceof errors.ActorError) {
+				this.#dispatchActorError(error);
+			}
 
 			// Automatically reconnect if we were connected
 			if (wasConnected) {
@@ -710,55 +748,6 @@ enc
 				});
 			}
 		}
-	}
-
-	async #checkForSchedulingError(): Promise<errors.ActorSchedulingError | null> {
-		if (!this.#actorId) return null;
-
-		// Extract name from the query (it's nested in one of the variant properties)
-		const query = this.#actorQuery;
-		const name =
-			"getForId" in query
-				? query.getForId.name
-				: "getForKey" in query
-					? query.getForKey.name
-					: "getOrCreateForKey" in query
-						? query.getOrCreateForKey.name
-						: "create" in query
-							? query.create.name
-							: null;
-
-		if (!name) return null;
-
-		try {
-			// Fetch actor details to check for scheduling errors
-			const actor = await this.#driver.getForId({
-				name,
-				actorId: this.#actorId,
-			});
-
-			if (actor?.error) {
-				logger().info({
-					msg: "found actor scheduling error",
-					actorId: this.#actorId,
-					error: actor.error,
-				});
-				return new errors.ActorSchedulingError(
-					this.#actorId,
-					actor.error,
-				);
-			}
-		} catch (err) {
-			// If we can't fetch actor details, just return null
-			// and fall back to the generic error
-			logger().warn({
-				msg: "failed to fetch actor details for scheduling error check",
-				actorId: this.#actorId,
-				error: stringifyError(err),
-			});
-		}
-
-		return null;
 	}
 
 	#addEventSubscription<Args extends Array<unknown>>(
