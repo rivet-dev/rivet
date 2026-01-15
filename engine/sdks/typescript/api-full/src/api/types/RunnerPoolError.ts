@@ -12,8 +12,7 @@ export type RunnerPoolError =
     /**
      * Serverless: SSE connection or network error */
     | Rivet.RunnerPoolErrorServerlessConnectionError
-    | "serverless_invalid_base64"
     /**
-     * Serverless: Runner sent invalid protocol payload */
-    | Rivet.RunnerPoolErrorServerlessInvalidPayload
+     * Serverless: Runner sent invalid payload */
+    | Rivet.RunnerPoolErrorServerlessInvalidSsePayload
     | "internal_error";

@@ -2071,10 +2071,9 @@ type RunnerPoolError struct {
 	stringLiteral                      string
 	// Serverless: SSE connection or network error
 	RunnerPoolErrorServerlessConnectionError *RunnerPoolErrorServerlessConnectionError
-	stringLiteral                            string
-	// Serverless: Runner sent invalid protocol payload
-	RunnerPoolErrorServerlessInvalidPayload *RunnerPoolErrorServerlessInvalidPayload
-	stringLiteral                           string
+	// Serverless: Runner sent invalid payload
+	RunnerPoolErrorServerlessInvalidSsePayload *RunnerPoolErrorServerlessInvalidSsePayload
+	stringLiteral                              string
 }
 
 func NewRunnerPoolErrorFromRunnerPoolErrorServerlessHttpError(value *RunnerPoolErrorServerlessHttpError) *RunnerPoolError {
@@ -2089,20 +2088,12 @@ func NewRunnerPoolErrorFromRunnerPoolErrorServerlessConnectionError(value *Runne
 	return &RunnerPoolError{typeName: "runnerPoolErrorServerlessConnectionError", RunnerPoolErrorServerlessConnectionError: value}
 }
 
-func NewRunnerPoolErrorWithStringLiteral() *RunnerPoolError {
-	return &RunnerPoolError{typeName: "stringLiteral", stringLiteral: "serverless_invalid_base64"}
-}
-
-func NewRunnerPoolErrorFromRunnerPoolErrorServerlessInvalidPayload(value *RunnerPoolErrorServerlessInvalidPayload) *RunnerPoolError {
-	return &RunnerPoolError{typeName: "runnerPoolErrorServerlessInvalidPayload", RunnerPoolErrorServerlessInvalidPayload: value}
+func NewRunnerPoolErrorFromRunnerPoolErrorServerlessInvalidSsePayload(value *RunnerPoolErrorServerlessInvalidSsePayload) *RunnerPoolError {
+	return &RunnerPoolError{typeName: "runnerPoolErrorServerlessInvalidSsePayload", RunnerPoolErrorServerlessInvalidSsePayload: value}
 }
 
 func NewRunnerPoolErrorWithStringLiteral() *RunnerPoolError {
 	return &RunnerPoolError{typeName: "stringLiteral", stringLiteral: "internal_error"}
-}
-
-func (r *RunnerPoolError) StringLiteral() string {
-	return r.stringLiteral
 }
 
 func (r *RunnerPoolError) StringLiteral() string {
@@ -2134,18 +2125,10 @@ func (r *RunnerPoolError) UnmarshalJSON(data []byte) error {
 		r.RunnerPoolErrorServerlessConnectionError = valueRunnerPoolErrorServerlessConnectionError
 		return nil
 	}
-	var valueStringLiteral string
-	if err := json.Unmarshal(data, &valueStringLiteral); err == nil {
-		if valueStringLiteral == "serverless_invalid_base64" {
-			r.typeName = "stringLiteral"
-			r.stringLiteral = valueStringLiteral
-			return nil
-		}
-	}
-	valueRunnerPoolErrorServerlessInvalidPayload := new(RunnerPoolErrorServerlessInvalidPayload)
-	if err := json.Unmarshal(data, &valueRunnerPoolErrorServerlessInvalidPayload); err == nil {
-		r.typeName = "runnerPoolErrorServerlessInvalidPayload"
-		r.RunnerPoolErrorServerlessInvalidPayload = valueRunnerPoolErrorServerlessInvalidPayload
+	valueRunnerPoolErrorServerlessInvalidSsePayload := new(RunnerPoolErrorServerlessInvalidSsePayload)
+	if err := json.Unmarshal(data, &valueRunnerPoolErrorServerlessInvalidSsePayload); err == nil {
+		r.typeName = "runnerPoolErrorServerlessInvalidSsePayload"
+		r.RunnerPoolErrorServerlessInvalidSsePayload = valueRunnerPoolErrorServerlessInvalidSsePayload
 		return nil
 	}
 	var valueStringLiteral string
@@ -2169,10 +2152,8 @@ func (r RunnerPoolError) MarshalJSON() ([]byte, error) {
 		return json.Marshal("serverless_stream_ended_early")
 	case "runnerPoolErrorServerlessConnectionError":
 		return json.Marshal(r.RunnerPoolErrorServerlessConnectionError)
-	case "stringLiteral":
-		return json.Marshal("serverless_invalid_base64")
-	case "runnerPoolErrorServerlessInvalidPayload":
-		return json.Marshal(r.RunnerPoolErrorServerlessInvalidPayload)
+	case "runnerPoolErrorServerlessInvalidSsePayload":
+		return json.Marshal(r.RunnerPoolErrorServerlessInvalidSsePayload)
 	case "stringLiteral":
 		return json.Marshal("internal_error")
 	}
@@ -2182,8 +2163,7 @@ type RunnerPoolErrorVisitor interface {
 	VisitRunnerPoolErrorServerlessHttpError(*RunnerPoolErrorServerlessHttpError) error
 	VisitStringLiteral(string) error
 	VisitRunnerPoolErrorServerlessConnectionError(*RunnerPoolErrorServerlessConnectionError) error
-	VisitStringLiteral(string) error
-	VisitRunnerPoolErrorServerlessInvalidPayload(*RunnerPoolErrorServerlessInvalidPayload) error
+	VisitRunnerPoolErrorServerlessInvalidSsePayload(*RunnerPoolErrorServerlessInvalidSsePayload) error
 	VisitStringLiteral(string) error
 }
 
@@ -2197,10 +2177,8 @@ func (r *RunnerPoolError) Accept(visitor RunnerPoolErrorVisitor) error {
 		return visitor.VisitStringLiteral(r.stringLiteral)
 	case "runnerPoolErrorServerlessConnectionError":
 		return visitor.VisitRunnerPoolErrorServerlessConnectionError(r.RunnerPoolErrorServerlessConnectionError)
-	case "stringLiteral":
-		return visitor.VisitStringLiteral(r.stringLiteral)
-	case "runnerPoolErrorServerlessInvalidPayload":
-		return visitor.VisitRunnerPoolErrorServerlessInvalidPayload(r.RunnerPoolErrorServerlessInvalidPayload)
+	case "runnerPoolErrorServerlessInvalidSsePayload":
+		return visitor.VisitRunnerPoolErrorServerlessInvalidSsePayload(r.RunnerPoolErrorServerlessInvalidSsePayload)
 	case "stringLiteral":
 		return visitor.VisitStringLiteral(r.stringLiteral)
 	}
@@ -2329,26 +2307,26 @@ func (r *RunnerPoolErrorServerlessHttpErrorServerlessHttpError) String() string 
 	return fmt.Sprintf("%#v", r)
 }
 
-// Serverless: Runner sent invalid protocol payload
-type RunnerPoolErrorServerlessInvalidPayload struct {
-	// Serverless: Runner sent invalid protocol payload
-	ServerlessInvalidPayload *RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload `json:"serverless_invalid_payload,omitempty"`
+// Serverless: Runner sent invalid payload
+type RunnerPoolErrorServerlessInvalidSsePayload struct {
+	// Serverless: Runner sent invalid payload
+	ServerlessInvalidSsePayload *RunnerPoolErrorServerlessInvalidSsePayloadServerlessInvalidSsePayload `json:"serverless_invalid_sse_payload,omitempty"`
 
 	_rawJSON json.RawMessage
 }
 
-func (r *RunnerPoolErrorServerlessInvalidPayload) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerPoolErrorServerlessInvalidPayload
+func (r *RunnerPoolErrorServerlessInvalidSsePayload) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessInvalidSsePayload
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*r = RunnerPoolErrorServerlessInvalidPayload(value)
+	*r = RunnerPoolErrorServerlessInvalidSsePayload(value)
 	r._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (r *RunnerPoolErrorServerlessInvalidPayload) String() string {
+func (r *RunnerPoolErrorServerlessInvalidSsePayload) String() string {
 	if len(r._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
 			return value
@@ -2360,25 +2338,26 @@ func (r *RunnerPoolErrorServerlessInvalidPayload) String() string {
 	return fmt.Sprintf("%#v", r)
 }
 
-// Serverless: Runner sent invalid protocol payload
-type RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload struct {
-	Message string `json:"message"`
+// Serverless: Runner sent invalid payload
+type RunnerPoolErrorServerlessInvalidSsePayloadServerlessInvalidSsePayload struct {
+	Message    string  `json:"message"`
+	RawPayload *string `json:"raw_payload,omitempty"`
 
 	_rawJSON json.RawMessage
 }
 
-func (r *RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload
+func (r *RunnerPoolErrorServerlessInvalidSsePayloadServerlessInvalidSsePayload) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerPoolErrorServerlessInvalidSsePayloadServerlessInvalidSsePayload
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*r = RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload(value)
+	*r = RunnerPoolErrorServerlessInvalidSsePayloadServerlessInvalidSsePayload(value)
 	r._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (r *RunnerPoolErrorServerlessInvalidPayloadServerlessInvalidPayload) String() string {
+func (r *RunnerPoolErrorServerlessInvalidSsePayloadServerlessInvalidSsePayload) String() string {
 	if len(r._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
 			return value

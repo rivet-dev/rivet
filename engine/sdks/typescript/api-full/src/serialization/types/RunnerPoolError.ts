@@ -7,15 +7,14 @@ import * as Rivet from "../../api/index";
 import * as core from "../../core";
 import { RunnerPoolErrorServerlessHttpError } from "./RunnerPoolErrorServerlessHttpError";
 import { RunnerPoolErrorServerlessConnectionError } from "./RunnerPoolErrorServerlessConnectionError";
-import { RunnerPoolErrorServerlessInvalidPayload } from "./RunnerPoolErrorServerlessInvalidPayload";
+import { RunnerPoolErrorServerlessInvalidSsePayload } from "./RunnerPoolErrorServerlessInvalidSsePayload";
 
 export const RunnerPoolError: core.serialization.Schema<serializers.RunnerPoolError.Raw, Rivet.RunnerPoolError> =
     core.serialization.undiscriminatedUnion([
         RunnerPoolErrorServerlessHttpError,
         core.serialization.stringLiteral("serverless_stream_ended_early"),
         RunnerPoolErrorServerlessConnectionError,
-        core.serialization.stringLiteral("serverless_invalid_base64"),
-        RunnerPoolErrorServerlessInvalidPayload,
+        RunnerPoolErrorServerlessInvalidSsePayload,
         core.serialization.stringLiteral("internal_error"),
     ]);
 
@@ -24,7 +23,6 @@ export declare namespace RunnerPoolError {
         | RunnerPoolErrorServerlessHttpError.Raw
         | "serverless_stream_ended_early"
         | RunnerPoolErrorServerlessConnectionError.Raw
-        | "serverless_invalid_base64"
-        | RunnerPoolErrorServerlessInvalidPayload.Raw
+        | RunnerPoolErrorServerlessInvalidSsePayload.Raw
         | "internal_error";
 }

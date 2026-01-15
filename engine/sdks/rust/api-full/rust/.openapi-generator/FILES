@@ -83,7 +83,7 @@ docs/RunnerPoolErrorOneOf.md
 docs/RunnerPoolErrorOneOf1.md
 docs/RunnerPoolErrorOneOf1ServerlessConnectionError.md
 docs/RunnerPoolErrorOneOf2.md
-docs/RunnerPoolErrorOneOf2ServerlessInvalidPayload.md
+docs/RunnerPoolErrorOneOf2ServerlessInvalidSsePayload.md
 docs/RunnerPoolErrorOneOfServerlessHttpError.md
 docs/RunnersApi.md
 docs/RunnersListNamesResponse.md
@@ -174,7 +174,7 @@ src/models/runner_pool_error_one_of.rs
 src/models/runner_pool_error_one_of_1.rs
 src/models/runner_pool_error_one_of_1_serverless_connection_error.rs
 src/models/runner_pool_error_one_of_2.rs
-src/models/runner_pool_error_one_of_2_serverless_invalid_payload.rs
+src/models/runner_pool_error_one_of_2_serverless_invalid_sse_payload.rs
 src/models/runner_pool_error_one_of_serverless_http_error.rs
 src/models/runners_list_names_response.rs
 src/models/runners_list_response.rs
