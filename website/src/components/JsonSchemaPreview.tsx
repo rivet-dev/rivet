@@ -1,7 +1,6 @@
 // Renders JSON schema (draft 7)
 
 import { Foldable } from "@/components/FoldableSchema";
-import { Markdown } from "@/components/Markdown";
 import { cn } from "@rivet-gg/components";
 import type {
 	JSONSchema7,
@@ -41,21 +40,6 @@ export function JsonSchemaPreview({
 			return empty;
 		}
 
-		if (title ?? schema.title) {
-			return (
-				<div
-					className={cn(
-						"not-prose mb-6 rounded-md border px-4 pb-4",
-						className,
-					)}
-				>
-					<h3 className="relative -top-4 mb-0 inline-block bg-card text-xl font-bold">
-						{title ?? schema.title}
-					</h3>
-					<ObjectSchema schema={schema} defs={defs} parent={parent} />
-				</div>
-			);
-		}
 		return (
 			<ObjectSchema
 				className={className}
@@ -84,21 +68,38 @@ function ObjectSchema({
 }: ObjectSchemaProps) {
 	const schema = resolveSchema(baseSchema, defs);
 
+	// Merge properties from oneOf variants into main properties
+	const allProperties: Record<string, JSONSchema7> = {
+		...(schema.properties as Record<string, JSONSchema7> ?? {}),
+	};
+	const oneOfKeys: Set<string> = new Set();
+	if (schema.oneOf) {
+		for (const variant of schema.oneOf as JSONSchema7[]) {
+			const resolved = resolveSchema(variant, defs);
+			if (resolved.properties) {
+				for (const [key, value] of Object.entries(resolved.properties)) {
+					allProperties[key] = value as JSONSchema7;
+					oneOfKeys.add(key);
+				}
+			}
+		}
+	}
+
 	return (
 		<ul
 			className={cn(
-				{ "rounded-md border py-4": !!parent },
-				"space-y-4",
+				"space-y-4 pl-0 list-none",
 				className,
 			)}
 		>
-			{Object.entries(schema.properties ?? {}).map(([key, property]) => {
+			{Object.entries(allProperties).map(([key, property]) => {
 				const resolved = resolveSchema(property as JSONSchema7, defs);
-				const nullable = !schema.required?.some((r) => r === key);
+				// Properties from oneOf are always optional, others check required array
+				const nullable = oneOfKeys.has(key) || !schema.required?.some((r) => r === key);
 				const newParent = parent ? `${parent}.${key}` : key;
 
 				return (
-					<ObjectSchemaItem className={"px-4"} key={key}>
+					<ObjectSchemaItem key={key}>
 						<PropertyLabel
 							parent={parent}
 							name={key}
@@ -115,13 +116,12 @@ function ObjectSchema({
 				);
 			})}
 			{schema.anyOf ? (
-				<li className="px-4">
+				<li>
 					<p className="mb-2">Any of the following variants:</p>
-					<ul className="space-y-4 rounded-md border py-4">
+					<ul className="space-y-4 rounded-md border py-4 pl-0 list-none">
 						{schema.anyOf?.map((ref: JSONSchema7, index) => {
 							return (
 								<ObjectSchemaItem
-									className="px-4"
 									key={ref.$ref}
 								>
 									<p>Variant #{index + 1}</p>
@@ -159,7 +159,7 @@ function Schema({ schema: baseSchema, defs, parent, foldable }: SchemaProps) {
 		} as JSONSchema7;
 
 		const inner = (
-			<ul>
+			<ul className="pl-0 list-none">
 				{schema.oneOf.map((item: JSONSchema7, index) => {
 					return (
 						<li
@@ -215,13 +215,13 @@ function Schema({ schema: baseSchema, defs, parent, foldable }: SchemaProps) {
 	// String enum
 	if (schema.enum) {
 		const inner = (
-			<ul className="space-y-4 rounded-md">
+			<ul className="space-y-4 rounded-md pl-0 list-none">
 				{schema.enum.map((item, index) => {
 					return (
 						<li
 							// biome-ignore lint/suspicious/noArrayIndexKey: only used for static content
 							key={index}
-							className="mt-4 px-4"
+							className="mt-4"
 						>
 							<TypeLabel type={item} />
 						</li>
@@ -372,12 +372,12 @@ export function PropertyLabel({
 					{parent ? <>{parent}.</> : null}
 					<span className="font-bold text-foreground">{name}</span>
 				</code>
-				<div className="text-xs opacity-20">
+				<div className="text-xs text-muted-foreground">
 					{getPropertyTypeLabel(schema, defs, nullable)}
 				</div>
 			</div>
 			<div className="prose text-wrap text-sm text-muted-foreground">
-				<Markdown>{schema.description || ""}</Markdown>
+				<p>{schema.description || ""}</p>
 			</div>
 		</>
 	);
@@ -398,7 +398,7 @@ function TypeLabel({ type, description }: TypeLabelProps) {
 			</div>
 
 			<div className="prose text-wrap text-sm text-muted-foreground">
-				<Markdown>{description || ""}</Markdown>
+				<p>{description || ""}</p>
 			</div>
 		</>
 	);
@@ -495,6 +495,16 @@ function resolveSchema(
 		}
 
 		throw new Error("unsupported");
+	}
+
+	// Handle anyOf with $ref and null (nullable types)
+	if (schema.anyOf?.length) {
+		const refItem = schema.anyOf.find(
+			(item: JSONSchema7) => item.$ref,
+		) as JSONSchema7 | undefined;
+		if (refItem) {
+			return resolveSchema(refItem, defs);
+		}
 	}
 
 	if (schema.$ref) {
