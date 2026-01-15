@@ -124,7 +124,8 @@ export function buildServerlessRouter(
 
 /**
  * Normalizes a URL for comparison by extracting protocol, host, port, and pathname.
- * Normalizes 127.0.0.1 and 0.0.0.0 to localhost for consistent comparison.
+ * Normalizes loopback addresses (127.0.0.1, 0.0.0.0, ::1) to localhost for consistent comparison.
+ * Normalizes regional endpoints (api-*.domain) to base endpoints (api.domain).
  * Returns null if the URL is invalid.
  */
 export function normalizeEndpointUrl(url: string): string | null {
@@ -133,18 +134,58 @@ export function normalizeEndpointUrl(url: string): string | null {
 		// Normalize pathname by removing trailing slash (except for root)
 		const pathname =
 			parsed.pathname === "/" ? "/" : parsed.pathname.replace(/\/+$/, "");
+
 		// Normalize loopback addresses to localhost
-		const hostname =
-			parsed.hostname === "127.0.0.1" || parsed.hostname === "0.0.0.0"
-				? "localhost"
-				: parsed.hostname;
+		let hostname = isLoopbackAddress(parsed.hostname)
+			? "localhost"
+			: parsed.hostname;
+
+		// Normalize regional endpoints (api-region.domain) to base endpoints (api.domain)
+		// HACK: This is specific to Rivet Cloud and will not work for self-hosted
+		// engines with different regional endpoint naming conventions.
+		hostname = normalizeRegionalHostname(hostname);
+
 		// Reconstruct host with normalized hostname and port
 		const host = parsed.port ? `${hostname}:${parsed.port}` : hostname;
+
 		// Reconstruct normalized URL with protocol, host, and pathname
 		return `${parsed.protocol}//${host}${pathname}`;
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Normalizes regional hostnames (api-region.domain) to base hostnames (api.domain).
+ * Only applies to rivet.dev domains.
+ *
+ * Examples:
+ * - api-us-west-1.rivet.dev -> api.rivet.dev
+ * - api-lax.staging.rivet.dev -> api.staging.rivet.dev
+ * - api.rivet.dev -> api.rivet.dev (unchanged)
+ * - api-us-west-1.example.com -> api-us-west-1.example.com (unchanged, not rivet.dev)
+ * - foo-bar.rivet.dev -> foo-bar.rivet.dev (unchanged, not api- prefix)
+ */
+function normalizeRegionalHostname(hostname: string): string {
+	// Only apply to rivet.dev domains
+	if (!hostname.endsWith(".rivet.dev")) {
+		return hostname;
+	}
+
+	if (!hostname.startsWith("api-")) {
+		return hostname;
+	}
+
+	// Find the first dot after "api-"
+	const withoutPrefix = hostname.slice(4); // Remove "api-"
+	const firstDotIndex = withoutPrefix.indexOf(".");
+	if (firstDotIndex === -1) {
+		return hostname;
+	}
+
+	// Extract the domain part and prepend "api."
+	const domain = withoutPrefix.slice(firstDotIndex + 1);
+	return `api.${domain}`;
 }
 
 /**
@@ -159,4 +200,16 @@ export function endpointsMatch(a: string, b: string): boolean {
 		return a === b;
 	}
 	return normalizedA === normalizedB;
+}
+
+/**
+ * Checks if a hostname is a loopback address that should be normalized to localhost.
+ */
+function isLoopbackAddress(hostname: string): boolean {
+	return (
+		hostname === "127.0.0.1" ||
+		hostname === "0.0.0.0" ||
+		hostname === "::1" ||
+		hostname === "[::1]"
+	);
 }
