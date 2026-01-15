@@ -161,8 +161,10 @@
 		"format:write": "biome format --write .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"dump-openapi": "tsx scripts/dump-openapi.ts",
-		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts"
+		"manager-openapi-gen": "tsx scripts/manager-openapi-gen.ts",
+		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts",
+		"registry-config-schema-gen": "tsx scripts/registry-config-schema-gen.ts",
+		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
 		"@hono/standard-validator": "^0.1.3",

@@ -2098,28 +2098,27 @@
             }
           },
           {
-            "type": "string",
-            "description": "Serverless: Runner sent invalid base64 in SSE message",
-            "enum": [
-              "serverless_invalid_base64"
-            ]
-          },
-          {
             "type": "object",
-            "description": "Serverless: Runner sent invalid protocol payload",
+            "description": "Serverless: Runner sent invalid payload",
             "required": [
-              "serverless_invalid_payload"
+              "serverless_invalid_sse_payload"
             ],
             "properties": {
-              "serverless_invalid_payload": {
+              "serverless_invalid_sse_payload": {
                 "type": "object",
-                "description": "Serverless: Runner sent invalid protocol payload",
+                "description": "Serverless: Runner sent invalid payload",
                 "required": [
                   "message"
                 ],
                 "properties": {
                   "message": {
                     "type": "string"
+                  },
+                  "raw_payload": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }

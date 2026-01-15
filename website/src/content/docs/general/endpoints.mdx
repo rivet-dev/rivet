@@ -76,16 +76,16 @@ const registry = setup({
 
 ## Advanced
 
-### Configuring Namespace and Token
+### URL Auth Syntax
 
-You can configure namespace and token in two ways:
+Endpoint URLs support embedding namespace and token directly in the URL:
 
-**Embedded in URL** (recommended for simplicity):
 ```
 https://namespace:token@host/path
 ```
 
-**Separate environment variables** (useful when credentials are managed independently):
+This is the recommended approach for simplicity. Alternatively, you can use separate environment variables:
+
 ```bash
 RIVET_ENDPOINT=https://api.rivet.dev
 RIVET_NAMESPACE=my-namespace

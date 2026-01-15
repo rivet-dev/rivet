@@ -19,6 +19,7 @@ import {
 	faDatabase,
 	faDocker,
 	faDownload,
+	faFastForward,
 	faFileImport,
 	faFingerprint,
 	faFloppyDisk,
@@ -91,32 +92,34 @@ export const sitemap = [
 						href: "/docs",
 						icon: faSquareInfo,
 					},
+					{
+						title: "Quickstart",
+						icon: faFastForward,
+						collapsible: true,
+						pages: [
+							{
+								title: "Node.js & Bun",
+								href: "/docs/actors/quickstart/backend",
+								icon: faNodeJs,
+							},
+							{
+								title: "React",
+								href: "/docs/actors/quickstart/react",
+								icon: faReact,
+							},
+							{
+								title: "Next.js",
+								href: "/docs/actors/quickstart/next-js",
+								icon: faNextjs,
+							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/actors/quickstart/cloudflare-workers",
+								icon: faCloudflare,
+							},
+						],
+					},
 				]
-			},
-			{
-				title: "Quickstart",
-				pages: [
-					{
-						title: "Node.js & Bun",
-						href: "/docs/actors/quickstart/backend",
-						icon: faNodeJs,
-					},
-					{
-						title: "React",
-						href: "/docs/actors/quickstart/react",
-						icon: faReact,
-					},
-					{
-						title: "Next.js",
-						href: "/docs/actors/quickstart/next-js",
-						icon: faNextjs,
-					},
-					{
-						title: "Cloudflare Workers",
-						href: "/docs/actors/quickstart/cloudflare-workers",
-						icon: faCloudflare,
-					},
-				],
 			},
 			{
 				title: "Concepts",
@@ -313,6 +316,36 @@ export const sitemap = [
 					// 	icon: faPalette,
 					// },
 					{
+						title: "Configuration",
+						collapsible: true,
+						pages: [
+							{
+								title: "Registry Configuration",
+								href: "/docs/general/registry-configuration",
+							},
+							{
+								title: "Actor Configuration",
+								href: "/docs/general/actor-configuration",
+							},
+							{
+								title: "Environment Variables",
+								href: "/docs/general/environment-variables",
+							},
+							{
+								title: "Runtime Modes",
+								href: "/docs/general/runtime-modes",
+							},
+							{
+								title: "HTTP Server",
+								href: "/docs/general/http-server",
+							},
+							{
+								title: "Endpoints",
+								href: "/docs/general/endpoints",
+							},
+						]
+					},
+					{
 						title: "API Reference",
 						collapsible: true,
 						pages: [
@@ -402,23 +435,6 @@ export const sitemap = [
 				title: "Platforms",
 				pages: deploySidebarPages,
 			},
-			{
-				title: "Configuration",
-				pages: [
-					{
-						title: "Endpoints",
-						href: "/docs/connect/endpoints",
-					},
-					{
-						title: "Runtime Modes",
-						href: "/docs/general/runtime-modes",
-					},
-					{
-						title: "HTTP Server",
-						href: "/docs/general/http-server",
-					},
-				],
-			},
 		],
 	},
 	{
@@ -468,6 +484,19 @@ export const sitemap = [
 					{
 						title: "Railway",
 						href: "/docs/self-hosting/railway",
+					},
+				],
+			},
+			{
+				title: "Persistence",
+				pages: [
+					{
+						title: "PostgreSQL",
+						href: "/docs/self-hosting/postgres",
+					},
+					{
+						title: "File System",
+						href: "/docs/self-hosting/filesystem",
 					},
 				],
 			},

@@ -1,0 +1,129 @@
+{
+  "description": "Configuration schema for RivetKit actors. This is passed to the actor() function.",
+  "type": "object",
+  "properties": {
+    "state": {
+      "description": "Initial state value for the actor. Cannot be used with createState."
+    },
+    "createState": {
+      "description": "Function to create initial state. Receives context and input. Cannot be used with state."
+    },
+    "connState": {
+      "description": "Initial connection state value. Cannot be used with createConnState."
+    },
+    "createConnState": {
+      "description": "Function to create connection state. Receives context and connection params. Cannot be used with connState."
+    },
+    "vars": {
+      "description": "Initial ephemeral variables value. Cannot be used with createVars."
+    },
+    "createVars": {
+      "description": "Function to create ephemeral variables. Receives context and driver context. Cannot be used with vars."
+    },
+    "db": {
+      "description": "Database provider instance for the actor."
+    },
+    "onCreate": {
+      "description": "Called when the actor is first initialized. Use to initialize state."
+    },
+    "onDestroy": {
+      "description": "Called when the actor is destroyed."
+    },
+    "onWake": {
+      "description": "Called when the actor wakes up and is ready to receive connections and actions."
+    },
+    "onSleep": {
+      "description": "Called when the actor is stopping or sleeping. Use to clean up resources."
+    },
+    "onStateChange": {
+      "description": "Called when the actor's state changes. State changes within this hook won't trigger recursion."
+    },
+    "onBeforeConnect": {
+      "description": "Called before a client connects. Throw an error to reject the connection."
+    },
+    "onConnect": {
+      "description": "Called when a client successfully connects."
+    },
+    "onDisconnect": {
+      "description": "Called when a client disconnects."
+    },
+    "onBeforeActionResponse": {
+      "description": "Called before sending an action response. Use to transform output."
+    },
+    "onRequest": {
+      "description": "Called for raw HTTP requests to /actors/{name}/http/* endpoints."
+    },
+    "onWebSocket": {
+      "description": "Called for raw WebSocket connections to /actors/{name}/websocket/* endpoints."
+    },
+    "actions": {
+      "description": "Map of action name to handler function.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "options": {
+      "description": "Actor options for timeouts and behavior configuration.",
+      "type": "object",
+      "properties": {
+        "createVarsTimeout": {
+          "description": "Timeout in ms for createVars handler. Default: 5000",
+          "type": "number"
+        },
+        "createConnStateTimeout": {
+          "description": "Timeout in ms for createConnState handler. Default: 5000",
+          "type": "number"
+        },
+        "onConnectTimeout": {
+          "description": "Timeout in ms for onConnect handler. Default: 5000",
+          "type": "number"
+        },
+        "onSleepTimeout": {
+          "description": "Timeout in ms for onSleep handler. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: 5000",
+          "type": "number"
+        },
+        "onDestroyTimeout": {
+          "description": "Timeout in ms for onDestroy handler. Default: 5000",
+          "type": "number"
+        },
+        "stateSaveInterval": {
+          "description": "Interval in ms between automatic state saves. Default: 10000",
+          "type": "number"
+        },
+        "actionTimeout": {
+          "description": "Timeout in ms for action handlers. Default: 60000",
+          "type": "number"
+        },
+        "waitUntilTimeout": {
+          "description": "Max time in ms to wait for waitUntil background promises during shutdown. Default: 15000",
+          "type": "number"
+        },
+        "connectionLivenessTimeout": {
+          "description": "Timeout in ms for connection liveness checks. Default: 2500",
+          "type": "number"
+        },
+        "connectionLivenessInterval": {
+          "description": "Interval in ms between connection liveness checks. Default: 5000",
+          "type": "number"
+        },
+        "noSleep": {
+          "description": "If true, the actor will never sleep. Default: false",
+          "type": "boolean"
+        },
+        "sleepTimeout": {
+          "description": "Time in ms of inactivity before the actor sleeps. Default: 30000",
+          "type": "number"
+        },
+        "canHibernateWebSocket": {
+          "description": "Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "RivetKit Actor Configuration"
+}

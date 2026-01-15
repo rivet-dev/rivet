@@ -264,3 +264,71 @@ export function buildActorNames(
 		Object.keys(config.use).map((name) => [name, { metadata: {} }]),
 	);
 }
+
+// MARK: Documentation Schemas
+// These schemas are JSON-serializable versions used for documentation generation.
+// They exclude runtime-only fields (transforms, custom types, Logger instances).
+
+export const DocInspectorConfigSchema = z
+	.object({
+		enabled: z.boolean().optional().describe("Whether to enable the Rivet Inspector. Defaults to true in development mode."),
+		token: z.string().optional().describe("Token used to access the Inspector."),
+		defaultEndpoint: z.string().optional().describe("Default RivetKit server endpoint for Rivet Inspector to connect to."),
+	})
+	.optional()
+	.describe("Inspector configuration for debugging and development.");
+
+export const DocConfigureRunnerPoolSchema = z
+	.object({
+		name: z.string().optional().describe("Name of the runner pool."),
+		url: z.string().describe("URL of the serverless platform to configure runners."),
+		headers: z.record(z.string(), z.string()).optional().describe("Headers to include in requests to the serverless platform."),
+		maxRunners: z.number().optional().describe("Maximum number of runners in the pool."),
+		minRunners: z.number().optional().describe("Minimum number of runners to keep warm."),
+		requestLifespan: z.number().optional().describe("Maximum lifespan of a request in milliseconds."),
+		runnersMargin: z.number().optional().describe("Buffer margin for scaling runners."),
+		slotsPerRunner: z.number().optional().describe("Number of actor slots per runner."),
+		metadata: z.record(z.string(), z.unknown()).optional().describe("Additional metadata to pass to the serverless platform."),
+	})
+	.optional();
+
+export const DocServerlessConfigSchema = z.object({
+	spawnEngine: z.boolean().optional().describe("Downloads and starts the full Rust engine process. Auto-enabled in development mode when no endpoint is provided. Default: false"),
+	engineVersion: z.string().optional().describe("Version of the engine to download. Defaults to the current RivetKit version."),
+	configureRunnerPool: DocConfigureRunnerPoolSchema.describe("Automatically configure serverless runners in the engine."),
+	basePath: z.string().optional().describe("Base path for serverless API routes. Default: '/api/rivet'"),
+	publicEndpoint: z.string().optional().describe("The endpoint that clients should connect to. Supports URL auth syntax: https://namespace:token@api.rivet.dev"),
+	publicToken: z.string().optional().describe("Token that clients should use when connecting via the public endpoint."),
+}).describe("Configuration for serverless deployment mode.");
+
+export const DocRunnerConfigSchema = z.object({
+	totalSlots: z.number().optional().describe("Total number of actor slots available. Default: 100000"),
+	runnerName: z.string().optional().describe("Name of this runner. Default: 'default'"),
+	runnerKey: z.string().optional().describe("Authentication key for the runner."),
+	version: z.number().optional().describe("Version number of this runner. Default: 1"),
+}).describe("Configuration for runner mode.");
+
+export const DocRegistryConfigSchema = z
+	.object({
+		use: z.record(z.string(), z.unknown()).describe("Actor definitions. Keys are actor names, values are actor definitions."),
+		maxIncomingMessageSize: z.number().optional().describe("Maximum size of incoming WebSocket messages in bytes. Default: 65536"),
+		maxOutgoingMessageSize: z.number().optional().describe("Maximum size of outgoing WebSocket messages in bytes. Default: 1048576"),
+		noWelcome: z.boolean().optional().describe("Disable the welcome message on startup. Default: false"),
+		logging: z
+			.object({
+				level: LogLevelSchema.optional().describe("Log level for RivetKit. Default: 'warn'"),
+			})
+			.optional()
+			.describe("Logging configuration."),
+		endpoint: z.string().optional().describe("Endpoint URL to connect to Rivet Engine. Supports URL auth syntax: https://namespace:token@api.rivet.dev. Can also be set via RIVET_ENDPOINT environment variable."),
+		token: z.string().optional().describe("Authentication token for Rivet Engine. Can also be set via RIVET_TOKEN environment variable."),
+		namespace: z.string().optional().describe("Namespace to use. Default: 'default'. Can also be set via RIVET_NAMESPACE environment variable."),
+		headers: z.record(z.string(), z.string()).optional().describe("Additional headers to include in requests to Rivet Engine."),
+		serveManager: z.boolean().optional().describe("Whether to start the local manager server. Auto-determined based on endpoint and NODE_ENV if not specified."),
+		managerBasePath: z.string().optional().describe("Base path for the manager API. Default: '/'"),
+		managerPort: z.number().optional().describe("Port to run the manager on. Default: 6420"),
+		inspector: DocInspectorConfigSchema,
+		serverless: DocServerlessConfigSchema.optional(),
+		runner: DocRunnerConfigSchema.optional(),
+	})
+	.describe("RivetKit registry configuration.");

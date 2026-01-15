@@ -1,0 +1,97 @@
+import RegistryConfigSchema from "@/components/docs/RegistryConfigSchemaClient.astro";
+
+# Registry Configuration
+
+This page documents the configuration options available when setting up a RivetKit registry. The registry configuration is passed to the `setup()` function.
+
+
+## Example Configurations
+
+### Basic Setup
+
+```typescript
+import { setup, actor } from "rivetkit";
+
+const myActor = actor({ /* ... */ });
+
+const registry = setup({
+  use: { myActor },
+});
+```
+
+### Connecting to Rivet Engine
+
+<CodeGroup>
+
+```typescript {{"title":"Environment Variables"}}
+import { setup, actor } from "rivetkit";
+
+const myActor = actor({ /* ... */ });
+
+// Reads from RIVET_ENDPOINT, RIVET_TOKEN, and RIVET_NAMESPACE
+const registry = setup({
+  use: { myActor },
+});
+```
+
+```typescript {{"title":"Config"}}
+import { setup, actor } from "rivetkit";
+
+const myActor = actor({ /* ... */ });
+
+const registry = setup({
+  use: { myActor },
+  endpoint: "https://api.rivet.dev",
+  token: process.env.RIVET_TOKEN,
+  namespace: "production",
+});
+```
+
+</CodeGroup>
+
+## Starting Your App
+
+After configuring your registry, start it using one of two runtime modes:
+
+<CodeGroup>
+
+```typescript {{"title":"Serverless"}}
+import { registry } from "./actors";
+
+export default registry.serve();
+```
+
+```typescript {{"title":"Serverless with Router"}}
+import { registry } from "./actors";
+import { Hono } from "hono";
+
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+export default app;
+```
+
+```typescript {{"title":"Runner"}}
+import { registry } from "./actors";
+
+registry.startRunner();
+```
+
+</CodeGroup>
+
+See [Runtime Modes](/docs/general/runtime-modes) for details on when to use each mode.
+
+## Environment Variables
+
+Many configuration options can be set via environment variables. See [Environment Variables](/docs/general/environment-variables) for a complete reference.
+
+
+## Configuration Reference
+
+<RegistryConfigSchema />
+
+## Related
+
+- [Actor Configuration](/docs/general/actor-configuration)- Configure individual actors
+- [HTTP Server Setup](/docs/general/http-server): Set up HTTP routing and middleware
+- [Architecture](/docs/general/architecture): Understand how RivetKit works

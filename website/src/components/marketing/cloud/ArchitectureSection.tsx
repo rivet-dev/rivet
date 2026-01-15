@@ -94,7 +94,7 @@ export const ArchitectureSection = () => {
 
 			{/* CTA */}
 			<div className="text-center mt-12">
-				<a href="/docs/connect/endpoints"
+				<a href="/docs/general/endpoints"
 					className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors"
 				>
 					<span>Learn how to connect your backend</span>

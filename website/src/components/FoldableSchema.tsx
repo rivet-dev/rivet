@@ -1,6 +1,7 @@
 "use client";
 
-import { Button } from "@rivet-gg/components";
+import { cn } from "@rivet-gg/components";
+import { Icon, faChevronDown } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import { useState } from "react";
 
@@ -12,13 +13,27 @@ export function Foldable({
 	const [isOpen, setIsOpen] = useState(false);
 	return (
 		<>
-			<Button
-				variant="outline"
-				size="sm"
+			<button
+				type="button"
+				className={cn(
+					"mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors",
+				)}
 				onClick={() => setIsOpen((open) => !open)}
 			>
 				{isOpen ? closeTitle : title}
-			</Button>
+				<motion.span
+					variants={{
+						open: { rotateZ: 0 },
+						closed: { rotateZ: "-90deg" },
+					}}
+					initial={false}
+					animate={isOpen ? "open" : "closed"}
+					transition={{ duration: 0.2 }}
+					className="inline-block"
+				>
+					<Icon icon={faChevronDown} className="w-3 h-3" />
+				</motion.span>
+			</button>
 			<motion.div
 				className="mt-1 overflow-hidden"
 				initial={false}
