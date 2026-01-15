@@ -260,6 +260,10 @@ export const sitemap = [
 								href: "/docs/general/cors",
 								// icon: faShareNodes,
 							},
+							{
+								title: "Versions & Upgrades",
+								href: "/docs/actors/versions",
+							},
 						],
 					},
 				],
