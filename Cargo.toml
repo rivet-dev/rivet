@@ -53,98 +53,98 @@ members = [
   "engine/sdks/rust/ups-protocol"
 ]
 
-  [workspace.package]
-  version = "2.0.33"
-  edition = "2024"
-  authors = [ "Rivet Gaming, LLC <developer@rivet.gg>" ]
-  license = "Apache-2.0"
+[workspace.package]
+version = "2.0.33"
+edition = "2024"
+authors = [ "Rivet Gaming, LLC <developer@rivet.gg>" ]
+license = "Apache-2.0"
 
-  [workspace.dependencies]
-  anyhow = "1.0.82"
-  async-channel = "2.1.1"
-  async-nats = "0.33"
-  async-stream = "0.3"
-  async-trait = "0.1"
-  axum-test = "17"
-  base64 = "0.22"
-  bcrypt = "0.13.0"
-  bytes = "1.6.0"
-  cjson = "0.1"
-  colored_json = "5.0.0"
-  console-subscriber = "0.4"
-  dirs = "5.0.1"
-  divan = "0.1.17"
-  foundationdb-tuple = "0.9.1"
-  fs_extra = "1.3.0"
-  futures = "0.3.30"
-  futures-util = "0.3"
-  glob = "0.3.1"
-  governor = "0.6"
-  heck = "0.5"
-  hex = "0.4"
-  http = "1.3.1"
-  http-body = "1.0.0"
-  http-body-util = "0.1.1"
-  hyper-tls = "0.5.0"
-  hyper-tungstenite = "0.17.0"
-  include_dir = "0.7.4"
-  indoc = "2.0.5"
-  itertools = "0.14.0"
-  json5 = "0.4.1"
-  lazy_static = "1.4"
-  libc = "0.2"
-  lz4_flex = "0.11.3"
-  maplit = "1.0.2"
-  md5 = "0.7.0"
-  once_cell = "1.20.2"
-  opentelemetry-appender-tracing = "0.28.1"
-  papaya = "0.2.1"
-  pest_derive = "2.7"
-  portpicker = "0.1"
-  prettyplease = "0.2"
-  prometheus = "0.14"
-  quote = "1.0"
-  rand = "0.8"
-  regex = "1.4"
-  rstest = "0.26.1"
-  rustls-pemfile = "2.2.0"
-  rustyline = "15.0.0"
-  scc = "3.3.2"
-  semver = "1.0.27"
-  serde_bare = "0.5.0"
-  serde_html_form = "0.2.7"
-  serde_yaml = "0.9.34"
-  sha2 = "0.10"
-  slog = "2.7"
-  slog-async = "2.8"
-  slog-term = "2.9"
-  statrs = "0.18"
-  sysinfo = "0.37.2"
-  tabled = "0.17.0"
-  tempfile = "3.13.0"
-  testcontainers = "0.24"
-  thiserror = "1.0.64"
-  tokio-cron-scheduler = "0.13.0"
-  tokio-native-tls = "0.3.1"
-  tokio-stream = "0.1.15"
-  tokio-tungstenite = "0.26.0"
-  tokio-util = "0.7"
-  tower = "0.5"
-  tracing = "0.1.40"
-  tracing-core = "0.1"
-  tracing-opentelemetry = "0.29"
-  tracing-slog = "0.2"
-  vergen-gitcl = "1.0.0"
-  reqwest-eventsource = "0.6.0"
+[workspace.dependencies]
+anyhow = "1.0.82"
+async-channel = "2.1.1"
+async-nats = "0.33"
+async-stream = "0.3"
+async-trait = "0.1"
+axum-test = "17"
+base64 = "0.22"
+bcrypt = "0.13.0"
+bytes = "1.6.0"
+cjson = "0.1"
+colored_json = "5.0.0"
+console-subscriber = "0.4"
+dirs = "5.0.1"
+divan = "0.1.17"
+foundationdb-tuple = "0.9.1"
+fs_extra = "1.3.0"
+futures = "0.3.30"
+futures-util = "0.3"
+glob = "0.3.1"
+governor = "0.6"
+heck = "0.5"
+hex = "0.4"
+http = "1.3.1"
+http-body = "1.0.0"
+http-body-util = "0.1.1"
+hyper-tls = "0.5.0"
+hyper-tungstenite = "0.17.0"
+include_dir = "0.7.4"
+indoc = "2.0.5"
+itertools = "0.14.0"
+json5 = "0.4.1"
+lazy_static = "1.4"
+libc = "0.2"
+lz4_flex = "0.11.3"
+maplit = "1.0.2"
+md5 = "0.7.0"
+once_cell = "1.20.2"
+opentelemetry-appender-tracing = "0.28.1"
+papaya = "0.2.1"
+pest_derive = "2.7"
+portpicker = "0.1"
+prettyplease = "0.2"
+prometheus = "0.14"
+quote = "1.0"
+rand = "0.8"
+regex = "1.4"
+rstest = "0.26.1"
+rustls-pemfile = "2.2.0"
+rustyline = "15.0.0"
+scc = "3.3.2"
+semver = "1.0.27"
+serde_bare = "0.5.0"
+serde_html_form = "0.2.7"
+serde_yaml = "0.9.34"
+sha2 = "0.10"
+slog = "2.7"
+slog-async = "2.8"
+slog-term = "2.9"
+statrs = "0.18"
+sysinfo = "0.37.2"
+tabled = "0.17.0"
+tempfile = "3.13.0"
+testcontainers = "0.24"
+thiserror = "1.0.64"
+tokio-cron-scheduler = "0.13.0"
+tokio-native-tls = "0.3.1"
+tokio-stream = "0.1.15"
+tokio-tungstenite = "0.26.0"
+tokio-util = "0.7"
+tower = "0.5"
+tracing = "0.1.40"
+tracing-core = "0.1"
+tracing-opentelemetry = "0.29"
+tracing-slog = "0.2"
+vergen-gitcl = "1.0.0"
+reqwest-eventsource = "0.6.0"
 
-    [workspace.dependencies.vergen]
-    version = "9.0.4"
-    features = [ "build", "cargo", "rustc" ]
+[workspace.dependencies.vergen]
+version = "9.0.4"
+features = [ "build", "cargo", "rustc" ]
 
-    [workspace.dependencies.sentry]
-    version = "0.45.0"
-    default-features = false
-    features = [
+[workspace.dependencies.sentry]
+version = "0.45.0"
+default-features = false
+features = [
   "anyhow",
   "backtrace",
   "contexts",
@@ -155,9 +155,9 @@ members = [
   "tracing"
 ]
 
-    [workspace.dependencies.windows]
-    version = "0.58"
-    features = [
+[workspace.dependencies.windows]
+version = "0.58"
+features = [
   "Win32",
   "Win32_Storage",
   "Win32_Storage_FileSystem",
@@ -166,341 +166,341 @@ members = [
   "Win32_Security"
 ]
 
-    [workspace.dependencies.pest]
-    version = "2.7"
-
-    [workspace.dependencies.rocksdb]
-    version = "0.24"
-    features = [ "multi-threaded-cf" ]
-
-    [workspace.dependencies.hyper-util]
-    version = "0.1.10"
-    features = [ "full" ]
-
-    [workspace.dependencies.rustls]
-    version = "0.23.25"
-    default-features = false
-    features = [ "ring", "std", "logging" ]
-
-    [workspace.dependencies.tokio-rustls]
-    version = "0.26.2"
-    default-features = false
-    features = [ "ring", "logging" ]
-
-    [workspace.dependencies.utoipa]
-    version = "5.4.0"
-    features = [ "uuid" ]
-
-    [workspace.dependencies.axum]
-    version = "0.8"
-    features = [ "http2", "macros" ]
-
-    [workspace.dependencies.axum-extra]
-    version = "0.10.1"
-    features = [ "query" ]
-
-    [workspace.dependencies.tower-http]
-    version = "0.6"
-    features = [ "cors", "trace" ]
-
-    [workspace.dependencies.serde_json]
-    version = "1.0.128"
-    features = [ "raw_value" ]
-
-    [workspace.dependencies.nix]
-    version = "0.30"
-    default-features = false
-    features = [ "fs", "user", "signal" ]
-
-    [workspace.dependencies.chrono]
-    version = "0.4.38"
-    features = [ "now" ]
-
-    [workspace.dependencies.clap]
-    version = "4.3"
-    features = [ "derive", "cargo" ]
-
-    [workspace.dependencies.rivet-term]
-    git = "https://github.com/rivet-dev/rivet-term"
-    rev = "55e328470b68c557fb9bc8298369f90182d35b6d"
-
-    [workspace.dependencies.clickhouse]
-    version = "0.11.2"
-    features = [ "uuid" ]
-
-    [workspace.dependencies.config]
-    version = "0.14.0"
-    default-features = false
-    features = [ "async", "json", "yaml" ]
-
-    [workspace.dependencies.hyper]
-    version = "0.14"
-    features = [ "server", "http1", "tcp" ]
+[workspace.dependencies.pest]
+version = "2.7"
+
+[workspace.dependencies.rocksdb]
+version = "0.24"
+features = [ "multi-threaded-cf" ]
+
+[workspace.dependencies.hyper-util]
+version = "0.1.10"
+features = [ "full" ]
+
+[workspace.dependencies.rustls]
+version = "0.23.25"
+default-features = false
+features = [ "ring", "std", "logging" ]
+
+[workspace.dependencies.tokio-rustls]
+version = "0.26.2"
+default-features = false
+features = [ "ring", "logging" ]
+
+[workspace.dependencies.utoipa]
+version = "5.4.0"
+features = [ "uuid" ]
+
+[workspace.dependencies.axum]
+version = "0.8"
+features = [ "http2", "macros" ]
+
+[workspace.dependencies.axum-extra]
+version = "0.10.1"
+features = [ "query" ]
+
+[workspace.dependencies.tower-http]
+version = "0.6"
+features = [ "cors", "trace" ]
+
+[workspace.dependencies.serde_json]
+version = "1.0.128"
+features = [ "raw_value" ]
+
+[workspace.dependencies.nix]
+version = "0.30"
+default-features = false
+features = [ "fs", "user", "signal" ]
+
+[workspace.dependencies.chrono]
+version = "0.4.38"
+features = [ "now" ]
+
+[workspace.dependencies.clap]
+version = "4.3"
+features = [ "derive", "cargo" ]
+
+[workspace.dependencies.rivet-term]
+git = "https://github.com/rivet-dev/rivet-term"
+rev = "55e328470b68c557fb9bc8298369f90182d35b6d"
+
+[workspace.dependencies.clickhouse]
+version = "0.11.2"
+features = [ "uuid" ]
+
+[workspace.dependencies.config]
+version = "0.14.0"
+default-features = false
+features = [ "async", "json", "yaml" ]
+
+[workspace.dependencies.hyper]
+version = "0.14"
+features = [ "server", "http1", "tcp" ]
 
-    [workspace.dependencies.indexmap]
-    version = "2.0"
-    features = [ "serde" ]
+[workspace.dependencies.indexmap]
+version = "2.0"
+features = [ "serde" ]
 
-    [workspace.dependencies.ipnet]
-    version = "2.10.1"
-    features = [ "serde" ]
+[workspace.dependencies.ipnet]
+version = "2.10.1"
+features = [ "serde" ]
 
-    [workspace.dependencies.moka]
-    version = "0.12"
-    features = [ "future" ]
+[workspace.dependencies.moka]
+version = "0.12"
+features = [ "future" ]
 
-    [workspace.dependencies.opentelemetry]
-    version = "0.28"
-    features = [ "trace", "metrics", "logs" ]
+[workspace.dependencies.opentelemetry]
+version = "0.28"
+features = [ "trace", "metrics", "logs" ]
 
-    [workspace.dependencies.opentelemetry-otlp]
-    version = "0.28"
-    features = [ "trace", "metrics", "logs", "grpc-tonic" ]
+[workspace.dependencies.opentelemetry-otlp]
+version = "0.28"
+features = [ "trace", "metrics", "logs", "grpc-tonic" ]
 
-    [workspace.dependencies.opentelemetry_sdk]
-    version = "0.28"
-    features = [ "trace", "metrics", "logs" ]
+[workspace.dependencies.opentelemetry_sdk]
+version = "0.28"
+features = [ "trace", "metrics", "logs" ]
 
-    [workspace.dependencies.opentelemetry-semantic-conventions]
-    version = "0.28"
-    features = [ "semconv_experimental" ]
+[workspace.dependencies.opentelemetry-semantic-conventions]
+version = "0.28"
+features = [ "semconv_experimental" ]
 
-    [workspace.dependencies.opentelemetry-stdout]
-    version = "0.28.0"
-    features = [ "trace", "metrics", "logs" ]
+[workspace.dependencies.opentelemetry-stdout]
+version = "0.28.0"
+features = [ "trace", "metrics", "logs" ]
 
-    [workspace.dependencies.proc-macro2]
-    version = "1.0"
-    features = [ "span-locations" ]
+[workspace.dependencies.proc-macro2]
+version = "1.0"
+features = [ "span-locations" ]
 
-    [workspace.dependencies.reqwest]
-    version = "0.12.22"
-    features = [ "json" ]
+[workspace.dependencies.reqwest]
+version = "0.12.22"
+features = [ "json" ]
 
-    [workspace.dependencies.schemars]
-    version = "0.8.21"
-    features = [ "url", "uuid1" ]
+[workspace.dependencies.schemars]
+version = "0.8.21"
+features = [ "url", "uuid1" ]
 
-    [workspace.dependencies.serde]
-    version = "1.0"
-    features = [ "derive" ]
+[workspace.dependencies.serde]
+version = "1.0"
+features = [ "derive" ]
 
-    [workspace.dependencies.strum]
-    version = "0.26.3"
-    features = [ "derive" ]
+[workspace.dependencies.strum]
+version = "0.26.3"
+features = [ "derive" ]
 
-    [workspace.dependencies.syn]
-    version = "2.0"
-    features = [ "full", "extra-traits" ]
+[workspace.dependencies.syn]
+version = "2.0"
+features = [ "full", "extra-traits" ]
 
-    [workspace.dependencies.url]
-    version = "2.5.4"
-    features = [ "serde" ]
+[workspace.dependencies.url]
+version = "2.5.4"
+features = [ "serde" ]
 
-    [workspace.dependencies.urlencoding]
-    version = "2.1"
+[workspace.dependencies.urlencoding]
+version = "2.1"
 
-    [workspace.dependencies.uuid]
-    version = "1.11.0"
-    features = [ "v4", "serde" ]
+[workspace.dependencies.uuid]
+version = "1.11.0"
+features = [ "v4", "serde" ]
 
-    [workspace.dependencies.tokio]
-    version = "1.44.0"
-    features = [ "full", "tracing" ]
+[workspace.dependencies.tokio]
+version = "1.44.0"
+features = [ "full", "tracing" ]
 
-    [workspace.dependencies.tokio-postgres]
-    version = "0.7"
-    features = [ "with-chrono-0_4" ]
+[workspace.dependencies.tokio-postgres]
+version = "0.7"
+features = [ "with-chrono-0_4" ]
 
-    [workspace.dependencies.deadpool-postgres]
-    version = "0.14.1"
+[workspace.dependencies.deadpool-postgres]
+version = "0.14.1"
 
-    [workspace.dependencies.tokio-postgres-rustls]
-    version = "0.13"
+[workspace.dependencies.tokio-postgres-rustls]
+version = "0.13"
 
-    [workspace.dependencies.webpki-roots]
-    version = "0.26"
+[workspace.dependencies.webpki-roots]
+version = "0.26"
 
-    [workspace.dependencies.tracing-logfmt]
-    version = "0.3"
-    features = [ "ansi_logs" ]
+[workspace.dependencies.tracing-logfmt]
+version = "0.3"
+features = [ "ansi_logs" ]
 
-    [workspace.dependencies.tracing-subscriber]
-    version = "0.3"
-    default-features = false
-    features = [ "ansi", "fmt", "json", "env-filter" ]
+[workspace.dependencies.tracing-subscriber]
+version = "0.3"
+default-features = false
+features = [ "ansi", "fmt", "json", "env-filter" ]
 
-    [workspace.dependencies.vbare]
-    version = "0.0.4"
+[workspace.dependencies.vbare]
+version = "0.0.4"
 
-    [workspace.dependencies.vbare-compiler]
-    version = "0.0.4"
+[workspace.dependencies.vbare-compiler]
+version = "0.0.4"
 
-    [workspace.dependencies.pegboard-actor-kv]
-    path = "engine/packages/actor-kv"
+[workspace.dependencies.pegboard-actor-kv]
+path = "engine/packages/actor-kv"
 
-    [workspace.dependencies.rivet-api-builder]
-    path = "engine/packages/api-builder"
+[workspace.dependencies.rivet-api-builder]
+path = "engine/packages/api-builder"
 
-    [workspace.dependencies.rivet-api-peer]
-    path = "engine/packages/api-peer"
+[workspace.dependencies.rivet-api-peer]
+path = "engine/packages/api-peer"
 
-    [workspace.dependencies.rivet-api-public]
-    path = "engine/packages/api-public"
+[workspace.dependencies.rivet-api-public]
+path = "engine/packages/api-public"
 
-    [workspace.dependencies.rivet-api-types]
-    path = "engine/packages/api-types"
+[workspace.dependencies.rivet-api-types]
+path = "engine/packages/api-types"
 
-    [workspace.dependencies.rivet-api-util]
-    path = "engine/packages/api-util"
+[workspace.dependencies.rivet-api-util]
+path = "engine/packages/api-util"
 
-    [workspace.dependencies.rivet-bootstrap]
-    path = "engine/packages/bootstrap"
+[workspace.dependencies.rivet-bootstrap]
+path = "engine/packages/bootstrap"
 
-    [workspace.dependencies.rivet-cache]
-    path = "engine/packages/cache"
+[workspace.dependencies.rivet-cache]
+path = "engine/packages/cache"
 
-    [workspace.dependencies.rivet-cache-purge]
-    path = "engine/packages/cache-purge"
+[workspace.dependencies.rivet-cache-purge]
+path = "engine/packages/cache-purge"
 
-    [workspace.dependencies.rivet-cache-result]
-    path = "engine/packages/cache-result"
+[workspace.dependencies.rivet-cache-result]
+path = "engine/packages/cache-result"
 
-    [workspace.dependencies.clickhouse-inserter]
-    path = "engine/packages/clickhouse-inserter"
+[workspace.dependencies.clickhouse-inserter]
+path = "engine/packages/clickhouse-inserter"
 
-    [workspace.dependencies.clickhouse-user-query]
-    path = "engine/packages/clickhouse-user-query"
+[workspace.dependencies.clickhouse-user-query]
+path = "engine/packages/clickhouse-user-query"
 
-    [workspace.dependencies.rivet-config]
-    path = "engine/packages/config"
+[workspace.dependencies.rivet-config]
+path = "engine/packages/config"
 
-    [workspace.dependencies.rivet-api-public-openapi-gen]
-    path = "engine/packages/api-public-openapi-gen"
+[workspace.dependencies.rivet-api-public-openapi-gen]
+path = "engine/packages/api-public-openapi-gen"
 
-    [workspace.dependencies.rivet-engine]
-    path = "engine/packages/engine"
+[workspace.dependencies.rivet-engine]
+path = "engine/packages/engine"
 
-    [workspace.dependencies.rivet-env]
-    path = "engine/packages/env"
+[workspace.dependencies.rivet-env]
+path = "engine/packages/env"
 
-    [workspace.dependencies.epoxy]
-    path = "engine/packages/epoxy"
+[workspace.dependencies.epoxy]
+path = "engine/packages/epoxy"
 
-    [workspace.dependencies.rivet-error]
-    path = "engine/packages/error"
+[workspace.dependencies.rivet-error]
+path = "engine/packages/error"
 
-    [workspace.dependencies.rivet-error-macros]
-    path = "engine/packages/error-macros"
+[workspace.dependencies.rivet-error-macros]
+path = "engine/packages/error-macros"
 
-    [workspace.dependencies.gasoline]
-    path = "engine/packages/gasoline"
+[workspace.dependencies.gasoline]
+path = "engine/packages/gasoline"
 
-    [workspace.dependencies.gas]
-    package = "gasoline"
-    path = "engine/packages/gasoline"
+[workspace.dependencies.gas]
+package = "gasoline"
+path = "engine/packages/gasoline"
 
-    [workspace.dependencies.gasoline-macros]
-    path = "engine/packages/gasoline-macros"
+[workspace.dependencies.gasoline-macros]
+path = "engine/packages/gasoline-macros"
 
-    [workspace.dependencies.rivet-guard]
-    path = "engine/packages/guard"
+[workspace.dependencies.rivet-guard]
+path = "engine/packages/guard"
 
-    [workspace.dependencies.rivet-guard-core]
-    path = "engine/packages/guard-core"
+[workspace.dependencies.rivet-guard-core]
+path = "engine/packages/guard-core"
 
-    [workspace.dependencies.rivet-logs]
-    path = "engine/packages/logs"
+[workspace.dependencies.rivet-logs]
+path = "engine/packages/logs"
 
-    [workspace.dependencies.rivet-metrics]
-    path = "engine/packages/metrics"
+[workspace.dependencies.rivet-metrics]
+path = "engine/packages/metrics"
 
-    [workspace.dependencies.rivet-metrics-aggregator]
-    path = "engine/packages/metrics-aggregator"
+[workspace.dependencies.rivet-metrics-aggregator]
+path = "engine/packages/metrics-aggregator"
 
-    [workspace.dependencies.namespace]
-    path = "engine/packages/namespace"
+[workspace.dependencies.namespace]
+path = "engine/packages/namespace"
 
-    [workspace.dependencies.pegboard]
-    path = "engine/packages/pegboard"
+[workspace.dependencies.pegboard]
+path = "engine/packages/pegboard"
 
-    [workspace.dependencies.pegboard-gateway]
-    path = "engine/packages/pegboard-gateway"
+[workspace.dependencies.pegboard-gateway]
+path = "engine/packages/pegboard-gateway"
 
-    [workspace.dependencies.pegboard-runner]
-    path = "engine/packages/pegboard-runner"
+[workspace.dependencies.pegboard-runner]
+path = "engine/packages/pegboard-runner"
 
-    [workspace.dependencies.rivet-pools]
-    path = "engine/packages/pools"
+[workspace.dependencies.rivet-pools]
+path = "engine/packages/pools"
 
-    [workspace.dependencies.rivet-postgres-util]
-    path = "engine/packages/postgres-util"
+[workspace.dependencies.rivet-postgres-util]
+path = "engine/packages/postgres-util"
 
-    [workspace.dependencies.rivet-runtime]
-    path = "engine/packages/runtime"
+[workspace.dependencies.rivet-runtime]
+path = "engine/packages/runtime"
 
-    [workspace.dependencies.rivet-service-manager]
-    path = "engine/packages/service-manager"
+[workspace.dependencies.rivet-service-manager]
+path = "engine/packages/service-manager"
 
-    [workspace.dependencies.rivet-telemetry]
-    path = "engine/packages/telemetry"
+[workspace.dependencies.rivet-telemetry]
+path = "engine/packages/telemetry"
 
-    [workspace.dependencies.rivet-test-deps]
-    path = "engine/packages/test-deps"
+[workspace.dependencies.rivet-test-deps]
+path = "engine/packages/test-deps"
 
-    [workspace.dependencies.rivet-test-deps-docker]
-    path = "engine/packages/test-deps-docker"
+[workspace.dependencies.rivet-test-deps-docker]
+path = "engine/packages/test-deps-docker"
 
-    [workspace.dependencies.rivet-tracing-reconfigure]
-    path = "engine/packages/tracing-reconfigure"
+[workspace.dependencies.rivet-tracing-reconfigure]
+path = "engine/packages/tracing-reconfigure"
 
-    [workspace.dependencies.rivet-tracing-utils]
-    path = "engine/packages/tracing-utils"
+[workspace.dependencies.rivet-tracing-utils]
+path = "engine/packages/tracing-utils"
 
-    [workspace.dependencies.rivet-types]
-    path = "engine/packages/types"
+[workspace.dependencies.rivet-types]
+path = "engine/packages/types"
 
-    [workspace.dependencies.universaldb]
-    path = "engine/packages/universaldb"
+[workspace.dependencies.universaldb]
+path = "engine/packages/universaldb"
 
-    [workspace.dependencies.universalpubsub]
-    path = "engine/packages/universalpubsub"
+[workspace.dependencies.universalpubsub]
+path = "engine/packages/universalpubsub"
 
-    [workspace.dependencies.rivet-util]
-    path = "engine/packages/util"
+[workspace.dependencies.rivet-util]
+path = "engine/packages/util"
 
-    [workspace.dependencies.util]
-    package = "rivet-util"
-    path = "engine/packages/util"
+[workspace.dependencies.util]
+package = "rivet-util"
+path = "engine/packages/util"
 
-    [workspace.dependencies.rivet-util-id]
-    path = "engine/packages/util-id"
+[workspace.dependencies.rivet-util-id]
+path = "engine/packages/util-id"
 
-    [workspace.dependencies.rivet-workflow-worker]
-    path = "engine/packages/workflow-worker"
+[workspace.dependencies.rivet-workflow-worker]
+path = "engine/packages/workflow-worker"
 
-    [workspace.dependencies.rivet-api-full]
-    path = "engine/sdks/rust/api-full"
+[workspace.dependencies.rivet-api-full]
+path = "engine/sdks/rust/api-full"
 
-    [workspace.dependencies.rivet-data]
-    path = "engine/sdks/rust/data"
+[workspace.dependencies.rivet-data]
+path = "engine/sdks/rust/data"
 
-    [workspace.dependencies.epoxy-protocol]
-    path = "engine/sdks/rust/epoxy-protocol"
+[workspace.dependencies.epoxy-protocol]
+path = "engine/sdks/rust/epoxy-protocol"
 
-    [workspace.dependencies.rivet-runner-protocol]
-    path = "engine/sdks/rust/runner-protocol"
+[workspace.dependencies.rivet-runner-protocol]
+path = "engine/sdks/rust/runner-protocol"
 
-    [workspace.dependencies.rivet-ups-protocol]
-    path = "engine/sdks/rust/ups-protocol"
+[workspace.dependencies.rivet-ups-protocol]
+path = "engine/sdks/rust/ups-protocol"
 
 [profile.dev]
 overflow-checks = false
 debug = true
 lto = "off"
 
-  [profile.dev.build-override]
-  opt-level = 3
+[profile.dev.build-override]
+opt-level = 3
 
 [profile.release]
 debug = false
