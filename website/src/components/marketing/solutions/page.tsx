@@ -248,10 +248,10 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
-							Deploy Agent
+						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+							Get Started
 							<ArrowRight className="w-4 h-4" />
-						</button>
+						</a>
 					</motion.div>
 				</div>
 				<div className="flex-1 w-full max-w-xl">
@@ -731,12 +731,12 @@ export default function AgentsPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building Now
-							</button>
-							<button className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
+							</a>
+							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
 								Read the Docs
-							</button>
+							</a>
 						</motion.div>
 					</div>
 				</section>

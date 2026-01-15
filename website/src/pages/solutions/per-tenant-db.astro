@@ -1,0 +1,12 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import PerTenantDBPage from '@/app/(v2)/(marketing)/solutions/per-tenant-db/page';
+---
+
+<MarketingLayout
+	title="Per-Tenant Databases - Rivet"
+	description="Persistent state for every customer. Give every tenant their own isolated Actor with private in-memory state."
+	canonicalUrl="https://rivet.gg/solutions/per-tenant-db/"
+>
+	<PerTenantDBPage client:load />
+</MarketingLayout>
