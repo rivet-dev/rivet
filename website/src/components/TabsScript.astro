@@ -46,9 +46,57 @@
 		});
 	}
 
+	// Initialize CodeGroup tabs by reading code blocks from source
+	function initializeCodeGroups() {
+		const codeGroupContainers = document.querySelectorAll('[data-code-group-container]');
+		codeGroupContainers.forEach((container) => {
+			const tabsList = container.querySelector('[data-code-group-tabs]');
+			const contentContainer = container.querySelector('[data-code-group-content-container]');
+			const source = container.querySelector('[data-code-group-source]');
+
+			if (!tabsList || !contentContainer || !source) return;
+
+			// Already initialized
+			if (tabsList.children.length > 0) return;
+
+			// Find all code blocks in source (they have data-code-block attribute)
+			const codeBlocks = source.querySelectorAll('[data-code-block]');
+			codeBlocks.forEach((block, index) => {
+				const title = block.getAttribute('data-code-title') || 'Code';
+				const id = block.getAttribute('data-code-id') || `code-${index}`;
+
+				// Create tab button
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.setAttribute('data-code-group-trigger', id);
+				button.className = [
+					'relative inline-flex min-h-[2.75rem] items-center justify-center whitespace-nowrap',
+					'rounded-none border-b-2 bg-transparent px-4 py-2.5 text-sm font-semibold',
+					'ring-offset-background transition-none',
+					'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+					'disabled:pointer-events-none disabled:opacity-50',
+					index === 0 ? 'border-b-primary text-white' : 'border-b-transparent text-muted-foreground'
+				].join(' ');
+				button.textContent = title;
+				tabsList.appendChild(button);
+
+				// Create content wrapper and move code block
+				const contentWrapper = document.createElement('div');
+				contentWrapper.setAttribute('data-code-group-content', id);
+				contentWrapper.className = index === 0 ? '' : 'hidden';
+				contentWrapper.appendChild(block.cloneNode(true));
+				contentContainer.appendChild(contentWrapper);
+			});
+		});
+	}
+
 	// Run on page load and after view transitions
 	initializeTabs();
-	document.addEventListener('astro:after-swap', initializeTabs);
+	initializeCodeGroups();
+	document.addEventListener('astro:after-swap', () => {
+		initializeTabs();
+		initializeCodeGroups();
+	});
 
 	// Use event delegation - only need one listener on document
 	if (!(window as any).__tabsListenerAdded) {
