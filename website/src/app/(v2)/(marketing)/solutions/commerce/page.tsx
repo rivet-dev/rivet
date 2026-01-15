@@ -82,9 +82,9 @@ const CodeBlock = ({ code, fileName = "cart.ts" }) => {
 
 											if (["import", "from", "export", "const", "return", "async", "await", "function", "if", "throw"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
-											} else if (["actor", "recommend", "addItem", "rpc", "inventory", "reserve", "ai", "broadcast"].includes(trimmed)) {
+											} else if (["actor", "recommend", "addItem", "getRecommendations", "reserveInventory", "broadcast"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
-											} else if (["state", "actions", "items", "history", "productId", "qty", "stock", "recent", "slice"].includes(trimmed)) {
+											} else if (["state", "actions", "items", "history", "productId", "qty", "stock", "recent", "slice", "push"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											} else if (part.startsWith('"') || part.startsWith("'")) {
 												tokens.push(<span key={j} className="text-[#FF4500]">{part}</span>);
@@ -241,7 +241,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Start Building
 							<ArrowRight className="w-4 h-4" />
 						</a>
@@ -262,14 +262,15 @@ export const shoppingCart = actor({
     // Instant recommendations based on hot state
     recommend: async (c) => {
       const recent = c.state.history.slice(-5);
-      return await c.ai.recommend(recent);
+      return await getRecommendations(recent);
     },
 
     addItem: async (c, { productId, qty }) => {
-      const stock = await c.rpc.inventory.reserve(productId, qty);
+      const stock = await reserveInventory(productId, qty);
       if (!stock) throw "Out of Stock";
 
       c.state.items.push({ productId, qty });
+      c.state.history.push(productId);
       c.broadcast("cart_updated", c.state);
     }
   }
@@ -634,11 +635,11 @@ export default function CommercePage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building Now
 							</a>
-							<a href="/templates" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
-								View Examples
+							<a href="/templates/state" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
+								View Example
 							</a>
 						</motion.div>
 					</div>

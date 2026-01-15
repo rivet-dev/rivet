@@ -100,11 +100,11 @@ const CodeBlock = ({ code, fileName = "platform.ts" }) => {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
 											}
 											// Functions & Special Rivet Terms
-											else if (["actor", "spawn", "rpc", "loadCode", "deployGeneratedApp"].includes(trimmed)) {
+											else if (["actor", "broadcast", "deployGeneratedApp", "getApp"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
 											}
 											// Object Keys / Properties / Methods
-											else if (["state", "actions", "runningApps", "code", "schema", "env", "DATABASE_MODE", "url", "status", "appActor"].includes(trimmed)) {
+											else if (["state", "actions", "runningApps", "code", "appId", "status"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											}
 											// Strings
@@ -263,7 +263,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Start Building
 							<ArrowRight className="w-4 h-4" />
 						</a>
@@ -279,18 +279,19 @@ const Hero = () => (
 // Spawn a new backend for a user's generated app
 // cleanly isolated with zero infrastructure overhead
 export const appManager = actor({
-  state: { runningApps: [] },
+  state: { runningApps: {} },
   actions: {
-    deployGeneratedApp: async (c, { code, schema }) => {
-      // 1. Create a dedicated actor for this app
-      const appActor = await c.spawn("generated_backend", { 
-         env: { DATABASE_MODE: 'in-memory' } 
-      });
-      
-      // 2. Hot-load the logic
-      await appActor.rpc.loadCode(code);
-      
-      return { url: appActor.url, status: "ready" };
+    deployGeneratedApp: async (c, { appId, code }) => {
+      // 1. Store the generated code
+      c.state.runningApps[appId] = { code, status: "ready" };
+
+      // 2. Broadcast to any connected clients
+      c.broadcast("app_deployed", { appId });
+      return { appId, status: "ready" };
+    },
+
+    getApp: (c, appId) => {
+      return c.state.runningApps[appId] || null;
     }
   }
 });`}
@@ -587,7 +588,7 @@ export default function AppGeneratorsPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building Now
 							</a>
 							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">

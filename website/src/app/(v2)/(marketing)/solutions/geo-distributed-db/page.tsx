@@ -81,7 +81,7 @@ const CodeBlock = ({ code, fileName = "global.ts" }) => {
 
 											if (["import", "from", "export", "const", "return", "async", "await", "function"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
-											} else if (["actor", "broadcast", "getItem", "updateStock"].includes(trimmed)) {
+											} else if (["actor", "broadcast", "getItem", "updateStock", "getRegion"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
 											} else if (["state", "actions", "inventory", "region", "id", "qty"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
@@ -231,7 +231,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
@@ -245,22 +245,21 @@ const Hero = () => (
 							fileName="global_config.ts"
 							code={`import { actor } from "rivetkit";
 
+// Deployed to EU regions for data sovereignty
 export const globalStore = actor({
-  // Pin data to specific regions for sovereignty
-  // This actor never leaves the EU
-  region: ["fra", "lhr"],
-  
   state: { inventory: {} },
 
   actions: {
-    // Reads are served from the nearest local replica
+    // Reads are served from the nearest replica
     getItem: (c, id) => c.state.inventory[id],
 
-    // Writes are coordinated globally (Paxos/Raft)
+    // Writes update state atomically
     updateStock: (c, id, qty) => {
       c.state.inventory[id] = qty;
       c.broadcast("stock_update", { id, qty });
-    }
+    },
+
+    getRegion: (c) => c.region
   }
 });`}
 						/>
@@ -979,10 +978,10 @@ export default function GeoDistributedDBPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building Now
 							</a>
-							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
+							<a href="/docs/actors/state" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
 								Read the Docs
 							</a>
 						</motion.div>

@@ -101,11 +101,11 @@ const CodeBlock = ({ code, fileName = "workflow.ts" }) => {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
 											}
 											// Functions & Special Rivet Terms
-											else if (["actor", "broadcast", "sleep", "waitForSignal", "spawn", "rpc"].includes(trimmed)) {
+											else if (["actor", "broadcast", "schedule", "after", "spawn", "rpc", "sendEmail"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
 											}
 											// Object Keys / Properties / Methods
-											else if (["state", "actions", "step", "userId", "start", "email", "send", "hasLoggedIn", "subtasks", "runWorkflow", "goal", "researcher", "coder", "gatherInfo", "generate", "context", "code", "status", "complete"].includes(trimmed)) {
+											else if (["state", "actions", "step", "userId", "start", "hasLoggedIn", "checkStatus", "markLoggedIn", "complete"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											}
 											// Strings
@@ -255,12 +255,12 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
-						<a href="/templates" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
-							View Examples
+						<a href="/docs/actors/schedule" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
+							Read the Docs
 						</a>
 					</motion.div>
 				</div>
@@ -272,24 +272,27 @@ const Hero = () => (
 							code={`import { actor } from "rivetkit";
 
 export const userOnboarding = actor({
-  state: { step: 'welcome', userId: null },
+  state: { step: 'welcome', hasLoggedIn: false },
   actions: {
     start: async (c) => {
       // 1. Send welcome email
-      await c.email.send("welcome");
-      
-      // 2. Hibernate for 3 days (0 cost)
-      await c.sleep("3d");
+      await sendEmail(c.state.userId, "welcome");
 
-      // 3. Wake up and check status
+      // 2. Schedule nudge in 3 days (actor hibernates)
+      c.schedule.after(3 * 24 * 60 * 60 * 1000, "checkStatus");
+      c.state.step = "waiting";
+    },
+
+    checkStatus: async (c) => {
+      // 3. Wake up and check if user has logged in
       if (!c.state.hasLoggedIn) {
-        await c.email.send("nudge");
-        // Wait for human signal or timeout
-        await c.waitForSignal("login", "7d");
+        await sendEmail(c.state.userId, "nudge");
+        // Schedule final check in 7 more days
+        c.schedule.after(7 * 24 * 60 * 60 * 1000, "complete");
       }
+    },
 
-      return "completed";
-    }
+    markLoggedIn: (c) => { c.state.hasLoggedIn = true; }
   }
 });`}
 						/>
@@ -692,7 +695,7 @@ export default function WorkflowsPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building
 							</a>
 							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
