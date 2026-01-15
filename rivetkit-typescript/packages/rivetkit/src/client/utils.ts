@@ -20,6 +20,39 @@ import { httpUserAgent } from "@/utils";
 import { ActorError, HttpRequestError } from "./errors";
 import { logger } from "./log";
 
+export interface ParsedCloseReason {
+	group: string;
+	code: string;
+	rayId?: string;
+}
+
+/**
+ * Parses WebSocket close reason string into structured data.
+ *
+ * Expected format examples:
+ *   - "guard.actor_runner_failed#t1s80so6h3irenp8ymzltfoittcl00"
+ *   - "ws.client_closed"
+ *
+ * Returns undefined if the format is invalid
+ */
+export function parseWebSocketCloseReason(
+	reason: string,
+): ParsedCloseReason | undefined {
+	const [mainPart, rayId] = reason.split("#");
+	const [group, code] = mainPart.split(".");
+
+	if (!group || !code) {
+		logger().warn({ msg: "failed to parse close reason", reason });
+		return undefined;
+	}
+
+	return {
+		group,
+		code,
+		rayId,
+	};
+}
+
 export type WebSocketMessage = string | Blob | ArrayBuffer | Uint8Array;
 
 export function messageLength(message: WebSocketMessage): number {
