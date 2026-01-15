@@ -5,10 +5,10 @@ import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
-import { type ReactNode, useEffect, useState } from "react";
+import React, { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
-import { Bot, Gamepad2, FileText, Workflow, Database } from "lucide-react";
+import { Bot, Gamepad2, FileText, Workflow, ShoppingCart, Wand2, Network, Clock, Database, Globe } from "lucide-react";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
 import { LogoContextMenu } from "./LogoContextMenu";
@@ -48,22 +48,17 @@ function TextNavItem({
 
 function SolutionsDropdown({ active }: { active?: boolean }) {
 	const [isOpen, setIsOpen] = useState(false);
+	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 	const solutions = [
 		{ 
-			label: "Agents", 
+			label: "Agent Orchestration", 
 			href: "/solutions/agents",
 			icon: Bot,
 			description: "Build durable AI assistants"
 		},
 		{ 
-			label: "Game Servers", 
-			href: "/solutions/game-servers",
-			icon: Gamepad2,
-			description: "Authoritative multiplayer servers"
-		},
-		{ 
-			label: "Collaborative State", 
+			label: "Multiplayer Documents", 
 			href: "/solutions/collaborative-state",
 			icon: FileText,
 			description: "Real-time collaboration"
@@ -75,26 +70,81 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 			description: "Durable multi-step processes"
 		},
 		{ 
-			label: "User-Session Store", 
-			href: "/solutions/user-session-store",
+			label: "Vibe-Coded Backends", 
+			href: "/solutions/app-generators",
+			icon: Wand2,
+			description: "Backend for AI-generated apps"
+		},
+		{ 
+			label: "Geo-Distributed Databases", 
+			href: "/solutions/geo-distributed-db",
+			icon: Globe,
+			description: "Multi-region state replication"
+		},
+		{ 
+			label: "Per-Tenant Databases", 
+			href: "/solutions/per-tenant-db",
 			icon: Database,
-			description: "Isolated user data stores"
+			description: "Isolated state per customer"
 		},
 	];
 
+	const handleMouseEnter = () => {
+		if (closeTimeoutRef.current) {
+			clearTimeout(closeTimeoutRef.current);
+			closeTimeoutRef.current = null;
+		}
+		setIsOpen(true);
+	};
+
+	const handleMouseLeave = () => {
+		closeTimeoutRef.current = setTimeout(() => {
+			setIsOpen(false);
+		}, 200);
+	};
+
+	const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (closeTimeoutRef.current) {
+			clearTimeout(closeTimeoutRef.current);
+			closeTimeoutRef.current = null;
+		}
+		setIsOpen(!isOpen);
+	};
+
+	const handleOpenChange = (open: boolean) => {
+		if (closeTimeoutRef.current) {
+			clearTimeout(closeTimeoutRef.current);
+			closeTimeoutRef.current = null;
+		}
+		setIsOpen(open);
+	};
+
+	useEffect(() => {
+		return () => {
+			if (closeTimeoutRef.current) {
+				clearTimeout(closeTimeoutRef.current);
+			}
+		};
+	}, []);
+
 	return (
 		<div 
-			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-opacity duration-200"
-			onMouseEnter={() => setIsOpen(true)}
-			onMouseLeave={() => setIsOpen(false)}
+			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200"
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
 		>
-			<DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
+			<DropdownMenu open={isOpen} onOpenChange={handleOpenChange} modal={false}>
 				<DropdownMenuTrigger asChild>
 					<RivetHeader.NavItem
 						className={cn(
-							"text-white cursor-pointer flex items-center gap-1",
+							"!text-white cursor-pointer flex items-center gap-1 relative",
 							active && "opacity-100",
+							// Invisible bridge to prevent gap issues
+							"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
 						)}
+						onClick={handleClick}
 					>
 						Solutions
 						<Icon icon={faChevronDown} className="h-3 w-3 ml-0.5" />
@@ -103,9 +153,9 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 				<DropdownMenuContent 
 					align="start" 
 					className="min-w-[600px] p-6 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
-					onMouseEnter={() => setIsOpen(true)}
-					onMouseLeave={() => setIsOpen(false)}
-					sideOffset={8}
+					onMouseEnter={handleMouseEnter}
+					onMouseLeave={handleMouseLeave}
+					sideOffset={0}
 					alignOffset={0}
 					side="bottom"
 				>
@@ -244,7 +294,7 @@ export function Header({
 						}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
-								{/* <SolutionsDropdown active={active === "solutions"} /> */}
+								<SolutionsDropdown active={active === "solutions"} />
 								<TextNavItem
 									href="/docs"
 									ariaCurrent={
@@ -335,7 +385,7 @@ export function Header({
 			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
-					{/* <SolutionsDropdown active={active === "solutions"} /> */}
+					<SolutionsDropdown active={active === "solutions"} />
 					<TextNavItem
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}
@@ -397,49 +447,55 @@ function DocsMobileNavigation({ tree }) {
 	];
 
 	const solutions = [
-		{ label: "Agents", href: "/solutions/agents" },
-		{ label: "Game Servers", href: "/solutions/game-servers" },
-		{ label: "Collaborative State", href: "/solutions/collaborative-state" },
-		{ label: "Workflows", href: "/solutions/workflows" },
-		{ label: "User-Session Store", href: "/solutions/user-session-store" },
+		{ label: "Agent Orchestration", href: "/solutions/agents", icon: Bot },
+		{ label: "Multiplayer Documents", href: "/solutions/collaborative-state", icon: FileText },
+		{ label: "Workflows", href: "/solutions/workflows", icon: Workflow },
+		{ label: "Vibe-Coded Backends", href: "/solutions/app-generators", icon: Wand2 },
+		{ label: "Geo-Distributed Databases", href: "/solutions/geo-distributed-db", icon: Globe },
+		{ label: "Per-Tenant Databases", href: "/solutions/per-tenant-db", icon: Database },
 	];
 
 	const currentSection = sections.find(s => s.id === getCurrentSection());
 
 	return (
 		<div className="flex flex-col gap-1 font-v2 subpixel-antialiased text-sm">
+			{/* Solutions dropdown */}
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<button className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors flex items-center justify-between w-full text-left">
+						Solutions
+						<Icon icon={faChevronDown} className="h-3 w-3" />
+					</button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent 
+					className="w-[calc(100%-2rem)] max-w-[292px]"
+					align="start"
+					sideOffset={4}
+				>
+					{solutions.map((solution) => {
+						const IconComponent = solution.icon;
+						return (
+							<DropdownMenuItem
+								key={solution.href}
+								asChild
+								className="flex items-center gap-2"
+							>
+								<a href={solution.href}>
+									<IconComponent className="h-4 w-4" />
+									{solution.label}
+								</a>
+							</DropdownMenuItem>
+						);
+					})}
+				</DropdownMenuContent>
+			</DropdownMenu>
+
 			{/* Main navigation links */}
-			{mainLinks.map(({ href, label, isDropdown }) => {
-				if (isDropdown) {
-					return (
-						<div key={href} className="flex flex-col">
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button variant="outline" className="w-full justify-between h-9 text-sm">
-										{label}
-										<Icon icon={faChevronDown} className="h-3.5 w-3.5 ml-2" />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent className="w-[calc(100vw-3rem)]">
-									{solutions.map((solution) => (
-										<DropdownMenuItem
-											key={solution.href}
-											asChild
-										>
-											<a href={solution.href}>{solution.label}</a>
-										</DropdownMenuItem>
-									))}
-								</DropdownMenuContent>
-							</DropdownMenu>
-						</div>
-					);
-				}
-				return (
-					<a key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
-						{label}
-					</a>
-				);
-			})}
+			{mainLinks.map(({ href, label }) => (
+				<a key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
+					{label}
+				</a>
+			))}
 
 			{/* Separator and docs content */}
 			{isDocsPage && (
