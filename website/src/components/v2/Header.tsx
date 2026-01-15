@@ -49,6 +49,7 @@ function TextNavItem({
 function SolutionsDropdown({ active }: { active?: boolean }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const isHoveringRef = useRef(false);
 
 	const solutions = [
 		{ 
@@ -89,51 +90,51 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 		},
 	];
 
-	const handleMouseEnter = () => {
+	const cancelClose = () => {
 		if (closeTimeoutRef.current) {
 			clearTimeout(closeTimeoutRef.current);
 			closeTimeoutRef.current = null;
 		}
+	};
+
+	const scheduleClose = () => {
+		cancelClose();
+		closeTimeoutRef.current = setTimeout(() => {
+			setIsOpen(false);
+		}, 150);
+	};
+
+	const handleMouseEnter = () => {
+		isHoveringRef.current = true;
+		cancelClose();
 		setIsOpen(true);
 	};
 
 	const handleMouseLeave = () => {
-		closeTimeoutRef.current = setTimeout(() => {
-			setIsOpen(false);
-		}, 200);
+		isHoveringRef.current = false;
+		scheduleClose();
 	};
 
-	const handleClick = (e: React.MouseEvent<HTMLElement>) => {
-		e.preventDefault();
-		e.stopPropagation();
-		if (closeTimeoutRef.current) {
-			clearTimeout(closeTimeoutRef.current);
-			closeTimeoutRef.current = null;
-		}
-		setIsOpen(!isOpen);
-	};
-
+	// Handle Radix's open change events (escape key, click outside, etc.)
 	const handleOpenChange = (open: boolean) => {
-		if (closeTimeoutRef.current) {
-			clearTimeout(closeTimeoutRef.current);
-			closeTimeoutRef.current = null;
+		if (!open) {
+			// Close immediately for keyboard/click-outside events
+			// These fire when user explicitly wants to close
+			cancelClose();
+			setIsOpen(false);
 		}
-		if (open) {
-			setIsOpen(true);
-		} else {
-			// Use delay for closing to prevent flashing when Radix triggers state changes
-			closeTimeoutRef.current = setTimeout(() => {
-				setIsOpen(false);
-			}, 200);
-		}
+		// Ignore open events from Radix - hover controls opening
+	};
+
+	// Click toggles the menu, but we handle it ourselves to avoid Radix's double-toggle
+	const handlePointerDown = (e: React.PointerEvent) => {
+		e.preventDefault();
+		cancelClose();
+		setIsOpen((prev) => !prev);
 	};
 
 	useEffect(() => {
-		return () => {
-			if (closeTimeoutRef.current) {
-				clearTimeout(closeTimeoutRef.current);
-			}
-		};
+		return () => cancelClose();
 	}, []);
 
 	return (
@@ -144,17 +145,21 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 		>
 			<DropdownMenu open={isOpen} onOpenChange={handleOpenChange} modal={false}>
 				<DropdownMenuTrigger asChild>
-					<RivetHeader.NavItem
-						className={cn(
-							"!text-white cursor-pointer flex items-center gap-1 relative",
-							active && "opacity-100",
-							// Invisible bridge to prevent gap issues
-							"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
-						)}
-						onClick={handleClick}
-					>
-						Solutions
-						<Icon icon={faChevronDown} className="h-3 w-3 ml-0.5" />
+					<RivetHeader.NavItem asChild>
+						<button
+							type="button"
+							className={cn(
+								"!text-white cursor-pointer flex items-center gap-1 relative",
+								active && "opacity-100",
+								// Invisible bridge to prevent gap issues when moving to dropdown
+								"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
+							)}
+							onPointerDown={handlePointerDown}
+							onMouseEnter={handleMouseEnter}
+						>
+							Solutions
+							<Icon icon={faChevronDown} className="h-3 w-3 ml-0.5" />
+						</button>
 					</RivetHeader.NavItem>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent 

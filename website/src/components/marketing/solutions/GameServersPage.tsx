@@ -339,11 +339,11 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="w-full sm:w-auto h-12 px-8 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
+						<a href="https://dashboard.rivet.dev/" className="w-full sm:w-auto h-12 px-8 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
-						<a href="/templates" className="w-full sm:w-auto h-12 px-8 rounded-full border border-zinc-800 text-zinc-300 font-medium hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center gap-2 bg-black">
+						<a href="/templates/chat-room" className="w-full sm:w-auto h-12 px-8 rounded-full border border-zinc-800 text-zinc-300 font-medium hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center gap-2 bg-black">
 							<Play className="w-4 h-4" />
 							See Examples
 						</a>
@@ -800,7 +800,7 @@ export default function GameServersPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-all transform hover:-translate-y-1">
+							<a href="https://dashboard.rivet.dev/" className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-all transform hover:-translate-y-1">
 								Start Building
 							</a>
 							<a href="/docs/actors" className="w-full sm:w-auto px-8 py-4 rounded-full bg-zinc-900 text-white border border-zinc-800 font-medium hover:bg-zinc-800 transition-all">

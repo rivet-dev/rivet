@@ -83,10 +83,10 @@ const CodeBlock = ({ code, fileName = "agent.ts" }: { code: string; fileName?: s
 											if (["import", "from", "export", "const", "return", "async", "await", "function", "let", "var"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
 											}
-											else if (["actor", "broadcast", "streamText", "spawn", "rpc"].includes(trimmed)) {
+											else if (["actor", "broadcast", "generateText", "openai", "spawn", "rpc"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
 											}
-											else if (["state", "actions", "history", "goals", "role", "content", "text", "calls", "execute", "generate", "tools", "ai"].includes(trimmed)) {
+											else if (["state", "actions", "history", "goals", "role", "content", "text", "model", "messages", "think", "input"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											}
 											else if (part.startsWith('"') || part.startsWith("'")) {
@@ -243,12 +243,12 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
-						<a href="/templates" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
-							View Examples
+						<a href="/templates/ai-agent" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
+							View Example
 						</a>
 					</motion.div>
 				</div>
@@ -258,6 +258,8 @@ const Hero = () => (
 						<CodeBlock
 							fileName="reasoning_actor.ts"
 							code={`import { actor } from "rivetkit";
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 export const smartAgent = actor({
   // Persistent memory state
@@ -265,16 +267,17 @@ export const smartAgent = actor({
 
   actions: {
     think: async (c, input) => {
-      // Actors hold context in RAM across requests
-      c.state.history.push({ role: 'user', content: input });
-      
-      const res = await c.ai.generate(c.state.history);
-      
-      // Atomic tool execution
-      const toolOutput = await c.tools.execute(res.calls);
-      c.state.history.push({ role: 'assistant', content: res.text });
-      
-      return res.text;
+      // Context is held in RAM across requests
+      c.state.history.push({ role: "user", content: input });
+
+      const { text } = await generateText({
+        model: openai("gpt-4o"),
+        messages: c.state.history,
+      });
+
+      c.state.history.push({ role: "assistant", content: text });
+      c.broadcast("response", text);
+      return text;
     }
   }
 });`}
@@ -577,7 +580,7 @@ export default function AgentsPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building
 							</a>
 							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
