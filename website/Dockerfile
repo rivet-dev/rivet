@@ -4,10 +4,12 @@
 # =============================================================================
 # Stage 1: Build
 # =============================================================================
-FROM node:22-alpine AS builder
+# Use Debian-based Node image (required for Playwright/mermaid rendering)
+FROM node:22-bookworm AS builder
 
-# Install git and git-lfs for fetching LFS files
-RUN apk add --no-cache git git-lfs
+# Install git-lfs and Playwright browser dependencies
+RUN apt-get update && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
+RUN npx -y playwright install --with-deps chromium
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -23,6 +25,8 @@ COPY frontend/packages/components/ frontend/packages/components/
 COPY frontend/packages/icons/ frontend/packages/icons/
 COPY frontend/packages/example-registry/ frontend/packages/example-registry/
 COPY examples/ examples/
+COPY engine/artifacts/ engine/artifacts/
+COPY rivetkit-typescript/artifacts/ rivetkit-typescript/artifacts/
 
 # Fetch LFS files if build platform doesn't support Git LFS natively
 COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
