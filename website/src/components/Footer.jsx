@@ -24,6 +24,14 @@ const footer = {
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 	],
+	solutions: [
+		{ name: "Agent Orchestration", href: "/solutions/agents" },
+		{ name: "Multiplayer Documents", href: "/solutions/collaborative-state" },
+		{ name: "Workflows", href: "/solutions/workflows" },
+		{ name: "Vibe-Coded Backends", href: "/solutions/app-generators" },
+		{ name: "Geo-Distributed Databases", href: "/solutions/geo-distributed-db" },
+		{ name: "Per-Tenant Databases", href: "/solutions/per-tenant-db" },
+	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
@@ -174,7 +182,7 @@ function SmallPrint() {
 				</div>
 
 				{/* Links */}
-				<div className="mt-16 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-4 xl:col-span-9 xl:mt-0">
+				<div className="mt-16 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2 lg:grid-cols-5 xl:col-span-9 xl:mt-0">
 					<div>
 						<div className="text-sm font-semibold leading-6 text-white">
 							Product
@@ -183,6 +191,24 @@ function SmallPrint() {
 							{footer.product.map((item) => (
 								<li key={item.name}>
 									<a href={item.href}
+										target={item.target}
+										className="text-sm leading-4 text-gray-300 hover:text-white"
+									>
+										{item.name}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+					<div>
+						<div className="text-sm font-semibold leading-6 text-white">
+							Solutions
+						</div>
+						<ul role="list" className="mt-3 space-y-2">
+							{footer.solutions.map((item) => (
+								<li key={item.name}>
+									<a
+										href={item.href}
 										target={item.target}
 										className="text-sm leading-4 text-gray-300 hover:text-white"
 									>
