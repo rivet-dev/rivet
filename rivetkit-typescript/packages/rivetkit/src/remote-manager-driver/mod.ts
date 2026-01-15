@@ -81,9 +81,19 @@ export class RemoteManagerDriver implements ManagerDriver {
 					// Override endpoint for all future requests
 					if (metadataData.clientEndpoint) {
 						this.#config.endpoint = metadataData.clientEndpoint;
+						if (metadataData.clientNamespace) {
+							this.#config.namespace =
+								metadataData.clientNamespace;
+						}
+						if (metadataData.clientToken) {
+							this.#config.token = metadataData.clientToken;
+						}
+
 						logger().info({
-							msg: "overriding cached client endpoint",
+							msg: "overriding client endpoint",
 							endpoint: metadataData.clientEndpoint,
+							namespace: metadataData.clientNamespace,
+							token: metadataData.clientToken,
 						});
 					}
 
