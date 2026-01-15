@@ -210,15 +210,12 @@ export const Endpoint = ConnectManualServerlessForm.Endpoint;
 export const ConnectionCheck = ConnectManualServerlessForm.ConnectionCheck;
 
 export const FrontendIntegrationCode = () => {
-	const endpoint = useRivetDsn({
-		endpoint: useEndpoint(),
-		kind: "serverless",
-	});
+	const endpoint = useRivetDsn({ kind: "publishable" });
 	const clientCode = `"use client";
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
-export const { useActor } = createRivetKit<typeof registry>();
+export const { useActor } = createRivetKit<typeof registry>("${endpoint}");
 `;
 
 	return (
