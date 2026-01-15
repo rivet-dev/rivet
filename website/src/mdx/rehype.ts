@@ -4,6 +4,7 @@ import * as acorn from "acorn";
 import { toString as mdastToString } from "mdast-util-to-string";
 import { mdxAnnotations } from "mdx-annotations";
 import rehypeMdxTitle from "rehype-mdx-title";
+import rehypeMermaid from "rehype-mermaid";
 import * as shiki from "shiki";
 import { visit } from "unist-util-visit";
 import theme from "../lib/textmate-code-theme";
@@ -193,6 +194,7 @@ function rehypeTableOfContents() {
 
 export const rehypePlugins = [
 	mdxAnnotations.rehype,
+	[rehypeMermaid, { colorScheme: "dark", mermaidConfig: { theme: "dark" } }],
 	rehypeParseCodeBlocks,
 	rehypeShiki,
 	rehypeSlugify,
