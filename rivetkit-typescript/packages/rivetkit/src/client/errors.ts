@@ -66,7 +66,7 @@ export class ActorSchedulingError extends ActorError {
 		super(
 			group,
 			code,
-			`Actor ${actorId} failed to start: ${JSON.stringify(details)}`,
+			`Actor failed to start (${actorId}): ${JSON.stringify(details)}`,
 			{ actorId, details },
 		);
 		this.name = "ActorSchedulingError";
