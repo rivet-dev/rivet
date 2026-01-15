@@ -109,11 +109,11 @@ const CodeBlock = ({ code, fileName = "room.ts" }) => {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
 											}
 											// Functions & Special Rivet Terms
-											else if (["actor", "broadcast", "spawn", "rpc", "applyPatch", "connectionId"].includes(trimmed)) {
+											else if (["actor", "broadcast", "spawn", "rpc", "applyPatch", "conn"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
 											}
 											// Object Keys / Properties / Methods
-											else if (["state", "actions", "content", "cursors", "update", "patch", "moveCursor", "x", "y", "presence"].includes(trimmed)) {
+											else if (["state", "actions", "content", "cursors", "update", "patch", "moveCursor", "x", "y", "presence", "id"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											}
 											// Strings
@@ -272,12 +272,12 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
-						<a href="/templates" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
-							View Examples
+						<a href="/templates/cursors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors gap-2">
+							View Example
 						</a>
 					</motion.div>
 				</div>
@@ -296,14 +296,14 @@ export const docRoom = actor({
     // Handle keypresses instantly
     update: (c, patch) => {
       c.state.content = applyPatch(c.state.content, patch);
-      
+
       // Broadcast to all other clients in room
       c.broadcast("patch", patch);
     },
 
     // Ephemeral state for presence
     moveCursor: (c, { x, y }) => {
-      c.state.cursors[c.connectionId] = { x, y };
+      c.state.cursors[c.conn.id] = { x, y };
       c.broadcast("presence", c.state.cursors);
     }
   }
@@ -662,7 +662,7 @@ export default function CollaborativeStatePage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start for Free
 							</a>
 							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">

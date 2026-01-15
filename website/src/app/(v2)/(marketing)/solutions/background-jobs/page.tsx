@@ -83,9 +83,9 @@ const CodeBlock = ({ code, fileName = "worker.ts" }) => {
 
 											if (["import", "from", "export", "const", "return", "async", "await", "try", "catch", "if"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
-											} else if (["actor", "schedule", "sendEmail", "enqueue", "process"].includes(trimmed)) {
+											} else if (["actor", "schedule", "after", "sendEmail", "enqueue", "process"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
-											} else if (["state", "actions", "queue", "job", "attempts", "err", "delay", "shift", "push"].includes(trimmed)) {
+											} else if (["state", "actions", "queue", "job", "attempts", "err", "delayMs", "shift", "push"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											} else if (part.startsWith('"') || part.startsWith("'")) {
 												tokens.push(<span key={j} className="text-[#FF4500]">{part}</span>);
@@ -224,7 +224,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
@@ -245,7 +245,7 @@ export const emailWorker = actor({
   actions: {
     enqueue: (c, job) => {
       c.state.queue.push({ ...job, attempts: 0 });
-      c.schedule("process", "immediate");
+      c.schedule.after(0, "process");
     },
 
     process: async (c) => {
@@ -257,9 +257,9 @@ export const emailWorker = actor({
       } catch (err) {
         job.attempts++;
         // Retry with exponential backoff
-        const delay = Math.pow(2, job.attempts) + "s";
+        const delayMs = Math.pow(2, job.attempts) * 1000;
         c.state.queue.push(job);
-        c.schedule("process", delay);
+        c.schedule.after(delayMs, "process");
       }
     }
   }
@@ -663,11 +663,11 @@ export default function BackgroundJobsPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building Now
 							</a>
-							<a href="/templates" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
-								View Examples
+							<a href="/docs/actors/schedule" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
+								Read the Docs
 							</a>
 						</motion.div>
 					</div>

@@ -84,9 +84,9 @@ const CodeBlock = ({ code, fileName = "mcp_server.ts" }) => {
 
 											if (["import", "from", "export", "const", "return", "async", "await", "function", "let", "var"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-purple-400">{part}</span>);
-											} else if (["actor", "McpServer", "tool", "connect", "z"].includes(trimmed)) {
+											} else if (["actor", "McpServer", "SSEServerTransport", "tool", "connect", "z"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-400">{part}</span>);
-											} else if (["state", "actions", "preferences", "history", "name", "version", "key", "val", "content", "type", "text", "server", "transport"].includes(trimmed)) {
+											} else if (["state", "onRequest", "preferences", "history", "name", "version", "key", "val", "content", "type", "text", "server", "transport", "req", "sseResponse"].includes(trimmed)) {
 												tokens.push(<span key={j} className="text-blue-300">{part}</span>);
 											} else if (part.startsWith('"') || part.startsWith("'")) {
 												tokens.push(<span key={j} className="text-[#FF4500]">{part}</span>);
@@ -233,7 +233,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.2 }}
 						className="flex flex-col sm:flex-row items-center gap-4"
 					>
-						<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
+						<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors gap-2">
 							Get Started
 							<ArrowRight className="w-4 h-4" />
 						</a>
@@ -246,27 +246,28 @@ const Hero = () => (
 							fileName="mcp_server.ts"
 							code={`import { actor } from "rivetkit";
 import { McpServer } from "@modelcontextprotocol/sdk";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server";
 
 // One dedicated MCP server per user
 export const userContext = actor({
   state: { preferences: {}, history: [] },
-  actions: {
-    connect: async (c) => {
-      const server = new McpServer({
-        name: "PersonalContext",
-        version: "1.0.0"
-      });
-      
-      // Tool that reads/writes persistent state
-      server.tool("remember", { key: z.string(), val: z.string() }, 
-        async ({ key, val }) => {
-          c.state.preferences[key] = val;
-          return { content: [{ type: "text", text: "Saved." }] };
-        }
-      );
-      
-      return server.connect(c.transport);
-    }
+  onRequest: async (c, req) => {
+    const server = new McpServer({
+      name: "PersonalContext",
+      version: "1.0.0"
+    });
+
+    // Tool that reads/writes persistent state
+    server.tool("remember", { key: z.string(), val: z.string() },
+      async ({ key, val }) => {
+        c.state.preferences[key] = val;
+        return { content: [{ type: "text", text: "Saved." }] };
+      }
+    );
+
+    const transport = new SSEServerTransport("/message", req);
+    await server.connect(transport);
+    return transport.sseResponse;
   }
 });`}
 						/>
@@ -623,11 +624,11 @@ export default function MCPPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col sm:flex-row items-center justify-center gap-4"
 						>
-							<a href="/docs" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
+							<a href="https://dashboard.rivet.dev/" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black shadow-sm hover:bg-zinc-200 transition-colors">
 								Start Building Now
 							</a>
-							<a href="/templates" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
-								View Examples
+							<a href="/docs/actors" className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors">
+								Read the Docs
 							</a>
 						</motion.div>
 					</div>
