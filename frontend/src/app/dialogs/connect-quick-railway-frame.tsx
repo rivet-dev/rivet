@@ -167,7 +167,6 @@ function DeployToRailwayButton() {
 	const runnerName = useWatch({ name: "runnerName" });
 	const url = useRailwayTemplateLink({
 		runnerName,
-		kind: "serverless",
 	});
 
 	return (

@@ -125,38 +125,33 @@ function FormStepper({
 const useVercelTemplateLink = () => {
 	const endpoint = useEndpoint();
 
-	const dsn = useRivetDsn({ endpoint, kind: "serverless" });
+	const secretDsn = useRivetDsn({ endpoint, kind: "secret" });
+	const publicDsn = useRivetDsn({ endpoint, kind: "publishable" });
 
 	return useMemo(() => {
 		const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
-		const env = ["RIVET_ENDPOINT", "NEXT_PUBLIC_RIVET_ENDPOINT"].join(",");
+		const env = ["RIVET_ENDPOINT", "RIVET_PUBLIC_ENDPOINT"].join(",");
 		const projectName = "rivetkit-vercel";
 		const envDefaults = {
-			RIVET_ENDPOINT: dsn,
-			NEXT_PUBLIC_RIVET_ENDPOINT: dsn,
+			RIVET_ENDPOINT: secretDsn,
+			RIVET_PUBLIC_ENDPOINT: publicDsn,
 		};
 
 		return `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repositoryUrl)}&env=${env}&project-name=${projectName}&repository-name=${projectName}&envDefaults=${encodeURIComponent(JSON.stringify(envDefaults))}`;
-	}, [dsn]);
+	}, [secretDsn, publicDsn]);
 };
 
 function StepInitialInfo() {
 	const vercelTemplateLink = useVercelTemplateLink();
 	return (
-		<>
-			<div className="space-y-4">
-				<p>Deploy the Rivet Vercel template to get started quickly.</p>
-				<ExternalLinkCard
-					href={vercelTemplateLink}
-					icon={faVercel}
-					title="Deploy Template to Vercel"
-				/>
-			</div>
-			<div className="space-y-4">
-				<p>Set the following environment variables:</p>
-				<ConnectVercelForm.EnvVariables />
-			</div>
-		</>
+		<div className="space-y-4">
+			<p>Deploy the Rivet Vercel template to get started quickly.</p>
+			<ExternalLinkCard
+				href={vercelTemplateLink}
+				icon={faVercel}
+				title="Deploy Template to Vercel"
+			/>
+		</div>
 	);
 }
 
