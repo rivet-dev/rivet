@@ -25,9 +25,9 @@ import {
 import { bufferToArrayBuffer } from "@/utils";
 import type { ActorDefinitionActions } from "./actor-common";
 import { type ActorConn, ActorConnRaw } from "./actor-conn";
-import { queryActor } from "./actor-query";
+import { checkForSchedulingError, queryActor } from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
-import { ActorError } from "./errors";
+import { ActorError, isSchedulingError } from "./errors";
 import { logger } from "./log";
 import { rawHttpFetch, rawWebSocket } from "./raw-utils";
 import { sendHttpRequest } from "./utils";
@@ -81,22 +81,17 @@ export class ActorHandleRaw {
 		args: Args;
 		signal?: AbortSignal;
 	}): Promise<Response> {
-		// return await this.#driver.action<Args, Response>(
-		// 	undefined,
-		// 	this.#actorQuery,
-		// 	this.#encodingKind,
-		// 	this.#params,
-		// 	opts.name,
-		// 	opts.args,
-		// 	{ signal: opts.signal },
-		// );
+		// Track actorId for scheduling error lookups
+		let actorId: string | undefined;
+
 		try {
 			// Get the actor ID
-			const { actorId } = await queryActor(
+			const result = await queryActor(
 				undefined,
 				this.#actorQuery,
 				this.#driver,
 			);
+			actorId = result.actorId;
 			logger().debug({ msg: "found actor for action", actorId });
 			invariant(actorId, "Missing actor ID");
 
@@ -159,6 +154,21 @@ export class ActorHandleRaw {
 				{},
 				true,
 			);
+
+			// Check if this is a scheduling error and try to get more details
+			if (actorId && isSchedulingError(group, code)) {
+				const schedulingError = await checkForSchedulingError(
+					group,
+					code,
+					actorId,
+					this.#actorQuery,
+					this.#driver,
+				);
+				if (schedulingError) {
+					throw schedulingError;
+				}
+			}
+
 			throw new ActorError(group, code, message, metadata);
 		}
 	}

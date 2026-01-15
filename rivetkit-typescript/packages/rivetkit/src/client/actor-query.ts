@@ -1,7 +1,9 @@
 import type { Context as HonoContext } from "hono";
 import * as errors from "@/actor/errors";
+import { stringifyError } from "@/common/utils";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
+import { ActorSchedulingError } from "./errors";
 import { logger } from "./log";
 
 /**
@@ -62,4 +64,49 @@ export async function queryActor(
 
 	logger().debug({ msg: "actor query result", actorId: actorOutput.actorId });
 	return { actorId: actorOutput.actorId };
+}
+
+/**
+ * Extract the actor name from a query.
+ */
+export function getActorNameFromQuery(query: ActorQuery): string {
+	if ("getForId" in query) return query.getForId.name;
+	if ("getForKey" in query) return query.getForKey.name;
+	if ("getOrCreateForKey" in query) return query.getOrCreateForKey.name;
+	if ("create" in query) return query.create.name;
+	throw new errors.InvalidRequest("Invalid query format");
+}
+
+/**
+ * Fetch actor details and check for scheduling errors.
+ */
+export async function checkForSchedulingError(
+	group: string,
+	code: string,
+	actorId: string,
+	query: ActorQuery,
+	driver: ManagerDriver,
+): Promise<ActorSchedulingError | null> {
+	const name = getActorNameFromQuery(query);
+
+	try {
+		const actor = await driver.getForId({ name, actorId });
+
+		if (actor?.error) {
+			logger().info({
+				msg: "found actor scheduling error",
+				actorId,
+				error: actor.error,
+			});
+			return new ActorSchedulingError(group, code, actorId, actor.error);
+		}
+	} catch (err) {
+		logger().warn({
+			msg: "failed to fetch actor details for scheduling error check",
+			actorId,
+			error: stringifyError(err),
+		});
+	}
+
+	return null;
 }
