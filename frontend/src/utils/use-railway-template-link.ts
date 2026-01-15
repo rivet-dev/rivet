@@ -4,13 +4,12 @@ import { useRivetDsn } from "@/app/env-variables";
 
 export function useRailwayTemplateLink({
 	runnerName,
-	kind,
 }: {
 	runnerName: string;
-	kind: "serverless" | "serverfull";
 }) {
 	const endpoint = useEndpoint();
-	const dsn = useRivetDsn({ endpoint, kind });
+	const secretDsn = useRivetDsn({ endpoint, kind: "secret" });
+	const publicDsn = useRivetDsn({ endpoint, kind: "publishable" });
 
 	return useMemo(() => {
 		const url = new URL(
@@ -22,10 +21,13 @@ export function useRailwayTemplateLink({
 		url.searchParams.set("utm_campaign", "generic");
 
 		url.searchParams.set("RIVET_RUNNER", runnerName || "");
-		if (dsn) {
-			url.searchParams.set("RIVET_ENDPOINT", dsn);
+		if (secretDsn) {
+			url.searchParams.set("RIVET_ENDPOINT", secretDsn);
+		}
+		if (publicDsn) {
+			url.searchParams.set("RIVET_PUBLIC_ENDPOINT", publicDsn);
 		}
 
 		return url.toString();
-	}, [runnerName, dsn]);
+	}, [runnerName, secretDsn, publicDsn]);
 }

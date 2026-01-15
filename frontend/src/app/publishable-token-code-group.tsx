@@ -7,6 +7,7 @@ import {
 } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { hasProvider } from "@/app/data-providers/engine-data-provider";
+import { useRivetDsn } from "@/app/env-variables";
 import { CodeFrame, CodeGroup, CodePreview } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 
@@ -20,12 +21,14 @@ export function PublishableTokenCodeGroup() {
 	// Check if Vercel is connected
 	const hasVercel = hasProvider(configs, ["vercel", "next-js"]);
 
+	const endpoint = useRivetDsn({ kind: "publishable" });
+
 	const nextJsTab = (
 		<CodeFrame
 			language="typescript"
 			title="Next.js"
 			icon={faNextjs}
-			code={() => nextJsCode()}
+			code={() => nextJsCode(endpoint)}
 			footer={
 				<a
 					href="https://rivet.dev/docs/actors/quickstart/next-js"
@@ -39,7 +42,7 @@ export function PublishableTokenCodeGroup() {
 				</a>
 			}
 		>
-			<CodePreview code={nextJsCode()} language="typescript" />
+			<CodePreview code={nextJsCode(endpoint)} language="typescript" />
 		</CodeFrame>
 	);
 
@@ -48,7 +51,7 @@ export function PublishableTokenCodeGroup() {
 			language="typescript"
 			title="React"
 			icon={faReact}
-			code={() => reactCode()}
+			code={() => reactCode(endpoint)}
 			footer={
 				<a
 					href="https://rivet.dev/docs/actors/quickstart/react"
@@ -62,7 +65,7 @@ export function PublishableTokenCodeGroup() {
 				</a>
 			}
 		>
-			<CodePreview code={reactCode()} language="typescript" />
+			<CodePreview code={reactCode(endpoint)} language="typescript" />
 		</CodeFrame>
 	);
 
@@ -71,7 +74,7 @@ export function PublishableTokenCodeGroup() {
 			language="typescript"
 			title="JavaScript"
 			icon={faNodeJs}
-			code={() => javascriptCode()}
+			code={() => javascriptCode(endpoint)}
 			footer={
 				<a
 					href="https://rivet.dev/docs/actors/quickstart/backend"
@@ -85,7 +88,7 @@ export function PublishableTokenCodeGroup() {
 				</a>
 			}
 		>
-			<CodePreview code={javascriptCode()} language="typescript" />
+			<CodePreview code={javascriptCode(endpoint)} language="typescript" />
 		</CodeFrame>
 	);
 
@@ -98,18 +101,18 @@ export function PublishableTokenCodeGroup() {
 	);
 }
 
-const javascriptCode = () => `import { createClient } from "rivetkit/client";
+const javascriptCode = (endpoint: string) => `import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
-const client = createClient<typeof registry>();`;
+const client = createClient<typeof registry>("${endpoint}");`;
 
-const reactCode = () => `import { createRivetKit } from "@rivetkit/react";
+const reactCode = (endpoint: string) => `import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
-export const { useActor } = createRivetKit<typeof registry>();`;
+export const { useActor } = createRivetKit<typeof registry>("${endpoint}");`;
 
-const nextJsCode = () => `"use client";
+const nextJsCode = (endpoint: string) => `"use client";
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
-export const { useActor } = createRivetKit<typeof registry>();`;
+export const { useActor } = createRivetKit<typeof registry>("${endpoint}");`;

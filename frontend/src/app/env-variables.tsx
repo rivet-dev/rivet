@@ -93,12 +93,16 @@ export const useRivetDsn = ({
 	endpoint?: string;
 	kind: "publishable" | "secret";
 }) => {
+	const globalEndpoint = match(__APP_TYPE__)
+		.with("cloud", () => cloudEnv().VITE_APP_API_URL)
+		.with("engine", () => getConfig().apiUrl)
+		.otherwise(() => getConfig().apiUrl);
+
+	// Publishable (RIVET_PUBLIC_ENDPOINT) always uses global endpoint.
+	// Secret (RIVET_ENDPOINT) uses regional endpoint if provided.
 	const apiEndpoint =
-		endpoint ||
-		match(__APP_TYPE__)
-			.with("cloud", () => cloudEnv().VITE_APP_API_URL)
-			.with("engine", () => getConfig().apiUrl)
-			.otherwise(() => getConfig().apiUrl);
+		kind === "publishable" ? globalEndpoint : endpoint || globalEndpoint;
+
 	const dataProvider = useEngineCompatDataProvider();
 	const publishableToken = usePublishableToken();
 	const adminToken = useAdminToken();
