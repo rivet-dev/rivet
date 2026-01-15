@@ -8,12 +8,7 @@ import {
 } from "@rivet-gg/components";
 import { faCopy, faFile, Icon } from "@rivet-gg/icons";
 import escapeHTML from "escape-html";
-import {
-	Children,
-	cloneElement,
-	isValidElement,
-	type ReactElement,
-} from "react";
+import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { AutofillCodeBlock } from "@/components/v2/AutofillCodeBlock";
 import { AutofillFooter } from "@/components/v2/AutofillFooter";
 import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
@@ -46,24 +41,11 @@ const languageNames: Record<string, string> = {
 
 interface CodeGroupProps {
 	className?: string;
-	children: ReactElement[];
+	children: ReactNode;
 }
 
-const getChildIdx = (child: ReactElement) =>
-	child.props?.file || child.props?.title || child.props?.language || "text";
-
-const getDisplayName = (child: ReactElement) =>
-	child.props?.title || languageNames[child.props?.language] || "Code";
-
 export function CodeGroup({ children, className }: CodeGroupProps) {
-	const tabChildren = Children.toArray(children).filter(
-		(child): child is ReactElement => isValidElement(child),
-	);
-
-	if (tabChildren.length === 0) {
-		return null;
-	}
-
+	// Use Tabs-like pattern: render container with hidden source, let TabsScript create tabs
 	return (
 		<div
 			className={cn("code-group group my-4 overflow-hidden rounded-md border bg-neutral-950", className)}
@@ -74,47 +56,14 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 					data-code-group-tabs
 					className="inline-flex text-muted-foreground border-b border-neutral-800 w-full"
 				>
-					{tabChildren.map((child, index) => {
-						const idx = getChildIdx(child);
-						const displayName = getDisplayName(child);
-						return (
-							<button
-								key={idx}
-								type="button"
-								data-code-group-trigger={idx}
-								className={cn(
-									"relative inline-flex min-h-[2.75rem] items-center justify-center whitespace-nowrap",
-									"rounded-none border-b-2 bg-transparent px-4 py-2.5 text-sm font-semibold",
-									"ring-offset-background transition-none",
-									"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-									"disabled:pointer-events-none disabled:opacity-50",
-									index === 0
-										? "border-b-primary text-white"
-										: "border-b-transparent text-muted-foreground",
-								)}
-							>
-								{displayName}
-							</button>
-						);
-					})}
+					{/* Tabs are populated by TabsScript.astro from data-code-group-source */}
 				</div>
 			</div>
 			<div data-code-group-content-container className="pt-2">
-				{tabChildren.map((child, index) => {
-					const idx = getChildIdx(child);
-					return (
-						<div
-							key={idx}
-							data-code-group-content={idx}
-							className={index === 0 ? "" : "hidden"}
-						>
-							{cloneElement(child, {
-								isInGroup: true,
-								...child.props,
-							})}
-						</div>
-					);
-				})}
+				{/* Content is moved here by TabsScript.astro */}
+			</div>
+			<div data-code-group-source className="hidden">
+				{children}
 			</div>
 		</div>
 	);
@@ -142,11 +91,21 @@ export const pre = ({
 	highlightedCode,
 	flush,
 }: PreProps) => {
+	// Calculate display name for tabs
+	const displayName = title || languageNames[language as keyof typeof languageNames] || "Code";
+	// Calculate unique identifier for tab matching
+	const tabId = file || title || language || "text";
+
 	const codeBlock = (
-		<div className={cn(
-			"not-prose group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none group-[.code-group]:overflow-visible",
-			flush ? "" : "my-4 overflow-hidden rounded-md border"
-		)}>
+		<div
+			className={cn(
+				"not-prose group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none group-[.code-group]:overflow-visible",
+				flush ? "" : "my-4 overflow-hidden rounded-md border"
+			)}
+			data-code-block
+			data-code-title={displayName}
+			data-code-id={tabId}
+		>
 			<div className="bg-neutral-950 text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
 					{highlightedCode ? (
