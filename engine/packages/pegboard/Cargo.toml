@@ -8,6 +8,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
+bytes.workspace = true
 epoxy.workspace = true
 futures-util.workspace = true
 gas.workspace = true
@@ -31,6 +32,7 @@ serde_bare.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 strum.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true
@@ -38,3 +40,12 @@ url.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 vbare.workspace = true
+
+[dev-dependencies]
+portpicker.workspace = true
+rivet-config.workspace = true
+rivet-test-deps.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+uuid.workspace = true

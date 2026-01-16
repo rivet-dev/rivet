@@ -18,112 +18,9 @@
 	"editable": true,
 	"fiscalYearStartMonth": 0,
 	"graphTooltip": 0,
+	"id": 13,
 	"links": [],
 	"panels": [
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 0
-			},
-			"id": 2,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_proposals_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Proposals/s",
-			"type": "timeseries"
-		},
 		{
 			"datasource": {
 				"type": "prometheus",
@@ -147,10 +44,10 @@
 			"gridPos": {
 				"h": 8,
 				"w": 12,
-				"x": 12,
+				"x": 0,
 				"y": 0
 			},
-			"id": 1,
+			"id": 2,
 			"options": {
 				"calculate": false,
 				"cellGap": 0,
@@ -194,7 +91,7 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum(increase(rivet_epoxy_proposal_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
+					"expr": "sum(increase(rivet_pegboard_actor_allocate_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
 					"format": "heatmap",
 					"instant": false,
 					"legendFormat": "__auto",
@@ -202,7 +99,7 @@
 					"refId": "A"
 				}
 			],
-			"title": "Proposal Duration",
+			"title": "Actor Allocate Duration",
 			"type": "heatmap"
 		},
 		{
@@ -221,111 +118,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 8
-			},
-			"id": 3,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_pre_accept_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Pre Accepts/s",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
@@ -375,111 +168,7 @@
 				"h": 8,
 				"w": 12,
 				"x": 12,
-				"y": 8
-			},
-			"id": 4,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_accept_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Accepts/s",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 16
+				"y": 0
 			},
 			"id": 5,
 			"options": {
@@ -507,14 +196,14 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_commit_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
+					"expr": "sum by (rivet_datacenter) (rivet_pegboard_actor_pending_allocation{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Commits/s",
+			"title": "Actor Pending Allocation",
 			"type": "timeseries"
 		},
 		{
@@ -540,10 +229,10 @@
 			"gridPos": {
 				"h": 8,
 				"w": 12,
-				"x": 12,
-				"y": 16
+				"x": 0,
+				"y": 8
 			},
-			"id": 7,
+			"id": 4,
 			"options": {
 				"calculate": false,
 				"cellGap": 0,
@@ -587,7 +276,7 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum(increase(rivet_epoxy_request_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
+					"expr": "sum(increase(rivet_gateway_tunnel_ping_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
 					"format": "heatmap",
 					"instant": false,
 					"legendFormat": "__auto",
@@ -595,7 +284,7 @@
 					"refId": "A"
 				}
 			],
-			"title": "Request Duration",
+			"title": "Tunnel Ping",
 			"type": "heatmap"
 		},
 		{
@@ -614,7 +303,319 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "none"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 8
+			},
+			"id": 1,
+			"options": {
+				"legend": {
+					"calcs": [
+						"lastNotNull"
+					],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.6.7",
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum by (rivet_datacenter) (rivet_pegboard_serverless_desired_slots{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Serverless Desired Slots",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "none"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 16
+			},
+			"id": 7,
+			"options": {
+				"legend": {
+					"calcs": [
+						"lastNotNull"
+					],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.6.7",
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum by (rivet_datacenter) (rivet_pegboard_serverless_outbound_req_active{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Outbound Req Active",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "none"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 16
+			},
+			"id": 8,
+			"options": {
+				"legend": {
+					"calcs": [
+						"lastNotNull"
+					],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.6.7",
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum by (rivet_datacenter) (rate(rivet_pegboard_serverless_outbound_req_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval]))",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Outbound Req Started/s",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
 						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
@@ -666,7 +667,7 @@
 				"x": 0,
 				"y": 24
 			},
-			"id": 6,
+			"id": 10,
 			"options": {
 				"legend": {
 					"calcs": [
@@ -692,14 +693,14 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_requests_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
+					"expr": "sum by (rivet_datacenter) (rivet_pegboard_runner_connection_active{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Requests/s",
+			"title": "Runner Connection Active",
 			"type": "timeseries"
 		},
 		{
@@ -718,7 +719,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
@@ -796,14 +797,14 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rivet_epoxy_quorum_size{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
+					"expr": "sum by (rivet_datacenter) (rate(rivet_pegboard_runner_connection_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Quorum Size",
+			"title": "Runner Connections/s",
 			"type": "timeseries"
 		},
 		{
@@ -822,7 +823,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
@@ -873,214 +874,6 @@
 				"w": 12,
 				"x": 0,
 				"y": 32
-			},
-			"id": 8,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_quorum_attempts_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Quorum Attempts/s",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 32
-			},
-			"id": 10,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rivet_epoxy_ballot_epoch{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Ballot Epoch",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 40
 			},
 			"id": 11,
 			"options": {
@@ -1108,14 +901,14 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rivet_epoxy_ballot_number{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
+					"expr": "sum by (rivet_datacenter) (rivet_pegboard_event_multiplexer_count{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Ballot Number",
+			"title": "Event Multiplexer Count",
 			"type": "timeseries"
 		},
 		{
@@ -1134,7 +927,192 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "none"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 32
+			},
+			"id": 12,
+			"options": {
+				"legend": {
+					"calcs": [
+						"lastNotNull"
+					],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.6.7",
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum by (rivet_datacenter) (rate(rivet_pegboard_ingested_events_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval]))",
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Events Ingested/s",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 40
+			},
+			"id": 3,
+			"options": {
+				"calculate": false,
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.6.7",
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(increase(rivet_pegboard_runner_receive_init_packet_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
+					"format": "heatmap",
+					"instant": false,
+					"legendFormat": "__auto",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Runner Receive Init Packet Duration",
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
 						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
@@ -1186,7 +1164,7 @@
 				"x": 12,
 				"y": 40
 			},
-			"id": 12,
+			"id": 6,
 			"options": {
 				"legend": {
 					"calcs": [
@@ -1212,326 +1190,14 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rivet_epoxy_instance_number{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
+					"expr": "sum by (rivet_datacenter) (rivet_pegboard_runner_version_upgrade_drain_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Instance Number",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 48
-			},
-			"id": 13,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rivet_epoxy_replicas_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Replicas Total",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 12,
-				"y": 48
-			},
-			"id": 14,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_ballot_rejections_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Ballot Rejections/s",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"axisSoftMin": 0,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green"
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					},
-					"unit": "none"
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 12,
-				"x": 0,
-				"y": 56
-			},
-			"id": 15,
-			"options": {
-				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.6.7",
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_interference_detected_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
-					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Interference/s",
+			"title": "Runner Upgrade Drain",
 			"type": "timeseries"
 		}
 	],
@@ -1542,8 +1208,12 @@
 		"list": [
 			{
 				"current": {
-					"text": "prod",
-					"value": "prod"
+					"text": [
+						"prod"
+					],
+					"value": [
+						"prod"
+					]
 				},
 				"datasource": {
 					"type": "prometheus",
@@ -1566,9 +1236,7 @@
 			},
 			{
 				"current": {
-					"text": [
-						"All"
-					],
+					"text": "All",
 					"value": [
 						"$__all"
 					]
@@ -1595,12 +1263,12 @@
 		]
 	},
 	"time": {
-		"from": "now-6h",
+		"from": "now-1h",
 		"to": "now"
 	},
 	"timepicker": {},
 	"timezone": "browser",
-	"title": "Epoxy",
-	"uid": "",
-	"version": 0
+	"title": "Pegboard",
+	"uid": "afa77odsjjk74d",
+	"version": 1
 }
