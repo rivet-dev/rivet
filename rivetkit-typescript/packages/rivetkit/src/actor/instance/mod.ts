@@ -30,6 +30,7 @@ import {
 	RequestContext,
 	WebSocketContext,
 } from "../contexts";
+
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
@@ -49,6 +50,7 @@ import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
 } from "./persisted";
+import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
 
@@ -100,6 +102,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	eventManager!: EventManager<S, CP, CS, V, I, DB>;
 
 	#scheduleManager!: ScheduleManager<S, CP, CS, V, I, DB>;
+
+	queueManager!: QueueManager<S, CP, CS, V, I, DB>;
 
 	// MARK: - Logging
 	#log!: Logger;
@@ -269,6 +273,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.connectionManager = new ConnectionManager(this);
 		this.stateManager = new StateManager(this, actorDriver, this.#config);
 		this.eventManager = new EventManager(this);
+		this.queueManager = new QueueManager(this, actorDriver);
 		this.#scheduleManager = new ScheduleManager(
 			this,
 			actorDriver,
@@ -280,6 +285,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Load state
 		await this.#loadState();
+
+		await this.queueManager.initialize();
 
 		// Generate or load inspector token
 		await this.#initializeInspectorToken();
