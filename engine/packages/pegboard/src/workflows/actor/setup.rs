@@ -102,6 +102,31 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				&keys::actor::RunnerNameSelectorKey::new(input.actor_id),
 				input.runner_name_selector.clone(),
 			)?;
+			tx.write(
+				&keys::actor::NameKey::new(input.actor_id),
+				input.name.clone(),
+			)?;
+			tx.write(&keys::actor::KeyKey::new(input.actor_id), input.key.clone())?;
+			tx.write(
+				&keys::actor::CrashPolicyKey::new(input.actor_id),
+				input.crash_policy,
+			)?;
+
+			// Update metrics
+			keys::ns::metric::inc(
+				tx,
+				input.namespace_id,
+				keys::ns::metric::Metric::TotalActors(name.clone()),
+				1,
+			);
+
+			// Update metrics
+			keys::ns::metric::inc(
+				tx,
+				input.namespace_id,
+				keys::ns::metric::Metric::TotalActors(name.clone()),
+				1,
+			);
 
 			Ok(())
 		})
@@ -173,6 +198,48 @@ pub async fn add_indexes_and_set_create_complete(
 			}
 		})
 		.custom_instrument(tracing::info_span!("actor_populate_indexes_tx"))
+		.await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct BackfillUdbKeysAndMetricsInput {
+	pub actor_id: Id,
+}
+
+#[activity(BackfillUdbKeysAndMetrics)]
+pub async fn backfill_udb_keys_and_metrics(
+	ctx: &ActivityCtx,
+	input: &BackfillUdbKeysAndMetricsInput,
+) -> Result<()> {
+	let state = &ctx.state::<State>()?;
+
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
+			tx.write(
+				&keys::actor::NameKey::new(input.actor_id),
+				state.name.clone(),
+			)?;
+			tx.write(&keys::actor::KeyKey::new(input.actor_id), state.key.clone())?;
+			tx.write(
+				&keys::actor::CrashPolicyKey::new(input.actor_id),
+				state.crash_policy,
+			)?;
+
+			// Update metrics
+			keys::ns::metric::inc(
+				tx,
+				input.namespace_id,
+				keys::ns::metric::Metric::TotalActors(name.clone()),
+				1,
+			);
+
+			Ok(())
+		})
+		.custom_instrument(tracing::info_span!("actor_insert_tx"))
 		.await?;
 
 	Ok(())

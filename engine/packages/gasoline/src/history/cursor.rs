@@ -556,15 +556,18 @@ impl Cursor {
 		Ok(true)
 	}
 
-	pub fn compare_version_check(&self) -> WorkflowResult<Option<(bool, usize)>> {
+	pub fn compare_version_check(&self) -> WorkflowResult<CheckVersionHistoryResult> {
 		let Some(event) = self.current_event() else {
-			return Ok(None);
+			return Ok(CheckVersionHistoryResult::New);
 		};
 
-		Ok(Some((
-			matches!(event.data, EventData::VersionCheck),
-			event.version,
-		)))
+		// If the current event is a version check, return its version
+		if let EventData::VersionCheck = &event.data {
+			Ok(CheckVersionHistoryResult::Event(event.version))
+		} else {
+			// Current event is not a version check, one must be inserted with the same version
+			Ok(CheckVersionHistoryResult::Insertion(event.version))
+		}
 	}
 
 	pub fn compare_signals(&self, version: usize) -> WorkflowResult<HistoryResult<&SignalsEvent>> {
@@ -619,6 +622,16 @@ impl<T> HistoryResult<T> {
 			HistoryResult::New => HistoryResult::New,
 		}
 	}
+}
+
+pub enum CheckVersionHistoryResult {
+	/// A check version event for this location in history exists.
+	Event(usize),
+	/// An event for this location in history exists, but it is not a check version event. Therefore, an
+	/// insertion is required.
+	Insertion(usize),
+	/// No event for this location in history exists.
+	New,
 }
 
 #[cfg(test)]
