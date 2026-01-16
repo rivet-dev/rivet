@@ -2,7 +2,7 @@ use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
-	extract::{Extension, Path, Query},
+	extract::{Extension, Json, Path, Query},
 };
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
@@ -60,8 +60,6 @@ pub async fn kv_get(
 
 #[tracing::instrument(skip_all)]
 async fn kv_get_inner(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<Response> {
-	use axum::Json;
-
 	ctx.auth().await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {

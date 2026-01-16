@@ -249,6 +249,14 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			);
 		}
 
+		metrics::CONNECTION_ACTIVE
+			.with_label_values(&[
+				conn.namespace_id.to_string().as_str(),
+				&conn.runner_name,
+				conn.protocol_version.to_string().as_str(),
+			])
+			.dec();
+
 		// This will determine the close frame sent back to the runner websocket
 		lifecycle_res.map(|_| None)
 	}
