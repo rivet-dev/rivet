@@ -19,7 +19,7 @@
 
 ## What is Rivet?
 
-Rivet is an open-source platform for building stateful backends using **Actors** - long-lived processes that keep state in memory alongside compute. No more database round-trips for every request.
+Rivet is an open-source platform for building stateful backends using **Actors**, long-lived processes that keep state in memory alongside compute. No more database round-trips for every request.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -41,13 +41,13 @@ export const chatRoom = actor({
 });
 ```
 
-Each actor is like a tiny server with its own memory. Create millions of them - one per user, per document, per game session - and they scale automatically.
+Each actor is like a tiny server with its own memory. Create millions of them (one per user, per document, per game session) and they scale automatically.
 
 ## How It Works
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### RivetKit
 
@@ -60,7 +60,7 @@ npm install rivetkit
 Run standalone for development, deploy to Cloudflare Workers, or connect to Rivet Engine for scale.
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### Rivet Engine
 
@@ -77,9 +77,9 @@ High-performance Rust orchestration layer for production scale. Handles actor li
 
 ## Features
 
-- **Stateful Compute**: State lives with compute - sub-millisecond reads/writes, no database queries
+- **Stateful Compute**: State lives with compute for sub-millisecond reads/writes, no database queries
 - **Realtime Built-In**: WebSocket events without extra infrastructure
-- **Hibernation**: Actors sleep when idle, wake instantly - no cold starts
+- **Hibernation**: Actors sleep when idle and wake instantly with no cold starts
 - **Infinitely Scalable**: Auto-scale from zero to millions of actors
 - **Fault Tolerant**: Automatic failover with state integrity
 - **Type-Safe**: End-to-end TypeScript types from actor to client
@@ -89,40 +89,38 @@ High-performance Rust orchestration layer for production scale. Handles actor li
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-**Backend**
-- [Node.js & Bun](https://www.rivet.dev/docs/actors/quickstart/backend)
-- [Cloudflare Workers](https://www.rivet.dev/docs/actors/quickstart/cloudflare-workers)
+### One-Click Templates
+
+- [Chat Room](https://rivet.dev/templates/chat-room) - Realtime messaging
+- [AI Agent](https://rivet.dev/templates/ai-agent) - Stateful AI conversations
+- [Cursors](https://rivet.dev/templates/cursors) - Collaborative cursors
+- [Scheduling](https://rivet.dev/templates/scheduling) - Async processing
+
+[View all templates →](https://rivet.dev/templates)
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
-**Frontend**
+### Start From Scratch
+
+- [Node.js & Bun](https://www.rivet.dev/docs/actors/quickstart/backend)
 - [React](https://www.rivet.dev/docs/actors/quickstart/react)
 - [Next.js](https://www.rivet.dev/docs/actors/quickstart/next-js)
+- [Cloudflare Workers](https://www.rivet.dev/docs/actors/quickstart/cloudflare-workers)
+
+[View documentation →](https://www.rivet.dev/docs)
 
 </td>
 </tr>
 </table>
 
-## Examples
-
-| Example | Description |
-|---------|-------------|
-| [Chat Room](./examples/chat-room) | Realtime messaging with persistent history |
-| [AI Agent](./examples/ai-agent) | Stateful AI conversations |
-| [Cursors](./examples/cursors) | Realtime collaborative cursors |
-| [Scheduling](./examples/scheduling) | Scheduled and async processing |
-| [Counter](./examples/react) | Simple stateful counter with React |
-
-[View all examples →](./examples)
-
 ## Deploy Anywhere
 
-### Rivet Cloud (Fastest)
+### Rivet Cloud
 
-Deploy with [Rivet Cloud](https://dashboard.rivet.dev) for managed infrastructure with multiple regions and providers.
+Deploy your backend anywhere, then connect to [Rivet Cloud](https://dashboard.rivet.dev) for actor orchestration: [Vercel](https://www.rivet.dev/docs/connect/vercel) • [Railway](https://railway.com/deploy/rivet) • [Kubernetes](https://www.rivet.dev/docs/connect/kubernetes) • [AWS ECS](https://www.rivet.dev/docs/connect/aws-ecs) • [Google Cloud Run](https://www.rivet.dev/docs/connect/gcp-cloud-run) • [Hetzner](https://www.rivet.dev/docs/connect/hetzner) • [VM & Bare Metal](https://www.rivet.dev/docs/connect/vm-and-bare-metal)
 
 ### Self-Host Rivet Engine
 
@@ -142,13 +140,9 @@ curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engin
 
 [Self-hosting documentation →](https://www.rivet.dev/docs/self-hosting/)
 
-### Platform Integrations
-
-Deploy your backend to: [Vercel](https://www.rivet.dev/docs/connect/vercel) • [Railway](https://railway.com/deploy/rivet) • [Kubernetes](https://www.rivet.dev/docs/connect/kubernetes) • [AWS ECS](https://www.rivet.dev/docs/connect/aws-ecs) • [Google Cloud Run](https://www.rivet.dev/docs/connect/gcp-cloud-run) • [Hetzner](https://www.rivet.dev/docs/connect/hetzner) • [VM & Bare Metal](https://www.rivet.dev/docs/connect/vm-and-bare-metal)
-
 ## Integrations
 
-**Frameworks**: [Hono](./examples/hono) • [Elysia](./examples/elysia) • [tRPC](./examples/trpc)
+**Frameworks**: [Hono](https://rivet.dev/templates/hono) • [Elysia](https://rivet.dev/templates/elysia) • [tRPC](https://rivet.dev/templates/trpc)
 
 **Clients**: [JavaScript](https://www.rivet.dev/docs/clients/javascript) • [React](https://www.rivet.dev/docs/clients/react) • [Next.js](https://www.rivet.dev/docs/clients/next-js) • [Rust](https://www.rivet.dev/docs/clients/rust)
 
