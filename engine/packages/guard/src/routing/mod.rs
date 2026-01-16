@@ -127,7 +127,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 						)
 						.await?
 						{
-							metrics::ROUTE_TOTAL.with_label_values(&["GATEWAY"]).inc();
+							metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
 
 							return Ok(routing_output);
 						}
@@ -144,7 +144,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 						if let Some(routing_output) =
 							api_public::route_request(&ctx, "api-public", host, path).await?
 						{
-							metrics::ROUTE_TOTAL.with_label_values(&["API"]).inc();
+							metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
 
 							return Ok(routing_output);
 						}
