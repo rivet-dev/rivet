@@ -28,11 +28,11 @@ Projects that live in this repository:
 
 - **RivetKit**: Library for building with Rivet
   - **[TypeScript](/rivetkit-typescript)**: Client & server
-  - **[Rust](/rivetkit-typescript)**, Client only, experimental
-  - **[Python](/rivetkit-typescript)**: Client only, experimental
+  - **[Rust](/rivetkit-rust)**: Client only, experimental
+  - **[Python](/rivetkit-python)**: Client only, experimental
   - **[OpenAPI](/rivetkit-openapi)**: OpenAPI spec for RivetKit
 - **[Rivet Engine](/engine)**: High-performance, Rust-based engine that powers Rivet at scale
-  - **[Pegboard](packages/services/pegboard/)**: Actor orchestrator & networking
+  - **[Pegboard](/engine/packages/pegboard)**: Actor orchestrator & networking
   - **[Gasoline](/engine/packages/gasoline)**: Durable execution engine that powers Rivet
   - **[Guard](/engine/packages/guard)**: Proxy for routing traffic to Rivet Actors
   - **[Epoxy](/engine/packages/epoxy)**: Multi-region KV store based on Epaxos
@@ -118,7 +118,7 @@ Deploy Rivet Actors anywhere - from serverless platforms to your own infrastruct
 ### Compute
 - [Node.js](https://www.rivet.dev/docs/actors/quickstart/backend)
 - [Bun](https://www.rivet.dev/docs/actors/quickstart/backend)
-- [Deno](https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno)
+- [Deno](/examples/deno)
 - [Vercel](https://www.rivet.dev/docs/connect/vercel) *(1-Click Deploy)*
 - [Railway](https://railway.com/deploy/rivet) *(1-Click Deploy)*
 - [Durable Objects](https://www.rivet.dev/docs/actors/quickstart/backend)
@@ -133,7 +133,7 @@ Deploy Rivet Actors anywhere - from serverless platforms to your own infrastruct
 
 ## Works With Your Tools
 
-Seamlessly integrate Rivet with your favorite frameworks, languages, and tools. Don't see what you need? [Request an integration](https://github.com/rivet-dev/rivetkit/issues/new).
+Seamlessly integrate Rivet with your favorite frameworks, languages, and tools. Don't see what you need? [Request an integration](https://github.com/rivet-dev/rivet/issues/new).
 
 ### Frontend & Clients
 - [JavaScript](https://www.rivet.dev/docs/clients/javascript)
@@ -141,14 +141,14 @@ Seamlessly integrate Rivet with your favorite frameworks, languages, and tools. 
 - [React](https://www.rivet.dev/docs/clients/react)
 - [Rust](https://www.rivet.dev/docs/clients/rust)
 - [Next.js](https://www.rivet.dev/docs/clients/next-js)
-- [Svelte](https://github.com/rivet-dev/rivetkit/pull/1172)
-- [Vue](https://github.com/rivet-dev/rivetkit/issues/903) *(Help Wanted)*
+- [Svelte](https://github.com/rivet-dev/rivet/pull/1172)
+- [Vue](https://github.com/rivet-dev/rivet/issues/903) *(Help Wanted)*
 
 ### Backend
-- [Hono](https://www.rivet.dev/docs/integrations/hono)
-- [Express](https://www.rivet.dev/docs/integrations/express)
-- [Elysia](https://www.rivet.dev/docs/integrations/elysia)
-- [tRPC](https://www.rivet.dev/docs/integrations/trpc)
+- [Hono](/examples/hono)
+- [Express](/examples/express)
+- [Elysia](/examples/elysia)
+- [tRPC](/examples/trpc)
 
 ### Auth
 - [Better Auth](https://www.rivet.dev/docs/integrations/better-auth)
@@ -156,14 +156,11 @@ Seamlessly integrate Rivet with your favorite frameworks, languages, and tools. 
 ### Testing
 - [Vitest](https://www.rivet.dev/docs/integrations/vitest)
 
-### AI
-- [AI SDK](https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/ai-agent) *(On The Roadmap)*
-
 ### Sync
-- [LiveStore](https://github.com/rivet-dev/rivetkit/issues/908) *(On The Roadmap)*
-- [ZeroSync](https://github.com/rivet-dev/rivetkit/issues/909) *(Help Wanted)*
-- [TinyBase](https://github.com/rivet-dev/rivetkit/issues/910) *(Help Wanted)*
-- [Yjs](https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/crdt) *(Help Wanted)*
+- [LiveStore](https://github.com/rivet-dev/rivet/issues/908) *(On The Roadmap)*
+- [ZeroSync](https://github.com/rivet-dev/rivet/issues/909) *(Help Wanted)*
+- [TinyBase](https://github.com/rivet-dev/rivet/issues/910) *(Help Wanted)*
+- [Yjs](/examples/crdt) *(Help Wanted)*
 
 ## Built-In Observability at Scale
 
@@ -181,8 +178,8 @@ Join thousands of developers building with Rivet Actors today:
 - [Discord](https://rivet.dev/discord) - Chat with the community
 - [X/Twitter](https://x.com/rivet_dev) - Follow for updates
 - [Bluesky](https://bsky.app/profile/www.rivet.dev) - Follow for updates
-- [GitHub Discussions](https://github.com/www.rivet.dev/rivet/discussions) - Ask questions and share ideas
-- [GitHub Issues](https://github.com/www.rivet.dev/rivet/issues) - Report bugs and request features
+- [GitHub Discussions](https://github.com/rivet-dev/rivet/discussions) - Ask questions and share ideas
+- [GitHub Issues](https://github.com/rivet-dev/rivet/issues) - Report bugs and request features
 - [Talk to an engineer](https://www.rivet.dev/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges
 
 ## License
