@@ -17,6 +17,7 @@ interface ActorInspectorEmitterEvents {
 	connectionsUpdated: () => void;
 	eventFired: (event: EventDetails) => void;
 	eventsChanged: () => void;
+	queueUpdated: () => void;
 }
 
 export type Connection = Omit<schema.Connection, "details"> & {
@@ -55,8 +56,10 @@ export class ActorInspector {
 	public readonly emitter = createNanoEvents<ActorInspectorEmitterEvents>();
 
 	#lastEvents: Event[] = [];
+	#lastQueueSize = 0;
 
 	constructor(private readonly actor: AnyActorInstance) {
+		this.#lastQueueSize = actor.queueManager?.size ?? 0;
 		this.emitter.on("eventFired", (event) => {
 			const commonParams = {
 				id: crypto.randomUUID(),
@@ -82,6 +85,18 @@ export class ActorInspector {
 	clearEvents() {
 		this.#lastEvents = [];
 		this.emitter.emit("eventsChanged");
+	}
+
+	getQueueSize() {
+		return this.#lastQueueSize;
+	}
+
+	updateQueueSize(size: number) {
+		if (this.#lastQueueSize === size) {
+			return;
+		}
+		this.#lastQueueSize = size;
+		this.emitter.emit("queueUpdated");
 	}
 
 	// actor accessor methods
