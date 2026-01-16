@@ -109,14 +109,13 @@ High-performance Rust orchestration layer for production scale. Handles actor li
 
 | Example | Description |
 |---------|-------------|
-| [Chat Room](/examples/chat-room) | Realtime messaging with persistent history |
-| [AI Agent](/examples/ai-agent) | Stateful AI conversations |
-| [Multiplayer Game](/examples/game) | Game state synchronization |
-| [CRDT Docs](/examples/crdt) | Collaborative editing with Yjs |
-| [Workflows](/examples/workflows) | Durable task orchestration |
-| [Background Jobs](/examples/background-jobs) | Scheduled and async processing |
+| [Chat Room](./examples/chat-room) | Realtime messaging with persistent history |
+| [AI Agent](./examples/ai-agent) | Stateful AI conversations |
+| [Cursors](./examples/cursors) | Realtime collaborative cursors |
+| [Scheduling](./examples/scheduling) | Scheduled and async processing |
+| [Counter](./examples/react) | Simple stateful counter with React |
 
-[View all examples →](/examples)
+[View all examples →](./examples)
 
 ## Deploy Anywhere
 
@@ -148,13 +147,9 @@ Deploy your backend to: [Vercel](https://www.rivet.dev/docs/connect/vercel) • 
 
 ## Integrations
 
-**Frameworks**: [Hono](/examples/hono) • [Express](/examples/express) • [Elysia](/examples/elysia) • [tRPC](/examples/trpc)
+**Frameworks**: [Hono](./examples/hono) • [Elysia](./examples/elysia) • [tRPC](./examples/trpc)
 
 **Clients**: [JavaScript](https://www.rivet.dev/docs/clients/javascript) • [React](https://www.rivet.dev/docs/clients/react) • [Next.js](https://www.rivet.dev/docs/clients/next-js) • [Rust](https://www.rivet.dev/docs/clients/rust)
-
-**Auth**: [Better Auth](/examples/better-auth-external-db)
-
-**Sync**: [Yjs](/examples/crdt)
 
 [Request an integration →](https://github.com/rivet-dev/rivet/issues/new)
 
@@ -162,17 +157,17 @@ Deploy your backend to: [Vercel](https://www.rivet.dev/docs/connect/vercel) • 
 
 | Project | Description |
 |---------|-------------|
-| [RivetKit TypeScript](/rivetkit-typescript) | Client & server library for building actors |
-| [RivetKit Rust](/rivetkit-rust) | Rust client (experimental) |
-| [RivetKit Python](/rivetkit-python) | Python client (experimental) |
-| [Rivet Engine](/engine) | Rust orchestration engine |
-| ↳ [Pegboard](/engine/packages/pegboard) | Actor orchestrator & networking |
-| ↳ [Gasoline](/engine/packages/gasoline) | Durable execution engine |
-| ↳ [Guard](/engine/packages/guard) | Traffic routing proxy |
-| ↳ [Epoxy](/engine/packages/epoxy) | Multi-region KV store (EPaxos) |
-| [Dashboard](/frontend/apps/studio) | Inspector for debugging actors |
-| [Website](/website) | Source for [rivet.dev](https://www.rivet.dev) |
-| [Documentation](/website/src/content/docs) | Source for [rivet.dev/docs](https://www.rivet.dev/docs) |
+| [RivetKit TypeScript](./rivetkit-typescript) | Client & server library for building actors |
+| [RivetKit Rust](./rivetkit-rust) | Rust client (experimental) |
+| [RivetKit Python](./rivetkit-python) | Python client (experimental) |
+| [Rivet Engine](./engine) | Rust orchestration engine |
+| ↳ [Pegboard](./engine/packages/pegboard) | Actor orchestrator & networking |
+| ↳ [Gasoline](./engine/packages/gasoline) | Durable execution engine |
+| ↳ [Guard](./engine/packages/guard) | Traffic routing proxy |
+| ↳ [Epoxy](./engine/packages/epoxy) | Multi-region KV store (EPaxos) |
+| [Dashboard](./frontend) | Inspector for debugging actors |
+| [Website](./website) | Source for [rivet.dev](https://www.rivet.dev) |
+| [Documentation](./website/src/content/docs) | Source for [rivet.dev/docs](https://www.rivet.dev/docs) |
 
 ## Community
 
