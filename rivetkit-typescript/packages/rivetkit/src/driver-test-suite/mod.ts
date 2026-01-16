@@ -25,6 +25,7 @@ import { runActorInspectorTests } from "./tests/actor-inspector";
 import { runActorKvTests } from "./tests/actor-kv";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
+import { runActorQueueTests } from "./tests/actor-queue";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
@@ -120,6 +121,8 @@ export function runDriverTests(
 					runActorOnStateChangeTests(driverTestConfig);
 
 					runActorErrorHandlingTests(driverTestConfig);
+
+					runActorQueueTests(driverTestConfig);
 
 					runActorInlineClientTests(driverTestConfig);
 

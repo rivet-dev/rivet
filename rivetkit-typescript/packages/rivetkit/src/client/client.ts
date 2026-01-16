@@ -497,10 +497,14 @@ function createActorProxy<AD extends AnyActorDefinition>(
 				return value;
 			}
 
+			if (prop === "queue") {
+				return Reflect.get(target, prop, receiver);
+			}
+
 			// Create action function that preserves 'this' context
 			if (typeof prop === "string") {
 				// If JS is attempting to calling this as a promise, ignore it
-				if (prop === "then") return undefined;
+				if (prop === "then" || prop === "queue") return undefined;
 
 				let method = methodCache.get(prop);
 				if (!method) {
@@ -516,7 +520,7 @@ function createActorProxy<AD extends AnyActorDefinition>(
 		has(target: ActorHandleRaw, prop: string | symbol) {
 			// All string properties are potentially action functions
 			if (typeof prop === "string") {
-				return true;
+				return prop !== "queue";
 			}
 			// For symbols, defer to the target's own has behavior
 			return Reflect.has(target, prop);
@@ -545,6 +549,9 @@ function createActorProxy<AD extends AnyActorDefinition>(
 				return targetDescriptor;
 			}
 			if (typeof prop === "string") {
+				if (prop === "queue") {
+					return undefined;
+				}
 				// Make action methods appear non-enumerable
 				return {
 					configurable: true,

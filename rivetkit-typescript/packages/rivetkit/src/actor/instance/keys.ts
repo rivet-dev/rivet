@@ -3,7 +3,11 @@ export const KEYS = {
 	CONN_PREFIX: Uint8Array.from([2]), // Prefix for connection keys
 	INSPECTOR_TOKEN: Uint8Array.from([3]), // Inspector token key
 	KV: Uint8Array.from([4]), // Prefix for user-facing KV storage
+	QUEUE_PREFIX: Uint8Array.from([5]), // Prefix for queue message keys
+	QUEUE_METADATA: Uint8Array.from([6]), // Queue metadata key
 };
+
+const QUEUE_ID_BYTES = 8;
 
 // Helper to create a prefixed key for user-facing KV storage
 export function makePrefixedKey(key: Uint8Array): Uint8Array {
@@ -26,4 +30,27 @@ export function makeConnKey(connId: string): Uint8Array {
 	key.set(KEYS.CONN_PREFIX, 0);
 	key.set(connIdBytes, KEYS.CONN_PREFIX.length);
 	return key;
+}
+
+// Helper to create a queue message key
+export function makeQueueMessageKey(id: bigint): Uint8Array {
+	const key = new Uint8Array(KEYS.QUEUE_PREFIX.length + QUEUE_ID_BYTES);
+	key.set(KEYS.QUEUE_PREFIX, 0);
+	const view = new DataView(key.buffer, key.byteOffset, key.byteLength);
+	view.setBigUint64(KEYS.QUEUE_PREFIX.length, id, false);
+	return key;
+}
+
+// Helper to decode a queue message key
+export function decodeQueueMessageKey(key: Uint8Array): bigint {
+	const offset = KEYS.QUEUE_PREFIX.length;
+	if (key.length < offset + QUEUE_ID_BYTES) {
+		throw new Error("Queue key is too short");
+	}
+	const view = new DataView(
+		key.buffer,
+		key.byteOffset + offset,
+		QUEUE_ID_BYTES,
+	);
+	return view.getBigUint64(0, false);
 }
