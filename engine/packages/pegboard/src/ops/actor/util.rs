@@ -33,7 +33,7 @@ pub async fn build_actors_from_workflows(
 			}
 		};
 
-		actor_data.push((actor_id, actor_state));
+		actor_data.push((actor_id, wf, actor_state));
 	}
 
 	// Fetch runner pool errors if requested
@@ -45,8 +45,10 @@ pub async fn build_actors_from_workflows(
 
 	// Build actors with resolved errors
 	let mut actors = Vec::with_capacity(actor_data.len());
-	for (actor_id, actor_state) in actor_data {
-		let error = if fetch_error {
+	for (actor_id, wf, actor_state) in actor_data {
+		let error = if wf.is_dead() {
+			Some(rivet_types::actor::ActorError::InternalError)
+		} else if fetch_error {
 			resolve_actor_error(
 				&actor_state.failure_reason,
 				&actor_state,
@@ -83,18 +85,18 @@ pub async fn build_actors_from_workflows(
 /// Fetches runner pool errors for actors with NoCapacity failures.
 async fn fetch_runner_pool_errors(
 	ctx: &OperationCtx,
-	actor_data: &[(Id, crate::workflows::actor::State)],
+	actor_data: &[(Id, &WorkflowData, crate::workflows::actor::State)],
 ) -> Result<HashMap<(Id, String), rivet_types::actor::RunnerPoolError>> {
 	// Collect unique (namespace_id, runner_name) pairs that need error checks
 	let runners_needing_check: Vec<_> = actor_data
 		.iter()
-		.filter(|(_, state)| {
+		.filter(|(_, _, state)| {
 			matches!(
 				state.failure_reason,
 				Some(WorkflowFailureReason::NoCapacity)
 			)
 		})
-		.map(|(_, state)| (state.namespace_id, state.runner_name_selector.clone()))
+		.map(|(_, _, state)| (state.namespace_id, state.runner_name_selector.clone()))
 		.collect::<HashSet<_>>()
 		.into_iter()
 		.collect();

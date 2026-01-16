@@ -8,7 +8,7 @@ use crate::{
 	builder::BuilderError,
 	ctx::WorkflowCtx,
 	error::WorkflowError,
-	history::{cursor::HistoryResult, event::EventType, removed::Signal as RemovedSignal},
+	history::{cursor::HistoryResult, event::EventType},
 	metrics,
 	signal::Signal,
 	workflow::Workflow,
@@ -113,9 +113,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		}
 
 		// Check if this signal is being replayed and previously had no target (will have a removed event)
-		if self.graceful_not_found && self.ctx.cursor().is_removed() {
-			self.ctx.cursor().compare_removed::<RemovedSignal<T>>()?;
-
+		if self.graceful_not_found && self.ctx.cursor().current_event_is_removed() {
 			tracing::debug!("replaying gracefully not found signal dispatch");
 
 			// Move to next event

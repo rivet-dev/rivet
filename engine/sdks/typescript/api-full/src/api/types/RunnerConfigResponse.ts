@@ -5,5 +5,5 @@
 import * as Rivet from "../index";
 
 export interface RunnerConfigResponse extends Rivet.RunnerConfig {
-    runnerPoolError?: Rivet.RunnerPoolError;
+    runnerPoolError?: Record<string, unknown>;
 }

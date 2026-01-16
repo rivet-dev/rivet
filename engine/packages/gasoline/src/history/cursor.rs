@@ -476,7 +476,7 @@ impl Cursor {
 	}
 
 	// Helper function for signal functionality
-	pub fn is_removed(&self) -> bool {
+	pub fn current_event_is_removed(&self) -> bool {
 		let Some(event) = self.current_event() else {
 			return false;
 		};
@@ -484,10 +484,9 @@ impl Cursor {
 		matches!(&event.data, EventData::Removed(_))
 	}
 
-	/// Returns `true` if the current event is being replayed.
-	pub fn compare_removed<T: Removed>(&self) -> WorkflowResult<bool> {
+	pub fn compare_removed<T: Removed>(&self) -> RemovedHistoryResult {
 		let Some(event) = self.current_event() else {
-			return Ok(false);
+			return RemovedHistoryResult::New;
 		};
 
 		// Validate history is consistent
@@ -533,7 +532,9 @@ impl Cursor {
 			}
 		};
 
-		if !valid {
+		if valid {
+			RemovedHistoryResult::Skip
+		} else {
 			let msg = if let Some(name) = T::name() {
 				format!(
 					"expected {} at {}, found removed {} {name:?}",
@@ -550,10 +551,8 @@ impl Cursor {
 				)
 			};
 
-			return Err(WorkflowError::HistoryDiverged(msg));
+			RemovedHistoryResult::Ignore(msg)
 		}
-
-		Ok(true)
 	}
 
 	pub fn compare_version_check(&self) -> WorkflowResult<CheckVersionHistoryResult> {
@@ -632,6 +631,15 @@ pub enum CheckVersionHistoryResult {
 	Insertion(usize),
 	/// No event for this location in history exists.
 	New,
+}
+
+pub enum RemovedHistoryResult {
+	/// No event for this location in history exists.
+	New,
+	/// An event for this location in history exists and matches the filter.
+	Skip,
+	/// An event for this location in history exists, but it does not match the removed filter.
+	Ignore(String),
 }
 
 #[cfg(test)]

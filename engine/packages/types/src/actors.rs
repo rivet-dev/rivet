@@ -33,6 +33,7 @@ pub struct Actor {
 
 	/// Error details if the actor failed to start.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[schema(value_type = Option<Object>, additional_properties = true)]
 	pub error: Option<crate::actor::ActorError>,
 }
 
