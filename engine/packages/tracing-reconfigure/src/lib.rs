@@ -18,7 +18,7 @@ pub async fn start(_config: rivet_config::Config, pools: rivet_pools::Pools) -> 
 	let subject = "rivet.debug.tracing.config";
 	let mut sub = ups.subscribe(subject).await?;
 
-	tracing::debug!(subject = ?subject, "subscribed to tracing config updates");
+	tracing::debug!(%subject, "subscribed to tracing config updates");
 
 	// Process incoming messages
 	while let Ok(NextOutput::Message(msg)) = sub.next().await {

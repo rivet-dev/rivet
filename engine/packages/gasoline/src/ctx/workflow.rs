@@ -22,7 +22,7 @@ use crate::{
 	executable::{AsyncResult, Executable},
 	history::{
 		History,
-		cursor::{Cursor, HistoryResult, RemovedHistoryResult},
+		cursor::{CheckVersionHistoryResult, Cursor, HistoryResult, RemovedHistoryResult},
 		event::SleepState,
 		location::Location,
 		removed::Removed,
@@ -1143,43 +1143,46 @@ impl WorkflowCtx {
 
 	/// Returns the version of the current event in history. If no event exists, returns `current_version` and
 	/// inserts a version check event.
-	#[tracing::instrument(skip_all, fields(current_version))]
-	pub async fn check_version(&mut self, current_version: usize) -> Result<usize> {
+	#[tracing::instrument(skip_all, fields(latest_version))]
+	pub async fn check_version(&mut self, latest_version: usize) -> Result<usize> {
 		self.check_stop()?;
 
-		if current_version == 0 {
+		if latest_version == 0 {
 			return Err(WorkflowError::InvalidVersion(
 				"version for `check_version` must be greater than 0".into(),
 			)
 			.into());
 		}
 
-		let (is_version_check, version) =
-			if let Some((is_version_check, step_version)) = self.cursor.compare_version_check()? {
-				tracing::debug!("checking existing version");
+		let history_res = self.cursor.compare_version_check()?;
+		let event_location = self.cursor.current_location_for(&history_res.equivalent());
 
-				(is_version_check, step_version)
-			} else {
-				tracing::debug!("inserting version check");
+		let (event_version, checked_version) = match history_res {
+			CheckVersionHistoryResult::New => (Some(self.version), latest_version),
+			CheckVersionHistoryResult::Event(checked_version) => (None, checked_version),
+			CheckVersionHistoryResult::Insertion(next_event_version) => {
+				(Some(next_event_version + 1), next_event_version)
+			}
+		};
 
-				self.db
-					.commit_workflow_version_check_event(
-						self.workflow_id,
-						&self.cursor.current_location(),
-						current_version + self.version - 1,
-						self.loop_location(),
-					)
-					.await?;
+		if let Some(event_version) = event_version {
+			tracing::debug!("inserting version check");
 
-				(true, current_version)
-			};
-
-		if is_version_check {
-			// Move to next event
-			self.cursor.inc();
+			self.db
+				.commit_workflow_version_check_event(
+					self.workflow_id,
+					&event_location,
+					event_version + self.version - 1,
+					checked_version,
+					self.loop_location(),
+				)
+				.await?;
 		}
 
-		Ok(version + 1 - self.version)
+		// Move to next event
+		self.cursor.update(&event_location);
+
+		Ok(checked_version + 1 - self.version)
 	}
 }
 

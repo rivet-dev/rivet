@@ -21,7 +21,7 @@ use vbare::OwnedVersionedData;
 
 use crate::{keys, metrics};
 
-use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
+use super::{Allocate, Destroy, Input, METRICS_INTERVAL_MS, PendingAllocation, State, destroy};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LifecycleRunnerState {
@@ -64,6 +64,8 @@ pub struct LifecycleState {
 	/// created -> running event, stop intent -> stop event). If the timeout is reached, the actor is
 	/// considered lost.
 	pub gc_timeout_ts: Option<i64>,
+	/// Handles periodically recording metrics while the actor is allocated.
+	pub metrics_ts: Option<i64>,
 
 	pub reschedule_state: RescheduleState,
 }
@@ -87,6 +89,7 @@ impl LifecycleState {
 			will_wake: false,
 			alarm_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + actor_start_threshold),
+			metrics_ts: Some(util::timestamp::now() + METRICS_INTERVAL_MS),
 			reschedule_state: RescheduleState::default(),
 		}
 	}
@@ -104,6 +107,7 @@ impl LifecycleState {
 			will_wake: false,
 			alarm_ts: None,
 			gc_timeout_ts: None,
+			metrics_ts: None,
 			reschedule_state: RescheduleState::default(),
 		}
 	}
@@ -540,12 +544,15 @@ pub struct DeallocateOutput {
 #[activity(Deallocate)]
 pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<DeallocateOutput> {
 	let mut state = ctx.state::<State>()?;
-	let runner_name_selector = &state.runner_name_selector;
 	let namespace_id = state.namespace_id;
+	let runner_name_selector = &state.runner_name_selector;
+	let name = &state.name;
 	let runner_id = state.runner_id;
 	let allocated_serverless_slot = state.allocated_serverless_slot;
+	let last_kv_storage_size = state.last_kv_storage_size;
 
-	ctx.udb()?
+	let new_kv_storage_size = ctx
+		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
@@ -561,7 +568,16 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 			)
 			.await?;
 
-			Ok(())
+			// Record storage metrics after deallocation because no more kv writes will happen until
+			// reallocation
+			record_kv_storage_metrics(
+				&tx,
+				input.actor_id,
+				namespace_id,
+				name,
+				last_kv_storage_size,
+			)
+			.await
 		})
 		.custom_instrument(tracing::info_span!("actor_deallocate_tx"))
 		.await?;
@@ -572,10 +588,64 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 	state.runner_state = None;
 	// Slot was cleared by the above txn
 	state.allocated_serverless_slot = false;
+	state.last_kv_storage_size = new_kv_storage_size;
 
 	Ok(DeallocateOutput {
 		for_serverless: state.for_serverless,
 	})
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct RecordMetricsInput {
+	pub actor_id: Id,
+}
+
+#[activity(RecordMetrics)]
+pub async fn record_metrics(ctx: &ActivityCtx, input: &RecordMetricsInput) -> Result<()> {
+	let mut state = ctx.state::<State>()?;
+	let namespace_id = state.namespace_id;
+	let name = &state.name;
+	let last_kv_storage_size = state.last_kv_storage_size;
+
+	let new_kv_storage_size = ctx
+		.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
+			record_kv_storage_metrics(
+				&tx,
+				input.actor_id,
+				namespace_id,
+				name,
+				last_kv_storage_size,
+			)
+			.await
+		})
+		.custom_instrument(tracing::info_span!("actor_record_metrics_tx"))
+		.await?;
+
+	state.last_kv_storage_size = new_kv_storage_size;
+
+	Ok(())
+}
+
+async fn record_kv_storage_metrics(
+	tx: &universaldb::Transaction,
+	actor_id: Id,
+	namespace_id: Id,
+	actor_name: &str,
+	last_kv_storage_size: i64,
+) -> Result<i64> {
+	let new_kv_storage_size = crate::actor_kv::estimate_kv_size(tx, actor_id).await?;
+
+	keys::ns::metric::inc(
+		&tx,
+		namespace_id,
+		keys::ns::metric::Metric::KvStorageUsed(actor_name.to_string()),
+		new_kv_storage_size - last_kv_storage_size,
+	);
+
+	Ok(new_kv_storage_size)
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -1030,6 +1100,7 @@ pub async fn reschedule_actor(
 		// Reset gc timeout once allocated
 		state.gc_timeout_ts =
 			Some(util::timestamp::now() + ctx.config().pegboard().actor_start_threshold());
+		state.metrics_ts = Some(util::timestamp::now() + METRICS_INTERVAL_MS);
 	}
 
 	Ok(spawn_res)
@@ -1159,11 +1230,17 @@ pub struct SetSleepingInput {
 #[activity(SetSleeping)]
 pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
-	let sleep_ts = util::timestamp::now();
+	let now = util::timestamp::now();
 
-	state.sleep_ts = Some(sleep_ts);
+	// Seconds (rounded up)
+	let awake_duration = state
+		.connectable_ts
+		.map(|ts| util::math::div_ceil_i64((now - ts).max(0), util::duration::seconds(1)));
+	state.sleep_ts = Some(now);
 	state.connectable_ts = None;
 
+	let name = &state.name;
+	let namespace_id = state.namespace_id;
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
@@ -1171,7 +1248,17 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 			// Make not connectable
 			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
-			tx.write(&keys::actor::SleepTsKey::new(input.actor_id), sleep_ts)?;
+			tx.write(&keys::actor::SleepTsKey::new(input.actor_id), now)?;
+
+			// Update metrics
+			if let Some(awake_duration) = awake_duration {
+				keys::ns::metric::inc(
+					&tx,
+					namespace_id,
+					keys::ns::metric::Metric::ActorAwake(name.clone()),
+					awake_duration,
+				);
+			}
 
 			Ok(())
 		})
@@ -1342,5 +1429,33 @@ pub async fn set_failure_reason(ctx: &ActivityCtx, input: &SetFailureReasonInput
 	}
 
 	state.failure_reason = Some(input.failure_reason.clone());
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct SaveEventMetricsInput {
+	pub namespace_id: Id,
+	pub name: String,
+	pub alarms_set: usize,
+}
+
+/// Sets the failure reason on the actor workflow state.
+#[activity(SaveEventMetrics)]
+pub async fn save_event_metrics(ctx: &ActivityCtx, input: &SaveEventMetricsInput) -> Result<()> {
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
+			keys::ns::metric::inc(
+				&tx,
+				input.namespace_id,
+				keys::ns::metric::Metric::AlarmsSet(input.name.clone()),
+				input.alarms_set as i64,
+			);
+
+			Ok(())
+		})
+		.await?;
+
 	Ok(())
 }

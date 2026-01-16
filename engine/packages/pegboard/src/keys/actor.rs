@@ -377,6 +377,94 @@ impl<'de> TupleUnpack<'de> for RunnerNameSelectorKey {
 }
 
 #[derive(Debug)]
+pub struct NameKey {
+	actor_id: Id,
+}
+
+impl NameKey {
+	pub fn new(actor_id: Id) -> Self {
+		NameKey { actor_id }
+	}
+}
+
+impl FormalKey for NameKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(String::from_utf8(raw.to_vec())?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for NameKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, NAME);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for NameKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = NameKey { actor_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct KeyKey {
+	actor_id: Id,
+}
+
+impl KeyKey {
+	pub fn new(actor_id: Id) -> Self {
+		KeyKey { actor_id }
+	}
+}
+
+impl FormalKey for KeyKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(String::from_utf8(raw.to_vec())?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for KeyKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, KEY);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for KeyKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = KeyKey { actor_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
 pub struct HibernatingRequestKey {
 	actor_id: Id,
 	last_ping_ts: i64,

@@ -293,6 +293,7 @@ pub trait Database: Send {
 		from_workflow_id: Id,
 		location: &Location,
 		version: usize,
+		inner_version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()>;
 }
