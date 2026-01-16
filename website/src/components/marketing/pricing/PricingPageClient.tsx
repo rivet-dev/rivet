@@ -581,7 +581,7 @@ const Pricing = () => {
     const usagePricing = [
         { resource: "Awake Actors", price: "$0.05", unit: "per 1k awake actor-hours" },
         { resource: "State Storage", price: "$0.40", unit: "per GB-month" },
-        { resource: "Reads*", price: "$0.001", unit: "per million reads" },
+        { resource: "Reads*", price: "$0.20", unit: "per million reads" },
         { resource: "Writes*", price: "$1", unit: "per million writes" },
         { resource: "Egress", price: "$0.15", unit: "per GB" },
         { resource: "Compute", price: "BYO", unit: "Paid to your provider" },
