@@ -22,22 +22,23 @@
 Rivet is an open-source platform for building stateful backends using **Actors** - long-lived processes that keep state in memory alongside compute. No more database round-trips for every request.
 
 ```typescript
-import { actor, setup } from "rivetkit";
+import { actor } from "rivetkit";
 
-const chatRoom = actor({
-  // State persists across requests, restarts, and deployments
-  state: { messages: [] as { user: string; text: string }[] },
+export const chatRoom = actor({
+  // In-memory, persisted state
+  state: { messages: [] },
 
+  // Type-safe RPC
   actions: {
-    send: (c, user: string, text: string) => {
+    sendMessage: (c, user, text) => {
+      // High performance writes
       c.state.messages.push({ user, text });
-      c.broadcast("newMessage", { user, text }); // Realtime to all clients
+
+      // Realtime built-in
+      c.broadcast("newMessage", { user, text });
     },
-    history: (c) => c.state.messages,
   },
 });
-
-export const registry = setup({ use: { chatRoom } });
 ```
 
 Each actor is like a tiny server with its own memory. Create millions of them - one per user, per document, per game session - and they scale automatically.
