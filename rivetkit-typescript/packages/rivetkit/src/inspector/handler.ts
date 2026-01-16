@@ -4,6 +4,7 @@ import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import type { AnyActorInstance, RivetMessageEvent } from "@/mod";
 import type { ToClient } from "@/schemas/actor-inspector/mod";
 import {
+	CURRENT_VERSION as INSPECTOR_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED as toClient,
 	TO_SERVER_VERSIONED as toServer,
 } from "@/schemas/actor-inspector/versioned";
@@ -33,6 +34,7 @@ export async function handleWebSocketInspectorConnect({
 							: null,
 						isStateEnabled: inspector.isStateEnabled(),
 						isDatabaseEnabled: inspector.isDatabaseEnabled(),
+						queueSize: BigInt(inspector.getQueueSize()),
 					},
 				},
 			});
@@ -67,6 +69,16 @@ export async function handleWebSocketInspectorConnect({
 						body: {
 							tag: "EventsUpdated",
 							val: { events: inspector.getLastEvents() },
+						},
+					});
+				}),
+				inspector.emitter.on("queueUpdated", () => {
+					sendMessage(ws, {
+						body: {
+							tag: "QueueUpdated",
+							val: {
+								queueSize: BigInt(inspector.getQueueSize()),
+							},
 						},
 					});
 				}),
@@ -181,7 +193,7 @@ function sendMessage(ws: WSContext, message: ToClient) {
 	ws.send(
 		toClient.serializeWithEmbeddedVersion(
 			message,
-			1,
+			INSPECTOR_CURRENT_VERSION,
 		) as unknown as ArrayBuffer,
 	);
 }
