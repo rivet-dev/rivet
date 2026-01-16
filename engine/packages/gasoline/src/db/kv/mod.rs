@@ -223,7 +223,7 @@ impl DatabaseKv {
 		update_metric(
 			&tx.with_subspace(self.subspace.clone()),
 			None,
-			Some(keys::metric::GaugeMetric::SignalPending(
+			Some(keys::metric::GaugeMetric::SignalPending2(
 				signal_name.to_string(),
 			)),
 		);
@@ -620,7 +620,7 @@ impl Database for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn publish_metrics(&self, _worker_id: Id) -> WorkflowResult<()> {
+	async fn publish_metrics(&self, worker_id: Id) -> WorkflowResult<()> {
 		// Attempt to be the only worker publishing metrics by writing to the lock key
 		let acquired_lock = self
 			.pools
@@ -658,6 +658,10 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::Udb)?;
 
 		if acquired_lock {
+			metrics::WORKER_LAST_METRICS_PUBLISH
+				.with_label_values(&[worker_id.to_string().as_str()])
+				.set(rivet_util::timestamp::now());
+
 			let entries = self
 				.pools
 				.udb()
@@ -1192,7 +1196,7 @@ impl Database for DatabaseKv {
 							// TODO: This will record metrics even if the txn fails, which is wrong
 							metrics::WORKFLOW_WAKE_DELTA_DURATION
 								.with_label_values(&[&wake_key.workflow_name])
-								.observe(wake_key.ts.saturating_sub(now).max(0) as f64 / 1000.0);
+								.observe(now.saturating_sub(wake_key.ts).max(0) as f64 / 1000.0);
 						}
 
 						let Some(wf) = dedup_workflows.get_mut(&wake_key.workflow_id) else {
@@ -2201,7 +2205,7 @@ impl Database for DatabaseKv {
 
 										update_metric(
 											&tx.with_subspace(self.subspace.clone()),
-											Some(keys::metric::GaugeMetric::SignalPending(
+											Some(keys::metric::GaugeMetric::SignalPending2(
 												key.signal_name.clone(),
 											)),
 											None,

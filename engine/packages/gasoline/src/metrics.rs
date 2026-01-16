@@ -7,6 +7,12 @@ lazy_static::lazy_static! {
 		&["worker_id"],
 		*REGISTRY
 	).unwrap();
+	pub static ref WORKER_LAST_METRICS_PUBLISH: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"gasoline_worker_last_metrics_publish",
+		"Last timestamp of metrics publish.",
+		&["worker_id"],
+		*REGISTRY
+	).unwrap();
 	pub static ref WORKER_BUMPS_PER_TICK: HistogramVec = register_histogram_vec_with_registry!(
 		"gasoline_worker_bumps_per_tick",
 		"Amount of bump messages received in a single worker tick.",
