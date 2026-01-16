@@ -83,6 +83,11 @@ export const ActorConfigSchema = z
 				connectionLivenessInterval: z.number().positive().default(5000),
 				noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
+				maxQueueSize: z.number().positive().default(1000),
+				maxQueueMessageSize: z
+					.number()
+					.positive()
+					.default(1024 * 1024),
 				/**
 				 * Can hibernate WebSockets for onWebSocket.
 				 *
@@ -688,6 +693,18 @@ export const DocActorOptionsSchema = z
 			.optional()
 			.describe(
 				"Time in ms of inactivity before the actor sleeps. Default: 30000",
+			),
+		maxQueueSize: z
+			.number()
+			.optional()
+			.describe(
+				"Maximum number of queue messages before rejecting new messages. Default: 1000",
+			),
+		maxQueueMessageSize: z
+			.number()
+			.optional()
+			.describe(
+				"Maximum size of each queue message in bytes. Default: 1048576",
 			),
 		canHibernateWebSocket: z
 			.boolean()
