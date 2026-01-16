@@ -101,6 +101,7 @@ type Init struct {
 	isStateEnabled: bool
 	rpcs: list<str>
 	isDatabaseEnabled: bool
+	queueSize: uint
 }
 
 type ConnectionsResponse struct {
@@ -132,6 +133,10 @@ type EventsUpdated struct {
 	events: list<Event>
 }
 
+type QueueUpdated struct {
+	queueSize: uint
+}
+
 type RpcsListResponse struct {
 	rid: uint
 	rpcs: list<str>
@@ -151,6 +156,7 @@ type ToClientBody union {
 	ActionResponse |
 	ConnectionsUpdated |
 	EventsUpdated |
+	QueueUpdated |
 	StateUpdated |
 	RpcsListResponse |
 	Error |

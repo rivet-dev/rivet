@@ -188,6 +188,45 @@ export class Unsupported extends ActorError {
 	}
 }
 
+export class QueueFull extends ActorError {
+	constructor(limit: number) {
+		super("queue", "full", `Queue is full. Limit is ${limit} messages.`, {
+			public: true,
+			metadata: { limit },
+		});
+	}
+}
+
+export class QueueMessageTooLarge extends ActorError {
+	constructor(size: number, limit: number) {
+		super(
+			"queue",
+			"message_too_large",
+			`Queue message too large (${size} bytes). Limit is ${limit} bytes.`,
+			{ public: true, metadata: { size, limit } },
+		);
+	}
+}
+
+export class QueueMessageInvalid extends ActorError {
+	constructor(path?: string) {
+		super(
+			"queue",
+			"message_invalid",
+			path
+				? `Queue message body contains unsupported type at ${path}.`
+				: "Queue message body contains unsupported type.",
+			{ public: true, metadata: path ? { path } : undefined },
+		);
+	}
+}
+
+export class ActorAborted extends ActorError {
+	constructor() {
+		super("actor", "aborted", "Actor aborted.", { public: true });
+	}
+}
+
 /**
  * Options for the UserError class.
  */
