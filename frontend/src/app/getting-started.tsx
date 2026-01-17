@@ -3,6 +3,7 @@ import { deployOptions } from "@rivetkit/example-registry";
 import {
 	useInfiniteQuery,
 	useMutation,
+	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import {
@@ -12,18 +13,17 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Suspense, useEffect } from "react";
+import posthog from "posthog-js";
+import { Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match, P } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
 	ButtonCard,
-	Card,
 	CodeFrame,
 	CodeGroup,
 	CodePreview,
-	ExternalCard,
 	ExternalLinkCard,
 	FormField,
 	H1,
@@ -42,10 +42,7 @@ import {
 	buildServerlessConfig,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import {
-	DeployToVercelCard,
-	StepInitialInfo as VercelQuickSetupInfo,
-} from "./dialogs/connect-quick-vercel-frame";
+import { DeployToVercelCard } from "./dialogs/connect-quick-vercel-frame";
 import { EnvVariables } from "./env-variables";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
@@ -226,6 +223,7 @@ export function GettingStarted({
 										...values,
 										endpoint: status.url || values.endpoint,
 									},
+									{ provider: values.provider },
 								);
 
 								await mutateAsync({
@@ -593,22 +591,19 @@ function FrontendSetup() {
 		maxPages: 1,
 	});
 
-	const { data: actors } = useInfiniteQuery({
-		...dataProvider.actorsQueryOptions({
-			filters: { showDestroyed: { value: ["true"] } },
-			n: builds?.map((b) => b.id) || [],
-		}),
+	const { data: actors } = useQuery({
+		...dataProvider.actorsCountQueryOptions(),
 		enabled: (builds?.length || 0) > 0,
 		maxPages: 1,
 		refetchInterval: 2500,
 	});
 
-	const hasActors = (actors?.pages[0].actors.length || 0) > 0;
+	const hasActors = (actors || 0) > 0;
 
 	const navigate = useNavigate();
 	const router = useRouter();
 
-	const { data } = useInfiniteQuery({
+	const { data: config } = useInfiniteQuery({
 		...dataProvider.runnerConfigsQueryOptions(),
 		select: (data) =>
 			Object.values(data.pages[0].runnerConfigs || {})
@@ -616,11 +611,22 @@ function FrontendSetup() {
 				.filter((dc) => dc.serverless)?.[0].serverless,
 	});
 
+	const deploymentUrl = useMemo(() => {
+		if (!config?.url) return null;
+		try {
+			const url = new URL(config.url);
+			url.pathname = "/";
+			return url.toString();
+		} catch {
+			return null;
+		}
+	}, [config?.url]);
+
 	useEffect(() => {
 		const success = async () => {
 			successfulBackendSetupEffect();
 
-			await router.invalidate();
+			router.invalidate();
 			return navigate({
 				to: ".",
 				search: (s) => ({
@@ -647,10 +653,10 @@ function FrontendSetup() {
 				</div>
 
 				<div className="flex items-center justify-center mt-6 gap-4">
-					{data?.url ? (
+					{deploymentUrl ? (
 						<Button variant="outline">
 							<a
-								href={data.url}
+								href={deploymentUrl}
 								target="_blank"
 								rel="noopener noreferrer"
 							>

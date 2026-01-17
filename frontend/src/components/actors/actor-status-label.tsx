@@ -116,8 +116,8 @@ export function ActorError({ error }: { error: object | string }) {
 				Actor didn't stop in time.
 			</p>
 		))
-		.with(P.shape({ crashed: P.any }), () => (
-			<p>Actor exited with an error and is now sleeping.</p>
+		.with(P.shape({ crashed: P.shape({ message: P.string }) }), (err) => (
+			<p>Actor crashed. {err.crashed.message} </p>
 		))
 		.otherwise(() => {
 			return <p>Unknown error.</p>;

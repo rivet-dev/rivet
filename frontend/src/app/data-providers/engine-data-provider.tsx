@@ -648,6 +648,41 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
+
+		actorsCountQueryOptions() {
+			return queryOptions({
+				queryKey: [{ namespace }, "actors", "count"] as QueryKey,
+				enabled: true,
+				queryFn: async () => {
+					// TODO: fetch all actor names only to get the count is inefficient
+					const namesList = await client.actorsListNames({
+						namespace,
+						limit: 100,
+					});
+
+					const names = Object.keys(namesList.names);
+
+					const data = await Promise.all(
+						names.map((name) =>
+							client.actorsList({
+								namespace,
+								name,
+								limit: 1,
+							}),
+						),
+					);
+					return data.reduce(
+						(acc, curr) => acc + curr.actors.length,
+						0,
+					);
+				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: noThrow,
+				meta: {
+					mightRequireAuth,
+				},
+			});
+		},
 	};
 };
 
