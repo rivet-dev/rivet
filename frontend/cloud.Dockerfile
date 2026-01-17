@@ -28,6 +28,7 @@ COPY engine/sdks/typescript/runner-protocol/ engine/sdks/typescript/runner-proto
 COPY rivetkit-typescript/packages/rivetkit/ rivetkit-typescript/packages/rivetkit/
 COPY shared/typescript/virtual-websocket/ shared/typescript/virtual-websocket/
 COPY examples/ examples/
+COPY frontend/public/examples/ frontend/public/examples/
 
 # Copy generated API docs (used by rivetkit build)
 COPY rivetkit-asyncapi/ rivetkit-asyncapi/
