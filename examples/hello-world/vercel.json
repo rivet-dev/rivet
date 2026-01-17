@@ -1,3 +1,16 @@
 {
-	"framework": "hono"
+    "framework": "vite",
+    "outputDirectory": "dist",
+    "functions": {
+        "**/index.ts": {
+            "memory": 2048,
+            "maxDuration": 30
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/api/:path*",
+            "destination": "/api/"
+        }
+    ]
 }
