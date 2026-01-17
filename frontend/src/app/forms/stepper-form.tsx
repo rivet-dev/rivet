@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
+import { posthog } from "posthog-js";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
 	FormProvider,
@@ -14,9 +15,10 @@ import type { defineStepper } from "@/components/ui/stepper";
 import { HelpDropdown } from "../help-dropdown";
 
 type Step = Stepperize.Step & {
-	assist: boolean;
+	assist?: boolean;
 	schema: z.ZodSchema;
 	next?: string;
+	showNext?: boolean;
 };
 
 type StepperProps<Steps extends Step[]> = ReturnType<
@@ -48,9 +50,17 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 			form: UseFormReturn<z.infer<JoinStepSchemas<Steps>>>;
 			stepper: ReturnType<Stepperize.StepperReturn<Steps>["useStepper"]>;
 		}) => Promise<void> | void;
+		onPartialSubmit?: (opts: {
+			values: z.infer<JoinStepSchemas<Steps>>;
+			form: UseFormReturn<z.infer<JoinStepSchemas<Steps>>>;
+			stepper: ReturnType<Stepperize.StepperReturn<Steps>["useStepper"]>;
+		}) => Promise<void> | void;
 		content: Record<Steps[number]["id"], () => ReactNode>;
 		showAllSteps?: boolean;
 		initialStep?: Steps[number]["id"];
+		footer?: ReactNode;
+		children?: ReactNode;
+		formId?: string;
 	};
 
 export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
@@ -61,13 +71,15 @@ export type ExtractSteps<T> = T extends StepperFormProps<infer Steps>
 	? Steps
 	: never;
 
-export function StepperForm<const Steps extends Step[]>(
-	props: StepperFormProps<Steps>,
-) {
+export function StepperForm<const Steps extends Step[]>({
+	children,
+	...props
+}: StepperFormProps<Steps>) {
 	const Stepper = props.Stepper;
 	return (
 		<Stepper.Provider variant="vertical" initialStep={props.initialStep}>
 			<Content<Steps> {...props} />
+			{children}
 		</Stepper.Provider>
 	);
 }
@@ -79,7 +91,10 @@ function Content<const Steps extends Step[]>({
 	content,
 	showAllSteps,
 	onSubmit,
+	onPartialSubmit,
 	initialStep,
+	footer,
+	formId,
 	...formProps
 }: StepperFormProps<Steps>) {
 	const stepper = useStepper({ initialStep });
@@ -106,11 +121,19 @@ function Content<const Steps extends Step[]>({
 
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
 
-	const handleSubmit = (values: z.infer<JoinStepSchemas<Steps>>) => {
+	const handleSubmit = async (values: z.infer<JoinStepSchemas<Steps>>) => {
 		ref.current = { ...ref.current, ...values };
+
+		if (formId) {
+			posthog.capture(formId, {
+				step: stepper.current.id,
+				values: ref.current,
+			});
+		}
 		if (stepper.isLast) {
 			return onSubmit?.({ values: ref.current, form, stepper });
 		}
+		await onPartialSubmit?.({ values: ref.current, form, stepper });
 		stepper.next();
 		form.reset(undefined, {
 			keepErrors: false,
@@ -130,10 +153,15 @@ function Content<const Steps extends Step[]>({
 					{stepper.all.map((step, index, steps) => (
 						<Stepper.Step
 							key={step.id}
-							className="min-w-0"
+							className="min-w-0 w-full"
 							of={step.id}
 						>
 							<Stepper.Title>{step.title}</Stepper.Title>
+							{step.assist && stepper.current.id === step.id ? (
+								<Stepper.Helper>
+									<NeedHelpButton />
+								</Stepper.Helper>
+							) : null}
 
 							{showAllSteps ? (
 								<StepPanel<Steps>
@@ -142,8 +170,10 @@ function Content<const Steps extends Step[]>({
 									stepper={stepper}
 									step={step}
 									content={content}
+									showNext={false}
 									showPrevious={false}
 									showControls={steps.length - 1 === index}
+									footer={footer}
 								/>
 							) : (
 								stepper.when(step.id, (step) => {
@@ -153,6 +183,11 @@ function Content<const Steps extends Step[]>({
 											stepper={stepper}
 											step={step}
 											content={content}
+											footer={footer}
+											showNext={step.showNext ?? true}
+											showPrevious={
+												step.showPrevious ?? true
+											}
 										/>
 									);
 								})
@@ -170,13 +205,17 @@ function StepPanel<const Steps extends Step[]>({
 	stepper,
 	step,
 	content,
+	showNext = true,
 	showPrevious = true,
 	showControls = true,
+	footer,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
 	step: Steps[number];
 	showControls?: boolean;
+	showNext?: boolean;
 	showPrevious?: boolean;
+	footer?: ReactNode;
 }) {
 	const form = useFormContext();
 
@@ -185,7 +224,7 @@ function StepPanel<const Steps extends Step[]>({
 			{stepper.match(step.id, content)}
 			{showControls ? (
 				<Stepper.Controls>
-					{step.assist ? <NeedHelpButton /> : null}
+					{footer}
 					{showPrevious && !stepper.isFirst ? (
 						<Button
 							type="button"
@@ -202,13 +241,15 @@ function StepPanel<const Steps extends Step[]>({
 							Previous
 						</Button>
 					) : null}
-					<Button
-						type="submit"
-						disabled={!form.formState.isValid}
-						isLoading={form.formState.isSubmitting}
-					>
-						{step.next}
-					</Button>
+					{showNext ? (
+						<Button
+							type="submit"
+							disabled={!form.formState.isValid}
+							isLoading={form.formState.isSubmitting}
+						>
+							{step.next || (stepper.isLast ? "Finish" : "Next")}
+						</Button>
+					) : null}
 				</Stepper.Controls>
 			) : null}
 		</Stepper.Panel>
@@ -216,20 +257,11 @@ function StepPanel<const Steps extends Step[]>({
 }
 
 function NeedHelpButton() {
-	const [open, setOpen] = useState(false);
-
-	useEffect(() => {
-		const timeout = setTimeout(() => {
-			setOpen(true);
-		}, 10000);
-		return () => clearTimeout(timeout);
-	}, []);
-
-	if (!open) return null;
-
 	return (
 		<HelpDropdown>
-			<Button variant="ghost">Need help?</Button>
+			<Button variant="link" className="text-foreground p-0">
+				Need help?
+			</Button>
 		</HelpDropdown>
 	);
 }

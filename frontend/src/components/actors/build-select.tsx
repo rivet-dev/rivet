@@ -16,8 +16,8 @@ export function BuildSelect({ onValueChange, value }: BuildSelectProps) {
 	const builds = useMemo(() => {
 		return data.map((build) => {
 			return {
-				label: build.name,
-				value: build.name,
+				label: build.id,
+				value: build.id,
 				build,
 			};
 		});
@@ -29,7 +29,7 @@ export function BuildSelect({ onValueChange, value }: BuildSelectProps) {
 			options={builds}
 			value={value}
 			onValueChange={onValueChange}
-			filter={(option, search) => option.build.name.includes(search)}
+			filter={(option, search) => option.value.includes(search)}
 			className="w-full"
 		/>
 	);

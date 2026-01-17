@@ -1,53 +1,84 @@
+import { useOrganization } from "@clerk/clerk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { Flex, Frame } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { convertStringToId } from "@/lib/utils";
 
-export default function CreateProjectFrameContent() {
+const useDefaultOrg = () => {
+	if (__APP_TYPE__ === "cloud") {
+		// biome-ignore lint/correctness/useHookAtTopLevel: secured by build condition
+		const user = useOrganization();
+
+		return user.organization?.id;
+	}
+
+	return undefined;
+};
+
+export default function CreateProjectFrameContent({
+	organization,
+	onSuccess,
+	name,
+}: {
+	name?: string;
+	organization?: string;
+	// FIXME
+	onSuccess?: (
+		data: any,
+		vars: { displayName: string; organization: string },
+	) => void;
+}) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const params = useParams({ strict: false });
 
 	const provider = useCloudDataProvider();
 
-	const { mutateAsync } = useMutation(
-		provider.currentOrgCreateProjectMutationOptions({
-			onSuccess: async (values) => {
-				if (!params.organization) {
-					return;
-				}
+	const defaultOrg = useDefaultOrg();
 
-				await queryClient.invalidateQueries(
-					provider.currentOrgProjectsQueryOptions(),
-				);
+	const { mutateAsync } = useMutation({
+		...provider.createProjectMutationOptions(),
+		onSuccess: async (data, vars) => {
+			if (!params.organization) {
+				return;
+			}
 
-				await navigate({
-					to: "/orgs/$organization/projects/$project",
-					params: {
-						organization: params.organization,
-						project: values.project.name,
-					},
-				});
-			},
-		}),
-	);
+			await queryClient.invalidateQueries(
+				provider.currentOrgProjectsQueryOptions(),
+			);
+
+			return onSuccess
+				? onSuccess(data, vars)
+				: navigate({
+						to: "/orgs/$organization/projects/$project",
+						params: {
+							organization: params.organization,
+							project: data.project.name,
+						},
+					});
+		},
+	});
 
 	return (
 		<CreateProjectForm.Form
 			onSubmit={async (values) => {
 				await mutateAsync({
 					displayName: values.name,
+					organization: values.organization,
 				});
 			}}
-			defaultValues={{ name: "" }}
+			defaultValues={{
+				name: name,
+				organization: organization ?? defaultOrg ?? "",
+			}}
 		>
 			<Frame.Header>
 				<Frame.Title>Create Project</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
 				<Flex gap="4" direction="col">
+					<CreateProjectForm.Organization />
 					<CreateProjectForm.Name />
 				</Flex>
 			</Frame.Content>

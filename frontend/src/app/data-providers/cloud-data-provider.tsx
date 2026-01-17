@@ -3,10 +3,12 @@ import { type Rivet, RivetClient } from "@rivet-gg/cloud";
 import { fetcher } from "@rivetkit/engine-api-full/core";
 import {
 	infiniteQueryOptions,
+	mutationOptions,
 	type QueryKey,
 	queryOptions,
 	type UseQueryOptions,
 } from "@tanstack/react-query";
+import { clerk } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -85,16 +87,12 @@ export const createOrganizationContext = ({
 		infiniteQueryOptions({
 			queryKey: [opts, "namespaces"],
 			initialPageParam: undefined as string | undefined,
-			queryFn: async ({ pageParam, signal: abortSignal }) => {
-				const data = await client.namespaces.list(
-					opts.project,
-					{
-						org: opts.organization,
-						limit: RECORDS_PER_PAGE,
-						cursor: pageParam ?? undefined,
-					},
-					{ abortSignal },
-				);
+			queryFn: async ({ pageParam }) => {
+				const data = await client.namespaces.list(opts.project, {
+					org: opts.organization,
+					limit: RECORDS_PER_PAGE,
+					cursor: pageParam ?? undefined,
+				});
 				return {
 					pagination: data.pagination,
 					namespaces: data.namespaces.map((ns) => ({
@@ -118,17 +116,12 @@ export const createOrganizationContext = ({
 		infiniteQueryOptions({
 			queryKey: [opts, "projects"],
 			initialPageParam: undefined as string | undefined,
-			queryFn: async ({ signal: abortSignal, pageParam }) => {
-				const data = await client.projects.list(
-					{
-						org: opts.organization,
-						cursor: pageParam ?? undefined,
-						limit: RECORDS_PER_PAGE,
-					},
-					{
-						abortSignal,
-					},
-				);
+			queryFn: async ({ pageParam }) => {
+				const data = await client.projects.list({
+					org: opts.organization,
+					cursor: pageParam ?? undefined,
+					limit: RECORDS_PER_PAGE,
+				});
 				return data;
 			},
 			getNextPageParam: (lastPage) => {
@@ -146,14 +139,10 @@ export const createOrganizationContext = ({
 	}) =>
 		queryOptions({
 			queryKey: [opts, "project"],
-			queryFn: async ({ signal: abortSignal }) => {
-				const data = await client.projects.get(
-					opts.project,
-					{
-						org: opts.organization,
-					},
-					{ abortSignal },
-				);
+			queryFn: async () => {
+				const data = await client.projects.get(opts.project, {
+					org: opts.organization,
+				});
 				return data.project;
 			},
 			enabled: !!opts.project,
@@ -167,14 +156,13 @@ export const createOrganizationContext = ({
 	}) => {
 		return queryOptions({
 			queryKey: [opts, "namespace"],
-			queryFn: async ({ signal: abortSignal }) => {
+			queryFn: async () => {
 				const data = await client.namespaces.get(
 					opts.project,
 					opts.namespace,
 					{
 						org: opts.organization,
 					},
-					{ abortSignal },
 				);
 				return data.namespace;
 			},
@@ -182,8 +170,50 @@ export const createOrganizationContext = ({
 		});
 	};
 
+	const organizationsQueryOptions = () =>
+		infiniteQueryOptions({
+			queryKey: ["organizations"],
+			initialPageParam: undefined as number | undefined,
+			queryFn: async ({ pageParam }) => {
+				if (!clerk.user) {
+					throw new Error("No user logged in");
+				}
+				return clerk.user.getOrganizationMemberships({
+					initialPage: pageParam,
+					pageSize: RECORDS_PER_PAGE,
+				});
+			},
+			getNextPageParam: (lastPage, allPages) => {
+				if (lastPage.data.length < RECORDS_PER_PAGE) {
+					return undefined;
+				}
+				return allPages.reduce(
+					(prev, cur) => prev + cur.data.length,
+					0,
+				);
+			},
+			select: (data) => data.pages.flatMap((page) => page.data),
+		});
+
+	const createProjectMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["projects", "create"],
+			mutationFn: async (data: {
+				displayName: string;
+				organization: string;
+			}) => {
+				const response = await client.projects.create({
+					displayName: data.displayName,
+					org: data.organization,
+				});
+
+				return response;
+			},
+		});
+
 	return {
 		organization,
+		organizationsQueryOptions,
 		orgProjectNamespacesQueryOptions,
 		currentOrgProjectNamespacesQueryOptions: (opts: {
 			project: string;
@@ -210,13 +240,10 @@ export const createOrganizationContext = ({
 				namespace: opts.namespace,
 			});
 		},
-		currentOrgCreateProjectMutationOptions({
-			onSuccess,
-		}: {
-			onSuccess?: (data: Rivet.Project) => void;
-		} = {}) {
-			return {
-				mutationKey: ["projects"],
+		createProjectMutationOptions,
+		currentOrgCreateProjectMutationOptions() {
+			return mutationOptions({
+				mutationKey: [{ organization }, "projects", "create"],
 				mutationFn: async (data: { displayName: string }) => {
 					const response = await client.projects.create({
 						displayName: data.displayName,
@@ -225,8 +252,7 @@ export const createOrganizationContext = ({
 
 					return response;
 				},
-				onSuccess,
-			};
+			});
 		},
 	};
 };
@@ -292,12 +318,10 @@ export const createProjectContext = ({
 		currentProjectBillingDetailsQueryOptions() {
 			return queryOptions({
 				queryKey: [{ organization, project }, "billing-details"],
-				queryFn: async ({ signal: abortSignal }) => {
-					const response = await client.billing.details(
-						project,
-						{ org: organization },
-						{ abortSignal },
-					);
+				queryFn: async () => {
+					const response = await client.billing.details(project, {
+						org: organization,
+					});
 					return response;
 				},
 			});
@@ -322,12 +346,11 @@ export const createProjectContext = ({
 					{ organization, project, namespace },
 					"access-token",
 				],
-				queryFn: async ({ signal: abortSignal }) => {
+				queryFn: async () => {
 					const response = await client.namespaces.createAccessToken(
 						project,
 						namespace,
 						{ org: organization },
-						{ abortSignal },
 					);
 					return response;
 				},
@@ -337,12 +360,10 @@ export const createProjectContext = ({
 		apiTokensQueryOptions() {
 			return queryOptions({
 				queryKey: [{ organization, project }, "api-tokens"],
-				queryFn: async ({ signal: abortSignal }) => {
-					const response = await client.apiTokens.list(
-						project,
-						{ org: organization },
-						{ abortSignal },
-					);
+				queryFn: async () => {
+					const response = await client.apiTokens.list(project, {
+						org: organization,
+					});
 					return response;
 				},
 			});

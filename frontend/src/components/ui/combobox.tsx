@@ -29,29 +29,34 @@ interface ComboboxDefaultProps {
 	onCreateOption?: never;
 }
 
-interface ComboboxSingleProps {
+export interface ComboboxSingleProps {
 	multiple?: false;
 	value: string | undefined;
 	onValueChange: (value: string) => void;
 }
 
-interface ComboboxMultipleProps {
+export interface ComboboxMultipleProps {
 	multiple: true;
 	value: string[] | undefined;
 	onValueChange: (value: string[]) => void;
 }
 
-export type ComboboxProps<Option extends ComboboxOption> = {
+export type BaseComboboxProps<Option extends ComboboxOption> = {
 	options: Option[];
 	placeholder?: string;
 	notFoundMessage?: string;
 	className?: string;
 	showSelectedOptions?: number;
 	filter?: (option: Option, search: string) => boolean;
+	renderCurrentOptions?: (options: Option[]) => React.ReactNode;
 	onLoadMore?: () => void;
 	isLoading?: boolean;
-} & (ComboboxNewOptionsProps | ComboboxDefaultProps) &
-	(ComboboxSingleProps | ComboboxMultipleProps);
+};
+
+export type ComboboxProps<Option extends ComboboxOption> =
+	BaseComboboxProps<Option> &
+		(ComboboxNewOptionsProps | ComboboxDefaultProps) &
+		(ComboboxSingleProps | ComboboxMultipleProps);
 
 export const Combobox = <Option extends ComboboxOption>({
 	options,
@@ -65,6 +70,7 @@ export const Combobox = <Option extends ComboboxOption>({
 	showSelectedOptions = 3,
 	onLoadMore,
 	isLoading,
+	renderCurrentOptions,
 	...props
 }: ComboboxProps<Option>) => {
 	const [search, setSearch] = React.useState("");
@@ -134,7 +140,7 @@ export const Combobox = <Option extends ComboboxOption>({
 					role="combobox"
 					aria-expanded={open}
 					className={cn(
-						"justify-between",
+						"justify-between bg-background",
 						currentOptions.length === 0 &&
 							"text-muted-foreground/50",
 						className,
@@ -142,23 +148,28 @@ export const Combobox = <Option extends ComboboxOption>({
 				>
 					<div className="flex gap-4">
 						{currentOptions.length > 0 ? (
-							<>
-								{currentOptions
-									.map((option) => (
-										<Fragment key={option.value}>
-											{option.label}
-										</Fragment>
-									))
-									.slice(0, showSelectedOptions)}
+							renderCurrentOptions ? (
+								renderCurrentOptions(currentOptions)
+							) : (
+								<>
+									{currentOptions
+										.map((option) => (
+											<Fragment key={option.value}>
+												{option.label}
+											</Fragment>
+										))
+										.slice(0, showSelectedOptions)}
 
-								{currentOptions.length > showSelectedOptions ? (
-									<Badge variant="outline">
-										+
-										{currentOptions.length -
-											showSelectedOptions}
-									</Badge>
-								) : null}
-							</>
+									{currentOptions.length >
+									showSelectedOptions ? (
+										<Badge variant="outline">
+											+
+											{currentOptions.length -
+												showSelectedOptions}
+										</Badge>
+									) : null}
+								</>
+							)
 						) : (
 							placeholder
 						)}

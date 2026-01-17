@@ -1,6 +1,12 @@
 import { useClerk } from "@clerk/clerk-react";
 import type { Project } from "@rivet-gg/cloud";
-import { faChevronDown, faPlusCircle, Icon } from "@rivet-gg/icons";
+import {
+	faChevronDown,
+	faPlusCircle,
+	faSlash,
+	faSlashForward,
+	Icon,
+} from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	usePrefetchInfiniteQuery,
@@ -26,17 +32,28 @@ import { useCloudDataProvider } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
-export function ContextSwitcher() {
+export function ContextSwitcher({ inline }: { inline?: boolean }) {
 	const match = useContextSwitcherMatch();
 
 	if (!match) {
 		return null;
 	}
 
-	return <ContextSwitcherInner organization={match.organization} />;
+	return (
+		<ContextSwitcherInner
+			inline={inline}
+			organization={match.organization}
+		/>
+	);
 }
 
-function ContextSwitcherInner({ organization }: { organization: string }) {
+function ContextSwitcherInner({
+	organization,
+	inline,
+}: {
+	organization: string;
+	inline?: boolean;
+}) {
 	const [isOpen, setIsOpen] = useState(false);
 	usePrefetchInfiniteQuery({
 		...useCloudDataProvider().projectsQueryOptions({
@@ -48,11 +65,14 @@ function ContextSwitcherInner({ organization }: { organization: string }) {
 		<Popover open={isOpen} onOpenChange={setIsOpen}>
 			<PopoverTrigger asChild>
 				<Button
-					variant="outline"
-					className="flex h-auto justify-between items-center px-2 py-1.5"
+					variant={inline ? "ghost" : "outline"}
+					className={cn(
+						inline && "gap-2",
+						"flex h-auto justify-between items-center px-2 py-1.5",
+					)}
 					endIcon={<Icon icon={faChevronDown} />}
 				>
-					<Breadcrumbs />
+					<Breadcrumbs inline={inline} />
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent
@@ -96,18 +116,34 @@ const useContextSwitcherMatch = ():
 	return false;
 };
 
-function Breadcrumbs() {
+function Breadcrumbs({ inline }: { inline?: boolean }) {
 	const match = useContextSwitcherMatch();
 
 	if (match && "project" in match && "namespace" in match) {
 		return (
-			<div className="flex flex-col items-center min-w-0 w-full">
-				<div className="text-left text-xs text-muted-foreground min-w-0 flex w-full">
+			<div
+				className={cn(
+					"flex items-center min-w-0 w-full",
+					inline && "flex-row justify-center gap-2",
+					!inline && "flex-col",
+				)}
+			>
+				<div
+					className={cn(
+						!inline && "text-xs min-w-0 w-full",
+						"text-left text-muted-foreground flex",
+					)}
+				>
 					<ProjectBreadcrumb
 						project={match.project}
-						className="truncate min-w-0 max-w-full block h-4"
+						className={cn(
+							"truncate min-w-0 max-w-full block",
+							inline && "h-auto",
+							!inline && "h-4",
+						)}
 					/>
 				</div>
+				{inline ? <Icon icon={faSlashForward} /> : null}
 				<div className="min-w-0 w-full">
 					<NamespaceBreadcrumb
 						className="text-left truncate block"
@@ -258,6 +294,7 @@ function ProjectList({
 											search: (old) => ({
 												...old,
 												modal: "create-project",
+												organization,
 											}),
 										});
 									}}
@@ -313,6 +350,7 @@ function ProjectList({
 									search: (old) => ({
 										...old,
 										modal: "create-project",
+										organization,
 									}),
 								});
 							}}

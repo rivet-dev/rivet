@@ -2,6 +2,7 @@ import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
 import { type Fetcher, fetcher } from "@rivetkit/engine-api-full/core";
 import {
 	infiniteQueryOptions,
+	type MutationKey,
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
@@ -66,14 +67,11 @@ export const createGlobalContext = (opts: {
 			return infiniteQueryOptions({
 				queryKey: ["namespaces"] as any,
 				initialPageParam: undefined as string | undefined,
-				queryFn: async ({ pageParam, signal: abortSignal }) => {
-					const data = await client.namespaces.list(
-						{
-							limit: RECORDS_PER_PAGE,
-							cursor: pageParam ?? undefined,
-						},
-						{ abortSignal },
-					);
+				queryFn: async ({ pageParam }) => {
+					const data = await client.namespaces.list({
+						limit: RECORDS_PER_PAGE,
+						cursor: pageParam ?? undefined,
+					});
 					return {
 						...data,
 						namespaces: data.namespaces.map((ns) => ({
@@ -193,11 +191,11 @@ export const createNamespaceContext = ({
 					...def.actorQueryOptions(actorId).queryKey,
 				],
 				enabled: true,
-				queryFn: async ({ signal: abortSignal }) => {
-					const data = await client.actorsList(
-						{ actorIds: actorId as string, namespace },
-						{ abortSignal },
-					);
+				queryFn: async () => {
+					const data = await client.actorsList({
+						actorIds: actorId as string,
+						namespace,
+					});
 
 					if (!data.actors[0]) {
 						throw new Error("Actor not found");
@@ -221,11 +219,7 @@ export const createNamespaceContext = ({
 				],
 				enabled: true,
 				initialPageParam: undefined,
-				queryFn: async ({
-					signal: abortSignal,
-					pageParam,
-					queryKey: [, , _opts],
-				}) => {
+				queryFn: async ({ pageParam, queryKey: [, , _opts] }) => {
 					const { success, data: opts } =
 						ActorQueryOptionsSchema.safeParse(_opts || {});
 
@@ -245,27 +239,24 @@ export const createNamespaceContext = ({
 						};
 					}
 
-					const data = await client.actorsList(
-						{
-							namespace,
-							cursor: pageParam ?? undefined,
-							actorIds: opts?.filters?.id?.value?.join(","),
-							key: opts?.filters?.key?.value?.join(","),
-							includeDestroyed:
-								success &&
-								(opts?.filters?.showDestroyed?.value.includes(
-									"true",
-								) ||
-									opts?.filters?.showDestroyed?.value.includes(
-										"1",
-									)),
-							limit: RECORDS_PER_PAGE,
-							name: opts?.filters?.id?.value
-								? undefined
-								: opts?.n?.join(","),
-						},
-						{ abortSignal },
-					);
+					const data = await client.actorsList({
+						namespace,
+						cursor: pageParam ?? undefined,
+						actorIds: opts?.filters?.id?.value?.join(","),
+						key: opts?.filters?.key?.value?.join(","),
+						includeDestroyed:
+							success &&
+							(opts?.filters?.showDestroyed?.value.includes(
+								"true",
+							) ||
+								opts?.filters?.showDestroyed?.value.includes(
+									"1",
+								)),
+						limit: RECORDS_PER_PAGE,
+						name: opts?.filters?.id?.value
+							? undefined
+							: opts?.n?.join(","),
+					});
 
 					return data;
 				},
@@ -287,15 +278,12 @@ export const createNamespaceContext = ({
 				...def.buildsQueryOptions(),
 				queryKey: [{ namespace }, ...def.buildsQueryOptions().queryKey],
 				enabled: true,
-				queryFn: async ({ signal: abortSignal, pageParam }) => {
-					const data = await client.actorsListNames(
-						{
-							namespace,
-							cursor: pageParam ?? undefined,
-							limit: RECORDS_PER_PAGE,
-						},
-						{ abortSignal },
-					);
+				queryFn: async ({ pageParam }) => {
+					const data = await client.actorsListNames({
+						namespace,
+						cursor: pageParam ?? undefined,
+						limit: RECORDS_PER_PAGE,
+					});
 
 					return data;
 				},
@@ -315,7 +303,7 @@ export const createNamespaceContext = ({
 		createActorMutationOptions() {
 			return mutationOptions({
 				...def.createActorMutationOptions(),
-				mutationKey: [namespace, "actors"],
+				mutationKey: [namespace, "actors"] as MutationKey,
 				mutationFn: async (data) => {
 					const response = await client.actorsCreate({
 						namespace,
@@ -357,21 +345,32 @@ export const createNamespaceContext = ({
 			return queryOptions({
 				queryKey: ["runner", "healthcheck", opts] as QueryKey,
 				enabled: !!opts.runnerUrl,
-				queryFn: async ({ signal: abortSignal }) => {
-					const res = await client.runnerConfigsServerlessHealthCheck(
-						{
-							url: opts.runnerUrl,
+				queryFn: async () => {
+					const healthCheck = (url: string) =>
+						client.runnerConfigsServerlessHealthCheck({
+							url: url,
 							headers: opts.headers,
 							namespace,
-						},
-						{ abortSignal },
-					);
+						});
 
-					if ("success" in res) {
-						return res.success;
+					const url = opts.runnerUrl.replace(/\/+$/, "");
+					if (!url.endsWith("/api/rivet")) {
+						const res = await healthCheck(`${url}/api/rivet`);
+
+						if ("success" in res) {
+							return {
+								url: `${url}/api/rivet`,
+								success: res.success,
+							};
+						}
 					}
 
-					throw res.failure;
+					const res = await healthCheck(url);
+					if ("success" in res) {
+						return { url: url, success: res.success };
+					}
+
+					return { url: url, failure: res.failure };
 				},
 			});
 		},
@@ -385,14 +384,13 @@ export const createNamespaceContext = ({
 				] as QueryKey,
 				enabled: !!actorId,
 				retry: 0,
-				queryFn: async ({ signal: abortSignal }) => {
+				queryFn: async () => {
 					const response = await client.actorsKvGet(
 						actorId,
 						KV_KEYS.INSPECTOR_TOKEN
 							// @ts-expect-error
 							.toBase64(),
 						{ namespace },
-						{ abortSignal },
 					);
 
 					if (!response.value) {
@@ -421,15 +419,12 @@ export const createNamespaceContext = ({
 			return infiniteQueryOptions({
 				queryKey: [{ namespace }, "runners"] as QueryKey,
 				initialPageParam: undefined as string | undefined,
-				queryFn: async ({ pageParam, signal: abortSignal }) => {
-					const data = await client.runners.list(
-						{
-							namespace,
-							cursor: pageParam ?? undefined,
-							limit: RECORDS_PER_PAGE,
-						},
-						{ abortSignal },
-					);
+				queryFn: async ({ pageParam }) => {
+					const data = await client.runners.list({
+						namespace,
+						cursor: pageParam ?? undefined,
+						limit: RECORDS_PER_PAGE,
+					});
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
@@ -449,17 +444,12 @@ export const createNamespaceContext = ({
 			return infiniteQueryOptions({
 				queryKey: [{ namespace }, "runner", "names"] as QueryKey,
 				initialPageParam: undefined as string | undefined,
-				queryFn: async ({ signal: abortSignal, pageParam }) => {
-					const data = await client.runners.listNames(
-						{
-							namespace,
-							cursor: pageParam ?? undefined,
-							limit: RECORDS_PER_PAGE,
-						},
-						{
-							abortSignal,
-						},
-					);
+				queryFn: async ({ pageParam }) => {
+					const data = await client.runners.listNames({
+						namespace,
+						cursor: pageParam ?? undefined,
+						limit: RECORDS_PER_PAGE,
+					});
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
@@ -480,16 +470,11 @@ export const createNamespaceContext = ({
 			return queryOptions({
 				queryKey: [opts.namespace, "runner", opts.runnerId] as QueryKey,
 				enabled: !!opts.runnerId,
-				queryFn: async ({ signal: abortSignal }) => {
-					const data = await client.runners.list(
-						{
-							namespace: opts.namespace,
-							runnerIds: opts.runnerId,
-						},
-						{
-							abortSignal,
-						},
-					);
+				queryFn: async () => {
+					const data = await client.runners.list({
+						namespace: opts.namespace,
+						runnerIds: opts.runnerId,
+					});
 
 					if (!data.runners[0]) {
 						throw new Error("Runner not found");
@@ -511,13 +496,11 @@ export const createNamespaceContext = ({
 					opts.runnerName,
 				] as QueryKey,
 				enabled: !!opts.runnerName,
-				queryFn: async ({ signal: abortSignal }) => {
-					const data = await client.runners.list(
-						{ namespace, name: opts.runnerName },
-						{
-							abortSignal,
-						},
-					);
+				queryFn: async () => {
+					const data = await client.runners.list({
+						namespace,
+						name: opts.runnerName,
+					});
 					if (!data.runners[0]) {
 						throw new Error("Runner not found");
 					}
@@ -582,16 +565,13 @@ export const createNamespaceContext = ({
 					opts,
 				] as QueryKey,
 				initialPageParam: undefined as string | undefined,
-				queryFn: async ({ signal: abortSignal, pageParam }) => {
-					const response = await client.runnerConfigsList(
-						{
-							namespace,
-							cursor: pageParam ?? undefined,
-							limit: RECORDS_PER_PAGE,
-							variant: opts?.variant,
-						},
-						{ abortSignal },
-					);
+				queryFn: async ({ pageParam }) => {
+					const response = await client.runnerConfigsList({
+						namespace,
+						cursor: pageParam ?? undefined,
+						limit: RECORDS_PER_PAGE,
+						variant: opts?.variant,
+					});
 
 					return response;
 				},
@@ -630,15 +610,12 @@ export const createNamespaceContext = ({
 					opts,
 				] as QueryKey,
 				enabled: !!opts.name,
-				queryFn: async ({ signal: abortSignal }) => {
-					const response = await client.runnerConfigsList(
-						{
-							namespace,
-							runnerNames: opts.name,
-							variant: opts.variant,
-						},
-						{ abortSignal },
-					);
+				queryFn: async () => {
+					const response = await client.runnerConfigsList({
+						namespace,
+						runnerNames: opts.name,
+						variant: opts.variant,
+					});
 
 					const config = response.runnerConfigs[opts.name!];
 

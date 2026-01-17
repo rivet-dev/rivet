@@ -1,27 +1,14 @@
-import {
-	faCheck,
-	faSpinnerThird,
-	faTrash,
-	faTriangleExclamation,
-	Icon,
-} from "@rivet-gg/icons";
-import type { Rivet } from "@rivetkit/engine-api-full";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "framer-motion";
-import { useEffect } from "react";
-import {
-	useController,
-	useFieldArray,
-	useFormContext,
-	useWatch,
-} from "react-hook-form";
-import { match, P } from "ts-pattern";
-import { useDebounceValue } from "usehooks-ts";
+import { faTrash, Icon } from "@rivet-gg/icons";
+import type { Provider } from "@rivetkit/example-registry";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useFieldArray, useFormContext } from "react-hook-form";
 import z from "zod";
 import {
+	endpointSchema,
+	ServerlessConnectionCheck,
+} from "@/app/serverless-connection-check";
+import {
 	Button,
-	Checkbox,
-	cn,
 	FormControl,
 	FormDescription,
 	FormField,
@@ -33,19 +20,15 @@ import {
 	Label,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
+import { RegionSelect } from "@/components/actors/region-select";
 import { defineStepper } from "@/components/ui/stepper";
-import { VisibilitySensor } from "@/components/visibility-sensor";
 
-export const endpointSchema = z
-	.string()
-	.nonempty("Endpoint is required")
-	.url("Please enter a valid URL")
-	.endsWith("/api/rivet", "Endpoint must end with /api/rivet");
+export { endpointSchema };
 
 export const configurationSchema = z.object({
 	runnerName: z.string().min(1, "Runner name is required"),
 	datacenters: z
-		.record(z.boolean())
+		.record(z.string(), z.boolean())
 		.refine(
 			(data) => Object.values(data).some(Boolean),
 			"At least one datacenter must be selected",
@@ -108,9 +91,14 @@ export const RunnerName = function RunnerName() {
 
 export const Datacenters = function Datacenter() {
 	const { control } = useFormContext();
-	const { data, hasNextPage, fetchNextPage } = useInfiniteQuery(
-		useEngineCompatDataProvider().datacentersQueryOptions(),
-	);
+	const { data: datacenterCount } = useInfiniteQuery({
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
+		select: (data) =>
+			data.pages.reduce(
+				(prev, current) => prev + current.datacenters.length,
+				0,
+			),
+	});
 
 	return (
 		<div className="space-y-2">
@@ -120,34 +108,43 @@ export const Datacenters = function Datacenter() {
 			</FormDescription>
 
 			<div className="space-y-4">
-				{data?.map((region) => (
-					<FormField
-						key={region.name}
-						control={control}
-						name={`datacenters.${region.name}`}
-						render={({ field }) => (
-							<div className="flex items-start gap-3">
-								<Checkbox
-									id={region.name}
-									checked={field.value}
-									name={field.name}
-									onCheckedChange={field.onChange}
-								/>
-								<div className="grid gap-2">
-									<Label htmlFor={region.name}>
+				<FormField
+					control={control}
+					name="datacenters"
+					render={({ field }) => (
+						<RegionSelect
+							showAuto={false}
+							value={Object.keys(field.value || {}).filter(
+								(key) => field.value[key],
+							)}
+							renderCurrentOptions={(options) => {
+								if (options.length === datacenterCount) {
+									return <span>Global</span>;
+								}
+								return options.map((option) => (
+									<span key={option.value} className="mr-2">
 										<ActorRegion
-											regionId={region.name}
+											regionId={option.value}
 											showLabel
 										/>
-									</Label>
-								</div>
-							</div>
-						)}
-					/>
-				))}
-				{hasNextPage ? (
-					<VisibilitySensor onChange={fetchNextPage} />
-				) : null}
+									</span>
+								));
+							}}
+							onValueChange={(value) => {
+								field.onChange(
+									value.reduce(
+										(acc, key) => {
+											acc[key] = true;
+											return acc;
+										},
+										{} as Record<string, boolean>,
+									),
+								);
+							}}
+							multiple
+						/>
+					)}
+				/>
 			</div>
 		</div>
 	);
@@ -429,203 +426,48 @@ export const Endpoint = ({
 		<FormField
 			control={control}
 			name="endpoint"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-1">Endpoint</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							type="url"
-							placeholder={
-								placeholder ||
-								"https://my-rivet-app.vercel.app/api/rivet"
-							}
-							{...field}
-						/>
-					</FormControl>
-					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
+			render={({ field }) => {
+				return (
+					<FormItem className={className}>
+						<FormLabel className="col-span-1">Endpoint</FormLabel>
+						<FormControl className="row-start-2">
+							<Input
+								type="text"
+								placeholder={
+									placeholder ||
+									"https://my-rivet-app.vercel.app/api/rivet"
+								}
+								{...field}
+								value={field.value || ""}
+								onChange={(e) => {
+									const value = e.target.value;
+									field.onChange(value);
+								}}
+								onPaste={(e) => {
+									const pastedText = e.clipboardData
+										.getData("text")
+										.trim();
+									// Auto-add https:// if pasted URL doesn't have a protocol
+									if (
+										pastedText &&
+										!pastedText.match(/^https?:\/\//i)
+									) {
+										e.preventDefault();
+										field.onChange(`https://${pastedText}`);
+									}
+								}}
+							/>
+						</FormControl>
+						<FormMessage className="col-span-1" />
+					</FormItem>
+				);
+			}}
 		/>
 	);
 };
 
-export function ConnectionCheck({ provider }: { provider: string }) {
-	const dataProvider = useEngineCompatDataProvider();
-
-	const endpoint: string = useWatch({ name: "endpoint" });
-	const headers: [string, string][] = useWatch({ name: "headers" });
-
-	const enabled = !!endpoint && endpointSchema.safeParse(endpoint).success;
-
-	const [debouncedEndpoint] = useDebounceValue(endpoint, 300);
-	const [debouncedHeaders] = useDebounceValue(headers, 300);
-
-	const { isSuccess, data, isError, isRefetchError, isLoadingError, error } =
-		useQuery({
-			...dataProvider.runnerHealthCheckQueryOptions({
-				runnerUrl: debouncedEndpoint,
-				headers: Object.fromEntries(
-					debouncedHeaders
-						.filter(([k, v]) => k && v)
-						.map(([k, v]) => [k, v]),
-				),
-			}),
-			enabled,
-			retry: 0,
-			refetchInterval: 3_000,
-			meta: {
-				reportType: "runner-config-health-check",
-			},
-		});
-
-	const {
-		field: { onChange },
-	} = useController({ name: "success" });
-
-	useEffect(() => {
-		onChange(isSuccess);
-	}, [isSuccess, onChange]);
-
+export function ConnectionCheck({ provider }: { provider: Provider }) {
 	return (
-		<AnimatePresence>
-			{enabled ? (
-				<motion.div
-					layoutId="msg"
-					className={cn(
-						"border rounded-md text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-safe-center transition-colors p-4",
-						isSuccess && "text-primary-foreground border-primary",
-						(isError || isRefetchError || isLoadingError) &&
-							"text-destructive-foreground border-destructive",
-					)}
-					initial={{ height: 0, opacity: 0.5 }}
-					animate={{ minHeight: "8rem", height: "auto", opacity: 1 }}
-				>
-					{isSuccess ? (
-						<>
-							<Icon
-								icon={faCheck}
-								className="mr-1.5 text-primary"
-							/>{" "}
-							{provider} is running with RivetKit{" "}
-							{(data as any)?.version}
-						</>
-					) : isError || isRefetchError || isLoadingError ? (
-						<div className="flex flex-col items-center gap-2">
-							<p className="flex items-center">
-								<Icon
-									icon={faTriangleExclamation}
-									className="mr-1.5 text-destructive"
-								/>{" "}
-								Health check failed, verify the endpoint is
-								correct.
-							</p>
-							{isRivetHealthCheckFailureResponse(error) ? (
-								<HealthCheckFailure
-									error={error}
-									provider={provider}
-								/>
-							) : null}
-						</div>
-					) : (
-						<div className="flex flex-col items-center gap-2">
-							<div className="flex items-center">
-								<Icon
-									icon={faSpinnerThird}
-									className="mr-1.5 animate-spin"
-								/>{" "}
-								Waiting for Runner to connect...
-							</div>
-						</div>
-					)}
-				</motion.div>
-			) : null}
-		</AnimatePresence>
+		<ServerlessConnectionCheck provider={provider} pollIntervalMs={3_000} />
 	);
-}
-
-function isRivetHealthCheckFailureResponse(
-	error: any,
-): error is Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"] {
-	return error && "error" in error;
-}
-
-function HealthCheckFailure({
-	error,
-	provider,
-}: {
-	error: Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
-	provider: string;
-}) {
-	if (!("error" in error)) {
-		return null;
-	}
-	if (!error.error) {
-		return null;
-	}
-
-	return match(error.error)
-		.with(
-			{
-				nonSuccessStatus: P.when((status) => status.statusCode === 401),
-			},
-			(e) => {
-				return (
-					<div className="space-y-1">
-						<p>
-							Health check failed with status{" "}
-							{e.nonSuccessStatus.statusCode}
-						</p>
-						{provider.toLowerCase() === "vercel" ? (
-							<p>
-								Use your Vercel domain (for example,
-								https://my-app.vercel.app) instead of a
-								deployment URL, because Rivet cannot access
-								deployment URLs.
-							</p>
-						) : (
-							<p>
-								Please ensure your endpoint is correct and that
-								any required authentication headers are
-								included.
-							</p>
-						)}
-					</div>
-				);
-			},
-		)
-		.with({ nonSuccessStatus: P.any }, (e) => {
-			return (
-				<p>
-					Health check failed with status{" "}
-					{e.nonSuccessStatus.statusCode}
-				</p>
-			);
-		})
-		.with({ invalidRequest: P.any }, (e) => {
-			return <p>Health check failed because the request was invalid.</p>;
-		})
-		.with({ invalidResponseJson: P.any }, (e) => {
-			return (
-				<p>
-					Health check failed because the response was not valid JSON.
-				</p>
-			);
-		})
-		.with({ requestFailed: P.any }, (e) => {
-			return (
-				<p>
-					Health check failed because the request could not be
-					completed.
-				</p>
-			);
-		})
-		.with({ requestTimedOut: P.any }, (e) => {
-			return <p>Health check failed because the request timed out.</p>;
-		})
-		.with({ invalidResponseSchema: P.any }, (e) => {
-			return (
-				<p>Health check failed because the response was not valid.</p>
-			);
-		})
-		.exhaustive();
 }

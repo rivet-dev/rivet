@@ -1,16 +1,18 @@
 import {
-	faAws,
-	faCloudflare,
-	faGoogleCloud,
-	faHetzner,
-	faKubernetes,
-	faRailway,
-	faServer,
-	faVercel,
+    faAws,
+    faCloudflare,
+    faGoogleCloud,
+    faHetznerH,
+    faKubernetes,
+    faRailway,
+    faServer,
+    faVercel,
 } from "@rivet-gg/icons";
 
+
 export interface DeployOption {
-	title: string;
+	displayName: string;
+	name: string;
 	shortTitle?: string;
 	href: string;
 	description: string;
@@ -20,68 +22,79 @@ export interface DeployOption {
 	specializedPlatform?: boolean;
 }
 
-export const deployOptions: DeployOption[] = [
+export const deployOptions = [
 	{
-		title: "Vercel",
+		displayName: "Vercel",
+		name: "vercel" as const,
 		href: "/docs/connect/vercel",
 		description:
 			"Deploy Next.js + RivetKit apps to Vercel's edge network",
-		icon: faVercel,
+		icon: faVercel as any,
 		badge: "1-Click Deploy",
 	},
 	{
-		title: "Railway",
+		displayName: "Railway",
+		name: "railway" as const,
 		href: "/docs/connect/railway",
 		description:
 			"Deploy containers to Railway's managed infrastructure",
-		icon: faRailway,
+		icon: faRailway as any,
 		badge: "1-Click Deploy",
 	},
 	{
-		title: "Cloudflare Workers",
+		displayName: "Cloudflare Workers",
+		name: "cloudflare-workers" as const,
 		shortTitle: "Cloudflare",
 		href: "/docs/connect/cloudflare-workers",
 		description:
 			"Run your app on Cloudflare's global edge network with Durable Objects",
-		icon: faCloudflare,
+		icon: faCloudflare as any,
 		specializedPlatform: true,
 	},
 	{
-		title: "Kubernetes",
+		displayName: "Kubernetes",
+		name: "kubernetes" as const,
 		href: "/docs/connect/kubernetes",
 		description:
 			"Deploy to any Kubernetes cluster with container images",
-		icon: faKubernetes,
+		icon: faKubernetes as any,
 	},
 	{
-		title: "AWS ECS",
+		displayName: "AWS ECS",
 		shortTitle: "AWS",
+		name: "aws-ecs" as const,
 		href: "/docs/connect/aws-ecs",
 		description:
 			"Run containerized workloads on Amazon Elastic Container Service",
-		icon: faAws,
+		icon: faAws as any,
 	},
 	{
-		title: "Google Cloud Run",
+		displayName: "Google Cloud Run",
 		shortTitle: "GCP",
+		name: "gcp-cloud-run" as const,
 		href: "/docs/connect/gcp-cloud-run",
 		description:
 			"Deploy containers to Google Cloud Run for auto-scaling",
 		icon: faGoogleCloud,
 	},
 	{
-		title: "Hetzner",
+		displayName: "Hetzner",
+		name: "hetzner" as const,
 		href: "/docs/connect/hetzner",
 		description:
 			"Deploy to Hetzner's cost-effective cloud infrastructure",
-		icon: faHetzner,
+		icon: faHetznerH as any,
 	},
 	{
-		title: "VM & Bare Metal",
+		displayName: "VM & Bare Metal",
+		name: "custom" as const,
 		shortTitle: "VM",
 		href: "/docs/connect/vm-and-bare-metal",
 		description:
 			"Run on virtual machines or bare metal servers with full control",
-		icon: faServer,
+		icon: faServer as any,
 	},
-];
+] satisfies DeployOption[];
+
+
+export type Provider = typeof deployOptions[number]["name"];

@@ -2,8 +2,8 @@
 
 import { Box, LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { deployOptions } from '@/data/deploy/shared';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { deployOptions } from '@rivetkit/example-registry';
 
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },
@@ -53,13 +53,13 @@ export const IntegrationsSection = () => (
             <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Infrastructure</h4>
           </div>
           <div className='relative z-10 flex flex-wrap gap-2'>
-            {deployOptions.map(({ title, shortTitle, href }) => (
+            {deployOptions.map(({ displayName, shortTitle, href }) => (
               <a
-                key={title}
+                key={displayName}
                 href={href}
                 className='group/item flex cursor-pointer items-center gap-1.5 rounded-md border border-white/5 bg-zinc-800/50 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
               >
-                {shortTitle || title}
+                {shortTitle || displayName}
               </a>
             ))}
           </div>

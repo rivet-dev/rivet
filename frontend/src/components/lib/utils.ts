@@ -53,6 +53,23 @@ export const ls = {
 		getWidth: () => ls.get("actors-list-preview-width"),
 		getFolded: () => ls.get("actors-list-preview-folded"),
 	},
+	onboarding: {
+		skipWelcome: (project: string, ns: string) => {
+			ls.set(
+				`onboarding-skip-welcome-${btoa(
+					JSON.stringify({ project, ns }),
+				)}`,
+				true,
+			);
+		},
+		getSkipWelcome: (project: string, ns: string) => {
+			return ls.get(
+				`onboarding-skip-welcome-${btoa(
+					JSON.stringify({ project, ns }),
+				)}`,
+			);
+		},
+	},
 	actorsEphemeralFilters: {
 		key: "actors-ephemeral-filters",
 		set: (filters: Record<string, unknown>) => {

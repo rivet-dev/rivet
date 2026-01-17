@@ -7,7 +7,7 @@ import { Card } from "@/components";
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/",
 )({
-	beforeLoad: ({ context, params }) => {
+	beforeLoad: ({ context, params, search }) => {
 		return match(__APP_TYPE__)
 			.with("cloud", async () => {
 				if (!context.clerk?.organization) {
@@ -23,7 +23,7 @@ export const Route = createFileRoute(
 					throw redirect({
 						to: "/orgs/$organization/projects/$project/ns/$namespace",
 						replace: true,
-
+						search: true,
 						params: {
 							organization: params.organization,
 							project: params.project,
