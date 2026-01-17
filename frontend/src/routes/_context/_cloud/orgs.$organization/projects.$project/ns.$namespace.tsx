@@ -69,16 +69,26 @@ export const Route = createFileRoute(
 			),
 		]);
 
-		const actors = await context.queryClient.fetchInfiniteQuery(
-			context.dataProvider.actorsQueryOptions({
-				n: Object.keys(actorNames.pages[0].names),
-			}),
+		const actors = await Promise.all(
+			Object.keys(actorNames.pages?.[0].names || {}).map((name) =>
+				context.queryClient.fetchInfiniteQuery(
+					context.dataProvider.actorsQueryOptions({
+						n: [name],
+						limit: 1,
+					}),
+				),
+			),
+		);
+
+		const totalActors = actors.reduce(
+			(acc, curr) => curr.pages[0].actors.length + acc,
+			0,
 		);
 
 		const hasRunnerNames = runnerNames.pages[0].names.length > 0;
 		const hasRunnerConfigs =
 			Object.entries(runnerConfigs.pages[0].runnerConfigs).length > 0;
-		const hasActors = actors.pages[0].actors.length > 0;
+		const hasActors = totalActors > 0;
 
 		const displayOnboarding =
 			!isSkipped &&
