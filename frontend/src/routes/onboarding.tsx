@@ -8,8 +8,7 @@ export const Route = createFileRoute("/onboarding")({
 			throw notFound();
 		}
 
-		// Onboarding routes require authentication - wait for user and session
-		await waitForClerk(route.context.clerk, { requireAuth: true });
+		await waitForClerk(route.context.clerk);
 	},
 });
 
