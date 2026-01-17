@@ -1,4 +1,5 @@
 import type { Rivet } from "@rivetkit/engine-api-full";
+import type { Provider } from "@rivetkit/example-registry";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
@@ -9,6 +10,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
+import { endpointSchema } from "@/app/forms/connect-manual-serverless-form";
 import {
 	Accordion,
 	AccordionContent,
@@ -18,6 +20,7 @@ import {
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
 import { EnvVariables } from "../env-variables";
 import { StepperForm } from "../forms/stepper-form";
@@ -48,7 +51,7 @@ const stepper = defineStepper(
 );
 
 interface ConnectManualServerlessFrameContentProps extends DialogContentProps {
-	provider?: string;
+	provider: Provider;
 }
 
 export default function ConnectManualServerlessFrameContent({
@@ -80,23 +83,14 @@ function FormStepper({
 }: {
 	onClose?: () => void;
 	datacenters: Rivet.Datacenter[];
-	provider?: string;
+	provider: Provider;
 }) {
 	const dataProvider = useEngineCompatDataProvider();
 
 	const { mutateAsync } = useMutation({
 		...dataProvider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
+			successfulBackendSetupEffect();
 
 			await queryClient.invalidateQueries(
 				dataProvider.runnerConfigsQueryOptions(),
@@ -169,7 +163,7 @@ export const buildServerlessConfig = async (
 
 	const config = {
 		serverless: {
-			url: values.endpoint,
+			url: endpointSchema.parse(values.endpoint),
 			maxRunners: values.maxRunners,
 			slotsPerRunner: values.slotsPerRunner,
 			runnersMargin: values.runnerMargin,
@@ -204,7 +198,6 @@ function Step2() {
 		<>
 			<p>Set the following environment variables.</p>
 			<EnvVariables
-				kind="serverless"
 				endpoint={useEndpoint()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>
@@ -212,16 +205,11 @@ function Step2() {
 	);
 }
 
-function Step3({ provider }: { provider?: string }) {
-	const providerDisplayName = provider
-		? provider.charAt(0).toUpperCase() + provider.slice(1)
-		: undefined;
+function Step3({ provider }: { provider: Provider }) {
 	return (
 		<>
 			<ConnectServerlessForm.Endpoint placeholder="https://your-serverless-endpoint.com/api/rivet" />
-			<ConnectServerlessForm.ConnectionCheck
-				provider={providerDisplayName || "Your serverless provider"}
-			/>
+			<ConnectServerlessForm.ConnectionCheck provider={provider} />
 		</>
 	);
 }

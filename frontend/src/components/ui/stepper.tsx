@@ -117,6 +117,7 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 				const title = childMap.get("title");
 				const description = childMap.get("description");
 				const panel = childMap.get("panel");
+				const helper = childMap.get("helper");
 
 				if (variant === "circle") {
 					return (
@@ -199,9 +200,16 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 								)}
 							<div
 								date-component="stepper-step-content"
-								className="flex flex-col items-start"
+								className="flex flex-col items-star w-full"
 							>
-								{title}
+								{title && helper ? (
+									<div className="flex justify-between items-center w-full">
+										{title}
+										{helper}
+									</div>
+								) : (
+									title
+								)}
 								{description}
 							</div>
 						</li>
@@ -252,6 +260,7 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 					</Comp>
 				);
 			},
+			Helper,
 			Controls: ({ children, className, asChild, ...props }) => {
 				const Comp = asChild ? Slot : "div";
 				return (
@@ -266,6 +275,19 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 			},
 		},
 	};
+};
+
+const Helper = ({
+	children,
+	className,
+	asChild,
+}: {
+	children?: React.ReactNode;
+	className?: string;
+	asChild?: boolean;
+}) => {
+	const Comp = asChild ? Slot : "div";
+	return <Comp className={className}>{children}</Comp>;
 };
 
 const Title = ({
@@ -439,6 +461,8 @@ const extractChildren = (children: React.ReactNode) => {
 				map.set("title", child);
 			} else if (child.type === Description) {
 				map.set("description", child);
+			} else if (child.type === Helper) {
+				map.set("helper", child);
 			} else {
 				map.set("panel", child);
 			}
@@ -530,6 +554,7 @@ namespace Stepper {
 			Description: (props: AsChildProps<"p">) => React.ReactElement;
 			Panel: (props: AsChildProps<"div">) => React.ReactElement;
 			Controls: (props: AsChildProps<"div">) => React.ReactElement;
+			Helper: (props: AsChildProps<"div">) => React.ReactElement;
 		};
 	};
 

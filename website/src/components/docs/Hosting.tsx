@@ -18,7 +18,7 @@ export function Hosting() {
 			<CardGroup>
 				{hostingProviders
 					.filter((x) => !x.specializedPlatform)
-					.map(({ title, href, icon }) => (
+					.map(({ displayName: title, href, icon }) => (
 						<Card
 							key={href}
 							title={title}

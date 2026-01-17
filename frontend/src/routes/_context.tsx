@@ -79,14 +79,17 @@ export const Route = createFileRoute("/_context")({
 				) {
 					throw redirect({
 						to: "/onboarding/accept-invitation",
-						search: { ...route.search },
+						search: true,
 					});
 				}
 
 				if (!route.context.clerk.user) {
 					throw redirect({
 						to: "/login",
-						search: { from: location.pathname },
+						search: (old) => ({
+							...old,
+							from: route.location.pathname,
+						}),
 					});
 				}
 			})

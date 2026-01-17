@@ -1,23 +1,25 @@
+import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Combobox } from "@/components";
+import {
+	type BaseComboboxProps,
+	Combobox,
+	type ComboboxMultipleProps,
+	type ComboboxSingleProps,
+} from "@/components";
 import { ActorRegion } from "./actor-region";
 import { useDataProvider } from "./data-provider";
 
 type RegionSelectProps = {
 	showAuto?: boolean;
-} & (
-	| {
-			onValueChange: (value: string) => void;
-			value: string | undefined;
-			multiple?: false;
-	  }
-	| {
-			onValueChange: (value: string[]) => void;
-			value: string[] | undefined;
-			multiple: true;
-	  }
-);
-
+} & Omit<
+	BaseComboboxProps<{
+		region: { id: string; name: string } | Rivet.Datacenter;
+		label: React.ReactNode;
+		value: string;
+	}>,
+	"options" | "filter"
+> &
+	(ComboboxSingleProps | ComboboxMultipleProps);
 export function RegionSelect({ showAuto = true, ...props }: RegionSelectProps) {
 	const {
 		data = [],

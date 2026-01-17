@@ -40,3 +40,7 @@ export function useRootLayout() {
 	assertNonNullable(context);
 	return context;
 }
+
+export function useRootLayoutOptional() {
+	return useContext(RootLayoutContext);
+}

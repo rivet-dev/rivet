@@ -8,7 +8,7 @@ export const Route = createFileRoute("/join")({
 	beforeLoad: async ({ context }) => {
 		await waitForClerk(context.clerk);
 		if (context.clerk.user) {
-			throw redirect({ to: "/" });
+			throw redirect({ to: "/", search: true });
 		}
 	},
 });

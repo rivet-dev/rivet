@@ -12,7 +12,7 @@ export function EnvVariables({
 	showEndpoint = true,
 }: {
 	runnerName?: string;
-	endpoint?: string;
+	endpoint: string;
 	showRunnerName?: boolean;
 	showEndpoint?: boolean;
 }) {
@@ -28,7 +28,6 @@ export function EnvVariables({
 				<Label asChild className="text-muted-foreground text-xs mb-1">
 					<p>Value</p>
 				</Label>
-
 				{showEndpoint && <RivetPublicEndpointEnv endpoint={endpoint} />}
 				{showEndpoint && <RivetRunnerEndpointEnv endpoint={endpoint} />}
 				{showRunnerName && <RivetRunnerEnv runnerName={runnerName} />}
@@ -68,7 +67,7 @@ function RivetRunnerEnv({
 	prefix?: string;
 	runnerName?: string;
 }) {
-	if (runnerName === "default") return null;
+	if (runnerName === "default" || !runnerName) return null;
 
 	return (
 		<>
@@ -90,7 +89,7 @@ export const useRivetDsn = ({
 	endpoint,
 	kind,
 }: {
-	endpoint?: string;
+	endpoint: string;
 	kind: "publishable" | "secret";
 }) => {
 	const globalEndpoint = match(__APP_TYPE__)
@@ -120,7 +119,7 @@ export function RivetPublicEndpointEnv({
 	endpoint,
 }: {
 	prefix?: string;
-	endpoint?: string;
+	endpoint: string;
 }) {
 	const dsn = useRivetDsn({ endpoint, kind: "publishable" });
 	return (
@@ -144,8 +143,7 @@ export function RivetRunnerEndpointEnv({
 	endpoint,
 }: {
 	prefix?: string;
-	runnerName?: string;
-	endpoint?: string;
+	endpoint: string;
 }) {
 	const dsn = useRivetDsn({ endpoint, kind: "secret" });
 	return (

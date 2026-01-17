@@ -65,13 +65,12 @@ import {
 	faVercel,
 	faVialCircleCheck,
 } from "@rivet-gg/icons";
-import type { DeployOption } from "@/data/deploy/shared";
-import { deployOptions } from "@/data/deploy/shared";
+import { deployOptions, type DeployOption } from "@rivetkit/example-registry";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
 const deploySidebarPages: SidebarItem[] = deployOptions.map(
-	({ title, href, icon, badge }) => ({
+	({ displayName: title, href, icon, badge }) => ({
 		title,
 		href,
 		icon,

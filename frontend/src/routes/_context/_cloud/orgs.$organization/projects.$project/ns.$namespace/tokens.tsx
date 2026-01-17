@@ -16,11 +16,13 @@ import {
 } from "@tanstack/react-query";
 import {
 	createFileRoute,
+	redirect,
 	useParams,
 	useRouteContext,
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { match } from "ts-pattern";
+import { useEndpoint } from "@/app/dialogs/connect-manual-serverfull-frame";
 import { EnvVariables, useRivetDsn } from "@/app/env-variables";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
@@ -66,6 +68,13 @@ import { queryClient } from "@/queries/global";
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens",
 )({
+	beforeLoad: async ({ context, params }) => {
+		throw redirect({
+			to: "/orgs/$organization/projects/$project/ns/$namespace/settings",
+			params,
+			search: true,
+		});
+	},
 	component: RouteComponent,
 });
 
@@ -117,11 +126,11 @@ function RouteComponent() {
 	);
 }
 
-function PublishableToken() {
-	const dsn = useRivetDsn({ kind: "publishable" });
+export function PublishableToken() {
+	const dsn = useRivetDsn({ endpoint: "", kind: "publishable" });
 
 	return (
-		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg bg-muted/10">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg ">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Manual Client Configuration</H3>
 			</div>
@@ -147,9 +156,9 @@ function PublishableToken() {
 	);
 }
 
-function SecretToken() {
+export function SecretToken() {
 	return (
-		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Backend Configuration</H3>
 			</div>
@@ -187,7 +196,7 @@ const app = new Hono();
 
 app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));`;
 
-function ServerlessModeInfo() {
+export function ServerlessModeInfo() {
 	return (
 		<div className="space-y-8">
 			<p>
@@ -207,7 +216,7 @@ function ServerlessModeInfo() {
 			</p>
 			<div className="space-y-2">
 				<Label>Environment Variables</Label>
-				<EnvVariables showRunnerName={false} />
+				<EnvVariables endpoint={""} showRunnerName={false} />
 			</div>
 			<CodeGroup>
 				{[
@@ -360,7 +369,7 @@ registry.startRunner();`;
 	);
 }
 
-function CloudApiTokens() {
+export function CloudApiTokens() {
 	const { dataProvider } = useRouteContext({
 		from: "/_context/_cloud/orgs/$organization/projects/$project",
 	});
@@ -377,7 +386,7 @@ function CloudApiTokens() {
 	const cloudApiUrl = cloudEnv().VITE_APP_CLOUD_API_URL;
 
 	return (
-		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg bg-muted/10">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
 			<div className="flex gap-2 items-center justify-between mb-2 mt-6">
 				<div className="flex gap-2 items-center">
 					<H3>Cloud API Tokens</H3>

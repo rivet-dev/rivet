@@ -156,18 +156,20 @@ export const DiscreteCopyButton = forwardRef<
 	return content;
 });
 
-interface ClickToCopyProps {
+interface ClickToCopyProps
+	extends Omit<ComponentProps<typeof WithTooltip>, "trigger" | "content"> {
 	children: ReactNode;
 	value: string;
 }
 
-export function ClickToCopy({ children, value }: ClickToCopyProps) {
+export function ClickToCopy({ children, value, ...props }: ClickToCopyProps) {
 	const handleClick = () => {
 		navigator.clipboard.writeText(value);
 		toast.success("Copied to clipboard");
 	};
 	return (
 		<WithTooltip
+			{...props}
 			content="Click to copy"
 			trigger={<Slot onClick={handleClick}>{children}</Slot>}
 		/>
@@ -193,7 +195,7 @@ export function DiscreteInput({
 				className={cn("font-mono truncate", !show ? "pr-16" : "pr-8")}
 			/>
 			<div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-50 flex gap-1">
-				<ClickToCopy value={value}>
+				<ClickToCopy value={value} delayDuration={0}>
 					<Button variant="ghost" size="icon-sm" type="button">
 						<Icon icon={faCopy} />
 					</Button>

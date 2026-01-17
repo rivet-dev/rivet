@@ -6,10 +6,12 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
+import { deployOptions } from "packages/example-registry/src";
 import { useMemo } from "react";
 import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
 import { type DialogContentProps, ExternalLinkCard, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
+import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
 import { useRivetDsn } from "../env-variables";
 import { StepperForm } from "../forms/stepper-form";
@@ -22,10 +24,13 @@ import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 
 const { stepper } = ConnectVercelForm;
 
-interface ConnectQuickVercelFrameContentProps extends DialogContentProps {}
+interface ConnectQuickVercelFrameContentProps extends DialogContentProps {
+	title?: React.ReactNode;
+}
 
 export default function ConnectQuickVercelFrameContent({
 	onClose,
+	title,
 }: ConnectQuickVercelFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
@@ -40,10 +45,12 @@ export default function ConnectQuickVercelFrameContent({
 		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
-					<div>
-						Add <Icon icon={faVercel} className="ml-0.5" />
-						Vercel
-					</div>
+					{title ?? (
+						<div>
+							Add <Icon icon={faVercel} className="ml-0.5" />
+							Vercel
+						</div>
+					)}
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
@@ -64,16 +71,7 @@ function FormStepper({
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
+			successfulBackendSetupEffect();
 			await queryClient.invalidateQueries(
 				provider.runnerConfigsQueryOptions(),
 			);
@@ -122,38 +120,52 @@ function FormStepper({
 	);
 }
 
-const useVercelTemplateLink = () => {
+const useVercelTemplateLink = ({ template }: { template?: string }) => {
 	const endpoint = useEndpoint();
-
 	const secretDsn = useRivetDsn({ endpoint, kind: "secret" });
 	const publicDsn = useRivetDsn({ endpoint, kind: "publishable" });
 
 	return useMemo(() => {
-		const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
+		const repositoryUrl = `https://github.com/rivet-dev/rivet/tree/main/examples/${template || "chat-room"}`;
 		const env = ["RIVET_ENDPOINT", "RIVET_PUBLIC_ENDPOINT"].join(",");
-		const projectName = "rivetkit-vercel";
+		const projectName = template ?? "rivetkit-vercel";
 		const envDefaults = {
 			RIVET_ENDPOINT: secretDsn,
 			RIVET_PUBLIC_ENDPOINT: publicDsn,
 		};
-
-		return `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repositoryUrl)}&env=${env}&project-name=${projectName}&repository-name=${projectName}&envDefaults=${encodeURIComponent(JSON.stringify(envDefaults))}`;
-	}, [secretDsn, publicDsn]);
+		const url = new URL("https://vercel.com/new/clone");
+		url.searchParams.set("repository-url", repositoryUrl);
+		url.searchParams.set("env", env);
+		url.searchParams.set("project-name", projectName);
+		url.searchParams.set("repository-name", projectName);
+		url.searchParams.set("envDefaults", JSON.stringify(envDefaults));
+		return url.toString();
+	}, [secretDsn, publicDsn, template]);
 };
 
-function StepInitialInfo() {
-	const vercelTemplateLink = useVercelTemplateLink();
+export function StepInitialInfo({ template }: { template?: string }) {
 	return (
 		<div className="space-y-4">
-			<p>Deploy the Rivet Vercel template to get started quickly.</p>
-			<ExternalLinkCard
-				href={vercelTemplateLink}
-				icon={faVercel}
-				title="Deploy Template to Vercel"
-			/>
+			<p>
+				Deploy the {template ? `'${template}'` : "Vercel"} template to
+				get started quickly.
+			</p>
+			<DeployToVercelCard template={template} />
 		</div>
 	);
 }
+
+export const DeployToVercelCard = ({ template }: { template?: string }) => {
+	const templateOptions = deployOptions.find((opt) => opt.name === template);
+	const vercelTemplateLink = useVercelTemplateLink({ template });
+	return (
+		<ExternalLinkCard
+			href={vercelTemplateLink}
+			icon={faVercel}
+			title={`Deploy ${templateOptions ? templateOptions.displayName : "Template"} to Vercel`}
+		/>
+	);
+};
 
 function StepDeploy() {
 	return (
@@ -181,7 +193,7 @@ function StepDeploy() {
 				</p>
 			</div>
 
-			<ConnectVercelForm.ConnectionCheck provider="Vercel" />
+			<ConnectVercelForm.ConnectionCheck provider="vercel" />
 		</>
 	);
 }

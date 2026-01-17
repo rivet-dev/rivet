@@ -6,7 +6,7 @@ import { templates, TECHNOLOGIES, TAGS, type Template } from '@/data/templates/s
 import { VanillaMarkdown } from '@/components/VanillaMarkdown';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { Code } from '@/components/v2/Code';
-import { Icon, faGithub } from '@rivet-gg/icons';
+import { Icon, faCloud, faGithub } from '@rivet-gg/icons';
 
 export async function getStaticPaths() {
 	return templates.map((template) => ({
@@ -61,6 +61,7 @@ const readmeContent = await getReadmeContent(template.name);
 const cleanedReadmeContent = cleanReadmeContent(readmeContent);
 const displayedRelated = getRelatedTemplates(template);
 const githubUrl = `https://github.com/rivet-dev/rivet/tree/main/examples/${template.name}`;
+const dashboardUrl = `https://dashboard.rivet.dev/new/${template.name}`;
 
 // Strip markdown links from description
 const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
@@ -141,6 +142,15 @@ const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 						<div class="rounded-xl bg-neutral-950 border border-white/20 p-6 pt-5">
 							<h3 class="text-sm font-medium text-white mb-4">Get Started</h3>
 							<div class="space-y-2">
+								<a
+									href={dashboardUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
+								>
+									<Icon icon={faCloud} className="text-sm" />
+									Deploy 
+								</a>
 								<a
 									href={githubUrl}
 									target="_blank"

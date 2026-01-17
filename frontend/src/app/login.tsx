@@ -2,8 +2,8 @@
 import { useClerk, useUser } from "@clerk/clerk-react";
 import * as Clerk from "@clerk/elements/common";
 import * as SignIn from "@clerk/elements/sign-in";
-import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
 import { Badge } from "@/components";
@@ -23,11 +23,13 @@ export function Login() {
 	const clerk = useClerk();
 	const { user } = useUser();
 	const navigate = useNavigate();
+	const from = useSearch({ from: "__root__", select: (s) => s.from });
 
 	// HACK: redirect if user is already logged in, race condition with clerk
+	// biome-ignore lint/correctness/useExhaustiveDependencies: from is stable
 	useEffect(() => {
 		if (user) {
-			navigate({ to: "/" });
+			return navigate({ to: from ?? "/", search: true });
 		}
 	}, [user, navigate]);
 

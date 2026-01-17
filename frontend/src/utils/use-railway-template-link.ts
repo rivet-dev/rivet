@@ -2,11 +2,7 @@ import { useMemo } from "react";
 import { useEndpoint } from "@/app/dialogs/connect-manual-serverfull-frame";
 import { useRivetDsn } from "@/app/env-variables";
 
-export function useRailwayTemplateLink({
-	runnerName,
-}: {
-	runnerName: string;
-}) {
+export function useRailwayTemplateLink({ runnerName }: { runnerName: string }) {
 	const endpoint = useEndpoint();
 	const secretDsn = useRivetDsn({ endpoint, kind: "secret" });
 	const publicDsn = useRivetDsn({ endpoint, kind: "publishable" });
