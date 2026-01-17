@@ -30,6 +30,11 @@ const GC_INTERVAL: Duration = Duration::from_secs(5);
 pub struct PostgresConfig {
 	pub connection_string: String,
 	pub unstable_disable_lock_customization: bool,
+	pub ssl_config: Option<PostgresSslConfig>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PostgresSslConfig {
 	pub ssl_root_cert_path: Option<PathBuf>,
 	pub ssl_client_cert_path: Option<PathBuf>,
 	pub ssl_client_key_path: Option<PathBuf>,
@@ -41,9 +46,7 @@ impl PostgresConfig {
 		Self {
 			connection_string,
 			unstable_disable_lock_customization: false,
-			ssl_root_cert_path: None,
-			ssl_client_cert_path: None,
-			ssl_client_key_path: None,
+			ssl_config: None,
 		}
 	}
 }
@@ -77,17 +80,24 @@ impl PostgresDatabaseDriver {
 
 		tracing::debug!("creating Postgres pool");
 
-		let tls_config = build_tls_config(
-			config.ssl_root_cert_path.as_ref(),
-			config.ssl_client_cert_path.as_ref(),
-			config.ssl_client_key_path.as_ref(),
-		)?;
+		let pool = if let Some(config) = &config.ssl_config {
+			let tls_config = build_tls_config(
+				config.ssl_root_cert_path.as_ref(),
+				config.ssl_client_cert_path.as_ref(),
+				config.ssl_client_key_path.as_ref(),
+			)?;
+			let tls = MakeRustlsConnect::new(tls_config);
 
-		let tls = MakeRustlsConnect::new(tls_config);
+			pool_config
+				.create_pool(Some(Runtime::Tokio1), tls)
+				.context("failed to create postgres connection pool")?
+		} else {
+			let tls = tokio_postgres::NoTls;
 
-		let pool = pool_config
-			.create_pool(Some(Runtime::Tokio1), tls)
-			.context("failed to create postgres connection pool")?;
+			pool_config
+				.create_pool(Some(Runtime::Tokio1), tls)
+				.context("failed to create postgres connection pool")?
+		};
 
 		tracing::debug!("Getting Postgres connection from pool");
 		// Get a connection from the pool to create the table
