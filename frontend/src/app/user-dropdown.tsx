@@ -38,7 +38,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild={!params.organization}>
+			<DropdownMenuTrigger asChild={!params.organization || !!children}>
 				{children ||
 					(params.organization ? (
 						<Preview org={params.organization} />

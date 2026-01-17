@@ -1,16 +1,13 @@
 import { faArrowUpRight, faChevronLeft, Icon } from "@rivet-gg/icons";
 import type { Template } from "@rivetkit/example-registry";
-import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { match } from "ts-pattern";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
-import * as StartNewExampleForm from "@/app/forms/start-with-new-example-form";
 import { ExamplePreview } from "@/app/templates";
-import { useCloudDataProvider } from "./actors";
 import { FrameConfigProvider } from "./hooks/isomorphic-frame";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader } from "./ui/card";
+import { Card, CardHeader } from "./ui/card";
 import { H1 } from "./ui/typography";
 
 export function TemplateDetail({
@@ -166,8 +163,6 @@ function CreateProject({
 	template: Template;
 	organization: string;
 }) {
-	const navigate = useNavigate();
-
 	return (
 		<FrameConfigProvider
 			value={{
@@ -178,18 +173,7 @@ function CreateProject({
 		>
 			<CreateProjectFrameContent
 				organization={organization}
-				onSuccess={(data, vars) => {
-					return navigate({
-						to: "/orgs/$organization/projects/$project",
-						params: {
-							organization: vars.organization,
-							project: data.project.name,
-						},
-						search: {
-							template: template.name,
-						},
-					});
-				}}
+				template={template.name}
 			/>
 		</FrameConfigProvider>
 	);

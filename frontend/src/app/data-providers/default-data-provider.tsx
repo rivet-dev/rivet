@@ -34,6 +34,10 @@ export const ActorQueryOptionsSchema = z
 			.array(z.string())
 			.optional()
 			.catch(() => []),
+		limit: z
+			.number()
+			.optional()
+			.catch(() => RECORDS_PER_PAGE),
 	})
 	.optional();
 export type ActorQueryOptions = z.infer<typeof ActorQueryOptionsSchema>;

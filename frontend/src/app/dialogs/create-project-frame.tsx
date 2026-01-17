@@ -1,4 +1,5 @@
 import { useOrganization } from "@clerk/clerk-react";
+import type { Rivet } from "@rivet-gg/cloud";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
@@ -20,12 +21,16 @@ export default function CreateProjectFrameContent({
 	organization,
 	onSuccess,
 	name,
+	template,
+	noTemplate,
 }: {
 	name?: string;
 	organization?: string;
+	template?: string;
+	noTemplate?: boolean;
 	// FIXME
 	onSuccess?: (
-		data: any,
+		data: Rivet.ProjectsCreateResponse,
 		vars: { displayName: string; organization: string },
 	) => void;
 }) {
@@ -55,6 +60,10 @@ export default function CreateProjectFrameContent({
 						params: {
 							organization: params.organization,
 							project: data.project.name,
+						},
+						search: {
+							template: noTemplate ? undefined : template,
+							noTemplate: noTemplate ? true : undefined,
 						},
 					});
 		},

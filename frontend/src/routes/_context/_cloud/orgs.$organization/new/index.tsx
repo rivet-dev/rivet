@@ -22,6 +22,7 @@ function RouteComponent() {
 					to: ".",
 					search: {
 						modal: "create-project",
+						noTemplate: true,
 					},
 				}}
 			/>
