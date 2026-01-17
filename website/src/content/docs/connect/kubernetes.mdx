@@ -1,26 +1,17 @@
 # Deploying to Kubernetes
-#
-Run your backend on any Kubernetes cluster with a simple container image and deployment manifest.
 
-## Guide
+Deploy your RivetKit app to any Kubernetes cluster.
+
+## Steps
 
 <Steps>
 <Step title="Prerequisites">
 
-- A Kubernetes cluster with `kubectl` access (AKS, EKS, GKE, k3s, etc.)
+- A Kubernetes cluster with `kubectl` access (EKS, GKE, k3s, etc.)
 - Container registry credentials (Docker Hub, GHCR, GCR, etc.)
-- Your backend application repository
-
-</Step>
-<Step title="Generate Environment Variables">
-
-Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in later manifests. They should look something like this:
-
-```bash
-RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
-RIVET_NAMESPACE=your-namespace-id
-RIVET_TOKEN=your-token
-```
+- Your RivetKit app
+  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
 
 </Step>
 <Step title="Package Your App">
@@ -41,75 +32,82 @@ CMD ["node", "server.js"]
 <Step title="Build and Push the Image">
 
 ```bash
-docker build -t registry.example.com/your-team/backend:latest .
-docker push registry.example.com/your-team/backend:latest
+docker build -t registry.example.com/your-team/rivetkit-app:latest .
+docker push registry.example.com/your-team/rivetkit-app:latest
 ```
 
 Replace `registry.example.com/your-team` with your registry path. Auth with `docker login` first if needed.
 
 </Step>
-<Step title="Deploy to Kubernetes">
+<Step title="Set Environment Variables">
 
-Create a `backend-secrets.yaml` for your environment variables:
+After creating your project on the Rivet dashboard, select Kubernetes as your provider. You'll be provided `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` environment variables.
+
+Create a `rivetkit-secrets.yaml` for your environment variables:
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: backend-secrets
+  name: rivetkit-secrets
 type: Opaque
 stringData:
-  RIVET_ENDPOINT: https://api-us-west-1.rivet.dev
-  RIVET_NAMESPACE: your-namespace-id
-  RIVET_TOKEN: your-token
+  RIVET_ENDPOINT: <your-rivet-endpoint>
+  RIVET_PUBLIC_ENDPOINT: <your-rivet-public-endpoint>
 ```
 
-Then create a `deployment.yaml`:
+</Step>
+<Step title="Deploy to Kubernetes">
+
+Create a `deployment.yaml`:
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend
+  name: rivetkit-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: backend
+      app: rivetkit-app
   template:
     metadata:
       labels:
-        app: backend
+        app: rivetkit-app
     spec:
       containers:
-        - name: backend
-          image: registry.example.com/your-team/backend:latest
+        - name: rivetkit-app
+          image: registry.example.com/your-team/rivetkit-app:latest
           envFrom:
             - secretRef:
-                name: backend-secrets
+                name: rivetkit-secrets
 ```
-
-<Note>You do not need to expose a container port. Rivet tunnels traffic directly to your backend.</Note>
 
 Apply both manifests:
 
 ```bash
-kubectl apply -f backend-secrets.yaml
+kubectl apply -f rivetkit-secrets.yaml
 kubectl apply -f deployment.yaml
 ```
 
-Add a `Service` or Ingress if you need external access.
+</Step>
+<Step title="Connect to Rivet">
+
+1. Add a `Service` and Ingress to expose your app externally (e.g. `my-app.example.com`)
+2. On the Rivet dashboard, paste your domain with the `/api/rivet` path into the connect form (e.g. `https://my-app.example.com/api/rivet`)
+3. Click "Done"
 
 </Step>
-<Step title="Verify the Runner">
+<Step title="Verify">
 
 Check that the pod is running:
 
 ```bash
-kubectl get pods -l app=backend
+kubectl get pods -l app=rivetkit-app
 ```
 
-Your runner should appear as connected on the Rivet dashboard once the pod is ready.
+Your app should appear as connected on the Rivet dashboard once the pod is ready.
 
 </Step>
 </Steps>
