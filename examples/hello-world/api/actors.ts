@@ -22,4 +22,5 @@ export const counter = actor({
 // Register actors for use: https://rivet.dev/docs/setup
 export const registry = setup({
 	use: { counter },
+	serverless: { basePath: "/rivet" },
 });
