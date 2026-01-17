@@ -193,6 +193,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			.send()
 			.await?;
 
+		// TODO(RVT-3928): return Ok(Err);
 		return Ok(());
 	}
 
@@ -206,20 +207,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		create_ts: ctx.create_ts(),
 	})
 	.await?;
-
-	match ctx.check_version(2).await? {
-		1 => {
-			ctx.v(2)
-				.activity(setup::BackfillUdbKeysAndMetricsInput {
-					actor_id: input.actor_id,
-				})
-				.await?;
-		}
-		_latest => {
-			// Do nothing, already using the new version of init_state_and_udb which has the new udb keys and
-			// metrics
-		}
-	}
 
 	if let Some(key) = &input.key {
 		match keys::reserve_key(

@@ -68,7 +68,7 @@ If we want this workflow to remain the same but new workflows to execute a diffe
 // Activity foo
 ctx.activity(...).await?;
 
-match ctx.check_version(2).await? {
+match ctx.check_version(2).await {
 	// The existing workflow will always match this path because the next event (activity bar) has version 1
 	1 => {
 		// Here we need to keep the workflow steps as expected by the history, run activity bar
@@ -81,7 +81,7 @@ match ctx.check_version(2).await? {
 	}
 }
 
-ctx.sleep().await?;
+ctx.sleep().await
 ```
 
 Version checks are durable because if history already exists at the location they are added then they do not manipulate the database and read the version of that history event. But if the version check is at the end of the current branch of events (as in a new workflow), it will be inserted as an event itself. This means the workflow history for both workflows will look like this:

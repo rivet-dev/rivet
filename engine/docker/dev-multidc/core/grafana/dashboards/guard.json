@@ -37,7 +37,6 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
-            "axisSoftMin": 0,
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
@@ -308,113 +307,12 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 8
-      },
-      "id": 19,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Mean",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (router) (rate(rivet_guard_route_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",k8s_pod_name=~\"$k8s_pod_name\"} [$__rate_interval]))",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Requests Routed/s",
-      "type": "timeseries"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 8
       },
       "id": 16,
       "panels": [],
@@ -486,7 +384,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 17
+        "y": 9
       },
       "id": 2,
       "options": {
@@ -590,7 +488,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 17
+        "y": 9
       },
       "id": 5,
       "options": {
@@ -652,7 +550,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 17
+        "y": 9
       },
       "id": 1,
       "options": {
@@ -715,7 +613,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 17
       },
       "id": 17,
       "panels": [],
@@ -787,7 +685,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 26
+        "y": 18
       },
       "id": 7,
       "options": {
@@ -891,7 +789,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 26
+        "y": 18
       },
       "id": 8,
       "options": {
@@ -953,7 +851,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 26
+        "y": 18
       },
       "id": 9,
       "options": {
@@ -1016,7 +914,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 26
       },
       "id": 15,
       "panels": [],
@@ -1088,7 +986,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 35
+        "y": 27
       },
       "id": 10,
       "options": {
@@ -1191,7 +1089,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 35
+        "y": 27
       },
       "id": 11,
       "options": {
@@ -1294,7 +1192,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 35
+        "y": 27
       },
       "id": 12,
       "options": {
@@ -1341,11 +1239,9 @@
     "list": [
       {
         "current": {
-          "text": [
-            "prod"
-          ],
+          "text": "All",
           "value": [
-            "prod"
+            "$__all"
           ]
         },
         "datasource": {
@@ -1423,12 +1319,12 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-12h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Guard",
   "uid": "cen785ige8fswd",
-  "version": 6
+  "version": 3
 }

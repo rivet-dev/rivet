@@ -15,6 +15,7 @@ gas.workspace = true
 indexmap.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
+pegboard-actor-kv.workspace = true
 rivet-api-builder.workspace = true
 rivet-api-types.workspace = true
 rivet-api-util.workspace = true

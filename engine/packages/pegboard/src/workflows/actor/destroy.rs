@@ -93,15 +93,16 @@ async fn update_state_and_db(
 	let mut state = ctx.state::<State>()?;
 	let destroy_ts = util::timestamp::now();
 
-	let runner_id = state.runner_id;
-	let namespace_id = state.namespace_id;
-	let runner_name_selector = &state.runner_name_selector;
-	let allocated_serverless_slot = state.allocated_serverless_slot;
-	let name = &state.name;
-	let create_ts = state.create_ts;
-	let key = &state.key;
 	ctx.udb()?
 		.run(|tx| {
+			let runner_id = state.runner_id.clone();
+			let namespace_id = state.namespace_id.clone();
+			let runner_name_selector = state.runner_name_selector.clone();
+			let allocated_serverless_slot = state.allocated_serverless_slot.clone();
+			let name = state.name.clone();
+			let create_ts = state.create_ts.clone();
+			let key = state.key.clone();
+
 			async move {
 				let tx = tx.with_subspace(keys::subspace());
 
@@ -110,7 +111,7 @@ async fn update_state_and_db(
 				clear_slot(
 					input.actor_id,
 					namespace_id,
-					runner_name_selector,
+					&runner_name_selector,
 					runner_id,
 					allocated_serverless_slot,
 					&tx,
@@ -125,12 +126,12 @@ async fn update_state_and_db(
 					input.actor_id,
 				));
 
-				if let Some(key) = &key {
+				if let Some(k) = &key {
 					tx.write(
 						&keys::ns::ActorByKeyKey::new(
 							namespace_id,
 							name.clone(),
-							key.clone(),
+							k.clone(),
 							create_ts,
 							input.actor_id,
 						),
@@ -140,14 +141,6 @@ async fn update_state_and_db(
 						},
 					)?;
 				}
-
-				// Update metrics
-				keys::ns::metric::inc(
-					tx,
-					namespace_id,
-					keys::ns::metric::Metric::TotalActors(name.clone()),
-					-1,
-				);
 
 				Ok(())
 			}
@@ -179,6 +172,7 @@ struct ClearKvOutput {
 
 #[activity(ClearKv)]
 async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutput> {
+	// Matches `delete_all` from actor_kv (can't import because of cyclical dep)
 	let final_size = ctx
 		.udb()?
 		.run(|tx| async move {
@@ -187,7 +181,6 @@ async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutp
 			let (start, end) = subspace.range();
 			let final_size = tx.get_estimated_range_size_bytes(&start, &end).await?;
 
-			// Matches `delete_all` from actor kv
 			tx.clear_subspace_range(&subspace);
 
 			Ok(final_size)
