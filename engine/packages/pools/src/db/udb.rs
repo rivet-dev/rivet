@@ -20,23 +20,16 @@ impl Deref for UdbPool {
 pub async fn setup(config: Config) -> Result<Option<UdbPool>> {
 	let db_driver = match config.database() {
 		config::Database::Postgres(pg) => {
-			let (ssl_root_cert_path, ssl_client_cert_path, ssl_client_key_path) =
-				if let Some(ssl) = &pg.ssl {
-					(
-						ssl.root_cert_path.clone(),
-						ssl.client_cert_path.clone(),
-						ssl.client_key_path.clone(),
-					)
-				} else {
-					(None, None, None)
-				};
-
 			let postgres_config = universaldb::driver::postgres::PostgresConfig {
 				connection_string: pg.url.read().clone(),
 				unstable_disable_lock_customization: pg.unstable_disable_lock_customization,
-				ssl_root_cert_path,
-				ssl_client_cert_path,
-				ssl_client_key_path,
+				ssl_config: pg.ssl.as_ref().map(|ssl| {
+					universaldb::driver::postgres::PostgresSslConfig {
+						ssl_root_cert_path: ssl.root_cert_path.clone(),
+						ssl_client_cert_path: ssl.client_cert_path.clone(),
+						ssl_client_key_path: ssl.client_key_path.clone(),
+					}
+				}),
 			};
 
 			Arc::new(
