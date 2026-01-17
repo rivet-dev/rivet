@@ -8,7 +8,7 @@
     "check-types": "tsc --noEmit",
     "test": "vitest run",
     "build": "vite build && vite build --mode server",
-    "start": "srvx --static=public/ dist/server.js"
+    "start": "srvx --static=public/ src/index.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.1",
@@ -31,8 +31,8 @@
     "tsx": "^3.12.7",
     "typescript": "^5.5.2",
     "vite": "^5.0.0",
-    "vitest": "^2.1.8",
-    "vite-plugin-srvx": "^1.0.0"
+    "vite-plugin-srvx": "^1.0.1",
+    "vitest": "^2.1.8"
   },
   "template": {
     "technologies": [

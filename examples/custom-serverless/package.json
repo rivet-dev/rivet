@@ -4,8 +4,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "npx srvx --import tsx src/server.ts",
-		"start": "npx srvx --import tsx src/server.ts",
+		"dev": "npx srvx --import tsx src/index.ts",
+		"start": "npx srvx --import tsx src/index.ts",
 		"check-types": "tsc --noEmit",
 		"test": "vitest run",
 		"build": "tsup"

@@ -1,3 +1,4 @@
 {
-	"framework": "hono"
+	"framework": "hono",
+	"outputDirectory": "src/"
 }

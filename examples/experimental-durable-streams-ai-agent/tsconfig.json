@@ -12,5 +12,5 @@
 		"allowImportingTsExtensions": true,
 		"rewriteRelativeImportExtensions": true
 	},
-	"include": ["src/**/*", "tests/**/*"]
+	"include": ["src/**/*", "frontend/**/*", "tests/**/*"]
 }

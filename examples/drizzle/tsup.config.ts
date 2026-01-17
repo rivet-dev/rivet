@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
 	entry: {
-		server: "src/server.ts",
+		server: "src/index.ts",
 	},
 	format: ["esm"],
 	outDir: "dist",

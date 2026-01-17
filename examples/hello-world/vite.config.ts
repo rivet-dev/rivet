@@ -3,5 +3,5 @@ import react from "@vitejs/plugin-react";
 import srvx from "vite-plugin-srvx";
 
 export default defineConfig({
-	plugins: [react(), ...srvx({ entry: "src/server.ts" })],
+	plugins: [react(), ...srvx({ entry: "server/index.ts" })],
 });

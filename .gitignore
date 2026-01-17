@@ -60,3 +60,6 @@ website/public/llms.txt
 website/.playwright-mcp/
 .vercel
 
+# Examples
+# examples/*/public/
+

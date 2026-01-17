@@ -17,19 +17,22 @@ All example READMEs must follow the template defined in `.claude/resources/EXAMP
 Examples with frontend (using vite-plugin-srvx):
 ```
 example-name/
-├── src/
+├── server/
 │   ├── actors.ts       # Actor definitions and registry setup
-│   └── server.ts       # Server entry point
+│   └── index.ts        # Server entry point
 ├── frontend/
 │   ├── App.tsx         # Main React component
 │   └── main.tsx        # React entry point
 ├── tests/
 │   └── *.test.ts       # Vitest tests
 ├── index.html          # HTML entry point (for Vite)
+├── middleware.ts       # Middleware for SPA routing (Vercel)
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
 ├── vitest.config.ts    # Only if tests exist
+├── vercel.json
+├── .gitignore
 ├── turbo.json
 └── README.md
 ```
@@ -37,17 +40,20 @@ example-name/
 Examples with separate frontend/backend dev servers:
 ```
 example-name/
-├── src/
+├── server/
 │   ├── actors.ts       # Actor definitions and registry setup
-│   └── server.ts       # Server entry point
+│   └── index.ts        # Server entry point
 ├── frontend/
 │   ├── App.tsx
 │   └── main.tsx
+├── middleware.ts       # Middleware for SPA routing (Vercel)
 ├── package.json
 ├── tsconfig.json
 ├── tsup.config.ts      # For backend bundling
 ├── vite.config.ts
 ├── vitest.config.ts    # Only if tests exist
+├── vercel.json
+├── .gitignore
 ├── turbo.json
 └── README.md
 ```
@@ -55,19 +61,22 @@ example-name/
 Backend-only examples:
 ```
 example-name/
-├── src/
+├── server/
 │   ├── actors.ts       # Actor definitions and registry setup
-│   └── server.ts       # Server entry point
+│   └── index.ts        # Server entry point
 ├── package.json
 ├── tsconfig.json
+├── vercel.json
+├── .gitignore
 ├── turbo.json
 └── README.md
 ```
 
 ### Naming Conventions
 
-- Actor definitions go in `src/actors.ts`
-- Server entry point is always `src/server.ts`
+- Actor definitions go in `server/actors.ts`
+- Server entry point is always `server/index.ts`
+- Middleware for SPA routing goes in `middleware.ts` (root of example)
 - Frontend entry is `frontend/main.tsx` with main component in `frontend/App.tsx`
 - Test files use `.test.ts` extension in `tests/` directory
 
@@ -83,7 +92,7 @@ For examples with frontend (using vite-plugin-srvx):
     "check-types": "tsc --noEmit",
     "test": "vitest run",
     "build": "vite build && vite build --mode server",
-    "start": "srvx --static=public/ dist/server.js"
+    "start": "srvx --static=public/ server/index.ts"
   }
 }
 ```
@@ -92,7 +101,7 @@ For examples with separate frontend/backend dev servers:
 ```json
 {
   "scripts": {
-    "dev:backend": "srvx --import tsx src/server.ts",
+    "dev:backend": "srvx --import tsx server/index.ts",
     "dev:frontend": "vite",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "check-types": "tsc --noEmit",
@@ -100,7 +109,7 @@ For examples with separate frontend/backend dev servers:
     "build:frontend": "vite build",
     "build:backend": "tsup",
     "build": "npm run build:backend && npm run build:frontend",
-    "start": "srvx --static=../frontend/dist dist/server.js"
+    "start": "srvx --static=../frontend/dist server/index.ts"
   }
 }
 ```
@@ -109,8 +118,8 @@ For backend-only examples:
 ```json
 {
   "scripts": {
-    "dev": "npx srvx --import tsx src/server.ts",
-    "start": "npx srvx --import tsx src/server.ts",
+    "dev": "npx srvx --import tsx server/index.ts",
+    "start": "npx srvx --import tsx server/index.ts",
     "check-types": "tsc --noEmit",
     "build": "tsup"
   }
@@ -173,7 +182,7 @@ For backend-only examples:
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["src/**/*", "frontend/**/*", "tests/**/*"]
+  "include": ["server/**/*", "frontend/**/*", "tests/**/*"]
 }
 ```
 
@@ -192,10 +201,10 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: {
-    server: "src/server.ts",
+    server: "server/index.ts",
   },
   format: ["esm"],
-  outDir: "dist",
+  outDir: "server",
   bundle: true,
   splitting: false,
   shims: true,
@@ -211,7 +220,7 @@ import react from "@vitejs/plugin-react";
 import srvx from "vite-plugin-srvx";
 
 export default defineConfig({
-  plugins: [react(), ...srvx({ entry: "src/server.ts" })],
+  plugins: [react(), ...srvx({ entry: "server/index.ts" })],
 });
 ```
 
@@ -254,11 +263,12 @@ export default defineConfig({
 
 ### vercel.json
 
-Vercel auto-detects Vite when it sees a `vite.config.ts` and ignores Hono. We must explicitly set the framework to Hono:
+Vercel auto-detects Vite when it sees a `vite.config.ts` and ignores Hono. We must explicitly set the framework to Hono and specify the output directory:
 
 ```json
 {
-  "framework": "hono"
+  "framework": "hono",
+  "outputDirectory": "server/"
 }
 ```
 
@@ -275,13 +285,31 @@ All examples should extend the root turbo config:
 ### .gitignore
 
 ```
-.actorcore
-node_modules
+# public/ intentionally committed for Vercel
+node_modules/
+dist/
 ```
 
 ## Source Code Patterns
 
-### Actor Definitions (src/actors.ts)
+### Middleware (middleware.ts)
+
+Every example should include a middleware file for SPA routing:
+
+```typescript
+// Middleware for Vercel to serve index.html as a SPA
+export default function middleware(request: Request) {
+    const path = new URL(request.url).pathname;
+    if (path.startsWith("/api") || path.startsWith("/assets")) return;
+    return new Response(null, {
+        headers: { "x-middleware-rewrite": new URL("/index.html", request.url).toString() },
+    });
+}
+```
+
+This middleware handles SPA client-side routing by rewriting non-API and non-asset requests to serve `index.html`.
+
+### Actor Definitions (server/actors.ts)
 
 ```typescript
 import { actor, setup } from "rivetkit";
@@ -312,7 +340,7 @@ export const registry = setup({
 });
 ```
 
-### Server Entry Point (src/server.ts)
+### Server Entry Point (server/index.ts)
 
 You must explicitly import from `"hono"` for Vercel to detect the framework.
 
@@ -346,7 +374,7 @@ export default app;
 
 ```typescript
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../server/actors.ts";
 
 const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
 
@@ -383,7 +411,7 @@ createRoot(root).render(
 ```typescript
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/actors.ts";
+import { registry } from "../server/actors.ts";
 
 test("Description of test", async (ctx) => {
   const { client } = await setupTest(ctx, registry);
@@ -442,18 +470,3 @@ This is enforced by the tsconfig options `allowImportingTsExtensions` and `rewri
 6. **Testing** - Use `setupTest()` from `rivetkit/test` for isolated actor testing
 7. **Comments** - Include helpful comments linking to documentation (e.g., `// https://rivet.dev/docs/actors/state`)
 
-## TODO: Examples Cleanup
-
-The following issues need to be fixed across examples:
-
-- [x] Rename `src/registry.ts` to `src/actors.ts` in all examples
-- [ ] Update all relative imports to use `.ts` extensions (ESM compliance) - only cloudflare examples remaining
-- [ ] Add `allowImportingTsExtensions` and `rewriteRelativeImportExtensions` to tsconfig.json
-- [x] Remove unused `tsup.config.ts` from examples using vite-plugin-srvx
-- [x] Remove unused `tsup` devDependency from examples using vite-plugin-srvx
-- [x] Move `srvx` from devDependencies to dependencies (used by `start` script)
-- [x] Move `@hono/node-server` and `@hono/node-ws` from devDependencies to dependencies
-- [x] Remove unused `concurrently` devDependency from examples using vite-plugin-srvx
-- [ ] Remove `scripts/` directories with CLI client scripts - only cloudflare/next-js examples remaining
-- [x] Remove `prompts` and `@types/prompts` devDependencies
-- [x] Migrate all frontend examples to use vite-plugin-srvx

@@ -1,3 +1,4 @@
 {
-	"framework": "elysia"
+	"framework": "hono",
+	"outputDirectory": "src/"
 }
