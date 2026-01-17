@@ -126,7 +126,8 @@ const useVercelTemplateLink = ({ template }: { template?: string }) => {
 	const publicDsn = useRivetDsn({ endpoint, kind: "publishable" });
 
 	return useMemo(() => {
-		const repositoryUrl = `https://github.com/rivet-dev/rivet/tree/main/examples/${template || "chat-room"}`;
+		// const repositoryUrl = `https://github.com/rivet-dev/rivet/tree/main/examples/${template || "chat-room"}`;
+		const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
 		const env = ["RIVET_ENDPOINT", "RIVET_PUBLIC_ENDPOINT"].join(",");
 		const projectName = template ?? "rivetkit-vercel";
 		const envDefaults = {
