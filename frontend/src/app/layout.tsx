@@ -1,9 +1,12 @@
+import { useUser } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
+	faCog,
+	faGift,
 	faHome,
-	faKey,
 	faLink,
 	faLinkSlash,
+	faMessageSmile,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
@@ -36,11 +39,13 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useDataProvider, useDataProviderCheck } from "@/components/actors";
+import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
+import { HelpDropdown } from "./help-dropdown";
 import {
 	useInspectorContext,
 	useInspectorEndpoint,
@@ -128,6 +133,18 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 	);
 };
 
+export const Logo = () => {
+	return (
+		<Link to="/" className="flex items-center gap-5 ps-3 pt-5 pb-4">
+			<img
+				src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
+				alt="Rivet.gg"
+				className="h-6"
+			/>
+		</Link>
+	);
+};
+
 const Sidebar = ({
 	ref,
 	...props
@@ -146,17 +163,8 @@ const Sidebar = ({
 				{...props}
 			>
 				<div className="flex-col gap-2 size-full flex">
-					<Link
-						to="/"
-						className="flex items-center gap-2 ps-3 pt-5 pb-4"
-					>
-						<img
-							src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
-							alt="rivet.dev"
-							className="h-6"
-						/>
-					</Link>
-					<div className="flex flex-1 flex-col gap-4 px-2 min-h-0">
+					<Logo />
+					<div className="flex flex-1 flex-col gap-2 px-2 min-h-0">
 						{match(__APP_TYPE__)
 							.with("inspector", () => (
 								<>
@@ -179,46 +187,88 @@ const Sidebar = ({
 					</div>
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />
-						<div
-							className={cn(
-								"px-1 py-1 flex flex-col gap-[1px] text-sm ",
-								__APP_TYPE__ !== "cloud" ? "pb-4" : "",
-							)}
-						>
-							<Changelog>
-								<Button
-									className="text-muted-foreground justify-start py-1 h-auto"
-									variant="ghost"
-									size="xs"
-									asChild
-								>
-									<a
-										href="https://www.rivet.dev/changelog"
-										target="_blank"
-										rel="noopener"
-									>
-										Whats new?
-										<Ping
-											className="relative -right-1"
-											data-changelog-ping
-										/>
-									</a>
-								</Button>
-							</Changelog>
-							{match(__APP_TYPE__)
-								.with("cloud", () => (
-									<Button
-										className="text-muted-foreground justify-start py-1 h-auto"
-										variant="ghost"
-										size="xs"
-										onClick={() => {
-											Plain.open();
-										}}
-									>
-										Feedback & Support
-									</Button>
-								))
-								.otherwise(() => (
+
+						{match(__APP_TYPE__)
+							.with("cloud", () => {
+								return (
+									<>
+										<div className="flex gap-0.5 my-2 px-2.5 flex-col">
+											<HeaderLink
+												to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+												className="font-normal"
+												{...props}
+												icon={faCog}
+											>
+												Settings
+											</HeaderLink>
+											<HelpDropdown>
+												<HeaderButton
+													startIcon={
+														<Icon
+															icon={
+																faMessageSmile
+															}
+															className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+														/>
+													}
+												>
+													Support
+												</HeaderButton>
+											</HelpDropdown>
+
+											<Changelog>
+												<HeaderButton
+													startIcon={
+														<Icon
+															icon={faGift}
+															className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+														/>
+													}
+												>
+													<a
+														href="https://www.rivet.dev/changelog"
+														target="_blank"
+														rel="noopener"
+													>
+														Whats new?
+														<Ping
+															className="relative -right-1"
+															data-changelog-ping
+														/>
+													</a>
+												</HeaderButton>
+											</Changelog>
+										</div>
+										<div className="border-t my-0.5 mx-2.5" />
+
+										<div className=" px-1 pt-2 pb-4 flex flex-col">
+											<UserDropdown />
+										</div>
+									</>
+								);
+							})
+							.otherwise(() => (
+								<>
+									<Changelog>
+										<Button
+											className="text-muted-foreground justify-start py-1 h-auto"
+											variant="ghost"
+											size="xs"
+											asChild
+										>
+											<a
+												href="https://www.rivet.dev/changelog"
+												target="_blank"
+												rel="noopener"
+											>
+												Whats new?
+												<Ping
+													className="relative -right-1"
+													data-changelog-ping
+												/>
+											</a>
+										</Button>
+									</Changelog>
 									<Button
 										className="text-muted-foreground justify-start py-1 h-auto"
 										variant="ghost"
@@ -235,71 +285,60 @@ const Sidebar = ({
 											Feedback
 										</Link>
 									</Button>
-								))}
-							<Button
-								className="text-muted-foreground justify-start py-1 h-auto"
-								variant="ghost"
-								size="xs"
-								asChild
-							>
-								<a
-									href="https://www.rivet.dev/docs"
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									Documentation
-								</a>
-							</Button>
-							<Button
-								variant="ghost"
-								className="text-muted-foreground justify-start py-1 h-auto"
-								size="xs"
-								endIcon={
-									<Icon
-										icon={faArrowUpRight}
-										className="ms-1"
-									/>
-								}
-							>
-								<a
-									href="http://www.rivet.dev/discord"
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									Discord
-								</a>
-							</Button>
-							<Button
-								variant="ghost"
-								size="xs"
-								className="text-muted-foreground justify-start py-1 h-auto"
-								endIcon={
-									<Icon
-										icon={faArrowUpRight}
-										className="ms-1"
-									/>
-								}
-							>
-								<a
-									href="http://github.com/rivet-dev/rivet"
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									GitHub
-								</a>
-							</Button>
-						</div>
-						{match(__APP_TYPE__)
-							.with("cloud", () => (
-								<>
-									<div className="border-t my-0.5 mx-2.5" />
-
-									<div className=" px-1 pt-2 pb-4 flex flex-col">
-										<CloudSidebarFooter />
-									</div>
+									<Button
+										className="text-muted-foreground justify-start py-1 h-auto"
+										variant="ghost"
+										size="xs"
+										asChild
+									>
+										<a
+											href="https://www.rivet.dev/docs"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											Documentation
+										</a>
+									</Button>
+									<Button
+										variant="ghost"
+										className="text-muted-foreground justify-start py-1 h-auto"
+										size="xs"
+										endIcon={
+											<Icon
+												icon={faArrowUpRight}
+												className="ms-1"
+											/>
+										}
+									>
+										<a
+											href="http://www.rivet.dev/discord"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											Discord
+										</a>
+									</Button>
+									<Button
+										variant="ghost"
+										size="xs"
+										className="text-muted-foreground justify-start py-1 h-auto"
+										endIcon={
+											<Icon
+												icon={faArrowUpRight}
+												className="ms-1"
+											/>
+										}
+									>
+										<a
+											href="http://github.com/rivet-dev/rivet"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											GitHub
+										</a>
+									</Button>
 								</>
-							))
-							.otherwise(() => null)}
+							))}
 					</div>
 				</div>
 			</ResizablePanel>
@@ -443,7 +482,7 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 			variant="ghost"
 			{...props}
 			className={cn(
-				"text-muted-foreground px-2 aria-current-page:text-foreground relative h-auto py-1 justify-start",
+				"text-muted-foreground px-1 aria-current-page:text-foreground relative h-auto py-1 justify-start",
 				className,
 			)}
 		>
@@ -550,37 +589,17 @@ function CloudSidebarContent() {
 	});
 
 	if (matchNamespace) {
-		return <CloudSidebarContentInner {...matchNamespace} />;
+		return <CloudSidebarContentInner />;
 	}
 
 	return null;
 }
 
-function CloudSidebarContentInner(props: {
-	organization: string;
-	project: string;
-	namespace: string;
-}) {
+function CloudSidebarContentInner() {
 	const hasDataProvider = useDataProviderCheck();
 	const hasQuery = !!useDataProvider().buildsQueryOptions;
 	return (
 		<div className="flex gap-0.5 flex-col">
-			<HeaderLink
-				to="/orgs/$organization/projects/$project/ns/$namespace/connect"
-				className="font-normal"
-				{...props}
-				icon={faHome}
-			>
-				Overview
-			</HeaderLink>
-			<HeaderLink
-				to="/orgs/$organization/projects/$project/ns/$namespace/tokens"
-				className="font-normal"
-				{...props}
-				icon={faKey}
-			>
-				Tokens
-			</HeaderLink>
 			{hasDataProvider && hasQuery ? (
 				<div className="w-full pt-1.5">
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
@@ -593,6 +612,51 @@ function CloudSidebarContentInner(props: {
 	);
 }
 
-function CloudSidebarFooter() {
-	return <UserDropdown />;
-}
+export const Content = ({
+	className,
+	children,
+}: {
+	className?: string;
+	children: ReactNode;
+}) => {
+	const isInRootLayout = !!useRootLayoutOptional();
+	const { isSidebarCollapsed } = useRootLayoutOptional() || {};
+	return (
+		<div
+			className={cn(
+				" h-full overflow-auto @container transition-colors",
+				!isSidebarCollapsed &&
+					isInRootLayout &&
+					"border my-2 bg-card rounded-lg mr-2",
+				!isInRootLayout && "h-screen",
+				className,
+			)}
+		>
+			{children}
+		</div>
+	);
+};
+
+export const SidebarlessHeader = () => {
+	const { user } = useUser();
+	return (
+		<div className="rounded-lg flex items-center pe-1.5 justify-between bg-card/10 backdrop-blur-lg fixed inset-x-0 top-0 z-10">
+			<Logo />
+
+			<div className="flex gap-4">
+				<ContextSwitcher inline />
+				<UserDropdown>
+					<Button
+						variant="ghost"
+						className="text-sm text-muted-foreground font-normal px-1.5"
+					>
+						Logged in as{" "}
+						<span className="text-foreground">
+							{user?.primaryEmailAddress?.emailAddress}
+						</span>
+					</Button>
+				</UserDropdown>
+			</div>
+		</div>
+	);
+};

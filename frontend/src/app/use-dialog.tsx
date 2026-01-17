@@ -23,6 +23,9 @@ export const useDialog = {
 	ConnectManual: createDialogHook(
 		() => import("@/app/dialogs/connect-manual-frame"),
 	),
+	ConnectCloudflare: createDialogHook(
+		() => import("@/app/dialogs/connect-cloudflare-frame"),
+	),
 	ConnectAws: createDialogHook(
 		() => import("@/app/dialogs/connect-aws-frame"),
 	),
@@ -46,5 +49,8 @@ export const useDialog = {
 	ApiTokens: createDialogHook(() => import("@/app/dialogs/api-tokens-frame")),
 	CreateApiToken: createDialogHook(
 		() => import("@/app/dialogs/create-api-token-frame"),
+	),
+	CreateOrganization: createDialogHook(
+		() => import("@/app/dialogs/create-organization-frame"),
 	),
 };

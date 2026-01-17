@@ -7,11 +7,15 @@ export const clerk =
 		? new Clerk(cloudEnv().VITE_APP_CLERK_PUBLISHABLE_KEY)
 		: (null as unknown as Clerk);
 
-export const redirectToOrganization = async (clerk: Clerk) => {
+export const redirectToOrganization = async (
+	clerk: Clerk,
+	search: Record<string, string>,
+) => {
 	if (clerk.user) {
 		if (clerk.organization) {
 			throw redirect({
 				to: "/orgs/$organization",
+				search: true,
 				params: {
 					organization: clerk.organization.id,
 				},
@@ -23,11 +27,13 @@ export const redirectToOrganization = async (clerk: Clerk) => {
 			await clerk.setActive({ organization: orgs[0].organization.id });
 			throw redirect({
 				to: "/orgs/$organization",
+				search: true,
 				params: { organization: orgs[0].organization.id },
 			});
 		}
 		throw redirect({
 			to: "/onboarding/choose-organization",
+			search: true,
 		});
 	}
 

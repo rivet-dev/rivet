@@ -6,15 +6,33 @@ import {
 	CardFooter,
 	CardHeader,
 	CardTitle,
+	cn,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from "@/components";
 
 export const IsInModalContext = createContext(false);
+export const FrameConfigContext = createContext<{
+	showHeader?: boolean;
+	showFooter?: boolean;
+	contentClassName?: string;
+	footerClassName?: string;
+}>({
+	showHeader: true,
+	showFooter: true,
+	contentClassName: "",
+	footerClassName: "",
+});
+
+export const FrameConfigProvider = FrameConfigContext.Provider;
 
 export const Header = (props: React.ComponentProps<typeof DialogHeader>) => {
+	const { showHeader } = useContext(FrameConfigContext);
 	const isInModal = useContext(IsInModalContext);
+	if (!showHeader) {
+		return null;
+	}
 	return isInModal ? <DialogHeader {...props} /> : <CardHeader {...props} />;
 };
 
@@ -34,16 +52,45 @@ export const Description = (
 	);
 };
 
-export const Content = (props: React.HTMLAttributes<HTMLDivElement>) => {
+export const Content = (
+	props: React.HTMLAttributes<HTMLDivElement> & {
+		ref?: React.Ref<HTMLDivElement>;
+	},
+) => {
+	const { contentClassName } = useContext(FrameConfigContext);
 	const isInModal = useContext(IsInModalContext);
 	return isInModal ? (
-		<div className="flex-1 min-w-0 max-w-full" {...props} />
+		<div
+			{...props}
+			className={cn(
+				"flex-1 min-w-0 max-w-full",
+				props.className,
+				contentClassName,
+			)}
+		/>
 	) : (
-		<CardContent {...props} />
+		<CardContent
+			{...props}
+			className={cn(props.className, contentClassName)}
+		/>
 	);
 };
 
 export const Footer = (props: React.ComponentProps<typeof DialogFooter>) => {
+	const { showFooter, footerClassName } = useContext(FrameConfigContext);
 	const isInModal = useContext(IsInModalContext);
-	return isInModal ? <DialogFooter {...props} /> : <CardFooter {...props} />;
+	if (showFooter === false) {
+		return null;
+	}
+	return isInModal ? (
+		<DialogFooter
+			{...props}
+			className={cn(props.className, footerClassName)}
+		/>
+	) : (
+		<CardFooter
+			{...props}
+			className={cn(props.className, footerClassName)}
+		/>
+	);
 };

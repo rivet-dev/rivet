@@ -1,45 +1,41 @@
-import { CreateOrganization, useOrganizationList } from "@clerk/clerk-react";
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { Content } from "@/app/layout";
 import { RouteLayout } from "@/app/route-layout";
 
 export const Route = createFileRoute("/onboarding/choose-organization")({
 	component: RouteComponent,
+	beforeLoad: async ({ context }) => {
+		if (context.clerk.organization) {
+			throw redirect({
+				to: "/orgs/$organization",
+				params: { organization: context.clerk.organization.id },
+				search: true,
+			});
+		}
+
+		const org = await context.clerk.createOrganization({
+			name: `${context.clerk.user?.firstName || context.clerk.user?.primaryEmailAddress?.emailAddress.split("@")[0] || "Anonymous"}'s Organization`,
+		});
+
+		await context.clerk.setActive({ organization: org.id });
+		await context.clerk.session?.reload();
+
+		throw redirect({
+			to: "/orgs/$organization",
+			params: { organization: org.id },
+			search: true,
+		});
+	},
 });
 
 function RouteComponent() {
-	const {
-		userMemberships: { data: userMemberships },
-	} = useOrganizationList({ userMemberships: true });
-
 	return (
 		<RouteLayout>
-			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-				<div className="mt-2 flex flex-col items-center justify-center h-full">
-					<div className="w-full sm:w-96">
-						{userMemberships?.length ? (
-							<Navigate
-								to={`/orgs/$organization`}
-								params={{
-									organization:
-										userMemberships[0].organization.id,
-								}}
-								replace
-							/>
-						) : null}
-						<CreateOrganization
-							hideSlug
-							afterCreateOrganizationUrl={(org) =>
-								`/orgs/${org.id}`
-							}
-							appearance={{
-								variables: {
-									colorBackground: "hsl(var(--card))",
-								},
-							}}
-						/>
-					</div>
+			<Content className="flex flex-col items-center justify-safe-center">
+				<div className="w-full sm:w-96">
+					Creating your organization...
 				</div>
-			</div>
+			</Content>
 		</RouteLayout>
 	);
 }

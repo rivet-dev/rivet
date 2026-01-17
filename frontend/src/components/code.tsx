@@ -121,6 +121,7 @@ interface CodeFrameProps {
 	code?: () => string | string;
 	footer?: ReactNode;
 	children?: ReactElement<any>;
+	className?: string;
 }
 export const CodeFrame = ({
 	children,
@@ -130,9 +131,15 @@ export const CodeFrame = ({
 	title,
 	footer,
 	isInGroup,
+	className,
 }: CodeFrameProps) => {
 	return (
-		<div className="not-prose my-4 rounded-lg border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
+		<div
+			className={cn(
+				"not-prose my-4 rounded-lg border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none",
+				className,
+			)}
+		>
 			<div className="bg-background text-wrap py-2 text-sm">
 				<ScrollArea className="w-full">
 					{children
@@ -156,6 +163,7 @@ export const CodeFrame = ({
 					)}
 				</div>
 				<WithTooltip
+					delayDuration={0}
 					trigger={
 						<CopyButton value={code || ""}>
 							<Button size="icon-sm" variant="ghost">

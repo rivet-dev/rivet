@@ -1,6 +1,6 @@
 import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { CancelledError, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { Suspense } from "react";

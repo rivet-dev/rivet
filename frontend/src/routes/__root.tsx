@@ -1,6 +1,5 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { ClerkProvider } from "@clerk/clerk-react";
-import * as ClerkComponents from "@clerk/elements/common";
 import { dark } from "@clerk/themes";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -50,8 +49,8 @@ function CloudRoute() {
 			routerReplace={(to) => navigate({ to, replace: true })}
 			signInUrl="/login"
 			signUpUrl="/join"
-			signInForceRedirectUrl="/"
-			signUpForceRedirectUrl="/"
+			signInForceRedirectUrl="/sso-callback"
+			signUpForceRedirectUrl="/sso-callback"
 			taskUrls={{
 				"choose-organization": "/onboarding/choose-organization",
 			}}

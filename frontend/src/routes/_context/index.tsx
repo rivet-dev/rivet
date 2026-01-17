@@ -14,11 +14,11 @@ export const Route = createFileRoute("/_context/")({
 			.with("engine", () => <EngineRoute />)
 			.with("inspector", () => <InspectorRoute />)
 			.exhaustive(),
-	beforeLoad: async ({ context }) => {
+	beforeLoad: async ({ context, search }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async () => {
-				if (!(await redirectToOrganization(context.clerk))) {
-					throw redirect({ to: "/login" });
+				if (!(await redirectToOrganization(context.clerk, search))) {
+					throw redirect({ to: "/login", search: true });
 				}
 			})
 			.with({ __type: "engine" }, async (ctx) => {
@@ -32,11 +32,13 @@ export const Route = createFileRoute("/_context/")({
 						throw redirect({
 							to: "/ns/$namespace",
 							params: { namespace: "default" },
+							search: true,
 						});
 					}
 					throw redirect({
 						to: "/ns/$namespace",
 						params: { namespace: firstNamespace.name },
+						search: true,
 					});
 				} catch (e) {
 					if (isRedirect(e)) {

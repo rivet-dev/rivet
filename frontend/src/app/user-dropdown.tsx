@@ -22,7 +22,7 @@ import {
 import { useCloudDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
-export function UserDropdown() {
+export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const params = useParams({
 		strict: false,
 	});
@@ -36,26 +36,22 @@ export function UserDropdown() {
 		fuzzy: true,
 	});
 
-	const isMatchingNamespaceRoute = match({
-		to: "/orgs/$organization/projects/$project/ns/$namespace",
-		fuzzy: true,
-	});
-
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild={!params.organization}>
-				{params.organization ? (
-					<Preview org={params.organization} />
-				) : (
-					<Button
-						variant="ghost"
-						size="xs"
-						className="text-muted-foreground justify-between py-1 min-h-8 gap-2 w-full"
-						endIcon={<Icon icon={faChevronDown} />}
-					>
-						{clerk.user?.primaryEmailAddress?.emailAddress}
-					</Button>
-				)}
+				{children ||
+					(params.organization ? (
+						<Preview org={params.organization} />
+					) : (
+						<Button
+							variant="ghost"
+							size="xs"
+							className="text-muted-foreground justify-between py-1 min-h-8 gap-2 w-full"
+							endIcon={<Icon icon={faChevronDown} />}
+						>
+							{clerk.user?.primaryEmailAddress?.emailAddress}
+						</Button>
+					))}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				<DropdownMenuItem
@@ -89,7 +85,7 @@ export function UserDropdown() {
 				{isMatchingProjectRoute ? (
 					<DropdownMenuItem
 						onSelect={() => {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({ ...old, modal: "billing" }),
 							});
@@ -206,7 +202,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 						clerk.setActive({
 							organization: membership.organization.id,
 							navigate: () => {
-								navigate({
+								return navigate({
 									to: `/orgs/$organization`,
 									params: {
 										organization:

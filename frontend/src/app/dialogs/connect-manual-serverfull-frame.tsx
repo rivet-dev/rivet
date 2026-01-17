@@ -1,4 +1,5 @@
 import type { Rivet } from "@rivetkit/engine-api-full";
+import { deployOptions, type Provider } from "@rivetkit/example-registry";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
@@ -13,6 +14,7 @@ import * as ConnectRailwayForm from "@/app/forms/connect-manual-serverfull-form"
 import type { DialogContentProps } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { successfulBackendSetupEffect } from "@/lib/effects";
 import { engineEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { EnvVariables } from "../env-variables";
@@ -50,12 +52,14 @@ const stepper = defineStepper(
 );
 
 interface ConnectManualServerlfullFrameContentProps extends DialogContentProps {
-	provider: string;
+	provider: Provider;
+	footer?: React.ReactNode;
 }
 
 export default function ConnectManualServerlfullFrameContent({
 	onClose,
 	provider,
+	footer,
 }: ConnectManualServerlfullFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
@@ -76,6 +80,7 @@ export default function ConnectManualServerlfullFrameContent({
 
 	return (
 		<FormStepper
+			footer={footer}
 			onClose={onClose}
 			provider={provider}
 			defaultDatacenter={prefferedRegionForRailway}
@@ -87,30 +92,19 @@ function FormStepper({
 	onClose,
 	defaultDatacenter,
 	provider,
+	footer,
 }: {
 	onClose?: () => void;
-	provider: string;
+	provider: Provider;
 	defaultDatacenter: string;
+	footer?: React.ReactNode;
 }) {
 	const dataProvider = useEngineCompatDataProvider();
-
-	const { data } = useSuspenseInfiniteQuery({
-		...dataProvider.runnerConfigsQueryOptions(),
-	});
 
 	const { mutateAsync } = useMutation({
 		...dataProvider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
+			successfulBackendSetupEffect();
 
 			await queryClient.invalidateQueries(
 				dataProvider.runnerConfigsQueryOptions(),
@@ -121,6 +115,7 @@ function FormStepper({
 	return (
 		<StepperForm
 			{...stepper}
+			footer={footer}
 			onSubmit={async ({ values }) => {
 				let existing: Record<string, Rivet.RunnerConfig> = {};
 				try {
@@ -172,58 +167,25 @@ function Step1() {
 	);
 }
 
-function Step2({ provider }: { provider: string }) {
+function Step2({ provider }: { provider: Provider }) {
+	const providerOptions = deployOptions.find(
+		(option) => option.name === provider,
+	);
 	return (
 		<>
-			{match(provider)
-				.with("aws", () => (
-					<p>
-						<a
-							href="https://www.rivet.dev/docs/connect/aws-ecs/"
-							className="underline"
-							target="_blank"
-							rel="noopener"
-						>
-							Follow the integration guide here
-						</a>
-						, and make sure to set the following environment
-						variables:
-					</p>
-				))
-				.with("hetzner", () => (
-					<p>
-						<a
-							href="https://www.rivet.dev/docs/connect/hetzner/"
-							className="underline"
-							target="_blank"
-							rel="noopener"
-						>
-							Follow the integration guide here
-						</a>
-						, and make sure to set the following environment
-						variables:
-					</p>
-				))
-				.with("gcp", () => (
-					<p>
-						<a
-							href="https://www.rivet.dev/docs/connect/gcp-cloud-run/"
-							className="underline"
-							target="_blank"
-							rel="noopener"
-						>
-							Follow the integration guide here
-						</a>
-						, and make sure to set the following environment
-						variables:
-					</p>
-				))
-				.otherwise(() => (
-					<p>Set the following environment variables.</p>
-				))}
+			<p>
+				<a
+					href={`https://www.rivet.dev/${providerOptions?.href || "docs/getting-started"}`}
+					className="underline"
+					target="_blank"
+					rel="noopener"
+				>
+					Follow the integration guide here
+				</a>
+				, and make sure to set the following environment variables:
+			</p>
 
 			<EnvVariables
-				kind="serverfull"
 				endpoint={useEndpoint()}
 				runnerName={useWatch({ name: "runnerName" })}
 			/>

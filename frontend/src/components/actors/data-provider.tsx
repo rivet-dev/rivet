@@ -1,7 +1,6 @@
 import {
 	type RegisteredRouter,
 	type RouteIds,
-	useMatches,
 	useMatchRoute,
 	useRouteContext,
 } from "@tanstack/react-router";

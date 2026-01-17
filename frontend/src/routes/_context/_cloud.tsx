@@ -48,20 +48,22 @@ function CloudModals() {
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
+	const CreateOrganizationDialog = useDialog.CreateOrganization.Dialog;
 
 	return (
 		<>
 			<CreateProjectDialog
+				organization={search.organization}
 				dialogProps={{
 					open: search.modal === "create-project",
-					// FIXME
-					onOpenChange: (value: any) => {
+					onOpenChange: (value) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
 									modal: undefined,
+									organization: undefined,
 								}),
 							});
 						}
@@ -74,7 +76,7 @@ function CloudModals() {
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
-							navigate({
+							return navigate({
 								to: ".",
 								search: (old) => ({
 									...old,
@@ -282,6 +284,22 @@ function CloudModals() {
 									...old,
 									modal: undefined,
 									config: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<CreateOrganizationDialog
+				dialogProps={{
+					open: search.modal === "create-organization",
+					onOpenChange: (value) => {
+						if (!value) {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
 								}),
 							});
 						}
