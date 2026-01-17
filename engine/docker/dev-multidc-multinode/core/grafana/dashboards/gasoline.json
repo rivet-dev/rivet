@@ -772,7 +772,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 30,
+            "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -793,7 +793,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1033,7 +1033,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 13,
         "x": 0,
         "y": 43
       },
@@ -1072,95 +1072,6 @@
       ],
       "title": "Active Workers",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 43
-      },
-      "id": 33,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "cellValues": {},
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "none"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(rivet_gasoline_worker_bumps_per_tick_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
-          "format": "heatmap",
-          "legendFormat": "{{le}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Worker Bumps Per Tick",
-      "type": "heatmap"
     },
     {
       "datasource": {
@@ -1725,101 +1636,12 @@
       "type": "heatmap"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 76
-      },
-      "id": 34,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "cellValues": {},
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(rivet_gasoline_workflow_wake_delta_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"} [$__rate_interval])) by (le)",
-          "format": "heatmap",
-          "legendFormat": "{{le}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Workflow Wake Delta",
-      "type": "heatmap"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 84
+        "y": 76
       },
       "id": 16,
       "panels": [],
@@ -1850,7 +1672,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 85
+        "y": 77
       },
       "id": 12,
       "interval": "15s",
@@ -1979,7 +1801,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 85
+        "y": 77
       },
       "id": 9,
       "interval": "15s",
@@ -2041,7 +1863,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 94
+        "y": 86
       },
       "id": 21,
       "interval": "15s",
@@ -2202,7 +2024,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 94
+        "y": 86
       },
       "id": 25,
       "interval": "15s",
@@ -2264,7 +2086,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 103
+        "y": 95
       },
       "id": 27,
       "interval": "15s",
@@ -2352,7 +2174,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 103
+        "y": 95
       },
       "id": 17,
       "interval": "15s",
@@ -2440,7 +2262,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 112
+        "y": 104
       },
       "id": 22,
       "interval": "15s",
@@ -2528,7 +2350,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 112
+        "y": 104
       },
       "id": 19,
       "interval": "15s",
@@ -2601,11 +2423,9 @@
     "list": [
       {
         "current": {
-          "text": [
-            "prod"
-          ],
+          "text": "All",
           "value": [
-            "prod"
+            "$__all"
           ]
         },
         "datasource": {
@@ -2630,9 +2450,11 @@
       },
       {
         "current": {
-          "text": "All",
+          "text": [
+            "us-east-1"
+          ],
           "value": [
-            "$__all"
+            "us-east-1"
           ]
         },
         "datasource": {
@@ -2658,10 +2480,10 @@
       {
         "current": {
           "text": [
-            "All"
+            "pegboard_runner_pool"
           ],
           "value": [
-            "$__all"
+            "pegboard_runner_pool"
           ]
         },
         "datasource": {
@@ -2693,5 +2515,5 @@
   "timezone": "",
   "title": "Gasoline",
   "uid": "636d22f9-d18f-4086-8b45-7c50886a105c",
-  "version": 7
+  "version": 5
 }

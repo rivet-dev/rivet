@@ -1159,17 +1159,11 @@ pub struct SetSleepingInput {
 #[activity(SetSleeping)]
 pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
-	let now = util::timestamp::now();
+	let sleep_ts = util::timestamp::now();
 
-	// Seconds (rounded up)
-	let awake_duration = state
-		.connectable_ts
-		.map(|ts| util::math::div_ceil_i64((now - ts).max(0), util::duration::seconds(1)));
-	state.sleep_ts = Some(now);
+	state.sleep_ts = Some(sleep_ts);
 	state.connectable_ts = None;
 
-	let name = &state.name;
-	let namespace_id = state.namespace_id;
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
@@ -1177,17 +1171,7 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 			// Make not connectable
 			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
-			tx.write(&keys::actor::SleepTsKey::new(input.actor_id), now)?;
-
-			// Update metrics
-			if let Some(awake_duration) = awake_duration {
-				keys::ns::metric::inc(
-					tx,
-					namespace_id,
-					keys::ns::metric::Metric::ActorAwake(name.clone()),
-					awake_duration,
-				);
-			}
+			tx.write(&keys::actor::SleepTsKey::new(input.actor_id), sleep_ts)?;
 
 			Ok(())
 		})

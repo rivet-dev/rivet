@@ -2131,8 +2131,6 @@ pub mod insert {
 			create_ts,
 		)?;
 
-		InnerVersionKey;
-
 		Ok(())
 	}
 }

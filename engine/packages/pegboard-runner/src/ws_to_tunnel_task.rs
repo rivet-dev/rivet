@@ -4,8 +4,8 @@ use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
-use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
+use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
@@ -198,33 +198,49 @@ async fn handle_message_mk2(
 				}
 			};
 
-			let actor_res = ctx
-				.op(pegboard::ops::actor::get_for_runner::Input { actor_id })
+			let actors_res = ctx
+				.op(pegboard::ops::actor::get_runner::Input {
+					actor_ids: vec![actor_id],
+				})
 				.await
 				.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
-
-			let Some(actor) = actor_res else {
-				send_actor_kv_error("actor does not exist").await?;
-				return Ok(());
-			};
+			let actor_belongs = actors_res
+				.actors
+				.first()
+				.map(|x| x.runner_id == conn.runner_id)
+				.unwrap_or_default();
 
 			// Verify actor belongs to this runner
-			if actor.runner_id != conn.runner_id {
-				send_actor_kv_error("actor does not belong to runner").await?;
+			if !actor_belongs {
+				let res_msg = versioned::ToClientMk2::wrap_latest(
+					protocol::mk2::ToClient::ToClientKvResponse(
+						protocol::mk2::ToClientKvResponse {
+							request_id: req.request_id,
+							data: protocol::mk2::KvResponseData::KvErrorResponse(
+								protocol::mk2::KvErrorResponse {
+									message: "given actor does not belong to runner".to_string(),
+								},
+							),
+						},
+					),
+				);
+
+				let res_msg_serialized = res_msg
+					.serialize(conn.protocol_version)
+					.context("failed to serialize KV actor validation error")?;
+				conn.ws_handle
+					.send(Message::Binary(res_msg_serialized.into()))
+					.await
+					.context("failed to send KV actor validation error to client")?;
+
 				return Ok(());
 			}
-
-			let recipient = actor_kv::Recipient {
-				actor_id,
-				namespace_id: conn.namespace_id,
-				name: actor.name,
-			};
 
 			// TODO: Add queue and bg thread for processing kv ops
 			// Run kv operation
 			match req.data {
 				protocol::mk2::KvRequestData::KvGetRequest(body) => {
-					let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
+					let res = kv::get(&*ctx.udb()?, actor_id, body.keys).await;
 
 					let res_msg = versioned::ToClientMk2::wrap_latest(
 						protocol::mk2::ToClient::ToClientKvResponse(
@@ -260,9 +276,9 @@ async fn handle_message_mk2(
 						.context("failed to send KV get response to client")?;
 				}
 				protocol::mk2::KvRequestData::KvListRequest(body) => {
-					let res = actor_kv::list(
+					let res = kv::list(
 						&*ctx.udb()?,
-						&recipient,
+						actor_id,
 						body.query,
 						body.reverse.unwrap_or_default(),
 						body.limit
@@ -306,7 +322,7 @@ async fn handle_message_mk2(
 						.context("failed to send KV list response to client")?;
 				}
 				protocol::mk2::KvRequestData::KvPutRequest(body) => {
-					let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
+					let res = kv::put(&*ctx.udb()?, actor_id, body.keys, body.values).await;
 
 					let res_msg = versioned::ToClientMk2::wrap_latest(
 						protocol::mk2::ToClient::ToClientKvResponse(
@@ -336,7 +352,7 @@ async fn handle_message_mk2(
 						.context("failed to send KV put response to client")?;
 				}
 				protocol::mk2::KvRequestData::KvDeleteRequest(body) => {
-					let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
+					let res = kv::delete(&*ctx.udb()?, actor_id, body.keys).await;
 
 					let res_msg = versioned::ToClientMk2::wrap_latest(
 						protocol::mk2::ToClient::ToClientKvResponse(
@@ -364,7 +380,7 @@ async fn handle_message_mk2(
 						.context("failed to send KV delete response to client")?;
 				}
 				protocol::mk2::KvRequestData::KvDropRequest => {
-					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
+					let res = kv::delete_all(&*ctx.udb()?, actor_id).await;
 
 					let res_msg = versioned::ToClientMk2::wrap_latest(
 						protocol::mk2::ToClient::ToClientKvResponse(
@@ -499,11 +515,15 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 				}
 			};
 
-			let actor_res = ctx
-				.op(pegboard::ops::actor::get_for_runner::Input { actor_id })
+			let actors_res = ctx
+				.op(pegboard::ops::actor::get_runner::Input {
+					actor_ids: vec![actor_id],
+				})
 				.await
 				.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
-			let actor_belongs = actor_res
+			let actor_belongs = actors_res
+				.actors
+				.first()
 				.map(|x| x.runner_id == conn.runner_id)
 				.unwrap_or_default();
 
@@ -535,7 +555,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 			// Run kv operation
 			match req.data {
 				protocol::KvRequestData::KvGetRequest(body) => {
-					let res = actor_kv::get(&*ctx.udb()?, actor_id, body.keys).await;
+					let res = kv::get(&*ctx.udb()?, actor_id, body.keys).await;
 
 					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
@@ -575,7 +595,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 						.context("failed to send KV get response to client")?;
 				}
 				protocol::KvRequestData::KvListRequest(body) => {
-					let res = actor_kv::list(
+					let res = kv::list(
 						&*ctx.udb()?,
 						actor_id,
 						match body.query {
@@ -643,7 +663,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 						.context("failed to send KV list response to client")?;
 				}
 				protocol::KvRequestData::KvPutRequest(body) => {
-					let res = actor_kv::put(&*ctx.udb()?, actor_id, body.keys, body.values).await;
+					let res = kv::put(&*ctx.udb()?, actor_id, body.keys, body.values).await;
 
 					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
@@ -671,7 +691,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 						.context("failed to send KV put response to client")?;
 				}
 				protocol::KvRequestData::KvDeleteRequest(body) => {
-					let res = actor_kv::delete(&*ctx.udb()?, actor_id, body.keys).await;
+					let res = kv::delete(&*ctx.udb()?, actor_id, body.keys).await;
 
 					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
@@ -697,7 +717,7 @@ async fn handle_message_mk1(ctx: &StandaloneCtx, conn: &Conn, msg: Bytes) -> Res
 						.context("failed to send KV delete response to client")?;
 				}
 				protocol::KvRequestData::KvDropRequest => {
-					let res = actor_kv::delete_all(&*ctx.udb()?, actor_id).await;
+					let res = kv::delete_all(&*ctx.udb()?, actor_id).await;
 
 					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
@@ -903,27 +923,6 @@ async fn compat_ack_tunnel_message(conn: &Conn, payload: &[u8]) -> Result<()> {
 		))
 		.await
 		.context("failed to send DeprecatedTunnelAck to runner")?;
-
-	Ok(())
-}
-
-async fn send_actor_kv_error(message: &str) -> Result<()> {
-	let res_msg = versioned::ToClientMk2::wrap_latest(protocol::mk2::ToClient::ToClientKvResponse(
-		protocol::mk2::ToClientKvResponse {
-			request_id: req.request_id,
-			data: protocol::mk2::KvResponseData::KvErrorResponse(protocol::mk2::KvErrorResponse {
-				message: message.to_string(),
-			}),
-		},
-	));
-
-	let res_msg_serialized = res_msg
-		.serialize(conn.protocol_version)
-		.context("failed to serialize KV actor validation error")?;
-	conn.ws_handle
-		.send(Message::Binary(res_msg_serialized.into()))
-		.await
-		.context("failed to send KV actor validation error to client")?;
 
 	Ok(())
 }

@@ -2,6 +2,7 @@ use anyhow::*;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use gas::prelude::*;
+use pegboard_actor_kv as actor_kv;
 use rivet_api_builder::ApiCtx;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
@@ -76,7 +77,7 @@ pub async fn kv_get(ctx: ApiCtx, path: KvGetPath, query: KvGetQuery) -> Result<K
 	// Get the KV value
 	let udb = ctx.pools().udb()?;
 	let (keys, values, metadata) =
-		pegboard::actor_kv::get(&*udb, path.actor_id, vec![key_bytes.clone()]).await?;
+		actor_kv::get(&*udb, path.actor_id, vec![key_bytes.clone()]).await?;
 
 	// Check if key was found
 	if keys.is_empty() {

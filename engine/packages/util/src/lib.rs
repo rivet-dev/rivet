@@ -11,7 +11,6 @@ pub mod format;
 pub mod future;
 pub mod geo;
 pub mod math;
-pub mod metric;
 pub mod req;
 pub mod serde;
 pub mod size;

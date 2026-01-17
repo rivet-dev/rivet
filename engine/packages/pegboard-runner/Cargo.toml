@@ -37,4 +37,5 @@ url.workspace = true
 vbare.workspace = true
 
 pegboard.workspace = true
+pegboard-actor-kv.workspace = true
 namespace.workspace = true

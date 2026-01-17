@@ -116,7 +116,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_proposals_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -301,7 +301,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_pre_accept_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -405,7 +405,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_accept_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -509,7 +509,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_commit_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -694,7 +694,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_requests_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -798,7 +798,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rivet_epoxy_quorum_size{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -902,7 +902,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_quorum_attempts_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -1006,7 +1006,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rivet_epoxy_ballot_epoch{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -1110,7 +1110,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rivet_epoxy_ballot_number{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -1214,7 +1214,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rivet_epoxy_instance_number{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -1318,7 +1318,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rivet_epoxy_replicas_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -1422,7 +1422,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_ballot_rejections_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
@@ -1526,7 +1526,7 @@
 					"editorMode": "code",
 					"expr": "sum by (rivet_datacenter) (rate(rivet_epoxy_interference_detected_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}[$__rate_interval]))",
 					"instant": false,
-					"legendFormat": "{{rivet_datacenter}}",
+					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}

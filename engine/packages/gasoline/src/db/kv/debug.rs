@@ -620,14 +620,14 @@ impl DatabaseDebug for DatabaseKv {
 
 						// Clear metric
 						let metric = if has_output {
-							keys::metric::Metric::WorkflowComplete(workflow_name.clone())
+							keys::metric::GaugeMetric::WorkflowComplete(workflow_name.clone())
 						} else if has_wake_condition {
 							let error =
 								error_key.deserialize(&error_entry.context("key should exist")?)?;
 
-							keys::metric::Metric::WorkflowDead(workflow_name.clone(), error)
+							keys::metric::GaugeMetric::WorkflowDead(workflow_name.clone(), error)
 						} else {
-							keys::metric::Metric::WorkflowSleeping(workflow_name.clone())
+							keys::metric::GaugeMetric::WorkflowSleeping(workflow_name.clone())
 						};
 
 						update_metric(&tx.with_subspace(self.subspace.clone()), Some(metric), None);
@@ -716,11 +716,11 @@ impl DatabaseDebug for DatabaseKv {
 						if !has_wake_condition {
 							update_metric(
 								&tx,
-								Some(keys::metric::Metric::WorkflowDead(
+								Some(keys::metric::GaugeMetric::WorkflowDead(
 									workflow_name.clone(),
 									error.context("key should exist")?,
 								)),
-								Some(keys::metric::Metric::WorkflowSleeping(workflow_name)),
+								Some(keys::metric::GaugeMetric::WorkflowSleeping(workflow_name)),
 							);
 						}
 					}
@@ -1193,7 +1193,7 @@ impl DatabaseDebug for DatabaseKv {
 						if ack_ts_entry.is_none() {
 							update_metric(
 								&tx.with_subspace(self.subspace.clone()),
-								Some(keys::metric::Metric::SignalPending(signal_name)),
+								Some(keys::metric::GaugeMetric::SignalPending(signal_name)),
 								None,
 							);
 						}

@@ -1143,41 +1143,41 @@ impl WorkflowCtx {
 
 	/// Returns the version of the current event in history. If no event exists, returns `current_version` and
 	/// inserts a version check event.
-	#[tracing::instrument(skip_all, fields(latest_version))]
-	pub async fn check_version(&mut self, latest_version: usize) -> Result<usize> {
+	#[tracing::instrument(skip_all, fields(current_version))]
+	pub async fn check_version(&mut self, current_version: usize) -> Result<usize> {
 		self.check_stop()?;
 
-		if latest_version == 0 {
+		if current_version == 0 {
 			return Err(WorkflowError::InvalidVersion(
 				"version for `check_version` must be greater than 0".into(),
 			)
 			.into());
 		}
 
-		let history_res = self.cursor.compare_version_check()?;
-		let check_version_location = self.cursor.current_location_for(&history_res);
+		let (is_version_check, version) =
+			if let Some((is_version_check, step_version)) = self.cursor.compare_version_check()? {
+				tracing::debug!("checking existing version");
 
-		let (version, insert) = match history_res {
-			CheckVersionHistoryResult::New => (latest_version, true),
-			CheckVersionHistoryResult::Event(version) => (version, false),
-			CheckVersionHistoryResult::Insertion(next_event_version) => (next_event_version, true),
-		};
+				(is_version_check, step_version)
+			} else {
+				tracing::debug!("inserting version check");
 
-		if insert {
-			tracing::debug!("inserting version check");
+				self.db
+					.commit_workflow_version_check_event(
+						self.workflow_id,
+						&self.cursor.current_location(),
+						current_version + self.version - 1,
+						self.loop_location(),
+					)
+					.await?;
 
-			self.db
-				.commit_workflow_version_check_event(
-					self.workflow_id,
-					&check_version_location,
-					version + self.version - 1,
-					self.loop_location(),
-				)
-				.await?;
+				(true, current_version)
+			};
+
+		if is_version_check {
+			// Move to next event
+			self.cursor.inc();
 		}
-
-		// Move to next event
-		self.cursor.update(&check_version_location);
 
 		Ok(version + 1 - self.version)
 	}
