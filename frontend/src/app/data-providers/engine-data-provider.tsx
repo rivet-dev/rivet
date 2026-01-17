@@ -668,6 +668,7 @@ export const createNamespaceContext = ({
 								namespace,
 								name,
 								limit: 1,
+								includeDestroyed: true,
 							}),
 						),
 					);
