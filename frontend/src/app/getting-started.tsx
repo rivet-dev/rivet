@@ -253,6 +253,7 @@ export function GettingStarted({
 
 function StepperFooter() {
 	const s = stepper.useStepper();
+	const router = useRouter();
 	return (
 		<div className="flex items-center justify-center gap-4">
 			{s.isLast ? (
@@ -272,12 +273,18 @@ function StepperFooter() {
 				variant="link"
 				className="text-muted-foreground"
 				size="xs"
-				asChild
+				onClick={() => {
+					router.invalidate();
+					return router.navigate({
+						to: ".",
+						search: {
+							skipOnboarding: true,
+						},
+					});
+				}}
 				endIcon={<Icon icon={faChevronRight} />}
 			>
-				<Link to="." search={{ skipOnboarding: true }}>
-					Skip Setup
-				</Link>
+				Skip Setup
 			</Button>
 		</div>
 	);
