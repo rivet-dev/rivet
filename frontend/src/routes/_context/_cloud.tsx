@@ -14,8 +14,7 @@ export const Route = createFileRoute("/_context/_cloud")({
 	beforeLoad: ({ context }) => {
 		return match(context)
 			.with({ __type: "cloud" }, async () => {
-				// Cloud routes require authentication - wait for user and session
-				await waitForClerk(context.clerk, { requireAuth: true });
+				await waitForClerk(context.clerk);
 			})
 			.otherwise(() => {
 				throw notFound();
