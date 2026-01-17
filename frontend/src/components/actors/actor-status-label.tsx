@@ -95,24 +95,24 @@ export function ActorError({ error }: { error: object | string }) {
 				))
 				.otherwise(() => <p>Unknown error: {errMsg}</p>),
 		)
-		.with(P.shape({ runnerPoolError: P.shape({ runnerId: P.string }) }), (err) => (
-			<RunnerPoolError error={err.runnerPoolError} />
+		.with(P.shape({ runner_pool_error: P.shape({ runner_id: P.string }) }), (err) => (
+			<RunnerPoolError error={err.runner_pool_error} />
 		))
-		.with(P.shape({ runnerNoResponse: P.shape({ runnerId: P.string }) }), (err) => (
+		.with(P.shape({ runner_no_response: P.shape({ runner_id: P.string }) }), (err) => (
 			<p>
-				Runner ({err.runnerNoResponse.runnerId}) was allocated but Actor
+				Runner ({err.runner_no_response.runner_id}) was allocated but Actor
 				did not respond.
 			</p>
 		))
-		.with(P.shape({ runnerConnectionLost: P.shape({ runnerId: P.string }) }), (err) => (
+		.with(P.shape({ runner_connection_lost: P.shape({ runner_id: P.string }) }), (err) => (
 			<p>
-				Runner ({err.runnerConnectionLost.runnerId}) connection was lost
+				Runner ({err.runner_connection_lost.runner_id}) connection was lost
 				(no recent ping, network issue, or crash).
 			</p>
 		))
-		.with(P.shape({ runnerDrainingTimeout: P.shape({ runnerId: P.string }) }), (err) => (
+		.with(P.shape({ runner_draining_timeout: P.shape({ runner_id: P.string }) }), (err) => (
 			<p>
-				Runner ({err.runnerDrainingTimeout.runnerId}) was draining but
+				Runner ({err.runner_draining_timeout.runner_id}) was draining but
 				Actor didn't stop in time.
 			</p>
 		))
@@ -153,9 +153,9 @@ export function RunnerPoolError({
 				))
 				.otherwise(() => <p>Unknown runner pool error</p>),
 		)
-		.with(P.shape({ serverlessHttpError: P.shape({ statusCode: P.number, body: P.string }) }), (errObj) => {
-			const { statusCode, body } = errObj.serverlessHttpError;
-			const code = statusCode ?? "unknown";
+		.with(P.shape({ serverless_http_error: P.shape({ status_code: P.number, body: P.string }) }), (errObj) => {
+			const { status_code, body } = errObj.serverless_http_error;
+			const code = status_code ?? "unknown";
 			return (
 				<>
 					<p>Serverless HTTP error with status code {code}</p>
@@ -163,8 +163,8 @@ export function RunnerPoolError({
 				</>
 			);
 		})
-		.with(P.shape({ serverlessConnectionError: P.shape({ message: P.string }) }), (errObj) => {
-			const message = errObj.serverlessConnectionError?.message;
+		.with(P.shape({ serverless_connection_error: P.shape({ message: P.string }) }), (errObj) => {
+			const message = errObj.serverless_connection_error?.message;
 			return (
 				<>
 					<p>Unable to connect to serverless endpoint</p>
@@ -172,8 +172,8 @@ export function RunnerPoolError({
 				</>
 			);
 		})
-		.with(P.shape({ serverlessInvalidSsePayload: P.shape({ message: P.string }) }), (errObj) => {
-			const message = errObj.serverlessInvalidSsePayload?.message;
+		.with(P.shape({ serverless_invalid_sse_payload: P.shape({ message: P.string }) }), (errObj) => {
+			const message = errObj.serverless_invalid_sse_payload?.message;
 			return (
 				<>
 					<p>Request payload validation failed</p>
