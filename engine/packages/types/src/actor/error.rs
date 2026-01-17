@@ -1,8 +1,7 @@
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerPoolError {
 	/// Serverless: SSE returned non-200 status code (e.g., 404, 500)
@@ -24,7 +23,7 @@ pub enum RunnerPoolError {
 	InternalError,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActorError {
 	/// Runner pool-related errors
@@ -39,4 +38,6 @@ pub enum ActorError {
 	RunnerDrainingTimeout { runner_id: Id },
 	/// Actor exited with an error and is now sleeping
 	Crashed { message: Option<String> },
+	/// Actor has an internal error
+	InternalError,
 }

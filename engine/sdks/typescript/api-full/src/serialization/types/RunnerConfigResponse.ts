@@ -5,7 +5,6 @@
 import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
-import { RunnerPoolError } from "./RunnerPoolError";
 import { RunnerConfig } from "./RunnerConfig";
 
 export const RunnerConfigResponse: core.serialization.ObjectSchema<
@@ -13,12 +12,15 @@ export const RunnerConfigResponse: core.serialization.ObjectSchema<
     Rivet.RunnerConfigResponse
 > = core.serialization
     .object({
-        runnerPoolError: core.serialization.property("runner_pool_error", RunnerPoolError.optional()),
+        runnerPoolError: core.serialization.property(
+            "runner_pool_error",
+            core.serialization.record(core.serialization.string(), core.serialization.unknown()).optional(),
+        ),
     })
     .extend(RunnerConfig);
 
 export declare namespace RunnerConfigResponse {
     export interface Raw extends RunnerConfig.Raw {
-        runner_pool_error?: RunnerPoolError.Raw | null;
+        runner_pool_error?: Record<string, unknown> | null;
     }
 }

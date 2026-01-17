@@ -83,31 +83,34 @@ export function QueriedActorStatusAdditionalInfo({
 	return null;
 }
 
-export function ActorError({ error }: { error: Rivet.ActorError }) {
+export function ActorError({ error }: { error: object | string }) {
 	return match(error)
 		.with(P.string, (errMsg) =>
 			match(errMsg)
 				.with("no_capacity", () => (
 					<p>No capacity available to start Actor.</p>
 				))
+				.with("internal_error", () => (
+					<p>Actor has an internal error.</p>
+				))
 				.otherwise(() => <p>Unknown error: {errMsg}</p>),
 		)
-		.with(P.shape({ runnerPoolError: P.any }), (err) => (
+		.with(P.shape({ runnerPoolError: P.shape({ runnerId: P.string }) }), (err) => (
 			<RunnerPoolError error={err.runnerPoolError} />
 		))
-		.with(P.shape({ runnerNoResponse: P.any }), (err) => (
+		.with(P.shape({ runnerNoResponse: P.shape({ runnerId: P.string }) }), (err) => (
 			<p>
 				Runner ({err.runnerNoResponse.runnerId}) was allocated but Actor
 				did not respond.
 			</p>
 		))
-		.with(P.shape({ runnerConnectionLost: P.any }), (err) => (
+		.with(P.shape({ runnerConnectionLost: P.shape({ runnerId: P.string }) }), (err) => (
 			<p>
 				Runner ({err.runnerConnectionLost.runnerId}) connection was lost
 				(no recent ping, network issue, or crash).
 			</p>
 		))
-		.with(P.shape({ runnerDrainingTimeout: P.any }), (err) => (
+		.with(P.shape({ runnerDrainingTimeout: P.shape({ runnerId: P.string }) }), (err) => (
 			<p>
 				Runner ({err.runnerDrainingTimeout.runnerId}) was draining but
 				Actor didn't stop in time.
@@ -136,7 +139,7 @@ export function QueriedActorError({ actorId }: { actorId: ActorId }) {
 export function RunnerPoolError({
 	error,
 }: {
-	error: Rivet.RunnerPoolError | undefined;
+	error: object | string | undefined;
 }) {
 	return match(error)
 		.with(P.nullish, () => null)
@@ -145,15 +148,12 @@ export function RunnerPoolError({
 				.with("internal_error", () => (
 					<p>Internal error occurred in runner pool</p>
 				))
-				.with("serverless_invalid_base64", () => (
-					<p>Invalid base64 encoding in serverless response</p>
-				))
 				.with("serverless_stream_ended_early", () => (
 					<p>Connection terminated unexpectedly</p>
 				))
 				.otherwise(() => <p>Unknown runner pool error</p>),
 		)
-		.with(P.shape({ serverlessHttpError: P.any }), (errObj) => {
+		.with(P.shape({ serverlessHttpError: P.shape({ statusCode: P.number, body: P.string }) }), (errObj) => {
 			const { statusCode, body } = errObj.serverlessHttpError;
 			const code = statusCode ?? "unknown";
 			return (
@@ -163,7 +163,7 @@ export function RunnerPoolError({
 				</>
 			);
 		})
-		.with(P.shape({ serverlessConnectionError: P.any }), (errObj) => {
+		.with(P.shape({ serverlessConnectionError: P.shape({ message: P.string }) }), (errObj) => {
 			const message = errObj.serverlessConnectionError?.message;
 			return (
 				<>
@@ -172,8 +172,8 @@ export function RunnerPoolError({
 				</>
 			);
 		})
-		.with(P.shape({ serverlessInvalidPayload: P.any }), (errObj) => {
-			const message = errObj.serverlessInvalidPayload?.message;
+		.with(P.shape({ serverlessInvalidSsePayload: P.shape({ message: P.string }) }), (errObj) => {
+			const message = errObj.serverlessInvalidSsePayload?.message;
 			return (
 				<>
 					<p>Request payload validation failed</p>
@@ -181,7 +181,9 @@ export function RunnerPoolError({
 				</>
 			);
 		})
-		.exhaustive();
+		.otherwise(() => {
+			return <p>Unknown runner pool error.</p>;
+		});
 }
 
 export function ErrorDetails({ error }: { error: unknown }) {

@@ -323,8 +323,12 @@ impl WorkflowData {
 			.map_err(WorkflowError::DeserializeWorkflowOutput)
 	}
 
-	pub fn has_output(&self) -> bool {
+	pub fn is_complete(&self) -> bool {
 		self.output.is_some()
+	}
+
+	pub fn is_dead(&self) -> bool {
+		!self.is_complete() && !self.has_wake_condition
 	}
 }
 

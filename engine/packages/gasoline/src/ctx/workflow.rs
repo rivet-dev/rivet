@@ -22,7 +22,7 @@ use crate::{
 	executable::{AsyncResult, Executable},
 	history::{
 		History,
-		cursor::{Cursor, HistoryResult},
+		cursor::{Cursor, HistoryResult, RemovedHistoryResult},
 		event::SleepState,
 		location::Location,
 		removed::Removed,
@@ -1108,27 +1108,35 @@ impl WorkflowCtx {
 	pub async fn removed<T: Removed>(&mut self) -> Result<()> {
 		self.check_stop()?;
 
-		// Existing event
-		if self.cursor.compare_removed::<T>()? {
-			tracing::debug!("skipping removed step");
+		match self.cursor.compare_removed::<T>() {
+			RemovedHistoryResult::New => {
+				tracing::debug!("inserting removed step");
+
+				self.db
+					.commit_workflow_removed_event(
+						self.workflow_id,
+						&self.cursor.current_location(),
+						T::event_type(),
+						T::name(),
+						self.loop_location(),
+					)
+					.await?;
+
+				// Move to next event
+				self.cursor.inc();
+			}
+			RemovedHistoryResult::Skip => {
+				tracing::debug!("skipping removed step");
+
+				// Move to next event
+				self.cursor.inc();
+			}
+			RemovedHistoryResult::Ignore(msg) => {
+				tracing::debug!(
+					"removed event filter doesn't match existing event, ignoring: {msg}"
+				);
+			}
 		}
-		// New "removed" event
-		else {
-			tracing::debug!("inserting removed step");
-
-			self.db
-				.commit_workflow_removed_event(
-					self.workflow_id,
-					&self.cursor.current_location(),
-					T::event_type(),
-					T::name(),
-					self.loop_location(),
-				)
-				.await?;
-		};
-
-		// Move to next event
-		self.cursor.inc();
 
 		Ok(())
 	}

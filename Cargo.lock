@@ -3478,6 +3478,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-actor-kv"
+version = "2.0.38"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "gasoline",
+ "pegboard",
+ "portpicker",
+ "rivet-config",
+ "rivet-runner-protocol",
+ "rivet-test-deps",
+ "rivet-util-id",
+ "serde",
+ "serde_bare",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
+ "universaldb",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "pegboard-gateway"
 version = "2.0.38"
 dependencies = [
