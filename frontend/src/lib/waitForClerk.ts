@@ -2,7 +2,14 @@ import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
 import { posthog } from "posthog-js";
 
-export function waitForClerk(clerk: Clerk): Promise<void> {
+interface WaitForClerkOptions {
+	// If true, wait for user and session to be available (for authenticated routes)
+	requireAuth?: boolean;
+}
+
+export function waitForClerk(clerk: Clerk, options: WaitForClerkOptions = {}): Promise<void> {
+	const { requireAuth = false } = options;
+
 	const logState = (context: string) => {
 		console.log(`[waitForClerk] ${context}`, {
 			status: clerk.status,
@@ -10,6 +17,7 @@ export function waitForClerk(clerk: Clerk): Promise<void> {
 			userId: clerk.user?.id,
 			hasSession: !!clerk.session,
 			sessionId: clerk.session?.id,
+			requireAuth,
 		});
 	};
 
@@ -18,6 +26,12 @@ export function waitForClerk(clerk: Clerk): Promise<void> {
 		// Must be in ready status
 		if (clerk.status !== "ready") {
 			return false;
+		}
+		// If requireAuth is set, we need both user and session
+		if (requireAuth) {
+			if (!clerk.user || !clerk.session) {
+				return false;
+			}
 		}
 		// If there's a user, there should also be a session
 		// This handles the race condition after SSO where user might be set before session
