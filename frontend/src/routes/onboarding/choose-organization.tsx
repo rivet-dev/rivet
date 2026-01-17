@@ -5,6 +5,15 @@ import { RouteLayout } from "@/app/route-layout";
 export const Route = createFileRoute("/onboarding/choose-organization")({
 	component: RouteComponent,
 	beforeLoad: async ({ context }) => {
+		// Defensive check - session should be available after waitForClerk in parent route
+		if (!context.clerk.session) {
+			console.error("[choose-organization] No session available", {
+				hasUser: !!context.clerk.user,
+				status: context.clerk.status,
+			});
+			throw new Error("Session not available. Please try refreshing the page.");
+		}
+
 		if (context.clerk.organization) {
 			throw redirect({
 				to: "/orgs/$organization",
