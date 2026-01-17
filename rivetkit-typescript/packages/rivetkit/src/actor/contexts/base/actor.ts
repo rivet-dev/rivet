@@ -6,6 +6,7 @@ import type { Conn, ConnId } from "../../conn/mod";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../../database";
 import type { ActorDefinition, AnyActorDefinition } from "../../definition";
 import type { ActorInstance, SaveStateOptions } from "../../instance/mod";
+import { ActorKv } from "../../instance/kv";
 import type { Schedule } from "../../schedule";
 
 /**
@@ -27,6 +28,7 @@ export class ActorContext<
 		TInput,
 		TDatabase
 	>;
+	#kv: ActorKv | undefined;
 
 	constructor(
 		actor: ActorInstance<
@@ -39,6 +41,16 @@ export class ActorContext<
 		>,
 	) {
 		this.#actor = actor;
+	}
+
+	/**
+	 * Gets the KV storage interface.
+	 */
+	get kv(): ActorKv {
+		if (!this.#kv) {
+			this.#kv = new ActorKv(this.#actor.driver, this.#actor.id);
+		}
+		return this.#kv;
 	}
 
 	/**

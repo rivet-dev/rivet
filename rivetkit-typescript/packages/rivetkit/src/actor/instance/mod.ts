@@ -44,7 +44,7 @@ import {
 } from "../utils";
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
-import { KEYS } from "./kv";
+import { KEYS } from "./keys";
 import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
