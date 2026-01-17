@@ -2290,6 +2290,10 @@ importers:
         version: 3.9.1(@types/node@20.19.13)(rollup@4.53.3)(typescript@5.9.3)(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
 
   frontend/packages/example-registry:
+    dependencies:
+      '@rivet-gg/icons':
+        specifier: workspace:*
+        version: link:../icons
     devDependencies:
       '@types/node':
         specifier: ^22.13.9

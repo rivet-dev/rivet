@@ -18,6 +18,9 @@
 	"scripts": {
 		"build": "tsx scripts/build/index.ts"
 	},
+	"dependencies": {
+		"@rivet-gg/icons": "workspace:*"
+	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
 		"puppeteer": "^23.11.1",
