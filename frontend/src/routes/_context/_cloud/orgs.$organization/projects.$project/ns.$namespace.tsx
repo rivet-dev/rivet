@@ -28,7 +28,10 @@ export const Route = createFileRoute(
 
 		if (search.skipOnboarding) {
 			ls.onboarding.skipWelcome(params.project, params.namespace);
-			posthog.capture("onboarding_skipped");
+			posthog.capture("onboarding_skipped", {
+				project: params.project,
+				namespace: params.namespace,
+			});
 			throw redirect({ to: ".", search: {} });
 		}
 		if (search.onboardingSuccess) {
