@@ -1,12 +1,8 @@
 # Deploying to Railway
-#
+
 Deploy your RivetKit app to [Railway](https://railway.app).
 
-## Option A: Deploy from Template
-
-If you're starting from scratch, go to the Connect tab on the Rivet dashboard and follow the Railway deployment steps. This give you a 1-click deploy of the [RivetKit Railway template]().
-
-## Option B: Deploy Manual
+## Steps
 
 <Steps>
 <Step title="Prerequisites">
@@ -37,35 +33,28 @@ Ensure your `package.json` has a start script:
 2. Select your repository containing your RivetKit app
 3. Railway will automatically detect and deploy your app
 
-Railway will automatically deploy your RivetKit app on every git push.
-
-Detailed steps are available on [Railway's docs](https://docs.railway.com/quick-start).
+See [Railway's deployment docs](https://docs.railway.com/quick-start) for more details.
 
 </Step>
 <Step title="Set Environment Variables">
 
-After selecting your project on the Rivet dashboard, go to Connect > Railway to get the environment variables needed.
+After creating your project on the Rivet dashboard, select Railway as your provider. You'll be provided `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` environment variables to add to your Railway service.
 
-To add your environment variables:
-1. Go to your Railway project dashboard
-2. Select your service
-3. Navigate to the **Variables** tab
-4. Add the required environment variables and deploy your changes
+See [Railway's environment variables docs](https://docs.railway.com/guides/variables#service-variables) for more details.
 
-Detailed steps are available on [Railway's docs](https://docs.railway.com/guides/variables#service-variables).
 </Step>
 <Step title="Connect to Rivet">
 
 1. In your Railway project, go to **Settings > Networking**
-2. Click **Create Custom Domain**
-3. Click **Create Domain** to generate a Railway domain (e.g. `my-app.railway.app`)
-4. On the Rivet dashboard, paste your domain with the `/api/rivet` path into the connect form (e.g. `https://my-app.railway.app/api/rivet`)
-5. Click "Done"
+2. Click **Create Custom Domain** then **Create Domain** to generate a Railway domain (e.g. `my-app.railway.app`)
+3. On the Rivet dashboard, paste your domain with the `/api/rivet` path into the connect form (e.g. `https://my-app.railway.app/api/rivet`)
+4. Click "Done"
 
 </Step>
-<Step title="Test Your Deployment">
+<Step title="Configure Sleeping & Multi-Region (Optional)">
 
-Visit your Railway frontend to see everything working.
+- [Enable App Sleeping](https://docs.railway.com/reference/app-sleeping) to reduce costs when idle
+- [Configure Multi-Region](https://docs.railway.com/reference/deployment-regions) to deploy closer to your users
 
 </Step>
 

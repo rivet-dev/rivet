@@ -1,66 +1,74 @@
 # Deploying to VMs & Bare Metal
 
-Run your backend on any Linux VM or bare metal host with a basic systemd unit.
+Deploy your RivetKit app to any Linux VM or bare metal host.
 
-## Guide
+## Steps
 
 <Steps>
+<Step title="Prerequisites">
+
+- A Linux VM or bare metal server with SSH access
+- Your RivetKit app
+  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
+
+</Step>
 <Step title="Upload Your App">
 
-- Build your backend locally.
+- Build your RivetKit app locally
 - Copy the build output to your server (example):
 
 ```bash
-scp -r ./dist user@server:/opt/backend
+scp -r ./dist user@server:/opt/rivetkit-app
 ```
 
-Place the files somewhere readable by the service user, such as `/opt/backend`.
+Place the files somewhere readable by the service user, such as `/opt/rivetkit-app`.
 
 </Step>
-<Step title="Generate Environment Variables">
+<Step title="Set Environment Variables">
 
-Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the next step. They should look something like this:
-
-```bash
-RIVET_ENDPOINT=https://api-us-west-1.rivet.dev
-RIVET_NAMESPACE=your-namespace-id
-RIVET_TOKEN=your-token
-```
+After creating your project on the Rivet dashboard, select VM & Bare Metal as your provider. You'll be provided `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` environment variables to use in the next step.
 
 </Step>
 <Step title="Create the systemd Service">
 
-Create `/etc/systemd/system/backend.service`:
+Create `/etc/systemd/system/rivetkit-app.service`:
 
 ```ini
 [Unit]
-Description=Backend Service
+Description=RivetKit App
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/backend
+WorkingDirectory=/opt/rivetkit-app
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
-Environment=RIVET_ENDPOINT=https://api.rivet.dev
-Environment=RIVET_NAMESPACE=your-namespace-id
-Environment=RIVET_TOKEN=your-token
+Environment=RIVET_ENDPOINT=<your-rivet-endpoint>
+Environment=RIVET_PUBLIC_ENDPOINT=<your-rivet-public-endpoint>
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Replace the environment values with those from the Connect tab in the Rivet dashboard (or your self-hosted engine) and adjust paths to match your deployment.
+Replace the environment values with those from the Rivet dashboard and adjust paths to match your deployment.
 
 </Step>
-<Step title="Start and Manage the Service">
+<Step title="Start the Service">
 
 Reload systemd units and start the service:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now backend.service
+sudo systemctl enable --now rivetkit-app.service
 ```
+
+</Step>
+<Step title="Connect to Rivet">
+
+1. Ensure your server is accessible via a public URL (e.g. `https://my-app.example.com`)
+2. On the Rivet dashboard, paste your URL with the `/api/rivet` path into the connect form (e.g. `https://my-app.example.com/api/rivet`)
+3. Click "Done"
 
 </Step>
 </Steps>
@@ -72,7 +80,7 @@ sudo systemctl enable --now backend.service
 Restart the service after deploying new builds or environment changes:
 
 ```bash
-sudo systemctl restart backend.service
+sudo systemctl restart rivetkit-app.service
 ```
 
 ### Logs
@@ -80,5 +88,5 @@ sudo systemctl restart backend.service
 Follow realtime logs when debugging:
 
 ```bash
-sudo journalctl -u backend.service -f
+sudo journalctl -u rivetkit-app.service -f
 ```
