@@ -15,7 +15,7 @@ export interface Actor {
     /** Denotes when the actor was destroyed. */
     destroyTs?: number;
     /** Error details if the actor failed to start. */
-    error?: Rivet.ActorError;
+    error?: Record<string, unknown>;
     key?: string;
     name: string;
     namespaceId: Rivet.RivetId;

@@ -102,30 +102,37 @@ async fn runner_config_get_error_inner(
 
 	let mut result = Vec::new();
 
-	for workflow_data in workflows {
-		let Some((namespace_id, runner_name)) = workflow_to_runner.get(&workflow_data.workflow_id)
-		else {
+	for wf in workflows {
+		let Some((namespace_id, runner_name)) = workflow_to_runner.get(&wf.workflow_id) else {
 			continue;
 		};
 
-		let state = match workflow_data
-			.parse_state::<Option<crate::workflows::runner_pool_error_tracker::State>>()
-		{
-			Ok(Some(s)) => s,
-			Ok(None) => {
-				tracing::warn!(%namespace_id, %runner_name, "pool error tracker has no state");
-				continue;
-			}
-			Err(err) => {
-				tracing::error!(
-					%namespace_id,
-					%runner_name,
-					?err,
-					"failed to parse error tracker state"
-				);
-				continue;
-			}
-		};
+		if wf.is_dead() {
+			result.push(RunnerPoolErrorCacheEntry {
+				namespace_id: *namespace_id,
+				runner_name: runner_name.clone(),
+				error: Some(RunnerPoolError::InternalError),
+			});
+			continue;
+		}
+
+		let state =
+			match wf.parse_state::<Option<crate::workflows::runner_pool_error_tracker::State>>() {
+				Ok(Some(s)) => s,
+				Ok(None) => {
+					tracing::warn!(%namespace_id, %runner_name, "pool error tracker has no state");
+					continue;
+				}
+				Err(err) => {
+					tracing::error!(
+						%namespace_id,
+						%runner_name,
+						?err,
+						"failed to parse error tracker state"
+					);
+					continue;
+				}
+			};
 
 		result.push(RunnerPoolErrorCacheEntry {
 			namespace_id: *namespace_id,
