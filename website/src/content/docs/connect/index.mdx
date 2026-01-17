@@ -1,4 +1,4 @@
-import { deployOptions } from "@/data/deploy/shared";
+import { deployOptions } from "@rivetkit/example-registry";
 
 # Deploy
 
@@ -8,7 +8,7 @@ Rivet supports deployment to a wide range of platforms, from serverless function
   {deployOptions.map((option) => (
     <Card
       key={option.href}
-      title={option.title}
+      title={option.displayName}
       href={option.href}
       icon={option.icon}
     >
