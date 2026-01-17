@@ -25,7 +25,7 @@
 		"@headlessui/react": "^2.2.9",
 		"@heroicons/react": "^2.2.0",
 		"@rivet-gg/api": "25.5.3",
-		"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2",
+		"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23",
 		"@rivet-gg/components": "workspace:*",
 		"@rivet-gg/icons": "workspace:^",
 		"@rivetkit/example-registry": "workspace:*",

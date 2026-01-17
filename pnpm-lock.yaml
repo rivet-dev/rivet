@@ -543,31 +543,6 @@ importers:
         specifier: ^4.22.0
         version: 4.44.0(@cloudflare/workers-types@4.20251014.0)
 
-  examples/cloudflare-workers-inline-client:
-    dependencies:
-      '@rivetkit/cloudflare-workers':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/cloudflare-workers
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.20250129.0
-        version: 4.20251014.0
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.19.1
-      tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
-      typescript:
-        specifier: ^5.5.2
-        version: 5.9.3
-      wrangler:
-        specifier: ^4.22.0
-        version: 4.44.0(@cloudflare/workers-types@4.20251014.0)
-
   examples/cross-actor-actions:
     dependencies:
       '@hono/node-server':
@@ -1811,8 +1786,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@9c2916b
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@9c2916b
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -2722,8 +2697,8 @@ importers:
         specifier: 25.5.3
         version: 25.5.3
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -6952,12 +6927,8 @@ packages:
     resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@715f221}
     version: 0.0.0
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@9c2916b':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@9c2916b}
-    version: 0.0.0
-
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -13732,6 +13703,7 @@ packages:
   tar@7.5.2:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
     engines: {node: '>=18'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
 
   temp-dir@2.0.0:
     resolution: {integrity: sha512-aoBAniQmmwtcKp/7BzsH8Cxzv8OL736p7v1ihGb5e9DJ9kTwGWHrQrVB5+lfVDzfGrdRzXch+ig7LHaY1JTOrg==}
@@ -19395,20 +19367,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@9c2916b':
-    dependencies:
-      cross-fetch: 4.1.0
-      form-data: 4.0.5
-      js-base64: 3.7.8
-      node-fetch: 2.7.0
-      pino-pretty: 13.1.2
-      qs: 6.14.0
-      readable-stream: 4.7.0
-      url-join: 5.0.0
-    transitivePeerDependencies:
-      - encoding
-
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@f01ac23':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5

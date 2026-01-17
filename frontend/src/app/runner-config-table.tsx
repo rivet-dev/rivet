@@ -217,7 +217,7 @@ function StatusCell({
 	datacenters: Record<string, Rivet.RunnerConfigResponse>;
 }) {
 	const errors = useMemo(() => {
-		const errorMap: Record<string, Rivet.RunnerPoolError | undefined> = {};
+		const errorMap: Record<string, object | undefined> = {};
 		let hasErrors = false;
 		for (const [dc, config] of Object.entries(datacenters)) {
 			if (config.runnerPoolError) {

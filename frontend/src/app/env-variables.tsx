@@ -89,7 +89,7 @@ export const useRivetDsn = ({
 	endpoint,
 	kind,
 }: {
-	endpoint: string;
+	endpoint?: string;
 	kind: "publishable" | "secret";
 }) => {
 	const globalEndpoint = match(__APP_TYPE__)
@@ -119,7 +119,7 @@ export function RivetPublicEndpointEnv({
 	endpoint,
 }: {
 	prefix?: string;
-	endpoint: string;
+	endpoint?: string;
 }) {
 	const dsn = useRivetDsn({ endpoint, kind: "publishable" });
 	return (
@@ -143,7 +143,7 @@ export function RivetRunnerEndpointEnv({
 	endpoint,
 }: {
 	prefix?: string;
-	endpoint: string;
+	endpoint?: string;
 }) {
 	const dsn = useRivetDsn({ endpoint, kind: "secret" });
 	return (

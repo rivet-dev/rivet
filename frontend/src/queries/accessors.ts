@@ -1,4 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 import { getConfig } from "@/components";
 import {
@@ -14,14 +15,14 @@ export function usePublishableToken() {
 			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
 			return useSuspenseQuery(
 				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
+				useCloudNamespaceDataProvider().publishableTokenQueryOptions() as UseSuspenseQueryOptions<string>,
 			).data;
 		})
 		.with("engine", () => {
 			// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
 			return useSuspenseQuery(
 				// biome-ignore lint/correctness/useHookAtTopLevel: it's okay, its guarded by build constant
-				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
+				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions() as UseSuspenseQueryOptions<string>,
 			).data;
 		})
 		.otherwise(() => {
@@ -31,7 +32,7 @@ export function usePublishableToken() {
 
 export function useAdminToken() {
 	return useSuspenseQuery(
-		useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
+		useEngineCompatDataProvider().engineAdminTokenQueryOptions() as UseSuspenseQueryOptions<string>,
 	).data;
 }
 

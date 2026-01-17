@@ -21,7 +21,7 @@ export function PublishableTokenCodeGroup() {
 	// Check if Vercel is connected
 	const hasVercel = hasProvider(configs, ["vercel", "next-js"]);
 
-	const endpoint = useRivetDsn({ endpoint: "", kind: "publishable" });
+	const endpoint = useRivetDsn({ kind: "publishable" });
 
 	const nextJsTab = (
 		<CodeFrame

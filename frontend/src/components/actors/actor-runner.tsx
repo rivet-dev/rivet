@@ -13,9 +13,9 @@ export function ActorRunner({ actorId }: ActorRunnerProps) {
 	);
 
 	const { data: runner } = useQuery({
-		...useDataProvider().runnerByNameQueryOptions(
-			actor?.runnerNameSelector!,
-		),
+		...useDataProvider().runnerByNameQueryOptions({
+			runnerName: actor?.runnerNameSelector || "",
+		}),
 		enabled: !!actor?.runnerNameSelector,
 	});
 

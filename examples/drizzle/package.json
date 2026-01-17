@@ -11,7 +11,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
-		"rivetkit": "*",
+		"rivetkit": "^2.0.38",
 		"tsup": "^8.0.0",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
@@ -19,7 +19,7 @@
 	"dependencies": {
 		"@hono/node-server": "^1.19.7",
 		"@hono/node-ws": "^1.3.0",
-		"@rivetkit/db": "*",
+		"@rivetkit/db": "^2.0.38",
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2",
 		"hono": "^4.0.0",
