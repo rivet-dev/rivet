@@ -484,7 +484,7 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
       vite-plugin-srvx:
-        specifier: ^1.0.1
+        specifier: ^1.0.0
         version: 1.0.1(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
@@ -957,8 +957,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
       vite-plugin-srvx:
-        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@312eeb8
-        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@312eeb8(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@7
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@7(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
@@ -14466,8 +14466,8 @@ packages:
       srvx: '>=0.9.0'
       vite: ^5.0.0 || ^6.0.0
 
-  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@312eeb8:
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@312eeb8}
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@7:
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@7}
     version: 1.0.1
     peerDependencies:
       srvx: '>=0.9.0'
@@ -29032,7 +29032,7 @@ snapshots:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
-  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@312eeb8(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@7(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)

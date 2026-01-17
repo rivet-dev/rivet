@@ -18,7 +18,7 @@
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
-		"vite-plugin-srvx": "https://pkg.pr.new/rivet-dev/vite-plugin-srvx@312eeb8",
+		"vite-plugin-srvx": "https://pkg.pr.new/rivet-dev/vite-plugin-srvx@7",
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
