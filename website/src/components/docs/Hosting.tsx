@@ -1,5 +1,5 @@
 import { CardGroup, Card } from "@/components/Card";
-import { deployOptions } from "@/data/deploy/shared";
+import { deployOptions } from "@rivetkit/example-registry";
 
 export function Hosting() {
 	const hostingProviders = deployOptions;
