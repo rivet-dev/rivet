@@ -252,7 +252,7 @@ export const createNamespaceContext = ({
 								opts?.filters?.showDestroyed?.value.includes(
 									"1",
 								)),
-						limit: RECORDS_PER_PAGE,
+						limit: opts?.limit ?? RECORDS_PER_PAGE,
 						name: opts?.filters?.id?.value
 							? undefined
 							: opts?.n?.join(","),

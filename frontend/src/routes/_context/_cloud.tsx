@@ -5,7 +5,6 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { config } from "process";
 import { match } from "ts-pattern";
 import { useDialog } from "@/app/use-dialog";
 import { waitForClerk } from "@/lib/waitForClerk";
@@ -34,7 +33,7 @@ function RouteComponent() {
 
 function CloudModals() {
 	const navigate = useNavigate();
-	const search = useSearch({ from: "/_context" });
+	const search = useSearch({ strict: false });
 
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
@@ -53,9 +52,11 @@ function CloudModals() {
 	return (
 		<>
 			<CreateProjectDialog
-				organization={search.organization}
+				organization={search?.organization}
+				template={search?.template}
+				noTemplate={search?.noTemplate}
 				dialogProps={{
-					open: search.modal === "create-project",
+					open: search?.modal === "create-project",
 					onOpenChange: (value) => {
 						if (!value) {
 							return navigate({
@@ -72,7 +73,7 @@ function CloudModals() {
 			/>
 			<CreateNamespaceDialog
 				dialogProps={{
-					open: search.modal === "create-ns",
+					open: search?.modal === "create-ns",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -92,7 +93,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-vercel",
+					open: search?.modal === "connect-vercel",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -112,7 +113,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-q-vercel",
+					open: search?.modal === "connect-q-vercel",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -132,7 +133,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-q-railway",
+					open: search?.modal === "connect-q-railway",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -152,7 +153,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-railway",
+					open: search?.modal === "connect-railway",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -172,7 +173,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-custom",
+					open: search?.modal === "connect-custom",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -192,7 +193,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-aws",
+					open: search?.modal === "connect-aws",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -212,7 +213,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-gcp",
+					open: search?.modal === "connect-gcp",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -232,7 +233,7 @@ function CloudModals() {
 					className: "max-w-xl",
 				}}
 				dialogProps={{
-					open: search.modal === "connect-hetzner",
+					open: search?.modal === "connect-hetzner",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -251,10 +252,10 @@ function CloudModals() {
 				dialogContentProps={{
 					className: "max-w-xl",
 				}}
-				name={search.config}
-				dc={search.dc}
+				name={search?.config}
+				dc={search?.dc}
 				dialogProps={{
-					open: search.modal === "edit-provider-config",
+					open: search?.modal === "edit-provider-config",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -272,9 +273,9 @@ function CloudModals() {
 				}}
 			/>
 			<DeleteConfigDialog
-				name={search.config}
+				name={search?.config}
 				dialogProps={{
-					open: search.modal === "delete-provider-config",
+					open: search?.modal === "delete-provider-config",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {
@@ -292,7 +293,7 @@ function CloudModals() {
 			/>
 			<CreateOrganizationDialog
 				dialogProps={{
-					open: search.modal === "create-organization",
+					open: search?.modal === "create-organization",
 					onOpenChange: (value) => {
 						if (!value) {
 							return navigate({
