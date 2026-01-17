@@ -4,6 +4,7 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
+import { posthog } from "posthog-js";
 import { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
@@ -27,6 +28,7 @@ export const Route = createFileRoute(
 
 		if (search.skipOnboarding) {
 			ls.onboarding.skipWelcome(params.project, params.namespace);
+			posthog.capture("onboarding_skipped");
 			throw redirect({ to: ".", search: {} });
 		}
 		if (search.onboardingSuccess) {
@@ -57,38 +59,23 @@ export const Route = createFileRoute(
 			ls.onboarding.getSkipWelcome(params.project, params.namespace) ||
 			deps.skipOnboarding;
 
-		const [runnerNames, runnerConfigs, actorNames] = await Promise.all([
+		const [runnerNames, runnerConfigs] = await Promise.all([
 			context.queryClient.fetchInfiniteQuery(
 				context.dataProvider.runnerNamesQueryOptions(),
 			),
 			context.queryClient.fetchInfiniteQuery(
 				context.dataProvider.runnerConfigsQueryOptions(),
 			),
-			context.queryClient.fetchInfiniteQuery(
-				context.dataProvider.buildsQueryOptions(),
-			),
 		]);
 
-		const actors = await Promise.all(
-			Object.keys(actorNames.pages?.[0].names || {}).map((name) =>
-				context.queryClient.fetchInfiniteQuery(
-					context.dataProvider.actorsQueryOptions({
-						n: [name],
-						limit: 1,
-					}),
-				),
-			),
-		);
-
-		const totalActors = actors.reduce(
-			(acc, curr) => curr.pages[0].actors.length + acc,
-			0,
+		const actors = await context.queryClient.fetchQuery(
+			context.dataProvider.actorsCountQueryOptions(),
 		);
 
 		const hasRunnerNames = runnerNames.pages[0].names.length > 0;
 		const hasRunnerConfigs =
 			Object.entries(runnerConfigs.pages[0].runnerConfigs).length > 0;
-		const hasActors = totalActors > 0;
+		const hasActors = actors > 0;
 
 		const displayOnboarding =
 			!isSkipped &&
