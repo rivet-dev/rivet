@@ -237,6 +237,9 @@ export function createTestInlineClientDriver(
 			);
 			return upgradeWebSocket(() => wsHandler)(c, noopNext());
 		},
+		async buildGatewayUrl(actorId: string): Promise<string> {
+			return `${endpoint}/gateway/${actorId}`;
+		},
 		displayInformation(): ManagerDisplayInformation {
 			return { properties: {} };
 		},

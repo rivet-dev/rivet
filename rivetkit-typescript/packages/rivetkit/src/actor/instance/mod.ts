@@ -203,7 +203,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	get actions(): string[] {
-		return Object.keys(this.#config.actions);
+		return Object.keys(this.#config.actions ?? {});
 	}
 
 	get config(): ActorConfig<S, CP, CS, V, I, DB> {
@@ -516,12 +516,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	): Promise<unknown> {
 		this.assertReady();
 
-		if (!(actionName in this.#config.actions)) {
+		const actions = this.#config.actions ?? {};
+		if (!(actionName in actions)) {
 			this.#rLog.warn({ msg: "action does not exist", actionName });
 			throw new errors.ActionNotFound(actionName);
 		}
 
-		const actionFunction = this.#config.actions[actionName];
+		const actionFunction = actions[actionName];
 		if (typeof actionFunction !== "function") {
 			this.#rLog.warn({
 				msg: "action is not a function",
