@@ -11,6 +11,8 @@ import { isRivetApiError } from "@/lib/errors";
 import { modal } from "@/utils/modal-utils";
 import { Changelog } from "./types";
 
+const previousQueryCache = new QueryCache();
+
 const queryCache = new QueryCache({
 	onError(error, query) {
 		// Silently ignore CancelledError - these are expected during navigation/unmount
@@ -34,12 +36,19 @@ const queryCache = new QueryCache({
 				queryKey: query.queryKey,
 			});
 		}
+
+		if (query.meta?.statusCheck) {
+			previousQueryCache.remove(query);
+		}
 	},
 	onSuccess(data, query) {
 		if (query.meta?.statusCheck) {
-			queryClient.invalidateQueries({
-				predicate: (q) => q.state.error !== null,
-			});
+			if (!previousQueryCache.find(query)) {
+				previousQueryCache.add(query);
+				queryClient.invalidateQueries({
+					predicate: (q) => q.state.error !== null,
+				});
+			}
 		}
 	},
 });
