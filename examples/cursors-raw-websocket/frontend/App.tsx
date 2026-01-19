@@ -6,7 +6,10 @@ import type {
 	registry,
 } from "../src/actors.ts";
 
-const rivetUrl = "http://localhost:6420";
+// HTTP requests go through Vite proxy
+const rivetUrl = `${location.origin}/api/rivet`;
+// WebSocket connections go directly to RivetKit server (vite-plugin-srvx doesn't proxy WS)
+const rivetWsUrl = "ws://localhost:6420";
 
 const client = createClient<typeof registry>(rivetUrl);
 
@@ -89,13 +92,12 @@ export function App() {
 				const actorId = await client.cursorRoom.getOrCreate(roomId).resolve();
 				console.log("found actor", actorId);
 
-				// FIXME: derive ws url from rivet url, should use metadata and `clientEndpoint`
-				const wsOrigin = rivetUrl.replace(/^http/, "ws");
-				const wsUrl = `${wsOrigin}/gateway/${actorId}/websocket?sessionId=${encodeURIComponent(sessionId)}`;
+				// Connect directly to RivetKit server for WebSocket (vite-plugin-srvx doesn't proxy WS)
+				const wsUrl = `${rivetWsUrl}/gateway/${actorId}/websocket?sessionId=${encodeURIComponent(sessionId)}`;
 
 				console.log("ws url:", wsUrl);
 
-				// Create WebSocket connection
+				// Create raw WebSocket connection (no subprotocols needed)
 				ws = new WebSocket(wsUrl);
 				wsRef.current = ws;
 
