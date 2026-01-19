@@ -384,7 +384,8 @@ export function parseWebSocketProtocols(
 		}
 	}
 
-	const encoding = EncodingSchema.parse(encodingRaw);
+	// Default to "json" encoding for raw WebSocket connections without subprotocols
+	const encoding = EncodingSchema.parse(encodingRaw ?? "json");
 	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
 
 	return { encoding, connParams };
