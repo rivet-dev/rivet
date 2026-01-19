@@ -13,6 +13,18 @@ import { combineUrlPath } from "@/utils";
 import { getEndpoint } from "./api-utils";
 import { logger } from "./log";
 
+export function buildActorGatewayUrl(
+	endpoint: string,
+	actorId: string,
+	token: string | undefined,
+	path = "",
+): string {
+	const tokenSegment =
+		token !== undefined ? `@${encodeURIComponent(token)}` : "";
+	const gatewayPath = `/gateway/${encodeURIComponent(actorId)}${tokenSegment}${path}`;
+	return combineUrlPath(endpoint, gatewayPath);
+}
+
 export async function openWebSocketToActor(
 	runConfig: ClientConfig,
 	path: string,
@@ -24,13 +36,12 @@ export async function openWebSocketToActor(
 
 	// WebSocket connections go through guard
 	const endpoint = getEndpoint(runConfig);
-	let gatewayPath;
-	if (runConfig.token !== undefined) {
-		gatewayPath = `/gateway/${encodeURIComponent(actorId)}@${encodeURIComponent(runConfig.token)}${path}`;
-	} else {
-		gatewayPath = `/gateway/${encodeURIComponent(actorId)}${path}`;
-	}
-	const guardUrl = combineUrlPath(endpoint, gatewayPath);
+	const guardUrl = buildActorGatewayUrl(
+		endpoint,
+		actorId,
+		runConfig.token,
+		path,
+	);
 
 	logger().debug({
 		msg: "opening websocket to actor via guard",

@@ -1,6 +1,6 @@
 import type { ClientConfig } from "@/client/config";
 import { HEADER_RIVET_TOKEN } from "@/common/actor-router-consts";
-import { combineUrlPath } from "@/utils";
+import { buildActorGatewayUrl } from "./actor-websocket-client";
 import { getEndpoint } from "./api-utils";
 
 export async function sendHttpRequestToActor(
@@ -11,9 +11,11 @@ export async function sendHttpRequestToActor(
 	// Route through guard port
 	const url = new URL(actorRequest.url);
 	const endpoint = getEndpoint(runConfig);
-	const guardUrl = combineUrlPath(
+	const guardUrl = buildActorGatewayUrl(
 		endpoint,
-		`/gateway/${actorId}${url.pathname}${url.search}`,
+		actorId,
+		runConfig.token,
+		`${url.pathname}${url.search}`,
 	);
 
 	// Handle body properly based on method and presence

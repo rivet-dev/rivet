@@ -32,6 +32,13 @@ export interface ManagerDriver {
 		params: unknown,
 	): Promise<Response>;
 
+	/**
+	 * Build a public gateway URL for a specific actor.
+	 *
+	 * This lives on the driver because the base endpoint varies by runtime.
+	 */
+	buildGatewayUrl(actorId: string): Promise<string>;
+
 	displayInformation(): ManagerDisplayInformation;
 
 	extraStartupLog?: () => Record<string, unknown>;
