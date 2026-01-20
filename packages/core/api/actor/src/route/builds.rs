@@ -428,7 +428,7 @@ pub async fn complete_build(
 	_body: serde_json::Value,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
-	let CheckOutput { env_id, .. } = ctx
+	let CheckOutput { game_id, env_id } = ctx
 		.auth()
 		.check(
 			ctx.op_ctx(),
@@ -460,11 +460,16 @@ pub async fn complete_build(
 
 	// Prewarm all datacenters for pegboard
 	{
-		let default_cluster_id = ctx.config().server()?.rivet.default_cluster_id()?;
+		let clusters_res = ctx
+			.op(cluster::ops::get_for_game::Input {
+				game_ids: vec![game_id],
+			})
+			.await?;
+		let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 
 		let datacenters_res = ctx
 			.op(cluster::ops::datacenter::list::Input {
-				cluster_ids: vec![default_cluster_id],
+				cluster_ids: vec![cluster_id],
 			})
 			.await?;
 		let cluster = unwrap!(datacenters_res.clusters.into_iter().next());
