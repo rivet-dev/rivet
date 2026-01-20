@@ -161,13 +161,7 @@ function PublishableToken() {
 					your frontend to interact with Rivet services.
 				</p>
 			</div>
-			{token && (
-				<PublishableTokenCodeGroup
-					token={token}
-					endpoint={endpoint}
-					namespace={namespace}
-				/>
-			)}
+			{token && <PublishableTokenCodeGroup />}
 		</div>
 	);
 }

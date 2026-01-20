@@ -22,7 +22,6 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { match } from "ts-pattern";
-import { useEndpoint } from "@/app/dialogs/connect-manual-serverfull-frame";
 import { EnvVariables, useRivetDsn } from "@/app/env-variables";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
@@ -56,6 +55,7 @@ import {
 	TabsTrigger,
 } from "@/components";
 import {
+	useCloudNamespaceDataProvider,
 	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
@@ -127,7 +127,7 @@ function RouteComponent() {
 }
 
 export function PublishableToken() {
-	const dsn = useRivetDsn({ endpoint: "", kind: "publishable" });
+	const dsn = useRivetDsn({ kind: "publishable" });
 
 	return (
 		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg ">
@@ -420,7 +420,7 @@ export function CloudApiTokens() {
 								<TableHead>Token</TableHead>
 								<TableHead>Created</TableHead>
 								<TableHead>Expires</TableHead>
-								<TableHead w="min" />
+								<TableHead className="w-min" />
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -439,7 +439,6 @@ export function CloudApiTokens() {
 									<ApiTokenRow
 										key={apiToken.id}
 										apiToken={apiToken}
-										dataProvider={dataProvider}
 									/>
 								))
 							)}
@@ -608,12 +607,10 @@ interface ApiTokenRowProps {
 		revoked: boolean;
 		lastFourChars: string;
 	};
-	dataProvider: ReturnType<
-		typeof useRouteContext<"/_context/_cloud/orgs/$organization/projects/$project">
-	>["dataProvider"];
 }
 
-function ApiTokenRow({ apiToken, dataProvider }: ApiTokenRowProps) {
+function ApiTokenRow({ apiToken }: ApiTokenRowProps) {
+	const dataProvider = useCloudNamespaceDataProvider();
 	const { mutate: revoke, isPending } = useMutation(
 		dataProvider.revokeApiTokenMutationOptions({
 			onSuccess: async () => {

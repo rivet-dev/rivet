@@ -23,7 +23,7 @@ export function Templates({
 	getTemplateLink?: (template: string) => LinkOptions;
 	startFromScratchLink?: LinkOptions;
 }) {
-	const showAll = useSearch({ from: "__root__", select: (s) => s.showAll });
+	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
 	return (
 		<>
 			<div className="grid grid-cols-3 gap-4 gap-y-10 my-4">

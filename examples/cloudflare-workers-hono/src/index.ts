@@ -1,14 +1,15 @@
-import { type Client, createHandler } from "@rivetkit/cloudflare-workers";
+import { createHandler } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
+import { createClient } from "rivetkit/client";
 import { registry } from "./registry";
 
+const client = createClient<typeof registry>();
+
 // Setup router
-const app = new Hono<{ Bindings: { RIVET: Client<typeof registry> } }>();
+const app = new Hono();
 
 // Example HTTP endpoint
 app.post("/increment/:name", async (c) => {
-	const client = c.env.RIVET;
-
 	const name = c.req.param("name");
 
 	const counter = client.counter.getOrCreate(name);

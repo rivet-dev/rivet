@@ -1,6 +1,5 @@
 import { faPlus, faQuestionCircle, faTrash, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { useDialog } from "@/app/use-dialog";
 import {
@@ -15,6 +14,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components";
+import { useCloudNamespaceDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 
 interface ApiTokensFrameContentProps extends DialogContentProps {}
@@ -22,9 +22,7 @@ interface ApiTokensFrameContentProps extends DialogContentProps {}
 export default function ApiTokensFrameContent({
 	onClose,
 }: ApiTokensFrameContentProps) {
-	const { dataProvider } = useRouteContext({
-		from: "/_context/_cloud/orgs/$organization/projects/$project",
-	});
+	const dataProvider = useCloudNamespaceDataProvider();
 
 	const { data, isLoading } = useQuery(dataProvider.apiTokensQueryOptions());
 
@@ -62,7 +60,7 @@ export default function ApiTokensFrameContent({
 								<TableHead>Token</TableHead>
 								<TableHead>Created</TableHead>
 								<TableHead>Expires</TableHead>
-								<TableHead w="min" />
+								<TableHead className="w-min" />
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -81,7 +79,6 @@ export default function ApiTokensFrameContent({
 									<ApiTokenRow
 										key={apiToken.id}
 										apiToken={apiToken}
-										dataProvider={dataProvider}
 									/>
 								))
 							)}
@@ -120,12 +117,10 @@ interface ApiTokenRowProps {
 		revoked: boolean;
 		lastFourChars: string;
 	};
-	dataProvider: ReturnType<
-		typeof useRouteContext<"/_context/_cloud/orgs/$organization/projects/$project">
-	>["dataProvider"];
 }
 
-function ApiTokenRow({ apiToken, dataProvider }: ApiTokenRowProps) {
+function ApiTokenRow({ apiToken }: ApiTokenRowProps) {
+	const dataProvider = useCloudNamespaceDataProvider();
 	const { mutate: revoke, isPending } = useMutation(
 		dataProvider.revokeApiTokenMutationOptions({
 			onSuccess: async () => {

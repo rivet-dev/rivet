@@ -1,9 +1,8 @@
 import { useClerk } from "@clerk/clerk-react";
-import type { Project } from "@rivet-gg/cloud";
+import type { Rivet } from "@rivet-gg/cloud";
 import {
 	faChevronDown,
 	faPlusCircle,
-	faSlash,
 	faSlashForward,
 	Icon,
 } from "@rivet-gg/icons";
@@ -374,7 +373,7 @@ function PrefetchedProjectListItem({
 	name,
 	displayName,
 	...props
-}: Project) {
+}: Rivet.Project) {
 	usePrefetchInfiniteQuery({
 		...useCloudDataProvider().currentOrgProjectNamespacesQueryOptions({
 			project: name,
@@ -397,7 +396,7 @@ function ProjectListItem({
 	displayName,
 	onHover,
 	onSelect,
-}: Project & {
+}: Rivet.Project & {
 	onHover?: () => void;
 	onSelect?: () => void;
 }) {

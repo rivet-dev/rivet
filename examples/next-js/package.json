@@ -14,10 +14,10 @@
 		"react": "19.1.0",
 		"react-dom": "19.1.0",
 		"next": "16.1.1",
-		"@rivetkit/next-js": "*",
+		"@rivetkit/next-js": "^2.0.38",
 		"@hono/node-server": "1.14.2",
 		"@hono/node-ws": "1.3.0",
-		"rivetkit": "*"
+		"rivetkit": "^2.0.38"
 	},
 	"devDependencies": {
 		"typescript": "^5",

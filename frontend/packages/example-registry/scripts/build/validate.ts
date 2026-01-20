@@ -92,9 +92,10 @@ export function validateRivetKitVersions(
 	for (const [pkgName, version] of Object.entries(allDeps)) {
 		// Check if it's a rivetkit or @rivetkit/* package
 		if (pkgName === "rivetkit" || pkgName.startsWith("@rivetkit/")) {
-			if (version !== "*") {
+			// Allow "*" or semver versions (^x.y.z, ~x.y.z, x.y.z, etc.)
+			if (version !== "*" && !/^[\^~]?\d+\.\d+\.\d+/.test(version)) {
 				throw new Error(
-					`Package version validation failed for ${exampleName}: Package "${pkgName}" version must be "*" (found "${version}")`,
+					`Package version validation failed for ${exampleName}: Package "${pkgName}" version must be "*" or a valid semver (found "${version}")`,
 				);
 			}
 		}

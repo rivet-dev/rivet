@@ -55,8 +55,4 @@ process.on("uncaughtException", (error) => {
 	process.exit(1);
 });
 
-const PORT = Number(process.env.PORT) || 3001;
-serve({
-	fetch: app.fetch,
-	port: PORT,
-});
+export default app;

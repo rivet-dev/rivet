@@ -201,18 +201,6 @@ export const templates: Template[] = [
     "noFrontend": true
   },
   {
-    "name": "cloudflare-workers-inline-client",
-    "displayName": "Cloudflare Workers Inline Client Example",
-    "description": "Simple example demonstrating accessing Rivet Actors via Cloudflare Workers without exposing a public API. This uses the `createInlineClient` function to connect directly to your Durable Object.",
-    "technologies": [
-      "rivet",
-      "cloudflare-workers",
-      "typescript"
-    ],
-    "tags": [],
-    "noFrontend": true
-  },
-  {
     "name": "cursors-raw-websocket",
     "displayName": "Real-time Collaborative Cursors (Raw WebSocket)",
     "description": "Demonstrates real-time cursor tracking and collaborative canvas using raw WebSocket handlers instead of RivetKit's higher-level WebSocket abstraction.",

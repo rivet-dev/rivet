@@ -7,7 +7,13 @@ async function main() {
 		platform: "node",
 		target: "node14",
 		format: "cjs",
-		outdir: "node",
+		outdir: "node/cjs",
+	});
+	await bundle({
+		platform: "node",
+		target: "node14",
+		format: "esm",
+		outdir: "node/esm",
 	});
 	await bundle({
 		platform: "browser",

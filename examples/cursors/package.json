@@ -24,11 +24,11 @@
   "dependencies": {
     "@hono/node-server": "^1.19.7",
     "@hono/node-ws": "^1.3.0",
-    "@rivetkit/react": "*",
+    "@rivetkit/react": "^2.0.38",
     "hono": "^4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "rivetkit": "*",
+    "rivetkit": "^2.0.38",
     "srvx": "^0.10.0"
   },
   "stableVersion": "0.8.0",
