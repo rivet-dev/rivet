@@ -152,6 +152,7 @@ const Sidebar = ({
 	ref?: RefObject<ImperativePanelHandle | null>;
 } & ComponentProps<typeof ResizablePanel>) => {
 	const sidebarMinWidth = useContext(SidebarDimensionsContext);
+	const matchRoute = useMatchRoute();
 	return (
 		<>
 			<ResizablePanel
@@ -193,16 +194,20 @@ const Sidebar = ({
 								return (
 									<>
 										<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-											<HeaderLink
-												to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-												className="font-normal"
-												icon={faCog}
-											>
-												Settings
-											</HeaderLink>
+											{matchRoute({
+												to: "/orgs/$organization/projects/$project/ns/$namespace",
+												fuzzy: true,
+											}) ? (
+												<HeaderLink
+													to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+													className="font-normal"
+													icon={faCog}
+												>
+													Settings
+												</HeaderLink>
+											) : null}
 											<HelpDropdown>
 												<HeaderButton
-													size="xs"
 													startIcon={
 														<Icon
 															icon={
@@ -218,7 +223,6 @@ const Sidebar = ({
 
 											<Changelog>
 												<HeaderButton
-													size="xs"
 													startIcon={
 														<Icon
 															icon={faGift}
@@ -252,7 +256,7 @@ const Sidebar = ({
 								<>
 									<div className="flex gap-0.5 my-2 px-2.5 flex-col">
 										<Changelog>
-											<HeaderButton size="xs">
+											<HeaderButton asChild>
 												<a
 													href="https://www.rivet.dev/changelog"
 													target="_blank"
@@ -266,7 +270,7 @@ const Sidebar = ({
 												</a>
 											</HeaderButton>
 										</Changelog>
-										<HeaderButton asChild size="xs">
+										<HeaderButton asChild>
 											<Link
 												to="."
 												search={(old) => ({
@@ -278,8 +282,6 @@ const Sidebar = ({
 											</Link>
 										</HeaderButton>
 										<HeaderButton
-											className="text-muted-foreground justify-start py-1 h-auto"
-											size="xs"
 											asChild
 											endIcon={
 												<Icon
@@ -297,9 +299,6 @@ const Sidebar = ({
 											</a>
 										</HeaderButton>
 										<HeaderButton
-											variant="ghost"
-											className="text-muted-foreground justify-start py-1 h-auto"
-											size="xs"
 											asChild
 											endIcon={
 												<Icon
@@ -317,9 +316,6 @@ const Sidebar = ({
 											</a>
 										</HeaderButton>
 										<HeaderButton
-											variant="ghost"
-											size="xs"
-											className="text-muted-foreground justify-start py-1 h-auto"
 											asChild
 											endIcon={
 												<Icon
