@@ -1,5 +1,5 @@
 import { faChevronLeft, faChevronRight, Icon } from "@rivet-gg/icons";
-import { deployOptions } from "@rivetkit/example-registry";
+import { deployOptions, templates } from "@rivetkit/example-registry";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -13,7 +13,6 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import posthog from "posthog-js";
 import { Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match, P } from "ts-pattern";
@@ -375,12 +374,13 @@ function Connector() {
 
 function BackendSetup({ template }: { template?: string }) {
 	const provider = useWatch({ name: "provider" });
+	const templateDetails = templates.find((t) => t.name === template);
 	const options = deployOptions.find((p) => p.name === provider);
 	return (
 		<div className="flex flex-col gap-6">
 			{match({ template, provider })
 				.with({ provider: "vercel", template: P.string }, () => (
-					<DeployToVercelCard template={template} />
+					<DeployToVercelCard template={templateDetails?.providers.vercel.name || template || "chat-room"} />
 				))
 				// .with("railway", () => (
 				// 	<RailwayQuickSetupInfo template={template} />
