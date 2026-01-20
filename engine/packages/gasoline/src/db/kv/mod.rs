@@ -1060,7 +1060,7 @@ impl Database for DatabaseKv {
 					let tx = tx.with_subspace(self.subspace.clone());
 					let now = rivet_util::timestamp::now();
 
-					// All wake conditions with a timestamp after this timestamp will be pulled
+					// All wake conditions with a timestamp before this timestamp will be pulled
 					let pull_before = now + i64::try_from(self.worker_poll_interval().as_millis())?;
 					// Only consider workers that have pinged within 2 ping intervals ago
 					let active_workers_after = now - i64::try_from(PING_INTERVAL.as_millis() * 2)?;
@@ -1184,7 +1184,7 @@ impl Database for DatabaseKv {
 
 					// Collect name and deadline ts for each wf id
 					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();
-					let now = rivet_util::timestamp::now();
+					let now = rivet_util::timestamp::now(); // More up to date now than prev var
 					for wake_key in &wake_keys {
 						// Record time difference between when the wake condition was created and when it was
 						// pulled (here). We ignore deadline wake conditions because their ts value is not
