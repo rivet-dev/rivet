@@ -288,7 +288,8 @@ function ProjectList({
 									startIcon={<Icon icon={faPlusCircle} />}
 									onClick={() => {
 										onHover?.(null);
-										navigate({
+										onClose?.();
+										return navigate({
 											to: ".",
 											search: (old) => ({
 												...old,
@@ -344,7 +345,8 @@ function ProjectList({
 							keywords={["create", "new", "project"]}
 							onSelect={() => {
 								onHover?.(null);
-								navigate({
+								onClose?.();
+								return navigate({
 									to: ".",
 									search: (old) => ({
 										...old,
@@ -466,7 +468,8 @@ function NamespaceList({
 									size="sm"
 									startIcon={<Icon icon={faPlusCircle} />}
 									onClick={() => {
-										navigate({
+										onClose?.();
+										return navigate({
 											to: ".",
 											search: (old) => ({
 												...old,
@@ -490,10 +493,11 @@ function NamespaceList({
 									]}
 									className="static w-full"
 									onSelect={() => {
+										onClose?.();
 										clerk.setActive({
 											organization,
 										});
-										navigate({
+										return navigate({
 											to: "/orgs/$organization/projects/$project/ns/$namespace",
 											params: {
 												organization: organization,
@@ -501,7 +505,6 @@ function NamespaceList({
 												namespace: namespace.name,
 											},
 										});
-										onClose?.();
 									}}
 								>
 									<span className="truncate w-full">
@@ -523,7 +526,8 @@ function NamespaceList({
 						<CommandItem
 							keywords={["create", "new", "namespace"]}
 							onSelect={() => {
-								navigate({
+								onClose?.();
+								return navigate({
 									to: ".",
 									search: (old) => ({
 										...old,

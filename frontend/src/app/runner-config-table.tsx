@@ -40,6 +40,7 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
+import { RivetActorError } from "@/queries/types";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;
@@ -217,7 +218,7 @@ function StatusCell({
 	datacenters: Record<string, Rivet.RunnerConfigResponse>;
 }) {
 	const errors = useMemo(() => {
-		const errorMap: Record<string, object | undefined> = {};
+		const errorMap: Record<string, RivetActorError | undefined> = {};
 		let hasErrors = false;
 		for (const [dc, config] of Object.entries(datacenters)) {
 			if (config.runnerPoolError) {

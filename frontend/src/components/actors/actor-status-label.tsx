@@ -1,4 +1,3 @@
-import type { Rivet } from "@rivetkit/engine-api-full";
 import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
 import { isObject } from "lodash";
@@ -15,6 +14,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Code } from "../ui/typography";
 import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
+import { RivetActorError } from "@/queries/types";
 
 export const ACTOR_STATUS_LABEL_MAP = {
 	unknown: "Unknown",
@@ -159,13 +159,7 @@ export function QueriedActorError({ actorId }: { actorId: ActorId }) {
 export function RunnerPoolError({
 	error,
 }: {
-	error:
-		| string
-		| null
-		| { runner_id: string }
-		| { serverless_http_error: unknown }
-		| { serverless_connection_error: unknown }
-		| { serverless_invalid_sse_payload: unknown };
+	error: RivetActorError
 }) {
 	return match(error)
 		.with(P.nullish, () => null)
@@ -241,13 +235,13 @@ export function ErrorDetails({ error }: { error: unknown }) {
 		<Accordion
 			type="single"
 			collapsible
-			className="mt-4 max-w-full min-w-0"
+			className="mt-4 max-w-full min-w-0 pb-0"
 		>
 			<AccordionItem value="error-details">
 				<AccordionTrigger className="gap-1 p-0 max-w-full min-w-0">
 					View Error Details
 				</AccordionTrigger>
-				<AccordionContent className="max-w-full min-w-0 ">
+				<AccordionContent className="max-w-full min-w-0 pb-0 ">
 					{json ? (
 						<div className="not-prose my-4 rounded-lg border p-1 bg-background">
 							<ScrollArea className="w-full">
