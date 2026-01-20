@@ -1,0 +1,94 @@
+name: frontend
+
+on:
+  pull_request:
+    paths:
+      - frontend/**
+      - engine/sdks/typescript/**
+      - rivetkit-typescript/**
+      - website/**
+
+jobs:
+  dashboard-quality-check:
+    name: Dashboard / Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: biomejs/setup-biome@v2
+        with:
+          version: latest
+      - run: biome check ./frontend --reporter=github
+  rivetkit-quality-check:
+    name: RivetKit / Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: biomejs/setup-biome@v2
+        with:
+          version: latest
+      - run: biome check ./rivetkit-typescript --reporter=github
+  # website-quality-check:
+  #   name: Website / Quality Check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: biomejs/setup-biome@v2
+  #       with:
+  #         version: latest
+  #     - run: biome check ./website --reporter=github
+  dashboard-type-check:
+    name: Dashboard / Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - run: pnpm build --filter='./frontend'
+      - run: pnpm check-types
+        working-directory: ./frontend
+  rivetkit-type-check:
+    name: RivetKit / Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          lfs: 'true'
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - run: pnpm build --filter='./rivetkit-typescript'
+      - run: pnpm check-types
+        working-directory: ./rivetkit-typescript
+  # website-type-check:
+  #   name: Website / Type Check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         lfs: 'true'
+  #     - uses: actions/cache@v4
+  #       with:
+  #         path: .turbo
+  #         key: ${{ runner.os }}-turbo-${{ github.sha }}
+  #         restore-keys: |
+  #           ${{ runner.os }}-turbo-
+  #     - uses: pnpm/action-setup@v4
+  #     - run: pnpm install
+  #     - run: pnpm build
+  #     - run: pnpm check-types
+  #       working-directory: ./website
+
+    

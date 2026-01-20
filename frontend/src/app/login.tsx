@@ -23,13 +23,15 @@ export function Login() {
 	const clerk = useClerk();
 	const { user } = useUser();
 	const navigate = useNavigate();
-	const from = useSearch({ from: "__root__", select: (s) => s.from });
+	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 
 	// HACK: redirect if user is already logged in, race condition with clerk
 	// biome-ignore lint/correctness/useExhaustiveDependencies: from is stable
 	useEffect(() => {
 		if (user) {
-			return navigate({ to: from ?? "/", search: true });
+			// biome-ignore lint/nursery/noFloatingPromises: ignore
+			navigate({ to: from ?? "/", search: true });
+			return;
 		}
 	}, [user, navigate]);
 

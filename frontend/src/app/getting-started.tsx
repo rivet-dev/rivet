@@ -31,7 +31,10 @@ import {
 	Ping,
 	Skeleton,
 } from "@/components";
-import { useDataProvider } from "@/components/actors";
+import {
+	useDataProvider,
+	useEngineCompatDataProvider,
+} from "@/components/actors";
 import { TemplatesList } from "@/components/templates-list";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
@@ -84,7 +87,7 @@ export function GettingStarted({
 	template?: string;
 	noTemplate?: boolean;
 }) {
-	const dataProvider = useDataProvider();
+	const dataProvider = useEngineCompatDataProvider();
 	const { data: datacenters } = useSuspenseInfiniteQuery(
 		dataProvider.datacentersQueryOptions(),
 	);

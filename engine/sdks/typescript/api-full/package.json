@@ -10,21 +10,30 @@
   ],
   "exports": {
     ".": {
-      "node": "./dist/node/index.js",
+      "node": {
+        "import": "./dist/node/esm/index.js",
+        "require": "./dist/node/cjs/index.js"
+      },
       "import": "./dist/browser/esm/index.js",
       "require": "./dist/browser/cjs/index.js",
       "default": "./dist/browser/cjs/index.js",
       "types": "./types/index.d.ts"
     },
     "./core": {
-      "node": "./dist/node/core.js",
+      "node": {
+        "import": "./dist/node/esm/core.js",
+        "require": "./dist/node/cjs/core.js"
+      },
       "import": "./dist/browser/esm/core.js",
       "require": "./dist/browser/cjs/core.js",
       "default": "./dist/browser/cjs/core.js",
       "types": "./types/core/index.d.ts"
     },
     "./serialization": {
-      "node": "./dist/node/serialization.js",
+      "node": {
+        "import": "./dist/node/esm/serialization.js",
+        "require": "./dist/node/cjs/serialization.js"
+      },
       "import": "./dist/browser/esm/serialization.js",
       "require": "./dist/browser/cjs/serialization.js",
       "default": "./dist/browser/cjs/serialization.js",

@@ -31,7 +31,7 @@ type SubmitHandler<FormValues extends FieldValues> = (
 	form: UseFormReturn<FormValues>,
 ) => Promise<void> | void;
 
-export const createSchemaForm = <Schema extends z.ZodSchema>(
+export const createSchemaForm = <Schema extends z.ZodType<any>>(
 	schema: Schema,
 ) => {
 	return {
@@ -46,7 +46,10 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 			...props
 		}: FormProps<z.TypeOf<Schema>>) => {
 			const form = useForm<z.TypeOf<Schema>>({
-				resolver: zodResolver(schema),
+				resolver: zodResolver(
+					// @ts-expect-error zodResolver types are broken for zod v4
+					schema,
+				),
 				mode,
 				reValidateMode: revalidateMode,
 				defaultValues,

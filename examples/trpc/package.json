@@ -22,7 +22,7 @@
 		"@trpc/client": "^11.3.1",
 		"@trpc/server": "^11.4.2",
 		"hono": "^4.7.11",
-		"rivetkit": "*",
+		"rivetkit": "^2.0.38",
 		"srvx": "^0.10.0",
 		"zod": "^3.25.76"
 	},

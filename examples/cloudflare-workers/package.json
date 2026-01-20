@@ -18,8 +18,8 @@
 		"wrangler": "^4.22.0"
 	},
 	"dependencies": {
-		"rivetkit": "*",
-		"@rivetkit/cloudflare-workers": "*"
+		"rivetkit": "^2.0.38",
+		"@rivetkit/cloudflare-workers": "^2.0.38"
 	},
 	"stableVersion": "0.8.0",
 	"template": {

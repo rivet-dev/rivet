@@ -5,9 +5,16 @@ import {
 	useRouteContext,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
-import type { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
-import type { createNamespaceContext as createNamespaceEngineContext } from "@/app/data-providers/engine-data-provider";
-import type { createGlobalContext } from "@/app/data-providers/inspector-data-provider";
+import type {
+	createNamespaceContext as createNamespaceCloudContext,
+	createOrganizationContext as createOrganizationCloudContext,
+	createProjectContext as createProjectCloudContext,
+} from "@/app/data-providers/cloud-data-provider";
+import type {
+	createGlobalContext as createGlobalEngineContext,
+	createNamespaceContext as createNamespaceEngineContext,
+} from "@/app/data-providers/engine-data-provider";
+import type { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
 
 export const useDataProvider = () => {
 	return match(__APP_TYPE__)
@@ -124,7 +131,17 @@ export const useEngineCompatDataProvider = () => {
 	return useRouteContext({
 		from: routePath,
 	}).dataProvider as
-		| ReturnType<typeof createNamespaceEngineContext>
-		| ReturnType<typeof createNamespaceContext>
-		| ReturnType<typeof createGlobalContext>;
+		| EngineDataProvider
+		| CloudDataProvider
+		| InspectorDataProvider;
 };
+
+type EngineDataProvider = ReturnType<typeof createNamespaceEngineContext> &
+	ReturnType<typeof createGlobalEngineContext>;
+
+type CloudDataProvider = ReturnType<typeof createNamespaceCloudContext> &
+	ReturnType<typeof createProjectCloudContext> &
+	ReturnType<typeof createOrganizationCloudContext> &
+	ReturnType<typeof createGlobalInspectorContext>;
+
+type InspectorDataProvider = ReturnType<typeof createGlobalInspectorContext>;
