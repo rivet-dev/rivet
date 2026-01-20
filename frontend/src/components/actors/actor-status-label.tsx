@@ -95,27 +95,47 @@ export function ActorError({ error }: { error: object | string }) {
 				))
 				.otherwise(() => <p>Unknown error: {errMsg}</p>),
 		)
-		.with(P.shape({ runner_pool_error: P.shape({ runner_id: P.string }) }), (err) => (
-			<RunnerPoolError error={err.runner_pool_error} />
-		))
-		.with(P.shape({ runner_no_response: P.shape({ runner_id: P.string }) }), (err) => (
-			<p>
-				Runner ({err.runner_no_response.runner_id}) was allocated but Actor
-				did not respond.
-			</p>
-		))
-		.with(P.shape({ runner_connection_lost: P.shape({ runner_id: P.string }) }), (err) => (
-			<p>
-				Runner ({err.runner_connection_lost.runner_id}) connection was lost
-				(no recent ping, network issue, or crash).
-			</p>
-		))
-		.with(P.shape({ runner_draining_timeout: P.shape({ runner_id: P.string }) }), (err) => (
-			<p>
-				Runner ({err.runner_draining_timeout.runner_id}) was draining but
-				Actor didn't stop in time.
-			</p>
-		))
+		.with(
+			P.shape({
+				runner_pool_error: P.shape({ runner_id: P.string })
+					.or(P.shape({ serverless_http_error: P.any }))
+					.or(P.string)
+					.or(P.shape({ serverless_connection_error: P.any }))
+					.or(P.shape({ serverless_invalid_sse_payload: P.any })),
+			}),
+			(err) => <RunnerPoolError error={err.runner_pool_error} />,
+		)
+		.with(
+			P.shape({ runner_no_response: P.shape({ runner_id: P.string }) }),
+			(err) => (
+				<p>
+					Runner ({err.runner_no_response.runner_id}) was allocated
+					but Actor did not respond.
+				</p>
+			),
+		)
+		.with(
+			P.shape({
+				runner_connection_lost: P.shape({ runner_id: P.string }),
+			}),
+			(err) => (
+				<p>
+					Runner ({err.runner_connection_lost.runner_id}) connection
+					was lost (no recent ping, network issue, or crash).
+				</p>
+			),
+		)
+		.with(
+			P.shape({
+				runner_draining_timeout: P.shape({ runner_id: P.string }),
+			}),
+			(err) => (
+				<p>
+					Runner ({err.runner_draining_timeout.runner_id}) was
+					draining but Actor didn't stop in time.
+				</p>
+			),
+		)
 		.with(P.shape({ crashed: P.shape({ message: P.string }) }), (err) => (
 			<p>Actor crashed. {err.crashed.message} </p>
 		))
@@ -139,7 +159,13 @@ export function QueriedActorError({ actorId }: { actorId: ActorId }) {
 export function RunnerPoolError({
 	error,
 }: {
-	error: object | string | undefined;
+	error:
+		| string
+		| null
+		| { runner_id: string }
+		| { serverless_http_error: unknown }
+		| { serverless_connection_error: unknown }
+		| { serverless_invalid_sse_payload: unknown };
 }) {
 	return match(error)
 		.with(P.nullish, () => null)
@@ -153,34 +179,52 @@ export function RunnerPoolError({
 				))
 				.otherwise(() => <p>Unknown runner pool error</p>),
 		)
-		.with(P.shape({ serverless_http_error: P.shape({ status_code: P.number, body: P.string }) }), (errObj) => {
-			const { status_code, body } = errObj.serverless_http_error;
-			const code = status_code ?? "unknown";
-			return (
-				<>
-					<p>Serverless HTTP error with status code {code}</p>
-					{body ? <ErrorDetails error={body} /> : null}
-				</>
-			);
-		})
-		.with(P.shape({ serverless_connection_error: P.shape({ message: P.string }) }), (errObj) => {
-			const message = errObj.serverless_connection_error?.message;
-			return (
-				<>
-					<p>Unable to connect to serverless endpoint</p>
-					{message ? <ErrorDetails error={message} /> : null}
-				</>
-			);
-		})
-		.with(P.shape({ serverless_invalid_sse_payload: P.shape({ message: P.string }) }), (errObj) => {
-			const message = errObj.serverless_invalid_sse_payload?.message;
-			return (
-				<>
-					<p>Request payload validation failed</p>
-					{message ? <ErrorDetails error={message} /> : null}
-				</>
-			);
-		})
+		.with(
+			P.shape({
+				serverless_http_error: P.shape({
+					status_code: P.number,
+					body: P.string,
+				}),
+			}),
+			(errObj) => {
+				const { status_code, body } = errObj.serverless_http_error;
+				const code = status_code ?? "unknown";
+				return (
+					<>
+						<p>Serverless HTTP error with status code {code}</p>
+						{body ? <ErrorDetails error={body} /> : null}
+					</>
+				);
+			},
+		)
+		.with(
+			P.shape({
+				serverless_connection_error: P.shape({ message: P.string }),
+			}),
+			(errObj) => {
+				const message = errObj.serverless_connection_error?.message;
+				return (
+					<>
+						<p>Unable to connect to serverless endpoint</p>
+						{message ? <ErrorDetails error={message} /> : null}
+					</>
+				);
+			},
+		)
+		.with(
+			P.shape({
+				serverless_invalid_sse_payload: P.shape({ message: P.string }),
+			}),
+			(errObj) => {
+				const message = errObj.serverless_invalid_sse_payload?.message;
+				return (
+					<>
+						<p>Request payload validation failed</p>
+						{message ? <ErrorDetails error={message} /> : null}
+					</>
+				);
+			},
+		)
 		.otherwise(() => {
 			return <p>Unknown runner pool error.</p>;
 		});

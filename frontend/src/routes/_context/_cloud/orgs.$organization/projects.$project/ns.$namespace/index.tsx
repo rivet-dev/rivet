@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
 import { BuildPrefiller } from "@/app/build-prefiller";
-import { PendingRouteLayout } from "@/app/route-layout";
+import { FullscreenLoading } from "@/components";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
@@ -16,7 +16,7 @@ export const Route = createFileRoute(
 			throw notFound();
 		}
 	},
-	pendingComponent: PendingRouteLayout,
+	pendingComponent: FullscreenLoading,
 });
 
 export function RouteComponent() {

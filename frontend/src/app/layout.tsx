@@ -196,13 +196,13 @@ const Sidebar = ({
 											<HeaderLink
 												to="/orgs/$organization/projects/$project/ns/$namespace/settings"
 												className="font-normal"
-												{...props}
 												icon={faCog}
 											>
 												Settings
 											</HeaderLink>
 											<HelpDropdown>
 												<HeaderButton
+													size="xs"
 													startIcon={
 														<Icon
 															icon={
@@ -218,6 +218,7 @@ const Sidebar = ({
 
 											<Changelog>
 												<HeaderButton
+													size="xs"
 													startIcon={
 														<Icon
 															icon={faGift}
@@ -249,94 +250,93 @@ const Sidebar = ({
 							})
 							.otherwise(() => (
 								<>
-									<Changelog>
-										<Button
+									<div className="flex gap-0.5 my-2 px-2.5 flex-col">
+										<Changelog>
+											<HeaderButton size="xs">
+												<a
+													href="https://www.rivet.dev/changelog"
+													target="_blank"
+													rel="noopener"
+												>
+													Whats new?
+													<Ping
+														className="relative -right-1"
+														data-changelog-ping
+													/>
+												</a>
+											</HeaderButton>
+										</Changelog>
+										<HeaderButton asChild size="xs">
+											<Link
+												to="."
+												search={(old) => ({
+													...old,
+													modal: "feedback",
+												})}
+											>
+												Feedback
+											</Link>
+										</HeaderButton>
+										<HeaderButton
 											className="text-muted-foreground justify-start py-1 h-auto"
-											variant="ghost"
 											size="xs"
 											asChild
+											endIcon={
+												<Icon
+													icon={faArrowUpRight}
+													className="ms-1"
+												/>
+											}
 										>
 											<a
-												href="https://www.rivet.dev/changelog"
+												href="https://www.rivet.dev/docs"
 												target="_blank"
-												rel="noopener"
+												rel="noopener noreferrer"
 											>
-												Whats new?
-												<Ping
-													className="relative -right-1"
-													data-changelog-ping
-												/>
+												Documentation
 											</a>
-										</Button>
-									</Changelog>
-									<Button
-										className="text-muted-foreground justify-start py-1 h-auto"
-										variant="ghost"
-										size="xs"
-										asChild
-									>
-										<Link
-											to="."
-											search={(old) => ({
-												...old,
-												modal: "feedback",
-											})}
+										</HeaderButton>
+										<HeaderButton
+											variant="ghost"
+											className="text-muted-foreground justify-start py-1 h-auto"
+											size="xs"
+											asChild
+											endIcon={
+												<Icon
+													icon={faArrowUpRight}
+													className="ms-1"
+												/>
+											}
 										>
-											Feedback
-										</Link>
-									</Button>
-									<Button
-										className="text-muted-foreground justify-start py-1 h-auto"
-										variant="ghost"
-										size="xs"
-										asChild
-									>
-										<a
-											href="https://www.rivet.dev/docs"
-											target="_blank"
-											rel="noopener noreferrer"
+											<a
+												href="http://www.rivet.dev/discord"
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												Discord
+											</a>
+										</HeaderButton>
+										<HeaderButton
+											variant="ghost"
+											size="xs"
+											className="text-muted-foreground justify-start py-1 h-auto"
+											asChild
+											endIcon={
+												<Icon
+													icon={faArrowUpRight}
+													className="ms-1"
+												/>
+											}
 										>
-											Documentation
-										</a>
-									</Button>
-									<Button
-										variant="ghost"
-										className="text-muted-foreground justify-start py-1 h-auto"
-										size="xs"
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
-									>
-										<a
-											href="http://www.rivet.dev/discord"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Discord
-										</a>
-									</Button>
-									<Button
-										variant="ghost"
-										size="xs"
-										className="text-muted-foreground justify-start py-1 h-auto"
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
-									>
-										<a
-											href="http://github.com/rivet-dev/rivet"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											GitHub
-										</a>
-									</Button>
+											<a
+												href="http://github.com/rivet-dev/rivet"
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												GitHub
+											</a>
+										</HeaderButton>
+									</div>
 								</>
 							))}
 					</div>
