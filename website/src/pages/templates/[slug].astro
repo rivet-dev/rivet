@@ -6,7 +6,7 @@ import { templates, TECHNOLOGIES, TAGS, type Template } from '@/data/templates/s
 import { VanillaMarkdown } from '@/components/VanillaMarkdown';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { Code } from '@/components/v2/Code';
-import { Icon, faCloud, faGithub } from '@rivet-gg/icons';
+import { Icon, faCloud, faGithub, faVercel } from '@rivet-gg/icons';
 
 export async function getStaticPaths() {
 	return templates.map((template) => ({
@@ -151,6 +151,18 @@ const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 									<Icon icon={faCloud} className="text-sm" />
 									Deploy 
 								</a>
+								{template.providers.vercel && (
+									<a
+										href={template.providers.vercel.deployUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
+									>
+										
+										<Icon icon={faVercel} className="text-sm" />
+										Deploy with Vercel
+									</a>
+								)}
 								<a
 									href={githubUrl}
 									target="_blank"

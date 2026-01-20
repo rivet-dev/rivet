@@ -187,7 +187,7 @@
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "^0.13.0",
-		"@biomejs/biome": "^2.2.3",
+		"@biomejs/biome": "^2.3",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
 		"@types/invariant": "^2",

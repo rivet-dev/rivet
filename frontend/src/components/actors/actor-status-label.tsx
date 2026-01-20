@@ -156,11 +156,7 @@ export function QueriedActorError({ actorId }: { actorId: ActorId }) {
 	return <ActorError error={error} />;
 }
 
-export function RunnerPoolError({
-	error,
-}: {
-	error: RivetActorError
-}) {
+export function RunnerPoolError({ error }: { error: RivetActorError }) {
 	return match(error)
 		.with(P.nullish, () => null)
 		.with(P.string, (errStr) =>
