@@ -442,6 +442,140 @@ This is enforced by the tsconfig options `allowImportingTsExtensions` and `rewri
 6. **Testing** - Use `setupTest()` from `rivetkit/test` for isolated actor testing
 7. **Comments** - Include helpful comments linking to documentation (e.g., `// https://rivet.dev/docs/actors/state`)
 
+## Vercel Examples
+
+Vercel-optimized versions of examples are automatically generated using the script at `scripts/vercel-examples/generate-vercel-examples.ts`. These examples use the `hono/vercel` adapter and are configured specifically for Vercel serverless deployment.
+
+### Generation Script
+
+```bash
+# Generate all changed examples (uses git diff)
+npx tsx scripts/vercel-examples/generate-vercel-examples.ts
+
+# Generate a specific example
+npx tsx scripts/vercel-examples/generate-vercel-examples.ts --example hello-world
+
+# Force regenerate all examples
+npx tsx scripts/vercel-examples/generate-vercel-examples.ts --all
+
+# Dry run (show what would be generated)
+npx tsx scripts/vercel-examples/generate-vercel-examples.ts --dry-run
+```
+
+### Naming Convention
+
+Vercel examples are placed at `examples/{original-name}-vercel/`. For example:
+- `hello-world` → `hello-world-vercel`
+- `chat-room` → `chat-room-vercel`
+
+### Directory Layout
+
+Vercel examples with frontend:
+```
+example-name-vercel/
+├── api/
+│   └── index.ts        # Hono handler with hono/vercel adapter
+├── src/
+│   ├── actors.ts       # Actor definitions (copied from origin)
+│   └── server.ts       # Server entry point (copied from origin)
+├── frontend/
+│   ├── App.tsx         # React component (copied from origin)
+│   └── main.tsx        # React entry point (copied from origin)
+├── index.html          # HTML entry point (copied from origin)
+├── package.json        # Modified for Vercel
+├── tsconfig.json       # Modified for Vercel
+├── vite.config.ts      # Simplified (no srvx)
+├── vercel.json         # Vercel configuration
+├── turbo.json
+└── README.md           # With Vercel-specific note and deploy button
+```
+
+Vercel examples without frontend (API-only):
+```
+example-name-vercel/
+├── api/
+│   └── index.ts        # Hono handler with hono/vercel adapter
+├── src/
+│   ├── actors.ts
+│   └── server.ts
+├── package.json
+├── tsconfig.json
+├── vercel.json
+├── turbo.json
+└── README.md
+```
+
+### Key Files
+
+#### api/index.ts
+
+The API entry point uses the Hono Vercel adapter (built into the `hono` package):
+
+```typescript
+import { handle } from "hono/vercel";
+import app from "../src/server.ts";
+
+export default handle(app);
+```
+
+#### vercel.json
+
+For examples with frontend:
+```json
+{
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" }
+  ]
+}
+```
+
+For API-only examples:
+```json
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api" }
+  ]
+}
+```
+
+#### package.json
+
+Key differences from origin examples:
+- Removes `srvx` and `vite-plugin-srvx`
+- Uses `vercel dev` for development
+- Simplified build scripts
+- Uses `hono/vercel` adapter (built into the `hono` package)
+
+#### README.md
+
+Each Vercel example README includes:
+- A note explaining it's the Vercel-optimized version with a link back to the origin
+- A "Deploy with Vercel" button for one-click deployment
+
+Example header:
+```markdown
+> **Note:** This is the Vercel-optimized version of the [hello-world](../hello-world) example.
+> It uses the `hono/vercel` adapter and is configured for Vercel deployment.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=...)
+```
+
+### Skipped Examples
+
+The following example types are not converted to Vercel:
+- **Next.js examples** (`*-next-js`): Next.js has its own Vercel integration
+- **Cloudflare examples** (`*-cloudflare*`): Different runtime environment
+- **Deno examples**: Different runtime environment
+- **Examples without `src/server.ts`**: Cannot be converted
+
+### Workflow
+
+1. Make changes to an origin example (e.g., `hello-world`)
+2. Run the generation script to update the Vercel version
+3. The script detects changes via git diff and only regenerates modified examples
+4. Commit both the origin and generated Vercel examples
+
 ## TODO: Examples Cleanup
 
 The following issues need to be fixed across examples:

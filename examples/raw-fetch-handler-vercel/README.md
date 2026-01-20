@@ -1,0 +1,52 @@
+> **Note:** This is the Vercel-optimized version of the [raw-fetch-handler](../raw-fetch-handler) example.
+> It uses the `hono/vercel` adapter and is configured for Vercel deployment.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fraw-fetch-handler-vercel&project-name=raw-fetch-handler-vercel)
+
+# Raw Fetch Handler Example
+
+Example project demonstrating raw HTTP fetch handling with Hono integration.
+
+## Getting Started
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/raw-fetch-handler
+npm install
+npm run dev
+```
+
+
+## Features
+
+- **Raw fetch handlers**: Use `onRequest` for low-level HTTP request handling with custom routing
+- **Hono integration**: Embed Hono router inside actor fetch handlers using `createVars`
+- **HTTP endpoints**: Define custom HTTP endpoints directly within actors
+- **Proxy routing**: Forward HTTP requests from external endpoints to actor fetch handlers
+- **Multiple actor instances**: Each named counter maintains independent state
+
+## Implementation
+
+The backend defines a counter actor with a Hono router embedded in the `onRequest` handler. Each counter is identified by a unique name, and the frontend can interact with counters through direct actor fetch calls or HTTP requests through a forward endpoint. Multiple counters maintain independent state.
+
+### Key Implementation
+
+- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/raw-fetch-handler/src/backend/registry.ts)): Demonstrates `onRequest` handler with Hono router for custom HTTP routing
+
+## Project Structure
+
+```
+raw-fetch-handler/
+├── src/
+│   ├── backend/     # RivetKit server with counter actors
+│   └── frontend/    # React app demonstrating client interactions
+└── tests/           # Vitest test suite
+```
+
+## Resources
+
+Read more about [HTTP request handling](/docs/actors/http), [state](/docs/actors/state), and [actions](/docs/actors/actions).
+
+## License
+
+MIT

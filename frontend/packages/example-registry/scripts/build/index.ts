@@ -73,6 +73,22 @@ interface Template {
 	tags: string[];
 	noFrontend: boolean;
 	priority?: number;
+	providers: {
+		vercel?: {
+			name: string;
+			deployUrl: string;
+		};
+	}
+}
+
+const VERCEL_SUFFIX = "-vercel";
+
+function generateVercelDeployUrl(exampleName: string): string {
+	const repoUrl = encodeURIComponent(
+		`https://github.com/rivet-gg/rivet/tree/main/examples/${exampleName}${VERCEL_SUFFIX}`
+	);
+	const projectName = encodeURIComponent(`${exampleName}${VERCEL_SUFFIX}`);
+	return `https://vercel.com/new/clone?repository-url=${repoUrl}&project-name=${projectName}`;
 }
 
 function validateTechnologiesAndTags(
@@ -224,7 +240,16 @@ async function main() {
 	const examplesData: ExampleData[] = [];
 	const errors: Array<{ example: string; error: Error }> = [];
 
+	// Collect all directory names for Vercel variant detection
+	const allDirNames = new Set(exampleDirs.map((d) => d.name));
+
 	for (const dir of exampleDirs) {
+		// Skip Vercel variant examples (they'll be linked from origin examples)
+		if (dir.name.endsWith(VERCEL_SUFFIX)) {
+			console.log(`⏭️  Skipping ${dir.name} (Vercel variant)`);
+			continue;
+		}
+
 		const packageJsonPath = path.join(examplesDir, dir.name, "package.json");
 		const readmePath = path.join(examplesDir, dir.name, "README.md");
 
@@ -292,6 +317,10 @@ async function main() {
 				? packageJson.template.technologies
 				: ["rivet", ...packageJson.template.technologies];
 
+			// Check if a Vercel variant exists for this example
+			const vercelVariantName = `${dir.name}${VERCEL_SUFFIX}`;
+			const hasVercelVariant = allDirNames.has(vercelVariantName);
+
 			templates.push({
 				name: dir.name,
 				displayName,
@@ -300,6 +329,13 @@ async function main() {
 				tags: packageJson.template.tags,
 				noFrontend: packageJson.template.noFrontend ?? false,
 				priority: packageJson.template.priority,
+				providers: {
+					...(hasVercelVariant && {vercel: {
+							name: vercelVariantName,
+							deployUrl: generateVercelDeployUrl(dir.name),
+						}
+					}),
+				}
 			});
 
 			// Collect example data for Railway sync
