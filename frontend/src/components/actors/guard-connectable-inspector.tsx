@@ -3,6 +3,7 @@
 import {
 	faExclamationTriangle,
 	faPowerOff,
+	faQuestionCircle,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
@@ -16,6 +17,7 @@ import { useRouteContext, useSearch } from "@tanstack/react-router";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { match, P } from "ts-pattern";
 import { useLocalStorage } from "usehooks-ts";
+import { HelpDropdown } from "@/app/help-dropdown";
 import { isRivetApiError } from "@/lib/errors";
 import { DiscreteCopyButton } from "../copy-area";
 import { getConfig, useConfig } from "../lib/config";
@@ -87,6 +89,15 @@ function UnavailableInfo({
 				<p>Actor is unavailable.</p>
 
 				<QueriedActorError actorId={actorId} />
+
+				<HelpDropdown>
+					<Button
+						variant="outline"
+						startIcon={<Icon icon={faQuestionCircle} />}
+					>
+						Need help?
+					</Button>
+				</HelpDropdown>
 			</Info>
 		))
 		.with("pending", () => <NoRunners />)
