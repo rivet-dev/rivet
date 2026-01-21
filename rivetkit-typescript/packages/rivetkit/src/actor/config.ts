@@ -132,7 +132,14 @@ export const ActorConfigSchema = z
 // This must have only one or the other or else TState will not be able to be inferred
 //
 // Data returned from this handler will be available on `c.state`.
-type CreateState<TState, TConnParams, TConnState, TVars, TInput, TDatabase extends AnyDatabaseProvider> =
+type CreateState<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+> =
 	| { state: TState }
 	| {
 			createState: (
@@ -458,7 +465,7 @@ interface BaseActorConfig<
 		websocket: UniversalWebSocket,
 	) => void | Promise<void>;
 
-	actions: TActions;
+	actions?: TActions;
 }
 
 type ActorDatabaseConfig<TDatabase extends AnyDatabaseProvider> =
@@ -620,43 +627,185 @@ export function test<
 
 export const DocActorOptionsSchema = z
 	.object({
-		createVarsTimeout: z.number().optional().describe("Timeout in ms for createVars handler. Default: 5000"),
-		createConnStateTimeout: z.number().optional().describe("Timeout in ms for createConnState handler. Default: 5000"),
-		onConnectTimeout: z.number().optional().describe("Timeout in ms for onConnect handler. Default: 5000"),
-		onSleepTimeout: z.number().optional().describe("Timeout in ms for onSleep handler. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: 5000"),
-		onDestroyTimeout: z.number().optional().describe("Timeout in ms for onDestroy handler. Default: 5000"),
-		stateSaveInterval: z.number().optional().describe("Interval in ms between automatic state saves. Default: 10000"),
-		actionTimeout: z.number().optional().describe("Timeout in ms for action handlers. Default: 60000"),
-		waitUntilTimeout: z.number().optional().describe("Max time in ms to wait for waitUntil background promises during shutdown. Default: 15000"),
-		connectionLivenessTimeout: z.number().optional().describe("Timeout in ms for connection liveness checks. Default: 2500"),
-		connectionLivenessInterval: z.number().optional().describe("Interval in ms between connection liveness checks. Default: 5000"),
-		noSleep: z.boolean().optional().describe("If true, the actor will never sleep. Default: false"),
-		sleepTimeout: z.number().optional().describe("Time in ms of inactivity before the actor sleeps. Default: 30000"),
-		canHibernateWebSocket: z.boolean().optional().describe("Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false"),
+		createVarsTimeout: z
+			.number()
+			.optional()
+			.describe("Timeout in ms for createVars handler. Default: 5000"),
+		createConnStateTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Timeout in ms for createConnState handler. Default: 5000",
+			),
+		onConnectTimeout: z
+			.number()
+			.optional()
+			.describe("Timeout in ms for onConnect handler. Default: 5000"),
+		onSleepTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Timeout in ms for onSleep handler. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: 5000",
+			),
+		onDestroyTimeout: z
+			.number()
+			.optional()
+			.describe("Timeout in ms for onDestroy handler. Default: 5000"),
+		stateSaveInterval: z
+			.number()
+			.optional()
+			.describe(
+				"Interval in ms between automatic state saves. Default: 10000",
+			),
+		actionTimeout: z
+			.number()
+			.optional()
+			.describe("Timeout in ms for action handlers. Default: 60000"),
+		waitUntilTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Max time in ms to wait for waitUntil background promises during shutdown. Default: 15000",
+			),
+		connectionLivenessTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Timeout in ms for connection liveness checks. Default: 2500",
+			),
+		connectionLivenessInterval: z
+			.number()
+			.optional()
+			.describe(
+				"Interval in ms between connection liveness checks. Default: 5000",
+			),
+		noSleep: z
+			.boolean()
+			.optional()
+			.describe("If true, the actor will never sleep. Default: false"),
+		sleepTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Time in ms of inactivity before the actor sleeps. Default: 30000",
+			),
+		canHibernateWebSocket: z
+			.boolean()
+			.optional()
+			.describe(
+				"Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
+			),
 	})
 	.describe("Actor options for timeouts and behavior configuration.");
 
 export const DocActorConfigSchema = z
 	.object({
-		state: z.unknown().optional().describe("Initial state value for the actor. Cannot be used with createState."),
-		createState: z.unknown().optional().describe("Function to create initial state. Receives context and input. Cannot be used with state."),
-		connState: z.unknown().optional().describe("Initial connection state value. Cannot be used with createConnState."),
-		createConnState: z.unknown().optional().describe("Function to create connection state. Receives context and connection params. Cannot be used with connState."),
-		vars: z.unknown().optional().describe("Initial ephemeral variables value. Cannot be used with createVars."),
-		createVars: z.unknown().optional().describe("Function to create ephemeral variables. Receives context and driver context. Cannot be used with vars."),
-		db: z.unknown().optional().describe("Database provider instance for the actor."),
-		onCreate: z.unknown().optional().describe("Called when the actor is first initialized. Use to initialize state."),
-		onDestroy: z.unknown().optional().describe("Called when the actor is destroyed."),
-		onWake: z.unknown().optional().describe("Called when the actor wakes up and is ready to receive connections and actions."),
-		onSleep: z.unknown().optional().describe("Called when the actor is stopping or sleeping. Use to clean up resources."),
-		onStateChange: z.unknown().optional().describe("Called when the actor's state changes. State changes within this hook won't trigger recursion."),
-		onBeforeConnect: z.unknown().optional().describe("Called before a client connects. Throw an error to reject the connection."),
-		onConnect: z.unknown().optional().describe("Called when a client successfully connects."),
-		onDisconnect: z.unknown().optional().describe("Called when a client disconnects."),
-		onBeforeActionResponse: z.unknown().optional().describe("Called before sending an action response. Use to transform output."),
-		onRequest: z.unknown().optional().describe("Called for raw HTTP requests to /actors/{name}/http/* endpoints."),
-		onWebSocket: z.unknown().optional().describe("Called for raw WebSocket connections to /actors/{name}/websocket/* endpoints."),
-		actions: z.record(z.string(), z.unknown()).optional().describe("Map of action name to handler function."),
+		state: z
+			.unknown()
+			.optional()
+			.describe(
+				"Initial state value for the actor. Cannot be used with createState.",
+			),
+		createState: z
+			.unknown()
+			.optional()
+			.describe(
+				"Function to create initial state. Receives context and input. Cannot be used with state.",
+			),
+		connState: z
+			.unknown()
+			.optional()
+			.describe(
+				"Initial connection state value. Cannot be used with createConnState.",
+			),
+		createConnState: z
+			.unknown()
+			.optional()
+			.describe(
+				"Function to create connection state. Receives context and connection params. Cannot be used with connState.",
+			),
+		vars: z
+			.unknown()
+			.optional()
+			.describe(
+				"Initial ephemeral variables value. Cannot be used with createVars.",
+			),
+		createVars: z
+			.unknown()
+			.optional()
+			.describe(
+				"Function to create ephemeral variables. Receives context and driver context. Cannot be used with vars.",
+			),
+		db: z
+			.unknown()
+			.optional()
+			.describe("Database provider instance for the actor."),
+		onCreate: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when the actor is first initialized. Use to initialize state.",
+			),
+		onDestroy: z
+			.unknown()
+			.optional()
+			.describe("Called when the actor is destroyed."),
+		onWake: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when the actor wakes up and is ready to receive connections and actions.",
+			),
+		onSleep: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when the actor is stopping or sleeping. Use to clean up resources.",
+			),
+		onStateChange: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when the actor's state changes. State changes within this hook won't trigger recursion.",
+			),
+		onBeforeConnect: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called before a client connects. Throw an error to reject the connection.",
+			),
+		onConnect: z
+			.unknown()
+			.optional()
+			.describe("Called when a client successfully connects."),
+		onDisconnect: z
+			.unknown()
+			.optional()
+			.describe("Called when a client disconnects."),
+		onBeforeActionResponse: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called before sending an action response. Use to transform output.",
+			),
+		onRequest: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called for raw HTTP requests to /actors/{name}/http/* endpoints.",
+			),
+		onWebSocket: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called for raw WebSocket connections to /actors/{name}/websocket/* endpoints.",
+			),
+		actions: z
+			.record(z.string(), z.unknown())
+			.optional()
+			.describe(
+				"Map of action name to handler function. Defaults to an empty object.",
+			),
 		options: DocActorOptionsSchema.optional(),
 	})
 	.describe("Actor configuration passed to the actor() function.");
