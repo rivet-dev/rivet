@@ -2,9 +2,7 @@ import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import type {
-	ManagerDriver,
-} from "@/manager/driver";
+import type { ManagerDriver } from "@/manager/driver";
 import { buildManagerRouter } from "@/manager/router";
 import { type RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 import { VERSION } from "@/utils";
@@ -22,19 +20,20 @@ async function main() {
 	// const registry = setup(registryConfig);
 
 	const managerDriver: ManagerDriver = {
-        getForId: unimplemented,
-        getWithKey: unimplemented,
-        getOrCreateWithKey: unimplemented,
-        createActor: unimplemented,
-        listActors: unimplemented,
-        sendRequest: unimplemented,
-        openWebSocket: unimplemented,
-        proxyRequest: unimplemented,
-        proxyWebSocket: unimplemented,
-        displayInformation: unimplemented,
-        setGetUpgradeWebSocket: unimplemented,
-        kvGet: unimplemented,
-    };
+		getForId: unimplemented,
+		getWithKey: unimplemented,
+		getOrCreateWithKey: unimplemented,
+		createActor: unimplemented,
+		listActors: unimplemented,
+		sendRequest: unimplemented,
+		openWebSocket: unimplemented,
+		proxyRequest: unimplemented,
+		proxyWebSocket: unimplemented,
+		displayInformation: unimplemented,
+		setGetUpgradeWebSocket: unimplemented,
+		buildGatewayUrl: unimplemented,
+		kvGet: unimplemented,
+	};
 
 	// const client = createClientWithDriver(
 	// 	managerDriver,
@@ -207,4 +206,5 @@ function unimplemented(): never {
 	throw new Error("UNIMPLEMENTED");
 }
 
+// biome-ignore lint/nursery/noFloatingPromises: main
 main();
