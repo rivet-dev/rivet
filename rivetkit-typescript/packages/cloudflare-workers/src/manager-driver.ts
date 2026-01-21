@@ -135,6 +135,10 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		return webSocket as unknown as UniversalWebSocket;
 	}
 
+	async buildGatewayUrl(actorId: string): Promise<string> {
+		return `http://actor/gateway/${encodeURIComponent(actorId)}`;
+	}
+
 	async proxyRequest(
 		c: HonoContext<{ Bindings: Bindings }>,
 		actorRequest: Request,

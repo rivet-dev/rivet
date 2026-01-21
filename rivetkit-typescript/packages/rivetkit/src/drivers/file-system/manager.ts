@@ -147,6 +147,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		return upgradeWebSocket(() => wsHandler)(c, noopNext());
 	}
 
+	async buildGatewayUrl(actorId: string): Promise<string> {
+		const port = this.#config.managerPort ?? 6420;
+		return `http://127.0.0.1:${port}/gateway/${encodeURIComponent(actorId)}`;
+	}
+
 	async getForId({
 		actorId,
 	}: GetForIdInput): Promise<ActorOutput | undefined> {
