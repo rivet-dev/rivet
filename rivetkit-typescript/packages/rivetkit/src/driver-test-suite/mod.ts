@@ -22,6 +22,7 @@ import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
 import { runActorInlineClientTests } from "./tests/actor-inline-client";
 import { runActorInspectorTests } from "./tests/actor-inspector";
+import { runActorKvTests } from "./tests/actor-kv";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorVarsTests } from "./tests/actor-vars";
@@ -121,6 +122,8 @@ export function runDriverTests(
 					runActorErrorHandlingTests(driverTestConfig);
 
 					runActorInlineClientTests(driverTestConfig);
+
+					runActorKvTests(driverTestConfig);
 
 					runRawHttpTests(driverTestConfig);
 

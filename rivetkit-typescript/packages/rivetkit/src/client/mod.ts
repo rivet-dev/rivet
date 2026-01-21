@@ -22,7 +22,7 @@ export {
 	ManagerError,
 } from "@/client/errors";
 export type { CreateRequest } from "@/manager/protocol/query";
-export { KEYS as KV_KEYS } from "../actor/instance/kv";
+export { KEYS as KV_KEYS } from "../actor/instance/keys";
 export type { ActorActionFunction } from "./actor-common";
 export type {
 	ActorConn,
