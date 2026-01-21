@@ -12,7 +12,7 @@ import { convertConnToBarePersistedConn } from "../conn/persisted";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { isConnStatePath, isStatePath } from "../utils";
-import { KEYS, makeConnKey } from "./kv";
+import { KEYS, makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
 import { convertActorToBarePersisted, type PersistedActor } from "./persisted";
 

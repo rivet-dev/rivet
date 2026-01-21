@@ -31,7 +31,7 @@ import {
 import type { AnyDatabaseProvider } from "../database";
 import { CachedSerializer } from "../protocol/serde";
 import { deadline } from "../utils";
-import { makeConnKey } from "./kv";
+import { makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
 /**
  * Manages all connection-related operations for an actor instance.

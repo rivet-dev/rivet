@@ -22,6 +22,7 @@ import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { hibernationActor } from "./hibernation";
 import { inlineClientActor } from "./inline-client";
+import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
 import { counterWithLifecycle } from "./lifecycle";
 import { metadataActor } from "./metadata";
@@ -72,6 +73,8 @@ export const registry = setup({
 		customTimeoutActor,
 		// From inline-client.ts
 		inlineClientActor,
+		// From kv.ts
+		kvActor,
 		// From action-inputs.ts
 		inputActor,
 		// From action-timeout.ts
