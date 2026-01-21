@@ -1,5 +1,5 @@
 import { transformerNotationHighlight } from "@shikijs/transformers";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	createHighlighterCore,
 	createOnigurumaEngine,
@@ -15,6 +15,43 @@ const langs = {
 	bash: () => import("@shikijs/langs/bash"),
 };
 
+let highlighterPromise: Promise<HighlighterCore> | null = null;
+let highlighterInstance: HighlighterCore | null = null;
+
+async function getHighlighter(
+	language: keyof typeof langs,
+): Promise<HighlighterCore> {
+	if (highlighterInstance !== null) {
+		const loadedLangs = highlighterInstance.getLoadedLanguages();
+		if (!loadedLangs.includes(language)) {
+			await highlighterInstance.loadLanguage(await langs[language]());
+		}
+		return highlighterInstance;
+	}
+
+	if (highlighterPromise === null) {
+		highlighterPromise = langs[language]()
+			.then((langModule) =>
+				createHighlighterCore({
+					themes: [theme as ThemeInput],
+					langs: [langModule],
+					engine: createOnigurumaEngine(import("shiki/wasm")),
+				}),
+			)
+			.then((hl) => {
+				highlighterInstance = hl;
+				return hl;
+			});
+	}
+
+	const hl = await highlighterPromise;
+	const loadedLangs = hl.getLoadedLanguages();
+	if (!loadedLangs.includes(language)) {
+		await hl.loadLanguage(await langs[language]());
+	}
+	return hl;
+}
+
 interface CodePreviewProps {
 	code: string;
 	language: keyof typeof langs;
@@ -23,38 +60,33 @@ interface CodePreviewProps {
 
 export function CodePreview({ className, code, language }: CodePreviewProps) {
 	const [isLoading, setIsLoading] = useState(true);
-	const highlighter = useRef<HighlighterCore | null>(null);
+	const [highlighter, setHighlighter] = useState<HighlighterCore | null>(
+		null,
+	);
 
 	useEffect(() => {
-		if (highlighter.current) return;
-
-		async function createHighlighter() {
-			highlighter.current ??= await createHighlighterCore({
-				themes: [theme as ThemeInput],
-				langs: [await langs[language]()],
-				engine: createOnigurumaEngine(import("shiki/wasm")),
-			});
-		}
-
-		createHighlighter().then(() => {
-			setIsLoading(false);
+		let cancelled = false;
+		void getHighlighter(language).then((hl) => {
+			if (!cancelled) {
+				setHighlighter(hl);
+				setIsLoading(false);
+			}
 		});
-
 		return () => {
-			highlighter.current?.dispose();
+			cancelled = true;
 		};
 	}, [language]);
 
 	const result = useMemo(
 		() =>
-			isLoading
+			isLoading || !highlighter
 				? ""
-				: (highlighter.current?.codeToHtml(code, {
+				: (highlighter.codeToHtml(code, {
 						lang: language,
 						theme: theme.name,
 						transformers: [transformerNotationHighlight()],
 					}) as TrustedHTML),
-		[isLoading, code, language],
+		[isLoading, highlighter, code, language],
 	);
 
 	if (isLoading) {

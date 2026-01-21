@@ -1,5 +1,18 @@
-import { faChevronLeft, faChevronRight, Icon } from "@rivet-gg/icons";
-import { deployOptions, templates } from "@rivetkit/example-registry";
+import {
+	faArrowRight,
+	faBookOpen,
+	faChevronLeft,
+	faClaude,
+	faCopy,
+	faCursor,
+	faVscode,
+	Icon,
+} from "@rivet-gg/icons";
+import {
+	deployOptions,
+	type Provider,
+	templates,
+} from "@rivetkit/example-registry";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -13,31 +26,42 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Suspense, useEffect, useMemo } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match, P } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
+	Badge,
 	ButtonCard,
+	Code,
 	CodeFrame,
+	type CodeFrameLikeElement,
 	CodeGroup,
+	CodeGroupSyncProvider,
 	CodePreview,
+	CopyTrigger,
 	ExternalLinkCard,
 	FormField,
 	H1,
 	Label,
 	Ping,
 	Skeleton,
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
 } from "@/components";
 import {
 	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
+import { PathSelection } from "@/components/onboarding/path-selection";
 import { TemplatesList } from "@/components/templates-list";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
+import { TEST_IDS } from "@/utils/test-ids";
 import { Button } from "../components/ui/button";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
@@ -75,12 +99,18 @@ const stepper = defineStepper(
 	},
 );
 
+type Flow = "template" | "agent" | "manual";
+
 export function GettingStarted({
 	displayOnboarding,
 	displayBackendOnboarding,
+	flow,
 	template,
+	provider,
 	noTemplate,
 }: {
+	flow?: Flow;
+	provider?: Provider;
 	displayOnboarding?: boolean;
 	displayBackendOnboarding?: boolean;
 	template?: string;
@@ -102,23 +132,38 @@ export function GettingStarted({
 
 	const navigate = useNavigate();
 
+	if (!flow) {
+		return <PathSelection />;
+	}
+
 	if (
-		!template &&
-		!noTemplate &&
+		flow === "template" &&
 		displayOnboarding &&
-		displayBackendOnboarding
+		displayBackendOnboarding &&
+		!template
 	) {
 		return (
 			<Content className="flex flex-col">
 				<TemplatesList
-					showBackHome={false}
+					back={
+						flow === "template" ? (
+							<Link
+								// @ts-expect-error
+								search={({ flow: _, ...old }: any) => ({
+									...old,
+								})}
+							>
+								Back
+							</Link>
+						) : undefined
+					}
 					getTemplateLink={(template) => ({
 						to: ".",
-						search: { template },
+						search: { template, flow },
 					})}
 					startFromScratchLink={{
 						to: ".",
-						search: { noTemplate: true },
+						search: { noTemplate: true, flow: "manual" },
 					}}
 				/>
 			</Content>
@@ -128,7 +173,7 @@ export function GettingStarted({
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
 			<motion.div
-				className="max-w-[32rem] mx-auto w-full"
+				className="max-w-[32rem] mx-auto w-full mt-14"
 				initial={{ opacity: 0, y: -20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.5 }}
@@ -146,87 +191,100 @@ export function GettingStarted({
 							search={{
 								template: undefined,
 								noTemplate: undefined,
+								flow: flow === "template" ? flow : undefined,
 							}}
 						>
-							Back to Templates
+							{flow === "template" ? "Back to Templates" : "Back"}
 						</Link>
 					</Button>
 				) : null}
 			</motion.div>
 			<motion.div
-				className="relative"
+				className="relative mb-8"
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
 				<H1 className="mt-8 text-center">Get started with Rivet</H1>
-				<p className="text-center text-muted-foreground max-w-2xl mx-auto">
+				<p className="text-center text-muted-foreground max-w-2xl mx-auto mt-2">
 					Follow these steps to set up your project quickly and
 					easily.
 				</p>
 				<div className="mt-8 w-[32rem]">
-					<StepperForm
-						{...stepper}
-						formId="onboarding"
-						initialStep={
-							displayBackendOnboarding ? undefined : "frontend"
-						}
-						defaultValues={{
-							runnerName: "default",
-							slotsPerRunner: 1,
-							maxRunners: 10000,
-							minRunners: 1,
-							runnerMargin: 0,
-							headers: [],
-							success: false,
-							requestLifespan: 900,
-							datacenters: Object.fromEntries(
-								datacenters.map((dc) => [dc.name, true]),
-							),
-						}}
-						content={{
-							provider: ProviderSetup,
-							backend: () => (
-								<Suspense
-									fallback={
-										<div className="space-y-6">
-											<Skeleton className="w-full h-[180px]" />
-											<Skeleton className="w-full h-[250px]" />
-											<Skeleton className="w-full h-[200px]" />
-										</div>
-									}
-								>
-									<BackendSetup template={template} />
-								</Suspense>
-							),
-							frontend: () => <FrontendSetup />,
-						}}
-						onSubmit={() => {}}
-						onPartialSubmit={async ({ stepper, values }) => {
-							if (stepper.current.id === "backend") {
-								const config = await buildServerlessConfig(
-									dataProvider,
-									values,
-									{ provider: values.provider },
-								);
-
-								await mutateAsync({
-									name: values.runnerName,
-									config,
-								});
-
-								await navigate({
-									to: ".",
-									search: (s) => ({
-										...s,
-										backendOnboardingSuccess: true,
-									}),
-								});
+					<CodeGroupSyncProvider>
+						<StepperForm
+							{...stepper}
+							formId="onboarding"
+							initialStep={
+								provider
+									? "backend"
+									: displayBackendOnboarding
+										? undefined
+										: "frontend"
 							}
-						}}
-					>
-						<StepperFooter />
-					</StepperForm>
+							defaultValues={{
+								provider,
+								runnerName: "default",
+								slotsPerRunner: 1,
+								maxRunners: 10000,
+								minRunners: 1,
+								runnerMargin: 0,
+								headers: [],
+								success: false,
+								requestLifespan: 900,
+								datacenters: Object.fromEntries(
+									datacenters.map((dc) => [dc.name, true]),
+								),
+							}}
+							content={{
+								provider: () => (
+									<ProviderSetup template={template} />
+								),
+								backend: () => (
+									<Suspense
+										fallback={
+											<div className="space-y-6">
+												<Skeleton className="w-full h-[180px]" />
+												<Skeleton className="w-full h-[250px]" />
+												<Skeleton className="w-full h-[200px]" />
+											</div>
+										}
+									>
+										<BackendSetup
+											template={template}
+											flow={flow}
+										/>
+									</Suspense>
+								),
+								frontend: () => <FrontendSetup />,
+							}}
+							onSubmit={() => {}}
+							onPartialSubmit={async ({ stepper, values }) => {
+								if (stepper.current.id === "backend") {
+									const config = await buildServerlessConfig(
+										dataProvider,
+										values,
+										{ provider: values.provider },
+									);
+
+									await mutateAsync({
+										name: values.runnerName,
+										config,
+									});
+
+									await navigate({
+										to: ".",
+										search: (s) => ({
+											...s,
+											backendOnboardingSuccess: true,
+										}),
+									});
+								}
+							}}
+						>
+							<StepperFooter />
+						</StepperForm>
+					</CodeGroupSyncProvider>
 				</div>
 			</motion.div>
 		</Content>
@@ -235,7 +293,6 @@ export function GettingStarted({
 
 function StepperFooter() {
 	const s = stepper.useStepper();
-	const router = useRouter();
 	return (
 		<div className="flex items-center justify-center gap-4">
 			{s.isLast ? (
@@ -250,37 +307,21 @@ function StepperFooter() {
 					</Link>
 				</Button>
 			) : null}
-
-			<Button
-				variant="link"
-				className="text-muted-foreground"
-				size="xs"
-				onClick={() => {
-					router.invalidate();
-					return router.navigate({
-						to: ".",
-						search: {
-							skipOnboarding: true,
-						},
-					});
-				}}
-				endIcon={<Icon icon={faChevronRight} />}
-			>
-				Skip Setup
-			</Button>
 		</div>
 	);
 }
 
-function ProviderSetup() {
+function ProviderSetup({ template }: { template?: string }) {
 	const navigate = useNavigate();
 	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
+
+	const templateDetails = templates.find((t) => t.name === template);
 
 	const { control } = useFormContext();
 	const s = stepper.useStepper();
 
 	return (
-		<div>
+		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
 			<FormField
 				control={control}
 				name="provider"
@@ -288,6 +329,13 @@ function ProviderSetup() {
 					<>
 						{deployOptions
 							.filter((option) => !option.specializedPlatform)
+							.filter((option) => {
+								if (!templateDetails) return true;
+								if (option.name === "vercel") {
+									return !!templateDetails.providers?.vercel;
+								}
+								return true;
+							})
 							.slice(0, showAll ? deployOptions.length : 3)
 							.map((option) => (
 								<ButtonCard
@@ -296,6 +344,9 @@ function ProviderSetup() {
 									title={option.displayName}
 									description={option.description}
 									className="text-left mb-4 w-full min-w-0"
+									data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
+										option.name,
+									)}
 									onClick={() => {
 										field.onChange(option.name);
 										s.next();
@@ -348,21 +399,37 @@ function ProviderSetup() {
 
 function Connector() {
 	return (
-		<div className="-my-6 flex justify-center">
-			<div className="h-4 border-l w-px" />
+		<div className="-my-10 flex justify-center">
+			<div className="h-6 border-l w-px" />
 		</div>
 	);
 }
 
-function BackendSetup({ template }: { template?: string }) {
+function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
 	const provider = useWatch({ name: "provider" });
 	const templateDetails = templates.find((t) => t.name === template);
-	const options = deployOptions.find((p) => p.name === provider);
+	const providerDetails = deployOptions.find((p) => p.name === provider);
 	return (
-		<div className="flex flex-col gap-6">
-			{match({ template, provider })
+		<div className="flex flex-col gap-10">
+			{flow !== "agent" ? (
+				<>
+					<SkillsSetup />
+					<Connector />
+				</>
+			) : null}
+			{match({ template, provider, flow })
+				// .with(
+				// 	{ provider: P.any, template: undefined, flow: "agent" },
+				// 	() => <McpSetup />,
+				// )
 				.with({ provider: "vercel", template: P.string }, () => (
-					<DeployToVercelCard template={templateDetails?.providers.vercel.name || template || "chat-room"} />
+					<DeployToVercelCard
+						template={
+							templateDetails?.providers?.vercel?.name ||
+							template ||
+							"chat-room"
+						}
+					/>
 				))
 				// .with("railway", () => (
 				// 	<RailwayQuickSetupInfo template={template} />
@@ -372,37 +439,64 @@ function BackendSetup({ template }: { template?: string }) {
 					({ template }) => <TemplateSetup template={template} />,
 				)
 				.otherwise(() => (
-					<div className="space-y-2 border rounded-md p-4">
-						<p>
-							Follow the{" "}
-							<a
-								href="https://www.rivet.dev/docs/actors/quickstart/"
-								className="underline"
-								target="_blank"
-								rel="noopener noreferrer"
-							>
-								Quickstart guide
-							</a>{" "}
-							to set up your project.
-						</p>
-					</div>
+					<ExternalLinkCard
+						icon={faBookOpen}
+						title={"Follow the Quickstart Guide"}
+						href={"https://www.rivet.dev/docs/actors/quickstart/"}
+					/>
 				))}
 			<Connector />
 
-			{(provider === "vercel" && !template) || provider !== "vercel" ? (
+			{/* {((provider === "vercel" && !template) || provider !== "vercel") &&
+			flow !== "agent" ? (
 				<>
 					<ExternalLinkCard
-						icon={options?.icon}
-						title={`View ${options?.displayName} Guide`}
-						href={`https://www.rivet.dev${options?.href || "/docs/getting-started"}`}
+						icon={providerDetails?.icon}
+						title={`View ${providerDetails?.displayName} Guide`}
+						href={`https://www.rivet.dev${providerDetails?.href || "/docs/getting-started"}`}
 					/>
 					<Connector />
 				</>
-			) : null}
+			) : null} */}
+			{/* {flow === "agent" ? (
+				<>
+					<div className="border rounded-md p-4">
+						<p className="mb-4">
+							Ask your Coding Agent to set up Rivet for you:
+						</p>
+						<p className="pl-4 border-l-2 border-primary-500 text-muted-foreground mb-4">
+							Integrate Rivet into{" "}
+							{providerDetails?.displayName || provider}, deploy,
+							then tell me the url to connect to Rivet.
+						</p>
+						<div className="flex items-end">
+							<CopyTrigger
+								value={`Integrate Rivet into ${providerDetails?.displayName || provider}, deploy, then tell me the url to connect to Rivet.`}
+								className="ml-auto"
+							>
+								<Button
+									endIcon={<Icon icon={faCopy} />}
+									variant="outline"
+								>
+									Copy instructions
+								</Button>
+							</CopyTrigger>
+						</div>
+					</div>
+					<Connector />
+				</>
+			) : null} */}
 			<div className="space-y-2 border rounded-md p-4">
+				{/* {flow === "agent" ? (
+					<p className="mb-4">
+						Tell your Coding Agent to use following environment
+						variables in your deployment.
+					</p>
+				) : ( */}
 				<p className="mb-4">
 					Set these environment variables in your deployment.
 				</p>
+				{/* )} */}
 				<Label>Environment Variables</Label>
 				<EnvVariables
 					endpoint={useEndpoint()}
@@ -411,9 +505,16 @@ function BackendSetup({ template }: { template?: string }) {
 			</div>
 			<Connector />
 			<div className="space-y-2 border rounded-md p-4">
+				{/* {flow === "agent" ? (
+					<p className="mb-4">
+						Paste the endpoint that your Coding Agent provides after
+						deployment.
+					</p>
+				) : ( */}
 				<p className="mb-4">
 					Deploy your code and paste your deployment's endpoint.
 				</p>
+				{/* )} */}
 				<div>
 					<ConnectServerlessForm.Endpoint
 						placeholder={match(provider)
@@ -457,114 +558,135 @@ pnpm install
 pnpm run dev`;
 
 function TemplateSetup({ template = "chat-room" }: { template?: string }) {
-	const npx = (
-		<CodeFrame
-			language="bash"
-			title="npm"
-			footer="Clone example"
-			code={() => code({ cmd: "npx", lib: "giget@latest", template })}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={code({ cmd: "npx", lib: "giget@latest", template })}
-			/>
-		</CodeFrame>
-	);
-
-	const yarn = (
-		<CodeFrame
-			language="bash"
-			title="yarn"
-			footer="Clone example"
-			code={() =>
-				code({ cmd: "yarn dlx", lib: "giget@latest", template })
-			}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={code({ cmd: "yarn dlx", lib: "giget@latest", template })}
-			/>
-		</CodeFrame>
-	);
-
-	const pnpm = (
-		<CodeFrame
-			language="bash"
-			title="pnpm"
-			footer="Clone example"
-			code={() => code({ cmd: "pnpx", lib: "giget@latest", template })}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={code({ cmd: "pnpx", lib: "giget@latest", template })}
-			/>
-		</CodeFrame>
-	);
-
-	const bun = (
-		<CodeFrame
-			language="bash"
-			title="bun"
-			footer="Clone example"
-			code={() => code({ cmd: "bunx", lib: "giget@latest", template })}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={code({ cmd: "bunx", lib: "giget@latest", template })}
-			/>
-		</CodeFrame>
-	);
-
-	const deno = (
-		<CodeFrame
-			language="bash"
-			title="deno"
-			footer="Clone example"
-			code={() =>
-				code({ cmd: "deno run -A", lib: "npm:giget@latest", template })
-			}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={code({
-					cmd: "deno run -A",
-					lib: "npm:giget@latest",
-					template,
-				})}
-			/>
-		</CodeFrame>
-	);
-
-	const git = (
-		<CodeFrame
-			language="bash"
-			title="git"
-			footer="Clone example"
-			code={() => manualCode({ template })}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={manualCode({ template })}
-			/>
-		</CodeFrame>
-	);
-
 	return (
-		<CodeGroup className="my-0">
-			{[npx, yarn, pnpm, bun, deno, git]}
-		</CodeGroup>
+		<PackageManagerCode
+			npx={code({ cmd: "npx", template })}
+			yarn={code({ cmd: "yarn dlx", template })}
+			bun={code({ cmd: "bunx", template })}
+			deno={code({
+				cmd: "deno run -A",
+				lib: "npm:giget@latest",
+				template,
+			})}
+			pnpm={code({ cmd: "pnpx", template })}
+			git={manualCode({ template })}
+			header={<p className="pt-2 pb-4 px-4 border-b">Clone example</p>}
+		/>
+	);
+}
+
+const skillsPath = "rivet-dev/skills";
+function SkillsSetup() {
+	return (
+		<PackageManagerCode
+			npx={`npx skills add ${skillsPath}`}
+			yarn={`yarn dlx skills add ${skillsPath}`}
+			bun={`bunx skills add ${skillsPath}`}
+			deno={`deno run -A npm:skills add ${skillsPath}`}
+			pnpm={`pnpx skills add ${skillsPath}`}
+			git={`git clone https://github.com/${skillsPath}.git .skills`}
+			header={
+				<p className="pt-2 pb-4 px-4 border-b flex items-center gap-2">
+					Install RivetKit skills <Badge>Recommended</Badge>
+				</p>
+			}
+		/>
+	);
+}
+
+const MCP_URL = "https://mcp.rivet.dev/mcp";
+const MCP_NAME = "rivet";
+
+const claudeCode = `claude mcp add --transport http ${MCP_NAME} ${MCP_URL}`;
+const cursorCode = JSON.stringify(
+	{
+		mcpServers: {
+			[MCP_NAME]: {
+				url: MCP_URL,
+			},
+		},
+	},
+	null,
+	2,
+);
+
+const installCursorUrl = `cursor://anysphere.cursor-deeplink/mcp/install?name=${MCP_NAME}&config=${encodeURIComponent(JSON.stringify({ url: MCP_URL }))}`;
+
+const installVsCodeUrl = `https://vscode.dev/redirect/mcp/install?name=${encodeURIComponent(MCP_NAME)}&config=${encodeURIComponent(JSON.stringify({ url: MCP_URL }))}`;
+
+const vscodeCode = `code --add-mcp '${JSON.stringify({ name: MCP_NAME, url: MCP_URL })}'`;
+
+// instruct user to set up MCP (Model Context Protocol) if agent flow,
+function McpSetup() {
+	return (
+		<div className="border rounded-md pt-2 space-y-4">
+			<Tabs defaultValue="claude">
+				<TabsList>
+					<TabsTrigger value="claude">
+						<Icon icon={faClaude} className="mr-1" /> Claude Code
+					</TabsTrigger>
+					<TabsTrigger value="cursor">
+						<Icon icon={faCursor} className="mr-1" /> Cursor
+					</TabsTrigger>
+					<TabsTrigger value="vscode">
+						<Icon icon={faVscode} className="mr-1" /> VSCode
+					</TabsTrigger>
+				</TabsList>
+				<TabsContent value="claude" className="px-4 pb-4">
+					<p>Use the Claude Code CLI to add Rivet MCP:</p>
+					<CodeFrame
+						language="bash"
+						code={() => claudeCode}
+						className="m-0 mt-4"
+					>
+						<CodePreview
+							language="bash"
+							className="text-left"
+							code={claudeCode}
+						/>
+					</CodeFrame>
+				</TabsContent>
+				<TabsContent value="cursor" className="px-4 pb-4">
+					<Button className="mb-2" variant="outline" asChild>
+						<a href={installCursorUrl}>Install in Cursor</a>
+					</Button>
+					<p>
+						Or, go to <Code>Cursor Settings</Code>{" "}
+						<Icon icon={faArrowRight} /> <Code>MCP</Code>{" "}
+						<Icon icon={faArrowRight} /> <Code>New MCP Server</Code>
+						, and use configuration below:
+					</p>
+					<CodeFrame
+						language="json"
+						code={() => cursorCode}
+						className="m-0 mt-4"
+					>
+						<CodePreview
+							language="json"
+							className="text-left"
+							code={cursorCode}
+						/>
+					</CodeFrame>
+				</TabsContent>
+				<TabsContent value="vscode" className="px-4 pb-4">
+					<Button className="mb-2" variant="outline" asChild>
+						<a href={installVsCodeUrl}>Install in VSCode</a>
+					</Button>
+					<p>Or, you can install manually using VSCode CLI:</p>
+					<CodeFrame
+						language="bash"
+						code={() => vscodeCode}
+						className="m-0 mt-4"
+					>
+						<CodePreview
+							language="bash"
+							className="text-left"
+							code={vscodeCode}
+						/>
+					</CodeFrame>
+				</TabsContent>
+			</Tabs>
+		</div>
 	);
 }
 
@@ -658,5 +780,124 @@ function FrontendSetup() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+function PackageManagerCode(props: {
+	npx?: string;
+	yarn?: string;
+	pnpm?: string;
+	bun?: string;
+	deno?: string;
+	git?: string;
+	footer?: ReactNode;
+	header?: ReactNode;
+}) {
+	const npx = props.npx ? (
+		<CodeFrame
+			language="bash"
+			title="npm"
+			footer={props.footer}
+			code={() => props.npx || ""}
+			className="m-0"
+		>
+			<CodePreview
+				language="bash"
+				className="text-left"
+				code={props.npx}
+			/>
+		</CodeFrame>
+	) : null;
+
+	const yarn = props.yarn ? (
+		<CodeFrame
+			language="bash"
+			title="yarn"
+			footer={props.footer}
+			code={() => props.yarn || ""}
+			className="m-0"
+		>
+			<CodePreview
+				language="bash"
+				className="text-left"
+				code={props.yarn}
+			/>
+		</CodeFrame>
+	) : null;
+
+	const pnpm = props.pnpm ? (
+		<CodeFrame
+			language="bash"
+			title="pnpm"
+			footer={props.footer}
+			code={() => props.pnpm || ""}
+			className="m-0"
+		>
+			<CodePreview
+				language="bash"
+				className="text-left"
+				code={props.pnpm}
+			/>
+		</CodeFrame>
+	) : null;
+
+	const bun = props.bun ? (
+		<CodeFrame
+			language="bash"
+			title="bun"
+			footer={props.footer}
+			code={() => props.bun || ""}
+			className="m-0"
+		>
+			<CodePreview
+				language="bash"
+				className="text-left"
+				code={props.bun}
+			/>
+		</CodeFrame>
+	) : null;
+
+	const deno = props.deno ? (
+		<CodeFrame
+			language="bash"
+			title="deno"
+			footer={props.footer}
+			code={() => props.deno || ""}
+			className="m-0"
+		>
+			<CodePreview
+				language="bash"
+				className="text-left"
+				code={props.deno}
+			/>
+		</CodeFrame>
+	) : null;
+
+	const git = props.git ? (
+		<CodeFrame
+			language="bash"
+			title="git"
+			footer={props.footer}
+			code={() => props.git || ""}
+			className="m-0"
+		>
+			<CodePreview
+				language="bash"
+				className="text-left"
+				code={props.git}
+			/>
+		</CodeFrame>
+	) : null;
+
+	return (
+		<CodeGroup
+			className="my-0"
+			syncId="package-manager"
+			header={props.header}
+		>
+			{[npx, yarn, pnpm, bun, deno, git].filter(
+				(el): el is CodeFrameLikeElement => Boolean(el),
+			)}
+		</CodeGroup>
 	);
 }

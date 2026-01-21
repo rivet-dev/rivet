@@ -23850,6 +23850,18 @@
         ]
       },
       {
+        "icon": "faClaude",
+        "aliases": [
+          "faClaude"
+        ]
+      },
+      {
+        "icon": "faCursor",
+        "aliases": [
+          "faCursor"
+        ]
+      },
+      {
         "icon": "faFreestyle",
         "aliases": [
           "faFreestyle"
@@ -23937,6 +23949,12 @@
         "icon": "faVercel",
         "aliases": [
           "faVercel"
+        ]
+      },
+      {
+        "icon": "faVscode",
+        "aliases": [
+          "faVscode"
         ]
       },
       {

@@ -15,6 +15,8 @@ import {
 	PictureFallback,
 	PictureImage,
 } from "@/components";
+import { TEST_IDS } from "@/utils/test-ids";
+import { MotionLink } from "./motion-link";
 
 export function Templates({
 	getTemplateLink,
@@ -99,10 +101,15 @@ function TemplateCard({
 		>
 			<MotionLink
 				{...(getLink?.(slug) || {})}
+				data-template={slug}
 				variants={{
 					hidden: { opacity: 0, y: 10 },
 					show: { opacity: 1, y: 0 },
 				}}
+				layout
+				animate="show"
+				initial="hidden"
+				data-testid={TEST_IDS.Onboarding.TemplateOption(slug)}
 			>
 				<div className="flex w-full">
 					<div className="flex-1 p-2 gap-1.5 flex flex-col w-full">
@@ -124,27 +131,6 @@ function TemplateCard({
 		</Button>
 	);
 }
-
-const MotionLinkComponent = React.forwardRef<
-	HTMLAnchorElement,
-	ComponentProps<typeof motion.a>
->((props, ref) => {
-	return (
-		<motion.a
-			layout
-			variants={{
-				hidden: { opacity: 0, y: 10 },
-				show: { opacity: 1, y: 0 },
-			}}
-			animate="show"
-			initial="hidden"
-			ref={ref}
-			{...props}
-		/>
-	);
-});
-
-const MotionLink = createLink(MotionLinkComponent);
 
 export function ExamplePreview({
 	slug,
