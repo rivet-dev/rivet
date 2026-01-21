@@ -1,8 +1,12 @@
+---
+title: "Endpoints"
+description: "Configure how your backend connects to Rivet and how clients reach your actors."
+skill: true
+---
+
 import imgEndpointEnvVars from "./endpoints/endpoint-env-vars.png";
 
-# Endpoints
 
-Configure how your backend connects to Rivet and how clients reach your actors.
 
 ## Local Development
 
@@ -31,8 +35,15 @@ RIVET_ENDPOINT=https://my-namespace:sk_xxxxx@api.rivet.dev
 <Tab title="Config">
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: {},
+  actions: {}
+});
+
 const registry = setup({
-  actors: { myActor },
+  use: { myActor },
   endpoint: "https://my-namespace:sk_xxxxx@api.rivet.dev",
 });
 ```
@@ -62,8 +73,15 @@ RIVET_PUBLIC_ENDPOINT=https://my-namespace:pk_xxxxx@api.rivet.dev
 <Tab title="Config">
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: {},
+  actions: {}
+});
+
 const registry = setup({
-  actors: { myActor },
+  use: { myActor },
   serverless: {
     publicEndpoint: "https://my-namespace:pk_xxxxx@api.rivet.dev",
   },

@@ -58,5 +58,7 @@ website/public/docs/
 website/public/llms-full.txt
 website/public/llms.txt
 website/.playwright-mcp/
+website/scripts/typecheck-staging/snippets/
+website/scripts/typecheck-staging/node_modules/
 .vercel
 

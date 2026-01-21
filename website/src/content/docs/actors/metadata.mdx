@@ -1,13 +1,25 @@
-# Metadata
-
-Metadata provides information about the currently running actor.
+---
+title: "Metadata"
+description: "Metadata provides information about the currently running actor."
+skill: true
+---
 
 ## Actor ID
 
 Get the unique instance ID of the actor:
 
 ```typescript
-const actorId = c.actorId;
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    getId: (c) => {
+      const actorId = c.actorId;
+      return actorId;
+    }
+  }
+});
 ```
 
 ## Actor Name
@@ -15,7 +27,17 @@ const actorId = c.actorId;
 Get the actor type name:
 
 ```typescript
-const actorName = c.name;
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    getName: (c) => {
+      const actorName = c.name;
+      return actorName;
+    }
+  }
+});
 ```
 
 This is useful when you need to know which actor type is running, especially if you have generic utility functions that are shared between different actor implementations.
@@ -25,7 +47,17 @@ This is useful when you need to know which actor type is running, especially if 
 Get the actor key used to identify this actor instance:
 
 ```typescript
-const actorKey = c.key;
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    getKey: (c) => {
+      const actorKey = c.key;
+      return actorKey;
+    }
+  }
+});
 ```
 
 The key is used to route requests to the correct actor instance and can include parameters passed when creating the actor.
@@ -37,7 +69,17 @@ Learn more about using keys for actor addressing and configuration in the [keys 
 Region can be accessed from the context object via `c.region`.
 
 ```typescript
-const region = c.region;
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    getRegion: (c) => {
+      const region = c.region;
+      return region;
+    }
+  }
+});
 ```
 
 <Warning>`c.region` is only supported on Rivet at the moment.</Warning>
@@ -73,16 +115,29 @@ export const registry = setup({
 ```
 
 ```typescript {{"title":"client.ts"}}
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {
+    getMetadata: (c) => ({
+      actorId: c.actorId,
+      name: c.name,
+      key: c.key,
+      region: c.region
+    })
+  }
+});
+
+const registry = setup({ use: { chatRoom } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Connect to a chat room
-const chatRoom = await client.chatRoom.get("general");
+const chatRoomHandle = client.chatRoom.get(["general"]);
 
 // Get actor metadata
-const metadata = await chatRoom.getMetadata();
+const metadata = await chatRoomHandle.getMetadata();
 console.log("Actor metadata:", metadata);
 ```
 

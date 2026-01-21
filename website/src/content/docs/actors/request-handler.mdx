@@ -1,6 +1,8 @@
-# Low-Level HTTP Request Handler
-
-Actors can handle HTTP requests through the `onRequest` handler.
+---
+title: "Low-Level HTTP Request Handler"
+description: "Actors can handle HTTP requests through the `onRequest` handler."
+skill: true
+---
 
 For most use cases, [actions](/docs/actors/actions) provide high-level API powered by HTTP that's easier to work with than low-level HTTP. However, low-level handlers are required when implementing custom use cases or integrating external libraries that need direct access to the underlying HTTP `Request`/`Response` objects or WebSocket connections.
 
@@ -19,7 +21,7 @@ export const counterActor = actor({
         count: 0,
     },
     // WinterTC compliant - accepts standard Request and returns standard Response
-    onRequest: (c, request) {
+    onRequest: (c, request) => {
         const url = new URL(request.url);
 
         if (request.method === "GET" && url.pathname === "/count") {
@@ -33,6 +35,7 @@ export const counterActor = actor({
 
         return new Response("Not Found", { status: 404 });
     },
+    actions: {}
 });
 ```
 
@@ -40,35 +43,44 @@ export const counterActor = actor({
 <Tab title="Hono">
 
 ```typescript
-import { type ActorContext, actor } from "rivetkit";
+import { actor, ActorContextOf } from "rivetkit";
 import { Hono } from "hono";
 
-function buildRouter(c: ActorContext<{ count: number }>) {
+// Define the actor first
+const counterActor = actor({
+    state: { count: 0 },
+    actions: {}
+});
+
+// Build router with typed context
+function buildRouter(actorCtx: ActorContextOf<typeof counterActor>) {
     const app = new Hono();
 
-    app.get("/count", (c) => {
-        return c.json({ count: c.state.count });
+    app.get("/count", (honoCtx) => {
+        return honoCtx.json({ count: actorCtx.state.count });
     });
 
-    app.post("/increment", (c) => {
-        c.state.count++;
-        return c.json({ count: c.state.count });
+    app.post("/increment", (honoCtx) => {
+        actorCtx.state.count++;
+        return honoCtx.json({ count: actorCtx.state.count });
     });
 
     return app;
 }
 
-export const counterActor = actor({
-    state: {
-        count: 0,
+// Define the full actor with onRequest
+export const counterActorWithRouter = actor({
+    state: { count: 0 },
+    vars: { app: null as Hono | null },
+    createVars: () => ({
+        app: null as Hono | null
+    }),
+    onRequest: async (c, request) => {
+        // Build router lazily
+        const app = buildRouter(c as ActorContextOf<typeof counterActor>);
+        return await app.fetch(request);
     },
-    createVars: (c) => {
-        const app = buildRouter(c);
-        return { app };
-    },
-    async onRequest: (c, request) {
-        return await c.vars.app.fetch(request);
-    },
+    actions: {}
 });
 ```
 
@@ -105,6 +117,10 @@ For example, to call `POST /increment` on the counter actor above:
 <CodeGroup>
 
 ```typescript
+// Replace with your actor ID and token
+const actorId = "your-actor-id";
+const token = "your-token";
+
 const response = await fetch(
   `https://api.rivet.dev/gateway/${actorId}/request/increment`,
   {

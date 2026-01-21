@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import { Feed } from 'feed';
 import { AUTHORS } from '@/lib/article';
 
@@ -23,14 +23,15 @@ export const GET: APIRoute = async ({ site }) => {
 		},
 	});
 
-	for (const post of posts) {
+	// Filter out unpublished posts
+	const publishedPosts = posts.filter(p => !p.data.unpublished);
+
+	for (const post of publishedPosts) {
 		const slug = post.id.replace(/\/page$/, '');
 		const url = `${siteUrl}/blog/${slug}/`;
 		const author = AUTHORS[post.data.author];
 
-		// Get title from headings
-		const { headings } = await render(post);
-		const title = headings.find(h => h.depth === 1)?.text || slug;
+		const title = post.data.title;
 
 		feed.addItem({
 			title,

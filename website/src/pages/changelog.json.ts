@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
 
 // Ensure this route is pre-rendered at build time
@@ -7,7 +7,7 @@ export const prerender = true;
 
 export const GET: APIRoute = async () => {
 	const posts = await getCollection('posts');
-	const changelogPosts = posts.filter(p => p.data.category === 'changelog');
+	const changelogPosts = posts.filter(p => p.data.category === 'changelog' && !p.data.unpublished);
 
 	// Import all post images eagerly
 	const images = import.meta.glob<{ default: ImageMetadata }>(
@@ -20,8 +20,7 @@ export const GET: APIRoute = async () => {
 			.sort((a, b) => b.data.published.getTime() - a.data.published.getTime())
 			.map(async (entry) => {
 				const author = AUTHORS[entry.data.author];
-				const { headings } = await render(entry);
-				const title = headings.find(h => h.depth === 1)?.text || entry.id;
+				const title = entry.data.title;
 				const slug = entry.id.replace(/\/page$/, '');
 
 				// Find the image for this post

@@ -1,0 +1,125 @@
+# Low-Level KV Storage
+
+> Source: `src/content/docs/actors/kv.mdx`
+> Canonical URL: https://rivet.gg/docs/actors/kv
+> Description: Use the built-in key-value store on ActorContext for durable string and binary data alongside actor state.
+
+---
+Every Rivet Actor includes a lightweight key-value store on `c.kv`. It is useful for dynamic keys, blobs, or data that does not fit well in structured state.
+
+If your data has a known schema, prefer [state](/docs/actors/state). KV is best for flexible or user-defined keys.
+
+## Basic Usage
+
+Keys and values default to `text`, so you can use strings without extra options.
+
+```typescript
+import { actor } from "rivetkit";
+
+const greetings = actor({
+  state: {},
+  actions: {
+    setGreeting: async (c, userId: string, message: string) => {
+      await c.kv.put(`greeting:${userId}`, message);
+    },
+    getGreeting: async (c, userId: string) => {
+      return await c.kv.get(`greeting:${userId}`);
+    }
+  }
+});
+```
+
+## Value Types
+
+You can store binary values by passing `Uint8Array` or `ArrayBuffer` directly. Use `type` when reading to get the right return type.
+
+```typescript
+import { actor } from "rivetkit";
+
+const assets = actor({
+  state: {},
+  actions: {
+    putAvatar: async (c, bytes: Uint8Array) => {
+      await c.kv.put("avatar", bytes);
+    },
+    getAvatar: async (c) => {
+      return await c.kv.get("avatar", { type: "binary" });
+    },
+    putSnapshot: async (c, data: ArrayBuffer) => {
+      await c.kv.put("snapshot", data);
+    }
+  }
+});
+```
+
+TypeScript returns a concrete type based on the option you pass in:
+
+```typescript
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    demo: async (c) => {
+      const textValue = await c.kv.get("greeting");
+      //    ^? string | null
+
+      const bytes = await c.kv.get("avatar", { type: "binary" });
+      //    ^? Uint8Array | null
+    }
+  }
+});
+```
+
+## Key Types
+
+Keys accept either `string` or `Uint8Array`. String keys are encoded as UTF-8 by default.
+
+When listing by prefix, you can control how keys are decoded with `keyType`. Returned keys have the prefix removed.
+
+```typescript
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    listGreetings: async (c) => {
+      const results = await c.kv.list("greeting:", { keyType: "text" });
+
+      for (const [key, value] of results) {
+        console.log(key, value);
+      }
+    }
+  }
+});
+```
+
+If you use binary keys, set `keyType: "binary"` so the returned keys stay as `Uint8Array`.
+
+## Batch Operations
+
+KV supports batch operations for efficiency. Defaults are still `text` for both keys and values.
+
+```typescript
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    batchOps: async (c) => {
+      await c.kv.putBatch([
+        ["alpha", "1"],
+        ["beta", "2"],
+      ]);
+
+      const values = await c.kv.getBatch(["alpha", "beta"]);
+    }
+  }
+});
+```
+
+## API Reference
+
+- [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - `c.kv` is available on the context
+
+_Source doc path: /docs/actors/kv_

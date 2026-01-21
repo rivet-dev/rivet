@@ -68,6 +68,30 @@ gt m
 
 - If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at https://docs.rs/serde/
 
+## Content Frontmatter
+
+### Docs (`website/src/content/docs/**/*.mdx`)
+
+Required frontmatter fields:
+
+- `title` (string)
+- `description` (string)
+- `skill` (boolean)
+
+### Blog + Changelog (`website/src/content/posts/**/page.mdx`)
+
+Required frontmatter fields:
+
+- `title` (string)
+- `description` (string)
+- `author` (enum: `nathan-flurry`, `nicholas-kissel`, `forest-anderson`)
+- `published` (date string)
+- `category` (enum: `changelog`, `monthly-update`, `launch-week`, `technical`, `guide`, `frogs`)
+
+Optional frontmatter fields:
+
+- `keywords` (string array)
+
 ## Examples
 
 All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.

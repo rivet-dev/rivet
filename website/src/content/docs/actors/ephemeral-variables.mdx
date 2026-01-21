@@ -1,6 +1,8 @@
-# Ephemeral Variables
-
-In addition to persisted state, Rivet provides a way to store ephemeral data that is not saved to permanent storage using `vars`. This is useful for temporary data that only needs to exist while the actor is running or data that cannot be serialized.
+---
+title: "Ephemeral Variables"
+description: "In addition to persisted state, Rivet provides a way to store ephemeral data that is not saved to permanent storage using `vars`. This is useful for temporary data that only needs to exist while the actor is running or data that cannot be serialized."
+skill: true
+---
 
 `vars` is designed to complement `state`, not replace it. Most actors should use both: `state` for critical business data and `vars` for ephemeral or non-serializable data.
 
@@ -17,18 +19,37 @@ Define an actor vars as a constant value:
 ```typescript
 import { actor } from "rivetkit";
 
+// Mock event emitter for demonstration
+interface EventEmitter {
+  on: (event: string, callback: (data: unknown) => void) => void;
+  emit: (event: string, data: unknown) => void;
+}
+
+function createEventEmitter(): EventEmitter {
+  const listeners: Record<string, ((data: unknown) => void)[]> = {};
+  return {
+    on: (event, callback) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(callback);
+    },
+    emit: (event, data) => {
+      listeners[event]?.forEach(cb => cb(data));
+    }
+  };
+}
+
 // Define vars as a constant
 const counter = actor({
   state: { count: 0 },
-  
+
   // Define ephemeral variables
-  vars: { 
+  vars: {
     lastAccessTime: 0,
-    emitter: createNanoEvents()
+    emitter: createEventEmitter()
   },
-  
+
   actions: {
-    // ...
+    increment: (c) => ++c.state.count
   }
 });
 ```
@@ -42,22 +63,41 @@ This value will be cloned for every new actor using `structuredClone`.
 Create actor state dynamically on each actors' start:
 
 ```typescript
-import { actor, CreateVarsContext } from "rivetkit";
+import { actor } from "rivetkit";
+
+// Mock event emitter for demonstration
+interface EventEmitter {
+  on: (event: string, callback: (data: unknown) => void) => void;
+  emit: (event: string, data: unknown) => void;
+}
+
+function createEventEmitter(): EventEmitter {
+  const listeners: Record<string, ((data: unknown) => void)[]> = {};
+  return {
+    on: (event, callback) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(callback);
+    },
+    emit: (event, data) => {
+      listeners[event]?.forEach(cb => cb(data));
+    }
+  };
+}
 
 // Define vars with initialization logic
 const counter = actor({
   state: { count: 0 },
 
   // Define vars using a creation function
-  createVars: (c: CreateVarsContext, driver: any) => {
+  createVars: () => {
     return {
       lastAccessTime: Date.now(),
-      emitter: createNanoEvents()
+      emitter: createEventEmitter()
     };
   },
-  
+
   actions: {
-    // ...
+    increment: (c) => ++c.state.count
   }
 });
 ```
@@ -78,33 +118,51 @@ Vars can be accessed and modified through the context object with `c.vars`:
 
 ```typescript
 import { actor } from "rivetkit";
-import { createNanoEvents } from "nanoevents";
+
+// Mock event emitter for demonstration
+interface EventEmitter {
+  on: (event: string, callback: (data: number) => void) => void;
+  emit: (event: string, data: number) => void;
+}
+
+function createEventEmitter(): EventEmitter {
+  const listeners: Record<string, ((data: number) => void)[]> = {};
+  return {
+    on: (event, callback) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(callback);
+    },
+    emit: (event, data) => {
+      listeners[event]?.forEach(cb => cb(data));
+    }
+  };
+}
 
 const counter = actor({
   // Persistent state - saved to storage
   state: { count: 0 },
-  
+
   // Create ephemeral objects that won't be serialized
   createVars: () => {
     // Create an event emitter (can't be serialized)
-    const emitter = createNanoEvents();
-    
+    const emitter = createEventEmitter();
+
     // Set up event listener directly in createVars
     emitter.on('count-changed', (newCount) => {
       console.log(`Count changed to: ${newCount}`);
     });
-    
+
     return { emitter };
   },
-  
+
   actions: {
     increment: (c) => {
       // Update persistent state
       c.state.count += 1;
-      
+
       // Use non-serializable emitter
       c.vars.emitter.emit('count-changed', c.state.count);
-      
+
       return c.state.count;
     }
   }

@@ -9,8 +9,6 @@ import {
 import { faCopy, faFile, Icon } from "@rivet-gg/icons";
 import escapeHTML from "escape-html";
 import { cloneElement, type ReactElement, type ReactNode } from "react";
-import { AutofillCodeBlock } from "@/components/v2/AutofillCodeBlock";
-import { AutofillFooter } from "@/components/v2/AutofillFooter";
 import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
 
 const languageNames: Record<string, string> = {
@@ -75,10 +73,10 @@ interface PreProps {
 	language?: keyof typeof languageNames | string;
 	isInGroup?: boolean;
 	children?: ReactElement;
-	autofill?: boolean;
 	code?: string;
 	highlightedCode?: string;
 	flush?: boolean;
+	hide?: boolean;
 }
 export const pre = ({
 	children,
@@ -86,10 +84,10 @@ export const pre = ({
 	language,
 	title,
 	isInGroup,
-	autofill,
 	code,
 	highlightedCode,
 	flush,
+	hide,
 }: PreProps) => {
 	// Calculate display name for tabs
 	const displayName = title || languageNames[language as keyof typeof languageNames] || "Code";
@@ -105,6 +103,7 @@ export const pre = ({
 			data-code-block
 			data-code-title={displayName}
 			data-code-id={tabId}
+			data-code-hide={hide ? "true" : undefined}
 		>
 			<div className="bg-neutral-950 text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
@@ -136,7 +135,6 @@ export const pre = ({
 							</Badge>
 						) : null
 					)}
-					{autofill && <AutofillFooter />}
 				</div>
 				<TooltipProvider>
 					<WithTooltip
@@ -153,11 +151,6 @@ export const pre = ({
 			</div>
 		</div>
 	);
-
-	// Wrap with autofill component if enabled
-	if (autofill && code) {
-		return <AutofillCodeBlock code={code}>{codeBlock}</AutofillCodeBlock>;
-	}
 
 	return codeBlock;
 };

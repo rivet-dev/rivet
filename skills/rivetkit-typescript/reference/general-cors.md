@@ -1,0 +1,74 @@
+# Cross-Origin Resource Sharing
+
+> Source: `src/content/docs/general/cors.mdx`
+> Canonical URL: https://rivet.gg/docs/general/cors
+> Description: Cross-Origin Resource Sharing (CORS) controls which origins (domains) can access your actors. When actors are exposed to the public internet, proper origin validation is critical to prevent security breaches and denial of service attacks.
+
+---
+Unlike stateless HTTP APIs that use CORS headers, Rivet Actors are stateful and support persistent WebSocket connections. Since WebSockets don't natively support CORS, we validate origins manually in the `onBeforeConnect` hook before connections may open.
+
+## Implementing Origin Restrictions
+
+To implement origin restrictions on Rivet Actors, use the `onBeforeConnect` hook to verify the request.
+
+```typescript {{"title":"server.ts"}}
+import { actor, UserError } from "rivetkit";
+
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://myapp.com",
+  "https://www.myapp.com"
+];
+
+const myActor = actor({
+  state: { count: 0 },
+
+  onBeforeConnect: (c, params) => {
+    // Check if origin is allowed
+    //
+    // This works for both HTTP & WebSocket requests
+    const origin = c.request?.headers.get("origin") ?? "";
+    if (!ALLOWED_ORIGINS.includes(origin)) {
+      throw new UserError("Origin not allowed", { code: "origin_not_allowed" });
+    }
+  },
+
+  actions: {
+    increment: (c) => {
+      c.state.count++;
+      return c.state.count;
+    }
+  }
+});
+```
+
+To catch the error on the client, use the following code:
+
+```typescript {{"title":"client.ts"}}
+import { createClient, ActorError } from "rivetkit/client";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => c.state.count++ }
+});
+const registry = setup({ use: { myActor } });
+
+const client = createClient<typeof registry>();
+
+try {
+  const actorHandle = client.myActor.getOrCreate(["my-actor"]);
+  const conn = actorHandle.connect();
+
+  // Connection will be established or error will be thrown
+  await conn.increment();
+} catch (error) {
+  if (error instanceof ActorError && error.code === "origin_not_allowed") {
+    console.error("Connection rejected: Origin not allowed");
+  }
+}
+```
+
+	See tracking issue for [configuring CORS per-actor on the gateway](https://github.com/rivet-dev/rivet/issues/3539) that will remove the need to implement origin restrictions in `onBforeRequest`.
+
+_Source doc path: /docs/general/cors_

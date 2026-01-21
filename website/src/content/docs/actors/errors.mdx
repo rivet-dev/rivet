@@ -1,6 +1,8 @@
-# Errors
-
-Rivet provides robust error handling with security built in by default. Errors are handled differently based on whether they should be exposed to clients or kept private.
+---
+title: "Errors"
+description: "Rivet provides robust error handling with security built in by default. Errors are handled differently based on whether they should be exposed to clients or kept private."
+skill: true
+---
 
 There are two types of errors:
 
@@ -39,11 +41,22 @@ const user = actor({
 <Tab title="Client (Connection)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => {
+      if (username.length > 32) throw new Error("Username is too long");
+      c.state.username = username;
+    }
+  }
+});
+
+const registry = setup({ use: { user } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const conn = client.user.getOrCreate().connect();
+const conn = client.user.getOrCreate([]).connect();
 
 try {
   await conn.updateUsername("extremely_long_username_that_exceeds_the_limit");
@@ -58,11 +71,22 @@ try {
 <Tab title="Client (Stateless)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => {
+      if (username.length > 32) throw new Error("Username is too long");
+      c.state.username = username;
+    }
+  }
+});
+
+const registry = setup({ use: { user } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const userActor = client.user.getOrCreate();
+const userActor = client.user.getOrCreate([]);
 
 try {
   await userActor.updateUsername("extremely_long_username_that_exceeds_the_limit");
@@ -113,11 +137,19 @@ const user = actor({
 <Tab title="Client (Connection)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => { c.state.username = username; }
+  }
+});
+
+const registry = setup({ use: { user } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const conn = client.user.getOrCreate().connect();
+const conn = client.user.getOrCreate([]).connect();
 
 try {
   await conn.updateUsername("ab");
@@ -136,11 +168,19 @@ try {
 <Tab title="Client (Stateless)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => { c.state.username = username; }
+  }
+});
+
+const registry = setup({ use: { user } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const userActor = client.user.getOrCreate();
+const userActor = client.user.getOrCreate([]);
 
 try {
   await userActor.updateUsername("ab");
@@ -198,11 +238,17 @@ const api = actor({
 <Tab title="Client (Connection)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+const api = actor({
+  state: { requestCount: 0 },
+  actions: { makeRequest: (c) => {} }
+});
+
+const registry = setup({ use: { api } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const conn = client.api.getOrCreate().connect();
+const conn = client.api.getOrCreate([]).connect();
 
 try {
   await conn.makeRequest();
@@ -213,7 +259,8 @@ try {
     console.log(error.metadata); // { limit: 100, resetAt: 1234567890, retryAfter: 45 }
 
     if (error.code === "rate_limited") {
-      console.log(`Rate limit hit. Try again in ${error.metadata.retryAfter} seconds`);
+      const metadata = error.metadata as { retryAfter: number };
+      console.log(`Rate limit hit. Try again in ${metadata.retryAfter} seconds`);
     }
   }
 }
@@ -223,11 +270,17 @@ try {
 <Tab title="Client (Stateless)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+const api = actor({
+  state: { requestCount: 0 },
+  actions: { makeRequest: (c) => {} }
+});
+
+const registry = setup({ use: { api } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const apiActor = client.api.getOrCreate();
+const apiActor = client.api.getOrCreate([]);
 
 try {
   await apiActor.makeRequest();
@@ -238,7 +291,8 @@ try {
     console.log(error.metadata); // { limit: 100, resetAt: 1234567890, retryAfter: 45 }
 
     if (error.code === "rate_limited") {
-      console.log(`Rate limit hit. Try again in ${error.metadata.retryAfter} seconds`);
+      const metadata = error.metadata as { retryAfter: number };
+      console.log(`Rate limit hit. Try again in ${metadata.retryAfter} seconds`);
     }
   }
 }
@@ -282,11 +336,22 @@ const payment = actor({
 <Tab title="Client (Connection)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+interface Transaction {
+  amount: number;
+  status: string;
+}
+
+const payment = actor({
+  state: { transactions: [] as Transaction[] },
+  actions: { processPayment: async (c, amount: number) => {} }
+});
+
+const registry = setup({ use: { payment } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const conn = client.payment.getOrCreate().connect();
+const conn = client.payment.getOrCreate([]).connect();
 
 try {
   await conn.processPayment(100);
@@ -305,11 +370,22 @@ try {
 <Tab title="Client (Stateless)">
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+interface Transaction {
+  amount: number;
+  status: string;
+}
+
+const payment = actor({
+  state: { transactions: [] as Transaction[] },
+  actions: { processPayment: async (c, amount: number) => {} }
+});
+
+const registry = setup({ use: { payment } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const paymentActor = client.payment.getOrCreate();
+const paymentActor = client.payment.getOrCreate([]);
 
 try {
   await paymentActor.processPayment(100);
@@ -352,6 +428,18 @@ For faster debugging during development, you can automatically expose internal e
 With error exposure enabled, clients will see the full error message instead of the generic "Internal error" response:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient, ActorError } from "rivetkit/client";
+
+const payment = actor({
+  state: {},
+  actions: { processPayment: async (c, amount: number) => {} }
+});
+
+const registry = setup({ use: { payment } });
+const client = createClient<typeof registry>("http://localhost:8080");
+const paymentActor = client.payment.getOrCreate([]);
+
 // With NODE_ENV=development or RIVET_EXPOSE_ERRORS=1
 try {
   await paymentActor.processPayment(100);

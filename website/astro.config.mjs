@@ -7,6 +7,7 @@ import sitemap from '@astrojs/sitemap';
 import { remarkPlugins } from './src/mdx/remark';
 import { rehypePlugins } from './src/mdx/rehype';
 import { generateRoutes } from './src/integrations/generate-routes';
+import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
 
 export default defineConfig({
 	site: 'https://rivet.gg',
@@ -26,6 +27,7 @@ export default defineConfig({
 		rehypePlugins,
 	},
 	integrations: [
+		typecheckCodeBlocks(),
 		generateRoutes(),
 		mdx({
 			syntaxHighlight: false,

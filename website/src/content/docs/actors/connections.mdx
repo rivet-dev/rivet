@@ -1,6 +1,8 @@
-# Connections
-
-Connections represent client connections to your actor. They provide a way to handle client authentication, manage connection-specific data, and control the connection lifecycle.
+---
+title: "Connections"
+description: "Connections represent client connections to your actor. They provide a way to handle client authentication, manage connection-specific data, and control the connection lifecycle."
+skill: true
+---
 
 For documentation on connecting to actors from clients, see the [Clients documentation](/docs/actors/clients).
 
@@ -13,11 +15,30 @@ For example:
 <CodeGroup>
 
 ```typescript {{"title":"Client"}}
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+interface ConnParams {
+  authToken: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+}
+
+const gameRoom = actor({
+  state: {},
+  createConnState: (c, params: ConnParams): ConnState => {
+    return { userId: "user-123", role: "player" };
+  },
+  actions: {}
+});
+
+const registry = setup({ use: { gameRoom } });
 const client = createClient<typeof registry>("http://localhost:8080");
-const gameRoom = client.gameRoom.getOrCreate("room-123", {
+
+const gameRoomHandle = client.gameRoom.getOrCreate(["room-123"], {
   params: { authToken: "supersekure" }
 });
 ```
@@ -32,6 +53,15 @@ interface ConnParams {
 interface ConnState {
   userId: string;
   role: string;
+}
+
+// Example validation functions
+function validateToken(token: string): boolean {
+  return token.length > 0;
+}
+
+function getUserIdFromToken(token: string): string {
+  return "user-" + token.slice(0, 8);
 }
 
 const gameRoom = actor({
@@ -50,9 +80,7 @@ const gameRoom = actor({
     return { userId: getUserIdFromToken(authToken), role: "player" };
   },
 
-  actions: {
-    // ...
-  }
+  actions: {}
 });
 ```
 
@@ -105,14 +133,20 @@ There are two ways to define an actor's connection state:
 		  joinedAt: number;
 		}
 
+		interface Message {
+		  username: string;
+		  message: string;
+		}
+
+		function generateUserId(): string {
+		  return "user-" + Math.random().toString(36).slice(2, 11);
+		}
+
 		const chatRoom = actor({
-		  state: { messages: [] },
+		  state: { messages: [] as Message[] },
 
 		  // Create connection state dynamically
 		  createConnState: (c): ConnState => {
-		    // Validate any connection parameters
-		    // ...
-
 		    // Return the connection state
 		    return {
 		      userId: generateUserId(),
@@ -122,7 +156,7 @@ There are two ways to define an actor's connection state:
 		  },
 
 		  actions: {
-		    sendMessage: (c, message) => {
+		    sendMessage: (c, message: string) => {
 		      const username = c.conn.state.userId;
 		      c.state.messages.push({ username, message });
 		      c.broadcast("newMessage", { username, message });
@@ -166,17 +200,32 @@ The `onBeforeConnect` hook does NOT return connection state - it's used solely f
 ```typescript
 import { actor } from "rivetkit";
 
+interface Message {
+  text: string;
+  author: string;
+}
+
+interface ConnParams {
+  authToken?: string;
+  userId?: string;
+  role?: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+  joinTime: number;
+}
+
+function validateToken(token: string): boolean {
+  return token.length > 0;
+}
+
 const chatRoom = actor({
-  state: { messages: [] },
+  state: { messages: [] as Message[] },
 
-  // Method 1: Use a static default connection state
-  connState: {
-    role: "guest",
-    joinTime: 0,
-  },
-
-  // Method 2: Dynamically create connection state
-  createConnState: (c, params: { userId?: string, role?: string }) => {
+  // Dynamically create connection state
+  createConnState: (c, params: ConnParams): ConnState => {
     return {
       userId: params.userId || "anonymous",
       role: params.role || "guest",
@@ -185,7 +234,7 @@ const chatRoom = actor({
   },
 
   // Validate connections before accepting them
-  onBeforeConnect: (c, params: { authToken?: string }) => {
+  onBeforeConnect: (c, params: ConnParams) => {
     // Validate authentication
     const authToken = params.authToken;
     if (!authToken || !validateToken(authToken)) {
@@ -193,10 +242,10 @@ const chatRoom = actor({
     }
 
     // Authentication is valid, connection will proceed
-    // The actual connection state will come from connState or createConnState
+    // The actual connection state will come from createConnState
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -211,8 +260,21 @@ Executed after the client has successfully connected. Can be async. Receives the
 ```typescript
 import { actor } from "rivetkit";
 
+interface ConnState {
+  userId: string;
+}
+
+interface UserStatus {
+  online: boolean;
+  lastSeen: number;
+}
+
 const chatRoom = actor({
-  state: { users: {}, messages: [] },
+  state: { users: {} as Record<string, UserStatus>, messages: [] as string[] },
+
+  createConnState: (): ConnState => ({
+    userId: "user-" + Math.random().toString(36).slice(2, 11)
+  }),
 
   onConnect: (c, conn) => {
     // Add user to the room's user list using connection state
@@ -228,7 +290,7 @@ const chatRoom = actor({
     console.log(`User ${userId} connected`);
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -243,8 +305,21 @@ Called when a client disconnects from the actor. Can be async. Receives the conn
 ```typescript
 import { actor } from "rivetkit";
 
+interface ConnState {
+  userId: string;
+}
+
+interface UserStatus {
+  online: boolean;
+  lastSeen: number;
+}
+
 const chatRoom = actor({
-  state: { users: {}, messages: [] },
+  state: { users: {} as Record<string, UserStatus>, messages: [] as string[] },
+
+  createConnState: (): ConnState => ({
+    userId: "user-" + Math.random().toString(36).slice(2, 11)
+  }),
 
   onDisconnect: (c, conn) => {
     // Update user status when they disconnect
@@ -260,7 +335,7 @@ const chatRoom = actor({
     console.log(`User ${userId} disconnected`);
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -275,14 +350,28 @@ For example:
 ```typescript
 import { actor } from "rivetkit";
 
+interface ConnState {
+  userId: string;
+}
+
 const chatRoom = actor({
-  state: { users: {} },
-  
+  state: { users: {} as Record<string, { online: boolean }> },
+
+  createConnState: (): ConnState => ({
+    userId: "user-" + Math.random().toString(36).slice(2, 11)
+  }),
+
   actions: {
-    sendDirectMessage: (c, recipientId, message) => {
-      // Find the recipient's connection
-      const recipientConn = c.conns.find(conn => conn.state.userId === recipientId);
-      
+    sendDirectMessage: (c, recipientId: string, message: string) => {
+      // Find the recipient's connection by iterating over the Map
+      let recipientConn = null;
+      for (const conn of c.conns.values()) {
+        if (conn.state.userId === recipientId) {
+          recipientConn = conn;
+          break;
+        }
+      }
+
       if (recipientConn) {
         // Send a private message to just that client
         recipientConn.send("directMessage", {
@@ -306,17 +395,26 @@ Connections can be disconnected from within an action:
 ```typescript
 import { actor } from "rivetkit";
 
+interface ConnState {
+  userId: string;
+}
+
 const secureRoom = actor({
   state: {},
-  
+
+  createConnState: (): ConnState => ({
+    userId: "user-" + Math.random().toString(36).slice(2, 11)
+  }),
+
   actions: {
-    kickUser: (c, targetUserId, reason) => {
-      // Find the connection to kick
-      const targetConn = c.conns.find(conn => conn.state.userId === targetUserId);
-      
-      if (targetConn) {
-        // Disconnect with a reason
-        targetConn.disconnect(reason || "Kicked by admin");
+    kickUser: (c, targetUserId: string, reason?: string) => {
+      // Find the connection to kick by iterating over the Map
+      for (const conn of c.conns.values()) {
+        if (conn.state.userId === targetUserId) {
+          // Disconnect with a reason
+          conn.disconnect(reason || "Kicked by admin");
+          break;
+        }
       }
     }
   }
@@ -326,7 +424,16 @@ const secureRoom = actor({
 If you need to wait for the disconnection to complete, you can use `await`:
 
 ```typescript
-await c.conn.disconnect("Too many requests");
+import { actor } from "rivetkit";
+
+const myActor = actor({
+  state: {},
+  actions: {
+    disconnect: async (c) => {
+      await c.conn.disconnect("Too many requests");
+    }
+  }
+});
 ```
 
 This ensures the underlying network connections close cleanly before continuing.

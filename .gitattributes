@@ -27,6 +27,7 @@ website/public/llms.txt linguist-generated=true
 website/public/llms-full.txt linguist-generated=true
 website/public/docs/**/*.md linguist-generated=true
 website/public/typedoc/**/* linguist-generated=true
+skills/** linguist-generated=true
 **/Cargo.lock linguist-generated=true
 
 # I refuse to admit there's more TypeScript than Rust in the codebase
@@ -40,4 +41,3 @@ frontend/**/*.ts linguist-generated=true
 frontend/**/*.tsx linguist-generated=true
 frontend/**/*.js linguist-generated=true
 frontend/**/*.jsx linguist-generated=true
-

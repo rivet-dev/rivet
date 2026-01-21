@@ -1,4 +1,4 @@
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import { AUTHORS } from '@/lib/article';
 
 interface OtherArticlesListProps {
@@ -10,30 +10,25 @@ export const OtherArticlesList = async ({
 }: OtherArticlesListProps) => {
 	const posts = await getCollection('posts');
 
-	// Filter out the current post and sort by date
+	// Filter out the current post, unpublished posts, and sort by date
 	const otherPosts = posts
 		.filter(post => {
 			const slug = post.id.replace(/\/page$/, '');
-			return slug !== currentSlug;
+			return slug !== currentSlug && !post.data.unpublished;
 		})
 		.sort((a, b) => b.data.published.getTime() - a.data.published.getTime());
 
-	// Get titles from headings
-	const articlesWithTitles = await Promise.all(
-		otherPosts.map(async (post) => {
-			const { headings } = await render(post);
-			const title = headings.find(h => h.depth === 1)?.text || post.id;
-			const slug = post.id.replace(/\/page$/, '');
-			const author = AUTHORS[post.data.author];
+	const articlesWithTitles = otherPosts.map((post) => {
+		const slug = post.id.replace(/\/page$/, '');
+		const author = AUTHORS[post.data.author];
 
-			return {
-				slug,
-				title,
-				author,
-				date: post.data.published,
-			};
-		})
-	);
+		return {
+			slug,
+			title: post.data.title,
+			author,
+			date: post.data.published,
+		};
+	});
 
 	const formatter = new Intl.DateTimeFormat("en", {});
 

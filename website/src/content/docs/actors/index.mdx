@@ -1,167 +1,718 @@
+---
+title: "Overview"
+description: "Actors for long-lived processes with durable state, realtime, and hibernate when not in use."
+skill: false
+---
+
 import { faCloudflare, faNodeJs, faReact, faNextjs } from "@rivet-gg/icons";
-
-# Overview
-
-Actors for long-lived processes with durable state, realtime, and hibernate when not in use.
 
 ## Features
 
 - **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts.
-- **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes.
+- **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes. State is persisted to Rivet for long term storage, so it survives server restarts.
 - **Realtime**: Update state and broadcast changes in realtime with WebSockets. No external pub/sub systems, no polling – just built-in low-latency events.
 - **Infinitely Scalable**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
 - **Fault Tolerant**: Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations.
 
-## Core Concepts
+## When to Use Rivet Actors
 
-### State Management
+- **AI agents & sandboxes**: multi-step toolchains, conversation memory, sandbox orchestration.
+- **Multiplayer or collaborative apps**: CRDT docs, shared cursors, realtime dashboards, chat.
+- **Workflow automation**: background jobs, cron, rate limiters, durable queues, backpressure control.
+- **Data-intensive backends**: geo-distributed or per-tenant databases, in-memory caches, sharded SQL.
+- **Networking workloads**: WebSocket servers, custom protocols, local-first sync, edge fanout.
 
-Actors maintain persistent state that survives restarts, crashes, and deployments. State can be defined as a constant or created dynamically:
+{/* SKILL_OVERVIEW_START */}
+
+## First Steps
+
+1. Install RivetKit
+   ```bash
+   npm install rivetkit
+   ```
+2. Define a registry with `setup({ use: { /* actors */ } })`.
+3. Expose `registry.serve()` or `registry.handler()` (serverless) or `registry.startRunner()` (runner mode).
+4. Verify `/api/rivet/metadata` returns 200 before deploying.
+5. Configure Rivet Cloud or self-hosted engine (registry token, project, region, metadata endpoint).
+6. Integrate clients
+
+## Minimal Project
+
+### Backend
+
+**actors.ts**
+
+```ts
+import { actor, setup } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      c.broadcast("count", c.state.count);
+      return c.state.count;
+    },
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+
+**server.ts**
+
+Integrate with the user's existing server if applicable. Otherwise, default to Hono.
+
+<Tabs>
+
+<Tab title="No Framework">
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c, amount: number) => c.state.count += amount }
+});
+
+const registry = setup({ use: { counter } });
+
+// Exposes Rivet API on /api/rivet/ to communicate with actors
+export default registry.serve();
+```
+
+</Tab>
+
+<Tab title="Hono">
+
+```typescript
+import { Hono } from "hono";
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c, amount: number) => c.state.count += amount }
+});
+
+const registry = setup({ use: { counter } });
+
+// Build client to communicate with actors (optional)
+const client = createClient<typeof registry>();
+
+const app = new Hono();
+
+// Exposes Rivet API to communicate with actors
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+export default app;
+```
+
+</Tab>
+
+<Tab title="Elysia">
+
+```typescript
+import { Elysia } from "elysia";
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c, amount: number) => c.state.count += amount }
+});
+
+const registry = setup({ use: { counter } });
+
+// Build client to communicate with actors (optional)
+const client = createClient<typeof registry>();
+
+const app = new Elysia()
+	// Exposes Rivet API to communicate with actors
+	.all("/api/rivet/*", (c) => registry.handler(c.request));
+
+export default app;
+
+```
+
+</Tab>
+
+</Tabs>
+
+### Minimal Client
+
+```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c, amount: number) => c.state.count += amount }
+});
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+const counterHandle = client.counter.getOrCreate(["my-counter"]);
+await counterHandle.increment(1);
+```
+
+See the [client quick reference](#javascript-client-quick-reference) for more details.
+
+
+## Actor Quick Reference
+
+### State
+
+Persistent data that survives restarts, crashes, and deployments. State is persisted on Rivet Cloud or Rivet self-hosted, so it survives restarts if the current process crashes or exits.
+
+<Tabs>
+<Tab title="Static Initial State">
+```ts
 import { actor } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
-  
   actions: {
-    increment: (c) => {
-      c.state.count++;
-      return c.state.count;
-    },
-    
-    getCount: (c) => c.state.count,
-  }
+    increment: (c) => c.state.count += 1,
+  },
+});
+```
+</Tab>
+<Tab title="Dynamic Initial State">
+```ts
+import { actor } from "rivetkit";
+
+interface CounterState {
+  count: number;
+}
+
+const counter = actor({
+  state: { count: 0 } as CounterState,
+  createState: (c, input: { start?: number }): CounterState => ({
+    count: input.start ?? 0,
+  }),
+  actions: {
+    increment: (c) => c.state.count += 1,
+  },
+});
+```
+</Tab>
+</Tabs>
+
+[Documentation](/docs/actors/state)
+
+### Input
+
+Pass initialization data when creating actors.
+
+```ts
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const game = actor({
+  createState: (c, input: { mode: string }) => ({ mode: input.mode }),
+  actions: {},
+});
+
+const registry = setup({ use: { game } });
+const client = createClient<typeof registry>();
+
+// Client usage
+const gameHandle = client.game.getOrCreate(["game-1"], {
+  createWithInput: { mode: "ranked" }
 });
 ```
 
-Learn more about [state management](/docs/actors/state).
+[Documentation](/docs/actors/input)
+
+### Temporary Variables
+
+Temporary data that doesn't survive restarts. Use for non-serializable objects (event emitters, connections, etc).
+
+<Tabs>
+<Tab title="Static Initial Vars">
+```ts
+import { actor } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  vars: { lastAccess: 0 },
+  actions: {
+    increment: (c) => {
+      c.vars.lastAccess = Date.now();
+      return c.state.count += 1;
+    },
+  },
+});
+```
+</Tab>
+<Tab title="Dynamic Initial Vars">
+```ts
+import { actor } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  createVars: () => ({
+    emitter: new EventTarget(),
+  }),
+  actions: {
+    increment: (c) => {
+      c.vars.emitter.dispatchEvent(new Event("change"));
+      return c.state.count += 1;
+    },
+  },
+});
+```
+</Tab>
+</Tabs>
+
+[Documentation](/docs/actors/ephemeral-variables)
 
 ### Actions
 
-Actions are the primary way to interact with actors. They're type-safe functions that can modify state and communicate with clients:
+Actions are the primary way clients and other actors communicate with an actor.
 
-```typescript
+```ts
+import { actor } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => (c.state.count += amount),
+    getCount: (c) => c.state.count,
+  },
+});
+```
+
+[Documentation](/docs/actors/actions)
+
+### Events & Broadcasts
+
+Events enable real-time communication from actors to connected clients.
+
+```ts
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: { messages: [] as Array<{text: string, userId: string}> },
-  
+  state: { messages: [] as string[] },
   actions: {
-    sendMessage: (c, userId: string, text: string) => {
-      const message = { text, userId };
-      c.state.messages.push(message);
-      c.broadcast("newMessage", message);
-      return message;
+    sendMessage: (c, text: string) => {
+      // Broadcast to ALL connected clients
+      c.broadcast("newMessage", { text });
     },
-    
-    getMessages: (c) => c.state.messages
-  }
+  },
 });
 ```
 
-Actions can be called from your backend, your clients, or other actors:
+[Documentation](/docs/actors/events)
 
-```typescript
-const room = client.chatRoom.getOrCreate(["general"]);
-const message = await room.sendMessage("user-123", "Hello everyone!");
-```
+### Connections
 
-Learn more about [actions](/docs/actors/actions) and [communicating with actors](/docs/actors/communicating-between-actors).
+Access all connected clients via `c.conns`. Each connection has state defined by `connState` or `createConnState`.
 
-### Real-time Communication & Events
-
-Actors support real-time bidirectional communication through WebSocket connections. Clients can establish persistent connections to receive live updates.
-
-For example, to send events to all connected clients:
-
-```typescript
+```ts
 import { actor } from "rivetkit";
 
-const liveAuction = actor({
-  state: { currentBid: 0 },
-  
+interface ConnState {
+  userId: string;
+}
+
+const chatRoom = actor({
+  state: {},
+  connState: { userId: "" } as ConnState,
+  createConnState: (c, params: { userId: string }): ConnState => ({ userId: params.userId }),
   actions: {
-    placeBid: (c, amount: number) => {
-      c.state.currentBid = amount;
-      c.broadcast("newBid", { amount });
-      return amount;
-    }
+    // Send to a specific connection
+    sendPrivate: (c, targetUserId: string, text: string) => {
+      for (const conn of c.conns.values()) {
+        if (conn.state.userId === targetUserId) {
+          conn.send("privateMessage", { text });
+          break;
+        }
+      }
+    },
+    // Send to all except current connection
+    notifyOthers: (c, text: string) => {
+      for (const conn of c.conns.values()) {
+        if (conn !== c.conn) conn.send("notification", { text });
+      }
+    },
+    // Disconnect a client
+    kickUser: (c, userId: string) => {
+      for (const conn of c.conns.values()) {
+        if (conn.state.userId === userId) {
+          conn.disconnect("Kicked by admin");
+          break;
+        }
+      }
+    },
+  },
+});
+```
+
+[Documentation](/docs/actors/connections)
+
+### Actor-to-Actor Communication
+
+Actors can call other actors using `c.client()`.
+
+```ts
+import { actor, setup } from "rivetkit";
+
+const inventory = actor({
+  state: { stock: 100 },
+  actions: {
+    reserve: (c, amount: number) => { c.state.stock -= amount; }
   }
 });
-```
 
-Clients connect and listen for real-time updates:
-
-```typescript
-const auction = client.liveAuction.getOrCreate(["auction-123"]);
-const connection = auction.connect();
-
-connection.on("newBid", (data) => {
-  console.log(`New bid: $${data.amount}`);
+const order = actor({
+  state: {},
+  actions: {
+    process: async (c) => {
+      const client = c.client<typeof registry>();
+      await client.inventory.getOrCreate(["main"]).reserve(1);
+    },
+  },
 });
 
-await auction.placeBid(150);
+const registry = setup({ use: { inventory, order } });
 ```
 
-Learn more about [events](/docs/actors/events) and [client communication](/docs/actors/communicating-between-actors).
+[Documentation](/docs/actors/communicating-between-actors)
 
-### Scheduling & Lifecycle
+### Scheduling
 
-Actors support scheduled tasks and lifecycle management:
+Schedule actions to run after a delay or at a specific time. Schedules persist across restarts, upgrades, and crashes.
 
-```typescript
+```ts
 import { actor } from "rivetkit";
 
 const reminder = actor({
   state: { message: "" },
-  
   actions: {
+    // Schedule action to run after delay (ms)
     setReminder: (c, message: string, delayMs: number) => {
       c.state.message = message;
       c.schedule.after(delayMs, "sendReminder");
     },
-    
+    // Schedule action to run at specific timestamp
+    setReminderAt: (c, message: string, timestamp: number) => {
+      c.state.message = message;
+      c.schedule.at(timestamp, "sendReminder");
+    },
     sendReminder: (c) => {
       c.broadcast("reminder", { message: c.state.message });
+    },
+  },
+});
+```
+
+[Documentation](/docs/actors/schedule)
+
+### Destroying Actors
+
+Permanently delete an actor and its state using `c.destroy()`.
+
+```ts
+import { actor } from "rivetkit";
+
+const userAccount = actor({
+  state: { email: "", name: "" },
+  onDestroy: (c) => {
+    console.log(`Account ${c.state.email} deleted`);
+  },
+  actions: {
+    deleteAccount: (c) => {
+      c.destroy();
+    },
+  },
+});
+```
+
+[Documentation](/docs/actors/destroy)
+
+### Lifecycle Hooks
+
+Actors support hooks for initialization, connections, networking, and state changes.
+
+```ts
+import { actor } from "rivetkit";
+
+interface RoomState {
+  users: Record<string, boolean>;
+  name?: string;
+}
+
+interface RoomInput {
+  roomName: string;
+}
+
+interface ConnState {
+  userId: string;
+  joinedAt: number;
+}
+
+const chatRoom = actor({
+  state: { users: {} } as RoomState,
+  vars: { startTime: 0 },
+  connState: { userId: "", joinedAt: 0 } as ConnState,
+
+  // State & vars initialization
+  createState: (c, input: RoomInput): RoomState => ({ users: {}, name: input.roomName }),
+  createVars: () => ({ startTime: Date.now() }),
+
+  // Actor lifecycle
+  onCreate: (c) => console.log("created", c.key),
+  onDestroy: (c) => console.log("destroyed"),
+  onWake: (c) => console.log("actor started"),
+  onSleep: (c) => console.log("actor sleeping"),
+  onStateChange: (c, newState) => c.broadcast("stateChanged", newState),
+
+  // Connection lifecycle
+  createConnState: (c, params): ConnState => ({ userId: (params as { userId: string }).userId, joinedAt: Date.now() }),
+  onBeforeConnect: (c, params) => { /* validate auth */ },
+  onConnect: (c, conn) => console.log("connected:", conn.state.userId),
+  onDisconnect: (c, conn) => console.log("disconnected:", conn.state.userId),
+
+  // Networking
+  onRequest: (c, req) => new Response(JSON.stringify(c.state)),
+  onWebSocket: (c, socket) => socket.addEventListener("message", console.log),
+
+  // Response transformation
+  onBeforeActionResponse: <Out>(c: unknown, name: string, args: unknown[], output: Out): Out => output,
+
+  actions: {},
+});
+```
+
+[Documentation](/docs/actors/lifecycle)
+
+## JavaScript Client Quick Reference
+
+### Stateless vs Stateful
+
+```ts
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      c.broadcast("count", c.state.count);
+      return c.state.count;
     }
   }
 });
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+const counterHandle = client.counter.getOrCreate(["my-counter"]);
+
+// Stateless: each call is independent, no persistent connection
+await counterHandle.increment(1);
+
+// Stateful: persistent connection for realtime events
+const conn = counterHandle.connect();
+conn.on("count", (value: number) => console.log(value));
+await conn.increment(1);
 ```
 
-Learn more about [actor lifecycle](/docs/actors/lifecycle).
+[Documentation](/docs/actors/clients)
 
-### Type Safety
+### Getting Actors
 
-Rivet provides end-to-end TypeScript safety between clients and actors:
+```ts
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
 
-<CodeGroup>
+const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {}
+});
 
-```typescript {{"title":"Actor"}}
-const userManager = actor({
-  state: { users: {} as Record<string, {name: string}> },
-  
+const game = actor({
+  state: { mode: "" },
+  createState: (c, input: { mode: string }) => ({ mode: input.mode }),
+  actions: {}
+});
+
+const registry = setup({ use: { chatRoom, game } });
+const client = createClient<typeof registry>();
+
+// Get or create by key
+const room = client.chatRoom.getOrCreate(["room-42"]);
+
+// Get existing (returns null if not found)
+const existing = client.chatRoom.get(["room-42"]);
+
+// Create with input
+const gameHandle = client.game.create(["game-1"], { input: { mode: "ranked" } });
+```
+
+[Documentation](/docs/actors/keys)
+
+### Subscribing to Events
+
+```ts
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {}
+});
+
+const registry = setup({ use: { chatRoom } });
+const client = createClient<typeof registry>();
+
+const conn = client.chatRoom.getOrCreate(["general"]).connect();
+conn.on("message", (msg: string) => console.log(msg));
+conn.once("gameOver", () => console.log("done"));
+```
+
+[Documentation](/docs/actors/events)
+
+### Calling from Backend
+
+Call actors from your server-side code.
+
+```ts
+import { Hono } from "hono";
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
   actions: {
-    createUser: (c, name: string) => {
-      const userId = crypto.randomUUID();
-      c.state.users[userId] = { name };
-      return { userId, name };
-    },
-    
-    getUser: (c, userId: string) => c.state.users[userId]
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
   }
+});
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+const app = new Hono();
+
+app.post("/increment/:name", async (c) => {
+  const counterHandle = client.counter.getOrCreate([c.req.param("name")]);
+  const newCount = await counterHandle.increment(1);
+  return c.json({ count: newCount });
 });
 ```
 
-```typescript {{"title":"Client"}}
-const manager = client.userManager.getOrCreate(["default"]);
+[Documentation](/docs/clients/javascript)
 
-const user = await manager.createUser("Alice");
-// Type: {userId: string, name: string}
+## React Quick Reference
 
-const foundUser = await manager.getUser(user.userId);
-// Type: {name: string} | undefined
+### Setup
+
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      c.broadcast("count", c.state.count);
+      return c.state.count;
+    }
+  }
+});
+
+export const registry = setup({ use: { counter } });
 ```
 
+```tsx {{"title":"app.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+```
 </CodeGroup>
 
+### useActor & Calling Actions
+
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
+  }
+});
+
+export const registry = setup({ use: { counter } });
+```
+
+```tsx {{"title":"counter.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function Counter() {
+  const counter = useActor({ name: "counter", key: ["my-counter"] });
+
+  const handleClick = async () => {
+    await counter.connection?.increment(1);
+  };
+
+  return <button onClick={handleClick}>+</button>;
+}
+```
+</CodeGroup>
+
+### Subscribing to Events
+
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {
+    send: (c, msg: string) => {
+      c.state.messages.push(msg);
+      c.broadcast("message", msg);
+    }
+  }
+});
+
+export const registry = setup({ use: { chatRoom } });
+```
+
+```tsx {{"title":"chat.tsx"}}
+import { useState } from "react";
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function ChatRoom() {
+  const [messages, setMessages] = useState<string[]>([]);
+  const chat = useActor({ name: "chatRoom", key: ["general"] });
+
+  chat.useEvent("message", (msg: string) => setMessages((prev) => [...prev, msg]));
+
+  return <div>{messages.map((m, i) => <p key={i}>{m}</p>)}</div>;
+}
+```
+</CodeGroup>
+
+[Documentation](/docs/clients/react)
+
+{/* SKILL_OVERVIEW_END */}

@@ -1,6 +1,8 @@
-# Actions
-
-Actions are how your backend, frontend, or other actors can communicate with actors. Actions are defined as functions in the actor configuration and can be called from clients.
+---
+title: "Actions"
+description: "Actions are how your backend, frontend, or other actors can communicate with actors. Actions are defined as functions in the actor configuration and can be called from clients."
+skill: true
+---
 
 Actions are very lightweight. They can be called thousands of times per second safely.
 
@@ -21,7 +23,7 @@ const mathUtils = actor({
   state: {},
   actions: {
     // This is an action
-    multiplyByTwo: (c, x) => {
+    multiplyByTwo: (c, x: number) => {
       return x * 2;
     }
   }
@@ -37,13 +39,28 @@ Actions can be called in different ways depending on your use case:
 <Tabs>
 <Tab title="Frontend (createClient)">
 
-```typescript {{"title":"frontend.ts"}}
+```typescript frontend.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./src/index";
+import { actor, setup } from "rivetkit";
 
+// Define actor
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
+  }
+});
+
+// Create registry
+const registry = setup({ use: { counter } });
+
+// Create client
 const client = createClient<typeof registry>("http://localhost:8080");
-const counter = await client.counter.getOrCreate();
-const result = await counter.increment(42);
+const counterActor = await client.counter.getOrCreate();
+const result = await counterActor.increment(42);
 console.log(result); // The value returned by the action
 ```
 
@@ -52,15 +69,26 @@ Learn more about [communicating with actors from the frontend](/docs/actors/comm
 </Tab>
 <Tab title="Backend (registry.handler)">
 
-```typescript {{"title":"server.ts"}}
-import { setup } from "rivetkit";
+```typescript server.ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 import { Hono } from "hono";
 
-const registry = setup({
-  use: { counter }
+// Define actor
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
+  }
 });
 
+// Create registry
+const registry = setup({ use: { counter } });
+
+// Create client
 const client = createClient<typeof registry>();
 
 const app = new Hono();
@@ -70,8 +98,8 @@ app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 
 // Use the client to call actions on a request
 app.get("/foo", async (c) => {
-	const counter = client.counter.getOrCreate();
-	const result = await counter.increment(42);
+	const counterActor = client.counter.getOrCreate();
+	const result = await counterActor.increment(42);
 	return c.text(String(result));
 });
 
@@ -83,17 +111,34 @@ Learn more about [communicating with actors from the backend](/docs/actors/commu
 </Tab>
 <Tab title="Actor-to-Actor (c.client())">
 
-```typescript {{"title":"actor.ts"}}
+```typescript actor.ts
+import { actor, setup } from "rivetkit";
+
+// Define counter actor
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
+  }
+});
+
+// Define actorA that calls counter
 const actorA = actor({
   state: {},
   actions: {
     callOtherActor: async (c) => {
       const client = c.client();
-      const counter = await client.counter.getOrCreate();
-      return await counter.increment(10);
+      const counterActor = await client.counter.getOrCreate();
+      return await counterActor.increment(10);
     }
   }
 });
+
+// Create registry
+export const registry = setup({ use: { counter, actorA } });
 ```
 
 Learn more about [communicating between actors](/docs/actors/communicating-between-actors).
@@ -111,8 +156,8 @@ The actor client includes type safety out of the box. When you use `createClient
 
 <CodeGroup>
 
-```typescript {{"title":"registry.ts"}}
-import { setup } from "rivetkit";
+```typescript registry.ts
+import { actor, setup } from "rivetkit";
 
 // Create simple counter
 const counter = actor({
@@ -125,23 +170,35 @@ const counter = actor({
   }
 });
 
-// Create and export the app
-const registry = setup({
+// Create and export the registry
+export const registry = setup({
   use: { counter }
 });
 ```
 
-```typescript {{"title":"client.ts"}}
+```typescript client.ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./src/index";
 
+// Define the actor inline for type inference
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, count: number) => {
+      c.state.count += count;
+      return c.state.count;
+    }
+  }
+});
+
+const registry = setup({ use: { counter } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Type-safe client usage
-const counter = await client.counter.get();
-await counter.increment(123); // OK
-await counter.increment("non-number type"); // TypeScript error
-await counter.nonexistentMethod(123); // TypeScript error
+const counterActor = await client.counter.get();
+await counterActor.increment(123); // OK
+// await counterActor.increment("non-number type"); // TypeScript error
+// await counterActor.nonexistentMethod(123); // TypeScript error
 ```
 
 </CodeGroup>
@@ -187,8 +244,29 @@ const user = actor({
 });
 ```
 
-```typescript {{"title":"client.ts"}}
-import { ActorError } from "rivetkit/client";
+```typescript client.ts
+import { actor, setup, UserError } from "rivetkit";
+import { ActorError, createClient } from "rivetkit/client";
+
+// Define the user actor
+const user = actor({
+  state: { username: "" },
+  actions: {
+    updateUsername: (c, username: string) => {
+      if (username.length > 32) {
+        throw new UserError("Username is too long", {
+          code: "username_too_long",
+          metadata: { maxLength: 32 }
+        });
+      }
+      c.state.username = username;
+    }
+  }
+});
+
+const registry = setup({ use: { user } });
+const client = createClient<typeof registry>();
+const userActor = await client.user.getOrCreate();
 
 try {
   await userActor.updateUsername("extremely_long_username_that_exceeds_limit");
@@ -215,7 +293,7 @@ If passing data to an actor from the frontend, use a library like [Zod](https://
 
 For example, to validate action parameters:
 
-```typescript {{"title":"actor.ts"}}
+```typescript actor.ts
 import { actor, UserError } from "rivetkit";
 import { z } from "zod";
 
@@ -227,18 +305,17 @@ const IncrementSchema = z.object({
 const counter = actor({
   state: { count: 0 },
   actions: {
-    increment: (c, params) => {
+    increment: (c, params: unknown) => {
       // Validate parameters
-      try {
-        const { count } = IncrementSchema.parse(params);
-        c.state.count += count;
-        return c.state.count;
-      } catch (err) {
-        throw new UserError("Invalid parameters", { 
+      const result = IncrementSchema.safeParse(params);
+      if (!result.success) {
+        throw new UserError("Invalid parameters", {
           code: "invalid_params",
-          meta: { errors: err.errors }
+          metadata: { errors: result.error.issues }
         });
       }
+      c.state.count += result.data.count;
+      return c.state.count;
     }
   }
 });

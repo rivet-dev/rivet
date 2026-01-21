@@ -1,6 +1,8 @@
-# External SQL Database
-
-While actors can serve as a complete database solution, they can also complement your existing databases. For example, you might use actors to handle frequently-changing data that needs real-time access, while keeping less frequently accessed data in your traditional database.
+---
+title: "External SQL Database"
+description: "While actors can serve as a complete database solution, they can also complement your existing databases. For example, you might use actors to handle frequently-changing data that needs real-time access, while keeping less frequently accessed data in your traditional database."
+skill: true
+---
 
 Actors can be used with common SQL databases, such as PostgreSQL and MySQL.
 
@@ -35,8 +37,8 @@ There are several options for places to host your SQL database:
 Here's a basic example of a user actor that creates a database record on start and tracks request counts:
 
 <CodeGroup>
-```typescript {{ "title": "registry.ts" }}
-import { actor, setup, CreateContext } from "rivetkit";
+```typescript registry.ts @nocheck
+import { actor, setup } from "rivetkit";
 import { Pool } from "pg";
 
 interface ActorInput {
@@ -55,21 +57,21 @@ const pool = new Pool({
 
 // Create the user actor
 export const userActor = actor({
-  createState: (c: CreateContext, input: ActorInput) => ({
+  createState: (c, input: ActorInput) => ({
     requestCount: 0,
     username: input.username,
     email: input.email,
     lastActive: Date.now()
   }),
-  
+
   // Insert user into database when actor creates
-  onCreate: async (c, opts) => {
-    const result = await pool.query(
+  onCreate: async (c) => {
+    await pool.query(
       "INSERT INTO users (username, email, created_at) VALUES ($1, $2, $3)",
       [c.state.username, c.state.email, c.state.lastActive]
     );
   },
-  
+
   // Sync state changes to database
   onStateChange: async (c, newState) => {
     await pool.query(
@@ -87,14 +89,14 @@ export const userActor = actor({
 
       return { requestCount: c.state.requestCount };
     },
-    
+
     // Get user data
     getUser: async (c) => {
       c.state.requestCount++;
       c.state.lastActive = Date.now();
-      
+
       return {
-        username: c.actorKey,
+        username: c.key[0],
         email: c.state.email,
         requestCount: c.state.requestCount,
         lastActive: c.state.lastActive
@@ -108,7 +110,7 @@ export const registry = setup({
 });
 ```
 
-```typescript {{ "title": "client.ts" }}
+```typescript client.ts @nocheck
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
@@ -142,8 +144,8 @@ const bobData = await bob.getUser();
 Here's the same user actor pattern using Drizzle ORM for more type-safe database operations:
 
 <CodeGroup>
-```typescript {{ "title": "registry.ts" }}
-import { actor, setup, CreateContext } from "rivetkit";
+```typescript registry.ts @nocheck
+import { actor, setup } from "rivetkit";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
@@ -172,22 +174,22 @@ const db = drizzle(pool);
 
 // Create the user actor
 export const userActor = actor({
-  createState: (c: CreateContext, input: ActorInput) => ({
+  createState: (c, input: ActorInput) => ({
     requestCount: 0,
     username: input.username,
     email: input.email,
     lastActive: Date.now()
   }),
-  
+
   // Insert user into database when actor creates
-  onCreate: async (c, opts) => {
-    const result = await db.insert(users).values({
+  onCreate: async (c) => {
+    await db.insert(users).values({
       username: c.state.username,
       email: c.state.email,
       createdAt: new Date(c.state.lastActive)
     });
   },
-  
+
   // Sync state changes to database
   onStateChange: async (c, newState) => {
     await db.update(users)
@@ -207,12 +209,12 @@ export const userActor = actor({
 
       return { requestCount: c.state.requestCount };
     },
-    
+
     // Get user data
     getUser: async (c) => {
       c.state.requestCount++;
       c.state.lastActive = Date.now();
-      
+
       return {
         username: c.state.username,
         email: c.state.email,
@@ -228,7 +230,7 @@ export const registry = setup({
 });
 ```
 
-```typescript {{ "title": "client.ts" }}
+```typescript client.ts @nocheck
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 

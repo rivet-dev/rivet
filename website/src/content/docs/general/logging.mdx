@@ -1,6 +1,8 @@
-# Logging
-
-Actors provide a built-in way to log complex data to the console.
+---
+title: "Logging"
+description: "Actors provide a built-in way to log complex data to the console."
+skill: true
+---
 
 Using the context's log object (`c.log`) allows you to log complex data using structured logging.
 
@@ -31,17 +33,26 @@ When using `c.log`, the actor's name, key, and actor ID are automatically includ
 ### Examples
 
 ```typescript
-// Just a message
-c.log.info('server started');
-// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="server started"
+import { actor } from "rivetkit";
 
-// Message with an object
-c.log.info('user connected', { userId: 123, ip: '192.168.1.1' });
-// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="user connected" userId=123 ip="192.168.1.1"
+const myActor = actor({
+  state: {},
+  actions: {
+    logExamples: (c) => {
+      // Just a message
+      c.log.info('server started');
+      // Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="server started"
 
-// Just an object (no message)
-c.log.info({ action: 'purchase', amount: 99.99, currency: 'USD' });
-// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 action="purchase" amount=99.99 currency="USD"
+      // Object with message and additional fields
+      c.log.info({ msg: 'user connected', userId: 123, ip: '192.168.1.1' });
+      // Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="user connected" userId=123 ip="192.168.1.1"
+
+      // Just an object (no message)
+      c.log.info({ action: 'purchase', amount: 99.99, currency: 'USD' });
+      // Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 action="purchase" amount=99.99 currency="USD"
+    }
+  }
+});
 ```
 
 The logging system is built on [Pino](https://getpino.io/#/docs/api?id=logger), a high-performance structured logger for Node.js.
@@ -71,11 +82,18 @@ RIVET_LOG_LEVEL=debug RIVET_LOG_TARGET=1 RIVET_LOG_TIMESTAMP=1 node server.js
 You can configure the log level programmatically when setting up your registry:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => c.state.count++ }
+});
+
 const registry = setup({
-	use: { counter },
-	logging: {
-		logLevel: "debug"
-	}
+  use: { counter },
+  logging: {
+    level: "debug"
+  }
 });
 ```
 
@@ -84,7 +102,13 @@ const registry = setup({
 You can also provide a custom Pino base logger for more advanced logging configurations:
 
 ```typescript
+import { actor, setup } from "rivetkit";
 import { pino } from "pino";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => c.state.count++ }
+});
 
 const customLogger = pino({
   level: "info",
@@ -94,10 +118,10 @@ const customLogger = pino({
 });
 
 const registry = setup({
-	use: { counter },
-	logging: {
-		baseLogger: customLogger,  // Use your custom Pino logger
-	}
+  use: { counter },
+  logging: {
+    baseLogger: customLogger,  // Use your custom Pino logger
+  }
 });
 ```
 
@@ -110,9 +134,16 @@ For more advanced Pino configuration options, see the [Pino API documentation](h
 You can disable the default RivetKit welcome message with:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => c.state.count++ }
+});
+
 const registry = setup({
-	use: { counter },
-	noWelcome: true
+  use: { counter },
+  noWelcome: true
 });
 ```
 

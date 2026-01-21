@@ -1,0 +1,202 @@
+# State
+
+> Source: `src/content/docs/actors/state.mdx`
+> Canonical URL: https://rivet.gg/docs/actors/state
+> Description: Actor state provides the best of both worlds: it's stored in-memory and persisted automatically. This lets you work with the data without added latency while still being able to survive crashes & upgrades.
+
+---
+Actors can also be used with external SQL databases. This can be useful to integrate actors with existing
+applications or for storing relational data. Read more [here](/docs/actors/external-sql).
+
+If you need low-level key-value storage for dynamic keys or blobs, see [Low-Level KV Storage](/docs/actors/kv).
+
+## Initializing State
+
+There are two ways to define an actor's initial state:
+
+### Static Initial State
+
+Define an actor state as a constant value:
+
+```typescript
+import { actor } from "rivetkit";
+
+// Simple state with a constant
+const counter = actor({
+  // Define state as a constant
+  state: { count: 0 },
+  
+  actions: {
+    // ...
+  }
+});
+```
+
+This value will be cloned for every new actor using `structuredClone`.
+
+### Dynamic Initial State
+
+Create actor state dynamically on each actors' creation:
+
+```typescript
+import { actor } from "rivetkit";
+
+// State with initialization logic
+const counter = actor({
+  // Define state using a creation function
+  createState: () => {
+    return { count: 0 };
+  },
+  
+  actions: {
+    // ...
+  }
+});
+```
+
+To accept a custom input parameters for the initial state, use:
+
+```typescript
+import { actor } from "rivetkit";
+
+interface CounterInput {
+  startingCount: number;
+}
+
+interface CounterState {
+  count: number;
+}
+
+// State with initialization logic
+const counter = actor({
+  state: { count: 0 } as CounterState,
+  // Define state using a creation function
+  createState: (c, input: CounterInput): CounterState => {
+    return { count: input.startingCount };
+  },
+
+  actions: {
+    increment: (c) => c.state.count++
+  }
+});
+```
+
+Read more about [input parameters](/docs/actors/input) here.
+
+If accepting arguments to `createState`, you **must** define the types: `createState(c: CreateContext, input: MyType)`
+
+Otherwise, the return type will not be inferred and `c.state` will be of type `unknown`.
+
+The `createState` function is called once when the actor is first created. See [Lifecycle](/docs/actors/lifecycle) for more details.
+
+## Modifying State
+
+To update state, modify the `state` property on the context object (`c.state`) in your actions:
+
+```typescript
+import { actor } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+
+  actions: {
+    // Define action to update state
+    increment: (c) => {
+      // Update state, this will automatically be persisted
+      c.state.count += 1;
+      return c.state.count;
+    },
+
+    add: (c, value: number) => {
+      c.state.count += value;
+      return c.state.count;
+    }
+  }
+});
+```
+
+Only state stored in the `state` object will be persisted. Any other variables or properties outside of this are not persisted.
+
+## State Saves
+
+Actors automatically handle persisting state transparently. This happens at the end of every action if the state has changed. State is also automatically saved after `onFetch` and `onWebSocket` handlers finish executing.
+
+For `onWebSocket` handlers specifically, you'll need to manually save state using `c.saveState()` while the WebSocket connection is open if you want state changes to be persisted immediately. This is because WebSocket connections can remain open for extended periods, and state changes made during event handlers (like `message` events) won't be automatically saved until the connection closes.
+
+In other cases where you need to force a state change mid-action, you can use `c.saveState()`. This should only be used if your action makes an important state change that needs to be persisted before the action completes.
+
+```typescript
+import { actor } from "rivetkit";
+
+// Mock risky operation
+async function someRiskyOperation() {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+const criticalProcess = actor({
+  state: {
+    steps: [] as string[],
+    currentStep: 0
+  },
+
+  actions: {
+    processStep: async (c) => {
+      // Update to current step
+      c.state.currentStep += 1;
+      c.state.steps.push(`Started step ${c.state.currentStep}`);
+
+      // Force save state before the async operation
+      await c.saveState({ immediate: true });
+
+      // Long-running operation that might fail
+      await someRiskyOperation();
+
+      // Update state again
+      c.state.steps.push(`Completed step ${c.state.currentStep}`);
+
+      return c.state.currentStep;
+    }
+  }
+});
+```
+
+## State Isolation
+
+Each actor's state is completely isolated, meaning it cannot be accessed directly by other actors or clients.
+
+To interact with an actor's state, you must use [Actions](/docs/actors/actions). Actions provide a controlled way to read from and write to the state.
+
+If you need a shared state between multiple actors, see [sharing and joining state](/docs/actors/sharing-and-joining-state).
+
+## Ephemeral Variables
+
+In addition to persisted state, actors can store ephemeral data that is not saved to permanent storage using `vars`. This is useful for temporary data or non-serializable objects like database connections or event emitters.
+
+For complete documentation on ephemeral variables, see [Ephemeral Variables](/docs/actors/ephemeral-variables).
+
+## Type Limitations
+
+State is currently constrained to the following types:
+
+- `null`
+- `undefined`
+- `boolean`
+- `string`
+- `number`
+- `BigInt`
+- `Date`
+- `RegExp`
+- `Error`
+- Typed arrays (`Uint8Array`, `Int8Array`, `Float32Array`, etc.)
+- `Map`
+- `Set`
+- `Array`
+- Plain objects
+
+## API Reference
+
+- [`CreateContext`](/typedoc/types/rivetkit.mod.CreateContext.html) - Context available during actor state creation
+- [`ActorContext`](/typedoc/interfaces/rivetkit.mod.ActorContext.html) - Context available throughout actor lifecycle
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining actors with state
+
+_Source doc path: /docs/actors/state_

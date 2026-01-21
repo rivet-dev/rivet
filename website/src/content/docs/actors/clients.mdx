@@ -1,6 +1,8 @@
-# Clients
-
-Clients are used to get and communicate with actors from your application. Clients can be created from either your frontend or backend.
+---
+title: "Clients"
+description: "Clients are used to get and communicate with actors from your application. Clients can be created from either your frontend or backend."
+skill: true
+---
 
 ## Creating a Client
 
@@ -16,7 +18,7 @@ Clients are used to get and communicate with actors from your application. Clien
 		const client = createClient<typeof registry>();
 		```
 
-		```tsx {{"title":"React"}}
+		```tsx React @nocheck
 		import { createRivetKit } from "@rivetkit/react";
 		import type { registry } from "./registry";  // Must use `type`
 
@@ -54,14 +56,27 @@ Clients are used to get and communicate with actors from your application. Clien
 		From within an actor to communicate with other actors:
 
 		```typescript
-		const myActor = actor({
+		import { actor, setup } from "rivetkit";
+
+		const counter = actor({
+			state: { count: 0 },
 			actions: {
-				callOtherActor: (c) => {
+				increment: (c) => ++c.state.count
+			}
+		});
+
+		const myActor = actor({
+			state: {},
+			actions: {
+				callOtherActor: async (c) => {
 					const client = c.client<typeof registry>();
-					// ...
+					const counterHandle = client.counter.getOrCreate(["shared"]);
+					return await counterHandle.increment();
 				}
 			}
 		});
+
+		const registry = setup({ use: { counter, myActor } });
 		```
 
 		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
@@ -76,11 +91,27 @@ Returns a handle to an existing actor or creates one if it doesn't exist:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const counter = client.counter.getOrCreate("my-counter");
-const count = await counter.increment(5);
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
+  }
+});
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+
+const counterHandle = client.counter.getOrCreate(["my-counter"]);
+const count = await counterHandle.increment(5);
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const counter = useActor({
   name: "counter",
   key: ["my-counter"],
@@ -95,12 +126,23 @@ Pass initialization data when creating:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const game = client.game.getOrCreate("game-123", {
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const game = actor({
+  state: { gameMode: "", maxPlayers: 0 },
+  actions: {}
+});
+
+const registry = setup({ use: { game } });
+const client = createClient<typeof registry>();
+
+const gameHandle = client.game.getOrCreate(["game-123"], {
   createWithInput: { gameMode: "tournament", maxPlayers: 8 }
 });
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const game = useActor({
   name: "game",
   key: ["game-123"],
@@ -115,14 +157,27 @@ Returns a handle to an existing actor or `null` if it doesn't exist:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const handle = client.myActor.get("actor-id");
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const myActor = actor({
+  state: {},
+  actions: {
+    someAction: (c) => "result"
+  }
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+
+const handle = client.myActor.get(["actor-id"]);
 
 if (handle) {
   await handle.someAction();
 }
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 import { createClient } from "rivetkit/client";
 import { useMemo } from "react";
 import type { registry } from "./registry";
@@ -132,7 +187,7 @@ import type { registry } from "./registry";
 
 function MyComponent() {
   const client = useMemo(() => createClient<typeof registry>(), []);
-  const handle = useMemo(() => client.myActor.get("actor-id"), [client]);
+  const handle = useMemo(() => client.myActor.get(["actor-id"]), [client]);
 
   // Use handle to call actions
 }
@@ -145,12 +200,23 @@ Creates a new actor, failing if one already exists with that key:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const newGame = await client.game.create("game-456", {
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const game = actor({
+  state: { gameMode: "" },
+  actions: {}
+});
+
+const registry = setup({ use: { game } });
+const client = createClient<typeof registry>();
+
+const newGame = await client.game.create(["game-456"], {
   input: { gameMode: "classic" }
 });
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 import { createClient } from "rivetkit/client";
 import { useMemo, useEffect, useState } from "react";
 import type { registry } from "./registry";
@@ -163,7 +229,7 @@ function MyComponent() {
   const [handle, setHandle] = useState(null);
 
   useEffect(() => {
-    client.game.create("game-456", {
+    client.game.create(["game-456"], {
       input: { gameMode: "classic" }
     }).then(setHandle);
   }, [client]);
@@ -179,10 +245,21 @@ Connect to an actor using its internal ID:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const actor = client.myActor.getForId("lrysjam017rhxofttna2x5nzjml610");
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const myActor = actor({
+  state: {},
+  actions: {}
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+
+const actorHandle = client.myActor.getForId("lrysjam017rhxofttna2x5nzjml610");
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 import { createClient } from "rivetkit/client";
 import { useMemo } from "react";
 import type { registry } from "./registry";
@@ -205,14 +282,32 @@ Prefer using keys over internal IDs for simplicity.
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const counter = client.counter.getOrCreate("my-counter");
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
 
-const count = await counter.increment(5);
-const value = await counter.getCount();
-await counter.reset();
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    },
+    getCount: (c) => c.state.count,
+    reset: (c) => { c.state.count = 0; }
+  }
+});
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+
+const counterHandle = client.counter.getOrCreate(["my-counter"]);
+
+const count = await counterHandle.increment(5);
+const value = await counterHandle.getCount();
+await counterHandle.reset();
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const counter = useActor({
   name: "counter",
   key: ["my-counter"],
@@ -233,8 +328,25 @@ For real-time use cases, establish a persistent connection to the actor:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const counter = client.counter.getOrCreate("live-counter");
-const conn = counter.connect();
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      c.broadcast("countChanged", c.state.count);
+      return c.state.count;
+    }
+  }
+});
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+
+const counterHandle = client.counter.getOrCreate(["live-counter"]);
+const conn = counterHandle.connect();
 
 // Listen for events
 conn.on("countChanged", (newCount: number) => {
@@ -245,7 +357,7 @@ conn.on("countChanged", (newCount: number) => {
 await conn.increment(1);
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const [count, setCount] = useState(0);
 
 const counter = useActor({
@@ -269,10 +381,34 @@ Listen for events from connected actors:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const conn = client.chatRoom.getOrCreate("general").connect();
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+interface Message {
+  from: string;
+  text: string;
+}
+
+const chatRoom = actor({
+  state: { messages: [] as Message[] },
+  actions: {
+    sendMessage: (c, from: string, text: string) => {
+      c.state.messages.push({ from, text });
+      c.broadcast("messageReceived", { from, text });
+    },
+    startGame: (c) => {
+      c.broadcast("gameStarted");
+    }
+  }
+});
+
+const registry = setup({ use: { chatRoom } });
+const client = createClient<typeof registry>();
+
+const conn = client.chatRoom.getOrCreate(["general"]).connect();
 
 // Listen for events
-conn.on("messageReceived", (message) => {
+conn.on("messageReceived", (message: Message) => {
   console.log(`${message.from}: ${message.text}`);
 });
 
@@ -282,7 +418,7 @@ conn.once("gameStarted", () => {
 });
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const [messages, setMessages] = useState<Message[]>([]);
 
 const chatRoom = useActor({
@@ -303,17 +439,31 @@ Import types from your registry for end-to-end type safety:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+// Define actors in a shared registry file
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number) => {
+      c.state.count += amount;
+      return c.state.count;
+    }
+  }
+});
+
+const registry = setup({ use: { counter } });
+
+// In your client code, import the registry type
 const client = createClient<typeof registry>();
 
 // IDE autocomplete shows available actors and actions
-const counter = client.counter.getOrCreate("my-counter");
-const count = await counter.increment(5);
+const counterHandle = client.counter.getOrCreate(["my-counter"]);
+const count = await counterHandle.increment(5);
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
@@ -336,13 +486,42 @@ Use `import type` to avoid accidentally bundling backend code in your frontend.
 Dispose clients to close all connections:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const myActor = actor({
+  state: {},
+  actions: {}
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+
+// ... use client ...
+
 await client.dispose();
 ```
 
 Dispose individual connections when finished:
 
 ```typescript
-const conn = actor.connect();
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const myActor = actor({
+  state: {},
+  actions: {
+    action: (c) => "result"
+  }
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+
+const actorHandle = client.myActor.getOrCreate(["example"]);
+const conn = actorHandle.connect();
+
+const handler = (data: unknown) => console.log(data);
 
 try {
   conn.on("event", handler);
@@ -362,7 +541,18 @@ Pass custom data to the actor when connecting:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const chat = client.chatRoom.getOrCreate("general", {
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const chatRoom = actor({
+  state: {},
+  actions: {}
+});
+
+const registry = setup({ use: { chatRoom } });
+const client = createClient<typeof registry>();
+
+const chat = client.chatRoom.getOrCreate(["general"], {
   params: {
     userId: "user-123",
     displayName: "Alice"
@@ -370,7 +560,7 @@ const chat = client.chatRoom.getOrCreate("general", {
 });
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const chat = useActor({
   name: "chatRoom",
   key: ["general"],
@@ -388,14 +578,25 @@ Pass authentication tokens when connecting:
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript"}}
-const chat = client.chatRoom.getOrCreate("general", {
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const chatRoom = actor({
+  state: {},
+  actions: {}
+});
+
+const registry = setup({ use: { chatRoom } });
+const client = createClient<typeof registry>();
+
+const chat = client.chatRoom.getOrCreate(["general"], {
   params: {
     authToken: "jwt-token-here"
   }
 });
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 const chat = useActor({
   name: "chatRoom",
   key: ["general"],
@@ -412,29 +613,55 @@ See [authentication](/docs/actors/authentication) for more details.
 
 <CodeGroup>
 ```typescript {{"title":"JavaScript (Connection)"}}
-import { ActorError } from "rivetkit/client";
+import { actor, setup } from "rivetkit";
+import { ActorError, createClient } from "rivetkit/client";
 
-const conn = actor.connect();
-conn.onError((error: ActorError) => {
+const myActor = actor({
+  state: {},
+  actions: {
+    protectedAction: (c) => "result"
+  }
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+
+const actorHandle = client.myActor.getOrCreate(["example"]);
+const conn = actorHandle.connect();
+
+conn.on("error", (error: ActorError) => {
   if (error.code === "forbidden") {
-    window.location.href = "/login";
+    console.log("Redirecting to login");
   }
 });
 ```
 
 ```typescript {{"title":"JavaScript (Stateless)"}}
-import { ActorError } from "rivetkit/client";
+import { actor, setup } from "rivetkit";
+import { ActorError, createClient } from "rivetkit/client";
+
+const myActor = actor({
+  state: {},
+  actions: {
+    protectedAction: (c) => "result"
+  }
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+
+const actorHandle = client.myActor.getOrCreate(["example"]);
 
 try {
-  const result = await actor.protectedAction();
+  const result = await actorHandle.protectedAction();
 } catch (error) {
   if (error instanceof ActorError && error.code === "forbidden") {
-    window.location.href = "/login";
+    console.log("Redirecting to login");
   }
 }
 ```
 
-```tsx {{"title":"React"}}
+```tsx React @nocheck
 import { ActorError } from "rivetkit/client";
 
 const actor = useActor({ name: "myActor", key: ["id"] });
@@ -460,7 +687,18 @@ See [errors](/docs/actors/errors) for more details.
 To explicitly resolve an actor and get its ID, use `resolve()`:
 
 ```typescript
-const handle = client.counter.getOrCreate("my-counter");
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {}
+});
+
+const registry = setup({ use: { counter } });
+const client = createClient<typeof registry>();
+
+const handle = client.counter.getOrCreate(["my-counter"]);
 const actorId = await handle.resolve();
 console.log(actorId); // "lrysjam017rhxofttna2x5nzjml610"
 ```

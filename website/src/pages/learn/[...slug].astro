@@ -18,9 +18,7 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
 
-// Get title from first h1 or frontmatter
-const title = entry.data.title || headings.find((h) => h.depth === 1)?.text || 'Learn';
-const description = entry.data.description || '';
+const { title, description } = entry.data as { title: string; description: string };
 
 // Handle index paths correctly
 const slugPath = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');

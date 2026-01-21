@@ -1,6 +1,8 @@
-# Design Patterns
-
-Common patterns and anti-patterns for building scalable actor systems.
+---
+title: "Design Patterns"
+description: "Common patterns and anti-patterns for building scalable actor systems."
+skill: true
+---
 
 ## How Actors Scale
 
@@ -42,7 +44,7 @@ Actors scale by splitting state into isolated entities. However, it's common to 
 <Tab title="Actor">
 
 ```ts
-import { actor } from "rivetkit";
+import { actor, setup } from "rivetkit";
 
 // Data actor: handles messages and connections
 const chatRoom = actor({
@@ -65,7 +67,7 @@ const chatRoomList = actor({
     createChatRoom: async (c, name: string) => {
       const client = c.client<typeof registry>();
       // Create the chat room actor and get its ID
-      const handle = await client.chatRoom.create(name);
+      const handle = await client.chatRoom.create([name]);
       const actorId = await handle.resolve();
       // Track it in the list
       c.state.chatRoomIds.push(actorId);
@@ -75,7 +77,7 @@ const chatRoomList = actor({
   },
 });
 
-export const registry = setup({
+const registry = setup({
   use: { chatRoom, chatRoomList },
 });
 ```
@@ -84,22 +86,43 @@ export const registry = setup({
 <Tab title="Client">
 
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+const chatRoom = actor({
+  state: { messages: [] as { sender: string; text: string }[] },
+  actions: {
+    sendMessage: (c, sender: string, text: string) => {
+      const message = { sender, text };
+      c.state.messages.push(message);
+      return message;
+    },
+    getHistory: (c) => c.state.messages,
+  },
+});
+
+const chatRoomList = actor({
+  state: { chatRoomIds: [] as string[] },
+  actions: {
+    createChatRoom: async (c, name: string) => "room-id",
+    listChatRooms: (c) => c.state.chatRoomIds,
+  },
+});
+
+const registry = setup({ use: { chatRoom, chatRoomList } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Create a new chat room via coordinator
-const coordinator = client.chatRoomList.getOrCreate("main");
+const coordinator = client.chatRoomList.getOrCreate(["main"]);
 const actorId = await coordinator.createChatRoom("general");
 
 // Get list of all chat rooms
 const chatRoomIds = await coordinator.listChatRooms();
 
 // Connect to a chat room using its ID
-const chatRoom = client.chatRoom.getForId(actorId);
-await chatRoom.sendMessage("alice", "Hello!");
-const history = await chatRoom.getHistory();
+const chatRoomHandle = client.chatRoom.getForId(actorId);
+await chatRoomHandle.sendMessage("alice", "Hello!");
+const history = await chatRoomHandle.getHistory();
 ```
 
 </Tab>
@@ -146,14 +169,29 @@ export const registry = setup({
 <Tab title="Client">
 
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+interface Event {
+  type: string;
+  url: string;
+}
+
+const hourlyAnalytics = actor({
+  state: { events: [] as Event[] },
+  actions: {
+    trackEvent: (c, event: Event) => {
+      c.state.events.push(event);
+    },
+  },
+});
+
+const registry = setup({ use: { hourlyAnalytics } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Shard by hour: hourlyAnalytics:2024-01-15T00, hourlyAnalytics:2024-01-15T01
 const shardKey = new Date().toISOString().slice(0, 13); // "2024-01-15T00"
-const analytics = client.hourlyAnalytics.getOrCreate(shardKey);
+const analytics = client.hourlyAnalytics.getOrCreate([shardKey]);
 await analytics.trackEvent({ type: "page_view", url: "/home" });
 ```
 
@@ -189,14 +227,27 @@ export const registry = setup({
 <Tab title="Client">
 
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+const rateLimiter = actor({
+  state: { requests: {} as Record<string, number> },
+  actions: {
+    checkLimit: (c, userId: string, limit: number) => {
+      const count = c.state.requests[userId] ?? 0;
+      if (count >= limit) return false;
+      c.state.requests[userId] = count + 1;
+      return true;
+    },
+  },
+});
+
+const registry = setup({ use: { rateLimiter } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Shard randomly: rateLimiter:shard-0, rateLimiter:shard-1, rateLimiter:shard-2
 const shardKey = `shard-${Math.floor(Math.random() * 3)}`;
-const limiter = client.rateLimiter.getOrCreate(shardKey);
+const limiter = client.rateLimiter.getOrCreate([shardKey]);
 const allowed = await limiter.checkLimit("user-123", 100);
 ```
 
@@ -270,22 +321,49 @@ export const registry = setup({
 <Tab title="Client">
 
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+interface Task {
+  id: string;
+  data: string;
+}
+
+interface Result {
+  taskId: string;
+  output: string;
+}
+
+const coordinator = actor({
+  state: { results: [] as Result[] },
+  actions: {
+    startJob: async (c, tasks: Task[]) => {},
+    reportResult: (c, result: Result) => { c.state.results.push(result); },
+    getResults: (c) => c.state.results,
+  },
+});
+
+const worker = actor({
+  state: {},
+  actions: {
+    process: async (c, task: Task) => {},
+  },
+});
+
+const registry = setup({ use: { coordinator, worker } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
-const coordinator = client.coordinator.getOrCreate("main");
+const coordinatorHandle = client.coordinator.getOrCreate(["main"]);
 
 // Start a job with multiple tasks
-await coordinator.startJob([
+await coordinatorHandle.startJob([
   { id: "task-1", data: "..." },
   { id: "task-2", data: "..." },
   { id: "task-3", data: "..." },
 ]);
 
 // Results are collected as workers report back
-const results = await coordinator.getResults();
+const results = await coordinatorHandle.getResults();
 ```
 
 </Tab>
@@ -313,14 +391,28 @@ Use this when:
 ```ts
 import { actor, setup } from "rivetkit";
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+// Mock database interface for demonstration
+const db = {
+  users: {
+    findById: async (id: string): Promise<User> => ({ id, email: "user@example.com", name: "User" }),
+    update: async (id: string, data: Partial<User>) => {},
+  },
+};
+
 const userSession = actor({
   state: { requestCount: 0 },
 
   // createVars runs on every wake (after restarts, crashes, or sleep), so
   // external data stays fresh.
-  createVars: async (c) => {
+  createVars: async (c): Promise<{ user: User }> => {
     // Load from database on every wake
-    const user = await db.users.findById(c.id);
+    const user = await db.users.findById(c.key.join("-"));
     return { user };
   },
 
@@ -331,14 +423,14 @@ const userSession = actor({
     },
     updateEmail: async (c, email: string) => {
       c.state.requestCount++;
-      await db.users.update(c.id, { email });
+      await db.users.update(c.key.join("-"), { email });
       // Refresh cached data
-      c.vars.user = await db.users.findById(c.id);
+      c.vars.user = await db.users.findById(c.key.join("-"));
     },
   },
 });
 
-export const registry = setup({
+const registry = setup({
   use: { userSession },
 });
 ```
@@ -347,12 +439,28 @@ export const registry = setup({
 <Tab title="Client">
 
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+const userSession = actor({
+  state: { requestCount: 0 },
+  createVars: () => ({ user: null as User | null }),
+  actions: {
+    getProfile: (c) => c.vars.user,
+    updateEmail: async (c, email: string) => {},
+  },
+});
+
+const registry = setup({ use: { userSession } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
-const session = client.userSession.getOrCreate("user-123");
+const session = client.userSession.getOrCreate(["user-123"]);
 
 // Get profile (loaded from database on actor wake)
 const profile = await session.getProfile();
@@ -383,6 +491,14 @@ Use this when:
 ```ts
 import { actor, setup } from "rivetkit";
 
+// Mock database interface for demonstration
+const db = {
+  users: {
+    insert: async (data: { id: string; email: string; createdAt: number }) => {},
+    update: async (id: string, data: { email: string; lastActive: number }) => {},
+  },
+};
+
 const userActor = actor({
   state: {
     email: "",
@@ -392,7 +508,7 @@ const userActor = actor({
   onCreate: async (c, input: { email: string }) => {
     // Insert into database on actor creation
     await db.users.insert({
-      id: c.id,
+      id: c.key.join("-"),
       email: input.email,
       createdAt: Date.now(),
     });
@@ -400,7 +516,7 @@ const userActor = actor({
 
   onStateChange: async (c, newState) => {
     // Sync any state changes to database
-    await db.users.update(c.id, {
+    await db.users.update(c.key.join("-"), {
       email: newState.email,
       lastActive: newState.lastActive,
     });
@@ -418,7 +534,7 @@ const userActor = actor({
   },
 });
 
-export const registry = setup({
+const registry = setup({
   use: { userActor },
 });
 ```
@@ -427,12 +543,27 @@ export const registry = setup({
 <Tab title="Client">
 
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+const userActor = actor({
+  state: { email: "", lastActive: 0 },
+  actions: {
+    updateEmail: (c, email: string) => {
+      c.state.email = email;
+      c.state.lastActive = Date.now();
+    },
+    getUser: (c) => ({
+      email: c.state.email,
+      lastActive: c.state.lastActive,
+    }),
+  },
+});
+
+const registry = setup({ use: { userActor } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
-const user = await client.userActor.create("user-123", {
+const user = await client.userActor.create(["user-123"], {
   input: { email: "alice@example.com" },
 });
 
@@ -477,17 +608,28 @@ Actors are designed to maintain state across multiple requests. Creating a new a
 
 **Problem:**
 ```ts
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import { Hono } from "hono";
 
+const processor = actor({
+  state: {},
+  actions: {
+    process: (c, body: unknown) => ({ processed: true }),
+    destroy: (c) => {},
+  },
+});
+
+const registry = setup({ use: { processor } });
 const client = createClient<typeof registry>("http://localhost:8080");
+const app = new Hono();
 
 // Bad: creating an actor for each API request
-app.post("/process", async (req) => {
-  const actor = client.processor.getOrCreate(crypto.randomUUID());
-  const result = await actor.process(req.body);
-  await actor.destroy();
-  return result;
+app.post("/process", async (c) => {
+  const actorHandle = client.processor.getOrCreate([crypto.randomUUID()]);
+  const result = await actorHandle.process(await c.req.json());
+  await actorHandle.destroy();
+  return c.json(result);
 });
 ```
 
