@@ -22,7 +22,10 @@ export function createRouter(
 } {
 	const router = new OpenAPIHono({ strict: false }).basePath(basePath);
 
-	router.use("*", loggerMiddleware(logger()), cors());
+	router.use("*", loggerMiddleware(logger()), cors(), async (c, next) => {
+		console.log(`[rivet] ${c.req.method} ${c.req.url}`);
+		await next();
+	});
 
 	// HACK: Add Sec-WebSocket-Protocol header to fix KIT-339
 	//

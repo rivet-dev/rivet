@@ -78,8 +78,11 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public async handler(request: Request): Promise<Response> {
+		console.log("[rivet] Handling serverless request:", request.url);
 		const runtime = await this.#ensureRuntime();
+		console.log("[rivet] Starting serverless runtime...", runtime);
 		runtime.startServerless();
+		console.log("[rivet] Serverless runtime started.");
 		return await runtime.handleServerlessRequest(request);
 	}
 

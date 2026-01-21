@@ -3,7 +3,12 @@
 	"rewrites": [
 		{
 			"source": "/api/(.*)",
-			"destination": "/api"
+			"destination": "/api/index"
 		}
-	]
+	],
+	"functions": {
+		"api/*": {
+			"maxDuration": 10
+		}
+	}
 }

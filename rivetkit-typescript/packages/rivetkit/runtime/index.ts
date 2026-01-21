@@ -260,6 +260,7 @@ export class Runtime<A extends RegistryActors> {
 			"not started as serverless",
 		);
 		invariant(this.#serverlessRouter, "serverless router not initialized");
+		console.log("[rivet] serverless request:", request.url);
 		return this.#serverlessRouter.fetch(request);
 	}
 }
