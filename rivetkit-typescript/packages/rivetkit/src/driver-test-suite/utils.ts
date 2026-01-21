@@ -39,6 +39,10 @@ export async function setupDriverTest(
 			namespace,
 			runnerName,
 			encoding: driverTestConfig.encoding,
+			// Disable metadata lookup to prevent redirect to the wrong port.
+			// Each test starts a new server on a dynamic port, but the
+			// registry's publicEndpoint defaults to port 6420.
+			disableMetadataLookup: true,
 		});
 	} else if (driverTestConfig.clientType === "inline") {
 		// Use inline client from driver
