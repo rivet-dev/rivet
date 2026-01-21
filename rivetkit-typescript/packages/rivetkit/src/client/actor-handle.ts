@@ -239,9 +239,7 @@ export class ActorHandleRaw {
 	}
 
 	/**
-	 * Resolves the actor to get its unique actor ID
-	 *
-	 * @returns {Promise<string>} - A promise that resolves to the actor's ID
+	 * Resolves the actor to get its unique actor ID.
 	 */
 	async resolve({ signal }: { signal?: AbortSignal } = {}): Promise<string> {
 		if (
@@ -276,6 +274,18 @@ export class ActorHandleRaw {
 		} else {
 			assertUnreachable(this.#actorQuery);
 		}
+	}
+
+	/**
+	 * Returns the raw URL for routing traffic to the actor.
+	 */
+	async getGatewayUrl(): Promise<string> {
+		const { actorId } = await queryActor(
+			undefined,
+			this.#actorQuery,
+			this.#driver,
+		);
+		return await this.#driver.buildGatewayUrl(actorId);
 	}
 }
 

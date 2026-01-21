@@ -21,6 +21,7 @@ import { combineUrlPath, type GetUpgradeWebSocket } from "@/utils";
 import { getNextPhase } from "@/utils/env-vars";
 import { sendHttpRequestToActor } from "./actor-http-client";
 import {
+	buildActorGatewayUrl,
 	buildWebSocketProtocols,
 	openWebSocketToActor,
 } from "./actor-websocket-client";
@@ -307,6 +308,15 @@ export class RemoteManagerDriver implements ManagerDriver {
 			encoding,
 			params,
 		);
+	}
+
+	async buildGatewayUrl(actorId: string): Promise<string> {
+		if (this.#metadataPromise) {
+			await this.#metadataPromise;
+		}
+
+		const endpoint = getEndpoint(this.#config);
+		return buildActorGatewayUrl(endpoint, actorId, this.#config.token);
 	}
 
 	async proxyRequest(
