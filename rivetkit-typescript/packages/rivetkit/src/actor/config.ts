@@ -50,6 +50,7 @@ export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
 		onDestroy: zFunction().optional(),
+		run: zFunction().optional(),
 		onWake: zFunction().optional(),
 		onSleep: zFunction().optional(),
 		onStateChange: zFunction().optional(),
@@ -129,6 +130,13 @@ export const ActorConfigSchema = z
 		{
 			message: "Cannot define both 'vars' and 'createVars'",
 			path: ["vars"],
+		},
+	)
+	.refine(
+		(data) => !(data.run !== undefined && data.onWake !== undefined),
+		{
+			message: "Cannot define both 'run' and 'onWake'. 'run' is an alias for 'onWake'.",
+			path: ["run"],
 		},
 	);
 
@@ -270,6 +278,24 @@ interface BaseActorConfig<
 	 */
 	onDestroy?: (
 		c: DestroyContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase
+		>,
+	) => void | Promise<void>;
+
+	/**
+	 * Called when the actor is started and ready to receive connections and actions.
+	 *
+	 * This is an alias for `onWake`. Use either `run` or `onWake`, but not both.
+	 *
+	 * @returns Void or a Promise that resolves when startup is complete
+	 */
+	run?: (
+		c: WakeContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -497,6 +523,7 @@ export type ActorConfig<
 	| "actions"
 	| "onCreate"
 	| "onDestroy"
+	| "run"
 	| "onWake"
 	| "onStateChange"
 	| "onBeforeConnect"
@@ -557,6 +584,7 @@ export type ActorConfigInput<
 	| "actions"
 	| "onCreate"
 	| "onDestroy"
+	| "run"
 	| "onWake"
 	| "onSleep"
 	| "onStateChange"

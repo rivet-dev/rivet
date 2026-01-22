@@ -11,7 +11,7 @@ Actors transition through several states during their lifetime. Each transition 
 1. `createState`
 2. `onCreate`
 3. `createVars`
-4. `onWake`
+4. `run`
 
 **On Destroy**
 
@@ -20,7 +20,7 @@ Actors transition through several states during their lifetime. Each transition 
 **On Wake** (after sleep, restart, or crash)
 
 1. `createVars`
-2. `onWake`
+2. `run`
 
 **On Sleep** (after idle period)
 
@@ -145,7 +145,7 @@ const gameSession = actor({
 });
 ```
 
-### `onWake`
+### `run`
 
 [API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
@@ -162,7 +162,7 @@ const counter = actor({
   state: { count: 0 },
   vars: { intervalId: null as NodeJS.Timeout | null },
 
-  onWake: (c) => {
+  run: (c) => {
     console.log('Actor started with count:', c.state.count);
 
     // Set up interval for automatic counting
@@ -187,6 +187,10 @@ const counter = actor({
 });
 ```
 
+### `onWake`
+
+`onWake` is an alias for [`run`](#run). Use either `run` or `onWake`, but not both.
+
 ### `onSleep`
 
 [API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
@@ -204,7 +208,7 @@ const counter = actor({
   state: { count: 0 },
   vars: { intervalId: null as NodeJS.Timeout | null },
 
-  onWake: (c) => {
+  run: (c) => {
     // Set up interval when actor wakes
     c.vars.intervalId = setInterval(() => {
       c.state.count++;
@@ -649,9 +653,9 @@ import { actor, ActorContextOf } from "rivetkit";
 
 const myActor = actor({
   state: { count: 0 },
-  
+
   // Use external function in lifecycle hook
-  onWake: (c) => logActorStarted(c)
+  run: (c) => logActorStarted(c)
 });
 
 // Simple external function with typed context
@@ -716,7 +720,7 @@ const counter = actor({
   },
 
   // Lifecycle hooks
-  onWake: (c) => {
+  run: (c) => {
     console.log(`Counter "${c.state.name}" started with count:`, c.state.count);
   },
 
