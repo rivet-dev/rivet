@@ -88,10 +88,15 @@ export async function routeWebSocket(
 		// Promise used to wait for the websocket close in `disconnect`
 		const closePromiseResolvers = promiseWithResolvers<void>();
 
+		// Strip query parameters from requestPath for routing purposes.
+		// This handles paths like "/websocket?query=value" which should route
+		// to the raw websocket handler.
+		const requestPathWithoutQuery = requestPath.split("?")[0];
+
 		// Route WebSocket & create driver
 		let handler: WebSocketHandler;
 		let connDriver: ConnDriver;
-		if (requestPath === PATH_CONNECT) {
+		if (requestPathWithoutQuery === PATH_CONNECT) {
 			const { driver, setWebSocket } = createWebSocketDriver(
 				isHibernatable
 					? { gatewayId: gatewayId!, requestId: requestId! }
@@ -103,8 +108,8 @@ export async function routeWebSocket(
 			handler = handleWebSocketConnect.bind(undefined, setWebSocket);
 			connDriver = driver;
 		} else if (
-			requestPath === PATH_WEBSOCKET_BASE ||
-			requestPath.startsWith(PATH_WEBSOCKET_PREFIX)
+			requestPathWithoutQuery === PATH_WEBSOCKET_BASE ||
+			requestPathWithoutQuery.startsWith(PATH_WEBSOCKET_PREFIX)
 		) {
 			const { driver, setWebSocket } = createRawWebSocketDriver(
 				isHibernatable
@@ -114,7 +119,7 @@ export async function routeWebSocket(
 			);
 			handler = handleRawWebSocket.bind(undefined, setWebSocket);
 			connDriver = driver;
-		} else if (requestPath === PATH_INSPECTOR_CONNECT) {
+		} else if (requestPathWithoutQuery === PATH_INSPECTOR_CONNECT) {
 			if (!actor.inspectorToken) {
 				throw "WebSocket Inspector Unauthorized: actor does not provide inspector access";
 			}
