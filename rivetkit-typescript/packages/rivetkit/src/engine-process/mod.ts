@@ -96,6 +96,28 @@ export async function ensureEngineProcess(
 		stdio: ["inherit", "pipe", "pipe"],
 		env: {
 			...process.env,
+			// In development, runners can be terminated without a graceful
+			// shutdown (i.e. SIGKILL instead of SIGTERM). This is treated as a
+			// crash by Rivet Engine in production and implements a backoff for
+			// rescheduling actors in case of a crash loop.
+			//
+			// This is problematic in development since this will cause actors
+			// to become unresponsive if frequently killing your dev server.
+			//
+			// We reduce the timeouts for resetting a runner as healthy in
+			// order to account for this.
+			RIVET__PEGBOARD__RETRY_RESET_DURATION: "100",
+			RIVET__PEGBOARD__BASE_RETRY_TIMEOUT: "100",
+			// Set max exponent to 1 to have a maximum of base_retry_timeout
+			RIVET__PEGBOARD__RESCHEDULE_BACKOFF_MAX_EXPONENT: "1",
+			// Reduce thresholds for faster development iteration
+			//
+			// Default ping interval is 3s, this gives a 2s & 4s grace
+			RIVET__PEGBOARD__RUNNER_ELIGIBLE_THRESHOLD: "5000",
+			RIVET__PEGBOARD__RUNNER_LOST_THRESHOLD: "7000",
+			// Reduce shutdown durations for faster development iteration (in seconds)
+			RIVET__RUNTIME__WORKER_SHUTDOWN_DURATION: "1",
+			RIVET__RUNTIME__GUARD_SHUTDOWN_DURATION: "1",
 		},
 	});
 
@@ -107,7 +129,12 @@ export async function ensureEngineProcess(
 	if (child.stdout) {
 		child.stdout.pipe(stdoutStream);
 	}
+	// Collect stderr for error detection
+	const stderrChunks: Buffer[] = [];
 	if (child.stderr) {
+		child.stderr.on("data", (chunk: Buffer) => {
+			stderrChunks.push(chunk);
+		});
 		child.stderr.pipe(stderrStream);
 	}
 	logger().debug({
@@ -117,13 +144,39 @@ export async function ensureEngineProcess(
 	});
 
 	child.once("exit", (code, signal) => {
-		logger().warn({
-			msg: "engine process exited, please report this error",
-			code,
-			signal,
-			issues: "https://github.com/rivet-dev/rivetkit/issues",
-			support: "https://rivet.dev/discord",
-		});
+		const stderrOutput = Buffer.concat(stderrChunks).toString("utf-8");
+
+		// Check for specific error conditions
+		if (stderrOutput.includes("failed to open rocksdb") && stderrOutput.includes("LOCK: Resource temporarily unavailable")) {
+			logger().error({
+				msg: "another instance of rivet engine is unexpectedly running, this is an internal error",
+				code,
+				signal,
+				stdoutLog: stdoutLogPath,
+				stderrLog: stderrLogPath,
+				issues: "https://github.com/rivet-dev/rivetkit/issues",
+				support: "https://rivet.dev/discord",
+			});
+		} else if (stderrOutput.includes("Rivet Engine has been rolled back to a previous version")) {
+			logger().error({
+				msg: "rivet engine version downgrade detected",
+				hint: `You attempted to downgrade the RivetKit version in development. To fix this, nuke the database by running: '${binaryPath}' database nuke --yes`,
+				code,
+				signal,
+				stdoutLog: stdoutLogPath,
+				stderrLog: stderrLogPath,
+			});
+		} else {
+			logger().warn({
+				msg: "engine process exited, please report this error",
+				code,
+				signal,
+				stdoutLog: stdoutLogPath,
+				stderrLog: stderrLogPath,
+				issues: "https://github.com/rivet-dev/rivetkit/issues",
+				support: "https://rivet.dev/discord",
+			});
+		}
 		// Clean up log streams
 		stdoutStream.end();
 		stderrStream.end();
