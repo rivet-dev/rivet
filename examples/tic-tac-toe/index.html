@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #000;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fafafa;
+        }
+        .game-container {
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+        }
+        h1 {
+            margin: 0 0 20px 0;
+            color: #fafafa;
+            font-size: 1.25em;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+        }
+        .game-info {
+            margin-bottom: 24px;
+            font-size: 0.875em;
+            color: #71717a;
+        }
+        .game-info strong {
+            color: #ff4500;
+            font-weight: 500;
+        }
+        .game-info strong.player-o {
+            color: #fafafa;
+        }
+        .status {
+            margin-top: 8px;
+            font-weight: 500;
+            color: #a1a1aa;
+            font-size: 0.875em;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            width: 300px;
+            height: 300px;
+            margin: 0 auto 24px auto;
+            position: relative;
+        }
+        /* Grid lines */
+        .board::before,
+        .board::after {
+            content: '';
+            position: absolute;
+            background: #27272a;
+        }
+        .board::before {
+            width: 1px;
+            height: 100%;
+            left: 33.33%;
+            box-shadow: 100px 0 0 #27272a;
+        }
+        .board::after {
+            width: 100%;
+            height: 1px;
+            top: 33.33%;
+            box-shadow: 0 100px 0 #27272a;
+        }
+        .cell {
+            aspect-ratio: 1;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease;
+            position: relative;
+        }
+        .cell:hover:not(:disabled) {
+            background: rgba(255, 69, 0, 0.05);
+        }
+        .cell:disabled {
+            cursor: default;
+        }
+        /* X symbol - Orange */
+        .cell.X::before,
+        .cell.X::after {
+            content: '';
+            position: absolute;
+            width: 55%;
+            height: 2px;
+            background: #ff4500;
+        }
+        .cell.X::before {
+            transform: rotate(45deg);
+        }
+        .cell.X::after {
+            transform: rotate(-45deg);
+        }
+        /* O symbol - White */
+        .cell.O::before {
+            content: '';
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            border: 2px solid #fafafa;
+            border-radius: 50%;
+        }
+        .reset-btn {
+            padding: 10px 24px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 0.875em;
+            font-weight: 500;
+            background: #ff4500;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 24px;
+            transition: all 0.15s ease;
+        }
+        .reset-btn:hover {
+            background: #ff5722;
+        }
+        .room-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            padding-top: 24px;
+            border-top: 1px solid #18181b;
+        }
+        .room-controls label {
+            font-weight: 500;
+            color: #52525b;
+            font-size: 0.8125em;
+        }
+        .room-controls input {
+            padding: 8px 12px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            border: 1px solid #27272a;
+            border-radius: 6px;
+            font-size: 0.875em;
+            width: 140px;
+            background: #09090b;
+            color: #fafafa;
+            transition: all 0.15s ease;
+        }
+        .room-controls input:focus {
+            outline: none;
+            border-color: #ff4500;
+            box-shadow: 0 0 0 2px rgba(255, 69, 0, 0.1);
+        }
+        .room-controls input::placeholder {
+            color: #3f3f46;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/frontend/main.tsx"></script>
+</body>
+</html>
