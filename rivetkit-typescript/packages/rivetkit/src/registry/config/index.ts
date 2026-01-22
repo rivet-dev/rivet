@@ -126,6 +126,12 @@ export const RegistryConfigSchema = z
 		 * What port to run the manager on.
 		 */
 		managerPort: z.number().optional().default(6420),
+		/**
+		 * @experimental
+		 *
+		 * What host to bind the manager server to.
+		 */
+		managerHost: z.string().optional(),
 
 		/** @experimental */
 		inspector: InspectorConfigSchema,

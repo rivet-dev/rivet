@@ -96,8 +96,9 @@ async function serveNode(
 
 	// Start server
 	const port = managerPort;
-	const server = serve({ fetch: app.fetch, port }, () =>
-		logger().info({ msg: "server listening", port }),
+	const hostname = config.managerHost;
+	const server = serve({ fetch: app.fetch, port, hostname }, () =>
+		logger().info({ msg: "server listening", port, hostname }),
 	);
 	injectWebSocket(server);
 
@@ -127,10 +128,11 @@ async function serveDeno(
 	}
 
 	const port = config.managerPort;
+	const hostname = config.managerHost;
 
 	// Use Deno.serve
-	Deno.serve({ port }, app.fetch);
-	logger().info({ msg: "server listening", port });
+	Deno.serve({ port, hostname }, app.fetch);
+	logger().info({ msg: "server listening", port, hostname });
 
 	return { upgradeWebSocket };
 }
@@ -160,15 +162,17 @@ async function serveBun(
 	const { websocket, upgradeWebSocket } = createBunWebSocket();
 
 	const port = config.managerPort;
+	const hostname = config.managerHost;
 
 	// Use Bun.serve
 	// @ts-expect-error - Bun global
 	Bun.serve({
 		fetch: app.fetch,
 		port,
+		hostname,
 		websocket,
 	});
-	logger().info({ msg: "server listening", port });
+	logger().info({ msg: "server listening", port, hostname });
 
 	return { upgradeWebSocket };
 }
