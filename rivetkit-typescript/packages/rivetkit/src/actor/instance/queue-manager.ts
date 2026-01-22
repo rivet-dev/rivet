@@ -34,6 +34,15 @@ interface QueueWaiter {
 	timeoutHandle?: ReturnType<typeof setTimeout>;
 }
 
+interface MessageListener {
+	nameSet: Set<string>;
+	resolve: () => void;
+	reject: (error: Error) => void;
+	actorAbortCleanup?: () => void;
+	signal?: AbortSignal;
+	signalAbortCleanup?: () => void;
+}
+
 const DEFAULT_METADATA: QueueMetadata = {
 	nextId: 1n,
 	size: 0,
@@ -44,6 +53,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#driver: ActorDriver;
 	#waiters = new Map<string, QueueWaiter>();
 	#metadata: QueueMetadata = { ...DEFAULT_METADATA };
+	#messageListeners = new Set<MessageListener>();
 
 	constructor(
 		actor: ActorInstance<S, CP, CS, V, I, DB>,
@@ -148,6 +158,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		this.#actor.resetSleepTimer();
 		await this.#maybeResolveWaiters();
+		this.#notifyMessageListeners(name);
 
 		return message;
 	}
@@ -220,9 +231,78 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return promise;
 	}
 
+	async waitForNames(
+		names: string[],
+		abortSignal?: AbortSignal,
+	): Promise<void> {
+		const nameSet = new Set(names);
+		const existing = await this.#loadQueueMessages();
+		if (existing.some((message) => nameSet.has(message.name))) {
+			return;
+		}
+
+		return await new Promise<void>((resolve, reject) => {
+			const listener: MessageListener = {
+				nameSet,
+				resolve: () => {
+					this.#removeMessageListener(listener);
+					resolve();
+				},
+				reject: (error) => {
+					this.#removeMessageListener(listener);
+					reject(error);
+				},
+			};
+
+			const actorAbortSignal = this.#actor.abortSignal;
+			const onActorAbort = () =>
+				listener.reject(new errors.ActorAborted());
+			if (actorAbortSignal.aborted) {
+				onActorAbort();
+				return;
+			}
+			actorAbortSignal.addEventListener("abort", onActorAbort, {
+				once: true,
+			});
+			listener.actorAbortCleanup = () =>
+				actorAbortSignal.removeEventListener("abort", onActorAbort);
+
+			if (abortSignal) {
+				const onAbort = () =>
+					listener.reject(new errors.ActorAborted());
+				if (abortSignal.aborted) {
+					onAbort();
+					return;
+				}
+				abortSignal.addEventListener("abort", onAbort, { once: true });
+				listener.signalAbortCleanup = () =>
+					abortSignal.removeEventListener("abort", onAbort);
+			}
+
+			this.#messageListeners.add(listener);
+		});
+	}
+
 	/** Returns all messages currently in the queue without removing them. */
 	async getMessages(): Promise<QueueMessage[]> {
 		return await this.#loadQueueMessages();
+	}
+
+	/** Deletes messages matching the provided IDs. Returns the IDs that were removed. */
+	async deleteMessagesById(ids: bigint[]): Promise<bigint[]> {
+		if (ids.length === 0) {
+			return [];
+		}
+		const idSet = new Set(ids.map((id) => id.toString()));
+		const entries = await this.#loadQueueMessages();
+		const toRemove = entries.filter((entry) =>
+			idSet.has(entry.id.toString()),
+		);
+		if (toRemove.length === 0) {
+			return [];
+		}
+		await this.#removeMessages(toRemove);
+		return toRemove.map((entry) => entry.id);
 	}
 
 	async #drainMessages(
@@ -276,6 +356,26 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#actor.inspector.updateQueueSize(this.#metadata.size);
 		}
 		return decoded;
+	}
+
+	#removeMessageListener(listener: MessageListener): void {
+		if (this.#messageListeners.delete(listener)) {
+			listener.actorAbortCleanup?.();
+			listener.signalAbortCleanup?.();
+		}
+	}
+
+	#notifyMessageListeners(name: string): void {
+		if (this.#messageListeners.size === 0) {
+			return;
+		}
+		for (const listener of [...this.#messageListeners]) {
+			if (!listener.nameSet.has(name)) {
+				continue;
+			}
+			this.#removeMessageListener(listener);
+			listener.resolve();
+		}
 	}
 
 	async #removeMessages(messages: QueueMessage[]): Promise<void> {

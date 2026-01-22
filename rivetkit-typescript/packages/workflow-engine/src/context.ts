@@ -47,6 +47,7 @@ import type {
 	StepConfig,
 	Storage,
 	WorkflowContextInterface,
+	WorkflowMessageDriver,
 } from "./types.js";
 import { sleep } from "./utils.js";
 
@@ -112,6 +113,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		public readonly workflowId: string,
 		private storage: Storage,
 		private driver: EngineDriver,
+		private messageDriver: WorkflowMessageDriver,
 		location: Location = emptyLocation(),
 		abortController?: AbortController,
 		mode: "forward" | "rollback" = "forward",
@@ -156,6 +158,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.workflowId,
 			this.storage,
 			this.driver,
+			this.messageDriver,
 			location,
 			abortController ?? this.abortController,
 			this.mode,
@@ -992,7 +995,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Try to consume messages immediately
 		const messages = await consumeMessages(
 			this.storage,
-			this.driver,
+			this.messageDriver,
 			messageName,
 			limit,
 		);
@@ -1134,7 +1137,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		if (remaining <= 0) {
 			const message = await consumeMessage(
 				this.storage,
-				this.driver,
+				this.messageDriver,
 				messageName,
 			);
 			const sleepEntry = getEntry(this.storage, sleepLocation)!;
@@ -1166,7 +1169,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Check for message (messages are loaded at workflow start, no polling needed)
 		const message = await consumeMessage(
 			this.storage,
-			this.driver,
+			this.messageDriver,
 			messageName,
 		);
 		if (message) {
@@ -1346,7 +1349,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// Try to consume a message
 			const message = await consumeMessage(
 				this.storage,
-				this.driver,
+				this.messageDriver,
 				messageName,
 			);
 			if (!message) {
