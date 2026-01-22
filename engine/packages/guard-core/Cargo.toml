@@ -5,14 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
-[features]
-ops = ["dep:gas", "dep:clickhouse-user-query", "dep:once_cell"]
-
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
-clickhouse-inserter.workspace = true
 futures-util.workspace = true
 futures.workspace = true
 http-body-util.workspace = true
@@ -45,11 +41,6 @@ tracing-opentelemetry.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
 url.workspace = true
-
-# Optional dependencies for ops feature
-gas = { workspace = true, optional = true }
-clickhouse-user-query = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
 
 [dev-dependencies]
 futures-util.workspace = true

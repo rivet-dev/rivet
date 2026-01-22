@@ -29,7 +29,7 @@ pub enum Metric {
 impl Metric {
 	fn variant(&self) -> MetricVariant {
 		match self {
-			Metric::ActorAwake(_) => MetricVariant::ActorAwakeHours,
+			Metric::ActorAwake(_) => MetricVariant::ActorAwake,
 			Metric::TotalActors(_) => MetricVariant::TotalActors,
 			Metric::KvStorageUsed(_) => MetricVariant::KvStorageUsed,
 			Metric::KvRead(_) => MetricVariant::KvRead,
@@ -45,7 +45,7 @@ impl Metric {
 
 #[derive(strum::FromRepr)]
 enum MetricVariant {
-	ActorAwakeHours = 0,
+	ActorAwake = 0,
 	TotalActors = 1,
 	KvStorageUsed = 2,
 	KvRead = 3,
@@ -55,6 +55,23 @@ enum MetricVariant {
 	GatewayEgress = 7,
 	Requests = 8,
 	ActiveRequests = 9,
+}
+
+impl std::fmt::Display for MetricVariant {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			MetricVariant::ActorAwake => write!(f, "actor_awake"),
+			MetricVariant::TotalActors => write!(f, "total_actors"),
+			MetricVariant::KvStorageUsed => write!(f, "kv_storage_used"),
+			MetricVariant::KvRead => write!(f, "kv_read"),
+			MetricVariant::KvWrite => write!(f, "kv_write"),
+			MetricVariant::AlarmsSet => write!(f, "alarms_set"),
+			MetricVariant::GatewayIngress => write!(f, "gateway_ingress"),
+			MetricVariant::GatewayEgress => write!(f, "gateway_egress"),
+			MetricVariant::Requests => write!(f, "requests"),
+			MetricVariant::ActiveRequests => write!(f, "active_requests"),
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -98,12 +115,7 @@ impl TuplePack for MetricKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = (
-			NAMESPACE,
-			METRIC,
-			self.namespace_id,
-			self.metric.variant() as usize,
-		);
+		let t = (METRIC, self.namespace_id, self.metric.variant() as usize);
 		offset += t.pack(w, tuple_depth)?;
 
 		offset += match &self.metric {
@@ -133,14 +145,13 @@ impl TuplePack for MetricKey {
 
 impl<'de> TupleUnpack<'de> for MetricKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, namespace_id, variant)) =
-			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let (input, (_, namespace_id, variant)) = <(usize, Id, usize)>::unpack(input, tuple_depth)?;
 		let variant = MetricVariant::from_repr(variant).ok_or_else(|| {
 			PackError::Message(format!("invalid metric variant `{variant}` in key").into())
 		})?;
 
 		let (input, v) = match variant {
-			MetricVariant::ActorAwakeHours => {
+			MetricVariant::ActorAwake => {
 				let (input, actor_name) = String::unpack(input, tuple_depth)?;
 
 				(
@@ -276,7 +287,7 @@ impl TuplePack for MetricSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (NAMESPACE, METRIC, self.namespace_id);
+		let t = (METRIC, self.namespace_id);
 		t.pack(w, tuple_depth)
 	}
 }

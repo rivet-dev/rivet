@@ -865,25 +865,25 @@ async fn record_req_metrics(
 fn metric_inc(tx: &universaldb::Transaction, namespace_id: Id, name: &str, metric: &Metric) {
 	match metric {
 		Metric::HttpIngress(size) => {
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::GatewayIngress(
+				namespace::keys::metric::Metric::GatewayIngress(
 					name.to_string(),
 					"http".to_string(),
 				),
 				(*size).try_into().unwrap_or_default(),
 			);
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::Requests(name.to_string(), "http".to_string()),
+				namespace::keys::metric::Metric::Requests(name.to_string(), "http".to_string()),
 				1,
 			);
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::ActiveRequests(
+				namespace::keys::metric::Metric::ActiveRequests(
 					name.to_string(),
 					"http".to_string(),
 				),
@@ -891,19 +891,19 @@ fn metric_inc(tx: &universaldb::Transaction, namespace_id: Id, name: &str, metri
 			);
 		}
 		Metric::HttpEgress(size) => {
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::GatewayEgress(
+				namespace::keys::metric::Metric::GatewayEgress(
 					name.to_string(),
 					"http".to_string(),
 				),
 				(*size).try_into().unwrap_or_default(),
 			);
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::ActiveRequests(
+				namespace::keys::metric::Metric::ActiveRequests(
 					name.to_string(),
 					"http".to_string(),
 				),
@@ -911,50 +911,38 @@ fn metric_inc(tx: &universaldb::Transaction, namespace_id: Id, name: &str, metri
 			);
 		}
 		Metric::WebsocketOpen => {
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::Requests(name.to_string(), "ws".to_string()),
+				namespace::keys::metric::Metric::Requests(name.to_string(), "ws".to_string()),
 				1,
 			);
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::ActiveRequests(
-					name.to_string(),
-					"ws".to_string(),
-				),
+				namespace::keys::metric::Metric::ActiveRequests(name.to_string(), "ws".to_string()),
 				1,
 			);
 		}
 		Metric::WebsocketTransfer(ingress_size, egress_size) => {
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::GatewayIngress(
-					name.to_string(),
-					"ws".to_string(),
-				),
+				namespace::keys::metric::Metric::GatewayIngress(name.to_string(), "ws".to_string()),
 				(*ingress_size).try_into().unwrap_or_default(),
 			);
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::GatewayEgress(
-					name.to_string(),
-					"ws".to_string(),
-				),
+				namespace::keys::metric::Metric::GatewayEgress(name.to_string(), "ws".to_string()),
 				(*egress_size).try_into().unwrap_or_default(),
 			);
 		}
 		Metric::WebsocketClose => {
-			pegboard::keys::ns::metric::inc(
-				&tx.with_subspace(pegboard::keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
-				pegboard::keys::ns::metric::Metric::ActiveRequests(
-					name.to_string(),
-					"ws".to_string(),
-				),
+				namespace::keys::metric::Metric::ActiveRequests(name.to_string(), "ws".to_string()),
 				-1,
 			);
 		}
