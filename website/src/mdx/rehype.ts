@@ -3,43 +3,52 @@ import { slugifyWithCounter } from "@sindresorhus/slugify";
 import * as acorn from "acorn";
 import { toString as mdastToString } from "mdast-util-to-string";
 import { mdxAnnotations } from "mdx-annotations";
-import rehypeMdxTitle from "rehype-mdx-title";
 import rehypeMermaid from "rehype-mermaid";
 import * as shiki from "shiki";
 import { visit } from "unist-util-visit";
 import theme from "../lib/textmate-code-theme";
-import { transformerTemplateVariables } from "./transformers";
 
 function rehypeParseCodeBlocks() {
 	return (tree) => {
 		visit(tree, "element", (node, _nodeIndex, parentNode) => {
 			if (node.tagName === "code") {
-				// Parse language
+				// Parse language from className
 				if (node.properties.className) {
 					parentNode.properties.language =
 						node.properties.className[0]?.replace(/^language-/, "");
 				}
-				// Parse annotations
+
+				// Parse annotations - supports both old JSON format and new space-separated format
 				const info = parentNode.properties?.annotation || node.data;
-				if (info) {
-					let annotations = info;
+				if (info && typeof info === "string") {
+					const trimmed = info.trim();
 
-					try {
-						annotations = JSON.parse(annotations);
-					} catch (e) {}
-
-					if (typeof annotations === "string") {
-						annotations = { title: annotations.trim() };
+					// Try parsing as JSON first (backward compatibility)
+					if (trimmed.startsWith("{")) {
+						try {
+							const annotations = JSON.parse(trimmed);
+							for (const key in annotations) {
+								parentNode.properties[key] = annotations[key];
+							}
+							return;
+						} catch {
+							// Not valid JSON, fall through to new format
+						}
 					}
 
-					// Autofill is handled client-side in AutofillCodeBlock.tsx
-					// Just pass through the autofill flag
-					if (annotations.autofill) {
-						parentNode.properties.autofill = true;
-					}
+					// New format: space-separated tokens with @flags
+					// Format: {title}? @nocheck? @hide?
+					const tokens = trimmed.split(/\s+/);
 
-					for (const key in annotations) {
-						parentNode.properties[key] = annotations[key];
+					for (const token of tokens) {
+						if (token === "@nocheck") {
+							parentNode.properties.nocheck = true;
+						} else if (token === "@hide") {
+							parentNode.properties.hide = true;
+						} else if (token && !token.startsWith("@")) {
+							// Non-flag token is the title
+							parentNode.properties.title = token;
+						}
 					}
 				}
 			}
@@ -91,21 +100,11 @@ function rehypeShiki() {
 				const lang = node.properties.language || "text";
 				node.properties.language = lang;
 
-				const transformers = [transformerNotationFocus()];
-
-				// Add template variable transformer for autofill blocks
-				if (
-					node.properties?.autofill ||
-					parentNode.properties?.autofill
-				) {
-					transformers.push(transformerTemplateVariables());
-				}
-
 				try {
 					const result = highlighter.codeToHtml(textNode.value, {
 						lang,
 						theme: theme.name,
-						transformers,
+						transformers: [transformerNotationFocus()],
 					});
 					// Store the highlighted HTML in a property instead of the text node
 					// This prevents MDX from interpreting the HTML as JSX
@@ -132,36 +131,11 @@ function rehypeSlugify() {
 	};
 }
 
-function rehypeDescription() {
-	return (tree) => {
-		let description = "";
-		visit(tree, "element", (node) => {
-			if (node.tagName === "p" && !description) {
-				description = mdastToString(node);
-			}
-		});
-
-		tree.children.unshift({
-			type: "mdxjsEsm",
-			value: `export const description = ${JSON.stringify(description)};`,
-			data: {
-				estree: acorn.parse(
-					`export const description = ${JSON.stringify(description)};`,
-					{
-						sourceType: "module",
-						ecmaVersion: "latest",
-					},
-				),
-			},
-		});
-	};
-}
-
 function rehypeTableOfContents() {
 	return (tree) => {
 		// Headings
 		const slugify = slugifyWithCounter();
-		const headings = [];
+		const headings: Array<{ title: string; id: string; children: Array<{ title: string; id: string; children: never[] }> }> = [];
 		// find all headings, remove the first one (the title)
 		visit(tree, "element", (node) => {
 			if (node.tagName === "h2" || node.tagName === "h3") {
@@ -198,7 +172,5 @@ export const rehypePlugins = [
 	rehypeParseCodeBlocks,
 	rehypeShiki,
 	rehypeSlugify,
-	rehypeMdxTitle,
 	rehypeTableOfContents,
-	rehypeDescription,
 ];

@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 
 export const prerender = true;
 
@@ -67,8 +67,7 @@ export const GET: APIRoute = async () => {
 	// Process each doc
 	const processedDocs = await Promise.all(
 		filteredDocs.map(async (doc) => {
-			const { headings, remarkPluginFrontmatter } = await render(doc);
-			const title = await getTitle(doc, headings);
+			const title = doc.data.title as string;
 
 			// Get raw body content and clean it
 			let cleanContent = '';

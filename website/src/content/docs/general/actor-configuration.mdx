@@ -1,13 +1,17 @@
+---
+title: "Actor Configuration"
+description: "This page documents the configuration options available when defining a RivetKit actor. The actor configuration is passed to the `actor()` function."
+skill: true
+---
+
 import ActorConfigSchema from "@/components/docs/ActorConfigSchemaClient.astro";
 
-# Actor Configuration
 
-This page documents the configuration options available when defining a RivetKit actor. The actor configuration is passed to the `actor()` function.
 
 ## Basic Example
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, setup } from "rivetkit";
 
 const myActor = actor({
   state: { count: 0 },
@@ -19,7 +23,7 @@ const myActor = actor({
     },
   },
   options: {
-	actionTimeout: 15_000,
+    actionTimeout: 15_000,
   }
 });
 

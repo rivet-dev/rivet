@@ -1,0 +1,88 @@
+# Deploying to VMs & Bare Metal
+
+> Source: `src/content/docs/connect/vm-and-bare-metal.mdx`
+> Canonical URL: https://rivet.gg/docs/connect/vm-and-bare-metal
+> Description: Deploy your RivetKit app to any Linux VM or bare metal host.
+
+---
+## Steps
+
+### Prerequisites
+
+- A Linux VM or bare metal server with SSH access
+- Your RivetKit app
+  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
+
+### Upload Your App
+
+- Build your RivetKit app locally
+- Copy the build output to your server (example):
+
+```bash
+scp -r ./dist user@server:/opt/rivetkit-app
+```
+
+Place the files somewhere readable by the service user, such as `/opt/rivetkit-app`.
+
+### Set Environment Variables
+
+After creating your project on the Rivet dashboard, select VM & Bare Metal as your provider. You'll be provided `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` environment variables to use in the next step.
+
+### Create the systemd Service
+
+Create `/etc/systemd/system/rivetkit-app.service`:
+
+```ini
+[Unit]
+Description=RivetKit App
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rivetkit-app
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=RIVET_ENDPOINT=<your-rivet-endpoint>
+Environment=RIVET_PUBLIC_ENDPOINT=<your-rivet-public-endpoint>
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Replace the environment values with those from the Rivet dashboard and adjust paths to match your deployment.
+
+### Start the Service
+
+Reload systemd units and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now rivetkit-app.service
+```
+
+### Connect to Rivet
+
+1. Ensure your server is accessible via a public URL (e.g. `https://my-app.example.com`)
+2. On the Rivet dashboard, paste your URL with the `/api/rivet` path into the connect form (e.g. `https://my-app.example.com/api/rivet`)
+3. Click "Done"
+
+## Operating
+
+### Restart
+
+Restart the service after deploying new builds or environment changes:
+
+```bash
+sudo systemctl restart rivetkit-app.service
+```
+
+### Logs
+
+Follow realtime logs when debugging:
+
+```bash
+sudo journalctl -u rivetkit-app.service -f
+```
+
+_Source doc path: /docs/connect/vm-and-bare-metal_

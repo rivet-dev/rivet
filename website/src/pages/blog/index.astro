@@ -1,8 +1,16 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import BlogLayout from '@/layouts/BlogLayout.astro';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
+
+type AuthorInfo = {
+	name: string;
+	role: string;
+	avatar: ImageMetadata;
+	socials?: { twitter?: string; github?: string; bluesky?: string };
+	url?: string;
+};
 import { Badge, Button } from '@rivet-gg/components';
 import { AuthorAvatar } from '@/components/AuthorAvatar';
 import { Icon, faRss } from '@rivet-gg/icons';
@@ -15,27 +23,29 @@ const images = import.meta.glob<{ default: ImageMetadata }>(
 	{ eager: true }
 );
 
-// Filter out changelog posts and sort by date
+// Filter out changelog posts, unpublished posts, and sort by date
 const filteredPosts = posts
-	.filter((post) => post.data.category !== 'changelog')
+	.filter((post) => post.data.category !== 'changelog' && !post.data.unpublished)
 	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime());
 
-// Render each post to extract title from headings
-const blogPosts = await Promise.all(
-	filteredPosts.map(async (post) => {
-		const slug = post.id.replace(/\/page$/, '');
-		const imagePath = Object.keys(images).find((p) => p.includes(slug));
-		const image = imagePath ? images[imagePath].default : null;
-		const author = AUTHORS[post.data.author];
-		const category = { ...CATEGORIES[post.data.category], id: post.data.category };
+const blogPosts = filteredPosts.map((post) => {
+	const slug = post.id.replace(/\/page$/, '');
+	const imagePath = Object.keys(images).find((p) => p.includes(slug));
+	const image = imagePath ? images[imagePath].default : null;
+	const author = AUTHORS[post.data.author] as AuthorInfo;
+	const category = { ...CATEGORIES[post.data.category], id: post.data.category };
+	const data = post.data as unknown as { title: string; description: string };
 
-		// Get title from first h1 heading
-		const { headings } = await render(post);
-		const title = headings.find((h) => h.depth === 1)?.text || slug;
-
-		return { ...post, slug, image, author, category, title };
-	})
-);
+	return {
+		...post,
+		slug,
+		image,
+		author,
+		category,
+		title: data.title,
+		description: data.description,
+	};
+});
 ---
 
 <BlogLayout title="Blog - Rivet">
@@ -90,8 +100,9 @@ const blogPosts = await Promise.all(
 									{article.title}
 								</h3>
 								<p class="text-muted-foreground mt-3 line-clamp-3 text-sm leading-6">
-									{article.data.description || ''}
+									{article.description}
 								</p>
+
 							</div>
 						</div>
 						<div class="max-w-xl">

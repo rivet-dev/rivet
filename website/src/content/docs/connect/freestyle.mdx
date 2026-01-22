@@ -1,6 +1,8 @@
-# Deploying to Freestyle
-
-Deploy RivetKit app to [Freestyle.sh](https://freestyle.sh/), a cloud platform for running AI-generated code with built-in security and scalability.
+---
+title: "Deploying to Freestyle"
+description: "Deploy RivetKit app to [Freestyle.sh](https://freestyle.sh/), a cloud platform for running AI-generated code with built-in security and scalability."
+skill: true
+---
 
 Freestyle provides built-in security for running untrusted AI-generated code, making it ideal for AI agent applications. Using Rivet, it is easy to deploy your vibe-coded or user-provided RivetKit backends straight to Freestyle.
 
@@ -27,13 +29,37 @@ npm install rivetkit hono
 
 Update your server code to run the registry serverless with Deno.
 
-```typescript {{"title":"server.ts"}}
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, x: number) => {
+      c.state.count += x;
+      return c.state.count;
+    },
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+
+```typescript {{"title":"server.ts"}} @nocheck
 import { registry } from "./registry";
 
 // Freestyle uses Deno under the hood for web deployments
-// @ts-ignore
+// @ts-ignore Deno is a Freestyle runtime global
 Deno.serve((request: Request) => registry.handler(request));
 ```
+</CodeGroup>
+
+<Note>
+The `Deno.serve` API is provided by Freestyle's runtime environment. The `@ts-ignore` comment suppresses TypeScript errors for this platform-specific API.
+</Note>
 
 </Step>
 
@@ -41,8 +67,11 @@ Deno.serve((request: Request) => registry.handler(request));
 
 Deploy your application to Freestyle with the correct configuration. Create a deployment script or add this to your existing deployment process:
 
-```typescript
+```typescript @nocheck
 const FREESTYLE_DOMAIN = "my-domain.style.dev"; // Change to your desired Freestyle domain
+
+declare const freestyle: any;
+declare const buildDir: string;
 
 const res = await freestyle.deployWeb(buildDir, {
 	envVars: {
@@ -76,7 +105,7 @@ Run this deployment script to push your application to Freestyle.
 
 Update the runner configuration on the Rivet side to connect with your Freestyle deployment. Create a configuration script and run it after your Freestyle deployment is live:
 
-```typescript
+```typescript @nocheck
 import { RivetClient } from "rivetkit/client";
 
 const rivet = new RivetClient({

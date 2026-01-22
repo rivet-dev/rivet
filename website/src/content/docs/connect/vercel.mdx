@@ -1,6 +1,8 @@
-# Deploying to Vercel
-
-Deploy your RivetKit app to [Vercel](https://vercel.com/).
+---
+title: "Deploying to Vercel"
+description: "Deploy your RivetKit app to [Vercel](https://vercel.com/)."
+skill: true
+---
 
 ## Steps
 
@@ -44,7 +46,7 @@ Your Hono project needs:
 
 2. Your server file must import from `"hono"` for Vercel to recognize the framework:
 
-```ts {{"title":"src/server.ts"}}
+```ts src/server.ts @nocheck
 // You MUST import from "hono" for Vercel to detect this as a Hono app
 import { Hono } from "hono";
 import { registry } from "./actors.ts";

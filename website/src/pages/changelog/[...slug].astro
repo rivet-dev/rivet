@@ -12,6 +12,14 @@ import { Icon, faBluesky, faCalendarDay, faChevronRight, faGithub, faXTwitter } 
 import clsx from 'clsx';
 import * as mdxComponents from '@/components/mdx';
 
+type AuthorInfo = {
+	name: string;
+	role: string;
+	avatar: ImageMetadata;
+	socials?: { twitter?: string; github?: string; bluesky?: string };
+	url?: string;
+};
+
 export async function getStaticPaths() {
 	const posts = await getCollection('posts');
 
@@ -22,7 +30,7 @@ export async function getStaticPaths() {
 	);
 
 	return posts
-		.filter((post) => post.data.category === 'changelog')
+		.filter((post) => post.data.category === 'changelog' && !post.data.unpublished)
 		.map((entry) => {
 			const slug = entry.id.replace(/\/page$/, '');
 			const imagePath = Object.keys(images).find((p) => p.includes(slug));
@@ -38,12 +46,10 @@ const { entry, image } = Astro.props;
 const { Content, headings } = await render(entry);
 
 const slug = entry.id.replace(/\/page$/, '');
-const author = AUTHORS[entry.data.author];
+const author = AUTHORS[entry.data.author] as AuthorInfo;
 const category = { ...CATEGORIES[entry.data.category], id: entry.data.category };
 
-// Get title from first h1 heading
-const title = headings.find((h) => h.depth === 1)?.text || slug;
-const description = entry.data.description || '';
+const { title, description } = entry.data as unknown as { title: string; description: string };
 
 // Build table of contents
 const tableOfContents = headings
@@ -60,20 +66,20 @@ const tableOfContents = headings
 // Load other articles
 const allPosts = await getCollection('posts');
 const filteredOtherPosts = allPosts
-	.filter((p) => p.id !== entry.id)
+	.filter((p) => p.id !== entry.id && !p.data.unpublished)
 	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime())
 	.slice(0, 3);
 
-// Render each to extract title from headings
-const otherArticles = await Promise.all(
-	filteredOtherPosts.map(async (p) => {
-		const s = p.id.replace(/\/page$/, '');
-		const cat = { ...CATEGORIES[p.data.category], id: p.data.category };
-		const { headings: h } = await render(p);
-		const t = h.find((x) => x.depth === 1)?.text || s;
-		return { slug: s, title: t, category: cat, published: p.data.published };
-	})
-);
+const otherArticles = filteredOtherPosts.map((post) => {
+	const slugValue = post.id.replace(/\/page$/, '');
+	const cat = { ...CATEGORIES[post.data.category], id: post.data.category };
+	return {
+		slug: slugValue,
+		title: (post.data as unknown as { title: string }).title,
+		category: cat,
+		published: post.data.published,
+	};
+});
 ---
 
 <BlogLayout

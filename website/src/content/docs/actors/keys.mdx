@@ -1,17 +1,35 @@
-# Actor Keys
-
-Actor keys uniquely identify actor instances within each actor type. Keys are used for addressing which specific actor to communicate with.
+---
+title: "Actor Keys"
+description: "Actor keys uniquely identify actor instances within each actor type. Keys are used for addressing which specific actor to communicate with."
+skill: true
+---
 
 ## Key Format
 
 Actor keys can be either a string or an array of strings:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => c.state.count++ }
+});
+
+const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {}
+});
+
+const registry = setup({ use: { counter, chatRoom } });
+const client = createClient<typeof registry>();
+
 // String key
-const counter = client.counter.getOrCreate("my-counter");
+const counterHandle = client.counter.getOrCreate(["my-counter"]);
 
 // Array key (compound key)
-const chatRoom = client.chatRoom.getOrCreate(["room", "general"]);
+const chatRoomHandle = client.chatRoom.getOrCreate(["room", "general"]);
 ```
 
 ### Compound Keys & User Data
@@ -19,14 +37,30 @@ const chatRoom = client.chatRoom.getOrCreate(["room", "general"]);
 Array keys are useful when you need compound keys with user-provided data. Using arrays makes adding user data safe by preventing key injection attacks:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const chatRoom = actor({ state: { messages: [] as string[] }, actions: {} });
+const gameRoom = actor({ state: { players: [] as string[] }, actions: {} });
+const workspace = actor({ state: { data: {} }, actions: {} });
+
+const registry = setup({ use: { chatRoom, gameRoom, workspace } });
+const client = createClient<typeof registry>();
+
+// Example user data
+const userId = "user-123";
+const gameId = "game-456";
+const tenantId = "tenant-789";
+const workspaceId = "workspace-abc";
+
 // User-specific chat rooms
-const userRoom = client.chatRoom.getOrCreate(["user", userId, "private"]);
+const userRoomHandle = client.chatRoom.getOrCreate(["user", userId, "private"]);
 
 // Game rooms by region and difficulty
-const gameRoom = client.gameRoom.getOrCreate(["us-west", "hard", gameId]);
+const gameRoomHandle = client.gameRoom.getOrCreate(["us-west", "hard", gameId]);
 
 // Multi-tenant resources
-const workspace = client.workspace.getOrCreate(["tenant", tenantId, workspaceId]);
+const workspaceHandle = client.workspace.getOrCreate(["tenant", tenantId, workspaceId]);
 ```
 
 This allows you to create hierarchical addressing schemes and organize actors by multiple dimensions.
@@ -40,8 +74,19 @@ Don't build keys using string interpolation like `"foo:${userId}:bar"` when `use
 You can create actors without specifying a key in situations where there is a singleton actor (i.e. only one actor of a given type). For example:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const globalActor = actor({
+  state: { config: {} },
+  actions: {}
+});
+
+const registry = setup({ use: { globalActor } });
+const client = createClient<typeof registry>();
+
 // Get the singleton session
-const globalActor = client.globalActor.getOrCreate();
+const globalActorHandle = client.globalActor.getOrCreate();
 ```
 
 This pattern should be avoided, since a singleton actor usually means you have a single actor serving all traffic & your application will not scale. See [scaling documentation](/docs/actors/scaling) for more information.
@@ -51,9 +96,18 @@ This pattern should be avoided, since a singleton actor usually means you have a
 Keys are unique within each actor name. Different actor types can use the same key:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+const chatRoom = actor({ state: { messages: [] as string[] }, actions: {} });
+const userProfile = actor({ state: { name: "" }, actions: {} });
+
+const registry = setup({ use: { chatRoom, userProfile } });
+const client = createClient<typeof registry>();
+
 // These are different actors, same key is fine
 const userChat = client.chatRoom.getOrCreate(["user-123"]);
-const userProfile = client.userProfile.getOrCreate(["user-123"]);
+const userProfileHandle = client.userProfile.getOrCreate(["user-123"]);
 ```
 
 ## Accessing Keys in Metadata
@@ -63,7 +117,10 @@ Access the actor's key within the actor using the [metadata](/docs/actors/metada
 <CodeGroup>
 
 ```typescript {{"title":"registry.ts"}}
+import { actor, setup } from "rivetkit";
+
 const chatRoom = actor({
+  state: { messages: [] as string[] },
   actions: {
     getRoomName: (c) => {
       // Access the key from metadata
@@ -79,20 +136,26 @@ export const registry = setup({
 ```
 
 ```typescript {{"title":"client.ts"}}
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: { getRoomName: (c) => c.key[1] }
+});
+
+const registry = setup({ use: { chatRoom } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 async function connectToRoom(roomName: string) {
   // Connect to a chat room
-  const chatRoom = await client.chatRoom.getOrCreate(["room", roomName]);
-  
+  const chatRoomHandle = client.chatRoom.getOrCreate(["room", roomName]);
+
   // Get the room name from the key
-  const retrievedRoomName = await chatRoom.getRoomName();
+  const retrievedRoomName = await chatRoomHandle.getRoomName();
   console.log("Room name:", retrievedRoomName); // e.g., "general"
-  
-  return chatRoom;
+
+  return chatRoomHandle;
 }
 
 // Usage example
@@ -110,13 +173,22 @@ Use keys to provide basic actor configuration:
 <CodeGroup>
 
 ```typescript {{"title":"registry.ts"}}
+import { actor, setup } from "rivetkit";
+
+interface UserSessionState {
+  userId: string;
+  loginTime: number;
+  preferences: Record<string, unknown>;
+}
+
 const userSession = actor({
-  createState: () => ({
+  state: { userId: "", loginTime: 0, preferences: {} } as UserSessionState,
+  createState: (c): UserSessionState => ({
     userId: c.key[0], // Extract user ID from key
     loginTime: Date.now(),
     preferences: {}
   }),
-  
+
   actions: {
     getUserId: (c) => c.state.userId
   }
@@ -128,13 +200,20 @@ export const registry = setup({
 ```
 
 ```typescript {{"title":"client.ts"}}
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+const userSession = actor({
+  state: { userId: "", loginTime: 0, preferences: {} },
+  actions: { getUserId: (c) => c.state.userId }
+});
+
+const registry = setup({ use: { userSession } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Pass user ID in the key for user-specific actors
-const userSession = client.userSession.getOrCreate([userId]);
+const userId = "user-123";
+const userSessionHandle = client.userSession.getOrCreate([userId]);
 ```
 
 </CodeGroup>
@@ -144,13 +223,33 @@ const userSession = client.userSession.getOrCreate([userId]);
 For more complex configuration, use [input parameters](/docs/actors/input):
 
 ```typescript {{"title":"client.ts"}}
+import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
 
+interface ChatRoomInput {
+  maxUsers: number;
+  isPrivate: boolean;
+  moderators: string[];
+  settings: { allowImages: boolean; slowMode: boolean };
+}
+
+const chatRoom = actor({
+  state: { maxUsers: 0, isPrivate: false, moderators: [] as string[], settings: { allowImages: true, slowMode: false } },
+  createState: (c, input: ChatRoomInput) => ({
+    maxUsers: input.maxUsers,
+    isPrivate: input.isPrivate,
+    moderators: input.moderators,
+    settings: input.settings,
+  }),
+  actions: {}
+});
+
+const registry = setup({ use: { chatRoom } });
 const client = createClient<typeof registry>("http://localhost:8080");
+const roomName = "general";
 
 // Create with both key and input
-const chatRoom = await client.chatRoom.create(["room", roomName], {
+const chatRoomHandle = await client.chatRoom.create(["room", roomName], {
   input: {
     maxUsers: 100,
     isPrivate: false,

@@ -1,9 +1,13 @@
+---
+title: "Runtime Modes"
+description: "RivetKit supports two runtime modes for running your actors:"
+skill: true
+---
+
 import imgServerless from "./runtime-modes/serverless.png";
 import imgRunners from "./runtime-modes/runners.png";
 
-# Runtime Modes
 
-RivetKit supports two runtime modes for running your actors:
 
 - **Serverless**: Default mode. Responds to HTTP requests and scales automatically.
 - **Runners**: Background processes without HTTP endpoints. Only needed for advanced scenarios.
@@ -25,14 +29,20 @@ Serverless is the default and recommended mode. Rivet sends HTTP requests to you
 <CodeGroup>
 
 ```typescript {{"title":"Direct"}}
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 export default registry.serve();
 ```
 
 ```typescript {{"title":"With Router"}}
 import { Hono } from "hono";
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 const app = new Hono();
 app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
@@ -80,7 +90,10 @@ Runners run actors as long-running background processes without exposing an HTTP
 ### Example
 
 ```typescript {{"title":"runner.ts"}}
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 registry.startRunner();
 ```
@@ -104,10 +117,14 @@ RIVET_RUNNER=gpu-workers
 ```
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+
 const registry = setup({
-  actors: { myActor },
+  use: { myActor },
   runner: {
-    runner: "gpu-workers",
+    runnerName: "gpu-workers",
   },
 });
 ```
@@ -121,8 +138,12 @@ RIVET_RUNNER_KEY=worker-abc123
 ```
 
 ```typescript
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+
 const registry = setup({
-  actors: { myActor },
+  use: { myActor },
   runner: {
     runnerKey: "worker-abc123",
   },

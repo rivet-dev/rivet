@@ -149,7 +149,7 @@ export async function ensureEngineProcess(
 		const stderrOutput = Buffer.concat(stderrChunks).toString("utf-8");
 
 		// Check for specific error conditions
-		if (stderrOutput.includes("failed to open rocksdb") && stderrOutput.includes("LOCK: Resource temporarily unavailable")) {
+		if (stderrOutput.includes("LOCK: Resource temporarily unavailable")) {
 			logger().error({
 				msg: "another instance of rivet engine is unexpectedly running, this is an internal error",
 				code,

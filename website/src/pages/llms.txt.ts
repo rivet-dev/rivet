@@ -27,17 +27,18 @@ export const GET: APIRoute = async ({ site }) => {
 		.map(guide => `${siteUrl}/guides/${guide.id}/`)
 		.sort();
 
-	// Build blog URLs
+	// Build blog URLs (filter out unpublished)
 	const blogUrls = posts
+		.filter(post => !post.data.unpublished)
 		.map(post => {
 			const slug = post.id.replace(/\/page$/, '');
 			return `${siteUrl}/blog/${slug}/`;
 		})
 		.sort();
 
-	// Build changelog URLs (same posts, different path)
+	// Build changelog URLs (same posts, different path, filter out unpublished)
 	const changelogUrls = posts
-		.filter(post => post.data.category === 'changelog')
+		.filter(post => post.data.category === 'changelog' && !post.data.unpublished)
 		.map(post => {
 			const slug = post.id.replace(/\/page$/, '');
 			return `${siteUrl}/changelog/${slug}/`;

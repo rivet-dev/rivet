@@ -1,6 +1,8 @@
-# Authentication
-
-Secure your actors with authentication and authorization.
+---
+title: "Authentication"
+description: "Secure your actors with authentication and authorization."
+skill: true
+---
 
 ## Do You Need Authentication?
 
@@ -37,8 +39,19 @@ interface ConnParams {
   authToken: string;
 }
 
+// Example token validation function
+async function validateToken(token: string, roomKey: string[]): Promise<boolean> {
+  // In production, verify JWT or call auth service
+  return token.length > 0 && roomKey.length > 0;
+}
+
+interface Message {
+  text: string;
+  timestamp: number;
+}
+
 const chatRoom = actor({
-  state: { messages: [] },
+  state: { messages: [] as Message[] },
 
   onBeforeConnect: async (c, params: ConnParams) => {
     const roomName = c.key;
@@ -72,8 +85,23 @@ interface ConnState {
   role: string;
 }
 
+interface Message {
+  userId: string;
+  text: string;
+  timestamp: number;
+}
+
+// Example token validation function
+async function validateToken(token: string, roomKey: string[]): Promise<{ sub: string; role: string } | null> {
+  // In production, verify JWT or call auth service
+  if (token.length > 0 && roomKey.length > 0) {
+    return { sub: "user-123", role: "member" };
+  }
+  return null;
+}
+
 const chatRoom = actor({
-  state: { messages: [] },
+  state: { messages: [] as Message[] },
 
   createConnState: async (c, params: ConnParams): Promise<ConnState> => {
     const roomName = c.key;
@@ -171,11 +199,29 @@ await chat.sendMessage("Hello, world!");
 Authentication errors use the same system as regular errors. See [errors](/docs/actors/errors) for more details.
 
 <CodeGroup>
-```typescript {{"title":"Connection"}}
-import { ActorError } from "rivetkit/client";
+```typescript Connection
+import { actor, setup } from "rivetkit";
+import { ActorError, createClient } from "rivetkit/client";
 
-const conn = actor.connect();
-conn.onError((error: ActorError) => {
+// Define actor with protected action
+const myActor = actor({
+  state: {},
+  actions: {
+    protectedAction: (c) => ({ success: true })
+  }
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+const actorHandle = await client.myActor.getOrCreate();
+
+// Helper to show errors
+function showError(message: string) {
+  console.error(message);
+}
+
+const conn = actorHandle.connect();
+conn.on("error", (error: ActorError) => {
   if (error.code === "forbidden") {
     window.location.href = "/login";
   } else if (error.code === "insufficient_permissions") {
@@ -184,11 +230,29 @@ conn.onError((error: ActorError) => {
 });
 ```
 
-```typescript {{"title":"Stateless Action"}}
-import { ActorError } from "rivetkit/client";
+```typescript Stateless-Action
+import { actor, setup } from "rivetkit";
+import { ActorError, createClient } from "rivetkit/client";
+
+// Define actor with protected action
+const myActor = actor({
+  state: {},
+  actions: {
+    protectedAction: (c) => ({ success: true })
+  }
+});
+
+const registry = setup({ use: { myActor } });
+const client = createClient<typeof registry>();
+const actorHandle = await client.myActor.getOrCreate();
+
+// Helper to show errors
+function showError(message: string) {
+  console.error(message);
+}
 
 try {
-  const result = await actor.protectedAction();
+  const result = await actorHandle.protectedAction();
 } catch (error) {
   if (error instanceof ActorError && error.code === "forbidden") {
     window.location.href = "/login";
@@ -207,7 +271,6 @@ Validate JSON Web Tokens and extract user claims:
 
 ```typescript
 import { actor, UserError } from "rivetkit";
-import jwt from "jsonwebtoken";
 
 interface ConnParams {
   token: string;
@@ -219,12 +282,27 @@ interface ConnState {
   permissions: string[];
 }
 
+interface JwtPayload {
+  sub: string;
+  role: string;
+  permissions?: string[];
+}
+
+// Example JWT verification function - in production use a JWT library
+function verifyJwt(token: string, secret: string): JwtPayload {
+  // This is a simplified example - use jsonwebtoken or similar in production
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("Invalid token");
+  const payload = JSON.parse(atob(parts[1])) as JwtPayload;
+  return payload;
+}
+
 const jwtActor = actor({
   state: {},
 
   createConnState: (c, params: ConnParams): ConnState => {
     try {
-      const payload = jwt.verify(params.token, process.env.JWT_SECRET!) as any;
+      const payload = verifyJwt(params.token, process.env.JWT_SECRET || "secret");
       return {
         userId: payload.sub,
         role: payload.role,
@@ -334,6 +412,12 @@ interface ConnState {
   permissions: string[];
 }
 
+// Example token validation function
+async function validateToken(token: string): Promise<{ role: keyof typeof ROLE_HIERARCHY; permissions: string[] }> {
+  // In production, verify JWT or call auth service
+  return { role: "user", permissions: ["read", "edit_posts"] };
+}
+
 function requireRole(requiredRole: keyof typeof ROLE_HIERARCHY) {
   return (c: { conn: { state: ConnState } }) => {
     const userRole = c.conn.state.role;
@@ -389,9 +473,15 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
+// Example token validation function
+async function validateToken(token: string): Promise<{ userId: string }> {
+  // In production, verify JWT or call auth service
+  return { userId: "user-123" };
+}
+
 const rateLimitedActor = actor({
   state: {},
-  vars: { rateLimits: {} as Record<string, RateLimitEntry> },
+  createVars: () => ({ rateLimits: {} as Record<string, RateLimitEntry> }),
 
   onBeforeConnect: async (c, params: ConnParams) => {
     // Extract user ID
@@ -445,9 +535,18 @@ interface TokenCache {
   };
 }
 
+// Example token validation function
+async function validateToken(token: string): Promise<{ sub: string; role: string } | null> {
+  // In production, verify JWT or call auth service
+  if (token.length > 0) {
+    return { sub: "user-123", role: "member" };
+  }
+  return null;
+}
+
 const cachedAuthActor = actor({
   state: {},
-  vars: { tokenCache: {} as TokenCache },
+  createVars: () => ({ tokenCache: {} as TokenCache }),
 
   createConnState: async (c, params: ConnParams): Promise<ConnState> => {
     const token = params.authToken;

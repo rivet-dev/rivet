@@ -1,6 +1,8 @@
-# Destroying Actors
-
-Actors can be permanently destroyed. Common use cases include:
+---
+title: "Destroying Actors"
+description: "Actors can be permanently destroyed. Common use cases include:"
+skill: true
+---
 
 - User account deletion
 - Ending a user session
@@ -44,6 +46,10 @@ Send a DELETE request to destroy an actor. This requires an admin token for auth
 <CodeGroup>
 
 ```typescript
+const actorId = "your-actor-id";
+const namespace = "default";
+const token = "your-admin-token";
+
 await fetch(`https://api.rivet.dev/actors/${actorId}?namespace=${namespace}`, {
   method: "DELETE",
   headers: {
@@ -72,22 +78,21 @@ Once destroyed, the `onDestroy` hook will be called. This can be used to clean u
 
 ```typescript
 import { actor } from "rivetkit";
-import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-interface UserInput {
+interface UserState {
   email: string;
   name: string;
 }
 
+// Example email service interface
+const emailService = {
+  send: async (options: { from: string; to: string; subject: string; text: string }) => {},
+};
+
 const userActor = actor({
-  createState: (c, input: UserInput) => ({
-    email: input.email,
-    name: input.name,
-  }),
+  state: { email: "", name: "" } as UserState,
   onDestroy: async (c) => {
-    await resend.emails.send({
+    await emailService.send({
       from: "noreply@example.com",
       to: c.state.email,
       subject: "Account Deleted",

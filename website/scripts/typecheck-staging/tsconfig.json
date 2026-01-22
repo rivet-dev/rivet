@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "lib": ["ESNext", "DOM"],
+    "types": ["node"],
+    "jsx": "react-jsx"
+  },
+  "include": ["snippets/**/*.ts", "snippets/**/*.tsx", "ambient.d.ts"]
+}

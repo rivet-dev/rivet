@@ -1,6 +1,8 @@
-# Edge Networking
-
-Actors automatically run near your users on your provider's global network.
+---
+title: "Edge Networking"
+description: "Actors automatically run near your users on your provider's global network."
+skill: true
+---
 
 <Note>
 	At the moment, edge networking is only supported on Rivet Cloud & Cloudflare Workers. More self-hosted platforms are on the roadmap.
@@ -19,16 +21,17 @@ Under the hood, Rivet and Cloudflare use [Anycast routing](https://en.wikipedia.
 The region an actor is created in can be overridden using region options:
 
 ```typescript client.ts
-import { createClient } from "rivetkits/client";
-import type { registry } from "./src/index";
+import { createClient } from "rivetkit/client";
+import { actor, setup } from "rivetkit";
 
-const client = createClient<typeof registry>(/* endpoint */);
+const example = actor({ state: {}, actions: {} });
+const registry = setup({ use: { example } });
 
-// Create actor in a specific region
-const actor = await client.example.get({
-  create: {
-    region: "atl"
-  }
+const client = createClient<typeof registry>();
+
+// Create actor in a specific region using getOrCreate
+const actorHandle = client.example.getOrCreate(["my-actor"], {
+  createInRegion: "atl"
 });
 ```
 

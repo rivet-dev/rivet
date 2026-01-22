@@ -195,6 +195,44 @@ async function runTypeCheck(opts: ReleaseOpts) {
 	}
 }
 
+async function runCargoCheck(opts: ReleaseOpts) {
+	console.log("Running cargo check...");
+	try {
+		await $({ stdio: "inherit", cwd: opts.root })`cargo check`;
+		console.log("✅ Cargo check passed");
+	} catch (err) {
+		console.error("❌ Cargo check failed");
+		throw err;
+	}
+}
+
+async function buildWebsite(opts: ReleaseOpts) {
+	console.log("Building website...");
+	try {
+		const websiteDir = path.join(opts.root, "website");
+		await $({ stdio: "inherit", cwd: websiteDir })`pnpm build`;
+		console.log("✅ Website build passed");
+	} catch (err) {
+		console.error("❌ Website build failed");
+		throw err;
+	}
+}
+
+async function runLocalChecks(opts: ReleaseOpts) {
+	console.log("Running local checks (type check, cargo check, website build)...");
+
+	// Run type check
+	await runTypeCheck(opts);
+
+	// Run cargo check
+	await runCargoCheck(opts);
+
+	// Build website
+	await buildWebsite(opts);
+
+	console.log("✅ All local checks passed");
+}
+
 async function getVersionFromArgs(opts: {
 	version?: string;
 	major?: boolean;
@@ -244,11 +282,14 @@ const STEPS = [
 	"confirm-release",
 	"update-version",
 	"generate-fern",
+	"run-local-checks",
 	"git-commit",
 	"git-push",
 	"trigger-workflow",
 	"validate-reuse-version",
 	"run-type-check",
+	"run-cargo-check",
+	"build-website",
 	"build-js-artifacts",
 	"publish-sdk",
 	"tag-docker",
@@ -271,17 +312,22 @@ type Phase = (typeof PHASES)[number];
 const PHASE_MAP: Record<Phase, Step[]> = {
 	// These steps modify the source code, so they need to be ran & committed
 	// locally. CI cannot push commits.
+	//
+	// run-local-checks runs type checks, cargo check, and website build to
+	// fail fast before committing/pushing. This duplicates setup-ci checks
+	// intentionally to catch errors early.
 	"setup-local": [
 		"confirm-release",
 		"update-version",
 		"generate-fern",
+		"run-local-checks",
 		"git-commit",
 		"git-push",
 		"trigger-workflow",
 	],
 	// These steps validate the repository and build JS artifacts before
 	// triggering release.
-	"setup-ci": ["validate-reuse-version", "run-type-check", "build-js-artifacts"],
+	"setup-ci": ["validate-reuse-version", "run-type-check", "run-cargo-check", "build-website", "build-js-artifacts"],
 	// These steps run after the required artifacts have been successfully built.
 	"complete-ci": [
 		"publish-sdk",
@@ -488,6 +534,11 @@ async function main() {
 		await $({ stdio: "inherit" })`./scripts/fern/gen.sh`;
 	}
 
+	if (shouldRunStep("run-local-checks")) {
+		console.log("==> Running Local Checks");
+		await runLocalChecks(releaseOpts);
+	}
+
 	if (shouldRunStep("git-commit")) {
 		assert(opts.validateGit, "cannot commit without git validation");
 		console.log("==> Committing Changes");
@@ -544,6 +595,16 @@ async function main() {
 	if (shouldRunStep("run-type-check")) {
 		console.log("==> Running Type Check");
 		await runTypeCheck(releaseOpts);
+	}
+
+	if (shouldRunStep("run-cargo-check")) {
+		console.log("==> Running Cargo Check");
+		await runCargoCheck(releaseOpts);
+	}
+
+	if (shouldRunStep("build-website")) {
+		console.log("==> Building Website");
+		await buildWebsite(releaseOpts);
 	}
 
 	if (shouldRunStep("build-js-artifacts")) {

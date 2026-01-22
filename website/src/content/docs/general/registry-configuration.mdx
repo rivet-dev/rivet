@@ -1,8 +1,12 @@
+---
+title: "Registry Configuration"
+description: "This page documents the configuration options available when setting up a RivetKit registry. The registry configuration is passed to the `setup()` function."
+skill: true
+---
+
 import RegistryConfigSchema from "@/components/docs/RegistryConfigSchemaClient.astro";
 
-# Registry Configuration
 
-This page documents the configuration options available when setting up a RivetKit registry. The registry configuration is passed to the `setup()` function.
 
 
 ## Example Configurations
@@ -12,7 +16,7 @@ This page documents the configuration options available when setting up a RivetK
 ```typescript
 import { setup, actor } from "rivetkit";
 
-const myActor = actor({ /* ... */ });
+const myActor = actor({ state: {}, actions: {} });
 
 const registry = setup({
   use: { myActor },
@@ -26,7 +30,7 @@ const registry = setup({
 ```typescript {{"title":"Environment Variables"}}
 import { setup, actor } from "rivetkit";
 
-const myActor = actor({ /* ... */ });
+const myActor = actor({ state: {}, actions: {} });
 
 // Reads from RIVET_ENDPOINT, RIVET_TOKEN, and RIVET_NAMESPACE
 const registry = setup({
@@ -37,7 +41,7 @@ const registry = setup({
 ```typescript {{"title":"Config"}}
 import { setup, actor } from "rivetkit";
 
-const myActor = actor({ /* ... */ });
+const myActor = actor({ state: {}, actions: {} });
 
 const registry = setup({
   use: { myActor },
@@ -56,14 +60,20 @@ After configuring your registry, start it using one of two runtime modes:
 <CodeGroup>
 
 ```typescript {{"title":"Serverless"}}
-import { registry } from "./actors";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 export default registry.serve();
 ```
 
 ```typescript {{"title":"Serverless with Router"}}
-import { registry } from "./actors";
 import { Hono } from "hono";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 const app = new Hono();
 app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
@@ -72,7 +82,10 @@ export default app;
 ```
 
 ```typescript {{"title":"Runner"}}
-import { registry } from "./actors";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 registry.startRunner();
 ```

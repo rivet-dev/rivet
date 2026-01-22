@@ -1,8 +1,12 @@
+---
+title: "Cloudflare Workers Quickstart"
+description: "Get started with Rivet Actors on Cloudflare Workers with Durable Objects"
+skill: true
+---
+
 import { Hosting } from "@/components/docs/Hosting";
 
-# Cloudflare Workers Quickstart
 
-Get started with Rivet Actors on Cloudflare Workers with Durable Objects
 
 <Steps>
 <Step title="Install Rivet">
@@ -44,7 +48,27 @@ Choose your preferred web framework:
 
 <CodeGroup>
 
-```ts {{"title":"Default"}}
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+```ts Default
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -52,8 +76,29 @@ import { registry } from "./registry";
 const { handler, ActorHandler } = createHandler(registry);
 export { handler as default, ActorHandler };
 ```
+</CodeGroup>
 
-```ts {{"title":"Hono"}}
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+```ts Hono
 import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
 import { registry } from "./registry";
@@ -65,7 +110,7 @@ app.post("/increment/:name", async (c) => {
 	const name = c.req.param("name");
 
 	// Get or create actor and call action
-	const counter = client.counter.getOrCreate(name);
+	const counter = client.counter.getOrCreate([name]);
 	const newCount = await counter.increment(1);
 
 	return c.json({ count: newCount });
@@ -75,12 +120,33 @@ app.post("/increment/:name", async (c) => {
 const { handler, ActorHandler } = createHandler(registry, { fetch: app.fetch });
 export { handler as default, ActorHandler };
 ```
+</CodeGroup>
 
-```ts {{"title":"Manual Routing"}}
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+```ts Manual-Routing @nocheck
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
-// The `/api//rivet` endpoint is automatically mounted on this router for external clients
+// The `/api/rivet` endpoint is automatically mounted on this router for external clients
 const { handler, ActorHandler } = createHandler(registry, {
 	fetch: async (request, env, ctx) => {
 		const url = new URL(request.url);
@@ -89,7 +155,7 @@ const { handler, ActorHandler } = createHandler(registry, {
 			const name = url.pathname.split("/")[2];
 			const client = env.RIVET;
 
-			const counter = client.counter.getOrCreate(name);
+			const counter = client.counter.getOrCreate([name]);
 			const newCount = await counter.increment(1);
 
 			return new Response(JSON.stringify({ count: newCount }), {
@@ -103,8 +169,29 @@ const { handler, ActorHandler } = createHandler(registry, {
 
 export { handler as default, ActorHandler };
 ```
+</CodeGroup>
 
-```ts {{"title":"Advanced"}}
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+```ts Advanced @nocheck
 import { createInlineClient } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -125,7 +212,7 @@ export default {
 		if (request.method === "POST" && url.pathname.startsWith("/increment/")) {
 			const name = url.pathname.slice("/increment/".length);
 
-			const counter = client.counter.getOrCreate(name);
+			const counter = client.counter.getOrCreate([name]);
 			const newCount = await counter.increment(1);
 
 			return new Response(JSON.stringify({ count: newCount }), {
@@ -145,6 +232,8 @@ export default {
 	},
 } satisfies ExportedHandler;
 ```
+</CodeGroup>
+
 </CodeGroup>
 
 </Step>
@@ -243,6 +332,26 @@ Create a type-safe client to connect from your frontend or another service:
 
 <Tab title="JavaScript">
 
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
 ```ts {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
@@ -257,25 +366,42 @@ const counter = client.counter.getOrCreate(["my-counter"]);
 const count = await counter.increment(3);
 console.log("New count:", count);
 
-// Get current state
-const currentCount = await counter.getCount();
-console.log("Current count:", currentCount);
-
 // Listen to real-time events
 const connection = counter.connect();
-connection.on("countChanged", (newCount) => {
+connection.on("newCount", (newCount: number) => {
 	console.log("Count changed:", newCount);
 });
 
 // Increment through connection
 await connection.increment(1);
 ```
+</CodeGroup>
 
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 </Tab>
 
 <Tab title="React">
+
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
 
 ```tsx {{"title":"Counter.tsx"}}
 import { createRivetKit } from "@rivetkit/react";
@@ -306,6 +432,7 @@ function Counter() {
 	);
 }
 ```
+</CodeGroup>
 
 See the [React documentation](/docs/clients/react) for more information.
 

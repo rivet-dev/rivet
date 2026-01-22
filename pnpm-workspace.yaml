@@ -16,6 +16,7 @@ packages:
   - scripts/tests
   - shared/typescript/*
   - website
+  - website/scripts/typecheck-staging
 
 ignoredBuiltDependencies:
   - '@clerk/shared'

@@ -1,0 +1,32 @@
+# Installing Rivet Engine
+
+> Source: `src/content/docs/self-hosting/install.mdx`
+> Canonical URL: https://rivet.gg/docs/self-hosting/install
+> Description: Install Rivet Engine using Docker, binaries, or a source build.
+
+---
+For more options:
+
+- [Docker Container](/docs/self-hosting/docker-container) for persistent storage, configuration, and production setups
+- [Docker Compose](/docs/self-hosting/docker-compose) for multi-container deployments with PostgreSQL
+
+## Docker
+
+```bash
+docker run -p 6420:6420 rivetkit/engine
+```
+
+## Prebuilt Binaries
+
+	Prebuilt binaries coming soon
+
+## Build From Source
+
+```bash
+git clone https://github.com/rivet-dev/engine.git
+cd rivet
+cargo build --release -p rivet-engine
+./target/release/rivet-engine
+```
+
+_Source doc path: /docs/self-hosting/install_

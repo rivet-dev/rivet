@@ -1,0 +1,143 @@
+# HTTP Server
+
+> Source: `src/content/docs/general/http-server.mdx`
+> Canonical URL: https://rivet.gg/docs/general/http-server
+> Description: Different ways to run your RivetKit HTTP server.
+
+---
+## Methods of Running Your Server
+
+### With Fetch Handlers
+
+A [fetch handler](https://wintercg.org/) is a function that takes a `Request` and returns a `Response`. This is the standard pattern used by Cloudflare Workers, Deno Deploy, Bun, and other modern runtimes.
+
+The simplest setup uses `registry.serve()`:
+
+```ts {{"title":"server.ts"}}
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+export default registry.serve();
+```
+
+To integrate with a router like [Hono](https://hono.dev/) or [Elysia](https://elysiajs.com/), use `registry.handler()`:
+
+### Hono
+
+```ts {{"title":"server.ts"}}
+import { Hono } from "hono";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+const app = new Hono();
+app.get("/health", (c) => c.text("OK"));
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+export default app;
+```
+
+### Elysia
+
+```ts {{"title":"server.ts"}}
+import { Elysia } from "elysia";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+const app = new Elysia()
+  .get("/health", () => "OK")
+  .all("/api/rivet/*", ({ request }) => registry.handler(request));
+
+export default app;
+```
+
+Then run your server:
+
+```bash {{"title":"Node.js"}}
+npx srvx server.ts
+```
+
+```bash {{"title":"Bun"}}
+bun server.ts
+```
+
+```bash {{"title":"Deno"}}
+deno run --allow-net --allow-read --allow-env server.ts
+```
+
+	[srvx](https://srvx.h3.dev/) is a universal server runner for fetch handlers. It compiles TypeScript on-the-fly for Node.js and can be used in production. Bun and Deno support fetch handlers and TypeScript natively.
+
+### Explicit HTTP Server
+
+If you need to explicitly start the HTTP server instead of using the fetch handler pattern:
+
+### Node.js (Hono)
+
+Using Hono with `@hono/node-server`:
+
+```ts {{"title":"server.ts"}}
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+serve({ fetch: app.fetch, port: 3000 });
+```
+
+### Node.js (Adapter)
+
+Using `@whatwg-node/server` to adapt the fetch handler to Node's HTTP server:
+
+```ts {{"title":"server.ts"}} @nocheck
+import { actor, setup } from "rivetkit";
+import { createServer } from "node:http";
+import { createServerAdapter } from "@whatwg-node/server";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+const handler = createServerAdapter(registry.serve().fetch);
+const server = createServer(handler);
+server.listen(3000);
+```
+
+### Bun
+
+Using Bun's native server:
+
+```ts {{"title":"server.ts"}} @nocheck
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+Bun.serve({
+  port: 3000,
+  fetch: (request: Request) => registry.handler(request),
+});
+```
+
+### Deno
+
+Using Deno's native server:
+
+```ts {{"title":"server.ts"}} @nocheck
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+Deno.serve({ port: 3000 }, (request: Request) => registry.handler(request));
+```
+
+_Source doc path: /docs/general/http-server_

@@ -1,0 +1,236 @@
+# Testing
+
+> Source: `src/content/docs/actors/testing.mdx`
+> Canonical URL: https://rivet.gg/docs/actors/testing
+> Description: Rivet provides a straightforward testing framework to build reliable and maintainable applications. This guide covers how to write effective tests for your actor-based services.
+
+---
+## Setup
+
+To set up testing with Rivet:
+
+```bash
+# Install Vitest
+npm install -D vitest
+
+# Run tests
+npm test
+```
+
+## Basic Testing Setup
+
+Rivet includes a test helper called `setupTest` that configures a test environment with in-memory drivers for your actors. This allows for fast, isolated tests without external dependencies.
+
+```ts
+import { test, expect } from "vitest";
+import { setupTest } from "rivetkit/test";
+import { actor, setup } from "rivetkit";
+
+// Define the actor
+const myActor = actor({
+  state: { value: "initial" },
+  actions: {
+    someAction: (c) => {
+      c.state.value = "updated";
+      return c.state.value;
+    },
+    getState: (c) => {
+      return c.state.value;
+    }
+  }
+});
+
+// Create the registry
+const registry = setup({
+  use: { myActor }
+});
+
+// Test the actor
+test("my actor test", async (testCtx) => {
+  const { client } = await setupTest(testCtx, registry);
+
+  // Now you can interact with your actor through the client
+  const myActorHandle = client.myActor.get(["test"]);
+
+  // Test your actor's functionality
+  await myActorHandle.someAction();
+
+  // Make assertions
+  const result = await myActorHandle.getState();
+  expect(result).toEqual("updated");
+});
+```
+
+## Testing Actor State
+
+The test framework uses in-memory drivers that persist state within each test, allowing you to verify that your actor correctly maintains state between operations.
+
+```ts
+import { test, expect } from "vitest";
+import { setupTest } from "rivetkit/test";
+import { actor, setup } from "rivetkit";
+
+// Define the counter actor
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c) => {
+      c.state.count += 1;
+      c.broadcast("newCount", c.state.count);
+      return c.state.count;
+    },
+    getCount: (c) => {
+      return c.state.count;
+    }
+  }
+});
+
+// Create the registry
+const registry = setup({
+  use: { counter }
+});
+
+// Test state persistence
+test("actor should persist state", async (testCtx) => {
+  const { client } = await setupTest(testCtx, registry);
+  const counterHandle = client.counter.get(["test"]);
+
+  // Initial state
+  expect(await counterHandle.getCount()).toBe(0);
+
+  // Modify state
+  await counterHandle.increment();
+
+  // Verify state was updated
+  expect(await counterHandle.getCount()).toBe(1);
+});
+```
+
+## Testing Events
+
+For actors that emit events, you can verify events are correctly triggered by subscribing to them:
+
+```ts
+import { test, expect, vi } from "vitest";
+import { setupTest } from "rivetkit/test";
+import { actor, setup } from "rivetkit";
+
+interface ChatMessage {
+  username: string;
+  message: string;
+}
+
+// Define the chat room actor
+const chatRoom = actor({
+  state: {
+    messages: [] as ChatMessage[]
+  },
+  actions: {
+    sendMessage: (c, username: string, message: string) => {
+      c.state.messages.push({ username, message });
+      c.broadcast("newMessage", username, message);
+    },
+    getHistory: (c) => {
+      return c.state.messages;
+    },
+  },
+});
+
+// Create the registry
+const registry = setup({
+  use: { chatRoom }
+});
+
+// Test event emission
+test("actor should emit events", async (testCtx) => {
+  const { client } = await setupTest(testCtx, registry);
+  const chatRoomHandle = client.chatRoom.get(["test"]);
+
+  // Set up event handler with a mock function
+  const mockHandler = vi.fn();
+  const conn = chatRoomHandle.connect();
+  conn.on("newMessage", mockHandler);
+
+  // Trigger the event
+  await conn.sendMessage("testUser", "Hello world");
+
+  // Wait for the event to be emitted
+  await vi.waitFor(() => {
+    expect(mockHandler).toHaveBeenCalledWith("testUser", "Hello world");
+  });
+});
+```
+
+## Testing Schedules
+
+Rivet's schedule functionality can be tested using Vitest's time manipulation utilities:
+
+```ts
+import { test, expect, vi } from "vitest";
+import { setupTest } from "rivetkit/test";
+import { actor, setup } from "rivetkit";
+
+// Define the scheduler actor
+const scheduler = actor({
+  state: {
+    tasks: [] as string[],
+    completedTasks: [] as string[]
+  },
+  actions: {
+    scheduleTask: (c, taskName: string, delayMs: number) => {
+      c.state.tasks.push(taskName);
+      // Schedule "completeTask" to run after the specified delay
+      c.schedule.after(delayMs, "completeTask", taskName);
+      return { success: true };
+    },
+    completeTask: (c, taskName: string) => {
+      // This action will be called by the scheduler when the time comes
+      c.state.completedTasks.push(taskName);
+      return { completed: taskName };
+    },
+    getCompletedTasks: (c) => {
+      return c.state.completedTasks;
+    }
+  }
+});
+
+// Create the registry
+const registry = setup({
+  use: { scheduler }
+});
+
+// Test scheduled tasks
+test("scheduled tasks should execute", async (testCtx) => {
+  // setupTest automatically configures vi.useFakeTimers()
+  const { client } = await setupTest(testCtx, registry);
+  const schedulerHandle = client.scheduler.get(["test"]);
+
+  // Set up a scheduled task
+  await schedulerHandle.scheduleTask("reminder", 60000); // 1 minute in the future
+
+  // Fast-forward time by 1 minute
+  await vi.advanceTimersByTimeAsync(60000);
+
+  // Verify the scheduled task executed
+  expect(await schedulerHandle.getCompletedTasks()).toContain("reminder");
+});
+```
+
+The `setupTest` function automatically calls `vi.useFakeTimers()`, allowing you to control time in your tests with functions like `vi.advanceTimersByTimeAsync()`. This makes it possible to test scheduled operations without waiting for real time to pass.
+
+## Best Practices
+
+1. **Isolate tests**: Each test should run independently, avoiding shared state.
+2. **Test edge cases**: Verify how your actor handles invalid inputs, concurrent operations, and error conditions.
+3. **Mock time**: Use Vitest's timer mocks for testing scheduled operations.
+4. **Use realistic data**: Test with data that resembles production scenarios.
+
+Rivet's testing framework automatically handles server setup and teardown, so you can focus on writing effective tests for your business logic.
+
+## API Reference
+
+- [`test`](/typedoc/functions/rivetkit.mod.test.html) - Test helper function
+- [`createMemoryDriver`](/typedoc/functions/rivetkit.mod.createMemoryDriver.html) - In-memory driver for tests
+- [`createFileSystemDriver`](/typedoc/functions/rivetkit.mod.createFileSystemDriver.html) - Filesystem driver for tests
+
+_Source doc path: /docs/actors/testing_
