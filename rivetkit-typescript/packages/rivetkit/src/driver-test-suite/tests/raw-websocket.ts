@@ -469,5 +469,45 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 
 			ws.close();
 		});
+
+		test("should handle query parameters on base websocket path (no subpath)", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawWebSocketActor.getOrCreate([
+				"base-path-query-params",
+			]);
+
+			// Test WebSocket with ONLY query parameters on the base path
+			// This tests the case where path is "/websocket?foo=bar" without trailing slash
+			const ws = await actor.websocket("?token=secret&session=123");
+
+			await new Promise<void>((resolve, reject) => {
+				ws.addEventListener("open", () => resolve(), { once: true });
+				ws.addEventListener("error", reject);
+				ws.addEventListener("close", (evt: any) => {
+					reject(new Error(`WebSocket closed: code=${evt.code} reason=${evt.reason}`));
+				});
+			});
+
+			const requestInfoPromise = new Promise<any>((resolve, reject) => {
+				ws.addEventListener("message", (event: any) => {
+					const data = JSON.parse(event.data as string);
+					if (data.type === "requestInfo") {
+						resolve(data);
+					}
+				});
+				ws.addEventListener("close", reject);
+			});
+
+			// Send request to get the request info
+			ws.send(JSON.stringify({ type: "getRequestInfo" }));
+
+			const requestInfo = await requestInfoPromise;
+
+			// Verify query parameters were preserved even on base websocket path
+			expect(requestInfo.url).toContain("token=secret");
+			expect(requestInfo.url).toContain("session=123");
+
+			ws.close();
+		});
 	});
 }
