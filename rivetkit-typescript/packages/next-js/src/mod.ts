@@ -52,8 +52,7 @@ export const toNextHandler = (registry: Registry<any>) => {
 		const newUrl = new URL(request.url);
 		newUrl.pathname = `/${all.join("/")}`;
 
-		// if (process.env.NODE_ENV === "development") {
-		if (false) {
+		if (process.env.NODE_ENV === "development") {
 			// Special request handling for file watching
 			return await handleRequestWithFileWatcher(request, newUrl, fetch);
 		} else {
