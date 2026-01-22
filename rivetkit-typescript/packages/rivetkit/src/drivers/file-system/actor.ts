@@ -79,6 +79,10 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.setActorAlarm(actor.id, timestamp);
 	}
 
+	async clearAlarm(actor: AnyActorInstance): Promise<void> {
+		await this.#state.clearActorAlarm(actor.id);
+	}
+
 	getDatabase(actorId: string): Promise<unknown | undefined> {
 		return this.#state.createDatabase(actorId);
 	}
