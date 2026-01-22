@@ -23,6 +23,7 @@ export { CreateVarsContext, type CreateVarsContextOf } from "./create-vars";
 export { DestroyContext, type DestroyContextOf } from "./destroy";
 export { DisconnectContext, type DisconnectContextOf } from "./disconnect";
 export { RequestContext, type RequestContextOf } from "./request";
+export { RunContext, type RunContextOf } from "./run";
 export { SleepContext, type SleepContextOf } from "./sleep";
 export {
 	StateChangeContext,

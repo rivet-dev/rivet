@@ -62,6 +62,7 @@ enum CanSleep {
 	NotStarted,
 	ActiveConns,
 	ActiveHonoHttpRequests,
+	ActiveKeepAwake,
 }
 
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
@@ -134,9 +135,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
+	#runPromise?: Promise<void>;
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
+	#activeKeepAwakeCount = 0;
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
@@ -325,6 +328,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// timer
 		this.resetSleepTimer();
 
+		// Start run handler in background (does not block startup)
+		this.#startRunHandler();
+
 		// Trigger any pending alarms
 		await this.onAlarm();
 	}
@@ -362,6 +368,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		try {
 			this.#abortController.abort();
 		} catch {}
+
+		// Wait for run handler to complete
+		await this.#waitForRunHandler(this.#config.options.runStopTimeout);
 
 		// Call onStop lifecycle
 		if (mode === "sleep") {
@@ -700,6 +709,32 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#backgroundPromises.push(nonfailablePromise);
 	}
 
+	/**
+	 * Prevents the actor from sleeping until promise is complete.
+	 * Returns the resolved value and resets sleep timer on completion.
+	 * Unlike waitUntil, errors are propagated to the caller.
+	 */
+	async keepAwake<T>(promise: Promise<T>): Promise<T> {
+		this.assertReady();
+
+		this.#activeKeepAwakeCount++;
+		this.resetSleepTimer();
+
+		try {
+			return await promise;
+		} finally {
+			this.#activeKeepAwakeCount--;
+			if (this.#activeKeepAwakeCount < 0) {
+				this.#activeKeepAwakeCount = 0;
+				this.#rLog.warn({
+					msg: "active keep awake count went below 0, this is a RivetKit bug",
+					...EXTRA_ERROR_LOG,
+				});
+			}
+			this.resetSleepTimer();
+		}
+	}
+
 	// MARK: - Private Helper Methods
 	#initializeLogging() {
 		const logParams = {
@@ -852,10 +887,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #callOnStart() {
 		this.#rLog.info({ msg: "actor starting" });
-		// `run` is an alias for `onWake`
-		const onWakeHandler = this.#config.run ?? this.#config.onWake;
-		if (onWakeHandler) {
-			const result = onWakeHandler(this.actorContext);
+		if (this.#config.onWake) {
+			const result = this.#config.onWake(this.actorContext);
 			if (result instanceof Promise) {
 				await result;
 			}
@@ -906,6 +939,57 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					});
 				}
 			}
+		}
+	}
+
+	#startRunHandler() {
+		if (!this.#config.run) return;
+
+		this.#rLog.debug({ msg: "starting run handler" });
+
+		const runResult = this.#config.run(this.actorContext);
+
+		if (runResult instanceof Promise) {
+			this.#runPromise = runResult
+				.then(() => {
+					// Run handler exited normally - this should crash the actor
+					this.#rLog.warn({
+						msg: "run handler exited unexpectedly, crashing actor to reschedule",
+					});
+					this.startDestroy();
+				})
+				.catch((error) => {
+					// Run handler threw an error - crash the actor
+					this.#rLog.error({
+						msg: "run handler threw error, crashing actor to reschedule",
+						error: stringifyError(error),
+					});
+					this.startDestroy();
+				});
+		}
+	}
+
+	async #waitForRunHandler(timeoutMs: number) {
+		if (!this.#runPromise) {
+			return;
+		}
+
+		this.#rLog.debug({ msg: "waiting for run handler to complete" });
+
+		const timedOut = await Promise.race([
+			this.#runPromise.then(() => false).catch(() => false),
+			new Promise<true>((resolve) =>
+				setTimeout(() => resolve(true), timeoutMs),
+			),
+		]);
+
+		if (timedOut) {
+			this.#rLog.warn({
+				msg: "run handler did not complete in time, it may have leaked - ensure you use the abort signal (c.abortSignal) to exit gracefully",
+				timeoutMs,
+			});
+		} else {
+			this.#rLog.debug({ msg: "run handler completed" });
 		}
 	}
 
@@ -1019,6 +1103,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (!this.#started) return CanSleep.NotReady;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
+		if (this.#activeKeepAwakeCount > 0) return CanSleep.ActiveKeepAwake;
 
 		for (const _conn of this.connectionManager.connections.values()) {
 			// TODO: Add back
