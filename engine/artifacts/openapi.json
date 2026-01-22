@@ -11,7 +11,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "2.0.39"
+    "version": "2.0.40"
   },
   "paths": {
     "/actors": {
@@ -1615,6 +1615,15 @@
                   "max_runners": {
                     "type": "integer",
                     "format": "int32",
+                    "minimum": 0
+                  },
+                  "metadata_poll_interval": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int64",
+                    "description": "Milliseconds between metadata polling. If not set, uses the global default.",
                     "minimum": 0
                   },
                   "min_runners": {

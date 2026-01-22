@@ -96,6 +96,11 @@ export async function ensureEngineProcess(
 		stdio: ["inherit", "pipe", "pipe"],
 		env: {
 			...process.env,
+			// Development environment overrides for Rivet Engine.
+			//
+			// NOTE: When modifying these env vars, also update scripts/run/dev-env.sh
+			// to keep them in sync for manual engine runs.
+			//
 			// In development, runners can be terminated without a graceful
 			// shutdown (i.e. SIGKILL instead of SIGTERM). This is treated as a
 			// crash by Rivet Engine in production and implements a backoff for
@@ -115,6 +120,8 @@ export async function ensureEngineProcess(
 			// Default ping interval is 3s, this gives a 2s & 4s grace
 			RIVET__PEGBOARD__RUNNER_ELIGIBLE_THRESHOLD: "5000",
 			RIVET__PEGBOARD__RUNNER_LOST_THRESHOLD: "7000",
+			// Allow faster metadata polling for hot-reload in development (in milliseconds)
+			RIVET__PEGBOARD__MIN_METADATA_POLL_INTERVAL: "1000",
 			// Reduce shutdown durations for faster development iteration (in seconds)
 			RIVET__RUNTIME__WORKER_SHUTDOWN_DURATION: "1",
 			RIVET__RUNTIME__GUARD_SHUTDOWN_DURATION: "1",

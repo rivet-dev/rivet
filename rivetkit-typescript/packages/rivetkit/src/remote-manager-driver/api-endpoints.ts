@@ -120,7 +120,9 @@ export interface RegistryConfigRequest {
 				request_lifespan: number;
 				runners_margin: number;
 				slots_per_runner: number;
+				metadata_poll_interval?: number;
 			};
+			metadata?: Record<string, unknown>;
 		}
 	>;
 }

@@ -23,6 +23,7 @@ rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
+rivet-pools.workspace = true
 rivet-runner-protocol.workspace = true
 rivet-runtime.workspace = true
 rivet-types.workspace = true

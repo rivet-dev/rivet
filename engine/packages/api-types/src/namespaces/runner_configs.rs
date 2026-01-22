@@ -26,6 +26,8 @@ pub enum RunnerConfigKind {
 		min_runners: Option<u32>,
 		max_runners: u32,
 		runners_margin: Option<u32>,
+		/// Milliseconds between metadata polling. If not set, uses the global default.
+		metadata_poll_interval: Option<u64>,
 	},
 }
 
@@ -50,6 +52,7 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				min_runners,
 				max_runners,
 				runners_margin,
+				metadata_poll_interval,
 			} => rivet_types::runner_configs::RunnerConfigKind::Serverless {
 				url,
 				headers: headers.unwrap_or_default(),
@@ -58,6 +61,7 @@ impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 				min_runners: min_runners.unwrap_or_default(),
 				max_runners,
 				runners_margin: runners_margin.unwrap_or_default(),
+				metadata_poll_interval,
 			},
 		};
 		rivet_types::runner_configs::RunnerConfig {
