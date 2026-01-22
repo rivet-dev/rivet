@@ -54,7 +54,7 @@ export const toNextHandler = (registry: Registry<any>) => {
 
 		if (process.env.NODE_ENV === "development") {
 			// Special request handling for file watching
-			return await handleRequestWithFileWatcher(request, newUrl, fetch);
+			return await handleRequestWithFileWatcher(request, newUrl, registry.handler);
 		} else {
 			// Handle request
 			const newReq = new Request(newUrl, request);
