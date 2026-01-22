@@ -16,43 +16,6 @@ interface RoutesData {
 }
 
 /**
- * Strip MDX/JSX syntax to get clean markdown content
- */
-function cleanMdxContent(content: string): string {
-	// Remove frontmatter
-	const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
-
-	return withoutFrontmatter
-		// Remove import statements
-		.replace(/import\s+.*?from\s+['"][^'"]*['"];?\s*/g, '')
-		// Remove export statements
-		.replace(/export\s+(?:default\s+)?(?:const|let|var|function|class)?\s*[^;{]*[;{]?/g, '')
-		// Remove JSX components (self-closing and with children)
-		.replace(/<[A-Z][a-zA-Z0-9]*[^>]*\/>/g, '')
-		.replace(/<[A-Z][a-zA-Z0-9]*[^>]*>[\s\S]*?<\/[A-Z][a-zA-Z0-9]*>/g, '')
-		// Remove HTML comments
-		.replace(/<!--[\s\S]*?-->/g, '')
-		// Remove JSX expressions
-		.replace(/\{[^}]*\}/g, '')
-		// Remove remaining HTML/JSX tags
-		.replace(/<[^>]+>/g, '')
-		// Normalize multiple line breaks
-		.replace(/\n\s*\n\s*\n/g, '\n\n')
-		.trim();
-}
-
-/**
- * Extract content starting from the first h1 heading
- */
-function stripContentBeforeFirstH1(content: string): string {
-	const h1Match = content.match(/^#\s+(.+)$/m);
-	if (!h1Match || h1Match.index === undefined) {
-		return content;
-	}
-	return content.substring(h1Match.index);
-}
-
-/**
  * Parse an MDX file to extract title and description
  */
 async function processPage(filePath: string): Promise<PageData> {
@@ -189,10 +152,6 @@ async function generateMarkdownFiles(rootDir: string, logger: { info: (msg: stri
 		const filePath = path.join(docsDir, file);
 		const content = await readFile(filePath, 'utf-8');
 
-		// Clean MDX syntax
-		const contentFromH1 = stripContentBeforeFirstH1(content);
-		const cleanContent = cleanMdxContent(contentFromH1);
-
 		// Determine output path
 		const cleanPath = file.replace(/\.mdx$/, '').replace(/\/index$/, '');
 		let outputPath: string;
@@ -211,7 +170,7 @@ async function generateMarkdownFiles(rootDir: string, logger: { info: (msg: stri
 		}
 
 		// Write markdown file
-		await writeFile(outputPath, cleanContent, 'utf-8');
+		await writeFile(outputPath, content, 'utf-8');
 		count++;
 	}
 
