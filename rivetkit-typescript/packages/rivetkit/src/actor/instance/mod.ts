@@ -852,8 +852,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #callOnStart() {
 		this.#rLog.info({ msg: "actor starting" });
-		if (this.#config.onWake) {
-			const result = this.#config.onWake(this.actorContext);
+		// `run` is an alias for `onWake`
+		const onWakeHandler = this.#config.run ?? this.#config.onWake;
+		if (onWakeHandler) {
+			const result = onWakeHandler(this.actorContext);
 			if (result instanceof Promise) {
 				await result;
 			}
