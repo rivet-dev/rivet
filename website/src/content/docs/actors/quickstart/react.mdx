@@ -1,11 +1,15 @@
+---
+title: "React Quickstart"
+description: "Build realtime React applications with Rivet Actors"
+skill: true
+---
+
 import { Hosting } from "@/components/docs/Hosting";
 import { StepSetupServer } from "@/components/docs/StepSetupServer";
 import { StepRunServer } from "@/components/docs/StepRunServer";
 import { ConfigurationOptions } from "@/components/docs/ConfigurationOptions";
 
-# React Quickstart
 
-Build realtime React applications with Rivet Actors
 
 ## Steps
 
@@ -53,6 +57,7 @@ export const registry = setup({
 
 Set up your React application:
 
+<CodeGroup workspace>
 ```tsx {{"title":"Counter.tsx"}}
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
@@ -86,6 +91,26 @@ function Counter() {
 }
 ```
 
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+</CodeGroup>
+
 For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
 
 </Step>
@@ -94,7 +119,7 @@ For detailed information about the React client API, see the [React Client API R
 
 Configure Vite for development:
 
-```ts {{"title":"vite.config.ts"}}
+```ts {{"title":"vite.config.ts"}} @nocheck
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

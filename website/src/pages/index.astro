@@ -1,5 +1,5 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { RedesignedHero } from '@/components/marketing/sections/RedesignedHero';
 import { StatsSection } from '@/components/marketing/sections/StatsSection';
@@ -15,16 +15,12 @@ import { ScrollObserver } from '@/components/ScrollObserver';
 
 // Get latest changelog title
 const posts = await getCollection('posts');
-const changelogEntries = posts.filter((p) => p.data.category === 'changelog');
+const changelogEntries = posts.filter((p) => p.data.category === 'changelog' && !p.data.unpublished);
 const latest = changelogEntries.sort(
 	(a, b) => b.data.published.getTime() - a.data.published.getTime()
 )[0];
 
-let latestChangelogTitle = '';
-if (latest) {
-	const { headings } = await render(latest);
-	latestChangelogTitle = headings.find((h) => h.depth === 1)?.text || '';
-}
+const latestChangelogTitle = latest?.data.title ?? '';
 ---
 
 <MarketingLayout title="Rivet - Stateful Backends. Finally Solved.">

@@ -1,9 +1,13 @@
+---
+title: "Next.js Quickstart"
+description: "Get started with Rivet Actors in Next.js"
+skill: true
+---
+
 import { Hosting } from "@/components/docs/Hosting";
 import { InstallPackage } from "@/components/docs/InstallPackage";
 
-# Next.js Quickstart
 
-Get started with Rivet Actors in Next.js
 
 <Steps>
 <Step title="Create a Next.js App">
@@ -50,7 +54,7 @@ export const registry = setup({
 
 Create a file at `src/app/api/rivet/[...all]/route.ts` to setup the API routes:
 
-```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}}
+```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}} @nocheck
 import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 
@@ -66,7 +70,7 @@ export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
 Create a Counter component and add it to your page:
 
 <CodeGroup>
-```tsx {{"title":"src/components/Counter.tsx"}}
+```tsx src/components/Counter.tsx @nocheck
 "use client";
 
 import { createRivetKit } from "@rivetkit/next-js/client";
@@ -103,7 +107,7 @@ export function Counter() {
 }
 ```
 
-```tsx {{"title":"src/app/page.tsx"}}
+```tsx src/app/page.tsx @nocheck
 import { Counter } from "@/components/Counter";
 
 export default function Home() {

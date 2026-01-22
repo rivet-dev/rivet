@@ -49,9 +49,7 @@ const tableOfContents = headings
 		return acc;
 	}, [] as Array<{ title: string; id: string; children: Array<{ title: string; id: string; children: never[] }> }>);
 
-// Get title from first h1 or frontmatter
-const title = entry.data.title || headings.find((h) => h.depth === 1)?.text || 'Documentation';
-const description = entry.data.description || '';
+const { title, description } = entry.data as { title: string; description: string };
 // Handle index paths correctly
 const slugPath = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');
 const fullPath = slugPath ? `/docs/${slugPath}/` : '/docs/';
@@ -87,6 +85,8 @@ const componentSourcePath = `docs/${entry.id}.mdx`;
 							{parentPage.title}
 						</div>
 					)}
+					<h1>{title}</h1>
+					{description && <p>{description}</p>}
 					<Content components={mdxComponents} />
 				</Prose>
 				<div class="border-t mt-12 pt-6 flex flex-wrap items-center justify-between gap-4">

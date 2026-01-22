@@ -1,11 +1,15 @@
+---
+title: "Node.js & Bun Quickstart"
+description: "Get started with Rivet Actors in Node.js and Bun"
+skill: true
+---
+
 import { Hosting } from "@/components/docs/Hosting";
 import { StepSetupServer } from "@/components/docs/StepSetupServer";
 import { StepRunServer } from "@/components/docs/StepRunServer";
 import { ConfigurationOptions } from "@/components/docs/ConfigurationOptions";
 
-# Node.js & Bun Quickstart
 
-Get started with Rivet Actors in Node.js and Bun
 
 ## Steps
 
@@ -63,6 +67,26 @@ This code can run either in your frontend or within your backend:
 
 <Tab title="TypeScript">
 
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
 ```ts {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
@@ -70,31 +94,48 @@ import type { registry } from "./registry";
 const client = createClient<typeof registry>();
 
 // Get or create a counter actor for the key "my-counter"
-const counter = client.counter.getOrCreate("my-counter");
+const counter = client.counter.getOrCreate(["my-counter"]);
 
 // Call actions
 const count = await counter.increment(3);
 console.log("New count:", count);
 
-// Get current state
-const currentCount = await counter.getCount();
-console.log("Current count:", currentCount);
-
 // Listen to realtime events
 const connection = counter.connect();
-connection.on("countChanged", (newCount) => {
+connection.on("newCount", (newCount: number) => {
 	console.log("Count changed:", newCount);
 });
 
 // Increment through connection
 await connection.increment(1);
 ```
+</CodeGroup>
 
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 </Tab>
 
 <Tab title="React">
+
+<CodeGroup workspace>
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
 
 ```tsx {{"title":"Counter.tsx"}}
 import { createRivetKit } from "@rivetkit/react";
@@ -128,6 +169,7 @@ function Counter() {
 	);
 }
 ```
+</CodeGroup>
 
 See the [React documentation](/docs/clients/react) for more information.
 

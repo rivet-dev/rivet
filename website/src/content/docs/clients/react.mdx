@@ -1,8 +1,12 @@
+---
+title: "React"
+description: "Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates."
+skill: true
+---
+
 import { InstallPackage } from "@/components/docs/InstallPackage";
 
-# React
 
-Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates.
 
 ## Getting Started
 
@@ -14,12 +18,33 @@ See the [React quickstart guide](/docs/actors/quickstart/react) for getting star
 
 Creates the Rivet hooks for React integration.
 
-```tsx
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, x: number) => {
+      c.state.count += x;
+      c.broadcast("newCount", c.state.count);
+      return c.state.count;
+    },
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+
+```tsx {{"title":"client.tsx"}}
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./backend/registry";
+import type { registry } from "./registry";
 
 const { useActor } = createRivetKit<typeof registry>();
 ```
+</CodeGroup>
 
 #### Parameters
 
@@ -35,14 +60,40 @@ An object containing:
 
 Hook that connects to an actor and manages the connection lifecycle.
 
-```tsx
-const actor = useActor({
-  name: "actorName",
-  key: ["actor-id"],
-  params: { userId: "123" },
-  enabled: true
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const myActor = actor({
+  state: { value: "" },
+  actions: {
+    getValue: (c) => c.state.value,
+  },
+});
+
+export const registry = setup({
+  use: { myActor },
 });
 ```
+
+```tsx {{"title":"component.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function MyComponent() {
+  const actor = useActor({
+    name: "myActor",
+    key: ["actor-id"],
+    params: { userId: "123" },
+    enabled: true
+  });
+
+  return <div>Status: {actor.connStatus}</div>;
+}
+```
+</CodeGroup>
 
 #### Parameters
 
@@ -66,13 +117,43 @@ Actor object with the following properties:
 
 Subscribe to events emitted by the actor.
 
-```tsx
-const actor = useActor({ name: "counter", key: ["my-counter"] });
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
 
-actor.useEvent("newCount", (count: number) => {
-  console.log("Count changed:", count);
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, x: number) => {
+      c.state.count += x;
+      c.broadcast("newCount", c.state.count);
+      return c.state.count;
+    },
+  },
+});
+
+export const registry = setup({
+  use: { counter },
 });
 ```
+
+```tsx {{"title":"component.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function Counter() {
+  const actor = useActor({ name: "counter", key: ["my-counter"] });
+
+  actor.useEvent("newCount", (count: number) => {
+    console.log("Count changed:", count);
+  });
+
+  return <div>Counter Component</div>;
+}
+```
+</CodeGroup>
 
 #### Parameters
 
@@ -92,13 +173,48 @@ The event subscription is automatically managed:
 
 Connect to multiple actors in a single component:
 
-```tsx
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const userProfile = actor({
+  state: { name: "", email: "" },
+  actions: {
+    update: (c, data: { name?: string; email?: string }) => {
+      if (data.name) c.state.name = data.name;
+      if (data.email) c.state.email = data.email;
+      c.broadcast("profileUpdated", c.state);
+    },
+  },
+});
+
+export const notifications = actor({
+  state: { items: [] as string[] },
+  actions: {
+    add: (c, message: string) => {
+      c.state.items.push(message);
+      c.broadcast("newNotification", message);
+    },
+  },
+});
+
+export const registry = setup({
+  use: { userProfile, notifications },
+});
+```
+
+```tsx {{"title":"dashboard.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
 function Dashboard() {
   const userProfile = useActor({
-    name: "userProfile", 
+    name: "userProfile",
     key: ["user-123"]
   });
-  
+
   const notifications = useActor({
     name: "notifications",
     key: ["user-123"]
@@ -114,25 +230,48 @@ function Dashboard() {
 
   return (
     <div>
-      <UserProfile actor={userProfile} />
-      <NotificationList actor={notifications} />
+      <p>Profile Status: {userProfile.connStatus}</p>
+      <p>Notifications Status: {notifications.connStatus}</p>
     </div>
   );
 }
 ```
+</CodeGroup>
 
 ### Conditional Connections
 
 Control when actors connect using the `enabled` option:
 
-```tsx
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c) => ++c.state.count,
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+
+```tsx {{"title":"component.tsx"}}
+import { useState } from "react";
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
 function ConditionalActor() {
   const [enabled, setEnabled] = useState(false);
 
   const counter = useActor({
     name: "counter",
     key: ["conditional"],
-    enabled: enabled // Only connect when enabled
+    enabled: enabled
   });
 
   return (
@@ -147,38 +286,85 @@ function ConditionalActor() {
   );
 }
 ```
+</CodeGroup>
 
 ### Real-time Collaboration
 
 Build collaborative features with multiple event listeners:
 
-```tsx
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+interface Position {
+  x: number;
+  y: number;
+}
+
+export const document = actor({
+  state: {
+    content: "",
+    users: [] as string[]
+  },
+  actions: {
+    updateContent: (c, newContent: string) => {
+      c.state.content = newContent;
+      c.broadcast("contentChanged", newContent);
+    },
+    moveCursor: (c, userId: string, position: Position) => {
+      c.broadcast("cursorMoved", { userId, position });
+    },
+    join: (c, userId: string) => {
+      c.state.users.push(userId);
+      c.broadcast("userJoined", { userId });
+    },
+    leave: (c, userId: string) => {
+      c.state.users = c.state.users.filter(u => u !== userId);
+      c.broadcast("userLeft", { userId });
+    },
+  },
+});
+
+export const registry = setup({
+  use: { document },
+});
+```
+
+```tsx {{"title":"editor.tsx"}}
+import { useState } from "react";
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+interface Position {
+  x: number;
+  y: number;
+}
+
 function CollaborativeEditor() {
   const [content, setContent] = useState("");
   const [cursors, setCursors] = useState<Record<string, Position>>({});
-  
+
   const document = useActor({
     name: "document",
     key: ["doc-123"],
-    params: { userId: getCurrentUserId() }
+    params: { userId: "current-user" }
   });
 
-  // Listen for content changes
-  document.useEvent("contentChanged", (newContent) => {
+  document.useEvent("contentChanged", (newContent: string) => {
     setContent(newContent);
   });
 
-  // Listen for cursor movements
-  document.useEvent("cursorMoved", ({ userId, position }) => {
+  document.useEvent("cursorMoved", ({ userId, position }: { userId: string; position: Position }) => {
     setCursors(prev => ({ ...prev, [userId]: position }));
   });
 
-  // Listen for user join/leave
-  document.useEvent("userJoined", ({ userId }) => {
+  document.useEvent("userJoined", ({ userId }: { userId: string }) => {
     console.log(`${userId} joined the document`);
   });
 
-  document.useEvent("userLeft", ({ userId }) => {
+  document.useEvent("userLeft", ({ userId }: { userId: string }) => {
     setCursors(prev => {
       const { [userId]: _, ...rest } = prev;
       return rest;
@@ -191,50 +377,84 @@ function CollaborativeEditor() {
 
   return (
     <div>
-      <Editor 
-        content={content}
-        cursors={cursors}
-        onChange={updateContent}
+      <textarea
+        value={content}
+        onChange={(e) => updateContent(e.target.value)}
       />
+      <p>Active cursors: {Object.keys(cursors).length}</p>
     </div>
   );
 }
 ```
+</CodeGroup>
 
 ### Authentication
 
 Connect authenticated actors in React:
 
-```tsx
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const protectedCounter = actor({
+  state: { count: 0 },
+  onBeforeConnect: (c, params: { authToken: string | null }) => {
+    if (!params.authToken) {
+      throw new Error("Authentication required");
+    }
+  },
+  actions: {
+    increment: (c) => ++c.state.count,
+    getCount: (c) => c.state.count,
+  },
+});
+
+export const registry = setup({
+  use: { protectedCounter },
+});
+```
+
+```tsx {{"title":"app.tsx"}}
+import { useState } from "react";
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+async function authenticateUser(): Promise<string> {
+  return "jwt-token-here";
+}
+
 function AuthenticatedApp() {
-	const [authToken, setAuthToken] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
 
-	const counter = useActor({
-		name: "protectedCounter",
-		key: ["user-counter"],
-		params: {
-			authToken: authToken
-		},
-		enabled: !!authToken // Only connect when authenticated
-	});
+  const counter = useActor({
+    name: "protectedCounter",
+    key: ["user-counter"],
+    params: {
+      authToken: authToken
+    },
+    enabled: !!authToken
+  });
 
-	const login = async () => {
-		const token = await authenticateUser();
-		setAuthToken(token);
-	};
+  const login = async () => {
+    const token = await authenticateUser();
+    setAuthToken(token);
+  };
 
-	if (!authToken) {
-		return <button onClick={login}>Login</button>;
-	}
+  if (!authToken) {
+    return <button onClick={login}>Login</button>;
+  }
 
-	return (
-		<div>
-			<h1>Authenticated Counter</h1>
-			{/* ... rest of authenticated UI */}
-		</div>
-	);
+  return (
+    <div>
+      <h1>Authenticated Counter</h1>
+      <p>Status: {counter.connStatus}</p>
+    </div>
+  );
 }
 ```
+</CodeGroup>
 
 Learn more about [authentication](/docs/actors/authentication).
 

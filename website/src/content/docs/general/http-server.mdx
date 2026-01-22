@@ -1,6 +1,8 @@
-# HTTP Server
-
-Different ways to run your RivetKit HTTP server.
+---
+title: "HTTP Server"
+description: "Different ways to run your RivetKit HTTP server."
+skill: true
+---
 
 ## Methods of Running Your Server
 
@@ -11,7 +13,10 @@ A [fetch handler](https://wintercg.org/) is a function that takes a `Request` an
 The simplest setup uses `registry.serve()`:
 
 ```ts {{"title":"server.ts"}}
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 export default registry.serve();
 ```
@@ -24,7 +29,10 @@ To integrate with a router like [Hono](https://hono.dev/) or [Elysia](https://el
 
 ```ts {{"title":"server.ts"}}
 import { Hono } from "hono";
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 const app = new Hono();
 app.get("/health", (c) => c.text("OK"));
@@ -39,7 +47,10 @@ export default app;
 
 ```ts {{"title":"server.ts"}}
 import { Elysia } from "elysia";
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 const app = new Elysia()
   .get("/health", () => "OK")
@@ -87,7 +98,10 @@ Using Hono with `@hono/node-server`:
 ```ts {{"title":"server.ts"}}
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 const app = new Hono();
 app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
@@ -102,10 +116,13 @@ serve({ fetch: app.fetch, port: 3000 });
 
 Using `@whatwg-node/server` to adapt the fetch handler to Node's HTTP server:
 
-```ts {{"title":"server.ts"}}
-import { registry } from "./registry";
+```ts {{"title":"server.ts"}} @nocheck
+import { actor, setup } from "rivetkit";
 import { createServer } from "node:http";
 import { createServerAdapter } from "@whatwg-node/server";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 const handler = createServerAdapter(registry.serve().fetch);
 const server = createServer(handler);
@@ -118,12 +135,15 @@ server.listen(3000);
 
 Using Bun's native server:
 
-```ts {{"title":"server.ts"}}
-import { registry } from "./registry";
+```ts {{"title":"server.ts"}} @nocheck
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
 
 Bun.serve({
   port: 3000,
-  fetch: (request) => registry.handler(request),
+  fetch: (request: Request) => registry.handler(request),
 });
 ```
 
@@ -133,10 +153,13 @@ Bun.serve({
 
 Using Deno's native server:
 
-```ts {{"title":"server.ts"}}
-import { registry } from "./registry";
+```ts {{"title":"server.ts"}} @nocheck
+import { actor, setup } from "rivetkit";
 
-Deno.serve({ port: 3000 }, (request) => registry.handler(request));
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+Deno.serve({ port: 3000 }, (request: Request) => registry.handler(request));
 ```
 
 </Tab>

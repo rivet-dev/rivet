@@ -1,11 +1,15 @@
-# State
-
-Actor state provides the best of both worlds: it's stored in-memory and persisted automatically. This lets you work with the data without added latency while still being able to survive crashes & upgrades.
+---
+title: "State"
+description: "Actor state provides the best of both worlds: it's stored in-memory and persisted automatically. This lets you work with the data without added latency while still being able to survive crashes & upgrades."
+skill: true
+---
 
 <Tip>
 Actors can also be used with external SQL databases. This can be useful to integrate actors with existing
 applications or for storing relational data. Read more [here](/docs/actors/external-sql).
 </Tip>
+
+If you need low-level key-value storage for dynamic keys or blobs, see [Low-Level KV Storage](/docs/actors/kv).
 
 ## Initializing State
 
@@ -58,21 +62,26 @@ const counter = actor({
 To accept a custom input parameters for the initial state, use:
 
 ```typescript
-import { actor, CreateContext } from "rivetkit";
+import { actor } from "rivetkit";
 
 interface CounterInput {
-	startingCount: number;
+  startingCount: number;
+}
+
+interface CounterState {
+  count: number;
 }
 
 // State with initialization logic
 const counter = actor({
+  state: { count: 0 } as CounterState,
   // Define state using a creation function
-  createState: (c: CreateContext, input: CounterInput) => {
+  createState: (c, input: CounterInput): CounterState => {
     return { count: input.startingCount };
   },
-  
+
   actions: {
-    // ...
+    increment: (c) => c.state.count++
   }
 });
 ```
@@ -100,7 +109,7 @@ import { actor } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
-  
+
   actions: {
     // Define action to update state
     increment: (c) => {
@@ -108,8 +117,8 @@ const counter = actor({
       c.state.count += 1;
       return c.state.count;
     },
-    
-    add: (c, value) => {
+
+    add: (c, value: number) => {
       c.state.count += value;
       return c.state.count;
     }
@@ -130,27 +139,32 @@ In other cases where you need to force a state change mid-action, you can use `c
 ```typescript
 import { actor } from "rivetkit";
 
+// Mock risky operation
+async function someRiskyOperation() {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
 const criticalProcess = actor({
-  state: { 
-    steps: [],
+  state: {
+    steps: [] as string[],
     currentStep: 0
   },
-  
+
   actions: {
     processStep: async (c) => {
       // Update to current step
       c.state.currentStep += 1;
       c.state.steps.push(`Started step ${c.state.currentStep}`);
-      
+
       // Force save state before the async operation
-      c.saveState();
-      
+      await c.saveState({ immediate: true });
+
       // Long-running operation that might fail
       await someRiskyOperation();
-      
+
       // Update state again
       c.state.steps.push(`Completed step ${c.state.currentStep}`);
-      
+
       return c.state.currentStep;
     }
   }

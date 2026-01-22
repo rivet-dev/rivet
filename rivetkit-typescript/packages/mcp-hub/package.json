@@ -1,0 +1,43 @@
+{
+	"name": "@rivetkit/mcp-hub",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"files": [
+		"dist",
+		"src"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./cli": {
+			"types": "./dist/cli.d.ts",
+			"default": "./dist/cli.js"
+		}
+	},
+	"bin": {
+		"rivet-mcp-hub": "./dist/cli.js"
+	},
+	"scripts": {
+		"build": "tsup --config tsup.config.ts",
+		"dev": "tsup --config tsup.config.ts --watch",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest",
+		"serve": "DOCS_METADATA_PATH=./data/docs.json node dist/cli.js",
+		"inspect": "npx @modelcontextprotocol/inspector http://localhost:7332/mcp"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.25.3",
+		"rivet-site-astro": "workspace:*",
+		"zod": "^3.25.76"
+	},
+	"devDependencies": {
+		"@modelcontextprotocol/inspector": "^0.14.0",
+		"@types/node": "^22.13.1",
+		"tsup": "^8.4.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.0.6"
+	}
+}

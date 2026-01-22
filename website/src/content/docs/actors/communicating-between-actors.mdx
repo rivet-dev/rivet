@@ -1,6 +1,8 @@
-# Communicating Between Actors
-
-Learn how actors can call other actors and share data
+---
+title: "Communicating Between Actors"
+description: "Learn how actors can call other actors and share data"
+skill: true
+---
 
 Actors can communicate with each other using the server-side actor client, enabling complex workflows and data sharing between different actor instances.
 
@@ -13,30 +15,61 @@ We recommend reading the [clients documentation](/docs/actors/clients) first. Th
 The server-side actor client allows actors to call other actors within the same registry. Access it via `c.client()` in your actor context:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, setup } from "rivetkit";
+
+interface Order {
+  id: string;
+  customerId: string;
+  quantity: number;
+  amount: number;
+}
+
+interface ProcessedOrder extends Order {
+  status: string;
+  paymentResult: { transactionId: string };
+}
+
+const inventory = actor({
+  state: { stock: 100 },
+  actions: {
+    reserveStock: (c, quantity: number) => {
+      c.state.stock -= quantity;
+      return { reserved: quantity };
+    }
+  }
+});
+
+const payment = actor({
+  state: {},
+  actions: {
+    processPayment: (c, amount: number) => ({ transactionId: "tx-123" })
+  }
+});
 
 const orderProcessor = actor({
-  state: { orders: [] },
-  
+  state: { orders: [] as ProcessedOrder[] },
+
   actions: {
-    processOrder: async (c, order) => {
+    processOrder: async (c, order: Order) => {
       const client = c.client<typeof registry>();
-      
+
       // Reserve the stock
-      const inventory = client.inventory.getOrCreate("main");
-      await inventory.reserveStock(order.quantity);
+      const inventoryHandle = client.inventory.getOrCreate(["main"]);
+      await inventoryHandle.reserveStock(order.quantity);
 
       // Process payment through payment actor
-      const payment = client.payment.getOrCreate(order.customerId);
-      const result = await payment.processPayment(order.amount);
-      
+      const paymentHandle = client.payment.getOrCreate([order.customerId]);
+      const result = await paymentHandle.processPayment(order.amount);
+
       // Update order state
       c.state.orders.push({ ...order, status: "completed", paymentResult: result });
-      
+
       return { success: true, orderId: order.id };
     }
   }
 });
+
+const registry = setup({ use: { inventory, payment, orderProcessor } });
 ```
 
 ## Use Cases and Patterns
@@ -46,32 +79,61 @@ const orderProcessor = actor({
 Use a coordinator actor to manage complex workflows:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, setup } from "rivetkit";
+
+interface WorkflowResult {
+  workflowId: string;
+  result: { finalized: boolean };
+  completedAt: number;
+}
+
+const dataProcessor = actor({
+  state: {},
+  actions: {
+    initialize: (c, workflowId: string) => ({ workflowId, data: "initialized" })
+  }
+});
+
+const validator = actor({
+  state: {},
+  actions: {
+    validate: (c, data: { workflowId: string; data: string }) => ({ valid: true, data })
+  }
+});
+
+const finalizer = actor({
+  state: {},
+  actions: {
+    finalize: (c, validationResult: { valid: boolean }) => ({ finalized: validationResult.valid })
+  }
+});
 
 const workflowActor = actor({
-  state: { workflows: [] },
-  
+  state: { workflows: [] as WorkflowResult[] },
+
   actions: {
-    executeWorkflow: async (c, workflowId) => {
+    executeWorkflow: async (c, workflowId: string) => {
       const client = c.client<typeof registry>();
-      
+
       // Step 1: Initialize data
-      const dataProcessor = client.dataProcessor.getOrCreate("main");
-      const data = await dataProcessor.initialize(workflowId);
+      const dataProcessorHandle = client.dataProcessor.getOrCreate(["main"]);
+      const data = await dataProcessorHandle.initialize(workflowId);
 
       // Step 2: Process through multiple actors
-      const validator = client.validator.getOrCreate("main");
-      const validationResult = await validator.validate(data);
+      const validatorHandle = client.validator.getOrCreate(["main"]);
+      const validationResult = await validatorHandle.validate(data);
 
       // Step 3: Finalize
-      const finalizer = client.finalizer.getOrCreate("main");
-      const result = await finalizer.finalize(validationResult);
-      
+      const finalizerHandle = client.finalizer.getOrCreate(["main"]);
+      const result = await finalizerHandle.finalize(validationResult);
+
       c.state.workflows.push({ workflowId, result, completedAt: Date.now() });
       return result;
     }
   }
 });
+
+const registry = setup({ use: { dataProcessor, validator, finalizer, workflowActor } });
 ```
 
 ### Data Aggregation
@@ -79,38 +141,73 @@ const workflowActor = actor({
 Collect data from multiple actors:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, setup } from "rivetkit";
+
+interface Stats {
+  count: number;
+  total: number;
+}
+
+interface Report {
+  id: string;
+  type: string;
+  data: { users: Stats; orders: Stats; system: Stats };
+  generatedAt: number;
+}
+
+const userMetrics = actor({
+  state: {},
+  actions: {
+    getStats: (c): Stats => ({ count: 100, total: 500 })
+  }
+});
+
+const orderMetrics = actor({
+  state: {},
+  actions: {
+    getStats: (c): Stats => ({ count: 50, total: 10000 })
+  }
+});
+
+const systemMetrics = actor({
+  state: {},
+  actions: {
+    getStats: (c): Stats => ({ count: 5, total: 99 })
+  }
+});
 
 const analyticsActor = actor({
-  state: { reports: [] },
-  
+  state: { reports: [] as Report[] },
+
   actions: {
-    generateReport: async (c, reportType) => {
+    generateReport: async (c, reportType: string) => {
       const client = c.client<typeof registry>();
-      
+
       // Collect data from multiple sources
-      const userMetrics = client.userMetrics.getOrCreate("main");
-      const orderMetrics = client.orderMetrics.getOrCreate("main");
-      const systemMetrics = client.systemMetrics.getOrCreate("main");
-      
+      const userMetricsHandle = client.userMetrics.getOrCreate(["main"]);
+      const orderMetricsHandle = client.orderMetrics.getOrCreate(["main"]);
+      const systemMetricsHandle = client.systemMetrics.getOrCreate(["main"]);
+
       const [users, orders, system] = await Promise.all([
-        userMetrics.getStats(),
-        orderMetrics.getStats(),
-        systemMetrics.getStats()
+        userMetricsHandle.getStats(),
+        orderMetricsHandle.getStats(),
+        systemMetricsHandle.getStats()
       ]);
-      
-      const report = {
+
+      const report: Report = {
         id: crypto.randomUUID(),
         type: reportType,
         data: { users, orders, system },
         generatedAt: Date.now()
       };
-      
+
       c.state.reports.push(report);
       return report;
     }
   }
 });
+
+const registry = setup({ use: { userMetrics, orderMetrics, systemMetrics, analyticsActor } });
 ```
 
 ### Event-Driven Architecture
@@ -118,41 +215,81 @@ const analyticsActor = actor({
 Use connections to listen for events from other actors:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, setup } from "rivetkit";
+
+interface User {
+  id: string;
+  name: string;
+}
+
+interface Order {
+  id: string;
+  amount: number;
+}
+
+interface AuditLog {
+  event: string;
+  data: User | Order;
+  timestamp: number;
+}
+
+const userActor = actor({
+  state: {},
+  actions: {
+    createUser: (c, name: string) => {
+      const user = { id: crypto.randomUUID(), name };
+      c.broadcast("userCreated", user);
+      return user;
+    }
+  }
+});
+
+const orderActor = actor({
+  state: {},
+  actions: {
+    completeOrder: (c, amount: number) => {
+      const order = { id: crypto.randomUUID(), amount };
+      c.broadcast("orderCompleted", order);
+      return order;
+    }
+  }
+});
 
 const auditLogActor = actor({
-  state: { logs: [] },
-  
+  state: { logs: [] as AuditLog[] },
+
   actions: {
     startAuditing: async (c) => {
       const client = c.client<typeof registry>();
-      
+
       // Connect to multiple actors to listen for events
-      const userActor = client.userActor.getOrCreate("main").connect();
-      const orderActor = client.orderActor.getOrCreate("main").connect();
-      
+      const userActorConn = client.userActor.getOrCreate(["main"]).connect();
+      const orderActorConn = client.orderActor.getOrCreate(["main"]).connect();
+
       // Listen for user events
-      userActor.on("userCreated", (user) => {
-        c.state.logs.push({ 
-          event: "userCreated", 
-          data: user, 
-          timestamp: Date.now() 
+      userActorConn.on("userCreated", (user: User) => {
+        c.state.logs.push({
+          event: "userCreated",
+          data: user,
+          timestamp: Date.now()
         });
       });
-      
+
       // Listen for order events
-      orderActor.on("orderCompleted", (order) => {
-        c.state.logs.push({ 
-          event: "orderCompleted", 
-          data: order, 
-          timestamp: Date.now() 
+      orderActorConn.on("orderCompleted", (order: Order) => {
+        c.state.logs.push({
+          event: "orderCompleted",
+          data: order,
+          timestamp: Date.now()
         });
       });
-      
+
       return { status: "auditing started" };
     }
   }
 });
+
+const registry = setup({ use: { userActor, orderActor, auditLogActor } });
 ```
 
 ### Batch Operations
@@ -160,9 +297,32 @@ const auditLogActor = actor({
 Process multiple items in parallel:
 
 ```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+interface Item {
+  type: string;
+  data: string;
+}
+
+const processor = actor({
+  state: {},
+  actions: {
+    process: (c, item: Item) => ({ processed: true, item })
+  }
+});
+
+const registry = setup({ use: { processor } });
+const client = createClient<typeof registry>();
+
 // Process items in parallel
+const items: Item[] = [
+  { type: "typeA", data: "data1" },
+  { type: "typeB", data: "data2" }
+];
+
 const results = await Promise.all(
-  items.map(item => client.processor.getOrCreate(item.type).process(item))
+  items.map(item => client.processor.getOrCreate([item.type]).process(item))
 );
 ```
 

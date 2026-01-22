@@ -1,6 +1,8 @@
-# Lifecycle
-
-Actors follow a well-defined lifecycle with hooks at each stage. Understanding these hooks is essential for proper initialization, state management, and cleanup.
+---
+title: "Lifecycle"
+description: "Actors follow a well-defined lifecycle with hooks at each stage. Understanding these hooks is essential for proper initialization, state management, and cleanup."
+skill: true
+---
 
 ## Lifecycle
 
@@ -276,17 +278,35 @@ The `onBeforeConnect` hook does NOT return connection state - it's used solely f
 ```typescript
 import { actor } from "rivetkit";
 
+// Helper function to validate tokens
+function validateToken(token: string): boolean {
+  return token.startsWith("valid_");
+}
+
+interface ConnParams {
+  authToken?: string;
+  userId?: string;
+  role?: string;
+}
+
+interface ConnState {
+  userId: string;
+  role: string;
+  joinTime: number;
+}
+
 const chatRoom = actor({
-  state: { messages: [] },
+  state: { messages: [] as string[] },
 
   // Method 1: Use a static default connection state
   connState: {
+    userId: "anonymous",
     role: "guest",
     joinTime: 0,
-  },
+  } as ConnState,
 
   // Method 2: Dynamically create connection state
-  createConnState: (c, params: { userId?: string, role?: string }) => {
+  createConnState: (c, params: ConnParams): ConnState => {
     return {
       userId: params.userId || "anonymous",
       role: params.role || "guest",
@@ -295,7 +315,7 @@ const chatRoom = actor({
   },
 
   // Validate connections before accepting them
-  onBeforeConnect: (c, params: { authToken?: string }) => {
+  onBeforeConnect: (c, params: ConnParams) => {
     // Validate authentication
     const authToken = params.authToken;
     if (!authToken || !validateToken(authToken)) {
@@ -306,7 +326,7 @@ const chatRoom = actor({
     // The actual connection state will come from connState or createConnState
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -321,8 +341,18 @@ Executed after the client has successfully connected. Can be async. Receives the
 ```typescript
 import { actor } from "rivetkit";
 
+interface ConnState {
+  userId: string;
+}
+
+interface UserInfo {
+  online: boolean;
+  lastSeen: number;
+}
+
 const chatRoom = actor({
-  state: { users: {}, messages: [] },
+  state: { users: {} as Record<string, UserInfo>, messages: [] as string[] },
+  connState: { userId: "" } as ConnState,
 
   onConnect: (c, conn) => {
     // Add user to the room's user list using connection state
@@ -338,7 +368,7 @@ const chatRoom = actor({
     console.log(`User ${userId} connected`);
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -353,8 +383,18 @@ Called when a client disconnects from the actor. Can be async. Receives the conn
 ```typescript
 import { actor } from "rivetkit";
 
+interface ConnState {
+  userId: string;
+}
+
+interface UserInfo {
+  online: boolean;
+  lastSeen: number;
+}
+
 const chatRoom = actor({
-  state: { users: {}, messages: [] },
+  state: { users: {} as Record<string, UserInfo>, messages: [] as string[] },
+  connState: { userId: "" } as ConnState,
 
   onDisconnect: (c, conn) => {
     // Update user status when they disconnect
@@ -370,7 +410,7 @@ const chatRoom = actor({
     console.log(`User ${userId} disconnected`);
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -401,11 +441,11 @@ const apiActor = actor({
       });
     }
 
-    // Return void to continue to default routing
-    return;
+    // Return a default response for unhandled paths
+    return new Response("Not Found", { status: 404 });
   },
 
-  actions: { /* ... */ }
+  actions: {}
 });
 ```
 
@@ -466,37 +506,27 @@ import { actor } from "rivetkit";
 const loggingActor = actor({
   state: { requestCount: 0 },
 
-  onBeforeActionResponse: (c, actionName, args, output) => {
+  onBeforeActionResponse: <Out>(c: unknown, actionName: string, args: unknown[], output: Out): Out => {
     // Log action calls
     console.log(`Action ${actionName} called with args:`, args);
     console.log(`Action ${actionName} returned:`, output);
 
-    // Add metadata to all responses
-    return {
-      data: output,
-      metadata: {
-        actionName,
-        timestamp: Date.now(),
-        requestId: crypto.randomUUID(),
-        userId: c.conn.state?.userId
-      }
-    };
+    // Return the output unchanged (or transform as needed)
+    return output;
   },
-  
+
   actions: {
     getUserData: (c, userId: string) => {
       c.state.requestCount++;
-      
-      // This will be wrapped with metadata by onBeforeActionResponse
+
       return {
         userId,
         profile: { name: "John Doe", email: "john@example.com" },
         lastActive: Date.now()
       };
     },
-    
+
     getStats: (c) => {
-      // This will also be wrapped with metadata
       return {
         requestCount: c.state.requestCount,
         uptime: process.uptime()
@@ -591,25 +621,32 @@ Common use cases:
 ```typescript
 import { actor } from "rivetkit";
 
+interface PlayerInfo {
+  joinedAt: number;
+}
+
 const gameRoom = actor({
-  state: { players: {}, scores: {} },
-  
+  state: {
+    players: {} as Record<string, PlayerInfo>,
+    scores: {} as Record<string, number>
+  },
+
   actions: {
     playerJoined: (c, playerId: string) => {
       c.state.players[playerId] = { joinedAt: Date.now() };
-      
-      // Send analytics event without blocking
-      c.runInBackground(
+
+      // Send analytics event without blocking using waitUntil
+      c.waitUntil(
         fetch('https://analytics.example.com/events', {
           method: 'POST',
-          body: JSON.stringify({ 
-            event: 'player_joined', 
+          body: JSON.stringify({
+            event: 'player_joined',
             playerId,
-            timestamp: Date.now() 
+            timestamp: Date.now()
           })
         }).then(() => console.log('Analytics sent'))
       );
-      
+
       return { success: true };
     },
   }
@@ -647,17 +684,25 @@ When extracting logic from lifecycle hooks or actions into external functions, y
 ```typescript
 import { actor, ActorContextOf } from "rivetkit";
 
+// Define the actor first
 const myActor = actor({
   state: { count: 0 },
-  
-  // Use external function in lifecycle hook
-  onWake: (c) => logActorStarted(c)
+  actions: {}
 });
 
-// Simple external function with typed context
+// Then define functions using the actor's context type
 function logActorStarted(c: ActorContextOf<typeof myActor>) {
   console.log(`Actor started with count: ${c.state.count}`);
 }
+
+// Usage example: call the function from inside the actor
+const myActorWithHook = actor({
+  state: { count: 0 },
+  onWake: (c) => {
+    console.log(`Actor woke up with count: ${c.state.count}`);
+  },
+  actions: {}
+});
 ```
 
 See [Types](/docs/actors/types) for more details on using `ActorContextOf`.
@@ -665,7 +710,7 @@ See [Types](/docs/actors/types) for more details on using `ActorContextOf`.
 ## Full Example
 
 ```typescript
-import { actor, CreateContext } from "rivetkit";
+import { actor } from "rivetkit";
 
 interface CounterInput {
   initialCount?: number;
@@ -692,8 +737,23 @@ interface ConnState {
 }
 
 const counter = actor({
+  // Default state (needed for type inference)
+  state: {
+    count: 0,
+    stepSize: 1,
+    name: "Unnamed Counter",
+    requestCount: 0,
+  } as CounterState,
+
+  // Default connection state (needed for type inference)
+  connState: {
+    userId: "",
+    role: "",
+    connectedAt: 0,
+  } as ConnState,
+
   // Initialize state with input
-  createState: (c: CreateContext, input: CounterInput): CounterState => ({
+  createState: (c, input: CounterInput): CounterState => ({
     count: input.initialCount ?? 0,
     stepSize: input.stepSize ?? 1,
     name: input.name ?? "Unnamed Counter",
@@ -744,17 +804,10 @@ const counter = actor({
   },
 
   // Transform all action responses
-  onBeforeActionResponse: (c, actionName, args, output) => {
-    c.state.requestCount++;
-
-    return {
-      data: output,
-      metadata: {
-        action: actionName,
-        timestamp: Date.now(),
-        requestNumber: c.state.requestCount
-      }
-    };
+  onBeforeActionResponse: <Out>(c: unknown, actionName: string, args: unknown[], output: Out): Out => {
+    // Log action calls
+    console.log(`Action ${actionName} called`);
+    return output;
   },
 
   // Define actions

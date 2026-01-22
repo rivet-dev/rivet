@@ -1,6 +1,8 @@
-# Low-Level WebSocket Handler
-
-Actors can handle WebSocket connections through the `onWebSocket` handler.
+---
+title: "Low-Level WebSocket Handler"
+description: "Actors can handle WebSocket connections through the `onWebSocket` handler."
+skill: true
+---
 
 For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/events) provide high-level connection handling powered by WebSockets that's easier to work with than low-level WebSockets. However, low-level handlers are required when implementing custom use cases.
 
@@ -13,7 +15,7 @@ import { actor } from "rivetkit";
 
 export const chatActor = actor({
     state: { messages: [] as string[] },
-    onWebSocket: (c, websocket) {
+    onWebSocket: (c, websocket) => {
         websocket.addEventListener("open", () => {
             // Send existing messages to new connection
             websocket.send(JSON.stringify({
@@ -24,15 +26,16 @@ export const chatActor = actor({
 
         websocket.addEventListener("message", (event) => {
             // Store message
-            c.state.messages.push(event.data);
+            c.state.messages.push(event.data as string);
 
             // Echo message back
-            websocket.send(event.data);
+            websocket.send(event.data as string);
 
             // Manually save state since WebSocket connections are long-lived
-            c.saveState();
+            c.saveState({ immediate: true });
         });
     },
+    actions: {}
 });
 ```
 
@@ -75,12 +78,16 @@ For example, to connect to the chat actor above:
 <CodeGroup>
 
 ```typescript
+// Replace with your actor ID and token
+const actorId = "your-actor-id";
+const token = "your-token";
+
 const ws = new WebSocket(
     `wss://api.rivet.dev/gateway/${actorId}@${token}/websocket/`
 );
 
 ws.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
+    const message = JSON.parse(event.data as string);
     console.log("Received:", message);
 });
 
@@ -100,6 +107,10 @@ The path after `/websocket/` is passed to your `onWebSocket` handler and can be 
 <CodeGroup>
 
 ```typescript
+// Replace with your actor ID and token
+const actorId = "your-actor-id";
+const token = "your-token";
+
 const ws = new WebSocket(
     `wss://api.rivet.dev/gateway/${actorId}@${token}/websocket/admin`
 );
@@ -119,30 +130,38 @@ You can proxy WebSocket connections from your own server to actor handlers using
 
 ```typescript
 import { Hono } from "hono";
+import type { WSContext, WSMessageReceive } from "hono/ws";
 import { upgradeWebSocket } from "hono/cloudflare-workers";
 import { createClient } from "rivetkit/client";
+import { actor, setup } from "rivetkit";
 
-const client = createClient();
+const chatActor = actor({
+    state: { messages: [] as string[] },
+    actions: {}
+});
+
+const registry = setup({ use: { chat: chatActor } });
+const client = createClient<typeof registry>();
 
 const app = new Hono();
 
 // Proxy WebSocket connections to actor's onWebSocket handler
 app.get("/ws/:id", upgradeWebSocket(async (c) => {
     const actorId = c.req.param("id");
-    const actor = client.chat.get(actorId);
-    const actorWs = await actor.websocket("/");
+    const actorHandle = client.chat.get([actorId]);
+    const actorWs = await actorHandle.websocket("/");
 
     return {
-        onOpen: (evt, ws) => {
-            actorWs.addEventListener("message", (event) => {
+        onOpen: (evt: Event, ws: WSContext) => {
+            actorWs.addEventListener("message", (event: MessageEvent) => {
                 ws.send(event.data);
             });
             actorWs.addEventListener("close", () => {
                 ws.close();
             });
         },
-        onMessage: (evt, ws) => {
-            actorWs.send(evt.data);
+        onMessage: (evt: MessageEvent<WSMessageReceive>, ws: WSContext) => {
+            actorWs.send(evt.data as string);
         },
         onClose: () => {
             actorWs.close();
@@ -174,11 +193,14 @@ WebSocket hibernation allows actors to go to sleep while keeping WebSocket conne
 Enable hibernation by setting `canHibernateWebSocket: true`. You can also pass a function `(request) => boolean` for conditional control.
 
 ```typescript
+import { actor } from "rivetkit";
+
 export const myActor = actor({
-    // ...
+    state: {},
     options: {
         canHibernateWebSocket: true,
     },
+    actions: {}
 });
 ```
 
@@ -189,11 +211,19 @@ Since `open` only fires once when the client first connects, use `c.conn.state` 
 The underlying HTTP request is available via `c.request`. This is useful for accessing the path or query parameters.
 
 ```typescript
-onWebSocket: (c, websocket) {
-    const url = new URL(c.request.url);
-    console.log(url.pathname); // e.g., "/admin"
-    console.log(url.searchParams.get("foo")); // e.g., "bar"
-}
+import { actor } from "rivetkit";
+
+const myActor = actor({
+    state: {},
+    onWebSocket: (c, websocket) => {
+        if (c.request) {
+            const url = new URL(c.request.url);
+            console.log(url.pathname); // e.g., "/admin"
+            console.log(url.searchParams.get("foo")); // e.g., "bar"
+        }
+    },
+    actions: {}
+});
 ```
 
 ### Async Handlers
@@ -201,19 +231,25 @@ onWebSocket: (c, websocket) {
 The `onWebSocket` handler can be async, allowing you to perform async code before setting up event listeners:
 
 ```typescript
-onWebSocket: async (c, websocket) => {
-    // Perform async operations before the connection is ready
-    const metadata = await fetch("https://api.example.com/metadata").then(r => r.json());
+import { actor } from "rivetkit";
 
-    websocket.addEventListener("open", () => {
-        // Send metadata on connection
-        websocket.send(JSON.stringify({ metadata }));
-    });
+const myActor = actor({
+    state: {},
+    onWebSocket: async (c, websocket) => {
+        // Perform async operations before the connection is ready
+        const metadata = await fetch("https://api.example.com/metadata").then(r => r.json());
 
-    websocket.addEventListener("message", (event) => {
-        // Handle messages
-    });
-}
+        websocket.addEventListener("open", () => {
+            // Send metadata on connection
+            websocket.send(JSON.stringify({ metadata }));
+        });
+
+        websocket.addEventListener("message", (event) => {
+            // Handle messages
+        });
+    },
+    actions: {}
+});
 ```
 
 ## API Reference

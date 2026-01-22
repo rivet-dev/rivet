@@ -1,0 +1,81 @@
+# Types
+
+> Source: `src/content/docs/actors/types.mdx`
+> Canonical URL: https://rivet.gg/docs/actors/types
+> Description: TypeScript types for working with Rivet Actors. This page covers context types used in lifecycle hooks and actions, as well as helper types for extracting types from actor definitions.
+
+---
+## Context Types
+
+Context types define what properties and methods are available in different parts of the actor lifecycle.
+
+```typescript
+import { actor } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+
+  // CreateContext in createState hook
+  createState: (c, input: { initial: number }) => {
+    return { count: input.initial };
+  },
+
+  // ActionContext in actions
+  actions: {
+    increment: (c) => {
+      c.state.count += 1;
+      return c.state.count;
+    }
+  }
+});
+```
+
+### Extracting Context Types
+
+When writing helper functions that work with actor contexts, use context extractor types like `CreateContextOf` or `ActionContextOf` to extract the appropriate context type from your actor definition.
+
+```typescript
+import { actor, CreateContextOf, ActionContextOf } from "rivetkit";
+
+const gameRoom = actor({
+  state: {
+    players: [] as string[],
+    score: 0
+  },
+
+  createState: (c, input: { roomId: string }) => {
+    initializeRoom(c, input.roomId);
+    return { players: [], score: 0 };
+  },
+
+  actions: {
+    addPlayer: (c, playerId: string) => {
+      validatePlayer(c, playerId);
+      c.state.players.push(playerId);
+    }
+  }
+});
+
+// Extract CreateContext type for createState hook
+function initializeRoom(
+  context: CreateContextOf<typeof gameRoom>,
+  roomId: string
+) {
+  console.log(`Initializing room: ${roomId}`);
+  // context.state is not available here (being created)
+  // context.vars is not available here (not created yet)
+}
+
+// Extract ActionContext type for actions
+function validatePlayer(
+  context: ActionContextOf<typeof gameRoom>,
+  playerId: string
+) {
+  // Full context available in actions
+  if (context.state.players.includes(playerId)) {
+    throw new Error("Player already in room");
+  }
+}
+```
+
+_Source doc path: /docs/actors/types_

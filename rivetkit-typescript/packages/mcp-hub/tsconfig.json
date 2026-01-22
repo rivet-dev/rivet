@@ -1,0 +1,34 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		"module": "ESNext",
+		"moduleResolution": "Node",
+		"target": "ES2022",
+		"lib": ["ES2022"],
+		"declaration": true,
+		"declarationMap": true,
+		"resolveJsonModule": true,
+		"strict": true,
+		"types": ["node"],
+		"baseUrl": ".",
+		"paths": {
+			"@modelcontextprotocol/sdk": [
+				"../../../node_modules/.pnpm/@modelcontextprotocol+sdk@1.25.3_hono@4.11.3_zod@3.25.76/node_modules/@modelcontextprotocol/sdk/dist/esm/index.d.ts"
+			],
+			"@modelcontextprotocol/sdk/*": [
+				"../../../node_modules/.pnpm/@modelcontextprotocol+sdk@1.25.3_hono@4.11.3_zod@3.25.76/node_modules/@modelcontextprotocol/sdk/dist/esm/*"
+			],
+			"@modelcontextprotocol/sdk/server/streamableHttp.js": [
+				"../../../node_modules/.pnpm/@modelcontextprotocol+sdk@1.25.3_hono@4.11.3_zod@3.25.76/node_modules/@modelcontextprotocol/sdk/dist/esm/server/streamableHttp.d.ts"
+			],
+			"@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js": [
+				"../../../node_modules/.pnpm/@modelcontextprotocol+sdk@1.25.3_hono@4.11.3_zod@3.25.76/node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.d.ts"
+			]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.d.ts"],
+	"exclude": ["dist", "node_modules"]
+}

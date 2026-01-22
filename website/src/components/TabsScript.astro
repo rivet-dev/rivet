@@ -61,9 +61,16 @@
 
 			// Find all code blocks in source (they have data-code-block attribute)
 			const codeBlocks = source.querySelectorAll('[data-code-block]');
+			let visibleIndex = 0;
 			codeBlocks.forEach((block, index) => {
 				const title = block.getAttribute('data-code-title') || 'Code';
 				const id = block.getAttribute('data-code-id') || `code-${index}`;
+				const isHidden = block.getAttribute('data-code-hide') === 'true';
+
+				// Skip hidden blocks (don't create tabs for them, don't add to DOM)
+				if (isHidden) {
+					return;
+				}
 
 				// Create tab button
 				const button = document.createElement('button');
@@ -75,7 +82,7 @@
 					'ring-offset-background transition-none',
 					'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 					'disabled:pointer-events-none disabled:opacity-50',
-					index === 0 ? 'border-b-primary text-white' : 'border-b-transparent text-muted-foreground'
+					visibleIndex === 0 ? 'border-b-primary text-white' : 'border-b-transparent text-muted-foreground'
 				].join(' ');
 				button.textContent = title;
 				tabsList.appendChild(button);
@@ -83,9 +90,11 @@
 				// Create content wrapper and move code block
 				const contentWrapper = document.createElement('div');
 				contentWrapper.setAttribute('data-code-group-content', id);
-				contentWrapper.className = index === 0 ? '' : 'hidden';
+				contentWrapper.className = visibleIndex === 0 ? '' : 'hidden';
 				contentWrapper.appendChild(block.cloneNode(true));
 				contentContainer.appendChild(contentWrapper);
+
+				visibleIndex++;
 			});
 		});
 	}

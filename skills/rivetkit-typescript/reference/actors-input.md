@@ -1,0 +1,298 @@
+# Input Parameters
+
+> Source: `src/content/docs/actors/input.mdx`
+> Canonical URL: https://rivet.gg/docs/actors/input
+> Description: Pass initialization data to actors when creating instances
+
+---
+Actors can receive input parameters when created, allowing for flexible initialization and configuration. Input is passed during actor creation and is available in lifecycle hooks.
+
+## Passing Input to Actors
+
+Input is provided when creating actor instances using the `input` property:
+
+```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+interface GameInput {
+  gameMode: string;
+  maxPlayers: number;
+  difficulty?: string;
+}
+
+const game = actor({
+  state: { gameMode: "", maxPlayers: 0, difficulty: "medium" },
+  createState: (c, input: GameInput) => ({
+    gameMode: input.gameMode,
+    maxPlayers: input.maxPlayers,
+    difficulty: input.difficulty ?? "medium",
+  }),
+  actions: {}
+});
+
+const registry = setup({ use: { game } });
+const client = createClient<typeof registry>();
+
+// Client side - create with input
+const gameHandle = await client.game.create(["game-123"], {
+  input: {
+    gameMode: "tournament",
+    maxPlayers: 8,
+    difficulty: "hard",
+  }
+});
+
+// getOrCreate can also accept input (used only if creating)
+const gameHandle2 = client.game.getOrCreate(["game-456"], {
+  createWithInput: {
+    gameMode: "casual",
+    maxPlayers: 4,
+  }
+});
+```
+
+## Accessing Input in Lifecycle Hooks
+
+Input is available in lifecycle hooks via the `opts.input` parameter:
+
+```typescript
+import { actor } from "rivetkit";
+
+interface ChatRoomInput {
+  roomName: string;
+  isPrivate: boolean;
+  maxUsers?: number;
+}
+
+interface ChatRoomState {
+  name: string;
+  isPrivate: boolean;
+  maxUsers: number;
+  users: Record<string, boolean>;
+  messages: string[];
+}
+
+// Mock function for demonstration
+function setupPrivateRoomLogging(roomName: string) {
+  console.log(`Setting up logging for private room: ${roomName}`);
+}
+
+const chatRoom = actor({
+  state: { name: "", isPrivate: false, maxUsers: 50, users: {}, messages: [] } as ChatRoomState,
+  createState: (c, input: ChatRoomInput): ChatRoomState => ({
+    name: input?.roomName ?? "Unnamed Room",
+    isPrivate: input?.isPrivate ?? false,
+    maxUsers: input?.maxUsers ?? 50,
+    users: {},
+    messages: [],
+  }),
+
+  onCreate: (c, input: ChatRoomInput) => {
+    console.log(`Creating room: ${input.roomName}`);
+
+    // Setup external services based on input
+    if (input.isPrivate) {
+      setupPrivateRoomLogging(input.roomName);
+    }
+  },
+
+  actions: {
+    // Input remains accessible in actions via initial state
+    getRoomInfo: (c) => ({
+      name: c.state.name,
+      isPrivate: c.state.isPrivate,
+      maxUsers: c.state.maxUsers,
+      currentUsers: Object.keys(c.state.users).length,
+    }),
+  },
+});
+```
+
+## Input Validation
+
+You can validate input parameters in the `createState` or `onCreate` hooks:
+
+```typescript
+import { actor } from "rivetkit";
+import { z } from "zod";
+
+const GameInputSchema = z.object({
+  gameMode: z.enum(["casual", "tournament", "ranked"]),
+  maxPlayers: z.number().min(2).max(16),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+});
+
+type GameInput = z.infer<typeof GameInputSchema>;
+
+interface GameState {
+  gameMode: string;
+  maxPlayers: number;
+  difficulty: string;
+  players: Record<string, boolean>;
+  gameState: string;
+}
+
+const game = actor({
+  state: { gameMode: "", maxPlayers: 0, difficulty: "medium", players: {}, gameState: "waiting" } as GameState,
+  createState: (c, inputRaw: GameInput): GameState => {
+    // Validate input
+    const input = GameInputSchema.parse(inputRaw);
+
+    return {
+      gameMode: input.gameMode,
+      maxPlayers: input.maxPlayers,
+      difficulty: input.difficulty ?? "medium",
+      players: {},
+      gameState: "waiting",
+    };
+  },
+
+  actions: {
+    // Actions can access the validated input via state
+    getGameInfo: (c) => ({
+      gameMode: c.state.gameMode,
+      maxPlayers: c.state.maxPlayers,
+      difficulty: c.state.difficulty,
+      currentPlayers: Object.keys(c.state.players).length,
+    }),
+  },
+});
+```
+
+## Input vs Connection Parameters
+
+Input parameters are different from connection parameters:
+
+- **Input**:
+  - Passed when creating the actor instance
+  - Use for actor-wide configuration
+  - Available in lifecycle hooks
+- **Connection parameters**:
+  - Passed when connecting to an existing actor
+  - Used for connection-specific configuration
+  - Available in connection hooks
+
+```typescript
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+interface RoomInput { roomName: string; isPrivate: boolean; }
+
+const chatRoom = actor({
+  state: { name: "", isPrivate: false },
+  createState: (c, input: RoomInput) => ({ name: input.roomName, isPrivate: input.isPrivate }),
+  connState: { userId: "", displayName: "" },
+  createConnState: (c, params: { userId: string; displayName: string }) => ({
+    userId: params.userId,
+    displayName: params.displayName,
+  }),
+  actions: {}
+});
+
+const registry = setup({ use: { chatRoom } });
+const client = createClient<typeof registry>();
+
+// Actor creation with input
+const room = await client.chatRoom.create(["room-123"], {
+  input: {
+    roomName: "General Discussion",
+    isPrivate: false,
+  },
+});
+```
+
+## Input Best Practices
+
+### Use Type Safety
+
+Define input types to ensure type safety:
+
+```typescript
+import { actor } from "rivetkit";
+
+interface GameInput {
+  gameMode: "casual" | "tournament" | "ranked";
+  maxPlayers: number;
+  difficulty?: "easy" | "medium" | "hard";
+}
+
+interface GameState {
+  gameMode: string;
+  maxPlayers: number;
+  difficulty: string;
+}
+
+const game = actor({
+  state: { gameMode: "", maxPlayers: 0, difficulty: "medium" } as GameState,
+  createState: (c, input: GameInput): GameState => ({
+    gameMode: input.gameMode,
+    maxPlayers: input.maxPlayers,
+    difficulty: input.difficulty ?? "medium",
+  }),
+
+  actions: {
+    // Actions are now type-safe
+  },
+});
+```
+
+### Store Input in State
+
+If you need to access input data in actions, store it in the actor's state:
+
+```typescript
+import { actor } from "rivetkit";
+
+interface GameInput {
+  gameMode: string;
+  maxPlayers: number;
+  difficulty?: string;
+}
+
+interface GameConfig {
+  gameMode: string;
+  maxPlayers: number;
+  difficulty: string;
+}
+
+interface GameState {
+  config: GameConfig;
+  players: Record<string, boolean>;
+  gameState: string;
+}
+
+const game = actor({
+  state: {
+    config: { gameMode: "", maxPlayers: 0, difficulty: "medium" },
+    players: {},
+    gameState: "waiting"
+  } as GameState,
+  createState: (c, input: GameInput): GameState => ({
+    // Store input configuration in state
+    config: {
+      gameMode: input.gameMode,
+      maxPlayers: input.maxPlayers,
+      difficulty: input?.difficulty ?? "medium",
+    },
+    // Runtime state
+    players: {},
+    gameState: "waiting",
+  }),
+
+  actions: {
+    getConfig: (c) => c.state.config,
+    updateDifficulty: (c, difficulty: string) => {
+      c.state.config.difficulty = difficulty;
+    },
+  },
+});
+```
+
+## API Reference
+
+- [`CreateOptions`](/typedoc/interfaces/rivetkit.client_mod.CreateOptions.html) - Options for creating actors
+- [`CreateRequest`](/typedoc/types/rivetkit.client_mod.CreateRequest.html) - Request type for creation
+- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining input types
+
+_Source doc path: /docs/actors/input_

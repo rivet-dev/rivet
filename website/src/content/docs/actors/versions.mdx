@@ -1,6 +1,8 @@
-# Versions & Upgrades
-
-When you deploy new code, Rivet ensures actors are upgraded seamlessly without downtime.
+---
+title: "Versions & Upgrades"
+description: "When you deploy new code, Rivet ensures actors are upgraded seamlessly without downtime."
+skill: true
+---
 
 ## How Versions Work
 
@@ -68,8 +70,12 @@ RIVET_RUNNER_VERSION=2
 ```
 
 ```typescript {{"title": "Programmatic"}}
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+
 const registry = setup({
-  actors: { myActor },
+  use: { myActor },
   runner: {
     version: 2,
   },

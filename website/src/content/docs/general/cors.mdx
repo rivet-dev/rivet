@@ -1,6 +1,8 @@
-# Cross-Origin Resource Sharing
-
-Cross-Origin Resource Sharing (CORS) controls which origins (domains) can access your actors. When actors are exposed to the public internet, proper origin validation is critical to prevent security breaches and denial of service attacks.
+---
+title: "Cross-Origin Resource Sharing"
+description: "Cross-Origin Resource Sharing (CORS) controls which origins (domains) can access your actors. When actors are exposed to the public internet, proper origin validation is critical to prevent security breaches and denial of service attacks."
+skill: true
+---
 
 Unlike stateless HTTP APIs that use CORS headers, Rivet Actors are stateful and support persistent WebSocket connections. Since WebSockets don't natively support CORS, we validate origins manually in the `onBeforeConnect` hook before connections may open.
 
@@ -22,9 +24,9 @@ const myActor = actor({
 
   onBeforeConnect: (c, params) => {
     // Check if origin is allowed
-	//
-	// This works for both HTTP & WebSocket requests
-    const origin = c.request?.headers.get("origin");
+    //
+    // This works for both HTTP & WebSocket requests
+    const origin = c.request?.headers.get("origin") ?? "";
     if (!ALLOWED_ORIGINS.includes(origin)) {
       throw new UserError("Origin not allowed", { code: "origin_not_allowed" });
     }
@@ -43,13 +45,19 @@ To catch the error on the client, use the following code:
 
 ```typescript {{"title":"client.ts"}}
 import { createClient, ActorError } from "rivetkit/client";
-import type { registry } from "./registry";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({
+  state: { count: 0 },
+  actions: { increment: (c) => c.state.count++ }
+});
+const registry = setup({ use: { myActor } });
 
 const client = createClient<typeof registry>();
 
 try {
-  const actor = client.myActor.getOrCreate("my-actor");
-  const conn = actor.connect();
+  const actorHandle = client.myActor.getOrCreate(["my-actor"]);
+  const conn = actorHandle.connect();
 
   // Connection will be established or error will be thrown
   await conn.increment();

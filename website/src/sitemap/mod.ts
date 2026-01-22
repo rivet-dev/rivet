@@ -224,16 +224,20 @@ export const sitemap = [
 						icon: faSitemap,
 						collapsible: true,
 						pages: [
-							{
-								title: "Ephemeral Variables",
-								href: "/docs/actors/ephemeral-variables",
-								//icon: faMemory,
-							},
-							{
-								title: "External SQL",
-								href: "/docs/actors/external-sql",
-								//icon: faDatabase,
-							},
+						{
+							title: "Ephemeral Variables",
+							href: "/docs/actors/ephemeral-variables",
+							//icon: faMemory,
+						},
+						{
+							title: "Low-Level KV Storage",
+							href: "/docs/actors/kv"
+						},
+						{
+							title: "External SQL",
+							href: "/docs/actors/external-sql",
+							//icon: faDatabase,
+						},
 							{
 								title: "Logging",
 								href: "/docs/general/logging",
@@ -384,9 +388,22 @@ export const sitemap = [
 					// 	// icon: faSquareBinary,
 					// },
 					{
-						title: "Docs for LLMs",
-						href: "/docs/general/docs-for-llms",
-						// icon: faSquareBinary,
+						title: "AI Integration",
+						collapsible: true,
+						pages: [
+							{
+								title: "MCP Server",
+								href: "/docs/general/mcp",
+							},
+							{
+								title: "Skill File",
+								href: "/docs/general/skill",
+							},
+							{
+								title: "Docs for LLMs",
+								href: "/docs/general/docs-for-llms",
+							},
+						]
 					},
 					// {
 					// 	title: "System Architecture",

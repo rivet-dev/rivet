@@ -1,6 +1,11 @@
+---
+title: "Deploying to Cloudflare Workers"
+description: "Deploy your Cloudflare Workers + RivetKit app to Cloudflare Workers."
+skill: true
+---
+
 import { faGithub } from "@rivet-gg/icons";
 
-# Deploying to Cloudflare Workers
 
 Deploy your Cloudflare Workers + RivetKit app to [Cloudflare Workers](https://workers.cloudflare.com/).
 
@@ -69,8 +74,9 @@ Use this endpoint URL when configuring your RivetKit client or connecting from t
 
 You can access Cloudflare Workers environment bindings directly using the importable `env`:
 
-```typescript
+```typescript @nocheck
 import { env } from "cloudflare:workers";
+import { actor } from "rivetkit";
 
 // Access environment variables and secrets in top-level scope
 const API_KEY = env.API_KEY;
@@ -96,7 +102,7 @@ const myActor = actor({
 
 The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
 
-```typescript
+```typescript @nocheck
 import { actor, CreateVarsContext } from "rivetkit";
 import type { DriverContext } from "@rivetkit/cloudflare-workers";
 
@@ -120,7 +126,7 @@ const myActor = actor({
 
 The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
 
-```typescript
+```typescript @nocheck
 interface DriverContext {
   state: DurableObjectState;
 }
