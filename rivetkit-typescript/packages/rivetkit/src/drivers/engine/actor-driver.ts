@@ -232,6 +232,26 @@ export class EngineActorDriver implements ActorDriver {
 		this.#runner.setAlarm(actor.id, timestamp);
 	}
 
+	async clearAlarm(actor: AnyActorInstance): Promise<void> {
+		const handler = this.#actors.get(actor.id);
+		if (!handler) {
+			logger().warn({
+				msg: "no handler for actor to clear alarm",
+			});
+
+			return;
+		}
+
+		// Clear timeout
+		if (handler.alarmTimeout) {
+			handler.alarmTimeout.abort();
+			handler.alarmTimeout = undefined;
+		}
+
+		// Clear alarm on Rivet
+		this.#runner.clearAlarm(actor.id);
+	}
+
 	async getDatabase(_actorId: string): Promise<unknown | undefined> {
 		return undefined;
 	}

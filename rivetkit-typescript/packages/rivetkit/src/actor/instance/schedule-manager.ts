@@ -349,6 +349,12 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		});
 	}
 
+	async #queueClearAlarm(): Promise<void> {
+		await this.#alarmWriteQueue.enqueue(async () => {
+			await this.#actorDriver.clearAlarm(this.#actor);
+		});
+	}
+
 	/**
 	 * Gets the next scheduled event, if any.
 	 */
@@ -370,13 +376,23 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	/**
-	 * Clears all scheduled events.
+	 * Clears all scheduled events and the alarm.
 	 * Use with caution - this removes all pending scheduled events.
 	 */
-	clearAllEvents(): void {
+	async clearAllEvents(): Promise<void> {
 		if (this.#persist?.scheduledEvents) {
 			this.#persist.scheduledEvents = [];
+			await this.#queueClearAlarm();
 			this.#actor.log.warn({ msg: "cleared all scheduled events" });
 		}
+	}
+
+	/**
+	 * Clears the alarm without removing scheduled events.
+	 * Events will not fire until a new alarm is set.
+	 */
+	async clearAlarm(): Promise<void> {
+		await this.#queueClearAlarm();
+		this.#actor.log.debug({ msg: "cleared alarm" });
 	}
 }
