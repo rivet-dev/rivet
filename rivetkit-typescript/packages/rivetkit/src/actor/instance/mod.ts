@@ -62,6 +62,7 @@ enum CanSleep {
 	NotStarted,
 	ActiveConns,
 	ActiveHonoHttpRequests,
+	ActiveKeepAwake,
 }
 
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
@@ -138,6 +139,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
+	#activeKeepAwakeCount = 0;
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
@@ -707,6 +709,36 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#backgroundPromises.push(nonfailablePromise);
 	}
 
+	/**
+	 * Prevents the actor from sleeping while the given promise is running.
+	 *
+	 * Use this when performing async operations in the `run` handler or other
+	 * background contexts where you need to ensure the actor stays awake.
+	 *
+	 * Returns the resolved value and resets the sleep timer on completion.
+	 * Errors are propagated to the caller.
+	 */
+	async keepAwake<T>(promise: Promise<T>): Promise<T> {
+		this.assertReady();
+
+		this.#activeKeepAwakeCount++;
+		this.resetSleepTimer();
+
+		try {
+			return await promise;
+		} finally {
+			this.#activeKeepAwakeCount--;
+			if (this.#activeKeepAwakeCount < 0) {
+				this.#activeKeepAwakeCount = 0;
+				this.#rLog.warn({
+					msg: "active keep awake count went below 0, this is a RivetKit bug",
+					...EXTRA_ERROR_LOG,
+				});
+			}
+			this.resetSleepTimer();
+		}
+	}
+
 	// MARK: - Private Helper Methods
 	#initializeLogging() {
 		const logParams = {
@@ -1075,6 +1107,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (!this.#started) return CanSleep.NotReady;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
+		if (this.#activeKeepAwakeCount > 0) return CanSleep.ActiveKeepAwake;
 
 		for (const _conn of this.connectionManager.connections.values()) {
 			// TODO: Add back
