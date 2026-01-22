@@ -44,6 +44,9 @@ export interface ActorDriver {
 	/** ActorInstance ensure that only one instance of setAlarm is called in parallel at a time. */
 	setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void>;
 
+	/** Clears any scheduled alarm for the actor. */
+	clearAlarm(actor: AnyActorInstance): Promise<void>;
+
 	// Database
 	/**
 	 * @experimental

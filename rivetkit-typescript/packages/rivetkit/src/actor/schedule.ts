@@ -14,4 +14,8 @@ export class Schedule {
 	async at(timestamp: number, fn: string, ...args: unknown[]) {
 		await this.#actor.scheduleEvent(timestamp, fn, args);
 	}
+
+	async clear() {
+		await this.#actor.clearAlarm();
+	}
 }

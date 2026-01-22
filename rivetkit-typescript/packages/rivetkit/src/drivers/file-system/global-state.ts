@@ -620,6 +620,39 @@ export class FileSystemGlobalState {
 		this.#scheduleAlarmTimeout(actorId, timestamp);
 	}
 
+	async clearActorAlarm(actorId: string): Promise<void> {
+		const entry = this.#actors.get(actorId);
+		if (!entry) {
+			logger().debug({ msg: "no entry for actor to clear alarm", actorId });
+			return;
+		}
+
+		// Clear timeout
+		if (entry.alarmTimeout) {
+			entry.alarmTimeout.abort();
+			entry.alarmTimeout = undefined;
+		}
+		entry.alarmTimestamp = undefined;
+
+		// Delete alarm file from disk
+		if (this.#persist) {
+			try {
+				const fs = getNodeFs();
+				await fs.unlink(this.getActorAlarmPath(actorId));
+			} catch (err: any) {
+				if (err?.code !== "ENOENT") {
+					logger().error({
+						msg: "failed to delete alarm file",
+						actorId,
+						error: stringifyError(err),
+					});
+				}
+			}
+		}
+
+		logger().debug({ msg: "cleared alarm", actorId });
+	}
+
 	/**
 	 * Perform the actual write operation with atomic writes
 	 */
