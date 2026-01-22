@@ -206,9 +206,13 @@ export class ActorContext<
 	}
 
 	/**
-	 * Prevents the actor from sleeping until promise is complete.
-	 * Returns the resolved value and resets sleep timer on completion.
-	 * Unlike waitUntil, errors are propagated to the caller.
+	 * Prevents the actor from sleeping while the given promise is running.
+	 *
+	 * Use this when performing async operations in the `run` handler or other
+	 * background contexts where you need to ensure the actor stays awake.
+	 *
+	 * Returns the resolved value and resets the sleep timer on completion.
+	 * Errors are propagated to the caller.
 	 */
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
 		return this.#actor.keepAwake(promise);

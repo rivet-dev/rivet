@@ -402,6 +402,10 @@ interface BaseActorConfig<
 	 * - Tick loops for periodic work
 	 * - Custom workflow logic
 	 *
+	 * **Important:** The actor may go to sleep at any time during the `run`
+	 * handler. Use `c.keepAwake(promise)` to wrap async operations that should
+	 * not be interrupted by sleep.
+	 *
 	 * The handler receives an abort signal via `c.abortSignal` that fires
 	 * when the actor is stopping. You should use this to gracefully exit.
 	 *
