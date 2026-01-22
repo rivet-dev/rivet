@@ -134,6 +134,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
+	#runPromise?: Promise<void>;
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
@@ -325,6 +326,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// timer
 		this.resetSleepTimer();
 
+		// Start run handler in background (does not block startup)
+		this.#startRunHandler();
+
 		// Trigger any pending alarms
 		await this.onAlarm();
 	}
@@ -362,6 +366,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		try {
 			this.#abortController.abort();
 		} catch {}
+
+		// Wait for run handler to complete
+		await this.#waitForRunHandler(this.#config.options.runStopTimeout);
 
 		// Call onStop lifecycle
 		if (mode === "sleep") {
@@ -904,6 +911,57 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					});
 				}
 			}
+		}
+	}
+
+	#startRunHandler() {
+		if (!this.#config.run) return;
+
+		this.#rLog.debug({ msg: "starting run handler" });
+
+		const runResult = this.#config.run(this.actorContext);
+
+		if (runResult instanceof Promise) {
+			this.#runPromise = runResult
+				.then(() => {
+					// Run handler exited normally - this should crash the actor
+					this.#rLog.warn({
+						msg: "run handler exited unexpectedly, crashing actor to reschedule",
+					});
+					this.startDestroy();
+				})
+				.catch((error) => {
+					// Run handler threw an error - crash the actor
+					this.#rLog.error({
+						msg: "run handler threw error, crashing actor to reschedule",
+						error: stringifyError(error),
+					});
+					this.startDestroy();
+				});
+		}
+	}
+
+	async #waitForRunHandler(timeoutMs: number) {
+		if (!this.#runPromise) {
+			return;
+		}
+
+		this.#rLog.debug({ msg: "waiting for run handler to complete" });
+
+		const timedOut = await Promise.race([
+			this.#runPromise.then(() => false).catch(() => false),
+			new Promise<true>((resolve) =>
+				setTimeout(() => resolve(true), timeoutMs),
+			),
+		]);
+
+		if (timedOut) {
+			this.#rLog.warn({
+				msg: "run handler did not complete in time, it may have leaked - ensure you use the abort signal (c.abortSignal) to exit gracefully",
+				timeoutMs,
+			});
+		} else {
+			this.#rLog.debug({ msg: "run handler completed" });
 		}
 	}
 

@@ -14,6 +14,7 @@ Actors transition through several states during their lifetime. Each transition 
 2. `onCreate`
 3. `createVars`
 4. `onWake`
+5. `run` (background, does not block)
 
 **On Destroy**
 
@@ -23,10 +24,12 @@ Actors transition through several states during their lifetime. Each transition 
 
 1. `createVars`
 2. `onWake`
+3. `run` (background, does not block)
 
 **On Sleep** (after idle period)
 
-1. `onSleep`
+1. Wait for `run` to complete (with timeout)
+2. `onSleep`
 
 **On Connect** (per client)
 
@@ -228,6 +231,87 @@ const counter = actor({
   },
 
   actions: { /* ... */ }
+});
+```
+
+### `run`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
+
+The `run` hook is called after the actor starts and runs in the background without blocking actor startup. This is ideal for long-running background tasks like:
+
+- Reading from message queues in a loop
+- Tick loops for periodic work
+- Custom workflow logic
+- Background processing
+
+The handler receives an abort signal via `c.abortSignal` that fires when the actor is stopping. You should always check or listen to this signal to exit gracefully.
+
+**Important behavior:**
+- If the `run` handler exits (returns), the actor will crash and reschedule
+- If the `run` handler throws an error, the actor will crash and reschedule
+- On shutdown, the actor waits for the `run` handler to complete (with configurable timeout via `options.runStopTimeout`)
+
+```typescript
+import { actor } from "rivetkit";
+
+// Example: Tick loop
+const tickActor = actor({
+  state: { tickCount: 0 },
+
+  run: async (c) => {
+    c.log.info("Background loop started");
+
+    while (!c.abortSignal.aborted) {
+      c.state.tickCount++;
+      c.log.info({ msg: "tick", count: c.state.tickCount });
+
+      // Wait 1 second, but exit early if aborted
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 1000);
+        c.abortSignal.addEventListener("abort", () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+      });
+    }
+
+    c.log.info("Background loop exiting gracefully");
+  },
+
+  actions: {
+    getTickCount: (c) => c.state.tickCount
+  }
+});
+```
+
+```typescript
+import { actor } from "rivetkit";
+
+// Example: Queue consumer
+const queueConsumer = actor({
+  state: { processedCount: 0 },
+
+  run: async (c) => {
+    c.log.info("Queue consumer started");
+
+    while (!c.abortSignal.aborted) {
+      // Wait for next message with timeout
+      const message = await c.queue.next("tasks", { timeout: 1000 });
+
+      if (message) {
+        c.log.info({ msg: "processing message", body: message.body });
+        // Process the message...
+        c.state.processedCount++;
+      }
+    }
+
+    c.log.info("Queue consumer exiting gracefully");
+  },
+
+  actions: {
+    getProcessedCount: (c) => c.state.processedCount
+  }
 });
 ```
 
@@ -571,6 +655,9 @@ const myActor = actor({
     // Max time to wait for background promises during shutdown (default: 15000ms)
     waitUntilTimeout: 15_000,
 
+    // Max time to wait for run handler to stop during shutdown (default: 15000ms)
+    runStopTimeout: 15_000,
+
     // Timeout for connection liveness check (default: 2500ms)
     connectionLivenessTimeout: 2500,
 
@@ -602,6 +689,7 @@ const myActor = actor({
 | `stateSaveInterval` | 10000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `waitUntilTimeout` | 15000ms | Max time to wait for background promises during shutdown |
+| `runStopTimeout` | 15000ms | Max time to wait for run handler to stop during shutdown |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |
 | `noSleep` | false | Prevent actor from sleeping |
@@ -612,7 +700,7 @@ const myActor = actor({
 
 ### Running Background Tasks
 
-The `c.runInBackground` method allows you to execute promises asynchronously without blocking the actor's main execution flow. The actor is prevented from sleeping while the promise passed to `runInBackground` is still active. This is useful for fire-and-forget operations where you don't need to wait for completion.
+The `c.waitUntil` method allows you to execute promises asynchronously without blocking the actor's main execution flow. The actor is prevented from sleeping while the promise passed to `waitUntil` is still active. This is useful for fire-and-forget operations where you don't need to wait for completion.
 
 Common use cases:
 - **Analytics and logging**: Send events to external services without delaying responses
@@ -635,7 +723,7 @@ const gameRoom = actor({
     playerJoined: (c, playerId: string) => {
       c.state.players[playerId] = { joinedAt: Date.now() };
 
-      // Send analytics event without blocking using waitUntil
+      // Send analytics event without blocking
       c.waitUntil(
         fetch('https://analytics.example.com/events', {
           method: 'POST',
@@ -778,6 +866,21 @@ const counter = actor({
   // Lifecycle hooks
   onWake: (c) => {
     console.log(`Counter "${c.state.name}" started with count:`, c.state.count);
+  },
+
+  // Background task (does not block startup)
+  run: async (c) => {
+    while (!c.abortSignal.aborted) {
+      // Example: periodic logging
+      console.log(`Counter "${c.state.name}" is at ${c.state.count}`);
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 60000);
+        c.abortSignal.addEventListener("abort", () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+      });
+    }
   },
 
   onStateChange: (c, newState) => {
