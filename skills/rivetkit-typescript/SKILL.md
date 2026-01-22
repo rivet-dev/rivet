@@ -1,6 +1,6 @@
 ---
-name: rivetkit-actors
-description: Build stateful backends with Rivet Actors: high-performance, long-lived, in-memory, persisted processes. Use when you outgrow HTTP, databases, or queues. Trigger on tasks related to AI agents, multiplayer apps or games, collaborative editors, realtime solutions, workflow automation, geo-distributed or per-tenant databases, local-first sync, WebSocket servers, background or cron jobs, rate limiters, or CRDT docs.
+name: "rivetkit-actors"
+description: "Build stateful backends with Rivet Actors: high-performance, long-lived, in-memory, persisted processes. Use when you outgrow HTTP, databases, or queues. Trigger on tasks related to AI agents, multiplayer apps or games, collaborative editors, realtime solutions, workflow automation, geo-distributed or per-tenant databases, local-first sync, WebSocket servers, background or cron jobs, rate limiters, or CRDT docs."
 ---
 
 # Rivet Actors
