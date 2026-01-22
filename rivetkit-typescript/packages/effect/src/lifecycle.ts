@@ -19,22 +19,19 @@ import type {
 import type { YieldWrap } from "effect/Utils";
 import { ActorContextTag } from "./actor.ts";
 
-// Local type alias to work around AnyDatabaseProvider not being exported
-type AnyDB = undefined;
-
 // Pattern: Each namespace exports an `effect()` function that:
 // 1. Takes a generator function with the appropriate context
 // 2. Returns a function that RivetKit can call
 // 3. Runs the Effect and returns a Promise (or void for sync hooks)
 
 export namespace OnCreate {
-	export function effect<TState, TInput, TDatabase extends AnyDB = AnyDB, AEff = void>(
+	export function effect<TState, TInput, AEff = void>(
 		genFn: (
-			c: CreateContext<TState, TInput, TDatabase>,
+			c: CreateContext<TState, TInput, undefined>,
 			input: TInput,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
-		c: CreateContext<TState, TInput, TDatabase>,
+		c: CreateContext<TState, TInput, undefined>,
 		input: TInput,
 	) => Promise<AEff> {
 		return (c, input) => {
@@ -61,7 +58,6 @@ export namespace OnWake {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
@@ -71,11 +67,50 @@ export namespace OnWake {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
-		c: WakeContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		c: WakeContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+	) => Promise<AEff> {
+		return (c) => {
+			const gen = genFn(c);
+			const eff = Effect.gen<YieldWrap<Effect.Effect<any, any, any>>, AEff>(
+				() => gen,
+			);
+
+			const withContext = Effect.provideService(
+				eff,
+				ActorContextTag,
+				c as any,
+			) as Effect.Effect<AEff, any, never>;
+
+			return Effect.runPromise(withContext);
+		};
+	}
+}
+
+export namespace Run {
+	export function effect<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		AEff = void,
+	>(
+		genFn: (
+			c: WakeContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				undefined
+			>,
+		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
+	): (
+		c: WakeContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	) => Promise<AEff> {
 		return (c) => {
 			const gen = genFn(c);
@@ -101,7 +136,6 @@ export namespace OnDestroy {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
@@ -111,7 +145,7 @@ export namespace OnDestroy {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
@@ -121,7 +155,7 @@ export namespace OnDestroy {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
 	) => Promise<AEff> {
 		return (c) => {
@@ -148,7 +182,6 @@ export namespace OnSleep {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
@@ -158,11 +191,11 @@ export namespace OnSleep {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
-		c: SleepContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		c: SleepContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	) => Promise<AEff> {
 		return (c) => {
 			const gen = genFn(c);
@@ -189,7 +222,6 @@ export namespace OnStateChange {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 	>(
 		genFn: (
 			c: StateChangeContext<
@@ -198,7 +230,7 @@ export namespace OnStateChange {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 			newState: TState,
 		) => Generator<YieldWrap<Effect.Effect<any, never, any>>, void, never>,
@@ -209,7 +241,7 @@ export namespace OnStateChange {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
 		newState: TState,
 	) => void {
@@ -236,15 +268,14 @@ export namespace OnBeforeConnect {
 		TConnParams,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
-			c: BeforeConnectContext<TState, TVars, TInput, TDatabase>,
+			c: BeforeConnectContext<TState, TVars, TInput, undefined>,
 			params: TConnParams,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
-		c: BeforeConnectContext<TState, TVars, TInput, TDatabase>,
+		c: BeforeConnectContext<TState, TVars, TInput, undefined>,
 		params: TConnParams,
 	) => Promise<AEff> {
 		return (c, params) => {
@@ -271,7 +302,6 @@ export namespace OnConnect {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
@@ -281,9 +311,9 @@ export namespace OnConnect {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
-			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
 		c: ConnectContext<
@@ -292,9 +322,9 @@ export namespace OnConnect {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	) => Promise<AEff> {
 		return (c, conn) => {
 			const gen = genFn(c, conn);
@@ -320,7 +350,6 @@ export namespace OnDisconnect {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
@@ -330,9 +359,9 @@ export namespace OnDisconnect {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
-			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 	): (
 		c: DisconnectContext<
@@ -341,9 +370,9 @@ export namespace OnDisconnect {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	) => Promise<AEff> {
 		return (c, conn) => {
 			const gen = genFn(c, conn);
@@ -369,10 +398,9 @@ export namespace CreateConnState {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 	>(
 		genFn: (
-			c: CreateConnStateContext<TState, TVars, TInput, TDatabase>,
+			c: CreateConnStateContext<TState, TVars, TInput, undefined>,
 			params: TConnParams,
 		) => Generator<
 			YieldWrap<Effect.Effect<any, any, any>>,
@@ -380,7 +408,7 @@ export namespace CreateConnState {
 			never
 		>,
 	): (
-		c: CreateConnStateContext<TState, TVars, TInput, TDatabase>,
+		c: CreateConnStateContext<TState, TVars, TInput, undefined>,
 		params: TConnParams,
 	) => Promise<TConnState> {
 		return (c, params) => {
@@ -408,7 +436,6 @@ export namespace OnBeforeActionResponse {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		Out = any,
 	>(
 		genFn: (
@@ -418,7 +445,7 @@ export namespace OnBeforeActionResponse {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 			name: string,
 			args: unknown[],
@@ -431,7 +458,7 @@ export namespace OnBeforeActionResponse {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
 		name: string,
 		args: unknown[],
@@ -455,13 +482,13 @@ export namespace OnBeforeActionResponse {
 }
 
 export namespace CreateState {
-	export function effect<TState, TInput, TDatabase extends AnyDB = AnyDB>(
+	export function effect<TState, TInput>(
 		genFn: (
-			c: CreateContext<TState, TInput, TDatabase>,
+			c: CreateContext<TState, TInput, undefined>,
 			input: TInput,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, TState, never>,
 	): (
-		c: CreateContext<TState, TInput, TDatabase>,
+		c: CreateContext<TState, TInput, undefined>,
 		input: TInput,
 	) => Promise<TState> {
 		return (c, input) => {
@@ -482,13 +509,13 @@ export namespace CreateState {
 }
 
 export namespace CreateVars {
-	export function effect<TState, TVars, TInput, TDatabase extends AnyDB = AnyDB>(
+	export function effect<TState, TVars, TInput>(
 		genFn: (
-			c: CreateVarsContext<TState, TInput, TDatabase>,
+			c: CreateVarsContext<TState, TInput, undefined>,
 			driverCtx: any,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, TVars, never>,
 	): (
-		c: CreateVarsContext<TState, TInput, TDatabase>,
+		c: CreateVarsContext<TState, TInput, undefined>,
 		driverCtx: any,
 	) => Promise<TVars> {
 		return (c, driverCtx) => {
@@ -515,7 +542,6 @@ export namespace OnRequest {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 	>(
 		genFn: (
 			c: RequestContext<
@@ -524,7 +550,7 @@ export namespace OnRequest {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 			request: Request,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, Response, never>,
@@ -535,7 +561,7 @@ export namespace OnRequest {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
 		request: Request,
 	) => Promise<Response> {
@@ -563,7 +589,6 @@ export namespace OnWebSocket {
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase extends AnyDB = AnyDB,
 		AEff = void,
 	>(
 		genFn: (
@@ -573,7 +598,7 @@ export namespace OnWebSocket {
 				TConnState,
 				TVars,
 				TInput,
-				TDatabase
+				undefined
 			>,
 			websocket: UniversalWebSocket,
 		) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
@@ -584,7 +609,7 @@ export namespace OnWebSocket {
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
 		websocket: UniversalWebSocket,
 	) => Promise<AEff> {

@@ -1,5 +1,5 @@
 import { actor } from "rivetkit";
-import { Action } from "../effect/index.ts";
+import { Action } from "../src/mod.ts";
 
 // Counter actor - demonstrates basic Effect-wrapped actions
 export const counter = actor({

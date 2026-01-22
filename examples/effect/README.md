@@ -1,37 +1,36 @@
-# Effect Integration for RivetKit
+# Effect Integration
 
-Demonstrates how to integrate [Effect](https://effect.website/) with RivetKit actors for functional, type-safe programming with powerful error handling and dependency injection.
+Demonstrates how to integrate [Effect](https://effect.website/) with actors for functional, type-safe programming with powerful error handling and dependency injection.
 
 ## Getting Started
 
 ```sh
-git clone https://github.com/rivet-dev/rivet
+git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/effect
 npm install
 npm run dev
 ```
 
+
 ## Features
 
 - **Effect-wrapped actions** - Write actor actions using Effect generators for composable, type-safe logic
-- **Durable workflows** - Use `@effect/workflow` with RivetKit's `waitUntil` for reliable multi-step operations
 - **Actor context as Effect service** - Access actor state, broadcast, and other context via Effect's dependency injection
-- **Structured logging** - Effect-based logging utilities integrated with RivetKit's actor logging
+- **Structured logging** - Effect-based logging utilities integrated with actor logging
 
 ## Implementation
 
-This example provides Effect bindings for RivetKit actors. The core implementation wraps RivetKit's actor context in Effect services, allowing you to write actions using Effect's generator syntax.
+This example provides Effect bindings for actors. The core implementation wraps the actor context in Effect services, allowing you to write actions using Effect's generator syntax.
 
 Key files:
-- [`src/effect/action.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/effect/action.ts) - Effect wrappers for action handlers with `Action.effect()` and `Action.workflow()`
-- [`src/effect/actor.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/effect/actor.ts) - Effect-wrapped actor context methods (state, broadcast, etc.)
-- [`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/actors.ts) - Example actors using the Effect integration
+- [`src/actors/fetch-actor.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/actors/fetch-actor.ts) - Multi-step workflows with error handling
+- [`src/actors/queue-processor.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/actors/queue-processor.ts) - Background queue processing with the `run` handler
 
 Example usage:
 
 ```typescript
 import { actor } from "rivetkit";
-import { Action } from "./effect/index.ts";
+import { Action } from "@rivetkit/effect";
 
 export const counter = actor({
   state: { count: 0 },
@@ -49,9 +48,9 @@ export const counter = actor({
 ## Resources
 
 - [Effect Documentation](https://effect.website/docs/introduction)
-- [RivetKit Actions](/docs/actors/actions)
-- [RivetKit State](/docs/actors/state)
+- [Actions](/docs/actors/actions)
+- [State](/docs/actors/state)
 
 ## License
 
-Apache 2.0
+MIT

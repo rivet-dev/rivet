@@ -1,11 +1,14 @@
+// Re-export actor context helpers
 export * as Hook from "./actor.ts";
 export * as Action from "./action.ts";
-export * from "./log.ts";
+export * as Log from "./log.ts";
+export * as Queue from "./queue.ts";
 
-// Export lifecycle hook namespaces
+// Re-export lifecycle hook namespaces
 export {
 	OnCreate,
 	OnWake,
+	Run,
 	OnDestroy,
 	OnSleep,
 	OnStateChange,
@@ -18,4 +21,7 @@ export {
 	CreateVars,
 	OnRequest,
 	OnWebSocket,
-} from "./hooks.ts";
+} from "./lifecycle.ts";
+
+// Re-export ActorContextTag for advanced usage
+export { ActorContextTag } from "./actor.ts";

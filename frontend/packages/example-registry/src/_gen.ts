@@ -242,6 +242,20 @@ export const templates: Template[] = [
     "noFrontend": true
   },
   {
+    "name": "effect",
+    "displayName": "Effect Integration",
+    "description": "Demonstrates how to integrate [Effect](https://effect.website/) with actors for functional, type-safe programming with powerful error handling and dependency injection.",
+    "technologies": [
+      "rivet",
+      "effect",
+      "typescript"
+    ],
+    "tags": [
+      "functional"
+    ],
+    "noFrontend": true
+  },
+  {
     "name": "elysia",
     "displayName": "Elysia Integration",
     "description": "Example project demonstrating Elysia web framework integration.",
