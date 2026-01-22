@@ -33,6 +33,16 @@
 				"default": "./dist/tsup/mod.cjs"
 			}
 		},
+		"./workflow": {
+			"import": {
+				"types": "./dist/tsup/workflow/mod.d.ts",
+				"default": "./dist/tsup/workflow/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/workflow/mod.d.cts",
+				"default": "./dist/tsup/workflow/mod.cjs"
+			}
+		},
 		"./client": {
 			"import": {
 				"types": "./dist/tsup/client/mod.d.ts",
@@ -162,7 +172,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts",
 		"build:schema": "./scripts/compile-bare.ts compile schemas/client-protocol/v1.bare -o dist/schemas/client-protocol/v1.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v2.bare -o dist/schemas/client-protocol/v2.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v3.bare -o dist/schemas/client-protocol/v3.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v1.bare -o dist/schemas/file-system-driver/v1.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v2.bare -o dist/schemas/file-system-driver/v2.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v3.bare -o dist/schemas/file-system-driver/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v1.bare -o dist/schemas/actor-persist/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v2.bare -o dist/schemas/actor-persist/v2.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v3.bare -o dist/schemas/actor-persist/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v4.bare -o dist/schemas/actor-persist/v4.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v1.bare -o dist/schemas/actor-inspector/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v2.bare -o dist/schemas/actor-inspector/v2.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check .",
@@ -179,6 +189,7 @@
 	"dependencies": {
 		"@hono/standard-validator": "^0.1.3",
 		"@hono/zod-openapi": "^1.1.5",
+		"@rivetkit/workflow-engine": "workspace:*",
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",

@@ -13,6 +13,7 @@ import type {
 	DestroyContext,
 	DisconnectContext,
 	RequestContext,
+	RunContext,
 	SleepContext,
 	StateChangeContext,
 	WakeContext,
@@ -50,9 +51,9 @@ export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
 		onDestroy: zFunction().optional(),
-		run: zFunction().optional(),
 		onWake: zFunction().optional(),
 		onSleep: zFunction().optional(),
+		run: zFunction().optional(),
 		onStateChange: zFunction().optional(),
 		onBeforeConnect: zFunction().optional(),
 		onConnect: zFunction().optional(),
@@ -80,6 +81,8 @@ export const ActorConfigSchema = z
 				actionTimeout: z.number().positive().default(60_000),
 				// Max time to wait for waitUntil background promises during shutdown
 				waitUntilTimeout: z.number().positive().default(15_000),
+				// Max time to wait for run handler to stop during shutdown
+				runStopTimeout: z.number().positive().default(15_000),
 				connectionLivenessTimeout: z.number().positive().default(2500),
 				connectionLivenessInterval: z.number().positive().default(5000),
 				noSleep: z.boolean().default(false),
@@ -130,13 +133,6 @@ export const ActorConfigSchema = z
 		{
 			message: "Cannot define both 'vars' and 'createVars'",
 			path: ["vars"],
-		},
-	)
-	.refine(
-		(data) => !(data.run !== undefined && data.onWake !== undefined),
-		{
-			message: "Cannot define both 'run' and 'onWake'. 'run' is an alias for 'onWake'.",
-			path: ["run"],
 		},
 	);
 
@@ -288,24 +284,6 @@ interface BaseActorConfig<
 	) => void | Promise<void>;
 
 	/**
-	 * Called when the actor is started and ready to receive connections and actions.
-	 *
-	 * This is an alias for `onWake`. Use either `run` or `onWake`, but not both.
-	 *
-	 * @returns Void or a Promise that resolves when startup is complete
-	 */
-	run?: (
-		c: WakeContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	) => void | Promise<void>;
-
-	/**
 	 * Called when the actor is started and ready to receive connections and action.
 	 *
 	 * Use this hook to initialize resources needed for the actor's operation
@@ -336,6 +314,34 @@ interface BaseActorConfig<
 	 */
 	onSleep?: (
 		c: SleepContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase
+		>,
+	) => void | Promise<void>;
+
+	/**
+	 * Called after the actor starts up. Does not block actor startup.
+	 *
+	 * Use this for background tasks like:
+	 * - Reading from queues in a loop
+	 * - Tick loops for periodic work
+	 * - Custom workflow logic
+	 *
+	 * The handler receives an abort signal via `c.abortSignal` that fires
+	 * when the actor is stopping. You should use this to gracefully exit.
+	 *
+	 * If this handler exits or throws, the actor will crash and reschedule.
+	 * On shutdown, the actor waits for this handler to complete with a
+	 * configurable timeout (options.runStopTimeout, default 15s).
+	 *
+	 * @returns Void or a Promise. If the promise exits, the actor crashes.
+	 */
+	run?: (
+		c: RunContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -523,8 +529,9 @@ export type ActorConfig<
 	| "actions"
 	| "onCreate"
 	| "onDestroy"
-	| "run"
 	| "onWake"
+	| "onSleep"
+	| "run"
 	| "onStateChange"
 	| "onBeforeConnect"
 	| "onConnect"
@@ -584,9 +591,9 @@ export type ActorConfigInput<
 	| "actions"
 	| "onCreate"
 	| "onDestroy"
-	| "run"
 	| "onWake"
 	| "onSleep"
+	| "run"
 	| "onStateChange"
 	| "onBeforeConnect"
 	| "onConnect"
@@ -700,6 +707,12 @@ export const DocActorOptionsSchema = z
 			.describe(
 				"Max time in ms to wait for waitUntil background promises during shutdown. Default: 15000",
 			),
+		runStopTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Max time in ms to wait for run handler to stop during shutdown. Default: 15000",
+			),
 		connectionLivenessTimeout: z
 			.number()
 			.optional()
@@ -806,6 +819,12 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Called when the actor is stopping or sleeping. Use to clean up resources.",
+			),
+		run: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits or throws, the actor crashes.",
 			),
 		onStateChange: z
 			.unknown()

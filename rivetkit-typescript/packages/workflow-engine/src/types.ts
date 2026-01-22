@@ -234,6 +234,18 @@ export interface Storage {
 }
 
 /**
+ * Driver interface for workflow message persistence.
+ */
+export interface WorkflowMessageDriver {
+	loadMessages(): Promise<Message[]>;
+	addMessage(message: Message): Promise<void>;
+	/**
+	 * Delete the specified messages and return the IDs that were successfully removed.
+	 */
+	deleteMessages(messageIds: string[]): Promise<string[]>;
+}
+
+/**
  * Context available to rollback handlers.
  */
 export interface RollbackContextInterface {

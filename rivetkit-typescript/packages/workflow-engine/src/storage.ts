@@ -38,6 +38,7 @@ import type {
 	Location,
 	Message,
 	Storage,
+	WorkflowMessageDriver,
 } from "./types.js";
 
 /**
@@ -64,6 +65,46 @@ export function createStorage(): Storage {
  */
 export function generateId(): string {
 	return crypto.randomUUID();
+}
+
+class KvMessageDriver implements WorkflowMessageDriver {
+	constructor(private readonly driver: EngineDriver) {}
+
+	async loadMessages(): Promise<Message[]> {
+		const entries = await this.driver.list(buildMessagePrefix());
+		entries.sort((a, b) => compareKeys(a.key, b.key));
+		return entries.map((entry) => deserializeMessage(entry.value));
+	}
+
+	async addMessage(message: Message): Promise<void> {
+		await this.driver.set(
+			buildMessageKey(message.id),
+			serializeMessage(message),
+		);
+	}
+
+	async deleteMessages(messageIds: string[]): Promise<string[]> {
+		const results = await Promise.allSettled(
+			messageIds.map((id) =>
+				this.driver.delete(buildMessageKey(id)),
+			),
+		);
+
+		const deleted: string[] = [];
+		for (let i = 0; i < results.length; i++) {
+			if (results[i].status === "fulfilled") {
+				deleted.push(messageIds[i]);
+			}
+		}
+
+		return deleted;
+	}
+}
+
+export function createDefaultMessageDriver(
+	driver: EngineDriver,
+): WorkflowMessageDriver {
+	return new KvMessageDriver(driver);
 }
 
 /**
@@ -104,7 +145,11 @@ export function getOrCreateMetadata(
 /**
  * Load storage from the driver.
  */
-export async function loadStorage(driver: EngineDriver): Promise<Storage> {
+export async function loadStorage(
+	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver = driver.messageDriver ??
+		createDefaultMessageDriver(driver),
+): Promise<Storage> {
 	const storage = createStorage();
 
 	// Load name registry
@@ -128,14 +173,9 @@ export async function loadStorage(driver: EngineDriver): Promise<Storage> {
 		storage.history.entries.set(key, parsed);
 	}
 
-	// Load messages
-	const messageEntries = await driver.list(buildMessagePrefix());
-	// Sort by index to ensure correct FIFO order
-	messageEntries.sort((a, b) => compareKeys(a.key, b.key));
-	for (const entry of messageEntries) {
-		const message = deserializeMessage(entry.value);
-		storage.messages.push(message);
-	}
+	// Load messages from the provided message driver
+	const messages = await messageDriver.loadMessages();
+	storage.messages.push(...messages);
 
 	// Load workflow state
 	const stateValue = await driver.get(buildWorkflowStateKey());
@@ -282,7 +322,7 @@ export async function flush(
  */
 export async function addMessage(
 	storage: Storage,
-	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver,
 	name: string,
 	data: unknown,
 ): Promise<void> {
@@ -295,8 +335,8 @@ export async function addMessage(
 
 	storage.messages.push(message);
 
-	// Persist immediately using message's unique ID as key
-	await driver.set(buildMessageKey(message.id), serializeMessage(message));
+	// Persist immediately using the message driver
+	await messageDriver.addMessage(message);
 }
 
 /**
@@ -306,25 +346,16 @@ export async function addMessage(
  */
 export async function consumeMessage(
 	storage: Storage,
-	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver,
 	messageName: string,
 ): Promise<Message | null> {
-	const index = storage.messages.findIndex(
-		(message) => message.name === messageName,
+	const messages = await consumeMessages(
+		storage,
+		messageDriver,
+		messageName,
+		1,
 	);
-	if (index === -1) {
-		return null;
-	}
-
-	const message = storage.messages[index];
-
-	// Delete from driver first - if this fails, memory is unchanged
-	await driver.delete(buildMessageKey(message.id));
-
-	// Only remove from memory after successful driver deletion
-	storage.messages.splice(index, 1);
-
-	return message;
+	return messages[0] ?? null;
 }
 
 /**
@@ -337,7 +368,7 @@ export async function consumeMessage(
  */
 export async function consumeMessages(
 	storage: Storage,
-	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver,
 	messageName: string,
 	limit: number,
 ): Promise<Message[]> {
@@ -356,29 +387,22 @@ export async function consumeMessages(
 		return [];
 	}
 
-	// Delete from driver using allSettled to handle partial failures
-	const deleteResults = await Promise.allSettled(
-		toConsume.map(({ message }) =>
-			driver.delete(buildMessageKey(message.id)),
-		),
-	);
-
-	// Track which messages were successfully deleted
-	const successfullyDeleted: { message: Message; index: number }[] = [];
-	for (let i = 0; i < deleteResults.length; i++) {
-		if (deleteResults[i].status === "fulfilled") {
-			successfullyDeleted.push(toConsume[i]);
-		}
-	}
+	const messageIds = toConsume.map(({ message }) => message.id);
+	const deletedIds = await messageDriver.deleteMessages(messageIds);
+	const deletedSet = new Set(deletedIds);
 
 	// Only remove successfully deleted messages from memory
 	// Remove in reverse order to preserve indices
-	for (let i = successfullyDeleted.length - 1; i >= 0; i--) {
-		const { index } = successfullyDeleted[i];
-		storage.messages.splice(index, 1);
+	for (let i = toConsume.length - 1; i >= 0; i--) {
+		const { message, index } = toConsume[i];
+		if (deletedSet.has(message.id)) {
+			storage.messages.splice(index, 1);
+		}
 	}
 
-	return successfullyDeleted.map(({ message }) => message);
+	return toConsume
+		.filter(({ message }) => deletedSet.has(message.id))
+		.map(({ message }) => message);
 }
 
 /**
