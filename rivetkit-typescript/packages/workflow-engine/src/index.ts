@@ -93,6 +93,7 @@ export type {
 	WorkflowContextInterface,
 	WorkflowFunction,
 	WorkflowHandle,
+	WorkflowMessageDriver,
 	WorkflowResult,
 	WorkflowRunMode,
 	WorkflowState,
@@ -116,7 +117,6 @@ import {
 	deserializeWorkflowOutput,
 	deserializeWorkflowState,
 	serializeEntryMetadata,
-	serializeMessage,
 	serializeWorkflowInput,
 	serializeWorkflowState,
 } from "../schemas/serde.js";
@@ -133,19 +133,25 @@ import {
 } from "./errors.js";
 import {
 	buildEntryMetadataPrefix,
-	buildMessageKey,
 	buildWorkflowErrorKey,
 	buildWorkflowInputKey,
 	buildWorkflowOutputKey,
 	buildWorkflowStateKey,
 } from "./keys.js";
-import { flush, generateId, loadMetadata, loadStorage } from "./storage.js";
+import {
+	createDefaultMessageDriver,
+	flush,
+	generateId,
+	loadMetadata,
+	loadStorage,
+} from "./storage.js";
 import type {
 	RollbackContextInterface,
 	RunWorkflowOptions,
 	Storage,
 	WorkflowFunction,
 	WorkflowHandle,
+	WorkflowMessageDriver,
 	WorkflowResult,
 	WorkflowRunMode,
 	WorkflowState,
@@ -297,6 +303,7 @@ async function executeRollback<TInput, TOutput>(
 	workflowFn: WorkflowFunction<TInput, TOutput>,
 	input: TInput,
 	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	storage: Storage,
 ): Promise<void> {
@@ -305,6 +312,7 @@ async function executeRollback<TInput, TOutput>(
 		workflowId,
 		storage,
 		driver,
+		messageDriver,
 		undefined,
 		abortController,
 		"rollback",
@@ -465,6 +473,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 	workflowFn: WorkflowFunction<TInput, TOutput>,
 	input: TInput,
 	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	runtime: LiveRuntime,
 ): Promise<WorkflowResult<TOutput>> {
@@ -476,6 +485,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			workflowFn,
 			input,
 			driver,
+			messageDriver,
 			abortController,
 		);
 		lastResult = result;
@@ -486,11 +496,21 @@ async function executeLiveWorkflow<TInput, TOutput>(
 
 		if (result.waitingForMessages && result.waitingForMessages.length > 0) {
 			try {
-				await waitForMessage(
-					runtime,
-					result.waitingForMessages,
-					abortController.signal,
-				);
+				if (driver.waitForMessages) {
+					await awaitWithEviction(
+						driver.waitForMessages(
+							result.waitingForMessages,
+							abortController.signal,
+						),
+						abortController.signal,
+					);
+				} else {
+					await waitForMessage(
+						runtime,
+						result.waitingForMessages,
+						abortController.signal,
+					);
+				}
 			} catch (error) {
 				if (error instanceof EvictedError) {
 					return lastResult;
@@ -527,6 +547,8 @@ export function runWorkflow<TInput, TOutput>(
 	driver: EngineDriver,
 	options: RunWorkflowOptions = {},
 ): WorkflowHandle<TOutput> {
+	const messageDriver =
+		driver.messageDriver ?? createDefaultMessageDriver(driver);
 	const abortController = new AbortController();
 	const mode: WorkflowRunMode = options.mode ?? "yield";
 	const liveRuntime = mode === "live" ? createLiveRuntime() : undefined;
@@ -538,6 +560,7 @@ export function runWorkflow<TInput, TOutput>(
 					workflowFn,
 					input,
 					driver,
+					messageDriver,
 					abortController,
 					liveRuntime,
 				)
@@ -546,6 +569,7 @@ export function runWorkflow<TInput, TOutput>(
 					workflowFn,
 					input,
 					driver,
+					messageDriver,
 					abortController,
 				);
 
@@ -555,15 +579,12 @@ export function runWorkflow<TInput, TOutput>(
 
 		async message(name: string, data: unknown): Promise<void> {
 			const messageId = generateId();
-			await driver.set(
-				buildMessageKey(messageId),
-				serializeMessage({
-					id: messageId,
-					name,
-					data,
-					sentAt: Date.now(),
-				}),
-			);
+			await messageDriver.addMessage({
+				id: messageId,
+				name,
+				data,
+				sentAt: Date.now(),
+			});
 
 			if (liveRuntime) {
 				notifyMessage(liveRuntime, name);
@@ -677,9 +698,10 @@ async function executeWorkflow<TInput, TOutput>(
 	workflowFn: WorkflowFunction<TInput, TOutput>,
 	input: TInput,
 	driver: EngineDriver,
+	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 ): Promise<WorkflowResult<TOutput>> {
-	const storage = await loadStorage(driver);
+	const storage = await loadStorage(driver, messageDriver);
 
 	// Check if workflow was cancelled
 	if (storage.state === "cancelled") {
@@ -709,6 +731,7 @@ async function executeWorkflow<TInput, TOutput>(
 				workflowFn,
 				effectiveInput,
 				driver,
+				messageDriver,
 				abortController,
 				storage,
 			);
@@ -735,6 +758,7 @@ async function executeWorkflow<TInput, TOutput>(
 		workflowId,
 		storage,
 		driver,
+		messageDriver,
 		undefined,
 		abortController,
 	);
@@ -783,18 +807,19 @@ async function executeWorkflow<TInput, TOutput>(
 
 		// Unrecoverable error
 		storage.error = extractErrorInfo(error);
-		storage.state = "rolling_back";
-		await flush(storage, driver);
+			storage.state = "rolling_back";
+			await flush(storage, driver);
 
-		try {
-			await executeRollback(
-				workflowId,
-				workflowFn,
-				effectiveInput,
-				driver,
-				abortController,
-				storage,
-			);
+			try {
+				await executeRollback(
+					workflowId,
+					workflowFn,
+					effectiveInput,
+					driver,
+					messageDriver,
+					abortController,
+					storage,
+				);
 		} catch (rollbackError) {
 			if (rollbackError instanceof EvictedError) {
 				return { state: storage.state };

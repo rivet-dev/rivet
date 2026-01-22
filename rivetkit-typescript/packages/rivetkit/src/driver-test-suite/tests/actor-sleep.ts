@@ -283,7 +283,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			}
 
 			// Connect WebSocket
-			const ws = await sleepActor.websocket();
+			const ws = await sleepActor.webSocket();
 
 			await new Promise<void>((resolve, reject) => {
 				ws.onopen = () => resolve();
@@ -292,7 +292,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 
 			// Wait for connection message
 			await new Promise<void>((resolve) => {
-				ws.onmessage = (event) => {
+				ws.onmessage = (event: { data: string }) => {
 					const data = JSON.parse(event.data);
 					if (data.type === "connected") {
 						resolve();
@@ -307,7 +307,7 @@ export function runActorSleepTests(driverTestConfig: DriverTestConfig) {
 			ws.send(JSON.stringify({ type: "getCounts" }));
 
 			const counts = await new Promise<any>((resolve) => {
-				ws.onmessage = (event) => {
+				ws.onmessage = (event: { data: string }) => {
 					const data = JSON.parse(event.data);
 					if (data.type === "counts") {
 						resolve(data);
