@@ -5,10 +5,16 @@ import type { Registry } from "@/registry";
 import type { Conn, ConnId } from "../../conn/mod";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../../database";
 import type { ActorDefinition, AnyActorDefinition } from "../../definition";
-import type { ActorInstance, SaveStateOptions } from "../../instance/mod";
+import type {
+	ActorInstance,
+	AnyActorInstance,
+	SaveStateOptions,
+} from "../../instance/mod";
 import { ActorKv } from "../../instance/kv";
 import { ActorQueue } from "../../instance/queue";
 import type { Schedule } from "../../schedule";
+
+export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol("actorContextInternal");
 
 /**
  * ActorContext class that provides access to actor methods and state
@@ -21,6 +27,7 @@ export class ActorContext<
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
 > {
+	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyActorInstance;
 	#actor: ActorInstance<
 		TState,
 		TConnParams,
@@ -45,6 +52,7 @@ export class ActorContext<
 		>,
 	) {
 		this.#actor = actor;
+		this[ACTOR_CONTEXT_INTERNAL_SYMBOL] = actor as AnyActorInstance;
 	}
 
 	/**
@@ -195,6 +203,15 @@ export class ActorContext<
 	 */
 	waitUntil(promise: Promise<void>): void {
 		this.#actor.waitUntil(promise);
+	}
+
+	/**
+	 * Prevents the actor from sleeping until promise is complete.
+	 * Returns the resolved value and resets sleep timer on completion.
+	 * Unlike waitUntil, errors are propagated to the caller.
+	 */
+	keepAwake<T>(promise: Promise<T>): Promise<T> {
+		return this.#actor.keepAwake(promise);
 	}
 
 	/**

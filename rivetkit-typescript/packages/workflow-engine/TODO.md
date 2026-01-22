@@ -2,6 +2,26 @@
 
 - todo
 
+## caffeination
+
+- todo
+
+## rename listen
+
+- rename to the queue-based handlers (next)
+
+## review workflow state vs actors tate
+
+## review variables available in workflow context that should not be
+
+## review where listen signals are buffered -> we should not buffer them in the wf engince since they're already buffered in actor
+
+## handle actor caffeination
+
+## should the run method put actor to sleep when finished instead of crashing it?
+
+## integrate pino loggic
+
 ## test migrating workflows
 
 - run workfklow code a
