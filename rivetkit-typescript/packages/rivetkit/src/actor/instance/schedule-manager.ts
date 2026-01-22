@@ -261,7 +261,8 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				});
 
 				// Look up the action function
-				const fn = this.#config.actions[event.action];
+				const actions = this.#config.actions ?? {};
+				const fn = actions[event.action];
 
 				if (!fn) {
 					throw new Error(
