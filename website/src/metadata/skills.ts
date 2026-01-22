@@ -85,8 +85,8 @@ export async function renderSkillFile(): Promise<string> {
 
 	const frontmatter = [
 		"---",
-		`name: ${SKILL_NAME}`,
-		`description: ${SKILL_DESCRIPTION}`,
+		`name: "${SKILL_NAME}"`,
+		`description: "${SKILL_DESCRIPTION}"`,
 		"---",
 		"",
 	].join("\n");
