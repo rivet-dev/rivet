@@ -4,10 +4,6 @@
 		"lib": ["esnext"],
 		"module": "esnext",
 		"moduleResolution": "bundler",
-		"baseUrl": ".",
-		"paths": {
-			"@rivetkit/effect": ["./src/effect/index.ts"]
-		},
 		"types": ["node"],
 		"noEmit": true,
 		"strict": true,

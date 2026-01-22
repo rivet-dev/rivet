@@ -1,18 +1,12 @@
 import { setup } from "rivetkit";
-import { counter } from "./counter.ts";
-import { user } from "./user.ts";
-import { lifecycleDemo } from "./lifecycle-demo.ts";
-import { simple } from "./simple.ts";
+import { fetchActor } from "./fetch-actor.ts";
+import { queueProcessor } from "./queue-processor.ts";
 
-// Re-export individual actors
-export { counter } from "./counter.ts";
-export { user } from "./user.ts";
-export { lifecycleDemo } from "./lifecycle-demo.ts";
-export { simple } from "./simple.ts";
+export { fetchActor } from "./fetch-actor.ts";
+export { queueProcessor } from "./queue-processor.ts";
 
-// Registry setup with all actors
 export const registry = setup({
-	use: { counter, user, lifecycleDemo, simple },
+	use: { fetchActor, queueProcessor },
 });
 
 export type Registry = typeof registry;

@@ -1,6 +1,6 @@
 import { actor } from "rivetkit";
 
-// Simple actor - plain functions without Effect wrappers for debugging
+// Simple actor - plain functions without Effect wrappers for comparison
 export const simple = actor({
 	state: {
 		value: 0,

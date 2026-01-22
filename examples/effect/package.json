@@ -9,18 +9,17 @@
 		"tags": ["functional"],
 		"noFrontend": true
 	},
-	"license": "Apache-2.0",
+	"license": "MIT",
 	"scripts": {
 		"dev": "npx srvx --import tsx src/server.ts",
 		"start": "npx srvx --import tsx src/server.ts",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run",
 		"build": "tsup"
 	},
 	"dependencies": {
-		"@effect/workflow": "^0.15.1",
 		"@hono/node-server": "^1.14.0",
 		"@hono/node-ws": "^1.1.0",
+		"@rivetkit/effect": "*",
 		"effect": "^3.19.9",
 		"hono": "^4.7.6",
 		"rivetkit": "*",
@@ -31,7 +30,6 @@
 		"@types/node": "^22.13.9",
 		"tsup": "^8.4.0",
 		"tsx": "^3.12.7",
-		"typescript": "^5.7.3",
-		"vitest": "^3.2.4"
+		"typescript": "^5.7.3"
 	}
 }

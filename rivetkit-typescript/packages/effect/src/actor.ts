@@ -2,10 +2,6 @@ import { Context, Effect } from "effect";
 import type { ActorContext } from "rivetkit";
 import type { YieldWrap } from "effect/Utils";
 
-// Local type alias to work around AnyDatabaseProvider not being exported
-// AnyDatabaseProvider = DatabaseProvider<any> | undefined
-type AnyDB = undefined;
-
 // Context tag for accessing ActorContext within Effects
 export const ActorContextTag =
 	Context.GenericTag<ActorContext<any, any, any, any, any, any>>(
@@ -18,9 +14,8 @@ export const context = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(): Effect.Effect<
-	ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	never,
 	typeof ActorContextTag
 > => ActorContextTag as any;
@@ -31,9 +26,8 @@ export const state = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<TState, never, never> => Effect.succeed(c.state);
 
 export const updateState = <
@@ -42,9 +36,8 @@ export const updateState = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	f: (state: TState) => void,
 ): Effect.Effect<void, never, never> => Effect.sync(() => f(c.state));
 
@@ -54,9 +47,8 @@ export const vars = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<TVars, never, never> => Effect.succeed(c.vars);
 
 export const updateVars = <
@@ -65,9 +57,8 @@ export const updateVars = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	f: (vars: TVars) => void,
 ): Effect.Effect<void, never, never> => Effect.sync(() => f(c.vars));
 
@@ -77,10 +68,9 @@ export const broadcast = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 	Args extends Array<unknown> = unknown[],
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	name: string,
 	...args: Args
 ): Effect.Effect<void, never, never> =>
@@ -92,10 +82,9 @@ export const getLog = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Effect.succeed(c.log);
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed(c.log);
 
 export const getActorId = <
 	TState,
@@ -103,9 +92,8 @@ export const getActorId = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<string, never, never> => Effect.succeed(c.actorId);
 
 export const getName = <
@@ -114,9 +102,8 @@ export const getName = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<string, never, never> => Effect.succeed(c.name);
 
 export const getKey = <
@@ -125,10 +112,9 @@ export const getKey = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Effect.succeed(c.key);
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown[], never, never> => Effect.succeed(c.key);
 
 export const getRegion = <
 	TState,
@@ -136,9 +122,8 @@ export const getRegion = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<string, never, never> => Effect.succeed(c.region);
 
 export const getSchedule = <
@@ -147,10 +132,9 @@ export const getSchedule = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Effect.succeed(c.schedule);
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed(c.schedule);
 
 export const getConns = <
 	TState,
@@ -158,10 +142,9 @@ export const getConns = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Effect.succeed(c.conns);
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed(c.conns);
 
 export const getClient = <
 	TState,
@@ -169,10 +152,9 @@ export const getClient = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Effect.succeed(c.client());
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed(c.client());
 
 export const getDb = <
 	TState,
@@ -180,10 +162,29 @@ export const getDb = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Effect.succeed(c.db);
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed(c.db);
+
+export const getKv = <
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+>(
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed(c.kv);
+
+export const getQueue = <
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+>(
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
+): Effect.Effect<unknown, never, never> => Effect.succeed((c as any).queue);
 
 export const saveState = <
 	TState,
@@ -191,9 +192,8 @@ export const saveState = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	opts: Parameters<typeof c.saveState>[0],
 ): Effect.Effect<void, never, never> => Effect.promise(() => c.saveState(opts));
 
@@ -203,11 +203,10 @@ export const waitUntil = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 	A = any,
 	E = any,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 	effect: Effect.Effect<A, E, never>,
 ): Effect.Effect<void, never, never> =>
 	Effect.sync(() => {
@@ -221,9 +220,8 @@ export const getAbortSignal = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<AbortSignal, never, never> => Effect.succeed(c.abortSignal);
 
 export const sleep = <
@@ -232,9 +230,8 @@ export const sleep = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<void, never, never> => Effect.sync(() => c.sleep());
 
 export const destroy = <
@@ -243,9 +240,8 @@ export const destroy = <
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 >(
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ): Effect.Effect<void, never, never> => Effect.sync(() => c.destroy());
 
 export function effect<
@@ -254,7 +250,6 @@ export function effect<
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase extends AnyDB = AnyDB,
 	AEff = void,
 >(
 	genFn: (
@@ -264,11 +259,11 @@ export function effect<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			undefined
 		>,
 	) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
 ): (
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 ) => Promise<AEff> {
 	return (c) => {
 		const gen = genFn(c);
@@ -283,53 +278,11 @@ export function effect<
 			c,
 		) as Effect.Effect<AEff, any, never>;
 
-		// Make workflow execution durable by using waitUntil
-		const workflowPromise = Effect.runPromise(withContext);
-		c.waitUntil(workflowPromise.then(() => {}));
+		// Make execution durable by using waitUntil
+		const effectPromise = Effect.runPromise(withContext);
+		c.waitUntil(effectPromise.then(() => {}));
 
-		return workflowPromise;
+		return effectPromise;
 	};
 }
 
-export function workflow<
-	TState,
-	TConnParams,
-	TConnState,
-	TVars,
-	TInput,
-	TDatabase extends AnyDB = AnyDB,
-	AEff = void,
->(
-	genFn: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	) => Generator<YieldWrap<Effect.Effect<any, any, any>>, AEff, never>,
-): (
-	c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-) => Promise<AEff> {
-	return (c) => {
-		const gen = genFn(c);
-		const eff = Effect.gen<YieldWrap<Effect.Effect<any, any, any>>, AEff>(
-			() => gen,
-		);
-
-		// Provide ActorContext via Effect Context
-		const withContext = Effect.provideService(
-			eff,
-			ActorContextTag,
-			c,
-		) as Effect.Effect<AEff, any, never>;
-
-		// Make workflow execution durable by using waitUntil
-		const workflowPromise = Effect.runPromise(withContext);
-		c.waitUntil(workflowPromise.then(() => {}));
-
-		return workflowPromise;
-	};
-}

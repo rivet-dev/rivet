@@ -249,7 +249,6 @@ export class ActorHandleRaw {
 	async resolve(): Promise<string> {
 		if ("getForKey" in this.#actorQuery) {
 			const name = this.#actorQuery.getForKey.name;
-			const key = this.#actorQuery.getForKey.key;
 
 			// Query the actor to get the id
 			const { actorId } = await queryActor(
@@ -261,8 +260,21 @@ export class ActorHandleRaw {
 			this.#actorQuery = { getForId: { actorId, name } };
 
 			return actorId;
+		} else if ("getOrCreateForKey" in this.#actorQuery) {
+			const name = this.#actorQuery.getOrCreateForKey.name;
+
+			// Query the actor to get the id (will create if doesn't exist)
+			const { actorId } = await queryActor(
+				undefined,
+				this.#actorQuery,
+				this.#driver,
+			);
+
+			this.#actorQuery = { getForId: { actorId, name } };
+
+			return actorId;
 		} else if ("getForId" in this.#actorQuery) {
-			// SKip since it's already resolved
+			// Skip since it's already resolved
 			return this.#actorQuery.getForId.actorId;
 		} else if ("create" in this.#actorQuery) {
 			// Cannot create a handle with this query
