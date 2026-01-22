@@ -118,6 +118,8 @@ export async function ensureEngineProcess(
 			// Reduce shutdown durations for faster development iteration (in seconds)
 			RIVET__RUNTIME__WORKER_SHUTDOWN_DURATION: "1",
 			RIVET__RUNTIME__GUARD_SHUTDOWN_DURATION: "1",
+			// Force exit after this duration (must be > worker and guard shutdown durations)
+			RIVET__RUNTIME__FORCE_SHUTDOWN_DURATION: "2",
 		},
 	});
 
