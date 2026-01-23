@@ -14,7 +14,7 @@ import {
 	createGitHubRelease,
 	validateGit,
 } from "./git";
-import { publishSdk } from "./sdk";
+import { EXCLUDED_RIVETKIT_PACKAGES, publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
 import { assert, assertEquals, assertExists, fetchGitRef, versionOrCommitToRef } from "./utils";
 
@@ -183,9 +183,13 @@ async function runBuildAndChecks(opts: ReleaseOpts, { ci }: BuildAndCheckOpts) {
 	const ciLabel = ci ? "CI" : "Local";
 	console.log(`Running ${ciLabel} build and checks...`);
 
-	// Build exclusion filters for CI (excludes website, mcp-hub, engine-frontend)
+	// Build exclusion filters for CI (excludes website and packages that shouldn't be built in CI)
 	const excludeFilters = ci
-		? ["-F", "!rivet-site-astro", "-F", "!@rivetkit/engine-frontend", "-F", "!@rivetkit/mcp-hub"]
+		? [
+				"-F",
+				"!rivet-site-astro",
+				...EXCLUDED_RIVETKIT_PACKAGES.flatMap((pkg) => ["-F", `!${pkg}`]),
+			]
 		: [];
 
 	// Type check
