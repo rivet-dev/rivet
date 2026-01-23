@@ -289,7 +289,6 @@ const STEPS = [
 	"validate-reuse-version",
 	"run-type-check",
 	"run-cargo-check",
-	"build-website",
 	"build-js-artifacts",
 	"publish-sdk",
 	"tag-docker",
@@ -327,7 +326,7 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 	],
 	// These steps validate the repository and build JS artifacts before
 	// triggering release.
-	"setup-ci": ["validate-reuse-version", "run-type-check", "run-cargo-check", "build-website", "build-js-artifacts"],
+	"setup-ci": ["validate-reuse-version", "run-type-check", "run-cargo-check", "build-js-artifacts"],
 	// These steps run after the required artifacts have been successfully built.
 	"complete-ci": [
 		"publish-sdk",
@@ -600,11 +599,6 @@ async function main() {
 	if (shouldRunStep("run-cargo-check")) {
 		console.log("==> Running Cargo Check");
 		await runCargoCheck(releaseOpts);
-	}
-
-	if (shouldRunStep("build-website")) {
-		console.log("==> Building Website");
-		await buildWebsite(releaseOpts);
 	}
 
 	if (shouldRunStep("build-js-artifacts")) {
