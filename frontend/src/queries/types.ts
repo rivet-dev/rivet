@@ -26,12 +26,11 @@ export const Changelog = z.array(ChangelogItem);
 export type Changelog = z.infer<typeof Changelog>;
 export type ChangelogItem = z.infer<typeof ChangelogItem>;
 
-
-export type RivetActorError = 
-		| string
-		| null
-		| object
-		| { runner_id: string }
-		| { serverless_http_error: unknown }
-		| { serverless_connection_error: unknown }
-		| { serverless_invalid_sse_payload: unknown };
+export type RivetActorError =
+	| string
+	| null
+	| object
+	| { runner_id: string }
+	| { serverless_http_error: unknown }
+	| { serverless_connection_error: unknown }
+	| { serverless_invalid_sse_payload: unknown };

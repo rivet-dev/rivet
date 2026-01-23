@@ -205,27 +205,9 @@ export function GettingStarted({
 						onSubmit={() => {}}
 						onPartialSubmit={async ({ stepper, values }) => {
 							if (stepper.current.id === "backend") {
-								const status =
-									await queryClient.ensureQueryData(
-										dataProvider.runnerHealthCheckQueryOptions(
-											{
-												runnerUrl:
-													ConnectServerlessForm.endpointSchema.parse(
-														values.endpoint,
-													),
-												headers: Object.fromEntries(
-													values.headers,
-												),
-											},
-										),
-									);
-
 								const config = await buildServerlessConfig(
 									dataProvider,
-									{
-										...values,
-										endpoint: status.url || values.endpoint,
-									},
+									values,
 									{ provider: values.provider },
 								);
 
