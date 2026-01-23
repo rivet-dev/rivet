@@ -55,6 +55,8 @@ export const Route = createFileRoute(
 			skipOnboarding: opts.search.skipOnboarding,
 			backendOnboardingSuccess: opts.search.backendOnboardingSuccess,
 			onboardingSuccess: opts.search.onboardingSuccess,
+			flow: opts.search.flow,
+			noTemplate: opts.search.noTemplate,
 		};
 	},
 	async loader({ params, deps, context }) {
@@ -98,7 +100,7 @@ export const Route = createFileRoute(
 function RouteComponent() {
 	const { displayOnboarding, displayBackendOnboarding } =
 		Route.useLoaderData();
-	const { template, noTemplate } = Route.useSearch();
+	const { template, noTemplate, flow, provider } = Route.useSearch();
 
 	if (displayOnboarding || displayBackendOnboarding) {
 		return (
@@ -109,6 +111,8 @@ function RouteComponent() {
 					noTemplate={noTemplate}
 					displayOnboarding={displayOnboarding}
 					displayBackendOnboarding={displayBackendOnboarding}
+					flow={flow}
+					provider={provider}
 				/>
 
 				<CloudNamespaceModals />

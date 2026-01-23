@@ -14,7 +14,10 @@
 		"build:cloud": "vite build --mode=production --config vite.cloud.config.ts",
 		"preview:inspector": "vite preview --config vite.inspector.config.ts",
 		"preview:engine": "vite preview --config vite.engine.config.ts",
-		"preview:cloud": "vite preview --config vite.cloud.config.ts"
+		"preview:cloud": "vite preview --config vite.cloud.config.ts",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:e2e:update-snapshots": "playwright test --update-snapshots"
 	},
 	"dependencies": {
 		"@clerk/clerk-js": "^5.97",
@@ -141,5 +144,10 @@
 		"vite-plugin-favicons-inject": "^2.2.0",
 		"vite-tsconfig-paths": "^5.1.4",
 		"zod": "^3.25.76"
+	},
+	"devDependencies": {
+		"@clerk/testing": "^1.13.30",
+		"@playwright/test": "^1.57.0",
+		"dotenv": "^17.2.3"
 	}
 }
