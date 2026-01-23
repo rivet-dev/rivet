@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium
+
       - name: Build website (generates skills)
         run: pnpm build -F rivet-website
 
