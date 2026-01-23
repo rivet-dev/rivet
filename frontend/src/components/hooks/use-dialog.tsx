@@ -286,9 +286,13 @@ function DialogErrorFallback({
 				</Title>
 			</Header>
 			<Content>
-				{"statusCode" in error && error.statusCode === 404
-					? "The resource you are looking for does not exist or you do not have access to it."
-					: 'description' in error ? <>{String(error.description)}</> : "An unexpected error occurred. Please try again later."}
+				{"statusCode" in error && error.statusCode === 404 ? (
+					"The resource you are looking for does not exist or you do not have access to it."
+				) : "description" in error ? (
+					<>{String(error.description)}</>
+				) : (
+					"An unexpected error occurred. Please try again later."
+				)}
 			</Content>
 			<Footer>
 				<Button variant="secondary" onClick={resetError}>

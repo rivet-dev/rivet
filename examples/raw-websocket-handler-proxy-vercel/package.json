@@ -1,0 +1,41 @@
+{
+	"name": "example-raw-websocket-handler-proxy-vercel",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vercel dev",
+		"build": "vite build",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.19.1",
+		"@hono/node-ws": "^1.2.0",
+		"@rivetkit/react": "^2.0.38",
+		"hono": "^4.7.0",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1",
+		"rivetkit": "^2.0.38",
+		"ws": "^8.18.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"@types/react": "^18.3.16",
+		"@types/react-dom": "^18.3.5",
+		"@types/ws": "^8.5.10",
+		"@vitejs/plugin-react": "^4.3.4",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2",
+		"vite": "^6.0.5",
+		"vitest": "^3.1.1"
+	},
+	"template": {
+		"technologies": [
+			"websocket",
+			"typescript"
+		],
+		"tags": [],
+		"frontendPort": 5173
+	},
+	"license": "MIT"
+}

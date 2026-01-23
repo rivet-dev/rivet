@@ -67,9 +67,8 @@ export type StepperFormValues<Steps extends Step[]> = z.TypeOf<
 	Steps[number]["schema"]
 >;
 
-export type ExtractSteps<T> = T extends StepperFormProps<infer Steps>
-	? Steps
-	: never;
+export type ExtractSteps<T> =
+	T extends StepperFormProps<infer Steps> ? Steps : never;
 
 export function StepperForm<const Steps extends Step[]>({
 	children,

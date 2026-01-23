@@ -145,6 +145,17 @@ export const buildServerlessConfig = async (
 	>,
 	{ provider }: { provider?: string } = {},
 ): Promise<Record<string, Rivet.RunnerConfig>> => {
+	const status = await queryClient.ensureQueryData(
+		dataProvider.runnerHealthCheckQueryOptions({
+			runnerUrl: ConnectServerlessForm.endpointSchema.parse(
+				values.endpoint,
+			),
+			headers: Object.fromEntries(values.headers),
+		}),
+	);
+
+	const endpoint = status.url || values.endpoint;
+
 	let existing: Record<string, Rivet.RunnerConfig> = {};
 	try {
 		const runnerConfig = await queryClient.fetchQuery(
@@ -163,7 +174,7 @@ export const buildServerlessConfig = async (
 
 	const config = {
 		serverless: {
-			url: endpointSchema.parse(values.endpoint),
+			url: endpoint,
 			maxRunners: values.maxRunners,
 			slotsPerRunner: values.slotsPerRunner,
 			runnersMargin: values.runnerMargin,

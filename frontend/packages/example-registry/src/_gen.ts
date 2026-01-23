@@ -9,6 +9,12 @@ export interface Template {
 	tags: string[];
 	noFrontend: boolean;
 	priority?: number;
+  providers: {
+    [key: string]: {
+      name: string;
+      deployUrl: string;
+    };
+  };
 }
 
 export const templates: Template[] = [
@@ -25,7 +31,13 @@ export const templates: Template[] = [
       "real-time"
     ],
     "noFrontend": false,
-    "priority": 100
+    "priority": 100,
+    "providers": {
+      "vercel": {
+        "name": "ai-agent-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fai-agent-vercel&project-name=ai-agent-vercel"
+      }
+    }
   },
   {
     "name": "hello-world",
@@ -40,7 +52,13 @@ export const templates: Template[] = [
       "starter"
     ],
     "noFrontend": false,
-    "priority": 100
+    "priority": 100,
+    "providers": {
+      "vercel": {
+        "name": "hello-world-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fhello-world-vercel&project-name=hello-world-vercel"
+      }
+    }
   },
   {
     "name": "chat-room",
@@ -55,7 +73,13 @@ export const templates: Template[] = [
       "real-time"
     ],
     "noFrontend": false,
-    "priority": 200
+    "priority": 200,
+    "providers": {
+      "vercel": {
+        "name": "chat-room-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fchat-room-vercel&project-name=chat-room-vercel"
+      }
+    }
   },
   {
     "name": "cursors",
@@ -70,7 +94,13 @@ export const templates: Template[] = [
       "real-time"
     ],
     "noFrontend": false,
-    "priority": 300
+    "priority": 300,
+    "providers": {
+      "vercel": {
+        "name": "cursors-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fcursors-vercel&project-name=cursors-vercel"
+      }
+    }
   },
   {
     "name": "ai-and-user-generated-actors-freestyle",
@@ -86,7 +116,8 @@ export const templates: Template[] = [
       "ai"
     ],
     "noFrontend": false,
-    "priority": 400
+    "priority": 400,
+    "providers": {}
   },
   {
     "name": "actor-actions",
@@ -98,7 +129,13 @@ export const templates: Template[] = [
     ],
     "tags": [],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "actor-actions-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Factor-actions-vercel&project-name=actor-actions-vercel"
+      }
+    }
   },
   {
     "name": "cross-actor-actions",
@@ -110,7 +147,13 @@ export const templates: Template[] = [
     ],
     "tags": [],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "cross-actor-actions-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fcross-actor-actions-vercel&project-name=cross-actor-actions-vercel"
+      }
+    }
   },
   {
     "name": "multi-region",
@@ -122,7 +165,13 @@ export const templates: Template[] = [
     ],
     "tags": [],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "multi-region-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fmulti-region-vercel&project-name=multi-region-vercel"
+      }
+    }
   },
   {
     "name": "raw-fetch-handler",
@@ -134,7 +183,13 @@ export const templates: Template[] = [
     ],
     "tags": [],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "raw-fetch-handler-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fraw-fetch-handler-vercel&project-name=raw-fetch-handler-vercel"
+      }
+    }
   },
   {
     "name": "raw-websocket-handler",
@@ -149,7 +204,13 @@ export const templates: Template[] = [
       "real-time"
     ],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "raw-websocket-handler-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fraw-websocket-handler-vercel&project-name=raw-websocket-handler-vercel"
+      }
+    }
   },
   {
     "name": "scheduling",
@@ -161,7 +222,13 @@ export const templates: Template[] = [
     ],
     "tags": [],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "scheduling-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fscheduling-vercel&project-name=scheduling-vercel"
+      }
+    }
   },
   {
     "name": "state",
@@ -173,7 +240,13 @@ export const templates: Template[] = [
     ],
     "tags": [],
     "noFrontend": false,
-    "priority": 1000
+    "priority": 1000,
+    "providers": {
+      "vercel": {
+        "name": "state-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fstate-vercel&project-name=state-vercel"
+      }
+    }
   },
   {
     "name": "cloudflare-workers",
@@ -185,7 +258,8 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {}
   },
   {
     "name": "cloudflare-workers-hono",
@@ -198,7 +272,8 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {}
   },
   {
     "name": "cursors-raw-websocket",
@@ -212,7 +287,13 @@ export const templates: Template[] = [
     "tags": [
       "real-time"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "cursors-raw-websocket-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fcursors-raw-websocket-vercel&project-name=cursors-raw-websocket-vercel"
+      }
+    }
   },
   {
     "name": "custom-serverless",
@@ -225,7 +306,13 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {
+      "vercel": {
+        "name": "custom-serverless-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fcustom-serverless-vercel&project-name=custom-serverless-vercel"
+      }
+    }
   },
   {
     "name": "drizzle",
@@ -239,7 +326,13 @@ export const templates: Template[] = [
     "tags": [
       "database"
     ],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {
+      "vercel": {
+        "name": "drizzle-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fdrizzle-vercel&project-name=drizzle-vercel"
+      }
+    }
   },
   {
     "name": "elysia",
@@ -251,7 +344,13 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {
+      "vercel": {
+        "name": "elysia-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Felysia-vercel&project-name=elysia-vercel"
+      }
+    }
   },
   {
     "name": "experimental-durable-streams-ai-agent",
@@ -267,7 +366,13 @@ export const templates: Template[] = [
       "real-time",
       "experimental"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "experimental-durable-streams-ai-agent-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fexperimental-durable-streams-ai-agent-vercel&project-name=experimental-durable-streams-ai-agent-vercel"
+      }
+    }
   },
   {
     "name": "hono",
@@ -279,7 +384,13 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {
+      "vercel": {
+        "name": "hono-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fhono-vercel&project-name=hono-vercel"
+      }
+    }
   },
   {
     "name": "hono-react",
@@ -294,7 +405,13 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "hono-react-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fhono-react-vercel&project-name=hono-react-vercel"
+      }
+    }
   },
   {
     "name": "kitchen-sink",
@@ -305,7 +422,13 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "kitchen-sink-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fkitchen-sink-vercel&project-name=kitchen-sink-vercel"
+      }
+    }
   },
   {
     "name": "native-websockets",
@@ -319,7 +442,13 @@ export const templates: Template[] = [
     "tags": [
       "real-time"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "native-websockets-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fnative-websockets-vercel&project-name=native-websockets-vercel"
+      }
+    }
   },
   {
     "name": "next-js",
@@ -334,7 +463,8 @@ export const templates: Template[] = [
     "tags": [
       "starter"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {}
   },
   {
     "name": "raw-websocket-handler-proxy",
@@ -346,7 +476,13 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "raw-websocket-handler-proxy-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fraw-websocket-handler-proxy-vercel&project-name=raw-websocket-handler-proxy-vercel"
+      }
+    }
   },
   {
     "name": "react",
@@ -358,7 +494,13 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "react-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Freact-vercel&project-name=react-vercel"
+      }
+    }
   },
   {
     "name": "stream",
@@ -371,7 +513,13 @@ export const templates: Template[] = [
     "tags": [
       "real-time"
     ],
-    "noFrontend": false
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "stream-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fstream-vercel&project-name=stream-vercel"
+      }
+    }
   },
   {
     "name": "trpc",
@@ -383,6 +531,12 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": true
+    "noFrontend": true,
+    "providers": {
+      "vercel": {
+        "name": "trpc-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Ftrpc-vercel&project-name=trpc-vercel"
+      }
+    }
   }
 ];
