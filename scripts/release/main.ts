@@ -187,7 +187,7 @@ async function runBuildAndChecks(opts: ReleaseOpts, { ci }: BuildAndCheckOpts) {
 	const excludeFilters = ci
 		? [
 				"-F",
-				"!rivet-site-astro",
+				"!rivet-website",
 				...EXCLUDED_RIVETKIT_PACKAGES.flatMap((pkg) => ["-F", `!${pkg}`]),
 			]
 		: [];

@@ -31,7 +31,7 @@ declare module "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js" {
 	}
 }
 
-declare module "rivet-site-astro/dist/metadata/docs.json" {
+declare module "rivet-website/dist/metadata/docs.json" {
 	const metadata: import("./types").DocsMetadata;
 	export default metadata;
 }

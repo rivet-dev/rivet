@@ -62,11 +62,11 @@ function loadDocsMetadata(): DocsMetadata {
 	// Fallback to dynamic import for workspace development
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		return require("rivet-site-astro/dist/metadata/docs.json") as DocsMetadata;
+		return require("rivet-website/dist/metadata/docs.json") as DocsMetadata;
 	} catch {
 		throw new Error(
 			"Could not load docs metadata. Either set DOCS_METADATA_PATH environment variable " +
-				"to point to a docs.json file, or ensure rivet-site-astro is built (run 'pnpm build' in website directory).",
+				"to point to a docs.json file, or ensure rivet-website is built (run 'pnpm build' in website directory).",
 		);
 	}
 }

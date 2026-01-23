@@ -1,0 +1,83 @@
+# Publishes generated skill files to rivet-dev/skills repository.
+#
+# To test this workflow:
+#   1. Trigger manually: gh workflow run skills.yml --repo rivet-gg/rivet
+#   2. Watch execution: gh run watch --repo rivet-gg/rivet
+#   3. Check logs if failed: gh run view --repo rivet-gg/rivet --log-failed
+#   4. Verify skills repo contents: gh api repos/rivet-dev/skills/contents --jq '.[].name'
+#   5. View latest commit: gh api repos/rivet-dev/skills/commits --jq '.[0].commit.message'
+
+name: Publish Skills
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'website/src/content/docs/**/*.mdx'
+      - 'website/src/metadata/skills.ts'
+      - 'website/src/metadata/skill-base.md'
+      - 'website/src/pages/metadata/skills/**'
+      - 'website/scripts/build.ts'
+  workflow_dispatch:  # Allows manual triggering for testing
+
+concurrency:
+  group: skills-publish
+  cancel-in-progress: true
+
+jobs:
+  publish-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter rivet-website exec playwright install chromium
+
+      - name: Build website (generates skills)
+        run: pnpm build -F rivet-website
+
+      - name: Checkout skills repo
+        uses: actions/checkout@v4
+        with:
+          repository: rivet-dev/skills
+          token: ${{ secrets.SKILLS_REPO_TOKEN }}
+          path: skills-repo
+
+      - name: Copy generated skills
+        run: |
+          # Only delete and replace the specific skill directories being updated
+          for skill_dir in website/dist/metadata/skills/*/; do
+            skill_name=$(basename "$skill_dir")
+            echo "Updating skill: $skill_name"
+            rm -rf "skills-repo/$skill_name"
+            cp -r "$skill_dir" "skills-repo/$skill_name"
+          done
+
+      - name: Commit and push
+        working-directory: skills-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update skills from rivet-gg/rivet@${{ github.sha }}"
+            git push
+          fi

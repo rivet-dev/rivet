@@ -30,7 +30,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.25.3",
-		"rivet-site-astro": "workspace:*",
+		"rivet-website": "workspace:*",
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
