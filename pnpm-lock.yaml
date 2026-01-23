@@ -2443,7 +2443,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.3
         version: 1.25.3(hono@4.11.3)(zod@3.25.76)
-      rivet-site-astro:
+      rivet-website:
         specifier: workspace:*
         version: link:../../../website
       zod:
