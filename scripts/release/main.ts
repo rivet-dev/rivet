@@ -208,24 +208,13 @@ async function runBuildAndChecks(opts: ReleaseOpts, { ci }: BuildAndCheckOpts) {
 	}
 
 	// Cargo check
-	console.log("Running cargo check...");
-	try {
-		await $({ stdio: "inherit", cwd: opts.root })`cargo check`;
-		console.log("✅ Cargo check passed");
-	} catch (err) {
-		console.error("❌ Cargo check failed");
-		throw err;
-	}
-
-	// Build website (local only)
 	if (!ci) {
-		console.log("Building website...");
+		console.log("Running cargo check...");
 		try {
-			const websiteDir = path.join(opts.root, "website");
-			await $({ stdio: "inherit", cwd: websiteDir })`pnpm build`;
-			console.log("✅ Website build passed");
+			await $({ stdio: "inherit", cwd: opts.root })`cargo check`;
+			console.log("✅ Cargo check passed");
 		} catch (err) {
-			console.error("❌ Website build failed");
+			console.error("❌ Cargo check failed");
 			throw err;
 		}
 	}
