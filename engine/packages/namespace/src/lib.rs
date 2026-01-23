@@ -11,6 +11,7 @@ pub fn registry() -> WorkflowResult<Registry> {
 
 	let mut registry = Registry::new();
 	registry.register_workflow::<namespace::Workflow>()?;
+	registry.register_workflow::<metrics_exporter::Workflow>()?;
 
 	Ok(registry)
 }

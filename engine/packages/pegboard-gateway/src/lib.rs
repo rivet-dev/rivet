@@ -156,7 +156,7 @@ impl PegboardGateway {
 			.context("failed to read body")?
 			.to_bytes();
 
-		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
+		let (mut stopped_sub, runner_protocol_version, _) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			record_req_metrics(
 				&ctx,
@@ -164,6 +164,7 @@ impl PegboardGateway {
 				self.actor_id,
 				Metric::HttpIngress(body_bytes.len()),
 			),
+			init_ns_metrics_exporter(&ctx, self.runner_id),
 		)?;
 
 		// Build subject to publish to
@@ -291,9 +292,10 @@ impl PegboardGateway {
 			}
 		}
 
-		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
+		let (mut stopped_sub, runner_protocol_version, _) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketOpen),
+			init_ns_metrics_exporter(&ctx, self.runner_id),
 		)?;
 
 		// Build subject to publish to
@@ -788,6 +790,28 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 			return Ok(HibernationResult::Close);
 		}
 	}
+}
+
+async fn init_ns_metrics_exporter(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
+	let namespace_id = ctx
+		.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(pegboard::keys::subspace());
+			tx.read(
+				&pegboard::keys::runner::NamespaceIdKey::new(runner_id),
+				Serializable,
+			)
+			.await
+		})
+		.await?;
+
+	ctx.workflow(namespace::workflows::metrics_exporter::Input { namespace_id })
+		.tag("namespace_id", namespace_id)
+		.unique()
+		.dispatch()
+		.await?;
+
+	Ok(())
 }
 
 enum Metric {

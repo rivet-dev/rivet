@@ -14,6 +14,7 @@ governor.workspace = true
 hyper-tls.workspace = true
 hyper.workspace = true
 lazy_static.workspace = true
+rdkafka.workspace = true
 reqwest.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true

@@ -10,6 +10,7 @@ pub mod cache;
 pub mod clickhouse;
 pub mod db;
 pub mod guard;
+pub mod kafka;
 pub mod logs;
 pub mod metrics;
 pub mod pegboard;
@@ -25,6 +26,7 @@ pub use cache::*;
 pub use clickhouse::*;
 pub use db::Database;
 pub use guard::*;
+pub use kafka::*;
 pub use logs::*;
 pub use metrics::*;
 pub use pegboard::*;
@@ -98,6 +100,9 @@ pub struct Root {
 	pub clickhouse: Option<ClickHouse>,
 
 	#[serde(default)]
+	pub kafka: Option<Kafka>,
+
+	#[serde(default)]
 	pub telemetry: Telemetry,
 
 	#[serde(default)]
@@ -121,6 +126,7 @@ impl Default for Root {
 			pubsub: None,
 			cache: None,
 			clickhouse: None,
+			kafka: None,
 			telemetry: Default::default(),
 			runtime: Default::default(),
 			metrics: Default::default(),
@@ -176,6 +182,10 @@ impl Root {
 
 	pub fn clickhouse(&self) -> Option<&ClickHouse> {
 		self.clickhouse.as_ref()
+	}
+
+	pub fn kafka(&self) -> Option<&Kafka> {
+		self.kafka.as_ref()
 	}
 
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {

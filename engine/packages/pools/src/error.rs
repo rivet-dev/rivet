@@ -6,6 +6,9 @@ pub enum Error {
 	#[error("missing clickhouse pool")]
 	MissingClickHousePool,
 
+	#[error("missing kafka pool")]
+	MissingKafkaPool,
+
 	#[error("missing udb pool")]
 	MissingUdbPool,
 

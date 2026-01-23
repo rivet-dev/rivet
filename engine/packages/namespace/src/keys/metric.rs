@@ -1,5 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
+use std::collections::HashMap;
 use universaldb::prelude::*;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -27,7 +28,7 @@ pub enum Metric {
 }
 
 impl Metric {
-	fn variant(&self) -> MetricVariant {
+	pub fn variant(&self) -> MetricVariant {
 		match self {
 			Metric::ActorAwake(_) => MetricVariant::ActorAwake,
 			Metric::TotalActors(_) => MetricVariant::TotalActors,
@@ -41,10 +42,41 @@ impl Metric {
 			Metric::ActiveRequests(_, _) => MetricVariant::ActiveRequests,
 		}
 	}
+
+	pub fn attributes(&self) -> HashMap<String, String> {
+		let entries = match self {
+			Metric::ActorAwake(actor_name) => vec![("actor_name".to_string(), actor_name.clone())],
+			Metric::TotalActors(actor_name) => vec![("actor_name".to_string(), actor_name.clone())],
+			Metric::KvStorageUsed(actor_name) => {
+				vec![("actor_name".to_string(), actor_name.clone())]
+			}
+			Metric::KvRead(actor_name) => vec![("actor_name".to_string(), actor_name.clone())],
+			Metric::KvWrite(actor_name) => vec![("actor_name".to_string(), actor_name.clone())],
+			Metric::AlarmsSet(actor_name) => vec![("actor_name".to_string(), actor_name.clone())],
+			Metric::GatewayIngress(actor_name, req_type) => vec![
+				("actor_name".to_string(), actor_name.clone()),
+				("type".to_string(), req_type.clone()),
+			],
+			Metric::GatewayEgress(actor_name, req_type) => vec![
+				("actor_name".to_string(), actor_name.clone()),
+				("type".to_string(), req_type.clone()),
+			],
+			Metric::Requests(actor_name, req_type) => vec![
+				("actor_name".to_string(), actor_name.clone()),
+				("type".to_string(), req_type.clone()),
+			],
+			Metric::ActiveRequests(actor_name, req_type) => vec![
+				("actor_name".to_string(), actor_name.clone()),
+				("type".to_string(), req_type.clone()),
+			],
+		};
+
+		entries.into_iter().collect()
+	}
 }
 
 #[derive(strum::FromRepr)]
-enum MetricVariant {
+pub enum MetricVariant {
 	ActorAwake = 0,
 	TotalActors = 1,
 	KvStorageUsed = 2,

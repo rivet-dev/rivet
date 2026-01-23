@@ -12,6 +12,7 @@ pub(crate) struct PoolsInner {
 	pub(crate) ups: Option<UpsPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
 	pub(crate) udb: Option<UdbPool>,
+	pub(crate) kafka_producer: Option<rdkafka::producer::FutureProducer>,
 }
 
 #[derive(Clone)]
@@ -30,11 +31,14 @@ impl Pools {
 		)?;
 		let clickhouse = crate::db::clickhouse::setup(&config)?;
 
+		let kafka_producer = crate::db::kafka::setup(&config)?;
+
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
 			ups: Some(ups),
 			clickhouse,
 			udb,
+			kafka_producer,
 		}));
 
 		Ok(pool)
@@ -57,6 +61,7 @@ impl Pools {
 			ups: Some(ups),
 			clickhouse: None,
 			udb,
+			kafka_producer: None,
 		}));
 
 		Ok(pool)
@@ -78,5 +83,12 @@ impl Pools {
 
 	pub fn udb(&self) -> Result<UdbPool> {
 		self.0.udb.clone().ok_or(Error::MissingUdbPool.into())
+	}
+
+	pub fn kafka(&self) -> Result<rdkafka::producer::FutureProducer> {
+		self.0
+			.kafka_producer
+			.clone()
+			.ok_or(Error::MissingKafkaPool.into())
 	}
 }

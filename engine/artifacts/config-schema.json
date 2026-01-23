@@ -95,6 +95,17 @@
         }
       ]
     },
+    "kafka": {
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Kafka"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "logs": {
       "default": null,
       "anyOf": [
@@ -428,6 +439,31 @@
         },
         "tls": {
           "$ref": "#/definitions/Tls"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Kafka": {
+      "type": "object",
+      "required": [
+        "ca_pem",
+        "password",
+        "url",
+        "username"
+      ],
+      "properties": {
+        "ca_pem": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "password": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "username": {
+          "type": "string"
         }
       },
       "additionalProperties": false

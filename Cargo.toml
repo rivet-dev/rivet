@@ -135,6 +135,10 @@ members = [
   vergen-gitcl = "1.0.0"
   reqwest-eventsource = "0.6.0"
 
+    [workspace.dependencies.rdkafka]
+    version = "0.38.0"
+    features = [ "ssl" ]
+
     [workspace.dependencies.vergen]
     version = "9.0.4"
     features = [ "build", "cargo", "rustc" ]
