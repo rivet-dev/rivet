@@ -95,18 +95,75 @@ See also the [raw fetch handler example](https://github.com/rivet-dev/rivet/tree
 
 Use the `.fetch()` method on an actor handle to send HTTP requests to the actor's `onRequest` handler. This can be executed from either your frontend or backend.
 
-```typescript
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+    state: { count: 0 },
+    onRequest: (c, request) => {
+        if (request.method === "POST") c.state.count++;
+        return Response.json(c.state);
+    },
+    actions: {}
+});
+
+export const registry = setup({ use: { counter } });
+```
+
+```typescript {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
 
-const client = createClient();
+const client = createClient<typeof registry>();
 
-const actor = client.counter.getOrCreate("my-counter");
+const actor = client.counter.getOrCreate(["my-counter"]);
 
 // .fetch() is WinterTC compliant, it accepts standard Request and returns standard Response
-const response = await actor.fetch("/increment", { method: "POST" });
+const response = await actor.fetch("/");
 const data = await response.json();
-console.log(data); // { count: 1 }
+console.log(data); // { count: 0 }
 ```
+</CodeGroup>
+
+### Via getGatewayUrl
+
+Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful when you need to use the URL with external tools or custom HTTP clients.
+
+<CodeGroup workspace>
+```typescript {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+    state: { count: 0 },
+    onRequest: (c, request) => {
+        if (request.method === "POST") c.state.count++;
+        return Response.json(c.state);
+    },
+    actions: {}
+});
+
+export const registry = setup({ use: { counter } });
+```
+
+```typescript {{"title":"client.ts"}}
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+
+const actor = client.counter.getOrCreate(["my-counter"]);
+
+// Get the raw gateway URL
+const gatewayUrl = await actor.getGatewayUrl();
+// gatewayUrl = "https://...rivet.dev/..."
+
+// Use with native fetch
+const response = await fetch(`${gatewayUrl}/request/`);
+const data = await response.json();
+console.log(data); // { count: 0 }
+```
+</CodeGroup>
 
 ### Via HTTP API
 

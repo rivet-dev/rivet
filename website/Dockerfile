@@ -17,7 +17,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Copy workspace configuration files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json tsconfig.base.json tsup.base.ts ./
 
 # Copy all workspace packages that website depends on
 COPY website/ website/
@@ -26,7 +26,12 @@ COPY frontend/packages/icons/ frontend/packages/icons/
 COPY frontend/packages/example-registry/ frontend/packages/example-registry/
 COPY examples/ examples/
 COPY engine/artifacts/ engine/artifacts/
+COPY engine/sdks/typescript/ engine/sdks/typescript/
 COPY rivetkit-typescript/artifacts/ rivetkit-typescript/artifacts/
+COPY rivetkit-typescript/packages/ rivetkit-typescript/packages/
+COPY rivetkit-openapi/ rivetkit-openapi/
+COPY rivetkit-asyncapi/ rivetkit-asyncapi/
+COPY shared/typescript/ shared/typescript/
 
 # Fetch LFS files if build platform doesn't support Git LFS natively
 COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh

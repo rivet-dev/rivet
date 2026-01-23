@@ -1,8 +1,45 @@
 ---
-title: "Skill File"
-description: "Learn about the Rivet skill file format for AI assistant integration."
+title: "Skills"
+description: "Learn how to use Rivet skills with AI coding assistants for enhanced development."
 skill: false
 ---
 
-TODO
+Skills are documentation files that help AI coding assistants (like Claude Code, Cursor, Windsurf, and others) understand how to work with Rivet. When you add skills, your AI assistant gets access to Rivet-specific knowledge, best practices, and code patterns.
+
+## Installation
+
+Add Rivet skills to your project:
+
+```sh
+npx skills add rivet-dev/skills
+```
+
+This command downloads the latest Rivet skills and makes them available to your AI coding assistant.
+
+## What Skills Provide
+
+- **Actor patterns**: Best practices for designing and implementing actors
+- **State management**: How to work with persistent state effectively
+- **Realtime features**: Implementing broadcasts, events, and connections
+- **Deployment guides**: Platform-specific deployment instructions
+- **Error handling**: Common issues and their solutions
+
+## Supported AI Assistants
+
+Skills work with any AI coding assistant that supports the skills format, including:
+
+- Claude Code
+- Cursor
+- Windsurf
+- And others
+
+## Updating Skills
+
+To get the latest skills:
+
+```sh
+npx skills add rivet-dev/skills
+```
+
+Running this command again will update your skills to the latest version.
 
