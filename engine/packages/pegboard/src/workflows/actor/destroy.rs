@@ -38,7 +38,7 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 
 		let bump_res = ctx
 			.v(2)
-			.signal(crate::workflows::runner_pool::Bump {})
+			.signal(crate::workflows::runner_pool::Bump::default())
 			.to_workflow::<crate::workflows::runner_pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", res.runner_name_selector.clone())

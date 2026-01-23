@@ -4,7 +4,7 @@ use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_types::{keys, runner_configs::RunnerConfigKind};
 
-use super::{runner_pool_error_tracker, serverless};
+use super::{runner_pool_error_tracker, runner_pool_metadata_poller, serverless};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -27,6 +27,17 @@ struct RunnerState {
 pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.v(2)
 		.workflow(runner_pool_error_tracker::Input {
+			namespace_id: input.namespace_id,
+			runner_name: input.runner_name.clone(),
+		})
+		.tag("namespace_id", input.namespace_id)
+		.tag("runner_name", &input.runner_name)
+		.unique()
+		.dispatch()
+		.await?;
+
+	ctx.v(3)
+		.workflow(runner_pool_metadata_poller::Input {
 			namespace_id: input.namespace_id,
 			runner_name: input.runner_name.clone(),
 		})
@@ -132,7 +143,17 @@ pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Resul
 								.await?;
 						}
 					}
-					Main::Bump(_) => {}
+					Main::Bump(bump) => {
+						if bump.endpoint_config_changed {
+							// Forward to metadata poller to trigger immediate metadata fetch
+							ctx.signal(runner_pool_metadata_poller::EndpointConfigChanged {})
+								.to_workflow::<runner_pool_metadata_poller::Workflow>()
+								.tag("namespace_id", input.namespace_id)
+								.tag("runner_name", &input.runner_name)
+								.send()
+								.await?;
+						}
+					}
 				}
 			}
 
@@ -243,8 +264,11 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 }
 
 #[signal("pegboard_runner_pool_bump")]
-#[derive(Debug)]
-pub struct Bump {}
+#[derive(Debug, Default)]
+pub struct Bump {
+	#[serde(default)]
+	pub endpoint_config_changed: bool,
+}
 
 #[signal("pegboard_outbound_conn_drain_started")]
 pub struct OutboundConnDrainStarted {

@@ -54,8 +54,11 @@ export async function configureServerlessRunner(
 				request_lifespan: customConfig.requestLifespan ?? 15 * 60,
 				runners_margin: customConfig.runnersMargin ?? 0,
 				slots_per_runner: customConfig.slotsPerRunner ?? 1,
+				metadata_poll_interval: customConfig.metadataPollInterval ?? 1000,
 			},
 			metadata: customConfig.metadata ?? {},
+			drain_on_version_upgrade: customConfig.drainOnVersionUpgrade ?? true,
+			metadataPollInterval: customConfig.metadataPollInterval ?? 1000,
 		};
 		await updateRunnerConfig(clientConfig, runnerName, {
 			datacenters: Object.fromEntries(

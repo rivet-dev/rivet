@@ -177,7 +177,7 @@ async fn outbound_req(ctx: &ActivityCtx, input: &OutboundReqInput) -> Result<Out
 			// If the outbound req exited successfully, continue with no backoff
 			Ok(OutboundReqOutput::Continue) => {
 				if let Err(err) = ctx
-					.signal(runner_pool::Bump {})
+					.signal(runner_pool::Bump::default())
 					// This is ok because bumps are not stateful
 					.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 					.to_workflow_id(input.pool_wf_id)

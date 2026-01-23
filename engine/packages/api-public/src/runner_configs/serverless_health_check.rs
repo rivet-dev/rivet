@@ -72,7 +72,7 @@ async fn serverless_health_check_inner(
 
 	let ServerlessHealthCheckRequest { url, headers } = body;
 
-	match fetch_serverless_runner_metadata(url, headers).await {
+	match fetch_serverless_runner_metadata(&ctx, url, headers).await {
 		Ok(metadata) => Ok(ServerlessHealthCheckResponse::Success {
 			version: metadata.version,
 		}),

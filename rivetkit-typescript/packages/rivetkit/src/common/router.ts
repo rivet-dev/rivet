@@ -118,6 +118,7 @@ export interface MetadataResponse {
 	version: string;
 	runner?: {
 		kind: MetadataRunnerKind;
+		version?: number;
 	};
 	actorNames: ReturnType<typeof buildActorNames>;
 	/**
@@ -153,6 +154,7 @@ export function handleMetadataRequest(
 		version: VERSION,
 		runner: {
 			kind: runnerKind,
+			version: config.runner.version,
 		},
 		actorNames: buildActorNames(config),
 		clientEndpoint,

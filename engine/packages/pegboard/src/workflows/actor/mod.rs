@@ -950,7 +950,7 @@ async fn handle_stopped(
 
 			let res = ctx
 				.v(2)
-				.signal(crate::workflows::runner_pool::Bump {})
+				.signal(crate::workflows::runner_pool::Bump::default())
 				.to_workflow::<crate::workflows::runner_pool::Workflow>()
 				.tag("namespace_id", input.namespace_id)
 				.tag("runner_name", input.runner_name_selector.clone())

@@ -99,6 +99,20 @@ The `drainOnVersionUpgrade` option controls whether old actors are stopped when 
 | `false` (default) | Old actors continue running. New actors go to new version. Versions coexist. |
 | `true` | Old actors receive stop signal and have 30s to finish gracefully. |
 
+## Advanced
+
+### How Version Upgrade Detection Works
+
+When `drainOnVersionUpgrade` is enabled, Rivet uses two mechanisms to detect version changes:
+
+**New Runner Connection**
+
+When a runner connects with a newer version number, the engine immediately drains all older runners with the same name. This is the primary mechanism for [runner mode](/docs/general/runtime-modes) deployments. In serverless mode, this also provides faster upgrades if a new request arrives before the next metadata poll interval.
+
+**Metadata Polling** (Serverless Only)
+
+In [serverless mode](/docs/general/runtime-modes), runners poll the engine's metadata endpoint periodically to check for newer versions. If a newer version is detected, the runner initiates a self-drain. This is necessary because serverless functions may continue handling requests without reconnecting after a new deployment. Polling ensures old runners eventually drain even if no new requests trigger a runner connection.
+
 ## Related
 
 - [Runtime Modes](/docs/general/runtime-modes): Serverless vs runner deployment modes
