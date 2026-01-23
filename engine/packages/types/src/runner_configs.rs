@@ -26,6 +26,9 @@ pub enum RunnerConfigKind {
 		min_runners: u32,
 		max_runners: u32,
 		runners_margin: u32,
+		/// Milliseconds between metadata polling. If not set, uses the global default.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		metadata_poll_interval: Option<u64>,
 	},
 }
 
@@ -33,19 +36,19 @@ fn default_drain_on_version_upgrade() -> bool {
 	false
 }
 
-impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v3::RunnerConfig {
+impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v4::RunnerConfig {
 	fn from(value: RunnerConfig) -> Self {
 		let RunnerConfig {
 			kind,
 			metadata,
 			drain_on_version_upgrade,
 		} = value;
-		rivet_data::generated::namespace_runner_config_v3::RunnerConfig {
+		rivet_data::generated::namespace_runner_config_v4::RunnerConfig {
 			metadata: metadata.and_then(|value| serde_json::to_string(&value).ok()),
 			drain_on_version_upgrade,
 			kind: match kind {
 				RunnerConfigKind::Normal {} => {
-					rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Normal
+					rivet_data::generated::namespace_runner_config_v4::RunnerConfigKind::Normal
 				}
 				RunnerConfigKind::Serverless {
 					url,
@@ -55,9 +58,10 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v3::R
 					min_runners,
 					max_runners,
 					runners_margin,
+					metadata_poll_interval,
 				} => {
-					rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Serverless(
-						rivet_data::generated::namespace_runner_config_v3::Serverless {
+					rivet_data::generated::namespace_runner_config_v4::RunnerConfigKind::Serverless(
+						rivet_data::generated::namespace_runner_config_v4::Serverless {
 							url,
 							headers: headers.into(),
 							request_lifespan,
@@ -65,6 +69,7 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v3::R
 							min_runners,
 							max_runners,
 							runners_margin,
+							metadata_poll_interval,
 						},
 					)
 				}
@@ -73,9 +78,9 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v3::R
 	}
 }
 
-impl From<rivet_data::generated::namespace_runner_config_v3::RunnerConfig> for RunnerConfig {
-	fn from(value: rivet_data::generated::namespace_runner_config_v3::RunnerConfig) -> Self {
-		let rivet_data::generated::namespace_runner_config_v3::RunnerConfig {
+impl From<rivet_data::generated::namespace_runner_config_v4::RunnerConfig> for RunnerConfig {
+	fn from(value: rivet_data::generated::namespace_runner_config_v4::RunnerConfig) -> Self {
+		let rivet_data::generated::namespace_runner_config_v4::RunnerConfig {
 			metadata,
 			kind,
 			drain_on_version_upgrade,
@@ -84,10 +89,10 @@ impl From<rivet_data::generated::namespace_runner_config_v3::RunnerConfig> for R
 			metadata: metadata.and_then(|raw| serde_json::from_str(&raw).ok()),
 			drain_on_version_upgrade,
 			kind: match kind {
-				rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Normal => {
+				rivet_data::generated::namespace_runner_config_v4::RunnerConfigKind::Normal => {
 					RunnerConfigKind::Normal {}
 				}
-				rivet_data::generated::namespace_runner_config_v3::RunnerConfigKind::Serverless(
+				rivet_data::generated::namespace_runner_config_v4::RunnerConfigKind::Serverless(
 					o,
 				) => RunnerConfigKind::Serverless {
 					url: o.url,
@@ -97,6 +102,7 @@ impl From<rivet_data::generated::namespace_runner_config_v3::RunnerConfig> for R
 					min_runners: o.min_runners,
 					max_runners: o.max_runners,
 					runners_margin: o.runners_margin,
+					metadata_poll_interval: o.metadata_poll_interval,
 				},
 			},
 		}

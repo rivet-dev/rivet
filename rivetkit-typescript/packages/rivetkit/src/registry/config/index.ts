@@ -295,6 +295,7 @@ export const DocConfigureRunnerPoolSchema = z
 		runnersMargin: z.number().optional().describe("Buffer margin for scaling runners."),
 		slotsPerRunner: z.number().optional().describe("Number of actor slots per runner."),
 		metadata: z.record(z.string(), z.unknown()).optional().describe("Additional metadata to pass to the serverless platform."),
+		metadataPollInterval: z.number().optional().describe("Interval in milliseconds between metadata polls from the engine. Defaults to 10000 milliseconds (10 seconds)."),
 	})
 	.optional();
 

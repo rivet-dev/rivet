@@ -79,6 +79,24 @@ pub struct Pegboard {
 	/// Global pool desired max.
 	pub pool_desired_max_override: Option<u32>,
 
+	/// Default metadata poll interval for serverless runners when not specified in runner config.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub default_metadata_poll_interval: Option<u64>,
+
+	/// Minimum metadata poll interval for serverless runners.
+	///
+	/// The actual poll interval will be the maximum of this value and the runner config's
+	/// `metadata_poll_interval` setting. This prevents excessive polling even if the
+	/// runner config specifies a very short interval.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub min_metadata_poll_interval: Option<u64>,
+
 	/// Number of consecutive successes required to clear an active runner pool error.
 	///
 	/// This prevents a single success from clearing an error during flapping conditions.
@@ -138,5 +156,13 @@ impl Pegboard {
 	pub fn runner_pool_error_consecutive_successes_to_clear(&self) -> u32 {
 		self.runner_pool_consecutive_successes_to_clear_error
 			.unwrap_or(3)
+	}
+
+	pub fn default_metadata_poll_interval(&self) -> u64 {
+		self.default_metadata_poll_interval.unwrap_or(10_000)
+	}
+
+	pub fn min_metadata_poll_interval(&self) -> u64 {
+		self.min_metadata_poll_interval.unwrap_or(5_000)
 	}
 }

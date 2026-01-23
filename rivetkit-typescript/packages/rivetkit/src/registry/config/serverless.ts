@@ -18,6 +18,8 @@ export const ConfigureRunnerPoolSchema = z
 		runnersMargin: z.number().optional(),
 		slotsPerRunner: z.number().optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
+		metadataPollInterval: z.number().optional(),
+		drainOnVersionUpgrade: z.boolean().optional(),
 	})
 	.optional();
 

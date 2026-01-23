@@ -19,4 +19,4 @@ echo "Type 'exit' to leave the subshell."
 echo ""
 
 # Open subshell (use user's preferred shell or default to bash)
-exec "${SHELL:-bash}"
+exec bash
