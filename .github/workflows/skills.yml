@@ -35,9 +35,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build rivetkit packages
-        run: pnpm build -F rivetkit -F @rivetkit/*
-
       - name: Build website (generates skills)
         run: pnpm build -F rivet-website
 
