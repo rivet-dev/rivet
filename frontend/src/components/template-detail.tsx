@@ -1,11 +1,12 @@
-import { faArrowUpRight, faChevronLeft, Icon } from "@rivet-gg/icons";
+import { faChevronLeft, Icon } from "@rivet-gg/icons";
 import type { Template } from "@rivetkit/example-registry";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { match } from "ts-pattern";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
 import { ExamplePreview } from "@/app/templates";
+import { TEST_IDS } from "@/utils/test-ids";
 import { FrameConfigProvider } from "./hooks/isomorphic-frame";
+import { OnboardingFooter } from "./onboarding/footer";
 import { Button } from "./ui/button";
 import { Card, CardHeader } from "./ui/card";
 import { H1 } from "./ui/typography";
@@ -20,7 +21,6 @@ export function TemplateDetail({
 	return (
 		<div className="h-screen flex flex-col justify-safe-center">
 			<div className="flex-1 flex flex-col justify-safe-center overflow-auto">
-				<div className="max-w-2xl mx-auto w-full"></div>
 				<div className="max-w-2xl flex mx-auto flex-1 rounded-md px-6 items-center justify-center">
 					<div>
 						<motion.div
@@ -38,7 +38,12 @@ export function TemplateDetail({
 								<Link to="..">Back to Templates</Link>
 							</Button>
 						</motion.div>
-						<Card className="mx-auto overflow-hidden">
+						<Card
+							className="mx-auto overflow-hidden"
+							data-testid={
+								TEST_IDS.Onboarding.CreateTemplateProjectCard
+							}
+						>
 							<CardHeader className="p-0 mb-4">
 								<div className="max-w-4xl relative">
 									<ExamplePreview
@@ -64,94 +69,8 @@ export function TemplateDetail({
 						</Card>
 					</div>
 				</div>
-				<Links />
+				<OnboardingFooter />
 			</div>
-		</div>
-	);
-}
-
-export function Links() {
-	return (
-		<div className="flex gap-4 justify-center py-8 bg-gradient-to-t from-background to-transparent">
-			<Button
-				variant="link"
-				size="xs"
-				className="text-muted-foreground"
-				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
-			>
-				<a
-					href="http://rivet.dev/docs"
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					Documentation
-				</a>
-			</Button>
-			{match(__APP_TYPE__)
-				.with("cloud", () => (
-					<Button
-						className="text-muted-foreground"
-						variant="link"
-						size="xs"
-						onClick={() => {
-							Plain.open();
-						}}
-						endIcon={
-							<Icon icon={faArrowUpRight} className="ms-1" />
-						}
-					>
-						Support
-					</Button>
-				))
-				.otherwise(() => (
-					<Button
-						className="text-muted-foreground"
-						variant="link"
-						size="xs"
-						asChild
-						endIcon={
-							<Icon icon={faArrowUpRight} className="ms-1" />
-						}
-					>
-						<Link
-							to="."
-							search={(old) => ({
-								...old,
-								modal: "feedback",
-							})}
-						>
-							Feedback
-						</Link>
-					</Button>
-				))}
-			<Button
-				variant="link"
-				size="xs"
-				className="text-muted-foreground"
-				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
-			>
-				<a
-					href="http://rivet.gg/discord"
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					Discord
-				</a>
-			</Button>
-			<Button
-				variant="link"
-				size="xs"
-				className="text-muted-foreground"
-				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
-			>
-				<a
-					href="http://github.com/rivet-gg/rivet"
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					GitHub
-				</a>
-			</Button>
 		</div>
 	);
 }
@@ -163,6 +82,7 @@ function CreateProject({
 	template: Template;
 	organization: string;
 }) {
+	const navigate = useNavigate();
 	return (
 		<FrameConfigProvider
 			value={{
@@ -173,7 +93,21 @@ function CreateProject({
 		>
 			<CreateProjectFrameContent
 				organization={organization}
-				template={template.name}
+				template={template?.name}
+				onSuccess={(data) => {
+					return navigate({
+						to: "/orgs/$organization/projects/$project",
+						params: {
+							organization,
+							project: data.project.name,
+						},
+						search: {
+							template: template?.name ?? undefined,
+							noTemplate: undefined,
+							flow: "template",
+						},
+					});
+				}}
 			/>
 		</FrameConfigProvider>
 	);

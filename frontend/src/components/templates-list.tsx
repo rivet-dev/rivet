@@ -1,24 +1,21 @@
 import { faChevronLeft, Icon } from "@rivet-gg/icons";
-import { Link, type LinkOptions } from "@tanstack/react-router";
 import { LayoutGroup, motion } from "framer-motion";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Templates } from "@/app/templates";
-import { Links } from "./template-detail";
+import { OnboardingFooter } from "./onboarding/footer";
 import { Button } from "./ui/button";
 import { H1 } from "./ui/typography";
 
 export function TemplatesList({
-	backHomeLink,
-	showBackHome = true,
+	back,
 	...props
 }: ComponentProps<typeof Templates> & {
-	backHomeLink?: LinkOptions;
-	showBackHome?: boolean;
+	back?: ReactNode;
 }) {
 	return (
 		<div className="h-screen flex flex-col justify-safe-center">
 			<div className="flex-1 flex flex-col justify-safe-center overflow-auto pt-32">
-				{showBackHome ? (
+				{back ? (
 					<motion.div
 						className="max-w-5xl mt-16 mx-auto w-full"
 						initial={{ opacity: 0, y: -20 }}
@@ -32,7 +29,7 @@ export function TemplatesList({
 							size="xs"
 							asChild
 						>
-							<Link {...backHomeLink}>Back Home</Link>
+							{back}
 						</Button>
 					</motion.div>
 				) : null}
@@ -57,7 +54,7 @@ export function TemplatesList({
 						</div>
 					</LayoutGroup>
 				</div>
-				<Links />
+				<OnboardingFooter />
 			</div>
 		</div>
 	);

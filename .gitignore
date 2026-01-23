@@ -48,6 +48,9 @@ frontend/.env.*
 frontend/dist/
 frontend/node_modules/
 frontend/.tanstack
+frontend/.auth/
+frontend/playwright-report/
+frontend/test-results/
 
 # Site
 website/out/

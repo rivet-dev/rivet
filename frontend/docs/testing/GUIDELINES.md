@@ -323,3 +323,76 @@ When writing or updating test documentation:
 6. Use bullet points for multiple verification items
 7. Avoid adding notes, warnings, or future considerations
 8. When in doubt, make it more ambiguous, not more specific
+
+## E2E Test Implementation
+
+When implementing e2e tests with Playwright:
+
+### Element Selection Strategy
+
+1. **Prefer test IDs over other selectors**: Use `data-testid` attributes for stable element selection
+   - ✅ `page.getByTestId("onboarding-path-agent")`
+   - ❌ `page.getByText("Use Coding Agent")`
+
+2. **Add test IDs to components when needed**: If a component lacks a test ID, add one manually
+   - Use descriptive, kebab-case names: `data-testid="onboarding-path-agent"`
+   - Ask for guidance on component location if unclear
+
+3. **Fallback hierarchy** (when test IDs are not available):
+   - `getByRole()` - for accessible elements (buttons, links, headings)
+   - `getByLabel()` - for form inputs
+   - `getByPlaceholder()` - for inputs with placeholders
+   - `getByText()` - last resort, avoid exact matching
+
+### Test ID Naming Convention
+
+Format: `{feature}-{element}-{variant?}`
+
+Examples:
+- `onboarding-path-agent` - Agent path option in onboarding
+- `onboarding-path-template` - Template path option in onboarding
+- `onboarding-back-button` - Back button in onboarding
+- `template-card-chat-room` - Chat room template card
+
+### Adding Test IDs to Components
+
+When adding a test ID to a React component:
+
+```tsx
+// In the component
+<Button data-testid="onboarding-submit">Continue</Button>
+
+// In the test
+await page.getByTestId("onboarding-submit").click();
+```
+
+### Screenshot Testing
+
+Use visual regression testing as much as possible to catch unintended UI changes:
+
+1. **Capture full page screenshots** for key states:
+   ```ts
+   await expect(page).toHaveScreenshot("onboarding-path-selection.png");
+   ```
+
+2. **Capture component screenshots** for specific elements:
+   ```ts
+   const card = page.getByTestId("onboarding-path-agent");
+   await expect(card).toHaveScreenshot("agent-card.png");
+   ```
+
+3. **When to use screenshots**:
+   - After page loads to verify initial state
+   - After user actions that change the UI
+   - For error states and loading states
+   - For form validation feedback
+
+4. **Screenshot naming convention**: `{feature}-{state}.png`
+   - `onboarding-path-selection.png`
+   - `onboarding-provider-step.png`
+   - `onboarding-error-invalid-endpoint.png`
+
+5. **Update baselines** when intentional UI changes are made:
+   ```bash
+   pnpm test:e2e --update-snapshots
+   ```

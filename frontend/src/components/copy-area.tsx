@@ -99,12 +99,12 @@ export const CopyArea = forwardRef<HTMLButtonElement, CopyAreaProps>(
 	},
 );
 
-interface CopyButtonProps extends ComponentProps<typeof Slot> {
+interface CopyTriggerProps extends ComponentProps<typeof Slot> {
 	children: ReactNode;
 	value: string | (() => string);
 }
 
-export const CopyButton = forwardRef<HTMLElement, CopyButtonProps>(
+export const CopyTrigger = forwardRef<HTMLElement, CopyTriggerProps>(
 	({ children, value, ...props }, ref) => {
 		const handleClick: MouseEventHandler<HTMLElement> = (event) => {
 			event.stopPropagation();
@@ -123,16 +123,16 @@ export const CopyButton = forwardRef<HTMLElement, CopyButtonProps>(
 	},
 );
 
-export type DiscreteCopyButtonProps = CopyButtonProps & {
+export type DiscreteCopyButtonProps = CopyTriggerProps & {
 	tooltip?: boolean;
-} & ComponentProps<typeof Button>;
+} & Omit<ComponentProps<typeof Button>, "value">;
 
 export const DiscreteCopyButton = forwardRef<
 	HTMLElement,
 	DiscreteCopyButtonProps
 >(({ children, value, tooltip = true, ...props }, ref) => {
 	const content = (
-		<CopyButton ref={ref} value={value} {...props}>
+		<CopyTrigger ref={ref} value={value} {...props}>
 			<Button
 				type="button"
 				variant="ghost"
@@ -147,7 +147,7 @@ export const DiscreteCopyButton = forwardRef<
 			>
 				{children}
 			</Button>
-		</CopyButton>
+		</CopyTrigger>
 	);
 
 	if (tooltip) {

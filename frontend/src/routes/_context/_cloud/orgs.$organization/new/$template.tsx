@@ -1,4 +1,3 @@
-import {} from "@fortawesome/free-solid-svg-icons";
 import { templates } from "@rivetkit/example-registry";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { SidebarlessHeader } from "@/app/layout";

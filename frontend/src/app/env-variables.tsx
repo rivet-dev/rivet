@@ -1,5 +1,5 @@
 import { match } from "ts-pattern";
-import { Button, CopyButton, DiscreteInput, getConfig } from "@/components";
+import { Button, CopyTrigger, DiscreteInput, getConfig } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { Label } from "@/components/ui/label";
 import { cloudEnv } from "@/lib/env";
@@ -33,7 +33,7 @@ export function EnvVariables({
 				{showRunnerName && <RivetRunnerEnv runnerName={runnerName} />}
 			</div>
 			<div className="mt-2 flex justify-end">
-				<CopyButton
+				<CopyTrigger
 					value={() => {
 						const inputs =
 							document.querySelectorAll<HTMLInputElement>(
@@ -54,7 +54,7 @@ export function EnvVariables({
 					<Button size="sm" variant="outline">
 						Copy all raw
 					</Button>
-				</CopyButton>
+				</CopyTrigger>
 			</div>
 		</div>
 	);

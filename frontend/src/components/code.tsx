@@ -2,16 +2,19 @@ import { faCopy, faFile, Icon, type IconProp } from "@rivet-gg/icons";
 import {
 	Children,
 	cloneElement,
+	createContext,
 	type ReactElement,
 	type ReactNode,
+	useCallback,
+	useContext,
+	useState,
 } from "react";
-import { CopyButton } from "./copy-area";
+import { CopyTrigger } from "./copy-area";
 import { cn } from "./lib/utils";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { WithTooltip } from "./ui/tooltip";
 
 const languageNames = {
 	csharp: "C#",
@@ -35,21 +38,67 @@ const languageNames = {
 	prisma: "Prisma",
 };
 
+interface CodeGroupSyncContextValue {
+	values: Record<string, string>;
+	setValue: (syncId: string, value: string) => void;
+}
+
+const CodeGroupSyncContext = createContext<CodeGroupSyncContextValue | null>(
+	null,
+);
+
+export function CodeGroupSyncProvider({ children }: { children: ReactNode }) {
+	const [values, setValues] = useState<Record<string, string>>({});
+
+	const setValue = useCallback((syncId: string, value: string) => {
+		setValues((prev) => ({ ...prev, [syncId]: value }));
+	}, []);
+
+	return (
+		<CodeGroupSyncContext.Provider value={{ values, setValue }}>
+			{children}
+		</CodeGroupSyncContext.Provider>
+	);
+}
+
+export type CodeFrameLikeElement = ReactElement<{
+	language?: keyof typeof languageNames;
+	title?: string;
+	icon?: IconProp;
+	isInGroup?: boolean;
+	file?: string;
+}>;
+
 interface CodeGroupProps {
 	className?: string;
-	children: ReactElement<{
-		language?: keyof typeof languageNames;
-		title?: string;
-		icon?: IconProp;
-		isInGroup?: boolean;
-		file?: string;
-	}>[];
+	header?: ReactNode;
+	children: CodeFrameLikeElement[];
+	syncId?: string;
 }
 
 const getChildIdx = (child: CodeGroupProps["children"][number]) =>
 	child.props?.file || child.props?.title || child.props?.language || "code";
 
-export function CodeGroup({ children, className }: CodeGroupProps) {
+export function CodeGroup({
+	children,
+	className,
+	syncId,
+	header,
+}: CodeGroupProps) {
+	const syncContext = useContext(CodeGroupSyncContext);
+	const defaultValue = getChildIdx(children[0]);
+
+	const isControlled = syncId && syncContext;
+	const value = isControlled
+		? (syncContext.values[syncId] ?? defaultValue)
+		: undefined;
+
+	const handleValueChange = (newValue: string) => {
+		if (isControlled) {
+			syncContext.setValue(syncId, newValue);
+		}
+	};
+
 	return (
 		<div
 			className={cn(
@@ -57,12 +106,17 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 				className,
 			)}
 		>
-			<Tabs defaultValue={getChildIdx(children[0])}>
+			{header}
+			<Tabs
+				defaultValue={!isControlled ? defaultValue : undefined}
+				value={value}
+				onValueChange={isControlled ? handleValueChange : undefined}
+			>
 				<ScrollArea
 					className="w-full"
 					viewportProps={{ className: "[&>div]:!table" }}
 				>
-					<TabsList>
+					<TabsList className="pt-2">
 						{Children.map(children, (child) => {
 							const idx = getChildIdx(child);
 							return (
@@ -118,7 +172,7 @@ interface CodeFrameProps {
 	icon?: IconProp;
 	language: keyof typeof languageNames;
 	isInGroup?: boolean;
-	code?: () => string | string;
+	code?: () => string;
 	footer?: ReactNode;
 	children?: ReactElement<any>;
 	className?: string;
@@ -127,8 +181,8 @@ export const CodeFrame = ({
 	children,
 	file,
 	language,
-	code,
 	title,
+	code,
 	footer,
 	isInGroup,
 	className,
@@ -136,44 +190,44 @@ export const CodeFrame = ({
 	return (
 		<div
 			className={cn(
-				"not-prose my-4 rounded-lg border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none",
+				"not-prose my-4 overflow-hidden rounded-lg border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none",
 				className,
 			)}
 		>
-			<div className="bg-background text-wrap py-2 text-sm">
-				<ScrollArea className="w-full">
+			<div className="bg-background text-wrap text-sm">
+				<ScrollArea className="w-full px-1 py-4 [&_.shiki_.line:first-child]:max-w-">
+					<CopyTrigger value={code || ""}>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="absolute top-1.5 right-1.5 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100"
+						>
+							<Icon icon={faCopy} />
+						</Button>
+					</CopyTrigger>
 					{children
 						? cloneElement(children, { escaped: true })
 						: null}
 				</ScrollArea>
 			</div>
 
-			<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
-				<div className="text-muted-foreground flex items-center gap-1">
-					{footer}
-					{file ? (
-						<>
-							<Icon icon={faFile} className="block" />
-							<span>{file}</span>
-						</>
-					) : isInGroup ? null : (
-						<Badge variant="outline">
-							{title || languageNames[language]}
-						</Badge>
-					)}
+			{footer || file || !isInGroup ? (
+				<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
+					<div className="text-muted-foreground flex items-center gap-1">
+						{footer}
+						{file ? (
+							<>
+								<Icon icon={faFile} className="block" />
+								<span>{file}</span>
+							</>
+						) : isInGroup ? null : (
+							<Badge variant="outline">
+								{title || languageNames[language]}
+							</Badge>
+						)}
+					</div>
 				</div>
-				<WithTooltip
-					delayDuration={0}
-					trigger={
-						<CopyButton value={code || ""}>
-							<Button size="icon-sm" variant="ghost">
-								<Icon icon={faCopy} />
-							</Button>
-						</CopyButton>
-					}
-					content="Copy code"
-				/>
-			</div>
+			) : null}
 		</div>
 	);
 };

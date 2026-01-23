@@ -20,7 +20,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { CopyButton } from "../copy-area";
+import { CopyTrigger } from "../copy-area";
 import { cn } from "../lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { WithTooltip } from "../ui/tooltip";
@@ -734,13 +734,13 @@ function Editable({
 					<WithTooltip
 						content="Copy"
 						trigger={
-							<CopyButton value={value}>
+							<CopyTrigger value={value}>
 								<Icon
 									data-action="copy"
 									className="text-foreground transition-opacity size-2.5 opacity-70 hover:opacity-100"
 									icon={faCopy}
 								/>
-							</CopyButton>
+							</CopyTrigger>
 						}
 					/>
 
