@@ -24,13 +24,23 @@
 	"type": "module",
 	"exports": {
 		".": {
-			"import": {
+			"browser": {
 				"types": "./dist/tsup/mod.d.ts",
 				"default": "./dist/tsup/mod.js"
 			},
-			"require": {
-				"types": "./dist/tsup/mod.d.cts",
-				"default": "./dist/tsup/mod.cjs"
+			"node": {
+				"import": {
+					"types": "./dist/tsup/mod.d.ts",
+					"default": "./dist/tsup/node-entry.js"
+				},
+				"require": {
+					"types": "./dist/tsup/mod.d.cts",
+					"default": "./dist/tsup/node-entry.cjs"
+				}
+			},
+			"default": {
+				"types": "./dist/tsup/mod.d.ts",
+				"default": "./dist/tsup/mod.js"
 			}
 		},
 		"./client": {
@@ -149,10 +159,16 @@
 	},
 	"sideEffects": [
 		"./dist/tsup/chunk-*.js",
-		"./dist/tsup/chunk-*.cjs"
+		"./dist/tsup/chunk-*.cjs",
+		"./dist/tsup/node-setup.js",
+		"./dist/tsup/node-setup.cjs",
+		"./dist/tsup/node-entry.js",
+		"./dist/tsup/node-entry.cjs",
+		"./src/node-setup.ts",
+		"./src/node-entry.ts"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts",
+		"build": "tsup src/mod.ts src/node-entry.ts src/node-setup.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts",
 		"build:schema": "./scripts/compile-bare.ts compile schemas/client-protocol/v1.bare -o dist/schemas/client-protocol/v1.ts && ./scripts/compile-bare.ts compile schemas/client-protocol/v2.bare -o dist/schemas/client-protocol/v2.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v1.bare -o dist/schemas/file-system-driver/v1.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v2.bare -o dist/schemas/file-system-driver/v2.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v3.bare -o dist/schemas/file-system-driver/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v1.bare -o dist/schemas/actor-persist/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v2.bare -o dist/schemas/actor-persist/v2.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v3.bare -o dist/schemas/actor-persist/v3.ts && ./scripts/compile-bare.ts compile schemas/actor-inspector/v1.bare -o dist/schemas/actor-inspector/v1.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check .",

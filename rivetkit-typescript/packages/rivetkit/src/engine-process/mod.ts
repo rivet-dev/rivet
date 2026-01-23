@@ -9,7 +9,7 @@ import {
 	getNodeFsSync,
 	getNodePath,
 	getNodeStream,
-	importNodeDependencies,
+	hasNodeDependencies,
 } from "@/utils/node";
 import { logger } from "./log";
 import { ENGINE_ENDPOINT, ENGINE_PORT } from "./constants";
@@ -26,7 +26,13 @@ interface EnsureEngineProcessOptions {
 export async function ensureEngineProcess(
 	options: EnsureEngineProcessOptions,
 ): Promise<void> {
-	importNodeDependencies();
+	// Validate that Node.js dependencies are available
+	if (!hasNodeDependencies()) {
+		throw new Error(
+			"Engine process requires Node.js. " +
+				"Ensure you are importing from 'rivetkit' in a Node.js environment.",
+		);
+	}
 
 	logger().debug({
 		msg: "ensuring engine process",

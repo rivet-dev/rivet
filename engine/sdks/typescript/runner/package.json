@@ -28,7 +28,9 @@
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
 		"uuid": "^12.0.0",
-		"pino": "^9.9.5",
+		"pino": "^9.9.5"
+	},
+	"optionalDependencies": {
 		"ws": "^8.18.3"
 	},
 	"devDependencies": {

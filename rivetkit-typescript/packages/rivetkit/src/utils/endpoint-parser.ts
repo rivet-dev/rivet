@@ -108,12 +108,15 @@ export function tryParseEndpoint(
 		});
 	}
 
-	// Strip auth from the URL by clearing username and password
-	url.username = "";
-	url.password = "";
-
-	// Get the cleaned endpoint without auth
-	const cleanedEndpoint = url.toString();
+	// Build cleaned endpoint without auth.
+	// We construct it manually instead of using url.username = "" because
+	// some edge runtimes (Convex, Cloudflare Workers) don't support setting
+	// username/password on URL objects.
+	let cleanedEndpoint = `${url.protocol}//${url.host}${url.pathname}`;
+	// Remove trailing slash if present (unless it's the root path)
+	if (cleanedEndpoint.endsWith("/") && url.pathname !== "/") {
+		cleanedEndpoint = cleanedEndpoint.slice(0, -1);
+	}
 
 	return {
 		endpoint: cleanedEndpoint,

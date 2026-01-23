@@ -1,0 +1,175 @@
+import { faGithub } from "@rivet-gg/icons";
+
+# Deploying to Convex
+
+Deploy your RivetKit app with [Convex](https://convex.dev/) HTTP actions.
+
+<CardGroup>
+<Card title="Convex Counter Example" href="https://github.com/rivet-dev/rivet/tree/main/examples/convex" target="_blank" icon={faGithub}>
+Real-time counter using RivetKit actors with Convex HTTP actions.
+</Card>
+</CardGroup>
+
+## Steps
+
+<Steps>
+<Step title="Prerequisites">
+
+- [Convex account](https://convex.dev/) and Convex CLI (`npx convex`)
+- A RivetKit app
+  - See the [Quickstart](/docs/actors/quickstart) or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples) to get started
+- Access to [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
+
+</Step>
+<Step title="Install packages">
+
+Install the required packages:
+
+```bash
+npm install rivetkit @rivetkit/convex convex
+```
+
+</Step>
+<Step title="Create actor definitions">
+
+Create your actors in `convex/actors.ts`:
+
+```typescript {{"title":"convex/actors.ts"}}
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, x: number) => {
+      c.state.count += x;
+      c.broadcast("newCount", c.state.count);
+      return c.state.count;
+    },
+    getCount: (c) => c.state.count,
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+
+</Step>
+<Step title="Set up HTTP routes">
+
+Create the HTTP router in `convex/http.ts`:
+
+```typescript {{"title":"convex/http.ts"}}
+import { httpRouter } from "convex/server";
+import { httpAction } from "./_generated/server";
+import { toConvexHandler } from "@rivetkit/convex";
+import { registry } from "./actors";
+
+const http = httpRouter();
+const rivetHandler = toConvexHandler(registry);
+
+// Route all HTTP methods for Rivet API.
+// Using /api/rivet/ for consistency with other RivetKit adapters.
+const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"] as const;
+for (const method of methods) {
+  http.route({
+    pathPrefix: "/api/rivet/",
+    method,
+    handler: httpAction(async (ctx, request) => rivetHandler(ctx, request)),
+  });
+}
+
+export default http;
+```
+
+<Note>
+Convex does not automatically add an `/api` prefix to HTTP routes. We use `/api/rivet/` for consistency with other RivetKit adapters like Next.js and Vercel.
+</Note>
+
+</Step>
+<Step title="Configure environment variables">
+
+Set environment variables in your Convex dashboard or using the CLI:
+
+```bash
+npx convex env set RIVET_ENDPOINT "https://your-rivet-engine.rivet.dev"
+npx convex env set RIVET_TOKEN "your-token-here"
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RIVET_ENDPOINT` | Yes | Rivet Engine endpoint URL |
+| `RIVET_TOKEN` | No | Authentication token |
+| `RIVET_NAMESPACE` | No | Namespace (defaults to "default") |
+
+</Step>
+<Step title="Deploy to Convex">
+
+Deploy your application to Convex:
+
+```bash
+npx convex deploy
+```
+
+Your deployment will be available at `https://<deployment>.convex.site`.
+
+</Step>
+<Step title="Connect and verify">
+
+1. Visit the [Rivet dashboard](https://dashboard.rivet.dev)
+2. Navigate to _Connect > Custom_
+3. Input your deployed Convex site URL with the API path:
+   - Example: `https://<deployment>.convex.site/api/rivet`
+4. Once it shows as successfully connected, click _Done_
+
+Your Convex deployment is now connected to Rivet.
+
+</Step>
+</Steps>
+
+## Important notes
+
+### Runtime compatibility
+
+Convex HTTP actions run in a V8-based runtime similar to Cloudflare Workers. This means:
+
+- Web Standard APIs are supported (fetch, Request, Response, etc.)
+- Node.js-specific APIs are **not** available
+- No local engine spawning - you must connect to an external Rivet Engine
+
+### Limitations
+
+- **No WebSocket upgrades**: Convex HTTP actions do not support WebSocket upgrades. Real-time updates work through polling or server-sent events.
+- **Request/response size**: Convex has a 20MB limit on request and response bodies.
+- **Execution time**: HTTP actions have execution time limits. See [Convex limits](https://docs.convex.dev/production/state/limits) for details.
+
+### Frontend integration
+
+Connect your React frontend using `@rivetkit/react`:
+
+```typescript {{"title":"frontend/App.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "../convex/actors";
+
+const CONVEX_SITE_URL = "https://<deployment>.convex.site";
+const { useActor } = createRivetKit<typeof registry>(
+  `${CONVEX_SITE_URL}/api/rivet`
+);
+
+export function App() {
+  const { connection, useEvent } = useActor({
+    name: "counter",
+    key: ["main"]
+  });
+
+  // Use connection.increment(1) to call actor actions
+  // Use useEvent("newCount", ...) to subscribe to events
+}
+```
+
+## Resources
+
+- [Convex HTTP Actions](https://docs.convex.dev/functions/http-actions)
+- [Convex Runtimes](https://docs.convex.dev/functions/runtimes)
+- [Convex Testing](https://docs.convex.dev/testing/convex-test)
+- [RivetKit Quickstart](/docs/actors/quickstart)

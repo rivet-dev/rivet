@@ -48,11 +48,18 @@ export class Registry<A extends RegistryActors> {
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
 
-		// Auto-prepare on next tick (gives time for sync config modification)
-		setTimeout(() => {
-			// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-			this.#ensureRuntime();
-		}, 0);
+		// Auto-prepare on next tick (gives time for sync config modification).
+		// Skip in edge runtimes (Convex, Cloudflare Workers) where setTimeout
+		// throws at module load time. We detect this by checking for process.versions.node
+		// which only exists in Node.js/Bun/Deno.
+		const isNodeLike =
+			typeof process !== "undefined" && process.versions?.node;
+		if (isNodeLike && typeof setTimeout !== "undefined") {
+			setTimeout(() => {
+				// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
+				this.#ensureRuntime();
+			}, 0);
+		}
 	}
 
 	/** Creates runtime if not already created. Idempotent. */

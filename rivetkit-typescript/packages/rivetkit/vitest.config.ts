@@ -7,4 +7,9 @@ export default defineConfig({
 	...defaultConfig,
 	// Used to resolve "rivetkit" to "src/mod.ts" in the test fixtures
 	plugins: [tsconfigPaths()],
+	test: {
+		...defaultConfig.test,
+		// Set up Node.js dependencies before running tests
+		setupFiles: ["./src/node-setup.ts"],
+	},
 });
