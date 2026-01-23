@@ -13,6 +13,7 @@ const langs = {
 	typescript: () => import("@shikijs/langs/typescript"),
 	json: () => import("@shikijs/langs/json"),
 	bash: () => import("@shikijs/langs/bash"),
+	markdown: () => import("@shikijs/langs/markdown"),
 };
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
