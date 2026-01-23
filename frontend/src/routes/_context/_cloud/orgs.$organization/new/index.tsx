@@ -53,13 +53,6 @@ function RouteComponent() {
 						to: "/orgs/$organization/new/$template",
 						params: { template },
 					})}
-					startFromScratchLink={{
-						to: ".",
-						search: {
-							flow: "manual",
-							noTemplate: true,
-						},
-					}}
 				/>
 			</>
 		);

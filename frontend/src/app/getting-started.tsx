@@ -159,10 +159,6 @@ export function GettingStarted({
 						to: ".",
 						search: { template, flow },
 					})}
-					startFromScratchLink={{
-						to: ".",
-						search: { noTemplate: true, flow: "manual" },
-					}}
 				/>
 			</Content>
 		);
@@ -417,7 +413,26 @@ function AgentInstructions({
 	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
 	const secretToken = useRivetDsn({ kind: "secret", endpoint });
 
-	const code = `Integrate Rivet into ${providerDetails?.displayName || provider}, use following\nenvironment variables in your deployment, deploy,\nthen tell me the url to connect to Rivet.\n\nRIVET_PUBLIC_ENDPOINT=${publishableToken}\nRIVET_SECRET_ENDPOINT=${secretToken}${runnerName !== "default" ? `\nRIVET_RUNNER=${runnerName || "default"}` : ""}`;
+	const providerStr = providerDetails
+		? `${providerDetails.displayName}`
+		: provider || "your chosen provider";
+
+	const code = `Load the Rivet skill and then:
+1. Integrate Rivet in to the project
+2. Verify it works on the local machine
+3. Deploy to ${providerStr} and configure
+   the following environment variables:
+
+  RIVET_PUBLIC_ENDPOINT=${publishableToken}
+  RIVET_ENDPOINT=${secretToken}${
+		runnerName !== "default"
+			? `
+  RIVET_RUNNER_NAME=${runnerName}`
+			: ""
+  }
+
+4. Tell the user the URL to past in 
+   to the Rivet dashboard`;
 
 	return (
 		<CodeFrame
@@ -440,7 +455,6 @@ function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
 	const templateDetails = templates.find((t) => t.name === template);
 	const providerDetails = deployOptions.find((p) => p.name === provider);
 
-	const id = useId();
 	const endpoint = useEndpoint();
 	const runnerName = useWatch({ name: "runnerName" }) as string;
 
@@ -454,12 +468,9 @@ function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
 
 	return (
 		<div className="flex flex-col gap-10">
-			{flow !== "agent" ? (
-				<>
-					<SkillsSetup />
-					<Connector />
-				</>
-			) : null}
+			<SkillsSetup />
+			<Connector />
+
 			{match({ template, provider, flow })
 				.with(
 					{ provider: P.any, template: undefined, flow: "agent" },

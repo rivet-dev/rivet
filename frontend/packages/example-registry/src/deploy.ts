@@ -5,6 +5,7 @@ import {
     faHetznerH,
     faKubernetes,
     faRailway,
+    faRocket,
     faServer,
     faVercel,
 } from "@rivet-gg/icons";
@@ -94,6 +95,14 @@ export const deployOptions = [
 			"Run on virtual machines or bare metal servers with full control",
 		icon: faServer as any,
 	},
+	{
+		displayName: "Custom Platform",
+		name: "custom-platform" as const,
+		href: "/docs/connect/custom",
+		description:
+			"Integrate RivetKit with any other hosting platform of your choice",
+		icon: faRocket as any,
+	}
 ] satisfies DeployOption[];
 
 
