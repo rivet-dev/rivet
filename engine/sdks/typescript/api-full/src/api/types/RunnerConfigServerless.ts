@@ -5,6 +5,8 @@
 export interface RunnerConfigServerless {
     headers?: Record<string, string>;
     maxRunners: number;
+    /** Milliseconds between metadata polling. If not set, uses the global default. */
+    metadataPollInterval?: number;
     minRunners?: number;
     /** Seconds. */
     requestLifespan: number;

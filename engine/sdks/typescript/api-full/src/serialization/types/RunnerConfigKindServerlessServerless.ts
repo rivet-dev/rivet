@@ -12,6 +12,7 @@ export const RunnerConfigKindServerlessServerless: core.serialization.ObjectSche
 > = core.serialization.object({
     headers: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxRunners: core.serialization.property("max_runners", core.serialization.number()),
+    metadataPollInterval: core.serialization.property("metadata_poll_interval", core.serialization.number().optional()),
     minRunners: core.serialization.property("min_runners", core.serialization.number().optional()),
     requestLifespan: core.serialization.property("request_lifespan", core.serialization.number()),
     runnersMargin: core.serialization.property("runners_margin", core.serialization.number().optional()),
@@ -23,6 +24,7 @@ export declare namespace RunnerConfigKindServerlessServerless {
     export interface Raw {
         headers?: Record<string, string> | null;
         max_runners: number;
+        metadata_poll_interval?: number | null;
         min_runners?: number | null;
         request_lifespan: number;
         runners_margin?: number | null;

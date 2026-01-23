@@ -6,6 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **headers** | Option<**std::collections::HashMap<String, String>**> |  | [optional]
 **max_runners** | **i32** |  | 
+**metadata_poll_interval** | Option<**i64**> | Milliseconds between metadata polling. If not set, uses the global default. | [optional]
 **min_runners** | Option<**i32**> |  | [optional]
 **request_lifespan** | **i32** | Seconds. | 
 **runners_margin** | Option<**i32**> |  | [optional]
