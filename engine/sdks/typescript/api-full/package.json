@@ -1,6 +1,6 @@
 {
   "name": "@rivetkit/engine-api-full",
-  "version": "2.0.40",
+  "version": "2.0.41",
   "repository": "https://github.com/rivet-gg/rivet/tree/main/sdks/typescript",
   "files": [
     "dist",

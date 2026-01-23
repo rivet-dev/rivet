@@ -882,7 +882,9 @@ func (r *RunnerConfigKindServerless) String() string {
 type RunnerConfigKindServerlessServerless struct {
 	Headers    map[string]string `json:"headers,omitempty"`
 	MaxRunners int               `json:"max_runners"`
-	MinRunners *int              `json:"min_runners,omitempty"`
+	// Milliseconds between metadata polling. If not set, uses the global default.
+	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
+	MinRunners           *int   `json:"min_runners,omitempty"`
 	// Seconds.
 	RequestLifespan int    `json:"request_lifespan"`
 	RunnersMargin   *int   `json:"runners_margin,omitempty"`
@@ -951,7 +953,9 @@ func (r *RunnerConfigResponse) String() string {
 type RunnerConfigServerless struct {
 	Headers    map[string]string `json:"headers,omitempty"`
 	MaxRunners int               `json:"max_runners"`
-	MinRunners *int              `json:"min_runners,omitempty"`
+	// Milliseconds between metadata polling. If not set, uses the global default.
+	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
+	MinRunners           *int   `json:"min_runners,omitempty"`
 	// Seconds.
 	RequestLifespan int    `json:"request_lifespan"`
 	RunnersMargin   *int   `json:"runners_margin,omitempty"`
