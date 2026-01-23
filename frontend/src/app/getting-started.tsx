@@ -25,7 +25,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { type ReactNode, Suspense, useEffect, useId, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match, P } from "ts-pattern";
 import z from "zod";
@@ -67,7 +67,7 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { DeployToVercelCard } from "./dialogs/connect-quick-vercel-frame";
-import { EnvVariables } from "./env-variables";
+import { EnvVariables, useRivetDsn } from "./env-variables";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
@@ -403,10 +403,55 @@ function Connector() {
 	);
 }
 
+function AgentInstructions({
+	title: _,
+	provider,
+}: {
+	title?: string;
+	provider?: Provider;
+}) {
+	const providerDetails = deployOptions.find((p) => p.name === provider);
+	const endpoint = useEndpoint();
+	const runnerName = useWatch({ name: "runnerName" }) as string;
+
+	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
+	const secretToken = useRivetDsn({ kind: "secret", endpoint });
+
+	const code = `Integrate Rivet into ${providerDetails?.displayName || provider}, use following\nenvironment variables in your deployment, deploy,\nthen tell me the url to connect to Rivet.\n\nRIVET_PUBLIC_ENDPOINT=${publishableToken}\nRIVET_SECRET_ENDPOINT=${secretToken}${runnerName !== "default" ? `\nRIVET_RUNNER=${runnerName || "default"}` : ""}`;
+
+	return (
+		<CodeFrame
+			key="yarn"
+			language="markdown"
+			code={() => code}
+			className="m-0"
+		>
+			<CodePreview
+				language="markdown"
+				className="text-left"
+				code={code}
+			/>
+		</CodeFrame>
+	);
+}
+
 function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
 	const provider = useWatch({ name: "provider" });
 	const templateDetails = templates.find((t) => t.name === template);
 	const providerDetails = deployOptions.find((p) => p.name === provider);
+
+	const id = useId();
+	const endpoint = useEndpoint();
+	const runnerName = useWatch({ name: "runnerName" }) as string;
+
+	const envVars = (
+		<EnvVariables
+			showCopyButton={flow !== "agent"}
+			endpoint={endpoint}
+			runnerName={runnerName}
+		/>
+	);
+
 	return (
 		<div className="flex flex-col gap-10">
 			{flow !== "agent" ? (
@@ -416,103 +461,102 @@ function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
 				</>
 			) : null}
 			{match({ template, provider, flow })
-				// .with(
-				// 	{ provider: P.any, template: undefined, flow: "agent" },
-				// 	() => <McpSetup />,
-				// )
+				.with(
+					{ provider: P.any, template: undefined, flow: "agent" },
+					() => null,
+				)
 				.with({ provider: "vercel", template: P.string }, () => (
-					<DeployToVercelCard
-						template={
-							templateDetails?.providers?.vercel?.name ||
-							template ||
-							"chat-room"
-						}
-					/>
+					<>
+						<DeployToVercelCard
+							template={
+								templateDetails?.providers?.vercel?.name ||
+								template ||
+								"chat-room"
+							}
+						/>
+						<Connector />
+					</>
 				))
 				// .with("railway", () => (
 				// 	<RailwayQuickSetupInfo template={template} />
 				// ))
 				.with(
 					{ provider: P.string, template: P.string },
-					({ template }) => <TemplateSetup template={template} />,
+					({ template }) => (
+						<>
+							<TemplateSetup template={template} />
+							<Connector />
+						</>
+					),
 				)
 				.otherwise(() => (
-					<ExternalLinkCard
-						icon={faBookOpen}
-						title={"Follow the Quickstart Guide"}
-						href={"https://www.rivet.dev/docs/actors/quickstart/"}
-					/>
+					<>
+						<ExternalLinkCard
+							icon={faBookOpen}
+							title={"Integrate with Quickstart Guide"}
+							href={
+								"https://www.rivet.dev/docs/actors/quickstart/"
+							}
+						/>
+						<Connector />
+					</>
 				))}
-			<Connector />
 
-			{/* {((provider === "vercel" && !template) || provider !== "vercel") &&
+			{((provider === "vercel" && !template) || provider !== "vercel") &&
 			flow !== "agent" ? (
 				<>
 					<ExternalLinkCard
 						icon={providerDetails?.icon}
-						title={`View ${providerDetails?.displayName} Guide`}
+						title={`Deploy with ${providerDetails?.displayName} Guide`}
 						href={`https://www.rivet.dev${providerDetails?.href || "/docs/getting-started"}`}
 					/>
 					<Connector />
 				</>
-			) : null} */}
-			{/* {flow === "agent" ? (
+			) : null}
+			{flow === "agent" ? (
 				<>
-					<div className="border rounded-md p-4">
+					<CodeGroup
+						className="my-0"
+						header={
+							<p className="pt-2 pb-4 px-4 border-b">
+								Ask your Coding Agent to set up Rivet for you.
+							</p>
+						}
+					>
+						{[
+							<AgentInstructions
+								key="agent-instructions"
+								provider={provider}
+								title="Prompt"
+							/>,
+						]}
+					</CodeGroup>
+					<Connector />
+				</>
+			) : null}
+			{flow !== "agent" ? (
+				<>
+					<div className="space-y-2 border rounded-md p-4">
 						<p className="mb-4">
-							Ask your Coding Agent to set up Rivet for you:
+							Set these environment variables in your deployment.
 						</p>
-						<p className="pl-4 border-l-2 border-primary-500 text-muted-foreground mb-4">
-							Integrate Rivet into{" "}
-							{providerDetails?.displayName || provider}, deploy,
-							then tell me the url to connect to Rivet.
-						</p>
-						<div className="flex items-end">
-							<CopyTrigger
-								value={`Integrate Rivet into ${providerDetails?.displayName || provider}, deploy, then tell me the url to connect to Rivet.`}
-								className="ml-auto"
-							>
-								<Button
-									endIcon={<Icon icon={faCopy} />}
-									variant="outline"
-								>
-									Copy instructions
-								</Button>
-							</CopyTrigger>
-						</div>
+						<Label>Environment Variables</Label>
+						{envVars}
 					</div>
 					<Connector />
 				</>
-			) : null} */}
+			) : null}
 			<div className="space-y-2 border rounded-md p-4">
-				{/* {flow === "agent" ? (
-					<p className="mb-4">
-						Tell your Coding Agent to use following environment
-						variables in your deployment.
-					</p>
-				) : ( */}
-				<p className="mb-4">
-					Set these environment variables in your deployment.
-				</p>
-				{/* )} */}
-				<Label>Environment Variables</Label>
-				<EnvVariables
-					endpoint={useEndpoint()}
-					runnerName={useWatch({ name: "runnerName" }) as string}
-				/>
-			</div>
-			<Connector />
-			<div className="space-y-2 border rounded-md p-4">
-				{/* {flow === "agent" ? (
+				{flow === "agent" ? (
 					<p className="mb-4">
 						Paste the endpoint that your Coding Agent provides after
 						deployment.
 					</p>
-				) : ( */}
-				<p className="mb-4">
-					Deploy your code and paste your deployment's endpoint.
-				</p>
-				{/* )} */}
+				) : (
+					<p className="mb-4">
+						Deploy your code and paste your deployment's endpoint.
+					</p>
+				)}
 				<div>
 					<ConnectServerlessForm.Endpoint
 						placeholder={match(provider)

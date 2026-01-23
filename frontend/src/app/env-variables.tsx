@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { match } from "ts-pattern";
 import { Button, CopyTrigger, DiscreteInput, getConfig } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -6,21 +7,27 @@ import { cloudEnv } from "@/lib/env";
 import { useAdminToken, usePublishableToken } from "@/queries/accessors";
 
 export function EnvVariables({
+	id: _id,
 	runnerName,
 	endpoint,
 	showRunnerName = true,
 	showEndpoint = true,
+	showCopyButton = true,
 }: {
+	id?: string;
 	runnerName?: string;
 	endpoint: string;
 	showRunnerName?: boolean;
 	showEndpoint?: boolean;
+	showCopyButton?: boolean;
 }) {
+	const rId = useId();
+	const id = _id || rId;
 	return (
 		<div>
 			<div
 				className="gap-1 items-center grid grid-cols-2"
-				data-env-variables
+				data-env-variables={id}
 			>
 				<Label asChild className="text-muted-foreground text-xs mb-1">
 					<p>Key</p>
@@ -32,32 +39,31 @@ export function EnvVariables({
 				{showEndpoint && <RivetRunnerEndpointEnv endpoint={endpoint} />}
 				{showRunnerName && <RivetRunnerEnv runnerName={runnerName} />}
 			</div>
-			<div className="mt-2 flex justify-end">
-				<CopyTrigger
-					value={() => {
-						const inputs =
-							document.querySelectorAll<HTMLInputElement>(
-								"[data-env-variables] input",
-							);
-						return Array.from(inputs)
-							.reduce((acc, input, index) => {
-								if (index % 2 === 0) {
-									acc.push(
-										`${input.value}=${inputs[index + 1]?.value}`,
-									);
-								}
-								return acc;
-							}, [] as string[])
-							.join("\n");
-					}}
-				>
-					<Button size="sm" variant="outline">
-						Copy all raw
-					</Button>
-				</CopyTrigger>
-			</div>
+			{showCopyButton ? (
+				<div className="mt-2 flex justify-end">
+					<CopyTrigger value={() => getEnvVariables({ id })}>
+						<Button size="sm" variant="outline">
+							Copy all raw
+						</Button>
+					</CopyTrigger>
+				</div>
+			) : null}
 		</div>
 	);
+}
+
+export function getEnvVariables({ id }: { id: string }) {
+	const inputs = document.querySelectorAll<HTMLInputElement>(
+		`[data-env-variables="${id}"] input`,
+	);
+	return Array.from(inputs)
+		.reduce((acc, input, index) => {
+			if (index % 2 === 0) {
+				acc.push(`${input.value}=${inputs[index + 1]?.value}`);
+			}
+			return acc;
+		}, [] as string[])
+		.join("\n");
 }
 
 function RivetRunnerEnv({

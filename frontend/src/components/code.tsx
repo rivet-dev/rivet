@@ -36,6 +36,7 @@ const languageNames = {
 	bash: "Command Line",
 	sh: "Command Line",
 	prisma: "Prisma",
+	markdown: "Markdown",
 };
 
 interface CodeGroupSyncContextValue {
