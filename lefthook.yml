@@ -10,4 +10,9 @@ pre-commit:
     #   run: pnpm fmt
     #   tags: formatting
     #   stage_fixed: true
+    generate-vercel-examples:
+      glob: "examples/**/*"
+      exclude: "examples/*-vercel/**/*"
+      run: npx tsx scripts/vercel-examples/generate-vercel-examples.ts
+      stage_fixed: true
 

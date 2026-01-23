@@ -1,0 +1,36 @@
+name: vercel-examples
+
+on:
+  pull_request:
+    paths:
+      - examples/**
+      - '!examples/**-vercel/**'
+      - scripts/vercel-examples/**
+
+jobs:
+  check-generated:
+    name: Check Vercel Examples Generated
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install
+      - name: Generate Vercel examples
+        run: npx tsx scripts/vercel-examples/generate-vercel-examples.ts --all
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain examples/)" ]; then
+            echo "::error::Vercel examples are out of date. Please run 'npx tsx scripts/vercel-examples/generate-vercel-examples.ts --all' and commit the changes."
+            echo ""
+            echo "Changed files:"
+            git status --porcelain examples/
+            echo ""
+            echo "Diff:"
+            git diff examples/
+            exit 1
+          fi
+          echo "Vercel examples are up to date."

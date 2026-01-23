@@ -240,6 +240,13 @@ export async function generateScreenshots(
 
 	for (const dir of exampleDirs) {
 		const examplePath = path.join(examplesDir, dir.name);
+
+		// skip if directory is a vercel example
+		if (dir.name.endsWith("-vercel")) {
+			console.log(`⏭️  Skipping ${dir.name}: vercel example`);
+			continue;
+		}
+
 		const packageJsonPath = path.join(examplePath, "package.json");
 
 		// Skip if no package.json
