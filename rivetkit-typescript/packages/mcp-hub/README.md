@@ -13,7 +13,7 @@ The MCP server reads `website/dist/_metadata/docs.json`, which is produced by th
 endpoint during the normal Astro build. Run a full site build whenever docs change:
 
 ```bash
-pnpm --filter rivet-site-astro run build
+pnpm --filter rivet-website run build
 ```
 
 This writes the fresh metadata to `website/dist/_metadata/docs.json`, which `@rivetkit/mcp-hub`

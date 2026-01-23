@@ -1,0 +1,64 @@
+name: Publish Skills
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'website/src/content/docs/**/*.mdx'
+      - 'website/src/metadata/skills.ts'
+      - 'website/src/metadata/skill-base.md'
+      - 'website/src/pages/metadata/skills/**'
+      - 'website/scripts/build.ts'
+  workflow_dispatch:  # Allows manual triggering for testing
+
+concurrency:
+  group: skills-publish
+  cancel-in-progress: true
+
+jobs:
+  publish-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build website (generates skills)
+        run: pnpm build -F rivet-website
+
+      - name: Checkout skills repo
+        uses: actions/checkout@v4
+        with:
+          repository: rivet-dev/skills
+          token: ${{ secrets.SKILLS_REPO_TOKEN }}
+          path: skills-repo
+
+      - name: Copy generated skills
+        run: |
+          rm -rf skills-repo/*
+          cp -r website/dist/metadata/skills/* skills-repo/
+
+      - name: Commit and push
+        working-directory: skills-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update skills from rivet-gg/rivet@${{ github.sha }}"
+            git push
+          fi
