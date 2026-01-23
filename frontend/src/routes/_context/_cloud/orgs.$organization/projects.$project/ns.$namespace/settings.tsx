@@ -291,7 +291,7 @@ function Advanced() {
 				<AccordionContent>
 					<SecretToken />
 					<PublishableToken />
-					<CloudApiTokens />
+					{__APP_TYPE__ === "cloud" ? <CloudApiTokens /> : null}
 					<DatacenterStatus />
 				</AccordionContent>
 			</AccordionItem>

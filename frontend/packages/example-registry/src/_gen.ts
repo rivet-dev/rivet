@@ -9,6 +9,12 @@ export interface Template {
 	tags: string[];
 	noFrontend: boolean;
 	priority?: number;
+	providers: {
+		[key: string]: {
+			name: string;
+			deployUrl: string;
+		};
+	}
 }
 
 export const templates: Template[] = [
