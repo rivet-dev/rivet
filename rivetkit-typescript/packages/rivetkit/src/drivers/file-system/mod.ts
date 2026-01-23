@@ -1,4 +1,4 @@
-import { importNodeDependencies } from "@/utils/node";
+import { hasNodeDependencies } from "@/utils/node";
 import { FileSystemActorDriver } from "./actor";
 import { FileSystemGlobalState } from "./global-state";
 import { FileSystemManagerDriver } from "./manager";
@@ -13,7 +13,13 @@ export function createFileSystemOrMemoryDriver(
 	persist: boolean = true,
 	customPath?: string,
 ): DriverConfig {
-	importNodeDependencies();
+	// Validate that Node.js dependencies are available
+	if (!hasNodeDependencies()) {
+		throw new Error(
+			"File system driver requires Node.js. " +
+				"Ensure you are importing from 'rivetkit' in a Node.js environment.",
+		);
+	}
 
 	const state = new FileSystemGlobalState(persist, customPath);
 	const driverConfig: DriverConfig = {

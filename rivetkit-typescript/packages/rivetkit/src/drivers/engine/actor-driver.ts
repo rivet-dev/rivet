@@ -841,8 +841,8 @@ export class EngineActorDriver implements ActorDriver {
 		actorId: string,
 	): Promise<HibernatingWebSocketMetadata[]> {
 		const actor = await this.loadActor(actorId);
-		return actor.conns
-			.values()
+		// Use Array.from() for compatibility with runtimes that don't support ES2024 iterator helpers
+		return Array.from(actor.conns.values())
 			.map((conn) => {
 				const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
 				const hibernatable = connStateManager.hibernatableData;
@@ -856,8 +856,7 @@ export class EngineActorDriver implements ActorDriver {
 					headers: hibernatable.requestHeaders,
 				} satisfies HibernatingWebSocketMetadata;
 			})
-			.filter((x) => x !== undefined)
-			.toArray();
+			.filter((x): x is HibernatingWebSocketMetadata => x !== undefined);
 	}
 
 	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {

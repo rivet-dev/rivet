@@ -1,10 +1,8 @@
 import type { Hono } from "hono";
 import { detectRuntime, stringifyError } from "../utils";
+import { getGetPort, getHonoNodeServer, getHonoNodeWs } from "../utils/node";
 import { logger } from "./log";
 import { RegistryConfig } from "./config";
-
-// TODO: Go back to dynamic import for this
-import getPort from "get-port";
 
 const DEFAULT_PORT = 6420;
 
@@ -16,9 +14,7 @@ const DEFAULT_PORT = 6420;
 export async function findFreePort(
 	startPort: number = DEFAULT_PORT,
 ): Promise<number> {
-	// TODO: Fix this
-	// const getPortModule = "get-port";
-	// const { default: getPort } = await import(/* webpackIgnore: true */ getPortModule);
+	const getPort = getGetPort();
 
 	// Create an iterable of ports starting from startPort
 	function* portRange(start: number, count: number = 100): Iterable<number> {
@@ -55,35 +51,27 @@ async function serveNode(
 	managerPort: number,
 	app: Hono<any>,
 ): Promise<{ upgradeWebSocket: any }> {
-	// Import @hono/node-server using string variable to prevent static analysis
-	const nodeServerModule = "@hono/node-server";
-	let serve: any;
+	// Get @hono/node-server from injected dependencies
+	let serve: typeof import("@hono/node-server").serve;
 	try {
-		const dep = await import(
-			/* webpackIgnore: true */
-			nodeServerModule
-		);
-		serve = dep.serve;
+		const honoNodeServer = getHonoNodeServer();
+		serve = honoNodeServer.serve;
 	} catch (err) {
 		logger().error({
-			msg: "failed to import @hono/node-server. please run 'npm install @hono/node-server @hono/node-ws'",
+			msg: "failed to get @hono/node-server. please run 'npm install @hono/node-server @hono/node-ws'",
 			error: stringifyError(err),
 		});
 		process.exit(1);
 	}
 
-	// Import @hono/node-ws using string variable to prevent static analysis
-	const nodeWsModule = "@hono/node-ws";
-	let createNodeWebSocket: any;
+	// Get @hono/node-ws from injected dependencies
+	let createNodeWebSocket: typeof import("@hono/node-ws").createNodeWebSocket;
 	try {
-		const dep = await import(
-			/* webpackIgnore: true */
-			nodeWsModule
-		);
-		createNodeWebSocket = dep.createNodeWebSocket;
+		const honoNodeWs = getHonoNodeWs();
+		createNodeWebSocket = honoNodeWs.createNodeWebSocket;
 	} catch (err) {
 		logger().error({
-			msg: "failed to import @hono/node-ws. please run 'npm install @hono/node-server @hono/node-ws'",
+			msg: "failed to get @hono/node-ws. please run 'npm install @hono/node-server @hono/node-ws'",
 			error: stringifyError(err),
 		});
 		process.exit(1);

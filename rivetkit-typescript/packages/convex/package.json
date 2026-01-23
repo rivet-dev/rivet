@@ -1,0 +1,50 @@
+{
+	"name": "@rivetkit/convex",
+	"version": "2.0.40",
+	"description": "Convex integration for RivetKit actors",
+	"license": "Apache-2.0",
+	"keywords": [
+		"rivetkit",
+		"convex",
+		"actors",
+		"serverless",
+		"backend",
+		"real-time"
+	],
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs"
+	],
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/mod.d.mts",
+				"default": "./dist/mod.mjs"
+			},
+			"require": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsup src/mod.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*"
+	},
+	"peerDependencies": {
+		"convex": ">=1.17.0"
+	},
+	"devDependencies": {
+		"convex": "^1.17.0",
+		"tsup": "^8.4.0",
+		"typescript": "^5.5.2"
+	},
+	"stableVersion": "0.8.0"
+}
