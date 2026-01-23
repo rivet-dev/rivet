@@ -3,6 +3,15 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ReleaseOpts } from "./main";
 
+// Packages to exclude from build and publish.
+// These are either private packages or have dependencies that aren't available in CI.
+// This should match the filters in .github/workflows/pkg-pr-new.yaml
+export const EXCLUDED_RIVETKIT_PACKAGES = [
+	"@rivetkit/example-registry",
+	"@rivetkit/engine-frontend",
+	"@rivetkit/mcp-hub",
+] as const;
+
 async function npmVersionExists(
 	packageName: string,
 	version: string,
@@ -46,7 +55,9 @@ async function getRivetkitPackages(opts: ReleaseOpts): Promise<string[]> {
 			(pkg: any) =>
 				(pkg.name === "rivetkit" || pkg.name.startsWith("@rivetkit/")) &&
 				// Exclude engine packages as they're handled separately in enginePackagePaths
-				!pkg.name.startsWith("@rivetkit/engine-"),
+				!pkg.name.startsWith("@rivetkit/engine-") &&
+				// Exclude packages that shouldn't be published
+				!EXCLUDED_RIVETKIT_PACKAGES.includes(pkg.name),
 		)
 		.map((pkg: any) => pkg.name);
 }
@@ -54,11 +65,18 @@ async function getRivetkitPackages(opts: ReleaseOpts): Promise<string[]> {
 export async function publishSdk(opts: ReleaseOpts) {
 	// Build rivetkit packages first
 	console.log("==> Building rivetkit packages");
+
+	// Build exclusion filters for packages that shouldn't be built
+	const excludeFilters = EXCLUDED_RIVETKIT_PACKAGES.flatMap((pkg) => [
+		"-F",
+		`!${pkg}`,
+	]);
+
 	try {
 		await $({
 			stdio: "inherit",
 			cwd: opts.root,
-		})`pnpm build --force -F rivetkit -F @rivetkit/*`;
+		})`pnpm build --force -F rivetkit -F @rivetkit/* ${excludeFilters}`;
 		console.log("✅ Rivetkit packages built");
 	} catch (err) {
 		console.error("❌ Failed to build rivetkit packages");
