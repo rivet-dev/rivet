@@ -2896,6 +2896,12 @@ importers:
         specifier: ^5.0.8
         version: 5.0.8(@types/react@19.2.2)(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
     devDependencies:
+      '@rivetkit/cloudflare-workers':
+        specifier: workspace:*
+        version: link:../rivetkit-typescript/packages/cloudflare-workers
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../rivetkit-typescript/packages/react
       '@types/escape-html':
         specifier: ^1.0.4
         version: 1.0.4
