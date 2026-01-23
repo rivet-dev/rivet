@@ -175,7 +175,20 @@ async function validateReuseVersion(version: string): Promise<void> {
 	console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
 }
 
-async function runTypeCheck(opts: ReleaseOpts) {
+interface BuildAndCheckOpts {
+	ci: boolean;
+}
+
+async function runBuildAndChecks(opts: ReleaseOpts, { ci }: BuildAndCheckOpts) {
+	const ciLabel = ci ? "CI" : "Local";
+	console.log(`Running ${ciLabel} build and checks...`);
+
+	// Build exclusion filters for CI (excludes website, mcp-hub, engine-frontend)
+	const excludeFilters = ci
+		? ["-F", "!rivet-site-astro", "-F", "!@rivetkit/engine-frontend", "-F", "!@rivetkit/mcp-hub"]
+		: [];
+
+	// Type check
 	console.log("Checking types...");
 	try {
 		// Build rivetkit packages first since some examples depend on them
@@ -183,19 +196,18 @@ async function runTypeCheck(opts: ReleaseOpts) {
 		await $({
 			stdio: "inherit",
 			cwd: opts.root,
-		})`pnpm build --force -F rivetkit -F @rivetkit/*`;
+		})`pnpm build --force -F rivetkit -F @rivetkit/* ${excludeFilters}`;
 		console.log("✅ Rivetkit packages built");
 
 		// --force to skip cache in case of Turborepo bugs
-		await $({ stdio: "inherit", cwd: opts.root })`pnpm check-types --force`;
+		await $({ stdio: "inherit", cwd: opts.root })`pnpm check-types --force ${excludeFilters}`;
 		console.log("✅ Type check passed");
 	} catch (err) {
 		console.error("❌ Type check failed");
 		throw err;
 	}
-}
 
-async function runCargoCheck(opts: ReleaseOpts) {
+	// Cargo check
 	console.log("Running cargo check...");
 	try {
 		await $({ stdio: "inherit", cwd: opts.root })`cargo check`;
@@ -204,33 +216,21 @@ async function runCargoCheck(opts: ReleaseOpts) {
 		console.error("❌ Cargo check failed");
 		throw err;
 	}
-}
 
-async function buildWebsite(opts: ReleaseOpts) {
-	console.log("Building website...");
-	try {
-		const websiteDir = path.join(opts.root, "website");
-		await $({ stdio: "inherit", cwd: websiteDir })`pnpm build`;
-		console.log("✅ Website build passed");
-	} catch (err) {
-		console.error("❌ Website build failed");
-		throw err;
+	// Build website (local only)
+	if (!ci) {
+		console.log("Building website...");
+		try {
+			const websiteDir = path.join(opts.root, "website");
+			await $({ stdio: "inherit", cwd: websiteDir })`pnpm build`;
+			console.log("✅ Website build passed");
+		} catch (err) {
+			console.error("❌ Website build failed");
+			throw err;
+		}
 	}
-}
 
-async function runLocalChecks(opts: ReleaseOpts) {
-	console.log("Running local checks (type check, cargo check, website build)...");
-
-	// Run type check
-	await runTypeCheck(opts);
-
-	// Run cargo check
-	await runCargoCheck(opts);
-
-	// Build website
-	await buildWebsite(opts);
-
-	console.log("✅ All local checks passed");
+	console.log(`✅ All ${ciLabel} checks passed`);
 }
 
 async function getVersionFromArgs(opts: {
@@ -282,13 +282,12 @@ const STEPS = [
 	"confirm-release",
 	"update-version",
 	"generate-fern",
-	"run-local-checks",
+	"run-local-build-and-checks",
 	"git-commit",
 	"git-push",
 	"trigger-workflow",
 	"validate-reuse-version",
-	"run-type-check",
-	"run-cargo-check",
+	"run-ci-build-and-checks",
 	"build-js-artifacts",
 	"publish-sdk",
 	"tag-docker",
@@ -312,21 +311,22 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 	// These steps modify the source code, so they need to be ran & committed
 	// locally. CI cannot push commits.
 	//
-	// run-local-checks runs type checks, cargo check, and website build to
-	// fail fast before committing/pushing. This duplicates setup-ci checks
-	// intentionally to catch errors early.
+	// run-local-build-and-checks runs type checks, cargo check, and website
+	// build to fail fast before committing/pushing. This duplicates setup-ci
+	// checks intentionally to catch errors early.
 	"setup-local": [
 		"confirm-release",
 		"update-version",
 		"generate-fern",
-		"run-local-checks",
+		"run-local-build-and-checks",
 		"git-commit",
 		"git-push",
 		"trigger-workflow",
 	],
 	// These steps validate the repository and build JS artifacts before
-	// triggering release.
-	"setup-ci": ["validate-reuse-version", "run-type-check", "run-cargo-check", "build-js-artifacts"],
+	// triggering release. Excludes website, mcp-hub, and engine-frontend
+	// since they are built separately.
+	"setup-ci": ["validate-reuse-version", "run-ci-build-and-checks", "build-js-artifacts"],
 	// These steps run after the required artifacts have been successfully built.
 	"complete-ci": [
 		"publish-sdk",
@@ -463,7 +463,7 @@ async function main() {
 
 	assertEquals(releaseOpts.commit.length, 7, "must use 8 char short commit");
 
-	if (opts.validateGit && !shouldRunStep("run-type-check")) {
+	if (opts.validateGit && !shouldRunStep("run-ci-build-and-checks")) {
 		// HACK: Skip setup-ci because for some reason there's changes in the setup step but only in GitHub Actions
 		await validateGit(releaseOpts);
 	}
@@ -533,9 +533,9 @@ async function main() {
 		await $({ stdio: "inherit" })`./scripts/fern/gen.sh`;
 	}
 
-	if (shouldRunStep("run-local-checks")) {
-		console.log("==> Running Local Checks");
-		await runLocalChecks(releaseOpts);
+	if (shouldRunStep("run-local-build-and-checks")) {
+		console.log("==> Running Local Build and Checks");
+		await runBuildAndChecks(releaseOpts, { ci: false });
 	}
 
 	if (shouldRunStep("git-commit")) {
@@ -591,14 +591,9 @@ async function main() {
 		}
 	}
 
-	if (shouldRunStep("run-type-check")) {
-		console.log("==> Running Type Check");
-		await runTypeCheck(releaseOpts);
-	}
-
-	if (shouldRunStep("run-cargo-check")) {
-		console.log("==> Running Cargo Check");
-		await runCargoCheck(releaseOpts);
+	if (shouldRunStep("run-ci-build-and-checks")) {
+		console.log("==> Running CI Build and Checks");
+		await runBuildAndChecks(releaseOpts, { ci: true });
 	}
 
 	if (shouldRunStep("build-js-artifacts")) {
