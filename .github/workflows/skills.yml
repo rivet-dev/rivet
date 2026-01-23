@@ -1,3 +1,12 @@
+# Publishes generated skill files to rivet-dev/skills repository.
+#
+# To test this workflow:
+#   1. Trigger manually: gh workflow run skills.yml --repo rivet-gg/rivet
+#   2. Watch execution: gh run watch --repo rivet-gg/rivet
+#   3. Check logs if failed: gh run view --repo rivet-gg/rivet --log-failed
+#   4. Verify skills repo contents: gh api repos/rivet-dev/skills/contents --jq '.[].name'
+#   5. View latest commit: gh api repos/rivet-dev/skills/commits --jq '.[0].commit.message'
+
 name: Publish Skills
 
 on:
