@@ -154,13 +154,6 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	broadcast<Args extends Array<unknown>>(name: string, ...args: Args) {
 		this.#actor.assertReady();
 
-		// Emit to inspector
-		this.#actor.inspector.emitter.emit("eventFired", {
-			type: "broadcast",
-			eventName: name,
-			args,
-		});
-
 		// Get subscribers for this event
 		const subscribers = this.#subscriptionIndex.get(name);
 		if (!subscribers || subscribers.size === 0) {
@@ -170,6 +163,11 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 			return;
 		}
+
+		this.#actor.emitTraceEvent("message.broadcast", {
+			"rivet.event.name": name,
+			"rivet.broadcast.subscribers": subscribers.size,
+		});
 
 		// Create serialized message
 		const eventData = { name, args };

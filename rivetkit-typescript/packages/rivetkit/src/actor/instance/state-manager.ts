@@ -108,9 +108,14 @@ export class StateManager<S, CP, CS, I> {
 				this.#actor.rLog.info({ msg: "actor state initializing" });
 
 				if ("createState" in this.#config) {
-					stateData = await this.#config.createState(
-						this.#actor.actorContext,
-						persistData.input!,
+					stateData = await this.#actor.runInTraceSpan(
+						"actor.createState",
+						undefined,
+						() =>
+							this.#config.createState!(
+								this.#actor.actorContext,
+								persistData.input!,
+							),
 					);
 				} else if ("state" in this.#config) {
 					stateData = structuredClone(this.#config.state);
@@ -349,13 +354,23 @@ export class StateManager<S, CP, CS, I> {
 			this.#actor.isReady() &&
 			!this.#isInOnStateChange
 		) {
+			const span = this.#actor.startTraceSpan("actor.onStateChange", {
+				"rivet.state.path": path,
+			});
 			try {
 				this.#isInOnStateChange = true;
-				this.#config.onStateChange(
-					this.#actor.actorContext,
-					this.#persistRaw.state,
+				this.#actor.traces.withSpan(span, () =>
+					this.#config.onStateChange!(
+						this.#actor.actorContext,
+						this.#persistRaw.state,
+					),
 				);
+				this.#actor.endTraceSpan(span, { code: "OK" });
 			} catch (error) {
+				this.#actor.endTraceSpan(span, {
+					code: "ERROR",
+					message: stringifyError(error),
+				});
 				this.#actor.rLog.error({
 					msg: "error in `_onStateChange`",
 					error: stringifyError(error),
