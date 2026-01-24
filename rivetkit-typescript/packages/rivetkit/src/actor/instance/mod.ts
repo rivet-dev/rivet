@@ -1173,9 +1173,15 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		this.#rLog.debug({ msg: "starting run handler" });
 
+// Handle both function and RunConfig object (returned by workflow())
+		const runFn =
+			typeof this.#config.run === "function"
+				? this.#config.run
+				: this.#config.run.run;
+
 		const runSpan = this.startTraceSpan("actor.run");
 		const runResult = this.#traces.withSpan(runSpan, () =>
-			this.#config.run!(this.actorContext),
+			runFn(this.actorContext),
 		);
 
 		if (runResult instanceof Promise) {

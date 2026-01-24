@@ -21,6 +21,17 @@ import type {
 } from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
 
+/**
+ * Configuration object that can be returned from `workflow()` to provide
+ * metadata and the run handler.
+ */
+export interface RunConfig {
+	/** Icon to display in the inspector for this run handler */
+	icon?: string;
+	/** The actual run handler function */
+	run: (...args: any[]) => any;
+}
+
 export interface ActorTypes<
 	TState,
 	TConnParams,
@@ -47,13 +58,19 @@ const zFunction = <
 // We don't use Zod generics with `z.custom` because:
 // (a) there seems to be a weird bug in either Zod, tsup, or TSC that causese external packages to have different types from `z.infer` than from within the same package and
 // (b) it makes the type definitions incredibly difficult to read as opposed to vanilla TypeScript.
+// Schema for RunConfig objects returned by workflow()
+const RunConfigSchema = z.object({
+	icon: z.string().optional(),
+	run: zFunction(),
+});
+
 export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
 		onDestroy: zFunction().optional(),
 		onWake: zFunction().optional(),
 		onSleep: zFunction().optional(),
-		run: zFunction().optional(),
+		run: z.union([zFunction(), RunConfigSchema]).optional(),
 		onStateChange: zFunction().optional(),
 		onBeforeConnect: zFunction().optional(),
 		onConnect: zFunction().optional(),
@@ -338,18 +355,22 @@ interface BaseActorConfig<
 	 * On shutdown, the actor waits for this handler to complete with a
 	 * configurable timeout (options.runStopTimeout, default 15s).
 	 *
+	 * Can be a function or a RunConfig object (returned by `workflow()`).
+	 *
 	 * @returns Void or a Promise. If the promise exits, the actor crashes.
 	 */
-	run?: (
-		c: RunContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	) => void | Promise<void>;
+	run?:
+		| ((
+				c: RunContext<
+					TState,
+					TConnParams,
+					TConnState,
+					TVars,
+					TInput,
+					TDatabase
+				>,
+		  ) => void | Promise<void>)
+		| RunConfig;
 
 	/**
 	 * Called when the actor's state changes.

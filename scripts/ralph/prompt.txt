@@ -1,0 +1,17 @@
+@prd.md @progress.txt
+
+Work on exactly ONE feature, then STOP.
+
+1. Decide which task to work on next (highest priority, not necessarily first in list)
+2. Implement that ONE feature
+3. Run type checks and tests
+4. Append progress to progress.txt
+5. Make a git commit
+6. STOP IMMEDIATELY - do not start another task
+
+If all work is complete, output <promise>COMPLETE</promise>
+
+CRITICAL: After committing, you are DONE. Do not look for more work. Do not start the next feature. Just stop.
+
+Never ask questions or request clarification.
+
