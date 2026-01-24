@@ -168,12 +168,9 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				connType: this[CONN_DRIVER_SYMBOL]?.type,
 			});
 		}
-
-		this.#actor.inspector.emitter.emit("eventFired", {
-			type: "event",
-			eventName,
-			args,
-			connId: this.id,
+		this.#actor.emitTraceEvent("message.send", {
+			"rivet.event.name": eventName,
+			"rivet.conn.id": this.id,
 		});
 		const eventData = { name: eventName, args };
 		this[CONN_SEND_MESSAGE_SYMBOL](
