@@ -23,7 +23,7 @@ runDriverTests({
 			async (registry) => {
 				// Get configuration from environment or use defaults
 				const endpoint =
-					process.env.RIVET_ENDPOINT || "http://127.0.0.1:6420";
+					process.env.RIVET_ENDPOINT || "http://localhost:6420";
 				const namespace = `test-${crypto.randomUUID().slice(0, 8)}`;
 				const runnerName = "test-runner";
 				const token = "dev";
@@ -76,7 +76,7 @@ runDriverTests({
 
 				return {
 					rivetEngine: {
-						endpoint: "http://127.0.0.1:6420",
+						endpoint: "http://localhost:6420",
 						namespace: namespace,
 						runnerName: runnerName,
 						token,

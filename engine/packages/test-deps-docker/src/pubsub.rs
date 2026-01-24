@@ -48,7 +48,7 @@ impl TestPubSub {
 
 				let config =
 					rivet_config::config::PubSub::Nats(rivet_config::config::pubsub::Nats {
-						addresses: vec![format!("127.0.0.1:{}", port)],
+						addresses: vec![format!("localhost:{}", port)],
 						..Default::default()
 					});
 

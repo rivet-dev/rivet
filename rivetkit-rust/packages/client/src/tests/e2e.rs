@@ -175,7 +175,7 @@ async fn e2e() {
     // Pick an available port
     let port = portpicker::pick_unused_port().expect("Failed to pick an unused port");
     info!("Using port {}", port);
-    let endpoint = format!("http://127.0.0.1:{}", port);
+    let endpoint = format!("http://localhost:{}", port);
 
     // Start the mock server
     let _server = MockServer::start(port).await;

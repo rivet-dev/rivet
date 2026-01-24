@@ -1,6 +1,6 @@
 import { DurableStream } from "@durable-streams/client";
 
-export const STREAMS_SERVER_URL = "http://127.0.0.1:8787/v1/stream";
+export const STREAMS_SERVER_URL = "http://localhost:8787/v1/stream";
 
 export interface ConversationStreams {
 	promptStream: DurableStream;

@@ -227,8 +227,8 @@ impl TestCtx {
 				name: format!("dc-{}", other_replica_id),
 				datacenter_label: other_replica_id as u16,
 				is_leader: other_replica_id == self.leader_id,
-				peer_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.api_peer_port))?,
-				public_url: Url::parse(&format!("http://127.0.0.1:{}", metadata.guard_port))?,
+				peer_url: Url::parse(&format!("http://localhost:{}", metadata.api_peer_port))?,
+				public_url: Url::parse(&format!("http://localhost:{}", metadata.guard_port))?,
 				proxy_url: None,
 				valid_hosts: None,
 			});

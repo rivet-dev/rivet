@@ -50,7 +50,7 @@ impl TestDatabase {
 				};
 
 				let connection_string = format!(
-					"host=127.0.0.1 port={} user=postgres password={} dbname={}",
+					"host=localhost port={} user=postgres password={} dbname={}",
 					port, password, database
 				);
 
@@ -96,7 +96,7 @@ impl TestDatabase {
 		use tokio_postgres::Config;
 
 		let connection_string =
-			format!("postgres://postgres:test_password@127.0.0.1:{port}/test_db");
+			format!("postgres://postgres:test_password@localhost:{port}/test_db");
 
 		for attempt in 1..=max_attempts {
 			tracing::debug!(attempt, max_attempts, "Checking if Postgres is ready");

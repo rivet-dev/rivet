@@ -242,7 +242,7 @@ export async function createTestRuntime(
 			"should have injectWebSocket",
 		);
 		nodeWebSocket.injectWebSocket(server);
-		const serverEndpoint = `http://127.0.0.1:${port}`;
+		const serverEndpoint = `http://localhost:${port}`;
 
 		logger().info({ msg: "test serer listening", port });
 

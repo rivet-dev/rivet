@@ -64,7 +64,7 @@ pub struct Postgres {
 impl Default for Postgres {
 	fn default() -> Self {
 		Self {
-			url: Secret::new("postgresql://postgres:postgres@127.0.0.1:5432/postgres".into()),
+			url: Secret::new("postgresql://postgres:postgres@localhost:5432/postgres".into()),
 			unstable_disable_lock_customization: false,
 			ssl: None,
 		}

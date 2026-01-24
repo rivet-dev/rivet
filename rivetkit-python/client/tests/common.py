@@ -145,5 +145,5 @@ serve(app, {{ port: {port}, mode: "memory" }});
         process.kill()
         shutil.rmtree(temp_dir)
     
-    return ("http://127.0.0.1:" + str(port), stop_mock_server)
+    return ("http://localhost:" + str(port), stop_mock_server)
 

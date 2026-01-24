@@ -28,7 +28,7 @@ export const toNextHandler = (registry: Registry<any>) => {
 		const publicUrl =
 			process.env.NEXT_PUBLIC_SITE_URL ??
 			process.env.NEXT_PUBLIC_VERCEL_URL ??
-			`http://127.0.0.1:${process.env.PORT ?? 3000}`;
+			`http://localhost:${process.env.PORT ?? 3000}`;
 
 		// Set these on the registry's config directly since the legacy inputConfig
 		// isn't used by the serverless router

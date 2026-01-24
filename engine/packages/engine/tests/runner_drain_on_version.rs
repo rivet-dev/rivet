@@ -542,7 +542,7 @@ fn drain_on_version_upgrade_via_metadata_polling() {
 			// Give the server time to start
 			tokio::time::sleep(Duration::from_millis(100)).await;
 
-			let mock_url = format!("http://127.0.0.1:{}", mock_port);
+			let mock_url = format!("http://localhost:{}", mock_port);
 
 			// Create serverless runner config with drain_on_version_upgrade enabled
 			let mut datacenters = HashMap::new();

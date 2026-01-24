@@ -56,7 +56,7 @@ export function getInspectorUrl(
 	const endpoint =
 		config.inspector.defaultEndpoint ??
 		(config.managerPort !== 6420
-			? `http://127.0.0.1:${managerPort}`
+			? `http://localhost:${managerPort}`
 			: undefined);
 	if (endpoint) {
 		url.searchParams.set("u", endpoint);

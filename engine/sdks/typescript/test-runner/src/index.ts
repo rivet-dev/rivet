@@ -19,7 +19,7 @@ const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
 	? Number(process.env.RIVET_RUNNER_TOTAL_SLOTS)
 	: 10000;
-const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
+const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://localhost:6420";
 const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
 const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER === undefined;
 const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER === undefined;
@@ -109,7 +109,7 @@ if (AUTOSTART_RUNNER) {
 
 async function autoConfigureServerless() {
 	const res = await fetch(
-		`http://127.0.0.1:6420/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`,
+		`http://localhost:6420/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`,
 		{
 			method: "PUT",
 			headers: {
