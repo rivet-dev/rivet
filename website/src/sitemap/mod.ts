@@ -276,6 +276,10 @@ export const sitemap = [
 								title: "Versions & Upgrades",
 								href: "/docs/actors/versions",
 							},
+							{
+								title: "Icons & Names",
+								href: "/docs/actors/appearance",
+							},
 						],
 					},
 				],
