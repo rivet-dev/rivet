@@ -13,11 +13,12 @@ import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDatabaseTab } from "./actor-db-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
-import { ActorEventsTab } from "./actor-events-tab";
 import { ActorLogsTab } from "./actor-logs-tab";
+import { ActorQueueTab } from "./actor-queue-tab";
 import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
+import { ActorTracesTab } from "./actor-traces-tab";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
 import {
@@ -100,7 +101,8 @@ export function ActorTabs({
 	className?: string;
 	children?: ReactNode;
 }) {
-	const value = disabled ? undefined : tab || "state";
+	const normalizedTab = tab === "events" ? "traces" : tab;
+	const value = disabled ? undefined : normalizedTab || "state";
 
 	const guardContent = useInspectorGuard();
 
@@ -132,10 +134,18 @@ export function ActorTabs({
 
 						<TabsTrigger
 							disabled={disabled}
-							value="events"
+							value="queue"
 							className="text-xs px-3 py-1 pb-2"
 						>
-							Events
+							Queue
+						</TabsTrigger>
+
+						<TabsTrigger
+							disabled={disabled}
+							value="traces"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Traces
 						</TabsTrigger>
 
 						{/* <TabsTrigger
@@ -209,8 +219,12 @@ export function ActorTabs({
 						)}
 					</TabsContent>
 
-					<TabsContent value="events" className="min-h-0 flex-1 mt-0">
-						{guardContent || <ActorEventsTab actorId={actorId} />}
+					<TabsContent value="queue" className="min-h-0 flex-1 mt-0">
+						{guardContent || <ActorQueueTab actorId={actorId} />}
+					</TabsContent>
+
+					<TabsContent value="traces" className="min-h-0 flex-1 mt-0">
+						{guardContent || <ActorTracesTab actorId={actorId} />}
 					</TabsContent>
 					<TabsContent
 						value="database"

@@ -3,8 +3,11 @@ import { createVersionedDataHandler } from "vbare";
 import * as v1 from "../../../dist/schemas/actor-inspector/v1";
 import * as v2 from "../../../dist/schemas/actor-inspector/v2";
 import * as v3 from "../../../dist/schemas/actor-inspector/v3";
+import * as v4 from "../../../dist/schemas/actor-inspector/v4";
 
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
+
+const EVENTS_DROPPED_ERROR = "inspector.events_dropped";
 
 // Converter from v1 to v2: Add queueSize field to Init message
 const v1ToClientToV2 = (v1Data: v1.ToClient): v2.ToClient => {
@@ -58,7 +61,14 @@ const v2ToClientToV3 = (v2Data: v2.ToClient): v3.ToClient => {
 		v2Data.body.tag === "EventsUpdated" ||
 		v2Data.body.tag === "EventsResponse"
 	) {
-		throw new Error("Cannot convert events responses to v3");
+		return {
+			body: {
+				tag: "Error",
+				val: {
+					message: EVENTS_DROPPED_ERROR,
+				},
+			},
+		};
 	}
 	return v2Data as unknown as v3.ToClient;
 };
@@ -81,6 +91,19 @@ const v3ToClientToV2 = (v3Data: v3.ToClient): v2.ToClient => {
 		throw new Error("Cannot convert TraceQueryResponse to v2");
 	}
 	return v3Data as unknown as v2.ToClient;
+};
+
+// Converter from v3 to v4: No changes to client structure
+const v3ToClientToV4 = (v3Data: v3.ToClient): v4.ToClient => {
+	return v3Data as unknown as v4.ToClient;
+};
+
+// Converter from v4 to v3: Drop queue responses
+const v4ToClientToV3 = (v4Data: v4.ToClient): v3.ToClient => {
+	if (v4Data.body.tag === "QueueResponse") {
+		throw new Error("Cannot convert QueueResponse to v3");
+	}
+	return v4Data as unknown as v3.ToClient;
 };
 
 // ToServer is identical between v1 and v2
@@ -111,7 +134,20 @@ const v3ToServerToV2 = (v3Data: v3.ToServer): v2.ToServer => {
 	return v3Data as unknown as v2.ToServer;
 };
 
-export const TO_SERVER_VERSIONED = createVersionedDataHandler<v3.ToServer>({
+// Converter from v3 to v4: No changes to server structure
+const v3ToServerToV4 = (v3Data: v3.ToServer): v4.ToServer => {
+	return v3Data as unknown as v4.ToServer;
+};
+
+// Converter from v4 to v3: Drop queue request
+const v4ToServerToV3 = (v4Data: v4.ToServer): v3.ToServer => {
+	if (v4Data.body.tag === "QueueRequest") {
+		throw new Error("Cannot convert QueueRequest to v3");
+	}
+	return v4Data as unknown as v3.ToServer;
+};
+
+export const TO_SERVER_VERSIONED = createVersionedDataHandler<v4.ToServer>({
 	serializeVersion: (data, version) => {
 		switch (version) {
 			case 1:
@@ -120,6 +156,8 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v3.ToServer>({
 				return v2.encodeToServer(data as v2.ToServer);
 			case 3:
 				return v3.encodeToServer(data);
+			case 4:
+				return v4.encodeToServer(data);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -132,15 +170,17 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v3.ToServer>({
 				return v2.decodeToServer(bytes);
 			case 3:
 				return v3.decodeToServer(bytes);
+			case 4:
+				return v4.decodeToServer(bytes);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
 	},
-	deserializeConverters: () => [v1ToServerToV2, v2ToServerToV3],
-	serializeConverters: () => [v3ToServerToV2, v2ToServerToV1],
+	deserializeConverters: () => [v1ToServerToV2, v2ToServerToV3, v3ToServerToV4],
+	serializeConverters: () => [v4ToServerToV3, v3ToServerToV2, v2ToServerToV1],
 });
 
-export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v3.ToClient>({
+export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v4.ToClient>({
 	serializeVersion: (data, version) => {
 		switch (version) {
 			case 1:
@@ -149,6 +189,8 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v3.ToClient>({
 				return v2.encodeToClient(data as v2.ToClient);
 			case 3:
 				return v3.encodeToClient(data);
+			case 4:
+				return v4.encodeToClient(data);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -161,10 +203,12 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v3.ToClient>({
 				return v2.decodeToClient(bytes);
 			case 3:
 				return v3.decodeToClient(bytes);
+			case 4:
+				return v4.decodeToClient(bytes);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
 	},
-	deserializeConverters: () => [v1ToClientToV2, v2ToClientToV3],
-	serializeConverters: () => [v3ToClientToV2, v2ToClientToV1],
+	deserializeConverters: () => [v1ToClientToV2, v2ToClientToV3, v3ToClientToV4],
+	serializeConverters: () => [v4ToClientToV3, v3ToClientToV2, v2ToClientToV1],
 });
