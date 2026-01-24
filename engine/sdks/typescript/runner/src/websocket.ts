@@ -13,14 +13,32 @@ export async function importWebSocket(): Promise<typeof WebSocket> {
 	webSocketPromise = (async () => {
 		let _WebSocket: typeof WebSocket;
 
-		if (typeof WebSocket !== "undefined") {
-			// Native
-			_WebSocket = WebSocket as unknown as typeof WebSocket;
+		// Check for native WebSocket in multiple ways to handle different runtimes
+		// Some runtimes expose WebSocket on globalThis but not as a global variable
+		const nativeWebSocket =
+			typeof WebSocket !== "undefined"
+				? WebSocket
+				: typeof globalThis !== "undefined" && globalThis.WebSocket
+					? globalThis.WebSocket
+					: undefined;
+
+		if (nativeWebSocket) {
+			// Native WebSocket (browsers, Deno, Node 22+, edge runtimes like Convex/Cloudflare)
+			_WebSocket = nativeWebSocket as unknown as typeof WebSocket;
 			logger()?.debug({ msg: "using native websocket" });
 		} else {
-			// Node.js package
+			// Node.js package - only for older Node.js without native WebSocket
 			try {
-				const ws = await import("ws");
+				// Use new Function to completely hide the import from bundlers.
+				// Bundlers like esbuild statically analyze imports and include
+				// dependencies even with variable indirection. This technique
+				// prevents any bundler from seeing the "ws" string.
+				// Edge runtimes should hit the native WebSocket branch above.
+				const dynamicImport = new Function(
+					"moduleName",
+					"return import(moduleName)",
+				) as (moduleName: string) => Promise<any>;
+				const ws = await dynamicImport("ws");
 				_WebSocket = ws.default as unknown as typeof WebSocket;
 				logger()?.debug({ msg: "using websocket from npm" });
 			} catch {

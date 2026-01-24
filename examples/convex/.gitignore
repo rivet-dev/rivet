@@ -1,0 +1,6 @@
+.actorcore
+node_modules
+dist
+convex/_generated
+
+.env.local

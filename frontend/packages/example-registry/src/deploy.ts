@@ -53,6 +53,15 @@ export const deployOptions = [
 		specializedPlatform: true,
 	},
 	{
+		displayName: "Convex",
+		name: "convex" as const,
+		href: "/docs/connect/convex",
+		description:
+			"Deploy RivetKit with Convex's reactive backend platform",
+		icon: faServer as any,
+		specializedPlatform: true,
+	},
+	{
 		displayName: "Kubernetes",
 		name: "kubernetes" as const,
 		href: "/docs/connect/kubernetes",
