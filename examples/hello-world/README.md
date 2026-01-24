@@ -11,12 +11,11 @@ npm install
 npm run dev
 ```
 
-
 ## Features
 
 - **Actor state management**: Persistent counter state managed by Rivet Actors
 - **Real-time updates**: Counter values synchronized across all connected clients via events
-- **Multiple actor instances**: Each counter ID creates a separate actor instance
+- **Multiple actor instances**: Each actor key creates a separate actor instance
 - **React integration**: Uses `@rivetkit/react` for seamless React hooks integration
 
 ## Implementation
@@ -29,7 +28,7 @@ This example demonstrates the core RivetKit concepts with a simple counter:
 
 ## Resources
 
-Read more about [actions](/docs/actors/actions), [state](/docs/actors/state), and [events](/docs/actors/events).
+Read more about [actions](https://rivet.dev/docs/actors/actions), [state](https://rivet.dev/docs/actors/state), and [events](https://rivet.dev/docs/actors/events).
 
 ## License
 
