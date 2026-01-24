@@ -48,5 +48,10 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 			expect(next.ticks).toBeGreaterThan(initial.ticks);
 		});
+
+		// NOTE: Test for workflow persistence across actor sleep is complex because
+		// calling c.sleep() during a workflow prevents clean shutdown. The workflow
+		// persistence is implicitly tested by the "sleeps and resumes between ticks"
+		// test which verifies the workflow continues from persisted state.
 	});
 }
