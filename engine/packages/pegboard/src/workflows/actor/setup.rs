@@ -118,14 +118,6 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				1,
 			);
 
-			// Update metrics
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				input.namespace_id,
-				namespace::keys::metric::Metric::TotalActors(input.name.clone()),
-				1,
-			);
-
 			Ok(())
 		})
 		.custom_instrument(tracing::info_span!("actor_insert_tx"))

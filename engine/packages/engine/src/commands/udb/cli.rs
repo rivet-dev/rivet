@@ -53,6 +53,16 @@ pub enum SubCommand {
 		style: ListStyle,
 	},
 
+	/// Calculates or estimates the size of all data under the current key.
+	#[command(name = "size")]
+	Size {
+		/// Key path to list. Supports relative key paths.
+		key: Option<String>,
+		/// Whether or not to scan the entire subspace and calculate the size manually.
+		#[arg(short = 's', long)]
+		scan: bool,
+	},
+
 	/// Move single key or entire subspace from A to B.
 	#[command(name = "move")]
 	Move {
@@ -335,6 +345,62 @@ impl SubCommand {
 						}
 
 						println!();
+					}
+					Ok(Err(err)) => println!("txn error: {err:#}"),
+					Err(_) => println!("txn timed out"),
+				}
+			}
+			SubCommand::Size { key, scan } => {
+				let mut current_tuple = current_tuple.clone();
+				if update_current_tuple(&mut current_tuple, key) {
+					return CommandResult::Error;
+				}
+
+				let subspace = universaldb::tuple::Subspace::all().subspace(&current_tuple);
+
+				let fut = pool.run(|tx| {
+					let subspace = subspace.clone();
+					async move {
+						let (start, end) = subspace.range();
+
+						let estimate_bytes =
+							tx.get_estimated_range_size_bytes(&start, &end).await?;
+
+						let exact_bytes = if scan {
+							let exact_bytes = tx
+								.get_ranges_keyvalues(
+									universaldb::RangeOption {
+										mode: StreamingMode::WantAll,
+										..(&subspace).into()
+									},
+									Snapshot,
+								)
+								.try_fold(0, |s, entry| async move {
+									Ok(s + entry.key().len() + entry.value().len())
+								})
+								.await?;
+
+							Some(exact_bytes as i64)
+						} else {
+							None
+						};
+
+						Ok((estimate_bytes, exact_bytes))
+					}
+				});
+
+				match tokio::time::timeout(Duration::from_secs(5), fut).await {
+					Ok(Ok((estimate_bytes, exact_bytes))) => {
+						println!("estimated size: {estimate_bytes}b");
+						if let Some(exact_bytes) = exact_bytes {
+							println!("exact size: {exact_bytes}b");
+							println!(
+								"difference: {}b ({:.1}%)",
+								exact_bytes - estimate_bytes,
+								(exact_bytes as f64 - estimate_bytes as f64)
+									/ estimate_bytes as f64 * 100.0,
+							);
+						}
 					}
 					Ok(Err(err)) => println!("txn error: {err:#}"),
 					Err(_) => println!("txn timed out"),
