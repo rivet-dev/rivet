@@ -1,13 +1,6 @@
 import { faChevronRight, faCode, Icon } from "@rivet-gg/icons";
 import { templates } from "@rivetkit/example-registry";
-import {
-	createLink,
-	Link,
-	type LinkOptions,
-	useSearch,
-} from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import React, { type ComponentProps } from "react";
+import { Link, type LinkOptions, useSearch } from "@tanstack/react-router";
 import {
 	Button,
 	cn,
@@ -20,10 +13,8 @@ import { MotionLink } from "./motion-link";
 
 export function Templates({
 	getTemplateLink,
-	startFromScratchLink,
 }: {
 	getTemplateLink?: (template: string) => LinkOptions;
-	startFromScratchLink?: LinkOptions;
 }) {
 	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
 	return (
@@ -60,13 +51,6 @@ export function Templates({
 							</Link>
 						</Button>
 					)}
-				</div>
-				<div className="flex gap-4">
-					<Button variant="outline" asChild>
-						<Link {...startFromScratchLink}>
-							Start From Scratch
-						</Link>
-					</Button>
 				</div>
 			</div>
 		</>

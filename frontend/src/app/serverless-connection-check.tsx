@@ -119,6 +119,10 @@ export function ServerlessConnectionCheck({
 								.with("hetzner", () => "Hetzner")
 								.with("kubernetes", () => "Kubernetes")
 								.with("custom", () => "VM & Bare Metal")
+								.with(
+									"custom-platform",
+									() => "Custom Platform",
+								)
 								.exhaustive()}{" "}
 							is running with RivetKit {data.success.version}
 						</>
