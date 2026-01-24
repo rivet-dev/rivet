@@ -9,14 +9,11 @@ import { ActionContext } from "@/actor/contexts/action";
 import * as actorErrors from "@/actor/errors";
 import type { AnyActorInstance } from "@/mod";
 import type * as schema from "@/schemas/actor-inspector/mod";
-import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
-import type { Event } from "./mod";
+import { bufferToArrayBuffer } from "@/utils";
 
 interface ActorInspectorEmitterEvents {
 	stateUpdated: (state: unknown) => void;
 	connectionsUpdated: () => void;
-	eventFired: (event: EventDetails) => void;
-	eventsChanged: () => void;
 	queueUpdated: () => void;
 }
 
@@ -24,30 +21,6 @@ export type Connection = Omit<schema.Connection, "details"> & {
 	details: unknown;
 };
 
-type EventDetails =
-	| {
-			type: "action";
-			name: string;
-			args: unknown[];
-			connId: string;
-	  }
-	| {
-			type: "subscribe";
-			eventName: string;
-			connId: string;
-	  }
-	| {
-			type: "unsubscribe";
-			eventName: string;
-			connId: string;
-	  }
-	| {
-			type: "event";
-			eventName: string;
-			args: unknown[];
-			connId: string;
-	  }
-	| { type: "broadcast"; eventName: string; args: unknown[] };
 
 /**
  * Provides a unified interface for inspecting actor external and internal state.
@@ -55,36 +28,10 @@ type EventDetails =
 export class ActorInspector {
 	public readonly emitter = createNanoEvents<ActorInspectorEmitterEvents>();
 
-	#lastEvents: Event[] = [];
 	#lastQueueSize = 0;
 
 	constructor(private readonly actor: AnyActorInstance) {
 		this.#lastQueueSize = actor.queueManager?.size ?? 0;
-		this.emitter.on("eventFired", (event) => {
-			const commonParams = {
-				id: crypto.randomUUID(),
-				timestamp: BigInt(Date.now()),
-			};
-
-			this.#lastEvents.push({
-				...commonParams,
-				...transformEvent(event),
-			});
-
-			// keep the last 100 events
-			if (this.#lastEvents.length > 100) {
-				this.#lastEvents = this.#lastEvents.slice(-100);
-			}
-		});
-	}
-
-	getLastEvents() {
-		return this.#lastEvents;
-	}
-
-	clearEvents() {
-		this.#lastEvents = [];
-		this.emitter.emit("eventsChanged");
 	}
 
 	getQueueSize() {
@@ -182,64 +129,5 @@ export class ActorInspector {
 		} finally {
 			conn.disconnect();
 		}
-	}
-}
-
-function transformEvent(event: EventDetails) {
-	if (event.type === "action") {
-		return {
-			body: {
-				tag: "ActionEvent",
-				val: {
-					name: event.name,
-					args: bufferToArrayBuffer(cbor.encode(event.args)),
-
-					connId: event.connId,
-				},
-			},
-		} as const;
-	} else if (event.type === "subscribe") {
-		return {
-			body: {
-				tag: "SubscribeEvent",
-				val: {
-					eventName: event.eventName,
-					connId: event.connId,
-				},
-			},
-		} as const;
-	} else if (event.type === "unsubscribe") {
-		return {
-			body: {
-				tag: "UnSubscribeEvent",
-				val: {
-					eventName: event.eventName,
-					connId: event.connId,
-				},
-			},
-		} as const;
-	} else if (event.type === "event") {
-		return {
-			body: {
-				tag: "FiredEvent",
-				val: {
-					eventName: event.eventName,
-					args: bufferToArrayBuffer(cbor.encode(event.args)),
-					connId: event.connId,
-				},
-			},
-		} as const;
-	} else if (event.type === "broadcast") {
-		return {
-			body: {
-				tag: "BroadcastEvent",
-				val: {
-					eventName: event.eventName,
-					args: bufferToArrayBuffer(cbor.encode(event.args)),
-				},
-			},
-		} as const;
-	} else {
-		assertUnreachable(event);
 	}
 }

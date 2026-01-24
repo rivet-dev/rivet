@@ -118,7 +118,13 @@ export class ConnectionManager<
 		// Create new connection
 		if (this.#actor.config.onBeforeConnect) {
 			const ctx = new BeforeConnectContext(this.#actor, request);
-			await this.#actor.config.onBeforeConnect(ctx, params);
+			await this.#actor.runInTraceSpan(
+				"actor.onBeforeConnect",
+				{
+					"rivet.conn.type": driver.type,
+				},
+				() => this.#actor.config.onBeforeConnect!(ctx, params),
+			);
 		}
 
 		// Create connection state if enabled
@@ -300,27 +306,65 @@ export class ConnectionManager<
 
 		this.#actor.inspector.emitter.emit("connectionsUpdated");
 
+		const attributes = {
+			"rivet.conn.id": conn.id,
+			"rivet.conn.type": conn[CONN_DRIVER_SYMBOL]?.type,
+			"rivet.conn.hibernatable": conn.isHibernatable,
+		};
+		const span = this.#actor.startTraceSpan(
+			"actor.onDisconnect",
+			attributes,
+		);
+
 		// Trigger disconnect
-		if (this.#actor.config.onDisconnect) {
-			try {
-				const result = this.#actor.config.onDisconnect(
-					this.#actor.actorContext,
-					conn,
+		try {
+			if (this.#actor.config.onDisconnect) {
+				const result = this.#actor.traces.withSpan(span, () =>
+					this.#actor.config.onDisconnect!(
+						this.#actor.actorContext,
+						conn,
+					),
+				);
+				this.#actor.emitTraceEvent(
+					"connection.disconnect",
+					attributes,
+					span,
 				);
 				if (result instanceof Promise) {
-					result.catch((error) => {
-						this.#actor.rLog.error({
-							msg: "error in `onDisconnect`",
-							error: stringifyError(error),
+					result
+						.then(() => {
+							this.#actor.endTraceSpan(span, { code: "OK" });
+						})
+						.catch((error) => {
+							this.#actor.endTraceSpan(span, {
+								code: "ERROR",
+								message: stringifyError(error),
+							});
+							this.#actor.rLog.error({
+								msg: "error in `onDisconnect`",
+								error: stringifyError(error),
+							});
 						});
-					});
+				} else {
+					this.#actor.endTraceSpan(span, { code: "OK" });
 				}
-			} catch (error) {
-				this.#actor.rLog.error({
-					msg: "error in `onDisconnect`",
-					error: stringifyError(error),
-				});
+			} else {
+				this.#actor.emitTraceEvent(
+					"connection.disconnect",
+					attributes,
+					span,
+				);
+				this.#actor.endTraceSpan(span, { code: "OK" });
 			}
+		} catch (error) {
+			this.#actor.endTraceSpan(span, {
+				code: "ERROR",
+				message: stringifyError(error),
+			});
+			this.#actor.rLog.error({
+				msg: "error in `onDisconnect`",
+				error: stringifyError(error),
+			});
 		}
 
 		// Remove from connsWithPersistChanged after onDisconnect to handle any
@@ -421,18 +465,23 @@ export class ConnectionManager<
 		request: Request | undefined,
 	): Promise<CS | undefined> {
 		if ("createConnState" in this.#actor.config) {
+			const createConnState = this.#actor.config.createConnState;
 			const ctx = new CreateConnStateContext(this.#actor, request);
-			const dataOrPromise = this.#actor.config.createConnState(
-				ctx,
-				params,
+			return await this.#actor.runInTraceSpan(
+				"actor.createConnState",
+				undefined,
+				() => {
+					const dataOrPromise =
+						createConnState!(ctx, params);
+					if (dataOrPromise instanceof Promise) {
+						return deadline(
+							dataOrPromise,
+							this.#actor.config.options.createConnStateTimeout,
+						);
+					}
+					return dataOrPromise;
+				},
 			);
-			if (dataOrPromise instanceof Promise) {
-				return await deadline(
-					dataOrPromise,
-					this.#actor.config.options.createConnStateTimeout,
-				);
-			}
-			return dataOrPromise;
 		} else if ("connState" in this.#actor.config) {
 			return structuredClone(this.#actor.config.connState);
 		}
@@ -443,29 +492,59 @@ export class ConnectionManager<
 	}
 
 	#callOnConnect(conn: Conn<S, CP, CS, V, I, DB>) {
-		if (this.#actor.config.onConnect) {
-			try {
+		const attributes = {
+			"rivet.conn.id": conn.id,
+			"rivet.conn.type": conn[CONN_DRIVER_SYMBOL]?.type,
+			"rivet.conn.hibernatable": conn.isHibernatable,
+		};
+		const span = this.#actor.startTraceSpan("actor.onConnect", attributes);
+
+		try {
+			if (this.#actor.config.onConnect) {
 				const ctx = new ConnectContext(this.#actor, conn);
-				const result = this.#actor.config.onConnect(ctx, conn);
+				const result = this.#actor.traces.withSpan(span, () =>
+					this.#actor.config.onConnect!(ctx, conn),
+				);
+				this.#actor.emitTraceEvent(
+					"connection.connect",
+					attributes,
+					span,
+				);
 				if (result instanceof Promise) {
 					deadline(
 						result,
 						this.#actor.config.options.onConnectTimeout,
-					).catch((error) => {
-						this.#actor.rLog.error({
-							msg: "error in `onConnect`, closing socket",
-							error,
+					)
+						.then(() => {
+							this.#actor.endTraceSpan(span, { code: "OK" });
+						})
+						.catch((error) => {
+							this.#actor.endTraceSpan(span, {
+								code: "ERROR",
+								message: stringifyError(error),
+							});
+							this.#actor.rLog.error({
+								msg: "error in `onConnect`, closing socket",
+								error,
+							});
+							conn?.disconnect("`onConnect` failed");
 						});
-						conn?.disconnect("`onConnect` failed");
-					});
+					return;
 				}
-			} catch (error) {
-				this.#actor.rLog.error({
-					msg: "error in `onConnect`",
-					error: stringifyError(error),
-				});
-				conn?.disconnect("`onConnect` failed");
 			}
+
+			this.#actor.emitTraceEvent("connection.connect", attributes, span);
+			this.#actor.endTraceSpan(span, { code: "OK" });
+		} catch (error) {
+			this.#actor.endTraceSpan(span, {
+				code: "ERROR",
+				message: stringifyError(error),
+			});
+			this.#actor.rLog.error({
+				msg: "error in `onConnect`",
+				error: stringifyError(error),
+			});
+			conn?.disconnect("`onConnect` failed");
 		}
 	}
 }

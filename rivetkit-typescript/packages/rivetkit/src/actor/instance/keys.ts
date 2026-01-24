@@ -6,6 +6,7 @@ export const KEYS = {
 	QUEUE_PREFIX: Uint8Array.from([5]), // Prefix for queue message keys
 	QUEUE_METADATA: Uint8Array.from([6]), // Queue metadata key
 	WORKFLOW_PREFIX: Uint8Array.from([7]), // Prefix for workflow storage
+	TRACES_PREFIX: Uint8Array.from([8]), // Prefix for traces storage
 };
 
 const QUEUE_ID_BYTES = 8;
@@ -27,6 +28,13 @@ export function makeWorkflowKey(key: Uint8Array): Uint8Array {
 	const prefixed = new Uint8Array(KEYS.WORKFLOW_PREFIX.length + key.length);
 	prefixed.set(KEYS.WORKFLOW_PREFIX, 0);
 	prefixed.set(key, KEYS.WORKFLOW_PREFIX.length);
+	return prefixed;
+}
+
+export function makeTracesKey(key: Uint8Array): Uint8Array {
+	const prefixed = new Uint8Array(KEYS.TRACES_PREFIX.length + key.length);
+	prefixed.set(KEYS.TRACES_PREFIX, 0);
+	prefixed.set(key, KEYS.TRACES_PREFIX.length);
 	return prefixed;
 }
 

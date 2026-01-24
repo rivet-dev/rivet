@@ -3,12 +3,13 @@ import type { Unsubscribe } from "nanoevents";
 import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import type { AnyActorInstance, RivetMessageEvent } from "@/mod";
 import type { ToClient } from "@/schemas/actor-inspector/mod";
+import { encodeReadRangeWire } from "@rivetkit/traces";
 import {
 	CURRENT_VERSION as INSPECTOR_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED as toClient,
 	TO_SERVER_VERSIONED as toServer,
 } from "@/schemas/actor-inspector/versioned";
-import { assertUnreachable } from "@/utils";
+import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 import { inspectorLogger } from "./log";
 
 export async function handleWebSocketInspectorConnect({
@@ -27,7 +28,6 @@ export async function handleWebSocketInspectorConnect({
 					tag: "Init",
 					val: {
 						connections: inspector.getConnections(),
-						events: inspector.getLastEvents(),
 						rpcs: inspector.getRpcs(),
 						state: inspector.isStateEnabled()
 							? inspector.getState()
@@ -53,22 +53,6 @@ export async function handleWebSocketInspectorConnect({
 						body: {
 							tag: "ConnectionsUpdated",
 							val: { connections: inspector.getConnections() },
-						},
-					});
-				}),
-				inspector.emitter.on("eventFired", () => {
-					sendMessage(ws, {
-						body: {
-							tag: "EventsUpdated",
-							val: { events: inspector.getLastEvents() },
-						},
-					});
-				}),
-				inspector.emitter.on("eventsChanged", () => {
-					sendMessage(ws, {
-						body: {
-							tag: "EventsUpdated",
-							val: { events: inspector.getLastEvents() },
 						},
 					});
 				}),
@@ -127,27 +111,6 @@ export async function handleWebSocketInspectorConnect({
 							},
 						},
 					});
-				} else if (message.body.tag === "EventsRequest") {
-					sendMessage(ws, {
-						body: {
-							tag: "EventsResponse",
-							val: {
-								rid: message.body.val.id,
-								events: inspector.getLastEvents(),
-							},
-						},
-					});
-				} else if (message.body.tag === "ClearEventsRequest") {
-					inspector.clearEvents();
-					sendMessage(ws, {
-						body: {
-							tag: "EventsResponse",
-							val: {
-								rid: message.body.val.id,
-								events: [],
-							},
-						},
-					});
 				} else if (message.body.tag === "RpcsListRequest") {
 					sendMessage(ws, {
 						body: {
@@ -155,6 +118,24 @@ export async function handleWebSocketInspectorConnect({
 							val: {
 								rid: message.body.val.id,
 								rpcs: inspector.getRpcs(),
+							},
+						},
+					});
+				} else if (message.body.tag === "TraceQueryRequest") {
+					const { id, startMs, endMs, limit } = message.body.val;
+					const wire = await actor.traces.readRangeWire({
+						startMs: Number(startMs),
+						endMs: Number(endMs),
+						limit: Number(limit),
+					});
+					sendMessage(ws, {
+						body: {
+							tag: "TraceQueryResponse",
+							val: {
+								rid: id,
+								payload: bufferToArrayBuffer(
+									encodeReadRangeWire(wire),
+								),
 							},
 						},
 					});
