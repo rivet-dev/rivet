@@ -94,6 +94,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 			await this.#rebuildMetadata();
 		}
+		this.#actor.inspector.updateQueueSize(this.#metadata.size);
 	}
 
 	/** Adds a message to the queue with the given name and body. */

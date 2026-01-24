@@ -918,7 +918,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	#emitLogEvent(level: string, args: unknown[]) {
 		const span = this.#traces.getCurrentSpan();
-		if (!span) {
+		if (!span || !span.isActive()) {
 			return;
 		}
 
