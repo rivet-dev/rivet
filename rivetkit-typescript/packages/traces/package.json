@@ -20,13 +20,23 @@
 				"types": "./dist/tsup/index.d.cts",
 				"default": "./dist/tsup/index.cjs"
 			}
+		},
+		"./reader": {
+			"import": {
+				"types": "./dist/tsup/reader.d.ts",
+				"default": "./dist/tsup/reader.js"
+			},
+			"require": {
+				"types": "./dist/tsup/reader.d.cts",
+				"default": "./dist/tsup/reader.cjs"
+			}
 		}
 	},
 	"engines": {
 		"node": ">=18.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts",
+		"build": "pnpm run compile:bare && tsup src/index.ts src/reader.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
 		"check-types": "pnpm run compile:bare && tsc --noEmit",
 		"test": "pnpm run compile:bare && vitest run"
