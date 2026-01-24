@@ -124,9 +124,9 @@ export const sitemap = [
 				title: "Concepts",
 				pages: [
 					{
-						title: "What are Rivet Actors?",
+						title: "Crash Course",
 						href: "/docs/actors",
-						icon: faSquareInfo,
+						icon: faRocket,
 					},
 					{
 						title: "State",
@@ -391,10 +391,6 @@ export const sitemap = [
 						title: "AI Integration",
 						collapsible: true,
 						pages: [
-							{
-								title: "MCP Server",
-								href: "/docs/general/mcp",
-							},
 							{
 								title: "Skill File",
 								href: "/docs/general/skill",

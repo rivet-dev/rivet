@@ -8,6 +8,7 @@ import { remarkPlugins } from './src/mdx/remark';
 import { rehypePlugins } from './src/mdx/rehype';
 import { generateRoutes } from './src/integrations/generate-routes';
 import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
+import { skillVersion } from './src/integrations/skill-version';
 
 export default defineConfig({
 	site: 'https://rivet.gg',
@@ -27,6 +28,7 @@ export default defineConfig({
 		rehypePlugins,
 	},
 	integrations: [
+		skillVersion(),
 		typecheckCodeBlocks(),
 		generateRoutes(),
 		mdx({

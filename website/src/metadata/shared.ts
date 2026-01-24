@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const DOCS_BASE_URL = "https://rivet.gg/docs";
+export const DOCS_BASE_URL = "https://rivet.dev/docs";
 export const PROJECT_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 export function normalizeSlug(rawSlug: string) {

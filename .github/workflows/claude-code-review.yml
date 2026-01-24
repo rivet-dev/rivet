@@ -31,6 +31,9 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Add Rivet Skill to Coding Agent
+        run: npx skills@1.0.18 add rivet-dev/skills --yes
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1

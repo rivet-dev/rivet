@@ -55,6 +55,8 @@ docker-compose up -d
 gt c -m "chore(my-pkg): foo bar"
 ```
 
+**Never push to `main` unless explicitly specified by the user.**
+
 ## Graphite CLI Commands
 ```bash
 # Modify a Graphite PR

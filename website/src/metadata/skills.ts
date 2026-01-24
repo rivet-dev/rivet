@@ -1,12 +1,15 @@
 import { getCollection } from "astro:content";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import { DOCS_BASE_URL, normalizeSlug } from "./shared";
 import skillBaseTemplate from "./skill-base.md?raw";
 
 export const SKILL_DIRECTORY = "rivetkit-typescript";
-export const SKILL_NAME = "rivetkit-actors";
+export const SKILL_NAME = "rivetkit-typescript";
 export const SKILL_DESCRIPTION =
-	"Build stateful backends with Rivet Actors: high-performance, long-lived, in-memory, persisted processes. Use when you outgrow HTTP, databases, or queues. Trigger on tasks related to AI agents, multiplayer apps or games, collaborative editors, realtime solutions, workflow automation, geo-distributed or per-tenant databases, local-first sync, WebSocket servers, background or cron jobs, rate limiters, or CRDT docs.";
+	"Use this skill for RivetKit building, modification, debugging, testing, or performance analysis. Trigger on RivetKit imports, Rivet/actor discussion, actor-based code analysis/logs/performance. Use RivetKit for AI agents, sandboxes, collaboration/multiplayer, realtime/WebSocket, workflows, background/scheduled jobs, or CRDT/local-first sync."
 
 if (SKILL_DESCRIPTION.length > 500) {
 	throw new Error(`SKILL_DESCRIPTION must be <= 500 chars, got ${SKILL_DESCRIPTION.length}`);
@@ -26,6 +29,21 @@ export type SkillReference = {
 
 let cachedReferences: SkillReference[] | null = null;
 let cachedSkillFile: string | null = null;
+
+async function getRivetkitVersion(): Promise<string> {
+	const versionFilePath = path.join(process.cwd(), "src/generated/skill-version.json");
+
+	if (!existsSync(versionFilePath)) {
+		throw new Error(
+			`skill-version.json not found at ${versionFilePath}. ` +
+			`Ensure the skillVersion integration runs before skill generation.`
+		);
+	}
+
+	const content = await readFile(versionFilePath, "utf-8");
+	const data = JSON.parse(content);
+	return data.rivetkit;
+}
 
 export async function listSkillReferences(): Promise<SkillReference[]> {
 	if (cachedReferences) {
@@ -98,8 +116,11 @@ export async function renderSkillFile(): Promise<string> {
 		throw new Error(`skill-base.md does not contain <!-- REFERENCE_INDEX --> marker`);
 	}
 
+	const rivetkitVersion = await getRivetkitVersion();
+
 	let content = base.replace("<!-- OVERVIEW -->", overviewContent);
 	content = content.replace("<!-- REFERENCE_INDEX -->", referenceList);
+	content = content.replace(/\{\{RIVETKIT_VERSION\}\}/g, rivetkitVersion);
 	const finalFile = `${frontmatter}\n${content}\n`;
 	cachedSkillFile = finalFile;
 	return finalFile;
@@ -120,7 +141,7 @@ function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]
 	const slug = normalizeSlug(entry.id);
 	const docPath = slug ? `/docs/${slug}` : "/docs";
 	const canonicalUrl = `${DOCS_BASE_URL}${slug ? `/${slug}` : ""}`;
-	const fileId = createFileId(slug || entry.data.title);
+	const fileId = createFileId(slug);
 	const body = entry.body ?? "";
 
 	return {
@@ -136,12 +157,10 @@ function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]
 	};
 }
 
-function createFileId(input: string) {
-	return (input || "docs")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "")
-		|| "docs";
+function createFileId(slug: string) {
+	// Preserve path structure instead of flattening to dashes
+	if (!slug) return "index";
+	return slug;
 }
 
 function convertDocToReference(body: string) {
