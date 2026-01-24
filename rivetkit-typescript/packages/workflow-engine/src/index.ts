@@ -1,3 +1,5 @@
+import type { Logger } from "pino";
+
 // Types
 
 // Context
@@ -306,6 +308,7 @@ async function executeRollback<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	storage: Storage,
+	logger?: Logger,
 ): Promise<void> {
 	const rollbackActions: RollbackAction[] = [];
 	const ctx = new WorkflowContextImpl(
@@ -317,6 +320,8 @@ async function executeRollback<TInput, TOutput>(
 		abortController,
 		"rollback",
 		rollbackActions,
+		false,
+		logger,
 	);
 
 	try {
@@ -476,6 +481,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	runtime: LiveRuntime,
+	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	let lastResult: WorkflowResult<TOutput> | undefined;
 
@@ -487,6 +493,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			driver,
 			messageDriver,
 			abortController,
+			logger,
 		);
 		lastResult = result;
 
@@ -553,6 +560,8 @@ export function runWorkflow<TInput, TOutput>(
 	const mode: WorkflowRunMode = options.mode ?? "yield";
 	const liveRuntime = mode === "live" ? createLiveRuntime() : undefined;
 
+	const logger = options.logger;
+
 	const resultPromise =
 		mode === "live" && liveRuntime
 			? executeLiveWorkflow(
@@ -563,6 +572,7 @@ export function runWorkflow<TInput, TOutput>(
 					messageDriver,
 					abortController,
 					liveRuntime,
+					logger,
 				)
 			: executeWorkflow(
 					workflowId,
@@ -571,6 +581,7 @@ export function runWorkflow<TInput, TOutput>(
 					driver,
 					messageDriver,
 					abortController,
+					logger,
 				);
 
 	return {
@@ -700,8 +711,20 @@ async function executeWorkflow<TInput, TOutput>(
 	driver: EngineDriver,
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
+	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	const storage = await loadStorage(driver, messageDriver);
+
+	if (logger) {
+		const entryKeys = Array.from(storage.history.entries.keys());
+		logger.debug({
+			msg: "loaded workflow storage",
+			state: storage.state,
+			entryCount: entryKeys.length,
+			entries: entryKeys.slice(0, 10),
+			nameRegistry: storage.nameRegistry,
+		});
+	}
 
 	// Check if workflow was cancelled
 	if (storage.state === "cancelled") {
@@ -734,6 +757,7 @@ async function executeWorkflow<TInput, TOutput>(
 				messageDriver,
 				abortController,
 				storage,
+				logger,
 			);
 		} catch (error) {
 			if (error instanceof EvictedError) {
@@ -761,6 +785,10 @@ async function executeWorkflow<TInput, TOutput>(
 		messageDriver,
 		undefined,
 		abortController,
+		"forward",
+		undefined,
+		false,
+		logger,
 	);
 
 	storage.state = "running";
@@ -819,6 +847,7 @@ async function executeWorkflow<TInput, TOutput>(
 					messageDriver,
 					abortController,
 					storage,
+					logger,
 				);
 		} catch (rollbackError) {
 			if (rollbackError instanceof EvictedError) {
