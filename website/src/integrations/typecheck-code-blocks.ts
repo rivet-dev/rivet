@@ -432,23 +432,23 @@ export function typecheckCodeBlocks(): AstroIntegration {
 					});
 				}
 
-				// Build rivetkit package if not already built this session
+				// Build rivetkit packages if not already built this session
 				if (!rivetKitBuilt) {
-					logger.info("Building rivetkit package...");
+					logger.info("Building rivetkit packages...");
 					try {
-						execSync("pnpm build -F rivetkit", {
+						execSync("pnpm build -F rivetkit -F @rivetkit/react -F @rivetkit/cloudflare-workers", {
 							cwd: MONOREPO_ROOT,
 							encoding: "utf-8",
 							stdio: ["pipe", "pipe", "pipe"],
 						});
 						rivetKitBuilt = true;
-						logger.info("rivetkit package built successfully");
+						logger.info("rivetkit packages built successfully");
 					} catch (buildError: unknown) {
 						const execError = buildError as { stdout?: string; stderr?: string };
 						const output = execError.stdout || execError.stderr || "";
-						logger.error("Failed to build rivetkit package:");
+						logger.error("Failed to build rivetkit packages:");
 						console.error(output);
-						throw new Error("Failed to build rivetkit package");
+						throw new Error("Failed to build rivetkit packages");
 					}
 				}
 
