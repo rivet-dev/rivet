@@ -478,7 +478,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 
 			// Test WebSocket with ONLY query parameters on the base path
 			// This tests the case where path is "/websocket?foo=bar" without trailing slash
-			const ws = await actor.websocket("?token=secret&session=123");
+			const ws = await actor.webSocket("?token=secret&session=123");
 
 			await new Promise<void>((resolve, reject) => {
 				ws.addEventListener("open", () => resolve(), { once: true });

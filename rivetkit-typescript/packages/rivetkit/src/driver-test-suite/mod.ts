@@ -10,7 +10,6 @@ import {
 	RegistryConfig,
 	RegistryConfigSchema,
 } from "@/registry/config";
-import { getPort } from "@/test/mod";
 import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
 import { runActorConnTests } from "./tests/actor-conn";
@@ -240,17 +239,24 @@ export async function createTestRuntime(
 
 		// TODO: I think this whole function is fucked, we should probably switch to calling registry.serve() directly
 		// Start server
-		const port = await getPort();
 		const server = honoServe({
 			fetch: router.fetch,
 			hostname: "127.0.0.1",
-			port,
+			port: 0,
 		});
+		if (!server.listening) {
+			await new Promise<void>((resolve) => {
+				server.once("listening", () => resolve());
+			});
+		}
 		invariant(
 			nodeWebSocket.injectWebSocket !== undefined,
 			"should have injectWebSocket",
 		);
 		nodeWebSocket.injectWebSocket(server);
+		const address = server.address();
+		invariant(address && typeof address !== "string", "missing server address");
+		const port = address.port;
 		const serverEndpoint = `http://127.0.0.1:${port}`;
 
 		logger().info({ msg: "test serer listening", port });
