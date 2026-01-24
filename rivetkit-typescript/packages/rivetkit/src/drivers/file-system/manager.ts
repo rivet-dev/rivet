@@ -149,7 +149,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 	async buildGatewayUrl(actorId: string): Promise<string> {
 		const port = this.#config.managerPort ?? 6420;
-		return `http://127.0.0.1:${port}/gateway/${encodeURIComponent(actorId)}`;
+		return `http://localhost:${port}/gateway/${encodeURIComponent(actorId)}`;
 	}
 
 	async getForId({

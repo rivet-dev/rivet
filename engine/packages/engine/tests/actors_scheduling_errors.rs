@@ -92,7 +92,7 @@ async fn create_serverless_runner_config(
 	let client = reqwest::Client::new();
 	let response = client
 		.put(format!(
-			"http://127.0.0.1:{}/runner-configs/{}?namespace={}",
+			"http://localhost:{}/runner-configs/{}?namespace={}",
 			guard_port, runner_name, namespace
 		))
 		.json(&json!({
@@ -136,7 +136,7 @@ async fn create_actor_with_policy(
 	let client = reqwest::Client::new();
 	let response = client
 		.post(format!(
-			"http://127.0.0.1:{}/actors?namespace={}",
+			"http://localhost:{}/actors?namespace={}",
 			guard_port, namespace
 		))
 		.json(&json!({
@@ -173,7 +173,7 @@ fn request_guard(
 			.unwrap();
 
 		client
-			.get(format!("http://127.0.0.1:{}/ping", guard_port))
+			.get(format!("http://localhost:{}/ping", guard_port))
 			.header("X-Rivet-Target", "actor")
 			.header("X-Rivet-Actor", &actor_id)
 			.send()
@@ -461,7 +461,7 @@ async fn get_runner_config_pool_error(
 	let client = reqwest::Client::new();
 	let response = client
 		.get(format!(
-			"http://127.0.0.1:{}/runner-configs?namespace={}&runner_name={}",
+			"http://localhost:{}/runner-configs?namespace={}&runner_name={}",
 			guard_port, namespace, runner_name
 		))
 		.send()

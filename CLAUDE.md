@@ -171,6 +171,18 @@ Key points:
 - Always check existing imports and dependencies before adding new ones
 - **Always add imports at the top of the file inside of inline within the function.**
 
+### localhost vs 127.0.0.1
+
+- **Use `localhost`** for client connections (URLs that connect TO a server)
+  - API endpoints: `http://localhost:6420`
+  - Database connections: `postgresql://postgres:postgres@localhost:5432/db`
+  - Test client URLs
+
+- **Use `127.0.0.1`** for server bindings (where a server LISTENS)
+  - `TcpListener::bind("127.0.0.1:0")`
+  - `hostname: "127.0.0.1"` in server configs
+  - `host: "127.0.0.1"` for server listen addresses
+
 ## Naming Conventions
 
 Data structures often include:

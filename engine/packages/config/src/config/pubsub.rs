@@ -40,7 +40,7 @@ pub struct Postgres {
 impl Default for Postgres {
 	fn default() -> Self {
 		Self {
-			url: Secret::new("postgresql://postgres:postgres@127.0.0.1:5432/postgres".into()),
+			url: Secret::new("postgresql://postgres:postgres@localhost:5432/postgres".into()),
 			memory_optimization: true,
 			ssl: None,
 		}
@@ -61,7 +61,7 @@ pub struct Nats {
 impl Default for Nats {
 	fn default() -> Self {
 		Self {
-			addresses: vec!["127.0.0.1:4222".to_string()],
+			addresses: vec!["localhost:4222".to_string()],
 			port: None,
 			username: None,
 			password: None,

@@ -52,12 +52,12 @@ impl Default for Topology {
 				datacenter_label: 1,
 				is_leader: true,
 				public_url: Url::parse(&format!(
-					"http://127.0.0.1:{}",
+					"http://localhost:{}",
 					crate::defaults::ports::GUARD
 				))
 				.unwrap(),
 				peer_url: Url::parse(&format!(
-					"http://127.0.0.1:{}",
+					"http://localhost:{}",
 					crate::defaults::ports::API_PEER
 				))
 				.unwrap(),

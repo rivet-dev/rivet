@@ -18,8 +18,8 @@ async fn test_kv_operations() -> Result<()> {
 		name: "test-dc".to_string(),
 		datacenter_label: dc_label,
 		is_leader: true,
-		peer_url: url::Url::parse("http://127.0.0.1:8080")?,
-		public_url: url::Url::parse("http://127.0.0.1:8081")?,
+		peer_url: url::Url::parse("http://localhost:8080")?,
+		public_url: url::Url::parse("http://localhost:8081")?,
 		proxy_url: None,
 		valid_hosts: None,
 	}];

@@ -15,7 +15,7 @@ pub async fn ping_actor_via_guard(dc: &TestDatacenter, actor_id: &str) -> serde_
 
 	let client = reqwest::Client::new();
 	let response = client
-		.get(format!("http://127.0.0.1:{}/ping", guard_port))
+		.get(format!("http://localhost:{}/ping", guard_port))
 		.header("X-Rivet-Target", "actor")
 		.header("X-Rivet-Actor", actor_id)
 		.send()
@@ -147,7 +147,7 @@ pub async fn ping_actor_websocket_via_guard(
 	);
 
 	// Build WebSocket URL and request with protocols for routing
-	let ws_url = format!("ws://127.0.0.1:{}/ws", dc.guard_port());
+	let ws_url = format!("ws://localhost:{}/ws", dc.guard_port());
 	let mut request = ws_url
 		.clone()
 		.into_client_request()

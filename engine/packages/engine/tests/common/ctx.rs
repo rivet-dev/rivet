@@ -186,7 +186,7 @@ impl TestDatacenter {
 }
 
 pub async fn wait_for_port(service_name: &str, port: u16) {
-	let addr = format!("127.0.0.1:{}", port);
+	let addr = format!("localhost:{}", port);
 	let start = std::time::Instant::now();
 	let timeout = Duration::from_secs(30);
 

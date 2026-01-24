@@ -135,7 +135,7 @@ impl TestRunnerBuilder {
 	}
 
 	pub async fn build(self, dc: &super::super::TestDatacenter) -> Result<TestRunner> {
-		let endpoint = format!("http://127.0.0.1:{}", dc.guard_port());
+		let endpoint = format!("http://localhost:{}", dc.guard_port());
 		let token = "dev".to_string();
 
 		let config = Config {

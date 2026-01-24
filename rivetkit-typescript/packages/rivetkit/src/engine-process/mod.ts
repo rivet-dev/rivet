@@ -370,7 +370,7 @@ async function checkIfEngineAlreadyRunningOnPort(
 ): Promise<boolean> {
 	let response: Response;
 	try {
-		response = await fetch(`http://127.0.0.1:${port}/health`);
+		response = await fetch(`http://localhost:${port}/health`);
 	} catch (err) {
 		// Nothing is running on this port
 		return false;

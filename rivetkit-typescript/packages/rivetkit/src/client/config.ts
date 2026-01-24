@@ -16,13 +16,13 @@ import { tryParseEndpoint } from "@/utils/endpoint-parser";
  *
  * In browser: uses current origin + /api/rivet
  *
- * Server-side: uses 127.0.0.1:6420
+ * Server-side: uses localhost:6420
  */
 function getDefaultEndpoint(): string {
 	if (typeof window !== "undefined" && window.location?.origin) {
 		return `${window.location.origin}/api/rivet`;
 	}
-	return "http://127.0.0.1:6420";
+	return "http://localhost:6420";
 }
 
 /**

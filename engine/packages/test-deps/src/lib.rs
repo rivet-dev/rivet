@@ -67,8 +67,8 @@ impl TestDeps {
 				name: format!("dc-{dc_id}"),
 				datacenter_label: dc_id,
 				is_leader: dc_id == dc_ids[0], // First DC in list is leader
-				public_url: Url::parse(&format!("http://127.0.0.1:{guard_port}"))?,
-				peer_url: Url::parse(&format!("http://127.0.0.1:{api_peer_port}"))?,
+				public_url: Url::parse(&format!("http://localhost:{guard_port}"))?,
+				peer_url: Url::parse(&format!("http://localhost:{api_peer_port}"))?,
 				proxy_url: None,
 				valid_hosts: None,
 			});

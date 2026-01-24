@@ -69,7 +69,7 @@ export async function setupTest<A extends Registry<any>>(
 		"should have injectWebSocket",
 	);
 	nodeWebSocket.injectWebSocket(server);
-	const endpoint = `http://127.0.0.1:${port}`;
+	const endpoint = `http://localhost:${port}`;
 
 	logger().info({ msg: "test server listening", port });
 
