@@ -1,4 +1,11 @@
 import invariant from "invariant";
+import {
+	createTraces,
+	type SpanHandle,
+	type SpanStatusInput,
+	type Traces,
+} from "@rivetkit/traces";
+import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
@@ -46,6 +53,7 @@ import {
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./keys";
+import { ActorTracesDriver } from "./traces-driver";
 import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
@@ -93,6 +101,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#actorId!: string;
 	#name!: string;
 	#key!: ActorKey;
+	#actorKeyString!: string;
 	#region!: string;
 
 	// MARK: - Managers
@@ -148,6 +157,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#inspectorToken?: string;
 	#inspector = new ActorInspector(this);
 
+	// MARK: - Tracing
+	#traces!: Traces<OtlpExportTraceServiceRequestJson>;
+
 	// MARK: - Constructor
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB>) {
 		this.#config = config;
@@ -193,8 +205,77 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return this.#inspector;
 	}
 
+	get traces(): Traces<OtlpExportTraceServiceRequestJson> {
+		return this.#traces;
+	}
+
 	get inspectorToken(): string | undefined {
 		return this.#inspectorToken;
+	}
+
+	// MARK: - Tracing
+	getCurrentTraceSpan(): SpanHandle | null {
+		return this.#traces.getCurrentSpan();
+	}
+
+	startTraceSpan(
+		name: string,
+		attributes?: Record<string, unknown>,
+	): SpanHandle {
+		return this.#traces.startSpan(name, {
+			parent: this.#traces.getCurrentSpan() ?? undefined,
+			attributes: this.#traceAttributes(attributes),
+		});
+	}
+
+	endTraceSpan(
+		handle: SpanHandle,
+		status?: SpanStatusInput,
+	): void {
+		this.#traces.endSpan(
+			handle,
+			status ? { status } : undefined,
+		);
+	}
+
+	async runInTraceSpan<T>(
+		name: string,
+		attributes: Record<string, unknown> | undefined,
+		fn: () => T | Promise<T>,
+	): Promise<T> {
+		const span = this.startTraceSpan(name, attributes);
+		try {
+			const result = this.#traces.withSpan(span, fn);
+			const resolved =
+				result instanceof Promise ? await result : result;
+			this.#traces.endSpan(span, {
+				status: { code: "OK" },
+			});
+			return resolved;
+		} catch (error) {
+			this.#traces.endSpan(span, {
+				status: {
+					code: "ERROR",
+					message: stringifyError(error),
+				},
+			});
+			throw error;
+		}
+	}
+
+	emitTraceEvent(
+		name: string,
+		attributes?: Record<string, unknown>,
+		handle?: SpanHandle,
+	): void {
+		const span = handle ?? this.#traces.getCurrentSpan();
+		if (!span) {
+			return;
+		}
+		this.#traces.emitEvent(span, name, {
+			attributes: this.#traceAttributes(attributes),
+			timeUnixMs: Date.now(),
+		});
 	}
 
 	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
@@ -267,7 +348,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#actorId = actorId;
 		this.#name = name;
 		this.#key = key;
+		this.#actorKeyString = serializeActorKey(this.#key);
 		this.#region = region;
+
+		// Initialize tracing
+		this.#initializeTraces();
 
 		// Initialize logging
 		this.#initializeLogging();
@@ -497,28 +582,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	) {
 		await processMessage(message, this, conn, {
 			onExecuteAction: async (ctx, name, args) => {
-				this.inspector.emitter.emit("eventFired", {
-					type: "action",
-					name,
-					args,
-					connId: conn.id,
-				});
 				return await this.executeAction(ctx, name, args);
 			},
 			onSubscribe: async (eventName, conn) => {
-				this.inspector.emitter.emit("eventFired", {
-					type: "subscribe",
-					eventName,
-					connId: conn.id,
-				});
 				this.eventManager.addSubscription(eventName, conn, false);
 			},
 			onUnsubscribe: async (eventName, conn) => {
-				this.inspector.emitter.emit("eventFired", {
-					type: "unsubscribe",
-					eventName,
-					connId: conn.id,
-				});
 				this.eventManager.removeSubscription(eventName, conn, false);
 			},
 		});
@@ -548,54 +617,77 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			throw new errors.ActionNotFound(actionName);
 		}
 
+		const actionSpan = this.startTraceSpan(
+			`actor.action.${actionName}`,
+			{
+				"rivet.action.name": actionName,
+			},
+		);
+		let spanEnded = false;
+
 		try {
-			this.#rLog.debug({
-				msg: "executing action",
-				actionName,
-				args,
-			});
+			return await this.#traces.withSpan(actionSpan, async () => {
+				this.#rLog.debug({
+					msg: "executing action",
+					actionName,
+					args,
+				});
 
-			const outputOrPromise = actionFunction.call(
-				undefined,
-				ctx,
-				...args,
-			);
-
-			let output: unknown;
-			if (outputOrPromise instanceof Promise) {
-				output = await deadline(
-					outputOrPromise,
-					this.#config.options.actionTimeout,
+				const outputOrPromise = actionFunction.call(
+					undefined,
+					ctx,
+					...args,
 				);
-			} else {
-				output = outputOrPromise;
-			}
 
-			// Process through onBeforeActionResponse if configured
-			if (this.#config.onBeforeActionResponse) {
-				try {
-					const processedOutput = this.#config.onBeforeActionResponse(
-						this.actorContext,
-						actionName,
-						args,
-						output,
+				let output: unknown;
+				if (outputOrPromise instanceof Promise) {
+					output = await deadline(
+						outputOrPromise,
+						this.#config.options.actionTimeout,
 					);
-					if (processedOutput instanceof Promise) {
-						output = await processedOutput;
-					} else {
-						output = processedOutput;
-					}
-				} catch (error) {
-					this.#rLog.error({
-						msg: "error in `onBeforeActionResponse`",
-						error: stringifyError(error),
-					});
+				} else {
+					output = outputOrPromise;
 				}
-			}
 
-			return output;
+				// Process through onBeforeActionResponse if configured
+				if (this.#config.onBeforeActionResponse) {
+					try {
+						output = await this.runInTraceSpan(
+							"actor.onBeforeActionResponse",
+							{ "rivet.action.name": actionName },
+							() =>
+								this.#config.onBeforeActionResponse!(
+									this.actorContext,
+									actionName,
+									args,
+									output,
+								),
+						);
+					} catch (error) {
+						this.#rLog.error({
+							msg: "error in `onBeforeActionResponse`",
+							error: stringifyError(error),
+						});
+					}
+				}
+
+				return output;
+			});
 		} catch (error) {
-			if (error instanceof DeadlineError) {
+			const isTimeout = error instanceof DeadlineError;
+			const message = isTimeout
+				? "ActionTimedOut"
+				: stringifyError(error);
+			this.#traces.setAttributes(actionSpan, {
+				"error.message": message,
+				"error.type":
+					error instanceof Error ? error.name : typeof error,
+			});
+			this.#traces.endSpan(actionSpan, {
+				status: { code: "ERROR", message },
+			});
+			spanEnded = true;
+			if (isTimeout) {
 				throw new errors.ActionTimedOut();
 			}
 			this.#rLog.error({
@@ -605,6 +697,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 			throw error;
 		} finally {
+			if (!spanEnded && actionSpan.isActive()) {
+				this.#traces.endSpan(actionSpan, {
+					status: { code: "OK" },
+				});
+			}
 			this.stateManager.savePersistThrottled();
 		}
 	}
@@ -619,23 +716,34 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (!this.#config.onRequest) {
 			throw new errors.RequestHandlerNotDefined();
 		}
+		const onRequest = this.#config.onRequest;
 
-		try {
-			const ctx = new RequestContext(this, conn, request);
-			const response = await this.#config.onRequest(ctx, request);
-			if (!response) {
-				throw new errors.InvalidRequestHandlerResponse();
-			}
-			return response;
-		} catch (error) {
-			this.#rLog.error({
-				msg: "onRequest error",
-				error: stringifyError(error),
-			});
-			throw error;
-		} finally {
-			this.stateManager.savePersistThrottled();
-		}
+		return await this.runInTraceSpan(
+			"actor.onRequest",
+			{
+				"http.method": request.method,
+				"http.url": request.url,
+				"rivet.conn.id": conn.id,
+			},
+				async () => {
+					try {
+						const ctx = new RequestContext(this, conn, request);
+						const response = await onRequest(ctx, request);
+					if (!response) {
+						throw new errors.InvalidRequestHandlerResponse();
+					}
+					return response;
+				} catch (error) {
+					this.#rLog.error({
+						msg: "onRequest error",
+						error: stringifyError(error),
+					});
+					throw error;
+				} finally {
+					this.stateManager.savePersistThrottled();
+				}
+			},
+		);
 	}
 
 	handleRawWebSocket(
@@ -651,6 +759,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			throw new errors.InternalError("onWebSocket handler not defined");
 		}
 
+		const span = this.startTraceSpan("actor.onWebSocket", {
+			"http.url": request?.url,
+			"rivet.conn.id": conn.id,
+		});
+		let spanEnded = false;
+
 		try {
 			// Reset sleep timer when handling WebSocket
 			this.resetSleepTimer();
@@ -659,17 +773,50 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const ctx = new WebSocketContext(this, conn, request);
 
 			// NOTE: This is async and will run in the background
-			const voidOrPromise = this.#config.onWebSocket(ctx, websocket);
+			const voidOrPromise = this.#traces.withSpan(span, () =>
+				this.#config.onWebSocket!(ctx, websocket),
+			);
 
 			// Save changes from the WebSocket open
 			if (voidOrPromise instanceof Promise) {
-				voidOrPromise.then(() => {
-					this.stateManager.savePersistThrottled();
-				});
+				voidOrPromise
+					.then(() => {
+						if (!spanEnded) {
+							this.endTraceSpan(span, { code: "OK" });
+							spanEnded = true;
+						}
+					})
+					.catch((error) => {
+						if (!spanEnded) {
+							this.endTraceSpan(span, {
+								code: "ERROR",
+								message: stringifyError(error),
+							});
+							spanEnded = true;
+						}
+						this.#rLog.error({
+							msg: "onWebSocket error",
+							error: stringifyError(error),
+						});
+					})
+					.finally(() => {
+						this.stateManager.savePersistThrottled();
+					});
 			} else {
+				if (!spanEnded) {
+					this.endTraceSpan(span, { code: "OK" });
+					spanEnded = true;
+				}
 				this.stateManager.savePersistThrottled();
 			}
 		} catch (error) {
+			if (!spanEnded) {
+				this.endTraceSpan(span, {
+					code: "ERROR",
+					message: stringifyError(error),
+				});
+				spanEnded = true;
+			}
 			this.#rLog.error({
 				msg: "onWebSocket error",
 				error: stringifyError(error),
@@ -736,10 +883,75 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: - Private Helper Methods
+	#initializeTraces() {
+		this.#traces = createTraces({
+			driver: new ActorTracesDriver(this.driver, this.#actorId),
+		});
+	}
+
+	#traceAttributes(
+		attributes?: Record<string, unknown>,
+	): Record<string, unknown> {
+		return {
+			"rivet.actor.id": this.#actorId,
+			"rivet.actor.name": this.#name,
+			"rivet.actor.key": this.#actorKeyString,
+			"rivet.actor.region": this.#region,
+			...(attributes ?? {}),
+		};
+	}
+
+	#patchLoggerForTraces(logger: Logger) {
+		const levels: Array<
+			"trace" | "debug" | "info" | "warn" | "error" | "fatal"
+		> = ["trace", "debug", "info", "warn", "error", "fatal"];
+		for (const level of levels) {
+			const original = logger[level].bind(logger) as (
+				...args: any[]
+			) => unknown;
+			logger[level] = ((...args: unknown[]) => {
+				this.#emitLogEvent(level, args);
+				return original(...(args as any[]));
+			}) as Logger[typeof level];
+		}
+	}
+
+	#emitLogEvent(level: string, args: unknown[]) {
+		const span = this.#traces.getCurrentSpan();
+		if (!span) {
+			return;
+		}
+
+		let message: string | undefined;
+		if (args.length >= 2) {
+			message = String(args[1]);
+		} else if (args.length === 1) {
+			const [value] = args;
+			if (typeof value === "string") {
+				message = value;
+			} else if (typeof value === "number" || typeof value === "boolean") {
+				message = String(value);
+			} else if (value && typeof value === "object") {
+				const maybeMsg = (value as { msg?: unknown }).msg;
+				if (maybeMsg !== undefined) {
+					message = String(maybeMsg);
+				}
+			}
+		}
+
+		this.#traces.emitEvent(span, "log", {
+			attributes: this.#traceAttributes({
+				"log.level": level,
+				...(message ? { "log.message": message } : {}),
+			}),
+			timeUnixMs: Date.now(),
+		});
+	}
+
 	#initializeLogging() {
 		const logParams = {
 			actor: this.#name,
-			key: serializeActorKey(this.#key),
+			key: this.#actorKeyString,
 			actorId: this.#actorId,
 		};
 
@@ -758,6 +970,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				logParams,
 			),
 		);
+
+		this.#patchLoggerForTraces(this.#log);
+		this.#patchLoggerForTraces(this.#rLog);
 	}
 
 	async #loadState() {
@@ -795,9 +1010,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Call onCreate lifecycle
 		if (this.#config.onCreate) {
-			await this.#config.onCreate(
-				this.actorContext as any,
-				persistData.input!,
+			const onCreate = this.#config.onCreate;
+			await this.runInTraceSpan("actor.onCreate", undefined, () =>
+				onCreate(this.actorContext as any, persistData.input!),
 			);
 		}
 	}
@@ -863,18 +1078,20 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	async #initializeVars() {
 		let vars: V | undefined;
 		if ("createVars" in this.#config) {
-			const dataOrPromise = this.#config.createVars(
-				this.actorContext as any,
-				this.driver.getContext(this.#actorId),
-			);
-			if (dataOrPromise instanceof Promise) {
-				vars = await deadline(
-					dataOrPromise,
-					this.#config.options.createVarsTimeout,
+			const createVars = this.#config.createVars;
+			vars = await this.runInTraceSpan("actor.createVars", undefined, () => {
+				const dataOrPromise = createVars!(
+					this.actorContext as any,
+					this.driver.getContext(this.#actorId),
 				);
-			} else {
-				vars = dataOrPromise;
-			}
+				if (dataOrPromise instanceof Promise) {
+					return deadline(
+						dataOrPromise,
+						this.#config.options.createVarsTimeout,
+					);
+				}
+				return dataOrPromise;
+			});
 		} else if ("vars" in this.#config) {
 			vars = structuredClone(this.#config.vars);
 		} else {
@@ -888,21 +1105,27 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	async #callOnStart() {
 		this.#rLog.info({ msg: "actor starting" });
 		if (this.#config.onWake) {
-			const result = this.#config.onWake(this.actorContext);
-			if (result instanceof Promise) {
-				await result;
-			}
+			const onWake = this.#config.onWake;
+			await this.runInTraceSpan("actor.onWake", undefined, () =>
+				onWake(this.actorContext),
+			);
 		}
 	}
 
 	async #callOnSleep() {
 		if (this.#config.onSleep) {
+			const onSleep = this.#config.onSleep;
 			try {
 				this.#rLog.debug({ msg: "calling onSleep" });
-				const result = this.#config.onSleep(this.actorContext);
-				if (result instanceof Promise) {
-					await deadline(result, this.#config.options.onSleepTimeout);
-				}
+				await this.runInTraceSpan("actor.onSleep", undefined, async () => {
+					const result = onSleep(this.actorContext);
+					if (result instanceof Promise) {
+						await deadline(
+							result,
+							this.#config.options.onSleepTimeout,
+						);
+					}
+				});
 				this.#rLog.debug({ msg: "onSleep completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
@@ -919,15 +1142,18 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #callOnDestroy() {
 		if (this.#config.onDestroy) {
+			const onDestroy = this.#config.onDestroy;
 			try {
 				this.#rLog.debug({ msg: "calling onDestroy" });
-				const result = this.#config.onDestroy(this.actorContext);
-				if (result instanceof Promise) {
-					await deadline(
-						result,
-						this.#config.options.onDestroyTimeout,
-					);
-				}
+				await this.runInTraceSpan("actor.onDestroy", undefined, async () => {
+					const result = onDestroy(this.actorContext);
+					if (result instanceof Promise) {
+						await deadline(
+							result,
+							this.#config.options.onDestroyTimeout,
+						);
+					}
+				});
 				this.#rLog.debug({ msg: "onDestroy completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
@@ -947,12 +1173,24 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		this.#rLog.debug({ msg: "starting run handler" });
 
-		const runResult = this.#config.run(this.actorContext);
+		const runSpan = this.startTraceSpan("actor.run");
+		const runResult = this.#traces.withSpan(runSpan, () =>
+			this.#config.run!(this.actorContext),
+		);
 
 		if (runResult instanceof Promise) {
 			this.#runPromise = runResult
 				.then(() => {
 					// Run handler exited normally - this should crash the actor
+					this.emitTraceEvent(
+						"actor.crash",
+						{ "rivet.actor.reason": "run_exited" },
+						runSpan,
+					);
+					this.endTraceSpan(runSpan, {
+						code: "ERROR",
+						message: "run exited unexpectedly",
+					});
 					this.#rLog.warn({
 						msg: "run handler exited unexpectedly, crashing actor to reschedule",
 					});
@@ -960,12 +1198,26 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				})
 				.catch((error) => {
 					// Run handler threw an error - crash the actor
+					this.emitTraceEvent(
+						"actor.crash",
+						{
+							"rivet.actor.reason": "run_error",
+							"error.message": stringifyError(error),
+						},
+						runSpan,
+					);
+					this.endTraceSpan(runSpan, {
+						code: "ERROR",
+						message: stringifyError(error),
+					});
 					this.#rLog.error({
 						msg: "run handler threw error, crashing actor to reschedule",
 						error: stringifyError(error),
 					});
 					this.startDestroy();
 				});
+		} else if (runSpan.isActive()) {
+			this.endTraceSpan(runSpan, { code: "OK" });
 		}
 	}
 

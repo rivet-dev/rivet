@@ -3689,6 +3689,9 @@ importers:
       '@rivetkit/on-change':
         specifier: ^6.0.2-rc.1
         version: 6.0.2-rc.1
+      '@rivetkit/traces':
+        specifier: workspace:*
+        version: link:../traces
       '@rivetkit/virtual-websocket':
         specifier: workspace:*
         version: link:../../../shared/typescript/virtual-websocket
@@ -3789,6 +3792,43 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.0(@microsoft/api-extractor@7.53.2(@types/node@22.18.1))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.2)
+
+  rivetkit-typescript/packages/traces:
+    dependencies:
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.2
+        version: 0.6.2
+      cbor-x:
+        specifier: ^1.6.0
+        version: 1.6.0
+      fdb-tuple:
+        specifier: ^1.0.0
+        version: 1.0.0
+      vbare:
+        specifier: ^0.0.4
+        version: 0.0.4
+    devDependencies:
+      '@bare-ts/tools':
+        specifier: ^0.13.0
+        version: 0.13.0(@bare-ts/lib@0.6.0)
+      '@types/node':
+        specifier: ^22.13.1
+        version: 22.19.5
+      commander:
+        specifier: ^12.0.0
+        version: 12.1.0
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.5))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.2)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.20.6
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
   rivetkit-typescript/packages/workflow-engine:
     dependencies:
