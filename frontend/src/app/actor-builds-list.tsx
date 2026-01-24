@@ -1,12 +1,37 @@
-import { faActorsBorderless, Icon } from "@rivet-gg/icons";
+import * as allIcons from "@rivet-gg/icons";
+import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import { match } from "ts-pattern";
 import { Button, cn, Skeleton } from "@/components";
 import { useDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { RECORDS_PER_PAGE } from "./data-providers/default-data-provider";
+
+const emojiRegex =
+	/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/u;
+
+function isEmoji(str: string): boolean {
+	return emojiRegex.test(str);
+}
+
+function capitalize(str: string): string {
+	return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function toPascalCase(str: string): string {
+	return str
+		.split("-")
+		.map((part) => capitalize(part))
+		.join("");
+}
+
+function lookupFaIcon(iconName: string): IconProp | null {
+	const pascalName = `fa${toPascalCase(iconName)}`;
+	const iconDef = (allIcons as Record<string, IconProp>)[pascalName];
+	return iconDef ?? null;
+}
 
 export function ActorBuildsList() {
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
@@ -22,55 +47,79 @@ export function ActorBuildsList() {
 						Connect RivetKit to see instances.
 					</p>
 				) : null}
-				{data?.map((build) => (
-					<Button
-						key={build.id}
-						className={cn(
-							"text-muted-foreground justify-start font-medium px-1",
-							"data-active:text-foreground data-active:bg-accent",
-						)}
-						startIcon={
-							<Icon
-								icon={faActorsBorderless}
-								className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 "
-							/>
-						}
-						variant={"ghost"}
-						size="sm"
-						onClick={() => {
-							navigate({
-								to: match(__APP_TYPE__)
-									.with("engine", () => "/ns/$namespace")
-									.with(
-										"cloud",
-										() =>
-											"/orgs/$organization/projects/$project/ns/$namespace",
-									)
-									.otherwise(() => "/"),
+				{data?.map((build) => {
+					const iconValue =
+						typeof build.name.metadata.icon === "string"
+							? build.name.metadata.icon
+							: null;
+					const displayName =
+						typeof build.name.metadata.name === "string"
+							? build.name.metadata.name
+							: build.id;
 
-								search: (old) => ({
+					const iconElement = useMemo(() => {
+						if (iconValue && isEmoji(iconValue)) {
+							return (
+								<span className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 text-sm">
+									{iconValue}
+								</span>
+							);
+						}
+
+						const faIcon = iconValue ? lookupFaIcon(iconValue) : null;
+						return (
+							<Icon
+								icon={faIcon ?? faActorsBorderless}
+								className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100"
+							/>
+						);
+					}, [iconValue]);
+
+					return (
+						<Button
+							key={build.id}
+							className={cn(
+								"text-muted-foreground justify-start font-medium px-1",
+								"data-active:text-foreground data-active:bg-accent",
+							)}
+							startIcon={iconElement}
+							variant={"ghost"}
+							size="sm"
+							onClick={() => {
+								navigate({
+									to: match(__APP_TYPE__)
+										.with("engine", () => "/ns/$namespace")
+										.with(
+											"cloud",
+											() =>
+												"/orgs/$organization/projects/$project/ns/$namespace",
+										)
+										.otherwise(() => "/"),
+
+									search: (old) => ({
+										...old,
+										actorId: undefined,
+										n: [build.id],
+									}),
+								});
+							}}
+							asChild
+						>
+							<Link
+								to="."
+								search={(old) => ({
 									...old,
 									actorId: undefined,
 									n: [build.id],
-								}),
-							});
-						}}
-						asChild
-					>
-						<Link
-							to="."
-							search={(old) => ({
-								...old,
-								actorId: undefined,
-								n: [build.id],
-							})}
-						>
-							<span className="text-ellipsis overflow-hidden whitespace-nowrap">
-								{build.id}
-							</span>
-						</Link>
-					</Button>
-				))}
+								})}
+							>
+								<span className="text-ellipsis overflow-hidden whitespace-nowrap">
+									{displayName}
+								</span>
+							</Link>
+						</Button>
+					);
+				})}
 				{isFetchingNextPage || isLoading
 					? Array(RECORDS_PER_PAGE)
 							.fill(null)
