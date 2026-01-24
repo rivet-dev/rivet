@@ -10,6 +10,10 @@
 
 - rename to the queue-based handlers (next)
 
+## keep syncing c.state flushing with workflow flushing
+
+- if we modify c.state in the workflow, it should roll back
+
 ## review workflow state vs actors tate
 
 ## review variables available in workflow context that should not be

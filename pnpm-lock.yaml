@@ -2890,6 +2890,9 @@ importers:
       '@rivetkit/example-registry':
         specifier: workspace:^
         version: link:packages/example-registry
+      '@rivetkit/traces':
+        specifier: workspace:*
+        version: link:../rivetkit-typescript/packages/traces
       '@sentry/react':
         specifier: ^8.55.0
         version: 8.55.0(react@19.1.0)
