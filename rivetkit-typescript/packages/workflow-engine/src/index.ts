@@ -380,12 +380,17 @@ async function setSleepState<TOutput>(
 	driver: EngineDriver,
 	workflowId: string,
 	deadline: number,
+	messageNames?: string[],
 ): Promise<WorkflowResult<TOutput>> {
 	storage.state = "sleeping";
 	await flush(storage, driver);
 	await driver.setAlarm(workflowId, deadline);
 
-	return { state: "sleeping", sleepUntil: deadline };
+	return {
+		state: "sleeping",
+		sleepUntil: deadline,
+		waitingForMessages: messageNames,
+	};
 }
 
 async function setMessageWaitState<TOutput>(
@@ -501,12 +506,47 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			return result;
 		}
 
-		if (result.waitingForMessages && result.waitingForMessages.length > 0) {
+		const hasMessages =
+			result.waitingForMessages && result.waitingForMessages.length > 0;
+		const hasDeadline = result.sleepUntil !== undefined;
+
+		if (hasMessages && hasDeadline) {
+			// Wait for EITHER a message OR the deadline (for listenWithTimeout)
+			try {
+				const messagePromise = driver.waitForMessages
+					? awaitWithEviction(
+							driver.waitForMessages(
+								result.waitingForMessages!,
+								abortController.signal,
+							),
+							abortController.signal,
+						)
+					: waitForMessage(
+							runtime,
+							result.waitingForMessages!,
+							abortController.signal,
+						);
+				const sleepPromise = waitForSleep(
+					runtime,
+					result.sleepUntil!,
+					abortController.signal,
+				);
+				await Promise.race([messagePromise, sleepPromise]);
+			} catch (error) {
+				if (error instanceof EvictedError) {
+					return lastResult;
+				}
+				throw error;
+			}
+			continue;
+		}
+
+		if (hasMessages) {
 			try {
 				if (driver.waitForMessages) {
 					await awaitWithEviction(
 						driver.waitForMessages(
-							result.waitingForMessages,
+							result.waitingForMessages!,
 							abortController.signal,
 						),
 						abortController.signal,
@@ -514,7 +554,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 				} else {
 					await waitForMessage(
 						runtime,
-						result.waitingForMessages,
+						result.waitingForMessages!,
 						abortController.signal,
 					);
 				}
@@ -527,11 +567,11 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			continue;
 		}
 
-		if (result.sleepUntil !== undefined) {
+		if (hasDeadline) {
 			try {
 				await waitForSleep(
 					runtime,
-					result.sleepUntil,
+					result.sleepUntil!,
 					abortController.signal,
 				);
 			} catch (error) {
@@ -809,6 +849,7 @@ async function executeWorkflow<TInput, TOutput>(
 				driver,
 				workflowId,
 				error.deadline,
+				error.messageNames,
 			);
 		}
 

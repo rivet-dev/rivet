@@ -32,10 +32,18 @@ export class RollbackCheckpointError extends Error {
 /**
  * Internal: Workflow should sleep until deadline.
  * This is thrown to yield control back to the scheduler.
+ * Optionally, the workflow can also wake early if certain messages arrive.
  */
 export class SleepError extends Error {
-	constructor(public readonly deadline: number) {
-		super(`Sleeping until ${deadline}`);
+	constructor(
+		public readonly deadline: number,
+		public readonly messageNames?: string[],
+	) {
+		super(
+			messageNames && messageNames.length > 0
+				? `Sleeping until ${deadline} or messages: ${messageNames.join(", ")}`
+				: `Sleeping until ${deadline}`,
+		);
 		this.name = "SleepError";
 	}
 }

@@ -1209,8 +1209,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			return message.data as T;
 		}
 
-		// Message not available, yield to scheduler until deadline
-		throw new SleepError(deadline);
+		// Message not available, yield to scheduler until deadline or message
+		throw new SleepError(deadline, [messageName]);
 	}
 
 	async listenNWithTimeout<T>(
@@ -1377,8 +1377,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			if (!message) {
 				// No message available - check if we should wait
 				if (results.length === 0) {
-					// No messages yet - yield to scheduler until deadline
-					throw new SleepError(deadline);
+					// No messages yet - yield to scheduler until deadline or message
+					throw new SleepError(deadline, [messageName]);
 				}
 				// We have some messages - return what we have
 				break;
@@ -1642,6 +1642,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		let pendingCount = branches.length;
 		const errors: Record<string, Error> = {};
 		const lateErrors: Array<{ name: string; error: string }> = [];
+		// Track scheduler yield errors - we need to propagate these after allSettled
+		let yieldError: SleepError | MessageWaitError | null = null;
 
 		// Check for replay winners first
 		for (const branch of branches) {
@@ -1716,6 +1718,39 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				(error) => {
 					pendingCount--;
 
+					// Track sleep/message errors - they need to bubble up to the scheduler
+					// We'll re-throw after allSettled to allow cleanup
+					if (error instanceof SleepError) {
+						// Track the earliest deadline
+						if (
+							!yieldError ||
+							!(yieldError instanceof SleepError) ||
+							error.deadline < yieldError.deadline
+						) {
+							yieldError = error;
+						}
+						branchStatus.status = "running"; // Keep as running since we'll resume
+						entry.dirty = true;
+						return;
+					}
+					if (error instanceof MessageWaitError) {
+						// Track message wait errors, prefer sleep errors with deadlines
+						if (!yieldError || !(yieldError instanceof SleepError)) {
+							if (!yieldError) {
+								yieldError = error;
+							} else if (yieldError instanceof MessageWaitError) {
+								// Merge message names
+								yieldError = new MessageWaitError([
+									...yieldError.messageNames,
+									...error.messageNames,
+								]);
+							}
+						}
+						branchStatus.status = "running"; // Keep as running since we'll resume
+						entry.dirty = true;
+						return;
+					}
+
 					if (
 						error instanceof CancelledError ||
 						error instanceof EvictedError
@@ -1749,6 +1784,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// Wait for all branches to complete or be cancelled
 		await Promise.allSettled(branchPromises);
+
+		// If any branch needs to yield to the scheduler (sleep/message wait),
+		// save state and re-throw the error to exit the workflow execution
+		if (yieldError && !settled) {
+			await flush(this.storage, this.driver);
+			throw yieldError;
+		}
 
 		// Clean up entries from non-winning branches
 		if (winnerName !== null) {
