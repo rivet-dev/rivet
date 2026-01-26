@@ -1,6 +1,6 @@
 import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
-import { CancelledError, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { Suspense } from "react";
@@ -12,6 +12,15 @@ import {
 	Toaster,
 	TooltipProvider,
 } from "@/components";
+import {
+	getOrCreateCloudContext,
+	getOrCreateCloudNamespaceContext,
+	getOrCreateEngineContext,
+	getOrCreateEngineNamespaceContext,
+	getOrCreateInspectorContext,
+	getOrCreateOrganizationContext,
+	getOrCreateProjectContext,
+} from "./app/data-providers/cache";
 import { NotFoundCard } from "./app/not-found-card";
 import { RouteLayout } from "./app/route-layout";
 import { clerk } from "./lib/auth";
@@ -41,6 +50,13 @@ export const router = createRouter({
 		clerk:
 			__APP_TYPE__ === "cloud" ? clerk : (undefined as unknown as Clerk),
 		queryClient: queryClient,
+		getOrCreateCloudContext,
+		getOrCreateEngineContext,
+		getOrCreateInspectorContext,
+		getOrCreateOrganizationContext,
+		getOrCreateProjectContext,
+		getOrCreateCloudNamespaceContext,
+		getOrCreateEngineNamespaceContext,
 	},
 	defaultPreloadStaleTime: 0,
 	defaultGcTime: 0,

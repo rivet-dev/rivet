@@ -9,6 +9,15 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { match } from "ts-pattern";
+import type {
+	CloudContext,
+	CloudNamespaceContext,
+	EngineContext,
+	EngineNamespaceContext,
+	InspectorContext,
+	OrganizationContext,
+	ProjectContext,
+} from "@/app/data-providers/cache";
 import { FullscreenLoading } from "@/components";
 import { clerk } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
@@ -69,6 +78,33 @@ interface RootRouteContext {
 	 */
 	clerk: Clerk;
 	queryClient: QueryClient;
+	getOrCreateCloudContext: (clerk: Clerk) => CloudContext;
+	getOrCreateEngineContext: (
+		engineToken: (() => string) | string | (() => Promise<string>),
+	) => EngineContext;
+	getOrCreateInspectorContext: (opts: {
+		url?: string;
+		token?: string;
+	}) => InspectorContext;
+	getOrCreateOrganizationContext: (
+		parent: CloudContext,
+		organization: string,
+	) => OrganizationContext;
+	getOrCreateProjectContext: (
+		parent: CloudContext & OrganizationContext,
+		organization: string,
+		project: string,
+	) => ProjectContext;
+	getOrCreateCloudNamespaceContext: (
+		parent: CloudContext & OrganizationContext & ProjectContext,
+		namespace: string,
+		engineNamespaceName: string,
+		engineNamespaceId: string,
+	) => CloudNamespaceContext;
+	getOrCreateEngineNamespaceContext: (
+		parent: EngineContext,
+		namespace: string,
+	) => EngineNamespaceContext;
 }
 
 export const Route = createRootRouteWithContext<RootRouteContext>()({
