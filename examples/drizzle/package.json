@@ -34,7 +34,8 @@
 		"tags": [
 			"database"
 		],
-		"noFrontend": true
+		"noFrontend": true,
+		"skipVercel": true
 	},
 	"license": "MIT"
 }

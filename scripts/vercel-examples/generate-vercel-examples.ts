@@ -42,6 +42,7 @@ interface PackageJson {
 		tags?: string[];
 		noFrontend?: boolean;
 		frontendPort?: number;
+		skipVercel?: boolean;
 	};
 	[key: string]: unknown;
 }
@@ -162,6 +163,11 @@ function getChangedExamples(): Set<string> {
 }
 
 function shouldSkipExample(example: ExampleConfig): string | null {
+	// Skip if explicitly marked to skip Vercel generation
+	if (example.packageJson.template?.skipVercel) {
+		return "Marked to skip Vercel generation";
+	}
+
 	// Skip next.js examples - they have their own deployment strategy
 	if (example.name.includes("next-js") || example.name.includes("nextjs")) {
 		return "Next.js has its own Vercel integration";
@@ -270,7 +276,7 @@ function generateTsConfig(example: ExampleConfig): object {
 	return {
 		compilerOptions: {
 			target: "esnext",
-			lib: example.hasFrontend ? ["esnext", "dom"] : ["esnext"],
+			lib: example.hasFrontend ? ["esnext", "dom", "dom.iterable"] : ["esnext"],
 			jsx: example.hasFrontend ? "react-jsx" : undefined,
 			module: "esnext",
 			moduleResolution: "bundler",
