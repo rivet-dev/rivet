@@ -1,4 +1,8 @@
 import Foundation
+import os
+import SwiftCBOR
+
+private let logger = RivetLogger.handle
 
 public final class ActorHandle: @unchecked Sendable {
     // Safe because all mutable state is actor-isolated in ActorHandleState.
@@ -14,20 +18,24 @@ public final class ActorHandle: @unchecked Sendable {
         self.params = params
     }
 
+    /// Performs an actor action using positional arguments encoded as CBOR.
+    /// Prefer the typed overloads for 0-5 arguments so decoding stays strongly typed.
     public func action<Response: Decodable>(
         _ name: String,
         args: [AnyEncodable],
         as _: Response.Type = Response.self
     ) async throws -> Response {
+        logger.debug("handling action name=\(name, privacy: .public) encoding=cbor")
         let actorId = try await resolveActorId()
+        logger.debug("found actor for action actorId=\(actorId, privacy: .public)")
         let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
         let path = "/action/\(encodedName)"
         let requestBody = HttpActionRequest(args: args)
-        let bodyData = try JSONEncoder().encode(requestBody)
+        let bodyData = try CBORSupport.encoder().encode(requestBody)
 
         var headers: [String: String] = [
-            Routing.headerEncoding: "json",
-            "Content-Type": "application/json"
+            Routing.headerEncoding: "cbor",
+            "Content-Type": "application/octet-stream"
         ]
         if let paramsHeader = try encodeParamsHeader() {
             headers[Routing.headerConnParams] = paramsHeader
@@ -42,18 +50,19 @@ public final class ActorHandle: @unchecked Sendable {
         )
 
         if !(200..<300).contains(response.statusCode) {
-            throw try await parseActorError(data: data, actorId: actorId)
+            logger.warning("action failed name=\(name, privacy: .public) statusCode=\(response.statusCode)")
+            throw try await parseActorError(data: data, response: response, actorId: actorId)
         }
 
-        let decoded = try JSONDecoder().decode(HttpActionResponse<Response>.self, from: data)
-        return decoded.output
+        let decoded = try CBORSupport.decode(HttpActionResponse<JSONValue>.self, from: data)
+        return try CBORSupport.decode(Response.self, from: decoded.output)
     }
 
     public func action<Response: Decodable>(
         _ name: String,
         as _: Response.Type = Response.self
     ) async throws -> Response {
-        return try await action(name, args: [], as: Response.self)
+        return try await action(name, args: [] as [AnyEncodable], as: Response.self)
     }
 
     public func action<Arg: Encodable, Response: Decodable>(
@@ -64,7 +73,67 @@ public final class ActorHandle: @unchecked Sendable {
         return try await action(name, args: [AnyEncodable(arg)], as: Response.self)
     }
 
+    public func action<A: Encodable, B: Encodable, Response: Decodable>(
+        _ name: String,
+        _ a: A,
+        _ b: B,
+        as _: Response.Type = Response.self
+    ) async throws -> Response {
+        return try await action(name, args: [AnyEncodable(a), AnyEncodable(b)], as: Response.self)
+    }
+
+    public func action<A: Encodable, B: Encodable, C: Encodable, Response: Decodable>(
+        _ name: String,
+        _ a: A,
+        _ b: B,
+        _ c: C,
+        as _: Response.Type = Response.self
+    ) async throws -> Response {
+        return try await action(name, args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c)], as: Response.self)
+    }
+
+    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, Response: Decodable>(
+        _ name: String,
+        _ a: A,
+        _ b: B,
+        _ c: C,
+        _ d: D,
+        as _: Response.Type = Response.self
+    ) async throws -> Response {
+        return try await action(
+            name,
+            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d)],
+            as: Response.self
+        )
+    }
+
+    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, E: Encodable, Response: Decodable>(
+        _ name: String,
+        _ a: A,
+        _ b: B,
+        _ c: C,
+        _ d: D,
+        _ e: E,
+        as _: Response.Type = Response.self
+    ) async throws -> Response {
+        return try await action(
+            name,
+            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d), AnyEncodable(e)],
+            as: Response.self
+        )
+    }
+
+    /// Raw JSON arguments for actions. Use this when you need more than 5 positional arguments.
+    public func action<Response: Decodable>(
+        _ name: String,
+        args: [JSONValue],
+        as _: Response.Type = Response.self
+    ) async throws -> Response {
+        return try await action(name, args: args.map { AnyEncodable($0) }, as: Response.self)
+    }
+
     public func connect() -> ActorConnection {
+        logger.debug("establishing connection from handle")
         let connection = ActorConnection(
             manager: manager,
             registry: registry,
@@ -99,6 +168,7 @@ public final class ActorHandle: @unchecked Sendable {
         request: RawHTTPRequest = RawHTTPRequest()
     ) async throws -> RawHTTPResponse {
         let actorId = try await resolveActorId()
+        logger.debug("found actor for raw http actorId=\(actorId, privacy: .public)")
         let fragmentParts = path.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
         let pathWithoutFragment = String(fragmentParts.first ?? "")
         let normalizedPath = pathWithoutFragment.hasPrefix("/") ? String(pathWithoutFragment.dropFirst()) : pathWithoutFragment
@@ -109,6 +179,7 @@ public final class ActorHandle: @unchecked Sendable {
             headers[Routing.headerConnParams] = paramsHeader
         }
 
+        logger.debug("sending http request url=\(fullPath, privacy: .public) encoding=cbor")
         let (data, response) = try await manager.sendHttpRequestToActor(
             actorId: actorId,
             path: fullPath,
@@ -154,8 +225,10 @@ public final class ActorHandle: @unchecked Sendable {
         return (actorId, name)
     }
 
-    private func parseActorError(data: Data, actorId: String) async throws -> ActorError {
-        if let error = try? JSONDecoder().decode(HttpResponseError.self, from: data) {
+    private func parseActorError(data: Data, response: HTTPURLResponse, actorId: String) async throws -> ActorError {
+        let rayId = response.value(forHTTPHeaderField: "x-rivet-ray-id")
+
+        func handleDecodedError(_ error: HttpResponseError) async throws -> ActorError {
             if isSchedulingError(group: error.group, code: error.code) {
                 let query = await state.query
                 let name = query.name
@@ -166,7 +239,34 @@ public final class ActorHandle: @unchecked Sendable {
             }
             return ActorError(group: error.group, code: error.code, message: error.message, metadata: error.metadata)
         }
-        return ActorError(group: "http", code: "error", message: "request failed", metadata: nil)
+
+        if let error = try? JSONDecoder().decode(HttpResponseError.self, from: data) {
+            return try await handleDecodedError(error)
+        }
+
+        if let error = try? CBORSupport.decode(HttpResponseError.self, from: data) {
+            return try await handleDecodedError(error)
+        }
+
+        if let error = try? CBORSupport.decodeHttpResponseError(from: data) {
+            return try await handleDecodedError(error)
+        }
+
+        if let error = try? CBORSupport.decodeBareHttpResponseError(from: data) {
+            return try await handleDecodedError(error)
+        }
+
+        let statusText = HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
+        let statusLabel = statusText.isEmpty ? "HTTP \(response.statusCode)" : "\(statusText) (\(response.statusCode))"
+        let bodyText = String(data: data, encoding: .utf8) ?? ""
+        let baseMessage: String
+        if let rayId, !rayId.isEmpty {
+            baseMessage = "\(statusLabel) (Ray ID: \(rayId))"
+        } else {
+            baseMessage = statusLabel
+        }
+        let message = bodyText.isEmpty ? baseMessage : "\(baseMessage):\n\(bodyText)"
+        throw HttpRequestError(message)
     }
 
     private func encodeParamsHeader() throws -> String? {
@@ -180,7 +280,7 @@ public final class ActorHandle: @unchecked Sendable {
     private func buildWebSocketProtocols() throws -> [String] {
         var protocols: [String] = []
         protocols.append(Routing.wsProtocolStandard)
-        protocols.append("\(Routing.wsProtocolEncoding)json")
+        protocols.append("\(Routing.wsProtocolEncoding)cbor")
         if let paramsHeader = try encodeParamsHeader() {
             let encoded = URLUtils.encodeURIComponent(paramsHeader)
             protocols.append("\(Routing.wsProtocolConnParams)\(encoded)")

@@ -9,7 +9,7 @@ public struct ClientConfig: Sendable {
     public var disableMetadataLookup: Bool
 
     public init(
-        endpoint: String? = nil,
+        endpoint: String,
         token: String? = nil,
         namespace: String? = nil,
         runnerName: String? = nil,
@@ -17,16 +17,12 @@ public struct ClientConfig: Sendable {
         disableMetadataLookup: Bool = false
     ) throws {
         let env = ProcessInfo.processInfo.environment
-        let endpointValue = endpoint
-            ?? env["RIVET_ENGINE"]
-            ?? env["RIVET_ENDPOINT"]
-            ?? "http://127.0.0.1:6420"
         let tokenValue = token ?? env["RIVET_TOKEN"]
         let namespaceValue = namespace ?? env["RIVET_NAMESPACE"]
         let runnerValue = runnerName ?? env["RIVET_RUNNER"] ?? "default"
 
         let parsed = try EndpointParser.parse(
-            endpoint: endpointValue,
+            endpoint: endpoint,
             namespace: namespaceValue,
             token: tokenValue
         )

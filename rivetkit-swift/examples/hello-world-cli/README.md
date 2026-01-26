@@ -33,6 +33,14 @@ RIVET_ACTOR_KEY=my-key swift run
 swift run -- --key my-key
 ```
 
+## Debug Logging
+
+Stream RivetKit client logs in a separate terminal:
+
+```bash
+log stream --level debug --predicate 'subsystem == "dev.rivet.client"'
+```
+
 ## Notes
 
 - The client subscribes to `newCount` and prints each update.

@@ -4,16 +4,14 @@ import RivetKitClient
 @main
 struct HelloWorldHeadless {
     static func main() async {
-        let endpoint = ProcessInfo.processInfo.environment["RIVET_ENGINE"]
-            ?? ProcessInfo.processInfo.environment["RIVET_ENDPOINT"]
-            ?? "http://127.0.0.1:8787/api/rivet"
+        let config = (try? ClientConfig()) ?? (try! ClientConfig(endpoint: "http://127.0.0.1:8787/api/rivet"))
         let key = resolveActorKey()
 
-        print("Connecting to \(endpoint)")
+        print("Connecting to \(config.endpoint)")
         print("Actor key: \(key)")
 
         do {
-            let client = try RivetKitClient(endpoint: endpoint)
+            let client = RivetKitClient(config: config)
             let handle = client.getOrCreate("counter", [key])
             let connection = handle.connect()
 
@@ -25,10 +23,8 @@ struct HelloWorldHeadless {
                 print("error: \(error.group).\(error.code): \(error.message)")
             }
 
-            _ = await connection.on("newCount") { args in
-                if let newValue = decodeCount(from: args) {
-                    print("event newCount: \(newValue)")
-                }
+            _ = await connection.on("newCount") { (newValue: Int) in
+                print("event newCount: \(newValue)")
             }
 
             let initial: Int = try await handle.action("getCount")
@@ -64,27 +60,4 @@ struct HelloWorldHeadless {
         return "swift-cli"
     }
 
-    private static func decodeCount(from args: [JSONValue]) -> Int? {
-        guard let first = args.first else { return nil }
-        switch first {
-        case .number(let number):
-            return intValue(from: number)
-        case .object(let object):
-            if case .number(let number)? = object["count"] {
-                return intValue(from: number)
-            }
-            return nil
-        default:
-            return nil
-        }
-    }
-
-    private static func intValue(from number: JSONNumber) -> Int {
-        switch number {
-        case .int(let value):
-            return Int(value)
-        case .double(let value):
-            return Int(value)
-        }
-    }
 }

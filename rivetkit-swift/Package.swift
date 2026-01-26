@@ -14,15 +14,17 @@ let package = Package(
         .library(name: "RivetKitClient", targets: ["RivetKitClient"]),
         .library(name: "RivetKitSwiftUI", targets: ["RivetKitSwiftUI"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/valpackett/SwiftCBOR.git", from: "0.6.0")
+    ],
     targets: [
         .target(
             name: "RivetKitClient",
-            dependencies: []
+            dependencies: ["SwiftCBOR"]
         ),
         .target(
             name: "RivetKitSwiftUI",
-            dependencies: ["RivetKitClient"]
+            dependencies: ["RivetKitClient", "SwiftCBOR"]
         ),
         .testTarget(
             name: "RivetKitClientTests",

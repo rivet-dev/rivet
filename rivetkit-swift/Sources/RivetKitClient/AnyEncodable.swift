@@ -1,7 +1,7 @@
 import Foundation
 
 public struct AnyEncodable: Encodable, @unchecked Sendable {
-    // Safe because the wrapped value is only used synchronously by JSONEncoder on the current task.
+    // Safe because the wrapped value is only used synchronously by an encoder on the current task.
     private let encodeBlock: (Encoder) throws -> Void
 
     public init<T: Encodable>(_ value: T) {

@@ -307,6 +307,11 @@ export const sitemap = [
 								href: "/docs/clients/swift",
 								icon: faSwift,
 							},
+							{
+								title: "SwiftUI",
+								href: "/docs/clients/swiftui",
+								icon: faSwift,
+							},
 						]
 					}
 				],

@@ -233,10 +233,15 @@ final class RivetKitClientSuite {
         let conn1 = handle1.connect()
         let conn2 = handle2.connect()
 
-        let eventStream = AsyncStream<[JSONValue]> { continuation in
+        struct NewCountEvent: Decodable, Sendable {
+            let count: Int
+            let by: String
+        }
+
+        let eventStream = AsyncStream<NewCountEvent> { continuation in
             Task {
-                let unsubscribe = await conn1.on("newCount") { args in
-                    continuation.yield(args)
+                let unsubscribe = await conn1.on("newCount") { (payload: NewCountEvent) in
+                    continuation.yield(payload)
                 }
                 continuation.onTermination = { _ in
                     Task { await unsubscribe() }
@@ -247,16 +252,10 @@ final class RivetKitClientSuite {
         _ = try await conn1.action("increment", arg: 1, as: Int.self)
 
         var received = false
-        for await args in eventStream {
+        for await payload in eventStream {
             received = true
-            if let first = args.first {
-                if case .object(let object) = first {
-                    #expect(object["count"] == .number(.int(1)))
-                    #expect(object["by"] == .string("user1"))
-                } else {
-                    #expect(Bool(false))
-                }
-            }
+            #expect(payload.count == 1)
+            #expect(payload.by == "user1")
             break
         }
         #expect(received)
@@ -564,10 +563,15 @@ final class RivetKitClientSuite {
         }
         _ = try await nextValue(from: openStream, timeoutSeconds: 5)
 
-        let eventStream = AsyncStream<[JSONValue]> { continuation in
+        struct NewCountEvent: Decodable, Sendable {
+            let count: Int
+            let by: String
+        }
+
+        let eventStream = AsyncStream<NewCountEvent> { continuation in
             Task {
-                let unsubscribe = await conn.once("newCount") { args in
-                    continuation.yield(args)
+                let unsubscribe = await conn.once("newCount") { (payload: NewCountEvent) in
+                    continuation.yield(payload)
                 }
                 continuation.onTermination = { _ in
                     Task { await unsubscribe() }
@@ -578,8 +582,7 @@ final class RivetKitClientSuite {
         _ = try await conn.action("increment", arg: 1, as: Int.self)
         _ = try await conn.action("increment", arg: 1, as: Int.self)
 
-        let args = try await nextValue(from: eventStream, timeoutSeconds: 5)
-        #expect(args.count == 1)
+        _ = try await nextValue(from: eventStream, timeoutSeconds: 5)
 
         await conn.dispose()
     }
@@ -679,10 +682,15 @@ final class RivetKitClientSuite {
             #expect(Bool(false))
         }
 
-        let messageStream = AsyncStream<[JSONValue]> { continuation in
+        struct DirectMessageEvent: Decodable, Sendable {
+            let from: String
+            let message: String
+        }
+
+        let messageStream = AsyncStream<DirectMessageEvent> { continuation in
             Task {
-                let unsubscribe = await conn1.on("directMessage") { args in
-                    continuation.yield(args)
+                let unsubscribe = await conn1.on("directMessage") { (payload: DirectMessageEvent) in
+                    continuation.yield(payload)
                 }
                 continuation.onTermination = { _ in
                     Task { await unsubscribe() }
@@ -704,13 +712,9 @@ final class RivetKitClientSuite {
         )
         #expect(sent)
 
-        let messageArgs = try await nextValue(from: messageStream, timeoutSeconds: 5)
-        if let first = messageArgs.first, case .object(let payload) = first {
-            #expect(payload["from"] == .string(state2Id))
-            #expect(payload["message"] == .string("hello"))
-        } else {
-            #expect(Bool(false))
-        }
+        let payload = try await nextValue(from: messageStream, timeoutSeconds: 5)
+        #expect(payload.from == state2Id)
+        #expect(payload.message == "hello")
 
         await conn1.dispose()
         await conn2.dispose()

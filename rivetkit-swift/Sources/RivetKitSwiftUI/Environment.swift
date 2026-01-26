@@ -9,10 +9,33 @@ public struct RivetKitContext: Sendable {
         self.client = client
         self.error = error
     }
+
+    /// Creates a context wrapping an existing client.
+    public init(client: RivetKitClient) {
+        self.client = client
+        self.error = nil
+    }
+}
+
+/// Singleton actor cache shared across the entire app.
+/// This cache is @MainActor-isolated and manages shared actor connections.
+@MainActor
+private enum ActorCacheHolder {
+    static let shared = ActorCache()
+}
+
+/// Access the shared actor cache (MainActor-isolated).
+@MainActor
+public var sharedActorCache: ActorCache {
+    ActorCacheHolder.shared
 }
 
 private struct RivetKitContextKey: EnvironmentKey {
-    static let defaultValue: RivetKitContext = RivetKitContext.makeDefault()
+    // Default context with no client - requires explicit configuration
+    static let defaultValue: RivetKitContext = RivetKitContext(
+        client: nil,
+        error: ActorError.clientError(code: "not_configured", message: "RivetKit not configured. Use .rivetKit(endpoint:) or .rivetKit(client:) to configure.")
+    )
 }
 
 extension EnvironmentValues {
@@ -22,65 +45,69 @@ extension EnvironmentValues {
     }
 }
 
-private final class RivetKitContextBox: ObservableObject {
-    let context: RivetKitContext
+/// Holder for singleton client instances keyed by endpoint.
+/// This ensures that calling .rivetKit(endpoint:) with the same endpoint
+/// in different views reuses the same client instance.
+@MainActor
+private enum ClientHolder {
+    private static var clients: [String: RivetKitClient] = [:]
 
-    init(context: RivetKitContext) {
-        self.context = context
-    }
-
-    deinit {
-        if let client = context.client {
-            Task {
-                await client.dispose()
-            }
+    static func getOrCreate(endpoint: String) throws -> RivetKitClient {
+        if let existing = clients[endpoint] {
+            return existing
         }
-    }
-}
-
-private struct RivetKitProvider: ViewModifier {
-    @StateObject private var box: RivetKitContextBox
-
-    init(context: RivetKitContext) {
-        _box = StateObject(wrappedValue: RivetKitContextBox(context: context))
-    }
-
-    func body(content: Content) -> some View {
-        content.environment(\.rivetKitContext, box.context)
+        let client = try RivetKitClient(endpoint: endpoint)
+        clients[endpoint] = client
+        return client
     }
 }
 
 public extension View {
-    func rivetKit(_ endpoint: String) -> some View {
-        modifier(RivetKitProvider(context: RivetKitContext.fromEndpoint(endpoint)))
-    }
-
-    func rivetKit(_ config: ClientConfig) -> some View {
-        modifier(RivetKitProvider(context: RivetKitContext.fromConfig(config)))
-    }
-}
-
-extension RivetKitContext {
-    static func fromEndpoint(_ endpoint: String) -> RivetKitContext {
+    /// Configures RivetKit with the specified endpoint.
+    /// Safe to call in view body - uses a singleton client instance per endpoint.
+    ///
+    /// Example:
+    /// ```swift
+    /// @main
+    /// struct MyApp: App {
+    ///     var body: some Scene {
+    ///         WindowGroup {
+    ///             ContentView()
+    ///                 .rivetKit(endpoint: "http://localhost:6420")
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    @MainActor
+    func rivetKit(endpoint: String) -> some View {
+        let context: RivetKitContext
         do {
-            let config = try ClientConfig(endpoint: endpoint)
-            return fromConfig(config)
+            let client = try ClientHolder.getOrCreate(endpoint: endpoint)
+            context = RivetKitContext(client: client)
         } catch {
-            return RivetKitContext(client: nil, error: ActorError.clientError(code: "config_error", message: error.localizedDescription))
+            context = RivetKitContext(client: nil, error: ActorError.clientError(code: "config_error", message: error.localizedDescription))
         }
+        return environment(\.rivetKitContext, context)
     }
 
-    static func fromConfig(_ config: ClientConfig) -> RivetKitContext {
-        let client = RivetKitClient(config: config)
-        return RivetKitContext(client: client, error: nil)
-    }
-
-    static func makeDefault() -> RivetKitContext {
-        do {
-            let client = try RivetKitClient()
-            return RivetKitContext(client: client, error: nil)
-        } catch {
-            return RivetKitContext(client: nil, error: ActorError.clientError(code: "config_error", message: error.localizedDescription))
-        }
+    /// Configures RivetKit with an existing client instance.
+    /// The client should be stored as a property (not created inline) to avoid recreation on each render.
+    ///
+    /// Example:
+    /// ```swift
+    /// @main
+    /// struct MyApp: App {
+    ///     private let client = try! RivetKitClient(endpoint: "...")
+    ///
+    ///     var body: some Scene {
+    ///         WindowGroup {
+    ///             ContentView()
+    ///                 .rivetKit(client: client)
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    func rivetKit(client: RivetKitClient) -> some View {
+        environment(\.rivetKitContext, RivetKitContext(client: client))
     }
 }

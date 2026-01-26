@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = RivetLogger.client
 
 public struct GetWithIdOptions: Sendable {
     public var params: AnyEncodable?
@@ -105,15 +108,12 @@ public final class RivetKitClient: @unchecked Sendable {
         }
     }
 
-    public convenience init() throws {
-        try self.init(config: ClientConfig())
-    }
-
     public convenience init(endpoint: String) throws {
         try self.init(config: ClientConfig(endpoint: endpoint))
     }
 
     public func get(_ name: String, _ key: [String] = [], options: GetOptions = GetOptions()) -> ActorHandle {
+        logger.debug("get handle to actor name=\(name, privacy: .public) key=\(key, privacy: .public)")
         return ActorHandle(
             manager: manager,
             registry: registry,
@@ -127,6 +127,7 @@ public final class RivetKitClient: @unchecked Sendable {
         _ key: [String] = [],
         options: GetOrCreateOptions = GetOrCreateOptions()
     ) -> ActorHandle {
+        logger.debug("get or create handle to actor name=\(name, privacy: .public) key=\(key, privacy: .public) createInRegion=\(options.createInRegion ?? "nil", privacy: .public)")
         return ActorHandle(
             manager: manager,
             registry: registry,
@@ -145,6 +146,7 @@ public final class RivetKitClient: @unchecked Sendable {
         _ actorId: String,
         options: GetWithIdOptions = GetWithIdOptions()
     ) -> ActorHandle {
+        logger.debug("get handle to actor with id name=\(name, privacy: .public) actorId=\(actorId, privacy: .public)")
         return ActorHandle(
             manager: manager,
             registry: registry,
@@ -158,12 +160,14 @@ public final class RivetKitClient: @unchecked Sendable {
         _ key: [String] = [],
         options: CreateOptions = CreateOptions()
     ) async throws -> ActorHandle {
+        logger.debug("create actor handle name=\(name, privacy: .public) key=\(key, privacy: .public) region=\(options.region ?? "nil", privacy: .public)")
         let actor = try await manager.createActor(
             name: name,
             key: key.isEmpty ? nil : key,
             input: options.input,
             region: options.region
         )
+        logger.debug("created actor with ID name=\(name, privacy: .public) key=\(key, privacy: .public) actorId=\(actor.actorId, privacy: .public)")
         return ActorHandle(
             manager: manager,
             registry: registry,
@@ -173,6 +177,7 @@ public final class RivetKitClient: @unchecked Sendable {
     }
 
     public func dispose() async {
+        logger.debug("disposing client")
         await registry.disposeAll()
     }
 }

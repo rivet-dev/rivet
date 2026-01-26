@@ -2,8 +2,6 @@ import RivetKitSwiftUI
 import SwiftUI
 
 struct ContentView: View {
-    let endpoint: String
-
     @State private var keyInput = "swift-ui"
 
     var body: some View {
@@ -21,7 +19,7 @@ struct ContentView: View {
             }
             .frame(maxWidth: 280)
 
-            CounterPanel(endpoint: endpoint, key: keyInput)
+            CounterPanel(key: keyInput)
                 .id(keyInput)
         }
         .padding(32)
@@ -29,15 +27,13 @@ struct ContentView: View {
 }
 
 private struct CounterPanel: View {
-    let endpoint: String
     let key: String
 
     @Actor("counter", key: ["default"]) private var counter
     @State private var count = 0
     @State private var lastError: String?
 
-    init(endpoint: String, key: String) {
-        self.endpoint = endpoint
+    init(key: String) {
         self.key = key
         _counter = Actor("counter", key: [key])
     }
@@ -53,13 +49,9 @@ private struct CounterPanel: View {
             .buttonStyle(.borderedProminent)
             .disabled(!counter.isConnected)
 
-            VStack(spacing: 6) {
-                Text("Status: \(counter.connStatus.rawValue)")
-                Text("Endpoint: \(endpoint)")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
+            Text("Status: \(counter.connStatus.rawValue)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             if let error = lastError {
                 Text(error)

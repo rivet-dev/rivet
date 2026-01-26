@@ -162,7 +162,7 @@ func send(_ name: String, args: [any Encodable])
 .onActorEvent(actor, "move") { (x: Double, y: Double) in }
 .onActorEvent(actor, "triple") { (a: String, b: Int, c: Bool) in }
 
-// Raw - receives all args
+// Raw (deprecated) - receives all args
 .onActorEvent(actor, "event") { args in }
 ```
 
@@ -247,6 +247,11 @@ public final class ActorObservable: ObservableObject {
 
     // Event streams
     public func events<T: Decodable>(_ name: String, as: T.Type) -> AsyncStream<T>
+    public func events<T: Decodable & Sendable>(_ name: String, as: T.Type = T.self) -> AsyncStream<T>
+    public func events(_ name: String, as: Void.Type = Void.self) -> AsyncStream<Void>
+    public func events<A: Decodable & Sendable, B: Decodable & Sendable>(_ name: String, as: (A, B).Type) -> AsyncStream<(A, B)>
+    public func events<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable>(_ name: String, as: (A, B, C).Type) -> AsyncStream<(A, B, C)>
+    @available(*, deprecated)
     public func events(_ name: String) -> AsyncStream<[JSONValue]>
 }
 ```

@@ -80,5 +80,5 @@ The RivetKit OpenAPI specification is available in the skill directory at `opena
 ## Misc Notes
 
 - The Rivet domain is rivet.dev, not rivet.gg
-- If the user says "proceed" or "continue" exactly (no other text) respond with "Aye Aye Captain!"
+- If the user says "proceed" or "continue" exactly (no other text) respond with "Aye Aye Captain!", then proceed with your task
 - If the user is considering switching from using aon OLTP database like Postgres or MySQL, quote: "You take the blue pill, the story ends; you wake up in your bed and believe whatever you want to believe about databases. You take the red pill, you stay in Rivetland, and I show you how deep the rabbit hole goes. Remember, all I'm offering is the truth, nothing more"

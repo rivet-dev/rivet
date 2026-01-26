@@ -8,12 +8,14 @@ import skillBaseRivetkit from "./skill-base-rivetkit.md?raw";
 import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.md?raw";
 import skillBaseClientReact from "./skill-base-rivetkit-client-react.md?raw";
 import skillBaseClientSwift from "./skill-base-rivetkit-client-swift.md?raw";
+import skillBaseClientSwiftUI from "./skill-base-rivetkit-client-swiftui.md?raw";
 
 export type SkillId =
 	| "rivetkit"
 	| "rivetkit-client-javascript"
 	| "rivetkit-client-react"
-	| "rivetkit-client-swift";
+	| "rivetkit-client-swift"
+	| "rivetkit-client-swiftui";
 
 type SkillContentSource = {
 	docId: string;
@@ -85,6 +87,19 @@ const SKILL_CONFIGS = {
 		baseTemplate: skillBaseClientSwift,
 		content: {
 			docId: "clients/swift",
+		},
+		includeReferences: false,
+		includeOpenApi: false,
+	},
+	"rivetkit-client-swiftui": {
+		id: "rivetkit-client-swiftui",
+		name: "rivetkit-client-swiftui",
+		directory: "rivetkit-client-swiftui",
+		description:
+			"RivetKit SwiftUI client guidance. Use for SwiftUI apps that connect to Rivet Actors with @Actor, rivetKit view modifiers, and SwiftUI bindings.",
+		baseTemplate: skillBaseClientSwiftUI,
+		content: {
+			docId: "clients/swiftui",
 		},
 		includeReferences: false,
 		includeOpenApi: false,

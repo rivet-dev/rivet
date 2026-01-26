@@ -1,4 +1,5 @@
 import Foundation
+import SwiftCBOR
 
 public struct RawHTTPResponse: Sendable {
     public let data: Data
@@ -14,6 +15,10 @@ public struct RawHTTPResponse: Sendable {
 
     public func json<T: Decodable>(_ type: T.Type = T.self) throws -> T {
         try JSONDecoder().decode(T.self, from: data)
+    }
+
+    public func cbor<T: Decodable>(_ type: T.Type = T.self) throws -> T {
+        try CBORSupport.decode(T.self, from: data)
     }
 }
 

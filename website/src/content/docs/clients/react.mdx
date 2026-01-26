@@ -53,27 +53,6 @@ export const registry = setup({
 ```
 </CodeGroup>
 
-## Environment Configuration
-
-`createRivetKit()` (and the underlying `createClient()` instance) automatically read:
-
-- `RIVET_ENGINE` or `RIVET_ENDPOINT` (endpoint)
-- `RIVET_NAMESPACE`
-- `RIVET_TOKEN`
-- `RIVET_RUNNER`
-
-Defaults to `window.location.origin + "/api/rivet"` in the browser or `http://127.0.0.1:6420` on the server when unset.
-
-## Endpoint Format
-
-Endpoints support URL auth syntax:
-
-```
-https://namespace:token@api.rivet.dev
-```
-
-You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. For serverless deployments, use your app’s `/api/rivet` URL. See [Endpoints](/docs/general/endpoints#url-auth-syntax) for details.
-
 ## Stateless vs Stateful
 
 ```tsx
@@ -121,41 +100,6 @@ const created = await client.game.create(["game-1"], { input: { mode: "ranked" }
 const byId = client.chatRoom.getForId("actor-id");
 const resolvedId = await handle.resolve();
 ```
-
-## Keys
-
-Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchical addressing:
-
-<CodeGroup workspace>
-```tsx {{"title":"ChatRoom.tsx"}}
-import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
-
-const { useActor } = createRivetKit<typeof registry>();
-
-function ChatRoom() {
-  const room = useActor({ name: "chatRoom", key: ["org-acme", "general"] });
-  return <div>{room.connStatus}</div>;
-}
-```
-
-```ts {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-export const chatRoom = actor({
-  state: { messages: [] as string[] },
-  actions: {
-    getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
-  },
-});
-
-export const registry = setup({
-  use: { chatRoom },
-});
-```
-</CodeGroup>
-
-Don't build keys with string interpolation like `"org:${userId}"` when `userId` contains user data. Use arrays instead to prevent key injection attacks.
 
 ## Connection Parameters
 
@@ -263,6 +207,64 @@ function Profile() {
   return <button onClick={updateUsername}>Update</button>;
 }
 ```
+
+## Concepts
+
+### Keys
+
+Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchical addressing:
+
+<CodeGroup workspace>
+```tsx {{"title":"ChatRoom.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function ChatRoom() {
+  const room = useActor({ name: "chatRoom", key: ["org-acme", "general"] });
+  return <div>{room.connStatus}</div>;
+}
+```
+
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {
+    getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
+  },
+});
+
+export const registry = setup({
+  use: { chatRoom },
+});
+```
+</CodeGroup>
+
+Don't build keys with string interpolation like `"org:${userId}"` when `userId` contains user data. Use arrays instead to prevent key injection attacks.
+
+### Environment Variables
+
+`createRivetKit()` (and the underlying `createClient()` instance) automatically read:
+
+- `RIVET_ENDPOINT`
+- `RIVET_NAMESPACE`
+- `RIVET_TOKEN`
+- `RIVET_RUNNER`
+
+Defaults to `window.location.origin + "/api/rivet"` in the browser or `http://127.0.0.1:6420` on the server when unset.
+
+### Endpoint Format
+
+Endpoints support URL auth syntax:
+
+```
+https://namespace:token@api.rivet.dev
+```
+
+You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. For serverless deployments, use your app's `/api/rivet` URL. See [Endpoints](/docs/general/endpoints#url-auth-syntax) for details.
 
 ## API Reference
 

@@ -1,4 +1,8 @@
 import Foundation
+import os
+import SwiftCBOR
+
+private let logger = RivetLogger.manager
 
 actor RemoteManager {
     private var config: ClientConfig
@@ -34,6 +38,7 @@ actor RemoteManager {
         let endpoint = config.endpoint
         var attempt = 0
         var delay: UInt64 = 500_000_000
+        logger.debug("starting metadata lookup endpoint=\(endpoint, privacy: .public)")
         while true {
             attempt += 1
             do {
@@ -41,14 +46,17 @@ actor RemoteManager {
                     method: "GET",
                     path: "/metadata"
                 )
+                logger.debug("metadata lookup succeeded runtime=\(metadata.runtime, privacy: .public) version=\(metadata.version, privacy: .public)")
                 applyMetadata(metadata)
                 return
             } catch {
+                logger.warning("metadata lookup failed attempt=\(attempt) error=\(String(describing: error), privacy: .public)")
                 if attempt > 1 {
                     delay = min(delay * 2, 15_000_000_000)
                 }
                 try await Task.sleep(nanoseconds: delay)
                 if config.endpoint != endpoint {
+                    logger.debug("endpoint changed during metadata lookup, aborting")
                     return
                 }
             }
@@ -85,10 +93,16 @@ actor RemoteManager {
     func getWithKey(name: String, key: [String]) async throws -> ActorOutput? {
         try await ensureMetadata()
         let serializedKey = ActorKeyCodec.serialize(key)
+        logger.debug("querying actor name=\(name, privacy: .public) key=\(key, privacy: .public)")
         let response: ActorListResponse = try await sendApiCall(
             method: "GET",
             path: "/actors?name=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)&key=\(serializedKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? serializedKey)"
         )
+        if let actor = response.actors.first {
+            logger.debug("actor query result actorId=\(actor.actorId, privacy: .public)")
+        } else {
+            logger.debug("actor query result: not found")
+        }
         return response.actors.first
     }
 
@@ -99,6 +113,7 @@ actor RemoteManager {
         region: String?
     ) async throws -> ActorOutput {
         try await ensureMetadata()
+        logger.debug("get or create actor name=\(name, privacy: .public) key=\(key, privacy: .public) region=\(region ?? "nil", privacy: .public)")
         let request = ActorGetOrCreateRequest(
             datacenter: region,
             name: name,
@@ -112,6 +127,7 @@ actor RemoteManager {
             path: "/actors",
             body: request
         )
+        logger.debug("get or create result actorId=\(response.actor.actorId, privacy: .public) created=\(response.created)")
         return response.actor
     }
 
@@ -122,6 +138,7 @@ actor RemoteManager {
         region: String?
     ) async throws -> ActorOutput {
         try await ensureMetadata()
+        logger.debug("creating actor name=\(name, privacy: .public) key=\(key ?? [], privacy: .public) region=\(region ?? "nil", privacy: .public)")
         let request = ActorCreateRequest(
             datacenter: region,
             name: name,
@@ -135,6 +152,7 @@ actor RemoteManager {
             path: "/actors",
             body: request
         )
+        logger.debug("created actor actorId=\(response.actor.actorId, privacy: .public)")
         return response.actor
     }
 
@@ -195,6 +213,8 @@ actor RemoteManager {
             path: path
         )
 
+        logger.debug("sending http request to actor actorId=\(actorId, privacy: .public) method=\(method, privacy: .public) path=\(path, privacy: .public)")
+
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
@@ -212,8 +232,10 @@ actor RemoteManager {
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
+            logger.error("invalid response from actor request")
             throw HttpRequestError("invalid response")
         }
+        logger.debug("http request complete statusCode=\(httpResponse.statusCode) responseLen=\(data.count)")
         return (data, httpResponse)
     }
 
@@ -230,6 +252,7 @@ actor RemoteManager {
             path: path
         )
         let wsUrl = try URLUtils.toWebSocketUrl(httpUrl)
+        logger.debug("opening websocket actorId=\(actorId, privacy: .public) path=\(path, privacy: .public)")
         let task = session.webSocketTask(with: wsUrl, protocols: protocols)
         task.resume()
         return task
@@ -268,18 +291,23 @@ actor RemoteManager {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        logger.trace("sending api call method=\(method, privacy: .public) path=\(path, privacy: .public)")
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
+            logger.error("invalid response from api call")
             throw HttpRequestError("invalid response")
         }
 
         if !(200..<300).contains(httpResponse.statusCode) {
             if let error = try? decodeHttpError(from: data) {
+                logger.warning("api call failed statusCode=\(httpResponse.statusCode) group=\(error.group, privacy: .public) code=\(error.code, privacy: .public)")
                 throw ActorError(group: error.group, code: error.code, message: error.message, metadata: error.metadata)
             }
+            logger.warning("api call failed statusCode=\(httpResponse.statusCode)")
             throw HttpRequestError("HTTP \(httpResponse.statusCode)")
         }
 
+        logger.trace("api call complete statusCode=\(httpResponse.statusCode)")
         let decoder = JSONDecoder()
         return try decoder.decode(TOutput.self, from: data)
     }
@@ -290,7 +318,7 @@ actor RemoteManager {
     }
 
     private func encodeInputBase64(_ input: AnyEncodable) throws -> String {
-        let cborData = try CBOREncoder.encodeEncodable(input)
+        let cborData = try CBORSupport.encoder().encode(input)
         return cborData.base64EncodedString()
     }
 }
