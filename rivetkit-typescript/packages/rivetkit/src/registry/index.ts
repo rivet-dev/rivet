@@ -1,6 +1,7 @@
 import type { Client } from "@/client/client";
 import { createClient } from "@/client/mod";
 import { isDev } from "@/utils/env-vars";
+import { Runtime } from "../../runtime";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -12,7 +13,6 @@ import {
 	type LegacyRunnerConfigInput,
 	LegacyRunnerConfigSchema,
 } from "./config/legacy-runner";
-import { Runtime } from "../../runtime";
 
 export type FetchHandler = (
 	request: Request,
@@ -48,11 +48,13 @@ export class Registry<A extends RegistryActors> {
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
 
-		// Auto-prepare on next tick (gives time for sync config modification)
-		setTimeout(() => {
-			// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-			this.#ensureRuntime();
-		}, 0);
+		if (config.serverless?.spawnEngine || config.serveManager) {
+			// Auto-prepare on next tick (gives time for sync config modification)
+			setTimeout(() => {
+				// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
+				this.#ensureRuntime();
+			}, 0);
+		}
 	}
 
 	/** Creates runtime if not already created. Idempotent. */
