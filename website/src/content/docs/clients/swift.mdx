@@ -4,14 +4,6 @@ description: "Connect Swift apps to Rivet Actors."
 skill: true
 ---
 
-## Platforms
-
-- iOS 17+
-- macOS 14+
-- tvOS 17+
-- watchOS 10+
-- visionOS 1+
-
 ## Install
 
 Add the Swift package dependency and import `RivetKitClient`:
@@ -19,7 +11,7 @@ Add the Swift package dependency and import `RivetKitClient`:
 ```swift
 // Package.swift
 dependencies: [
-    .package(path: "../rivetkit-swift")
+    .package(url: "https://github.com/rivet-dev/rivetkit-swift", from: "2.0.41")
 ]
 
 targets: [
@@ -34,12 +26,30 @@ targets: [
 
 ## Minimal Client
 
+<Tabs>
+<Tab title="Endpoint URL">
+
+```swift
+import RivetKitClient
+
+let config = try ClientConfig(
+    endpoint: "https://my-namespace:pk_...@api.rivet.dev"
+)
+let client = RivetKitClient(config: config)
+
+let handle = client.getOrCreate("counter", ["my-counter"])
+let count: Int = try await handle.action("increment", arg: 1, as: Int.self)
+```
+
+</Tab>
+<Tab title="Explicit Fields">
+
 ```swift
 import RivetKitClient
 
 let config = try ClientConfig(
     endpoint: "https://api.rivet.dev",
-    namespace: "default",
+    namespace: "my-namespace",
     token: "pk_..."
 )
 let client = RivetKitClient(config: config)
@@ -48,7 +58,29 @@ let handle = client.getOrCreate("counter", ["my-counter"])
 let count: Int = try await handle.action("increment", arg: 1, as: Int.self)
 ```
 
-The Swift client uses JSON encoding for requests and responses.
+</Tab>
+</Tabs>
+
+## Environment Configuration
+
+`ClientConfig()` (and `RivetKitClient()`'s convenience initializer) automatically read:
+
+- `RIVET_ENGINE` or `RIVET_ENDPOINT` (endpoint)
+- `RIVET_NAMESPACE`
+- `RIVET_TOKEN`
+- `RIVET_RUNNER`
+
+If none are set, the default endpoint is `http://127.0.0.1:6420`.
+
+## Endpoint Format
+
+Endpoints support URL auth syntax:
+
+```
+https://namespace:token@api.rivet.dev
+```
+
+You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. For serverless deployments, set the endpoint to your app’s `/api/rivet` URL. See [Endpoints](/docs/general/endpoints#url-auth-syntax) for details.
 
 ## Stateless vs Stateful
 
@@ -84,6 +116,16 @@ let created = try await client.create(
 let byId = client.getForId("chatRoom", "actor-id")
 let resolvedId = try await room.resolve()
 ```
+
+## Keys
+
+Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchical addressing:
+
+```swift
+let room = client.getOrCreate("chatRoom", ["org-acme", "general"])
+```
+
+Don't build keys with string interpolation like `"org:\(userId)"` when `userId` contains user data. Use arrays instead to prevent key injection attacks.
 
 ## Connection Parameters
 
@@ -136,6 +178,21 @@ await onStatus()
 await conn.dispose()
 ```
 
+## Low-Level HTTP & WebSocket
+
+For actors that implement `onRequest` or `onWebSocket`, you can call them directly:
+
+```swift
+let handle = client.getOrCreate("chatRoom", ["general"])
+
+let response = try await handle.fetch("history")
+let history: [String] = try response.json([String].self)
+
+let websocket = try await handle.websocket(path: "stream")
+try await websocket.send(text: "hello")
+let message = try await websocket.receive()
+```
+
 ## Calling from Backend
 
 Use the same client in server-side Swift (Vapor, Hummingbird, etc.):
@@ -160,6 +217,7 @@ do {
 ## API Reference
 
 - `RivetKitClient` - Create a client
+- `RivetKitClient(endpoint:)` - Create a client with an explicit endpoint
 - `ClientConfig` - Configure endpoint, namespace, and token
 - `ActorHandle` - Stateless action calls
 - `ActorConnection` - Stateful connection and events

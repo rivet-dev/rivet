@@ -109,6 +109,10 @@ public final class RivetKitClient: @unchecked Sendable {
         try self.init(config: ClientConfig())
     }
 
+    public convenience init(endpoint: String) throws {
+        try self.init(config: ClientConfig(endpoint: endpoint))
+    }
+
     public func get(_ name: String, _ key: [String] = [], options: GetOptions = GetOptions()) -> ActorHandle {
         return ActorHandle(
             manager: manager,

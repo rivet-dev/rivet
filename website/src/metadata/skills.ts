@@ -253,7 +253,13 @@ async function buildSkillContent(config: SkillConfig) {
 	const docs = await getDocs();
 	const docIds = [config.content.docId, ...(config.content.fallbackDocIds ?? [])];
 	const doc = docs.find((entry) =>
-		docIds.some((docId) => entry.id === docId || entry.id.startsWith(`${docId}/`)),
+		docIds.some((docId) => {
+			if (entry.id === docId) return true;
+			if (docId.includes("/") && entry.id.startsWith(`${docId}/`)) {
+				return true;
+			}
+			return false;
+		}),
 	);
 
 	if (!doc) {

@@ -98,6 +98,11 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
+								title: "Overview",
+								href: "/docs/actors/quickstart",
+								icon: faSquareInfo,
+							},
+							{
 								title: "Node.js & Bun",
 								href: "/docs/actors/quickstart/backend",
 								icon: faNodeJs,

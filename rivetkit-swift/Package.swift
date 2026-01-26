@@ -11,13 +11,18 @@ let package = Package(
         .visionOS(.v1)
     ],
     products: [
-        .library(name: "RivetKitClient", targets: ["RivetKitClient"])
+        .library(name: "RivetKitClient", targets: ["RivetKitClient"]),
+        .library(name: "RivetKitSwiftUI", targets: ["RivetKitSwiftUI"])
     ],
     dependencies: [],
     targets: [
         .target(
             name: "RivetKitClient",
             dependencies: []
+        ),
+        .target(
+            name: "RivetKitSwiftUI",
+            dependencies: ["RivetKitClient"]
         ),
         .testTarget(
             name: "RivetKitClientTests",

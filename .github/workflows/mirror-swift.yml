@@ -51,8 +51,10 @@ jobs:
           fi
 
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            git tag -f "${GITHUB_REF_NAME}" swift-mirror
-            git push --force swift "refs/tags/${GITHUB_REF_NAME}"
+            # SwiftPM expects bare SemVer tags; strip a leading "v" to keep tags consumable.
+            swift_tag="${GITHUB_REF_NAME#v}"
+            git tag -f "${swift_tag}" swift-mirror
+            git push --force swift "refs/tags/${swift_tag}"
           else
             git push --force swift "swift-mirror:refs/heads/${GITHUB_REF_NAME}"
           fi
