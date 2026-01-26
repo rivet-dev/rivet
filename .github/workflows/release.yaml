@@ -288,3 +288,9 @@ jobs:
           fi
 
           eval "$CMD"
+
+      - name: Trigger Swift mirror
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run mirror-swift.yml -f ref="v${{ github.event.inputs.version }}"

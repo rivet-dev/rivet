@@ -8,6 +8,12 @@ on:
       - "**"
     tags:
       - "**"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to mirror (branch or tag)'
+        required: true
+        type: string
 
 jobs:
   mirror:
@@ -18,10 +24,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Mirror repo
         env:
           MIRROR_TOKEN: ${{ secrets.RIVET_GITHUB_PAT }}
+          INPUT_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
 
@@ -50,11 +58,26 @@ jobs:
             git commit -m "chore: sync README"
           fi
 
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          # Determine ref type and name
+          if [ -n "${INPUT_REF}" ]; then
+            # Manual trigger - check if ref is a tag
+            if git show-ref --verify --quiet "refs/tags/${INPUT_REF}"; then
+              REF_TYPE="tag"
+              REF_NAME="${INPUT_REF}"
+            else
+              REF_TYPE="branch"
+              REF_NAME="${INPUT_REF}"
+            fi
+          else
+            REF_TYPE="${GITHUB_REF_TYPE}"
+            REF_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if [ "${REF_TYPE}" = "tag" ]; then
             # SwiftPM expects bare SemVer tags; strip a leading "v" to keep tags consumable.
-            swift_tag="${GITHUB_REF_NAME#v}"
+            swift_tag="${REF_NAME#v}"
             git tag -f "${swift_tag}" swift-mirror
             git push --force swift "refs/tags/${swift_tag}"
           else
-            git push --force swift "swift-mirror:refs/heads/${GITHUB_REF_NAME}"
+            git push --force swift "swift-mirror:refs/heads/${REF_NAME}"
           fi
