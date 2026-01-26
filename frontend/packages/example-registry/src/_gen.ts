@@ -327,12 +327,7 @@ export const templates: Template[] = [
       "database"
     ],
     "noFrontend": true,
-    "providers": {
-      "vercel": {
-        "name": "drizzle-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fdrizzle-vercel&project-name=drizzle-vercel"
-      }
-    }
+    "providers": {}
   },
   {
     "name": "elysia",

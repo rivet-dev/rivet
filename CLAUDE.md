@@ -225,3 +225,12 @@ Data structures often include:
 ### Examples
 
 - When adding new examples, or updating existing ones, ensure that the user also modified the vercel equivalent, if applicable. This ensures parity between local and vercel examples. In order to generate vercel example, run `./scripts/vercel-examples/generate-vercel-examples.ts ` after making changes to examples.
+- To skip Vercel generation for a specific example, add `"skipVercel": true` to the `template` object in the example's `package.json`.
+
+#### Common Vercel Example Errors
+
+After regenerating Vercel examples, you may see type check errors like:
+```
+error TS2688: Cannot find type definition file for 'vite/client'.
+```
+with warnings about `node_modules missing`. This happens because the regenerated examples need their dependencies reinstalled. Fix by running `pnpm install` before running type checks.
