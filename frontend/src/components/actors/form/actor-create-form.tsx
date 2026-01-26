@@ -202,7 +202,7 @@ export const ActorPreview = () => {
 				You can use above code snippet to get or create the actor in
 				your application. For more information, see the{" "}
 				<a
-					href="https://www.rivet.dev/docs/actors/clients/#client-setup"
+					href="https://www.rivet.dev/docs/clients"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="underline"

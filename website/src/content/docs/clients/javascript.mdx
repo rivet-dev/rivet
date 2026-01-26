@@ -1,26 +1,128 @@
 ---
 title: "Node.js & Bun"
-description: "The Rivet JavaScript client allows you to connect to and interact with actors from browser and Node.js applications."
+description: "Connect JavaScript apps to Rivet Actors."
 skill: true
 ---
 
 import { InstallPackage } from "@/components/docs/InstallPackage";
 
-
-
-
 ## Getting Started
 
 See the [backend quickstart guide](/docs/actors/quickstart/backend) for getting started.
+
+## Install
+
+<InstallPackage name="rivetkit @rivetkit/client" />
+
+## Minimal Client
+
+```typescript
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const counter = client.counter.getOrCreate(["my-counter"]);
+const count = await counter.increment(1);
+```
+
+## Stateless vs Stateful
+
+```typescript
+const handle = client.counter.getOrCreate(["my-counter"]);
+
+// Stateless: each call is independent
+await handle.increment(1);
+
+// Stateful: keep a connection open for realtime events
+const conn = handle.connect();
+conn.on("count", (value: number) => console.log(value));
+await conn.increment(1);
+```
+
+## Getting Actors
+
+```typescript
+const room = client.chatRoom.getOrCreate(["room-42"]);
+const existing = client.chatRoom.get(["room-42"]);
+
+const created = await client.game.create(["game-1"], {
+  input: { mode: "ranked" },
+});
+
+const byId = client.chatRoom.getForId("actor-id");
+const resolvedId = await room.resolve();
+```
+
+## Connection Parameters
+
+```typescript
+const chat = client.chatRoom.getOrCreate(["general"], {
+  params: { authToken: "jwt-token-here" },
+});
+
+const conn = chat.connect();
+```
+
+## Subscribing to Events
+
+```typescript
+const conn = client.chatRoom.getOrCreate(["general"]).connect();
+conn.on("message", (msg: string) => console.log(msg));
+conn.once("gameOver", () => console.log("done"));
+```
+
+## Connection Lifecycle
+
+```typescript
+const conn = client.chatRoom.getOrCreate(["general"]).connect();
+
+conn.onOpen(() => console.log("connected"));
+conn.onClose(() => console.log("disconnected"));
+conn.onError((err) => console.error("error:", err));
+conn.onStatusChange((status) => console.log("status:", status));
+
+await conn.dispose();
+```
+
+## Calling from Backend
+
+```typescript
+import { Hono } from "hono";
+
+const app = new Hono();
+
+app.post("/increment/:name", async (c) => {
+  const counterHandle = client.counter.getOrCreate([c.req.param("name")]);
+  const newCount = await counterHandle.increment(1);
+  return c.json({ count: newCount });
+});
+```
+
+## Error Handling
+
+```typescript
+import { ActorError } from "rivetkit/client";
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+
+try {
+  await client.user.getOrCreate(["user-123"]).updateUsername("ab");
+} catch (error) {
+  if (error instanceof ActorError) {
+    console.log(error.code, error.metadata);
+  }
+}
+```
 
 ## API Reference
 
 **Package:** [@rivetkit/client](https://www.npmjs.com/package/@rivetkit/client)
 
-See the [RivetKit client API](/docs/actors/clients/#actor-client).
+See the [RivetKit client overview](/docs/clients).
 
 - [`createClient`](/typedoc/functions/rivetkit.client_mod.createClient.html) - Create a client
 - [`createEngineDriver`](/typedoc/functions/rivetkit.mod.createEngineDriver.html) - Engine driver
 - [`DriverConfig`](/typedoc/types/rivetkit.mod.DriverConfig.html) - Driver configuration
 - [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type
-

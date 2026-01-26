@@ -4,15 +4,99 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { DOCS_BASE_URL, normalizeSlug } from "./shared";
-import skillBaseTemplate from "./skill-base.md?raw";
+import skillBaseRivetkit from "./skill-base-rivetkit.md?raw";
+import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.md?raw";
+import skillBaseClientReact from "./skill-base-rivetkit-client-react.md?raw";
+import skillBaseClientSwift from "./skill-base-rivetkit-client-swift.md?raw";
 
-export const SKILL_DIRECTORY = "rivetkit-typescript";
-export const SKILL_NAME = "rivetkit-typescript";
-export const SKILL_DESCRIPTION =
-	"Use this skill for RivetKit building, modification, debugging, testing, or performance analysis. Trigger on RivetKit imports, Rivet/actor discussion, actor-based code analysis/logs/performance. Use RivetKit for AI agents, sandboxes, collaboration/multiplayer, realtime/WebSocket, workflows, background/scheduled jobs, or CRDT/local-first sync."
+export type SkillId =
+	| "rivetkit"
+	| "rivetkit-client-javascript"
+	| "rivetkit-client-react"
+	| "rivetkit-client-swift";
 
-if (SKILL_DESCRIPTION.length > 500) {
-	throw new Error(`SKILL_DESCRIPTION must be <= 500 chars, got ${SKILL_DESCRIPTION.length}`);
+type SkillContentSource = {
+	docId: string;
+	fallbackDocIds?: string[];
+	startMarker?: string;
+	endMarker?: string;
+};
+
+type SkillConfig = {
+	id: SkillId;
+	name: string;
+	directory: string;
+	description: string;
+	baseTemplate: string;
+	content: SkillContentSource;
+	includeReferences: boolean;
+	includeOpenApi: boolean;
+};
+
+const SKILL_CONFIGS = {
+	rivetkit: {
+		id: "rivetkit",
+		name: "rivetkit",
+		directory: "rivetkit",
+		description:
+			"RivetKit backend and Rivet Actor runtime guidance. Use for building, modifying, debugging, or testing Rivet Actors, registries, serverless/runner modes, deployment, or actor-based workflows.",
+		baseTemplate: skillBaseRivetkit,
+		content: {
+			docId: "actors/index",
+			fallbackDocIds: ["actors"],
+			startMarker: "{/* SKILL_OVERVIEW_START */}",
+			endMarker: "{/* SKILL_OVERVIEW_END */}",
+		},
+		includeReferences: true,
+		includeOpenApi: true,
+	},
+	"rivetkit-client-javascript": {
+		id: "rivetkit-client-javascript",
+		name: "rivetkit-client-javascript",
+		directory: "rivetkit-client-javascript",
+		description:
+			"RivetKit JavaScript client guidance. Use for browser, Node.js, or Bun clients that connect to Rivet Actors with @rivetkit/client, create clients, call actions, or manage connections.",
+		baseTemplate: skillBaseClientJavascript,
+		content: {
+			docId: "clients/javascript",
+		},
+		includeReferences: false,
+		includeOpenApi: false,
+	},
+	"rivetkit-client-react": {
+		id: "rivetkit-client-react",
+		name: "rivetkit-client-react",
+		directory: "rivetkit-client-react",
+		description:
+			"RivetKit React client guidance. Use for React apps that connect to Rivet Actors with @rivetkit/react, create hooks with createRivetKit, or manage realtime state with useActor.",
+		baseTemplate: skillBaseClientReact,
+		content: {
+			docId: "clients/react",
+		},
+		includeReferences: false,
+		includeOpenApi: false,
+	},
+	"rivetkit-client-swift": {
+		id: "rivetkit-client-swift",
+		name: "rivetkit-client-swift",
+		directory: "rivetkit-client-swift",
+		description:
+			"RivetKit Swift client guidance. Use for Swift clients that connect to Rivet Actors with RivetKitClient, create actor handles, call actions, or manage connections.",
+		baseTemplate: skillBaseClientSwift,
+		content: {
+			docId: "clients/swift",
+		},
+		includeReferences: false,
+		includeOpenApi: false,
+	},
+} as const satisfies Record<SkillId, SkillConfig>;
+
+for (const config of Object.values(SKILL_CONFIGS)) {
+	if (config.description.length > 500) {
+		throw new Error(
+			`SKILL_DESCRIPTION must be <= 500 chars for ${config.id}, got ${config.description.length}`,
+		);
+	}
 }
 
 export type SkillReference = {
@@ -27,8 +111,21 @@ export type SkillReference = {
 	markdown: string;
 };
 
-let cachedReferences: SkillReference[] | null = null;
-let cachedSkillFile: string | null = null;
+const cachedReferences = new Map<SkillId, SkillReference[]>();
+const cachedSkillFiles = new Map<SkillId, string>();
+let cachedDocs: Awaited<ReturnType<typeof getCollection>> | null = null;
+
+export function listSkillIds(): SkillId[] {
+	return Object.keys(SKILL_CONFIGS) as SkillId[];
+}
+
+export function getSkillConfig(skillId: string): SkillConfig {
+	const config = SKILL_CONFIGS[skillId as SkillId];
+	if (!config) {
+		throw new Error(`Unknown skill id: ${skillId}`);
+	}
+	return config;
+}
 
 async function getRivetkitVersion(): Promise<string> {
 	const versionFilePath = path.join(process.cwd(), "src/generated/skill-version.json");
@@ -45,96 +142,91 @@ async function getRivetkitVersion(): Promise<string> {
 	return data.rivetkit;
 }
 
-export async function listSkillReferences(): Promise<SkillReference[]> {
-	if (cachedReferences) {
-		return cachedReferences;
+async function getDocs() {
+	if (!cachedDocs) {
+		cachedDocs = await getCollection("docs");
+	}
+	return cachedDocs;
+}
+
+export async function listSkillReferences(skillId: SkillId): Promise<SkillReference[]> {
+	if (cachedReferences.has(skillId)) {
+		return cachedReferences.get(skillId)!;
 	}
 
-	const docs = await getCollection("docs");
+	const config = getSkillConfig(skillId);
+	if (!config.includeReferences) {
+		cachedReferences.set(skillId, []);
+		return [];
+	}
+
+	const docs = await getDocs();
 	const skillDocs = docs.filter((entry) => entry.data.skill);
 	const references = skillDocs.map((entry) => buildReference(entry));
 	references.sort((a, b) => a.title.localeCompare(b.title));
-	cachedReferences = references;
+	cachedReferences.set(skillId, references);
 	return references;
 }
 
-export async function getReferenceByFileId(fileId: string) {
-	const references = await listSkillReferences();
+export async function getReferenceByFileId(skillId: SkillId, fileId: string) {
+	const references = await listSkillReferences(skillId);
 	return references.find((ref) => ref.fileId === fileId);
 }
 
-export async function renderSkillFile(): Promise<string> {
-	if (cachedSkillFile) {
-		return cachedSkillFile;
+export async function renderSkillFile(skillId: SkillId): Promise<string> {
+	if (cachedSkillFiles.has(skillId)) {
+		return cachedSkillFiles.get(skillId)!;
 	}
 
-	const base = skillBaseTemplate;
-	const references = await listSkillReferences();
-	const referenceList = buildReferenceSection(references);
+	const config = getSkillConfig(skillId);
+	const base = config.baseTemplate;
+	const content = await buildSkillContent(config);
 
-	// Get the actors overview content
-	const docs = await getCollection("docs");
-	const actorsIndex = docs.find((entry) => entry.id.startsWith("actors/index") || entry.id === "actors");
-	if (!actorsIndex) {
-		throw new Error(`actors/index not found in docs collection. Available: ${docs.map(d => d.id).join(", ")}`);
-	}
-	if (!actorsIndex.body) {
-		throw new Error(`actors/index has no body content`);
-	}
+	const frontmatter = ["---", `name: "${config.name}"`, `description: "${config.description}"`, "---", ""].join(
+		"\n",
+	);
 
-	const startMarker = "{/* SKILL_OVERVIEW_START */}";
-	const endMarker = "{/* SKILL_OVERVIEW_END */}";
-	const startIdx = actorsIndex.body.indexOf(startMarker);
-	const endIdx = actorsIndex.body.indexOf(endMarker);
-
-	if (startIdx === -1) {
-		throw new Error(`SKILL_OVERVIEW_START marker not found in actors/index.mdx`);
-	}
-	if (endIdx === -1) {
-		throw new Error(`SKILL_OVERVIEW_END marker not found in actors/index.mdx`);
-	}
-
-	const rawOverview = actorsIndex.body.slice(startIdx + startMarker.length, endIdx).trim();
-	if (!rawOverview) {
-		throw new Error(`Overview content between markers is empty`);
-	}
-
-	const overviewContent = convertDocToReference(rawOverview);
-
-	const frontmatter = [
-		"---",
-		`name: "${SKILL_NAME}"`,
-		`description: "${SKILL_DESCRIPTION}"`,
-		"---",
-		"",
-	].join("\n");
-
-	if (!base.includes("<!-- OVERVIEW -->")) {
-		throw new Error(`skill-base.md does not contain <!-- OVERVIEW --> marker`);
-	}
-	if (!base.includes("<!-- REFERENCE_INDEX -->")) {
-		throw new Error(`skill-base.md does not contain <!-- REFERENCE_INDEX --> marker`);
+	if (!base.includes("<!-- CONTENT -->")) {
+		throw new Error(`skill base for ${config.id} does not contain <!-- CONTENT --> marker`);
 	}
 
 	const rivetkitVersion = await getRivetkitVersion();
 
-	let content = base.replace("<!-- OVERVIEW -->", overviewContent);
-	content = content.replace("<!-- REFERENCE_INDEX -->", referenceList);
-	content = content.replace(/\{\{RIVETKIT_VERSION\}\}/g, rivetkitVersion);
-	const finalFile = `${frontmatter}\n${content}\n`;
-	cachedSkillFile = finalFile;
+	let fileBody = base.replace("<!-- CONTENT -->", content);
+
+	if (base.includes("<!-- REFERENCE_INDEX -->")) {
+		if (!config.includeReferences) {
+			throw new Error(`skill base for ${config.id} includes a reference index but references are disabled`);
+		}
+		const references = await listSkillReferences(skillId);
+		const referenceList = buildReferenceSection(references);
+		fileBody = fileBody.replace("<!-- REFERENCE_INDEX -->", referenceList);
+	} else if (config.includeReferences) {
+		throw new Error(`skill base for ${config.id} must include <!-- REFERENCE_INDEX --> marker`);
+	}
+
+	fileBody = fileBody.replace(/\{\{RIVETKIT_VERSION\}\}/g, rivetkitVersion);
+
+	const finalFile = `${frontmatter}\n${fileBody}\n`;
+	cachedSkillFiles.set(skillId, finalFile);
 	return finalFile;
 }
 
-export async function listReferenceSummaries() {
-	const references = await listSkillReferences();
+export async function listReferenceSummaries(skillId: SkillId) {
+	const references = await listSkillReferences(skillId);
+	const config = getSkillConfig(skillId);
 	return references.map((ref) => ({
 		name: ref.fileId,
 		title: ref.title,
 		description: ref.description,
 		canonical_url: ref.canonicalUrl,
-		reference_url: `/metadata/skills/${SKILL_DIRECTORY}/reference/${ref.fileId}.md`,
+		reference_url: `/metadata/skills/${config.directory}/reference/${ref.fileId}.md`,
 	}));
+}
+
+export function skillSupportsOpenApi(skillId: SkillId) {
+	const config = getSkillConfig(skillId);
+	return config.includeOpenApi;
 }
 
 function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]): SkillReference {
@@ -155,6 +247,41 @@ function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]
 		tags: slug.split("/").filter(Boolean),
 		markdown: convertDocToReference(body),
 	};
+}
+
+async function buildSkillContent(config: SkillConfig) {
+	const docs = await getDocs();
+	const docIds = [config.content.docId, ...(config.content.fallbackDocIds ?? [])];
+	const doc = docs.find((entry) =>
+		docIds.some((docId) => entry.id === docId || entry.id.startsWith(`${docId}/`)),
+	);
+
+	if (!doc) {
+		throw new Error(`Doc ${config.content.docId} not found in docs collection.`);
+	}
+	if (!doc.body) {
+		throw new Error(`${doc.id} has no body content`);
+	}
+
+	let rawBody = doc.body;
+	if (config.content.startMarker && config.content.endMarker) {
+		const startIdx = rawBody.indexOf(config.content.startMarker);
+		const endIdx = rawBody.indexOf(config.content.endMarker);
+
+		if (startIdx === -1) {
+			throw new Error(`${config.content.startMarker} marker not found in ${doc.id}.mdx`);
+		}
+		if (endIdx === -1) {
+			throw new Error(`${config.content.endMarker} marker not found in ${doc.id}.mdx`);
+		}
+
+		rawBody = rawBody.slice(startIdx + config.content.startMarker.length, endIdx).trim();
+		if (!rawBody) {
+			throw new Error(`Content between markers is empty for ${doc.id}.mdx`);
+		}
+	}
+
+	return convertDocToReference(rawBody);
 }
 
 function createFileId(slug: string) {
@@ -297,12 +424,6 @@ function resolveGroup(ref: SkillReference) {
 	const top = segments[0] ?? "general";
 	const sub = segments[1] ?? "";
 	return { top, sub };
-}
-
-function formatHeading(top: string, sub: string) {
-	const topTitle = formatSegment(top);
-	const subTitle = formatSegment(sub);
-	return subTitle ? `${topTitle} > ${subTitle}` : topTitle;
 }
 
 function formatSegment(value: string) {

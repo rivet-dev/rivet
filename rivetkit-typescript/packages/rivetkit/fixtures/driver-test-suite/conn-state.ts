@@ -104,5 +104,9 @@ export const connStateActor = actor({
 			if (updates.role) c.conn.state.role = updates.role;
 			return c.conn.state;
 		},
+		disconnectSelf: (c, reason?: string) => {
+			c.conn.disconnect(reason ?? "test.disconnect");
+			return true;
+		},
 	},
 });

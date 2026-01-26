@@ -61,6 +61,7 @@ import {
 	faSquareTerminal,
 	faTag,
 	faTowerBroadcast,
+	faSwift,
     faUpload,
 	faVercel,
 	faVialCircleCheck,
@@ -279,7 +280,7 @@ export const sitemap = [
 				pages: [
 					{
 						title: "Overview",
-						href: "/docs/actors/clients",
+						href: "/docs/clients",
 						// icon: faCode,
 					},
 					{
@@ -297,15 +298,10 @@ export const sitemap = [
 								icon: faReact,
 							},
 							{
-								title: "Next.js",
-								href: "/docs/clients/next-js",
-								icon: faNextjs,
+								title: "Swift",
+								href: "/docs/clients/swift",
+								icon: faSwift,
 							},
-							// {
-							// 	title: "Rust",
-							// 	href: "/docs/clients/rust",
-							// 	icon: faRust,
-							// },
 						]
 					}
 				],

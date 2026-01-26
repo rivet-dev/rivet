@@ -16,7 +16,7 @@ on:
     paths:
       - 'website/src/content/docs/**/*.mdx'
       - 'website/src/metadata/skills.ts'
-      - 'website/src/metadata/skill-base.md'
+      - 'website/src/metadata/skill-base-*.md'
       - 'website/src/pages/metadata/skills/**'
       - 'website/scripts/build.ts'
   workflow_dispatch:  # Allows manual triggering for testing
@@ -56,12 +56,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: rivet-dev/skills
-          token: ${{ secrets.SKILLS_REPO_TOKEN }}
+          token: ${{ secrets.RIVET_GITHUB_PAT }}
           path: skills-repo
 
       - name: Copy generated skills
         run: |
           # Only delete and replace the specific skill directories being updated
+          rm -rf "skills-repo/rivetkit-typescript"
           for skill_dir in website/dist/metadata/skills/*/; do
             skill_name=$(basename "$skill_dir")
             echo "Updating skill: $skill_name"

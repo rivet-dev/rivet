@@ -1,0 +1,166 @@
+---
+title: "Swift"
+description: "Connect Swift apps to Rivet Actors."
+skill: true
+---
+
+## Platforms
+
+- iOS 17+
+- macOS 14+
+- tvOS 17+
+- watchOS 10+
+- visionOS 1+
+
+## Install
+
+Add the Swift package dependency and import `RivetKitClient`:
+
+```swift
+// Package.swift
+dependencies: [
+    .package(path: "../rivetkit-swift")
+]
+
+targets: [
+    .target(
+        name: "MyApp",
+        dependencies: [
+            .product(name: "RivetKitClient", package: "rivetkit-swift")
+        ]
+    )
+]
+```
+
+## Minimal Client
+
+```swift
+import RivetKitClient
+
+let config = try ClientConfig(
+    endpoint: "https://api.rivet.dev",
+    namespace: "default",
+    token: "pk_..."
+)
+let client = RivetKitClient(config: config)
+
+let handle = client.getOrCreate("counter", ["my-counter"])
+let count: Int = try await handle.action("increment", arg: 1, as: Int.self)
+```
+
+The Swift client uses JSON encoding for requests and responses.
+
+## Stateless vs Stateful
+
+```swift
+let handle = client.getOrCreate("counter", ["my-counter"])
+
+// Stateless: each call is independent
+let current: Int = try await handle.action("getCount", as: Int.self)
+
+// Stateful: keep a connection open for realtime events
+let conn = handle.connect()
+let unsubscribe = await conn.on("count") { args in
+    print(args)
+}
+_ = try await conn.action("increment", arg: 1, as: Int.self)
+await unsubscribe()
+```
+
+## Getting Actors
+
+```swift
+struct GameInput: Encodable {
+    let mode: String
+}
+
+let room = client.getOrCreate("chatRoom", ["room-42"])
+let existing = client.get("chatRoom", ["room-42"])
+let created = try await client.create(
+    "game",
+    ["game-1"],
+    options: CreateOptions(input: GameInput(mode: "ranked"))
+)
+let byId = client.getForId("chatRoom", "actor-id")
+let resolvedId = try await room.resolve()
+```
+
+## Connection Parameters
+
+```swift
+struct ConnParams: Encodable {
+    let authToken: String
+}
+
+let chat = client.getOrCreate(
+    "chatRoom",
+    ["general"],
+    options: GetOrCreateOptions(params: ConnParams(authToken: "jwt-token-here"))
+)
+
+let conn = chat.connect()
+```
+
+## Subscribing to Events
+
+```swift
+let conn = client.getOrCreate("chatRoom", ["general"]).connect()
+let unsubscribe = await conn.on("message") { args in
+    print(args)
+}
+let unsubscribeOnce = await conn.once("gameOver") { _ in
+    print("done")
+}
+await unsubscribe()
+await unsubscribeOnce()
+```
+
+## Connection Lifecycle
+
+```swift
+let conn = client.getOrCreate("chatRoom", ["general"]).connect()
+
+let onOpen = await conn.onOpen { print("connected") }
+let onClose = await conn.onClose { print("disconnected") }
+let onError = await conn.onError { error in
+    print(error.code)
+}
+let onStatus = await conn.onStatusChange { status in
+    print(status)
+}
+
+await onOpen()
+await onClose()
+await onError()
+await onStatus()
+await conn.dispose()
+```
+
+## Calling from Backend
+
+Use the same client in server-side Swift (Vapor, Hummingbird, etc.):
+
+```swift
+let handle = client.getOrCreate("counter", ["server-counter"])
+let count: Int = try await handle.action("increment", arg: 1, as: Int.self)
+```
+
+## Error Handling
+
+```swift
+do {
+    _ = try await client.getOrCreate("user", ["user-123"])
+        .action("updateUsername", arg: "ab", as: String.self)
+} catch let error as ActorError {
+    print(error.code)
+    print(error.metadata ?? [:])
+}
+```
+
+## API Reference
+
+- `RivetKitClient` - Create a client
+- `ClientConfig` - Configure endpoint, namespace, and token
+- `ActorHandle` - Stateless action calls
+- `ActorConnection` - Stateful connection and events
+- `ActorError` - Typed actor errors
