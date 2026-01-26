@@ -7,12 +7,26 @@ Only target the latest Swift and OS versions. Do not add backwards compatibility
 ## API Surface
 
 - We intentionally support only CBOR encoding in the Swift client. Do not add JSON or vbare protocol support. This is a deliberate simplification.
-- Provide positional overloads up to 5 arguments for actions and events. For more than 5 arguments, expose a raw `JSONValue` array overload as the fallback.
+- We use Swift parameter packs (Swift 5.9+) for variadic typed arguments in `action()` and `send()` methods.
+- For event handlers (`on()`/`once()`), we provide overloads up to 5 arguments since closures cannot declare parameter packs.
 - Do not expose raw JSON types (e.g., `JSONValue`) in user-facing APIs unless absolutely necessary.
 - Prefer typed `Encodable`/`Decodable` overloads so callers can use native Swift types.
-- Provide overloads for multiple-argument callbacks and calls instead of forcing `[JSONValue]` or manual decoding.
 - After edits, always build the library or at least one example to ensure changes compile.
 - After edits, always run the Swift client driver tests (`swift test`) to validate the client behavior.
+
+### Parameter Packs (Swift 5.9+)
+
+We use Swift parameter packs to support variadic typed arguments:
+
+```swift
+// Supports 0-N typed arguments
+try await actor.action("myAction", arg1, arg2, arg3)
+actor.send("myAction", arg1, arg2)
+```
+
+When working with parameter packs:
+- Always add `& Sendable` constraint for async contexts
+- Shadow parameters before capturing in closures to avoid inference issues
 
 ### Examples
 
@@ -28,6 +42,11 @@ conn.on("newCount") { (payload: CounterPayload) in
 conn.on("message") { (from: String, body: String) in
     print("\(from): \(body)")
 }
+
+// AsyncStream events
+for await value in connection.events("newCount", as: Int.self) {
+    print("Count: \(value)")
+}
 ```
 
 **Actions (.action)**
@@ -36,11 +55,10 @@ conn.on("message") { (from: String, body: String) in
 // No-arg action
 let count: Int = try await handle.action("getCount")
 
-// One-arg action
-let updated: User = try await handle.action("updateUser", arg: UpdateUserInput(name: "Sam"))
-
-// Two-arg action
+// Variadic typed arguments (parameter packs)
+let updated: User = try await handle.action("updateUser", UpdateUserInput(name: "Sam"))
 let ok: Bool = try await handle.action("setScore", "user-1", 42)
+let result: Data = try await handle.action("complex", arg1, arg2, arg3, arg4, arg5, arg6)
 ```
 
 If a raw JSON value is unavoidable (e.g., debugging or passthrough), keep it in a clearly labeled escape hatch API.
@@ -86,6 +104,23 @@ let unsubscribe = await conn.on("event") { args in
 - **Swift:** Uses `Task.sleep(for: .seconds(5))` (5 second delay)
 
 The longer delay is needed because SwiftUI's `@StateObject` inside property wrappers may not preserve state correctly across view re-evaluations, and `deinit` is dispatched asynchronously via Task. The 5-second delay ensures connections survive SwiftUI's view lifecycle churn.
+
+## Logging
+
+Use the `dev.rivet.*` subsystem prefix for all OSLog categories:
+
+```swift
+import os
+
+let logger = Logger(subsystem: "dev.rivet.client", category: "myCategory")
+logger.debug("message with \(value, privacy: .public)")
+```
+
+Available categories in `RivetLogger`:
+- `client` - RivetKitClient operations
+- `connection` - ActorConnection WebSocket lifecycle
+- `handle` - ActorHandle HTTP operations
+- `manager` - RemoteManager API calls
 
 ## Debugging
 

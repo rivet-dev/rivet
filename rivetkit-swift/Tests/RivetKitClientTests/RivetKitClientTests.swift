@@ -115,7 +115,7 @@ final class RivetKitClientSuite {
     func handleAccessAndResolve() async throws {
         let client = try makeClient()
         let handle = client.getOrCreate("counter", ["swift-handle"]) 
-        let count: Int = try await handle.action("increment", arg: 5, as: Int.self)
+        let count: Int = try await handle.action("increment", 5, as: Int.self)
         #expect(count == 5)
 
         let actorId = try await handle.resolve()
@@ -238,27 +238,17 @@ final class RivetKitClientSuite {
             let by: String
         }
 
-        let eventStream = AsyncStream<NewCountEvent> { continuation in
-            Task {
-                let unsubscribe = await conn1.on("newCount") { (payload: NewCountEvent) in
-                    continuation.yield(payload)
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        // Wait for connection to be open before subscribing
+        let openStream = await conn1.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
 
-        _ = try await conn1.action("increment", arg: 1, as: Int.self)
+        let eventStream = await conn1.events("newCount", as: NewCountEvent.self)
 
-        var received = false
-        for await payload in eventStream {
-            received = true
-            #expect(payload.count == 1)
-            #expect(payload.by == "user1")
-            break
-        }
-        #expect(received)
+        _ = try await conn1.action("increment", 1, as: Int.self)
+
+        let payload = try await nextValue(from: eventStream, timeoutSeconds: 5)
+        #expect(payload.count == 1)
+        #expect(payload.by == "user1")
 
         let initializers: [String] = try await handle1.action("getInitializers", as: [String].self)
         #expect(initializers.contains("user1"))
@@ -303,7 +293,7 @@ final class RivetKitClientSuite {
         )
         let client = RivetKitClient(config: config)
         let handle = client.getOrCreate("counter", ["swift-metadata"]) 
-        let count: Int = try await handle.action("increment", arg: 2, as: Int.self)
+        let count: Int = try await handle.action("increment", 2, as: Int.self)
         #expect(count == 2)
     }
 
@@ -337,7 +327,7 @@ final class RivetKitClientSuite {
         let key = ["swift-get", UUID().uuidString]
         _ = try await client.create("counter", key)
         let handle = client.get("counter", key)
-        let count: Int = try await handle.action("increment", arg: 3, as: Int.self)
+        let count: Int = try await handle.action("increment", 3, as: Int.self)
         #expect(count == 3)
     }
 
@@ -480,38 +470,9 @@ final class RivetKitClientSuite {
         let handle = client.getOrCreate("connStateActor", ["swift-conn-life", UUID().uuidString])
         let conn = handle.connect()
 
-        let openStream = AsyncStream<Void> { continuation in
-            Task {
-                let unsubscribe = await conn.onOpen {
-                    continuation.yield(())
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
-
-        let closeStream = AsyncStream<Void> { continuation in
-            Task {
-                let unsubscribe = await conn.onClose {
-                    continuation.yield(())
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
-
-        let statusStream = AsyncStream<ActorConnStatus> { continuation in
-            Task {
-                let unsubscribe = await conn.onStatusChange { status in
-                    continuation.yield(status)
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let openStream = await conn.opens()
+        let closeStream = await conn.closes()
+        let statusStream = await conn.statusChanges()
 
         var openIterator = openStream.makeAsyncIterator()
         _ = try await waitNext(iterator: &openIterator, timeoutSeconds: 5)
@@ -523,7 +484,7 @@ final class RivetKitClientSuite {
             return
         }
         do {
-            _ = try await conn.action("disconnectSelf", arg: "test.disconnect", as: Bool.self)
+            _ = try await conn.action("disconnectSelf", "test.disconnect", as: Bool.self)
         } catch let error as ActorError {
             #expect(error.group == "test")
             #expect(error.code == "disconnect")
@@ -551,16 +512,7 @@ final class RivetKitClientSuite {
         )
         let conn = handle.connect()
 
-        let openStream = AsyncStream<Void> { continuation in
-            Task {
-                let unsubscribe = await conn.onOpen {
-                    continuation.yield(())
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let openStream = await conn.opens()
         _ = try await nextValue(from: openStream, timeoutSeconds: 5)
 
         struct NewCountEvent: Decodable, Sendable {
@@ -568,20 +520,12 @@ final class RivetKitClientSuite {
             let by: String
         }
 
-        let eventStream = AsyncStream<NewCountEvent> { continuation in
-            Task {
-                let unsubscribe = await conn.once("newCount") { (payload: NewCountEvent) in
-                    continuation.yield(payload)
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let eventStream = await conn.events("newCount", as: NewCountEvent.self)
 
-        _ = try await conn.action("increment", arg: 1, as: Int.self)
-        _ = try await conn.action("increment", arg: 1, as: Int.self)
+        _ = try await conn.action("increment", 1, as: Int.self)
+        _ = try await conn.action("increment", 1, as: Int.self)
 
+        // Get just the first event (simulates once behavior)
         _ = try await nextValue(from: eventStream, timeoutSeconds: 5)
 
         await conn.dispose()
@@ -593,31 +537,13 @@ final class RivetKitClientSuite {
         let handle = client.getOrCreate("connStateActor", ["swift-conn-error", UUID().uuidString])
         let conn = handle.connect()
 
-        let openStream = AsyncStream<Void> { continuation in
-            Task {
-                let unsubscribe = await conn.onOpen {
-                    continuation.yield(())
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let openStream = await conn.opens()
         _ = try await nextValue(from: openStream, timeoutSeconds: 5)
 
-        let errorStream = AsyncStream<ActorError> { continuation in
-            Task {
-                let unsubscribe = await conn.onError { error in
-                    continuation.yield(error)
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let errorStream = await conn.errors()
 
         do {
-            _ = try await conn.action("disconnectSelf", arg: "test.disconnect", as: Bool.self)
+            _ = try await conn.action("disconnectSelf", "test.disconnect", as: Bool.self)
         } catch let error as ActorError {
             #expect(error.group == "test")
             #expect(error.code == "disconnect")
@@ -643,16 +569,7 @@ final class RivetKitClientSuite {
         let conn1 = handle.connect()
         let conn2 = handle.connect()
 
-        let openStream = AsyncStream<Void> { continuation in
-            Task {
-                let unsubscribe = await conn1.onOpen {
-                    continuation.yield(())
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let openStream = await conn1.opens()
         _ = try await nextValue(from: openStream, timeoutSeconds: 5)
 
         let stateValue: JSONValue = try await conn1.action("getConnectionState", as: JSONValue.self)
@@ -673,7 +590,7 @@ final class RivetKitClientSuite {
 
         let updatedValue: JSONValue = try await conn1.action(
             "updateConnection",
-            arg: ["username": "bob"],
+            ["username": "bob"],
             as: JSONValue.self
         )
         if case .object(let updated) = updatedValue {
@@ -687,16 +604,7 @@ final class RivetKitClientSuite {
             let message: String
         }
 
-        let messageStream = AsyncStream<DirectMessageEvent> { continuation in
-            Task {
-                let unsubscribe = await conn1.on("directMessage") { (payload: DirectMessageEvent) in
-                    continuation.yield(payload)
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let messageStream = await conn1.events("directMessage", as: DirectMessageEvent.self)
 
         let state2Value: JSONValue = try await conn2.action("getConnectionState", as: JSONValue.self)
         guard case .object(let state2) = state2Value, case .string(let state2Id) = state2["id"] else {
@@ -730,16 +638,7 @@ final class RivetKitClientSuite {
         )
         let conn = handle.connect()
 
-        let openStream = AsyncStream<Void> { continuation in
-            Task {
-                let unsubscribe = await conn.onOpen {
-                    continuation.yield(())
-                }
-                continuation.onTermination = { _ in
-                    Task { await unsubscribe() }
-                }
-            }
-        }
+        let openStream = await conn.opens()
         _ = try await nextValue(from: openStream, timeoutSeconds: 5)
 
         struct RequestInfo: Decodable {
@@ -780,12 +679,12 @@ final class RivetKitClientSuite {
     func actionTypesAndTimeouts() async throws {
         let client = try makeClient()
         let sync = client.getOrCreate("syncActionActor", ["swift-sync", UUID().uuidString])
-        let increment: Int = try await sync.action("increment", arg: 2, as: Int.self)
+        let increment: Int = try await sync.action("increment", 2, as: Int.self)
         #expect(increment == 2)
 
         let asyncActor = client.getOrCreate("asyncActionActor", ["swift-async", UUID().uuidString])
         struct AsyncData: Decodable { let id: String }
-        let data: AsyncData = try await asyncActor.action("fetchData", arg: "swift", as: AsyncData.self)
+        let data: AsyncData = try await asyncActor.action("fetchData", "swift", as: AsyncData.self)
         #expect(data.id == "swift")
 
         let promise = client.getOrCreate("promiseActor", ["swift-promise", UUID().uuidString])
@@ -841,12 +740,12 @@ final class RivetKitClientSuite {
         let items = (0..<200).map { "Item \($0)" }
         struct LargeRequest: Encodable { let items: [String] }
         struct LargeResponse: Decodable { let itemCount: Int; let firstItem: String; let lastItem: String }
-        let response: LargeResponse = try await large.action("processLargeRequest", arg: LargeRequest(items: items), as: LargeResponse.self)
+        let response: LargeResponse = try await large.action("processLargeRequest", LargeRequest(items: items), as: LargeResponse.self)
         #expect(response.itemCount == 200)
         #expect(response.firstItem == "Item 0")
 
         struct LargeOutput: Decodable { let items: [String] }
-        let largeResponse: LargeOutput = try await large.action("getLargeResponse", arg: 150, as: LargeOutput.self)
+        let largeResponse: LargeOutput = try await large.action("getLargeResponse", 150, as: LargeOutput.self)
         #expect(largeResponse.items.count == 150)
     }
 
@@ -863,7 +762,7 @@ final class RivetKitClientSuite {
 
         let stateChange = client.getOrCreate("onStateChangeActor", ["swift-state-change", UUID().uuidString])
         let before: Int = try await stateChange.action("getChangeCount", as: Int.self)
-        _ = try await stateChange.action("setValue", arg: 1, as: Int.self)
+        _ = try await stateChange.action("setValue", 1, as: Int.self)
         let after: Int = try await stateChange.action("getChangeCount", as: Int.self)
         #expect(after >= before)
     }
@@ -873,7 +772,7 @@ final class RivetKitClientSuite {
         let client = try makeClient()
         let handle = client.getOrCreate("scheduled", ["swift-sched", UUID().uuidString])
         _ = try await handle.action("clearHistory", as: Bool.self)
-        _ = try await handle.action("scheduleTaskAfter", arg: 50, as: Int64.self)
+        _ = try await handle.action("scheduleTaskAfter", 50, as: Int64.self)
         await sleepMilliseconds(150)
         let count: Int = try await handle.action("getScheduledCount", as: Int.self)
         #expect(count >= 1)
@@ -929,5 +828,295 @@ final class RivetKitClientSuite {
         }
         iterator = box.iterator
         return result
+    }
+
+    // MARK: - AsyncStream Lifecycle Tests
+
+    @Test
+    func statusChangesYieldsCurrentStatusImmediately() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-status-immediate", UUID().uuidString])
+        let conn = handle.connect()
+
+        // Get status stream - it should yield current status immediately
+        let statusStream = await conn.statusChanges()
+        var iterator = statusStream.makeAsyncIterator()
+
+        // First value should be the current status (could be idle, connecting, or connected)
+        let firstStatus = try await waitNext(iterator: &iterator, timeoutSeconds: 5)
+        #expect(firstStatus == .idle || firstStatus == .connecting || firstStatus == .connected)
+
+        // Wait for connected
+        if firstStatus != .connected {
+            _ = try await waitForStatus(.connected, iterator: &iterator, timeoutSeconds: 5)
+        }
+
+        // Verify currentStatus property matches
+        let currentStatus = await conn.currentStatus
+        #expect(currentStatus == .connected)
+
+        await conn.dispose()
+    }
+
+    @Test
+    func multipleSubscribersToLifecycleStreams() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-multi-sub", UUID().uuidString])
+        let conn = handle.connect()
+
+        // Create multiple status stream subscribers
+        let stream1 = await conn.statusChanges()
+        let stream2 = await conn.statusChanges()
+
+        var iterator1 = stream1.makeAsyncIterator()
+        var iterator2 = stream2.makeAsyncIterator()
+
+        // Both should receive initial status
+        let status1 = try await waitNext(iterator: &iterator1, timeoutSeconds: 5)
+        let status2 = try await waitNext(iterator: &iterator2, timeoutSeconds: 5)
+
+        #expect(status1 == status2)
+
+        // Wait for both to reach connected
+        if status1 != .connected {
+            _ = try await waitForStatus(.connected, iterator: &iterator1, timeoutSeconds: 5)
+            _ = try await waitForStatus(.connected, iterator: &iterator2, timeoutSeconds: 5)
+        }
+
+        await conn.dispose()
+
+        // Both should receive disposed status
+        let disposed1 = try await waitForStatus(.disposed, iterator: &iterator1, timeoutSeconds: 5)
+        let disposed2 = try await waitForStatus(.disposed, iterator: &iterator2, timeoutSeconds: 5)
+
+        #expect(disposed1 == .disposed)
+        #expect(disposed2 == .disposed)
+    }
+
+    @Test
+    func currentStatusPropertyAtVariousStages() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-current-status", UUID().uuidString])
+        let conn = handle.connect()
+
+        // Status may be idle, connecting, or connected immediately after connect()
+        let initialStatus = await conn.currentStatus
+        #expect(initialStatus == .idle || initialStatus == .connecting || initialStatus == .connected)
+
+        // Wait for connected using opens stream
+        let openStream = await conn.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
+
+        let connectedStatus = await conn.currentStatus
+        #expect(connectedStatus == .connected)
+
+        await conn.dispose()
+
+        let disposedStatus = await conn.currentStatus
+        #expect(disposedStatus == .disposed)
+    }
+
+    // MARK: - Parameter Pack Action Tests
+
+    @Test
+    func parameterPackActionsWithVaryingArgCounts() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-param-pack", UUID().uuidString])
+        let conn = handle.connect()
+
+        let openStream = await conn.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
+
+        // Zero arguments
+        let count0: Int = try await conn.action("getCount")
+        #expect(count0 >= 0)
+
+        // One argument
+        let count1: Int = try await conn.action("increment", 5)
+        #expect(count1 == count0 + 5)
+
+        // Two arguments via handle (using kvActor with putText/getText)
+        let kvHandle = client.getOrCreate("kvActor", ["swift-param-pack-kv", UUID().uuidString])
+        let setResult: Bool = try await kvHandle.action("putText", "testKey", "testValue")
+        #expect(setResult == true)
+
+        let getValue: String? = try await kvHandle.action("getText", "testKey")
+        #expect(getValue == "testValue")
+
+        await conn.dispose()
+    }
+
+    // MARK: - JSONValue Escape Hatch Tests
+
+    @Test
+    func jsonValueActionEscapeHatch() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-json-action", UUID().uuidString])
+
+        // Use JSONValue array for action args
+        let result: Int = try await handle.action("increment", args: [.number(.int(10))])
+        #expect(result >= 10)
+
+        // Multiple JSONValue args (using kvActor with putText)
+        let kvHandle = client.getOrCreate("kvActor", ["swift-json-kv", UUID().uuidString])
+        let setResult: Bool = try await kvHandle.action(
+            "putText",
+            args: [.string("jsonKey"), .string("jsonValue")]
+        )
+        #expect(setResult == true)
+    }
+
+    @Test
+    func jsonValueEventsEscapeHatch() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-json-events", UUID().uuidString])
+        let conn = handle.connect()
+
+        let openStream = await conn.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
+
+        // Use raw JSONValue events stream
+        let eventStream = await conn.events("newCount")
+
+        // Trigger event
+        let _: Int = try await conn.action("increment", 1)
+
+        // Get the first event
+        let args = try await nextValue(from: eventStream, timeoutSeconds: 5)
+
+        // Verify we received the event
+        #expect(!args.isEmpty)
+        // Verify first arg is the count (a number)
+        if case .number = args[0] {
+            // Success - it's a number
+        } else {
+            #expect(Bool(false), "Expected number in event args")
+        }
+
+        await conn.dispose()
+    }
+
+    @Test
+    func typedEventsStream() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-typed-events", UUID().uuidString])
+        let conn = handle.connect()
+
+        let openStream = await conn.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
+
+        // Use typed events stream
+        let eventStream = await conn.events("newCount", as: Int.self)
+
+        // Trigger event
+        let _: Int = try await conn.action("increment", 7)
+
+        // Get the first event
+        let receivedCount = try await nextValue(from: eventStream, timeoutSeconds: 5)
+
+        #expect(receivedCount >= 7)
+
+        await conn.dispose()
+    }
+
+    // MARK: - Edge Case Tests
+
+    @Test
+    func actionOnDisposedConnectionThrows() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("counter", ["swift-disposed-action", UUID().uuidString])
+        let conn = handle.connect()
+
+        let openStream = await conn.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
+
+        await conn.dispose()
+
+        // Action on disposed connection should throw
+        do {
+            let _: Int = try await conn.action("getCount")
+            #expect(Bool(false), "Expected error on disposed connection")
+        } catch is ActorConnDisposed {
+            // Expected
+        } catch {
+            // Also acceptable - any error on disposed connection
+        }
+    }
+
+    @Test
+    func rapidConnectDisposeCycles() async throws {
+        let client = try makeClient()
+
+        for i in 0..<3 {
+            let handle = client.getOrCreate("counter", ["swift-rapid-cycle", UUID().uuidString, "\(i)"])
+            let conn = handle.connect()
+
+            // Brief wait for connection attempt
+            await sleepMilliseconds(50)
+
+            let status = await conn.currentStatus
+            #expect(status != .disposed)
+
+            await conn.dispose()
+
+            let disposedStatus = await conn.currentStatus
+            #expect(disposedStatus == .disposed)
+        }
+    }
+
+    @Test
+    func errorStreamReceivesConnectionErrors() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("connStateActor", ["swift-error-stream", UUID().uuidString])
+        let conn = handle.connect()
+
+        let openStream = await conn.opens()
+        _ = try await nextValue(from: openStream, timeoutSeconds: 5)
+
+        let errorStream = await conn.errors()
+
+        // Trigger a disconnect error
+        do {
+            _ = try await conn.action("disconnectSelf", "test.error_stream", as: Bool.self)
+        } catch {
+            // Expected to throw
+        }
+
+        // Error stream should receive the error
+        let error = try await nextValue(from: errorStream, timeoutSeconds: 8)
+        #expect(error.group == "test")
+        #expect(error.code == "error_stream")
+
+        await conn.dispose()
+    }
+
+    @Test
+    func opensAndClosesStreams() async throws {
+        let client = try makeClient()
+        let handle = client.getOrCreate("connStateActor", ["swift-open-close-streams", UUID().uuidString])
+        let conn = handle.connect()
+
+        let opensStream = await conn.opens()
+        let closesStream = await conn.closes()
+
+        // Wait for open
+        _ = try await nextValue(from: opensStream, timeoutSeconds: 5)
+        #expect(await conn.currentStatus == .connected)
+
+        // Trigger disconnect
+        do {
+            _ = try await conn.action("disconnectSelf", "test.close_stream", as: Bool.self)
+        } catch {
+            // Expected
+        }
+
+        // Wait for close
+        _ = try await nextValue(from: closesStream, timeoutSeconds: 5)
+
+        // Should reconnect - wait for another open
+        _ = try await nextValue(from: opensStream, timeoutSeconds: 5)
+        #expect(await conn.currentStatus == .connected)
+
+        await conn.dispose()
     }
 }

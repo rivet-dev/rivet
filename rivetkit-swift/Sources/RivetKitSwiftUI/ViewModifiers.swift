@@ -3,13 +3,12 @@ import SwiftUI
 
 public extension View {
     /// Subscribes to an actor event with no arguments.
-    /// Use the typed overloads for 1-3 arguments to decode positional values.
     func onActorEvent(
         _ actor: ActorObservable,
         _ event: String,
         perform: @escaping () -> Void
     ) -> some View {
-        modifier(ActorEventModifier0(actor: actor, event: event, handler: perform))
+        modifier(ActorEventModifierVoid(actor: actor, event: event, handler: perform))
     }
 
     func onActorEvent<A: Decodable & Sendable>(
@@ -17,7 +16,7 @@ public extension View {
         _ event: String,
         perform: @escaping (A) -> Void
     ) -> some View {
-        modifier(ActorEventModifier1(actor: actor, event: event, handler: perform))
+        modifier(ActorEventModifier<A>(actor: actor, event: event, handler: perform))
     }
 
     func onActorEvent<A: Decodable & Sendable, B: Decodable & Sendable>(
@@ -25,7 +24,7 @@ public extension View {
         _ event: String,
         perform: @escaping (A, B) -> Void
     ) -> some View {
-        modifier(ActorEventModifier2(actor: actor, event: event, handler: perform))
+        modifier(ActorEventModifier2<A, B>(actor: actor, event: event, handler: perform))
     }
 
     func onActorEvent<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable>(
@@ -33,7 +32,7 @@ public extension View {
         _ event: String,
         perform: @escaping (A, B, C) -> Void
     ) -> some View {
-        modifier(ActorEventModifier3(actor: actor, event: event, handler: perform))
+        modifier(ActorEventModifier3<A, B, C>(actor: actor, event: event, handler: perform))
     }
 
     func onActorEvent<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable, D: Decodable & Sendable>(
@@ -41,7 +40,7 @@ public extension View {
         _ event: String,
         perform: @escaping (A, B, C, D) -> Void
     ) -> some View {
-        modifier(ActorEventModifier4(actor: actor, event: event, handler: perform))
+        modifier(ActorEventModifier4<A, B, C, D>(actor: actor, event: event, handler: perform))
     }
 
     func onActorEvent<
@@ -55,11 +54,10 @@ public extension View {
         _ event: String,
         perform: @escaping (A, B, C, D, E) -> Void
     ) -> some View {
-        modifier(ActorEventModifier5(actor: actor, event: event, handler: perform))
+        modifier(ActorEventModifier5<A, B, C, D, E>(actor: actor, event: event, handler: perform))
     }
 
     /// Raw JSON event arguments. Use this when you need more than 5 positional arguments.
-    @available(*, deprecated, message: "use typed event overloads instead of raw JSON values")
     func onActorEvent(
         _ actor: ActorObservable,
         _ event: String,
@@ -81,73 +79,33 @@ private struct ActorEventKey: Hashable {
     let event: String
 }
 
-private struct ActorEventModifier0: ViewModifier {
+private struct ActorEventModifierVoid: ViewModifier {
     let actor: ActorObservable
     let event: String
     let handler: () -> Void
-    @State private var unsubscribe: EventUnsubscribe?
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await _ in actor.events(event, as: Void.self) {
+                    handler()
                 }
             }
-    }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) {
-            Task { @MainActor in
-                handler()
-            }
-        }
-        self.unsubscribe = unsubscribe
     }
 }
 
-private struct ActorEventModifier1<A: Decodable & Sendable>: ViewModifier {
+private struct ActorEventModifier<T: Decodable & Sendable>: ViewModifier {
     let actor: ActorObservable
     let event: String
-    let handler: (A) -> Void
-    @State private var unsubscribe: EventUnsubscribe?
+    let handler: (T) -> Void
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await value in actor.events(event, as: T.self) {
+                    handler(value)
                 }
             }
-    }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) { (value: A) in
-            Task { @MainActor in
-                handler(value)
-            }
-        }
-        self.unsubscribe = unsubscribe
     }
 }
 
@@ -155,34 +113,14 @@ private struct ActorEventModifier2<A: Decodable & Sendable, B: Decodable & Senda
     let actor: ActorObservable
     let event: String
     let handler: (A, B) -> Void
-    @State private var unsubscribe: EventUnsubscribe?
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await tuple in actor.events(event, as: (A, B).self) {
+                    handler(tuple.0, tuple.1)
                 }
             }
-    }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) { (first: A, second: B) in
-            Task { @MainActor in
-                handler(first, second)
-            }
-        }
-        self.unsubscribe = unsubscribe
     }
 }
 
@@ -190,34 +128,14 @@ private struct ActorEventModifier3<A: Decodable & Sendable, B: Decodable & Senda
     let actor: ActorObservable
     let event: String
     let handler: (A, B, C) -> Void
-    @State private var unsubscribe: EventUnsubscribe?
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await tuple in actor.events(event, as: (A, B, C).self) {
+                    handler(tuple.0, tuple.1, tuple.2)
                 }
             }
-    }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) { (first: A, second: B, third: C) in
-            Task { @MainActor in
-                handler(first, second, third)
-            }
-        }
-        self.unsubscribe = unsubscribe
     }
 }
 
@@ -230,34 +148,14 @@ private struct ActorEventModifier4<
     let actor: ActorObservable
     let event: String
     let handler: (A, B, C, D) -> Void
-    @State private var unsubscribe: EventUnsubscribe?
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await tuple in actor.events(event, as: (A, B, C, D).self) {
+                    handler(tuple.0, tuple.1, tuple.2, tuple.3)
                 }
             }
-    }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) { (first: A, second: B, third: C, fourth: D) in
-            Task { @MainActor in
-                handler(first, second, third, fourth)
-            }
-        }
-        self.unsubscribe = unsubscribe
     }
 }
 
@@ -271,70 +169,29 @@ private struct ActorEventModifier5<
     let actor: ActorObservable
     let event: String
     let handler: (A, B, C, D, E) -> Void
-    @State private var unsubscribe: EventUnsubscribe?
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await tuple in actor.events(event, as: (A, B, C, D, E).self) {
+                    handler(tuple.0, tuple.1, tuple.2, tuple.3, tuple.4)
                 }
             }
     }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) { (first: A, second: B, third: C, fourth: D, fifth: E) in
-            Task { @MainActor in
-                handler(first, second, third, fourth, fifth)
-            }
-        }
-        self.unsubscribe = unsubscribe
-    }
 }
 
-@available(*, deprecated, message: "use typed event overloads instead of raw JSON values")
 private struct ActorEventModifierRaw: ViewModifier {
     let actor: ActorObservable
     let event: String
     let handler: ([JSONValue]) -> Void
-    @State private var unsubscribe: EventUnsubscribe?
 
     func body(content: Content) -> some View {
         content
             .task(id: ActorEventKey(connectionId: actor.connectionToken(), event: event)) {
-                await subscribe()
-            }
-            .onDisappear {
-                let unsubscribe = self.unsubscribe
-                self.unsubscribe = nil
-                if let unsubscribe {
-                    Task { await unsubscribe() }
+                for await args in actor.events(event) {
+                    handler(args)
                 }
             }
-    }
-
-    private func subscribe() async {
-        if let unsubscribe {
-            await unsubscribe()
-            self.unsubscribe = nil
-        }
-        guard let connection = actor.connection else { return }
-        let unsubscribe = await connection.on(event) { args in
-            Task { @MainActor in
-                handler(args)
-            }
-        }
-        self.unsubscribe = unsubscribe
     }
 }
 

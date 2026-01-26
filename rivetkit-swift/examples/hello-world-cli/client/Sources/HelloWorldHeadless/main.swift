@@ -4,7 +4,7 @@ import RivetKitClient
 @main
 struct HelloWorldHeadless {
     static func main() async {
-        let config = (try? ClientConfig()) ?? (try! ClientConfig(endpoint: "http://127.0.0.1:8787/api/rivet"))
+        let config = try! ClientConfig(endpoint: "http://localhost:3000/api/rivet")
         let key = resolveActorKey()
 
         print("Connecting to \(config.endpoint)")
@@ -15,28 +15,40 @@ struct HelloWorldHeadless {
             let handle = client.getOrCreate("counter", [key])
             let connection = handle.connect()
 
-            _ = await connection.onStatusChange { status in
-                print("status: \(status.rawValue)")
+            // Monitor status changes using AsyncStream
+            let statusTask = Task {
+                for await status in await connection.statusChanges() {
+                    print("status: \(status.rawValue)")
+                }
             }
 
-            _ = await connection.onError { error in
-                print("error: \(error.group).\(error.code): \(error.message)")
+            // Monitor errors using AsyncStream
+            let errorTask = Task {
+                for await error in await connection.errors() {
+                    print("error: \(error.group).\(error.code): \(error.message)")
+                }
             }
 
-            _ = await connection.on("newCount") { (newValue: Int) in
-                print("event newCount: \(newValue)")
+            // Subscribe to newCount events using AsyncStream
+            let eventTask = Task {
+                for await newValue in await connection.events("newCount", as: Int.self) {
+                    print("event newCount: \(newValue)")
+                }
             }
 
             let initial: Int = try await handle.action("getCount")
             print("initial count: \(initial)")
 
             for _ in 0..<3 {
-                let newValue: Int = try await connection.action("increment", arg: 1)
+                let newValue: Int = try await connection.action("increment", 1)
                 print("increment -> \(newValue)")
             }
 
             try? await Task.sleep(nanoseconds: 3_000_000_000)
 
+            statusTask.cancel()
+            errorTask.cancel()
+            eventTask.cancel()
             await connection.dispose()
             await client.dispose()
         } catch {

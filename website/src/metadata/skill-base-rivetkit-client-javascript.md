@@ -1,12 +1,12 @@
 # RivetKit JavaScript Client
 
-Use this skill when building JavaScript clients (browser, Node.js, or Bun) that connect to Rivet Actors with `@rivetkit/client`.
+Use this skill when building JavaScript clients (browser, Node.js, or Bun) that connect to Rivet Actors with `rivetkit/client`.
 
 ## First Steps
 
 1. Install the client (latest: {{RIVETKIT_VERSION}})
    ```bash
-   npm install @rivetkit/client@{{RIVETKIT_VERSION}}
+   npm install rivetkit@{{RIVETKIT_VERSION}}
    ```
 2. Create a client with `createClient()` and call actor actions.
 

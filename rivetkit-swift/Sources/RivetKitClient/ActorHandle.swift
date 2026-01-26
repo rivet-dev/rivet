@@ -19,8 +19,7 @@ public final class ActorHandle: @unchecked Sendable {
     }
 
     /// Performs an actor action using positional arguments encoded as CBOR.
-    /// Prefer the typed overloads for 0-5 arguments so decoding stays strongly typed.
-    public func action<Response: Decodable>(
+    public func action<Response: Decodable & Sendable>(
         _ name: String,
         args: [AnyEncodable],
         as _: Response.Type = Response.self
@@ -58,73 +57,19 @@ public final class ActorHandle: @unchecked Sendable {
         return try CBORSupport.decode(Response.self, from: decoded.output)
     }
 
-    public func action<Response: Decodable>(
+    /// Performs an action with variadic typed arguments using parameter packs.
+    public func action<each Arg: Encodable & Sendable, Response: Decodable & Sendable>(
         _ name: String,
+        _ args: repeat each Arg,
         as _: Response.Type = Response.self
     ) async throws -> Response {
-        return try await action(name, args: [] as [AnyEncodable], as: Response.self)
+        var argsArray: [AnyEncodable] = []
+        repeat argsArray.append(AnyEncodable(each args))
+        return try await action(name, args: argsArray, as: Response.self)
     }
 
-    public func action<Arg: Encodable, Response: Decodable>(
-        _ name: String,
-        arg: Arg,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: [AnyEncodable(arg)], as: Response.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: [AnyEncodable(a), AnyEncodable(b)], as: Response.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c)], as: Response.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(
-            name,
-            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d)],
-            as: Response.self
-        )
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, E: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D,
-        _ e: E,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(
-            name,
-            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d), AnyEncodable(e)],
-            as: Response.self
-        )
-    }
-
-    /// Raw JSON arguments for actions. Use this when you need more than 5 positional arguments.
-    public func action<Response: Decodable>(
+    /// Raw JSON arguments for actions.
+    public func action<Response: Decodable & Sendable>(
         _ name: String,
         args: [JSONValue],
         as _: Response.Type = Response.self

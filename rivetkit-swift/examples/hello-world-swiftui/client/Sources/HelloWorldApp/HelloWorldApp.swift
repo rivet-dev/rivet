@@ -1,4 +1,3 @@
-import RivetKitClient
 import RivetKitSwiftUI
 import SwiftUI
 
@@ -7,7 +6,7 @@ struct HelloWorldApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .rivetKit(endpoint: "http://localhost:6420")
+                .rivetKit(endpoint: "http://localhost:3000/api/rivet")
         }
     }
 }

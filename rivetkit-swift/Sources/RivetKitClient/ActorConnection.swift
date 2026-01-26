@@ -25,10 +25,10 @@ public enum ActorConnStatus: String, Sendable {
     case disposed
 }
 
-public typealias EventUnsubscribe = @Sendable () async -> Void
-public typealias StatusChangeCallback = @Sendable (ActorConnStatus) -> Void
-public typealias ConnectionStateCallback = @Sendable () -> Void
-public typealias ActorErrorCallback = @Sendable (ActorError) -> Void
+private typealias EventUnsubscribe = @Sendable () async -> Void
+private typealias StatusChangeCallback = @Sendable (ActorConnStatus) -> Void
+private typealias ConnectionStateCallback = @Sendable () -> Void
+private typealias ActorErrorCallback = @Sendable (ActorError) -> Void
 
 /// Maintains a live websocket connection to a Rivet Actor using the CBOR wire protocol.
 public actor ActorConnection {
@@ -48,6 +48,10 @@ public actor ActorConnection {
     private var openHandlers: [UUID: ConnectionStateCallback] = [:]
     private var closeHandlers: [UUID: ConnectionStateCallback] = [:]
     private var statusHandlers: [UUID: StatusChangeCallback] = [:]
+    private var errorStreamContinuations: [UUID: AsyncStream<ActorError>.Continuation] = [:]
+    private var openStreamContinuations: [UUID: AsyncStream<Void>.Continuation] = [:]
+    private var closeStreamContinuations: [UUID: AsyncStream<Void>.Continuation] = [:]
+    private var statusStreamContinuations: [UUID: AsyncStream<ActorConnStatus>.Continuation] = [:]
     private var actionIdCounter: UInt64 = 0
     private var actorId: String?
     private var connectionId: String?
@@ -79,8 +83,7 @@ public actor ActorConnection {
     }
 
     /// Performs an action over the websocket using positional arguments encoded as CBOR.
-    /// Prefer the typed overloads for 0-5 arguments so decoding stays strongly typed.
-    public func action<Response: Decodable>(
+    public func action<Response: Decodable & Sendable>(
         _ name: String,
         args: [AnyEncodable],
         as _: Response.Type = Response.self
@@ -106,353 +109,260 @@ public actor ActorConnection {
         return try CBORSupport.decode(Response.self, from: data)
     }
 
-    public func action<Response: Decodable>(
+    /// Performs an action with variadic typed arguments using parameter packs.
+    public func action<each Arg: Encodable & Sendable, Response: Decodable & Sendable>(
         _ name: String,
+        _ args: repeat each Arg,
         as _: Response.Type = Response.self
     ) async throws -> Response {
-        return try await action(name, args: [] as [AnyEncodable], as: Response.self)
+        var argsArray: [AnyEncodable] = []
+        repeat argsArray.append(AnyEncodable(each args))
+        return try await action(name, args: argsArray, as: Response.self)
     }
 
-    public func action<Arg: Encodable, Response: Decodable>(
-        _ name: String,
-        arg: Arg,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: [AnyEncodable(arg)], as: Response.self)
+    /// Returns an AsyncStream of decoded event values.
+    public func events<T: Decodable & Sendable>(_ name: String, as _: T.Type = T.self) -> AsyncStream<T> {
+        let (stream, continuation) = AsyncStream<T>.makeStream()
+        let eventName = name
+        let unsubscribe = subscribe(eventName, once: false) { [weak self] args in
+            let result = Self.decodeEventArgsSingle(args, as: T.self)
+            switch result {
+            case .success(let value):
+                continuation.yield(value)
+            case .failure(let error):
+                Task { [weak self] in
+                    await self?.emitDecodeError(eventName: eventName, error: error)
+                }
+            }
+        }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
+            }
+        }
+        return stream
     }
 
-    public func action<A: Encodable, B: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: [AnyEncodable(a), AnyEncodable(b)], as: Response.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c)], as: Response.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(
-            name,
-            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d)],
-            as: Response.self
-        )
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, E: Encodable, Response: Decodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D,
-        _ e: E,
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(
-            name,
-            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d), AnyEncodable(e)],
-            as: Response.self
-        )
-    }
-
-    /// Raw JSON arguments for actions. Use this when you need more than 5 positional arguments.
-    public func action<Response: Decodable>(
-        _ name: String,
-        args: [JSONValue],
-        as _: Response.Type = Response.self
-    ) async throws -> Response {
-        return try await action(name, args: args.map { AnyEncodable($0) }, as: Response.self)
-    }
-
-    /// Subscribes to an event with no arguments.
-    /// Use the typed overloads for 1-3 arguments to decode positional values.
-    public func on(_ eventName: String, handler: @escaping @Sendable () -> Void) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false) { [weak self] args in
+    /// Returns an AsyncStream of void events.
+    public func events(_ name: String, as _: Void.Type = Void.self) -> AsyncStream<Void> {
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
+        let eventName = name
+        let unsubscribe = subscribe(eventName, once: false) { [weak self] args in
             let result = Self.decodeEventArgsZero(args)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success:
-                    handler()
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
+            switch result {
+            case .success:
+                continuation.yield(())
+            case .failure(let error):
+                Task { [weak self] in
+                    await self?.emitDecodeError(eventName: eventName, error: error)
                 }
             }
         }
-    }
-
-    public func on<A: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false) { [weak self] args in
-            let result = Self.decodeEventArgsSingle(args, as: A.self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
             }
         }
+        return stream
     }
 
-    public func on<A: Decodable & Sendable, B: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false) { [weak self] args in
+    /// Returns an AsyncStream of events with two arguments.
+    public func events<A: Decodable & Sendable, B: Decodable & Sendable>(
+        _ name: String,
+        as _: (A, B).Type
+    ) -> AsyncStream<(A, B)> {
+        let (stream, continuation) = AsyncStream<(A, B)>.makeStream()
+        let eventName = name
+        let unsubscribe = subscribe(eventName, once: false) { [weak self] args in
             let result = Self.decodeEventArgsPair(args, as: (A, B).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
+            switch result {
+            case .success(let value):
+                continuation.yield(value)
+            case .failure(let error):
+                Task { [weak self] in
+                    await self?.emitDecodeError(eventName: eventName, error: error)
                 }
             }
         }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
+            }
+        }
+        return stream
     }
 
-    public func on<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B, C) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false) { [weak self] args in
+    /// Returns an AsyncStream of events with three arguments.
+    public func events<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable>(
+        _ name: String,
+        as _: (A, B, C).Type
+    ) -> AsyncStream<(A, B, C)> {
+        let (stream, continuation) = AsyncStream<(A, B, C)>.makeStream()
+        let eventName = name
+        let unsubscribe = subscribe(eventName, once: false) { [weak self] args in
             let result = Self.decodeEventArgsTriple(args, as: (A, B, C).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1, value.2)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
+            switch result {
+            case .success(let value):
+                continuation.yield(value)
+            case .failure(let error):
+                Task { [weak self] in
+                    await self?.emitDecodeError(eventName: eventName, error: error)
                 }
             }
         }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
+            }
+        }
+        return stream
     }
 
-    public func on<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable, D: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B, C, D) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false) { [weak self] args in
+    /// Returns an AsyncStream of events with four arguments.
+    public func events<
+        A: Decodable & Sendable,
+        B: Decodable & Sendable,
+        C: Decodable & Sendable,
+        D: Decodable & Sendable
+    >(
+        _ name: String,
+        as _: (A, B, C, D).Type
+    ) -> AsyncStream<(A, B, C, D)> {
+        let (stream, continuation) = AsyncStream<(A, B, C, D)>.makeStream()
+        let eventName = name
+        let unsubscribe = subscribe(eventName, once: false) { [weak self] args in
             let result = Self.decodeEventArgsQuad(args, as: (A, B, C, D).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1, value.2, value.3)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
+            switch result {
+            case .success(let value):
+                continuation.yield(value)
+            case .failure(let error):
+                Task { [weak self] in
+                    await self?.emitDecodeError(eventName: eventName, error: error)
                 }
             }
         }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
+            }
+        }
+        return stream
     }
 
-    public func on<
+    /// Returns an AsyncStream of events with five arguments.
+    public func events<
         A: Decodable & Sendable,
         B: Decodable & Sendable,
         C: Decodable & Sendable,
         D: Decodable & Sendable,
         E: Decodable & Sendable
     >(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B, C, D, E) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false) { [weak self] args in
+        _ name: String,
+        as _: (A, B, C, D, E).Type
+    ) -> AsyncStream<(A, B, C, D, E)> {
+        let (stream, continuation) = AsyncStream<(A, B, C, D, E)>.makeStream()
+        let eventName = name
+        let unsubscribe = subscribe(eventName, once: false) { [weak self] args in
             let result = Self.decodeEventArgsQuint(args, as: (A, B, C, D, E).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1, value.2, value.3, value.4)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
+            switch result {
+            case .success(let value):
+                continuation.yield(value)
+            case .failure(let error):
+                Task { [weak self] in
+                    await self?.emitDecodeError(eventName: eventName, error: error)
                 }
             }
         }
-    }
-
-    /// Raw JSON event arguments. Use this when you need more than 5 positional arguments.
-    @available(*, deprecated, message: "use typed event overloads instead of raw JSON values")
-    public func on(_ eventName: String, handler: @escaping @Sendable ([JSONValue]) -> Void) async -> EventUnsubscribe {
-        return subscribe(eventName, once: false, handler: handler)
-    }
-
-    /// Subscribes to a single event emission with no arguments.
-    /// Use the typed overloads for 1-3 arguments to decode positional values.
-    public func once(_ eventName: String, handler: @escaping @Sendable () -> Void) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true) { [weak self] args in
-            let result = Self.decodeEventArgsZero(args)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success:
-                    handler()
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
             }
         }
+        return stream
     }
 
-    public func once<A: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true) { [weak self] args in
-            let result = Self.decodeEventArgsSingle(args, as: A.self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
+    /// Returns an AsyncStream of raw JSON event arguments.
+    public func events(_ name: String) -> AsyncStream<[JSONValue]> {
+        let (stream, continuation) = AsyncStream<[JSONValue]>.makeStream()
+        let unsubscribe = subscribe(name, once: false) { args in
+            continuation.yield(args)
+        }
+        continuation.onTermination = { _ in
+            Task {
+                await unsubscribe()
             }
         }
+        return stream
     }
 
-    public func once<A: Decodable & Sendable, B: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true) { [weak self] args in
-            let result = Self.decodeEventArgsPair(args, as: (A, B).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
-            }
-        }
-    }
-
-    public func once<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B, C) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true) { [weak self] args in
-            let result = Self.decodeEventArgsTriple(args, as: (A, B, C).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1, value.2)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
-            }
-        }
-    }
-
-    public func once<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable, D: Decodable & Sendable>(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B, C, D) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true) { [weak self] args in
-            let result = Self.decodeEventArgsQuad(args, as: (A, B, C, D).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1, value.2, value.3)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
-            }
-        }
-    }
-
-    public func once<
-        A: Decodable & Sendable,
-        B: Decodable & Sendable,
-        C: Decodable & Sendable,
-        D: Decodable & Sendable,
-        E: Decodable & Sendable
-    >(
-        _ eventName: String,
-        handler: @escaping @Sendable (A, B, C, D, E) -> Void
-    ) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true) { [weak self] args in
-            let result = Self.decodeEventArgsQuint(args, as: (A, B, C, D, E).self)
-            Task { [weak self] in
-                guard let self else { return }
-                switch result {
-                case .success(let value):
-                    handler(value.0, value.1, value.2, value.3, value.4)
-                case .failure(let error):
-                    await self.emitDecodeError(eventName: eventName, error: error)
-                }
-            }
-        }
-    }
-
-    /// Raw JSON event arguments. Use this when you need more than 5 positional arguments.
-    @available(*, deprecated, message: "use typed event overloads instead of raw JSON values")
-    public func once(_ eventName: String, handler: @escaping @Sendable ([JSONValue]) -> Void) async -> EventUnsubscribe {
-        return subscribe(eventName, once: true, handler: handler)
-    }
-
-    public func onError(_ handler: @escaping ActorErrorCallback) async -> EventUnsubscribe {
+    /// Returns an AsyncStream of connection errors.
+    public func errors() -> AsyncStream<ActorError> {
+        let (stream, continuation) = AsyncStream<ActorError>.makeStream()
         let id = UUID()
-        errorHandlers[id] = handler
-        return { [weak self] in
-            await self?.removeErrorHandler(id: id)
+        errorStreamContinuations[id] = continuation
+        errorHandlers[id] = { error in
+            continuation.yield(error)
         }
+        continuation.onTermination = { [weak self] _ in
+            Task { [weak self] in
+                await self?.removeErrorHandler(id: id)
+            }
+        }
+        return stream
     }
 
-    public func onOpen(_ handler: @escaping ConnectionStateCallback) async -> EventUnsubscribe {
+    /// Returns an AsyncStream that yields each time the connection opens.
+    public func opens() -> AsyncStream<Void> {
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
         let id = UUID()
-        openHandlers[id] = handler
-        return { [weak self] in
-            await self?.removeOpenHandler(id: id)
+        openStreamContinuations[id] = continuation
+        openHandlers[id] = {
+            continuation.yield(())
         }
+        continuation.onTermination = { [weak self] _ in
+            Task { [weak self] in
+                await self?.removeOpenHandler(id: id)
+            }
+        }
+        return stream
     }
 
-    public func onClose(_ handler: @escaping ConnectionStateCallback) async -> EventUnsubscribe {
+    /// Returns an AsyncStream that yields each time the connection closes.
+    public func closes() -> AsyncStream<Void> {
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
         let id = UUID()
-        closeHandlers[id] = handler
-        return { [weak self] in
-            await self?.removeCloseHandler(id: id)
+        closeStreamContinuations[id] = continuation
+        closeHandlers[id] = {
+            continuation.yield(())
         }
+        continuation.onTermination = { [weak self] _ in
+            Task { [weak self] in
+                await self?.removeCloseHandler(id: id)
+            }
+        }
+        return stream
     }
 
-    public func onStatusChange(_ handler: @escaping StatusChangeCallback) async -> EventUnsubscribe {
+    /// Returns an AsyncStream of status changes. Immediately yields the current status.
+    public func statusChanges() -> AsyncStream<ActorConnStatus> {
+        let (stream, continuation) = AsyncStream<ActorConnStatus>.makeStream()
         let id = UUID()
-        statusHandlers[id] = handler
-        // Immediately fire with current status (BehaviorSubject pattern)
-        handler(status)
-        return { [weak self] in
-            await self?.removeStatusHandler(id: id)
+        statusStreamContinuations[id] = continuation
+        // Immediately yield current status (BehaviorSubject pattern)
+        continuation.yield(status)
+        statusHandlers[id] = { status in
+            continuation.yield(status)
         }
+        continuation.onTermination = { [weak self] _ in
+            Task { [weak self] in
+                await self?.removeStatusHandler(id: id)
+            }
+        }
+        return stream
     }
 
-    public func getStatus() -> ActorConnStatus {
+    /// The current connection status.
+    public var currentStatus: ActorConnStatus {
         status
     }
 
@@ -476,6 +386,33 @@ public actor ActorConnection {
         websocket = nil
         await registry.remove(self)
         rejectAllPending(error: ActorConnDisposed())
+        finishAllStreams()
+    }
+
+    private func finishAllStreams() {
+        for (_, continuation) in errorStreamContinuations {
+            continuation.finish()
+        }
+        errorStreamContinuations.removeAll()
+        errorHandlers.removeAll()
+
+        for (_, continuation) in openStreamContinuations {
+            continuation.finish()
+        }
+        openStreamContinuations.removeAll()
+        openHandlers.removeAll()
+
+        for (_, continuation) in closeStreamContinuations {
+            continuation.finish()
+        }
+        closeStreamContinuations.removeAll()
+        closeHandlers.removeAll()
+
+        for (_, continuation) in statusStreamContinuations {
+            continuation.finish()
+        }
+        statusStreamContinuations.removeAll()
+        statusHandlers.removeAll()
     }
 
     private func connectLoop() async {
@@ -926,18 +863,22 @@ public actor ActorConnection {
 
     private func removeErrorHandler(id: UUID) {
         errorHandlers.removeValue(forKey: id)
+        errorStreamContinuations.removeValue(forKey: id)
     }
 
     private func removeOpenHandler(id: UUID) {
         openHandlers.removeValue(forKey: id)
+        openStreamContinuations.removeValue(forKey: id)
     }
 
     private func removeCloseHandler(id: UUID) {
         closeHandlers.removeValue(forKey: id)
+        closeStreamContinuations.removeValue(forKey: id)
     }
 
     private func removeStatusHandler(id: UUID) {
         statusHandlers.removeValue(forKey: id)
+        statusStreamContinuations.removeValue(forKey: id)
     }
 
     private func buildWebSocketProtocols() throws -> [String] {
@@ -954,7 +895,7 @@ public actor ActorConnection {
     }
 }
 
-struct EventSubscription: Sendable {
+private struct EventSubscription: Sendable {
     let callback: @Sendable ([JSONValue]) -> Void
     let once: Bool
 }
@@ -1199,12 +1140,12 @@ private enum DecodeIssue: Error, LocalizedError {
     }
 }
 
-struct InitMessage: Decodable, Sendable {
+private struct InitMessage: Decodable, Sendable {
     let actorId: String
     let connectionId: String
 }
 
-struct ErrorMessage: Decodable, Sendable {
+private struct ErrorMessage: Decodable, Sendable {
     let group: String
     let code: String
     let message: String
@@ -1237,7 +1178,7 @@ struct ErrorMessage: Decodable, Sendable {
     }
 }
 
-struct ActionResponseMessage: Decodable, Sendable {
+private struct ActionResponseMessage: Decodable, Sendable {
     let id: UInt64
     let output: JSONValue
 
@@ -1258,16 +1199,16 @@ struct ActionResponseMessage: Decodable, Sendable {
     }
 }
 
-struct EventMessage: Decodable, Sendable {
+private struct EventMessage: Decodable, Sendable {
     let name: String
     let args: JSONValue
 }
 
-struct ToClientMessage: Decodable, Sendable {
+private struct ToClientMessage: Decodable, Sendable {
     let body: ToClientBody
 }
 
-enum ToClientBody: Decodable, Sendable {
+private enum ToClientBody: Decodable, Sendable {
     case initMessage(InitMessage)
     case error(ErrorMessage)
     case actionResponse(ActionResponseMessage)
@@ -1305,22 +1246,22 @@ enum ToClientBody: Decodable, Sendable {
     }
 }
 
-struct ActionRequest: Encodable, Sendable {
+private struct ActionRequest: Encodable, Sendable {
     let id: UInt64
     let name: String
     let args: [AnyEncodable]
 }
 
-struct SubscriptionRequest: Encodable, Sendable {
+private struct SubscriptionRequest: Encodable, Sendable {
     let eventName: String
     let subscribe: Bool
 }
 
-struct ToServerMessage: Encodable, Sendable {
+private struct ToServerMessage: Encodable, Sendable {
     let body: ToServerBody
 }
 
-enum ToServerBody: Encodable, Sendable {
+private enum ToServerBody: Encodable, Sendable {
     case actionRequest(ActionRequest)
     case subscriptionRequest(SubscriptionRequest)
 

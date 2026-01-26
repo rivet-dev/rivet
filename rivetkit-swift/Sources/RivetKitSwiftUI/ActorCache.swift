@@ -5,6 +5,11 @@ import RivetKitClient
 /// Multiple `@Actor` property wrappers with the same options share a single connection.
 @MainActor
 public final class ActorCache {
+    /// Delay before cleaning up unused cache entries.
+    /// SwiftUI's view lifecycle may cause rapid mount/unmount cycles,
+    /// so we wait before disposing connections to avoid churn.
+    private static let cleanupDelay: Duration = .seconds(5)
+
     /// A cached actor entry with reference counting.
     final class CacheEntry {
         let observable: ActorObservable
@@ -75,11 +80,10 @@ public final class ActorCache {
             // - View re-renders cause property wrapper recreation
             // - @StateObject not preserving state in property wrapper
             //
-            // Use a longer delay (5 seconds) to handle SwiftUI's async view lifecycle.
             // The delay is cancelled immediately if a new mount happens.
             entry.cleanupTask = Task { @MainActor [weak self] in
                 // Wait for any pending mounts to happen
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: Self.cleanupDelay)
 
                 guard let self else { return }
                 guard let current = self.cache[hash], current.refCount == 0 else { return }

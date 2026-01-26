@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ActorError: Error, Sendable, Equatable {
+public struct ActorError: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public let group: String
     public let code: String
     public let message: String
@@ -12,9 +12,15 @@ public struct ActorError: Error, Sendable, Equatable {
         self.message = message
         self.metadata = metadata
     }
+
+    public var description: String {
+        "[\(group):\(code)] \(message)"
+    }
+
+    public var errorDescription: String? { description }
 }
 
-public struct ActorSchedulingError: Error, Sendable, Equatable {
+public struct ActorSchedulingError: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public let group: String
     public let code: String
     public let actorId: String
@@ -26,37 +32,58 @@ public struct ActorSchedulingError: Error, Sendable, Equatable {
         self.actorId = actorId
         self.details = details
     }
+
+    public var description: String {
+        "[\(group):\(code)] Actor scheduling failed for \(actorId)"
+    }
+
+    public var errorDescription: String? { description }
 }
 
-public struct ActorConnDisposed: Error, Sendable, Equatable {
+public struct ActorConnDisposed: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public init() {}
+
+    public var description: String {
+        "Actor connection has been disposed"
+    }
+
+    public var errorDescription: String? { description }
 }
 
-public struct HttpRequestError: Error, Sendable, Equatable {
+public struct HttpRequestError: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public let message: String
 
     public init(_ message: String) {
         self.message = message
     }
+
+    public var description: String { message }
+    public var errorDescription: String? { description }
 }
 
-public struct ConfigurationError: Error, Sendable, Equatable {
+public struct ConfigurationError: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public let message: String
 
     public init(_ message: String) {
         self.message = message
     }
+
+    public var description: String { message }
+    public var errorDescription: String? { description }
 }
 
-public struct InternalError: Error, Sendable, Equatable {
+public struct InternalError: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public let message: String
 
     public init(_ message: String) {
         self.message = message
     }
+
+    public var description: String { message }
+    public var errorDescription: String? { description }
 }
 
-public struct ManagerApiError: Error, Sendable, Equatable {
+public struct ManagerApiError: Error, Sendable, Equatable, LocalizedError, CustomStringConvertible {
     public let group: String
     public let code: String
     public let message: String
@@ -66,6 +93,12 @@ public struct ManagerApiError: Error, Sendable, Equatable {
         self.code = code
         self.message = message
     }
+
+    public var description: String {
+        "[\(group):\(code)] \(message)"
+    }
+
+    public var errorDescription: String? { description }
 }
 
 func isSchedulingError(group: String, code: String) -> Bool {

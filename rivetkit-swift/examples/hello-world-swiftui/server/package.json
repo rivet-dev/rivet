@@ -1,9 +1,9 @@
 {
-	"name": "rivetkit-swift-hello-world-server",
+	"name": "rivetkit-swift-hello-world-swiftui-server",
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "PORT=8787 srvx server.ts"
+		"dev": "srvx server.ts"
 	},
 	"dependencies": {
 		"rivetkit": "^2.0.42-rc.1"

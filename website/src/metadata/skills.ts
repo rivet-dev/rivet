@@ -57,7 +57,7 @@ const SKILL_CONFIGS = {
 		name: "rivetkit-client-javascript",
 		directory: "rivetkit-client-javascript",
 		description:
-			"RivetKit JavaScript client guidance. Use for browser, Node.js, or Bun clients that connect to Rivet Actors with @rivetkit/client, create clients, call actions, or manage connections.",
+			"RivetKit JavaScript client guidance. Use for browser, Node.js, or Bun clients that connect to Rivet Actors with rivetkit/client, create clients, call actions, or manage connections.",
 		baseTemplate: skillBaseClientJavascript,
 		content: {
 			docId: "clients/javascript",
@@ -96,7 +96,7 @@ const SKILL_CONFIGS = {
 		name: "rivetkit-client-swiftui",
 		directory: "rivetkit-client-swiftui",
 		description:
-			"RivetKit SwiftUI client guidance. Use for SwiftUI apps that connect to Rivet Actors with @Actor, rivetKit view modifiers, and SwiftUI bindings.",
+			"RivetKit SwiftUI client guidance. Use for SwiftUI apps that connect to Rivet Actors with RivetKitSwiftUI, @Actor, rivetKit view modifiers, and SwiftUI bindings.",
 		baseTemplate: skillBaseClientSwiftUI,
 		content: {
 			docId: "clients/swiftui",

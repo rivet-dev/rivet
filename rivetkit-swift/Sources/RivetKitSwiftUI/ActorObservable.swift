@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import RivetKitClient
 import SwiftCBOR
 
@@ -40,8 +41,16 @@ public final class ActorObservable {
     public private(set) var error: ActorError?
     public private(set) var connection: ActorConnection?
     public private(set) var handle: ActorHandle?
-    public private(set) var hash: String
     public private(set) var opts: ActorOptions
+
+    /// The hash identifying this actor. Thread-safe for `Identifiable` conformance.
+    public var hash: String {
+        get { _hashStorage.withLock { $0 } }
+        set { _hashStorage.withLock { $0 = newValue } }
+    }
+
+    /// Lock-protected storage for hash to enable nonisolated Identifiable conformance.
+    private let _hashStorage: OSAllocatedUnfairLock<String>
 
     public var isConnected: Bool { connStatus == .connected }
 
@@ -53,8 +62,8 @@ public final class ActorObservable {
 
     private var client: RivetKitClient?
     private var contextError: ActorError?
-    private var statusUnsubscribe: EventUnsubscribe?
-    private var errorUnsubscribe: EventUnsubscribe?
+    private var statusTask: Task<Void, Never>?
+    private var errorTask: Task<Void, Never>?
     private var errorHandlers: [UUID: (ActorError) -> Void] = [:]
     private var connectionWaiters: [CheckedContinuation<ActorConnection, Error>] = []
     private var stagedOptions: ActorOptions?
@@ -64,7 +73,7 @@ public final class ActorObservable {
 
     init(options: ActorOptions) {
         self.opts = options
-        self.hash = Self.computeHash(options)
+        self._hashStorage = OSAllocatedUnfairLock(initialState: Self.computeHash(options))
     }
 
     func stage(context: RivetKitContext, options: ActorOptions) {
@@ -168,139 +177,33 @@ public final class ActorObservable {
         connection.map { ObjectIdentifier($0) }
     }
 
-    /// Convenience overloads for 0-5 positional arguments.
-    /// Prefer these over the raw array-based form to keep decoding strongly typed.
-    public func action<R: Decodable & Sendable>(_ name: String) async throws -> R {
-        try await action(name, args: [] as [AnyEncodable], as: R.self)
-    }
-
-    public func action<A: Encodable, R: Decodable & Sendable>(_ name: String, _ a: A) async throws -> R {
-        try await action(name, args: [AnyEncodable(a)], as: R.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, R: Decodable & Sendable>(_ name: String, _ a: A, _ b: B) async throws -> R {
-        try await action(name, args: [AnyEncodable(a), AnyEncodable(b)], as: R.self)
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, R: Decodable & Sendable>(
+    /// Performs an action with variadic typed arguments using parameter packs.
+    public func action<each Arg: Encodable & Sendable, R: Decodable & Sendable>(
         _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C
+        _ args: repeat each Arg,
+        as _: R.Type = R.self
     ) async throws -> R {
-        try await action(name, args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c)], as: R.self)
+        var argsArray: [AnyEncodable] = []
+        repeat argsArray.append(AnyEncodable(each args))
+        return try await action(name, args: argsArray, as: R.self)
     }
 
-    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, R: Decodable & Sendable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D
-    ) async throws -> R {
-        try await action(
-            name,
-            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d)],
-            as: R.self
-        )
-    }
-
-    public func action<A: Encodable, B: Encodable, C: Encodable, D: Encodable, E: Encodable, R: Decodable & Sendable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D,
-        _ e: E
-    ) async throws -> R {
-        try await action(
-            name,
-            args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d), AnyEncodable(e)],
-            as: R.self
-        )
-    }
-
-    public func action<R: Decodable & Sendable>(_ name: String, args: [any Encodable]) async throws -> R {
-        let encoded = args.map { AnyEncodable($0) }
-        return try await action(name, args: encoded, as: R.self)
-    }
-
-    /// Raw JSON arguments for actions. Use this when you need more than 5 positional arguments.
+    /// Raw JSON arguments for actions.
     public func action<R: Decodable & Sendable>(_ name: String, args: [JSONValue]) async throws -> R {
         let encoded = args.map { AnyEncodable($0) }
         return try await action(name, args: encoded, as: R.self)
     }
 
-    public func send(_ name: String) {
+    /// Sends an action with variadic typed arguments, ignoring the response.
+    public func send<each Arg: Encodable & Sendable>(_ name: String, _ args: repeat each Arg) {
+        var argsArray: [AnyEncodable] = []
+        repeat argsArray.append(AnyEncodable(each args))
         Task { [weak self] in
-            _ = try? await self?.action(name, args: [] as [AnyEncodable], as: JSONValue.self)
+            _ = try? await self?.action(name, args: argsArray, as: JSONValue.self)
         }
     }
 
-    public func send<A: Encodable>(_ name: String, _ a: A) {
-        Task { [weak self] in
-            _ = try? await self?.action(name, args: [AnyEncodable(a)], as: JSONValue.self)
-        }
-    }
-
-    public func send<A: Encodable, B: Encodable>(_ name: String, _ a: A, _ b: B) {
-        Task { [weak self] in
-            _ = try? await self?.action(name, args: [AnyEncodable(a), AnyEncodable(b)], as: JSONValue.self)
-        }
-    }
-
-    public func send<A: Encodable, B: Encodable, C: Encodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C
-    ) {
-        Task { [weak self] in
-            _ = try? await self?.action(name, args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c)], as: JSONValue.self)
-        }
-    }
-
-    public func send<A: Encodable, B: Encodable, C: Encodable, D: Encodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D
-    ) {
-        Task { [weak self] in
-            _ = try? await self?.action(
-                name,
-                args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d)],
-                as: JSONValue.self
-            )
-        }
-    }
-
-    public func send<A: Encodable, B: Encodable, C: Encodable, D: Encodable, E: Encodable>(
-        _ name: String,
-        _ a: A,
-        _ b: B,
-        _ c: C,
-        _ d: D,
-        _ e: E
-    ) {
-        Task { [weak self] in
-            _ = try? await self?.action(
-                name,
-                args: [AnyEncodable(a), AnyEncodable(b), AnyEncodable(c), AnyEncodable(d), AnyEncodable(e)],
-                as: JSONValue.self
-            )
-        }
-    }
-
-    public func send(_ name: String, args: [any Encodable]) {
-        let encoded = args.map { AnyEncodable($0) }
-        Task { [weak self] in
-            _ = try? await self?.action(name, args: encoded, as: JSONValue.self)
-        }
-    }
-
-    /// Raw JSON arguments for actions. Use this when you need more than 5 positional arguments.
+    /// Raw JSON arguments for send.
     public func send(_ name: String, args: [JSONValue]) {
         Task { [weak self] in
             let encoded = args.map { AnyEncodable($0) }
@@ -309,117 +212,125 @@ public final class ActorObservable {
     }
 
     public func events<T: Decodable & Sendable>(_ name: String, as _: T.Type = T.self) -> AsyncStream<T> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] (value: T) in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield(value)
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<T>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName, as: T.self)
+            for await value in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(value)
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
     public func events(_ name: String, as _: Void.Type = Void.self) -> AsyncStream<Void> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield(())
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName, as: Void.self)
+            for await _ in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(())
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
     public func events<A: Decodable & Sendable, B: Decodable & Sendable>(
         _ name: String,
         as _: (A, B).Type
     ) -> AsyncStream<(A, B)> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] (first: A, second: B) in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield((first, second))
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<(A, B)>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName, as: (A, B).self)
+            for await value in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(value)
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
     public func events<A: Decodable & Sendable, B: Decodable & Sendable, C: Decodable & Sendable>(
         _ name: String,
         as _: (A, B, C).Type
     ) -> AsyncStream<(A, B, C)> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] (first: A, second: B, third: C) in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield((first, second, third))
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<(A, B, C)>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName, as: (A, B, C).self)
+            for await value in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(value)
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
     public func events<
@@ -431,30 +342,32 @@ public final class ActorObservable {
         _ name: String,
         as _: (A, B, C, D).Type
     ) -> AsyncStream<(A, B, C, D)> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] (first: A, second: B, third: C, fourth: D) in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield((first, second, third, fourth))
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<(A, B, C, D)>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName, as: (A, B, C, D).self)
+            for await value in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(value)
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
     public func events<
@@ -467,58 +380,62 @@ public final class ActorObservable {
         _ name: String,
         as _: (A, B, C, D, E).Type
     ) -> AsyncStream<(A, B, C, D, E)> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] (first: A, second: B, third: C, fourth: D, fifth: E) in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield((first, second, third, fourth, fifth))
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<(A, B, C, D, E)>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName, as: (A, B, C, D, E).self)
+            for await value in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(value)
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
-    @available(*, deprecated, message: "use typed events overloads instead of raw JSON values")
+    /// Raw JSON event arguments. Use this when you need more than 5 positional arguments.
     public func events(_ name: String) -> AsyncStream<[JSONValue]> {
-        AsyncStream { continuation in
-            Task { [weak self] in
-                guard let self else {
-                    continuation.finish()
-                    return
-                }
-                guard let connection = try? await waitForConnection() else {
-                    continuation.finish()
-                    return
-                }
-                let generation = connectionGeneration
-                let unsubscribe = await connection.on(name) { [weak self] args in
-                    Task { @MainActor in
-                        guard let self, self.connectionGeneration == generation else { return }
-                        continuation.yield(args)
-                    }
-                }
-                continuation.onTermination = { _ in
-                    Task {
-                        await unsubscribe()
-                    }
+        let (stream, continuation) = AsyncStream<[JSONValue]>.makeStream()
+        let eventName = name
+        let forwardingTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+            guard let connection = try? await waitForConnection() else {
+                continuation.finish()
+                return
+            }
+            let generation = connectionGeneration
+            let connStream = await connection.events(eventName)
+            for await value in connStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    continuation.yield(value)
                 }
             }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in
+            forwardingTask.cancel()
+        }
+        return stream
     }
 
     private func action<R: Decodable & Sendable>(_ name: String, args: [AnyEncodable], as _: R.Type) async throws -> R {
@@ -596,43 +513,44 @@ public final class ActorObservable {
     }
 
     private func attachConnectionHandlers(_ connection: ActorConnection, generation: UInt64) async {
-        if let statusUnsubscribe {
-            await statusUnsubscribe()
-        }
-        if let errorUnsubscribe {
-            await errorUnsubscribe()
-        }
+        statusTask?.cancel()
+        errorTask?.cancel()
 
-        statusUnsubscribe = await connection.onStatusChange { [weak self] status in
-            Task { @MainActor in
-                guard let self,
-                      self.connectionGeneration == generation,
-                      self.connection === connection else { return }
-                self.connStatus = status
-                if status == .connected {
-                    self.error = nil
-                }
-            }
-        }
-
-        errorUnsubscribe = await connection.onError { [weak self] error in
-            Task { @MainActor in
-                guard let self,
-                      self.connectionGeneration == generation,
-                      self.connection === connection else { return }
-                self.emitError(error)
-            }
-        }
-
-        // Sync current status after subscribing.
-        // The onStatusChange callback fires immediately (BehaviorSubject pattern),
-        // but it wraps the update in a Task which may not run before the view renders.
-        // This explicit sync ensures the UI sees the correct status immediately.
-        let currentStatus = await connection.getStatus()
+        // Sync current status immediately.
+        let currentStatus = await connection.currentStatus
         if connectionGeneration == generation && connection === self.connection {
             connStatus = currentStatus
             if currentStatus == .connected {
                 error = nil
+            }
+        }
+
+        let statusStream = await connection.statusChanges()
+        statusTask = Task { [weak self] in
+            for await status in statusStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self,
+                          self.connectionGeneration == generation,
+                          self.connection === connection else { return }
+                    self.connStatus = status
+                    if status == .connected {
+                        self.error = nil
+                    }
+                }
+            }
+        }
+
+        let errorStream = await connection.errors()
+        errorTask = Task { [weak self] in
+            for await error in errorStream {
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    guard let self,
+                          self.connectionGeneration == generation,
+                          self.connection === connection else { return }
+                    self.emitError(error)
+                }
             }
         }
     }
@@ -648,19 +566,11 @@ public final class ActorObservable {
             connStatus = .idle
         }
 
-        if let statusUnsubscribe {
-            Task {
-                await statusUnsubscribe()
-            }
-        }
-        statusUnsubscribe = nil
+        statusTask?.cancel()
+        statusTask = nil
 
-        if let errorUnsubscribe {
-            Task {
-                await errorUnsubscribe()
-            }
-        }
-        errorUnsubscribe = nil
+        errorTask?.cancel()
+        errorTask = nil
 
         if let connection {
             Task {
@@ -737,3 +647,10 @@ public final class ActorObservable {
     }
 }
 
+extension ActorObservable: Identifiable {
+    /// The unique identifier for this actor, based on its hash.
+    /// Thread-safe access via OSAllocatedUnfairLock.
+    public nonisolated var id: String {
+        _hashStorage.withLock { $0 }
+    }
+}

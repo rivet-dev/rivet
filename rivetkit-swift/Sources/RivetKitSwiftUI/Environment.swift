@@ -15,6 +15,15 @@ public struct RivetKitContext: Sendable {
         self.client = client
         self.error = nil
     }
+
+    /// Default context with no client - requires explicit configuration.
+    public static let unconfigured = RivetKitContext(
+        client: nil,
+        error: ActorError.clientError(
+            code: "not_configured",
+            message: "RivetKit not configured. Use .rivetKit(endpoint:) or .rivetKit(client:) to configure."
+        )
+    )
 }
 
 /// Singleton actor cache shared across the entire app.
@@ -30,19 +39,8 @@ public var sharedActorCache: ActorCache {
     ActorCacheHolder.shared
 }
 
-private struct RivetKitContextKey: EnvironmentKey {
-    // Default context with no client - requires explicit configuration
-    static let defaultValue: RivetKitContext = RivetKitContext(
-        client: nil,
-        error: ActorError.clientError(code: "not_configured", message: "RivetKit not configured. Use .rivetKit(endpoint:) or .rivetKit(client:) to configure.")
-    )
-}
-
 extension EnvironmentValues {
-    var rivetKitContext: RivetKitContext {
-        get { self[RivetKitContextKey.self] }
-        set { self[RivetKitContextKey.self] = newValue }
-    }
+    @Entry var rivetKitContext: RivetKitContext = .unconfigured
 }
 
 /// Holder for singleton client instances keyed by endpoint.
