@@ -19,7 +19,6 @@ import vmBareMetalLogo from '../images/platforms/vm-bare-metal.svg';
 import reactLogo from '../images/clients/react.svg';
 import javascriptLogo from '../images/clients/javascript.svg';
 import typescriptLogo from '../images/clients/typescript.svg';
-import rustLogo from '../images/clients/rust.svg';
 import nextjsLogo from '../images/clients/nextjs.svg';
 import vueLogo from '../images/clients/vue.svg';
 import svelteLogo from '../images/clients/svelte.svg';
@@ -300,7 +299,6 @@ export function TechSection() {
                 alt='TypeScript'
               />
               <TechLink href='/docs/clients/react' name='React' icon={reactLogo} alt='React' />
-              <TechLink href='/docs/clients/rust' name='Rust' icon={rustLogo} alt='Rust' />
               <TechLink href='/docs/clients/next-js' name='Next.js' icon={nextjsLogo} alt='Next.js' />
               <TechLink
                 href='https://github.com/rivet-dev/rivetkit/pull/1172'

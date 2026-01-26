@@ -61,6 +61,7 @@ import {
 	faSquareTerminal,
 	faTag,
 	faTowerBroadcast,
+	faSwift,
     faUpload,
 	faVercel,
 	faVialCircleCheck,
@@ -96,6 +97,11 @@ export const sitemap = [
 						icon: faFastForward,
 						collapsible: true,
 						pages: [
+							{
+								title: "Overview",
+								href: "/docs/actors/quickstart",
+								icon: faSquareInfo,
+							},
 							{
 								title: "Node.js & Bun",
 								href: "/docs/actors/quickstart/backend",
@@ -279,7 +285,7 @@ export const sitemap = [
 				pages: [
 					{
 						title: "Overview",
-						href: "/docs/actors/clients",
+						href: "/docs/clients",
 						// icon: faCode,
 					},
 					{
@@ -297,15 +303,15 @@ export const sitemap = [
 								icon: faReact,
 							},
 							{
-								title: "Next.js",
-								href: "/docs/clients/next-js",
-								icon: faNextjs,
+								title: "Swift",
+								href: "/docs/clients/swift",
+								icon: faSwift,
 							},
-							// {
-							// 	title: "Rust",
-							// 	href: "/docs/clients/rust",
-							// 	icon: faRust,
-							// },
+							{
+								title: "SwiftUI",
+								href: "/docs/clients/swiftui",
+								icon: faSwift,
+							},
 						]
 					}
 				],

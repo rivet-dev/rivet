@@ -12,6 +12,7 @@ packages:
   - frontend/packages/example-registry/
   - frontend/packages/icons/
   - rivetkit-typescript/packages/*
+  - rivetkit-swift/examples/*/server
   - scripts/release
   - scripts/tests
   - shared/typescript/*

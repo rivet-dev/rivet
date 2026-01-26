@@ -22,6 +22,7 @@ const LANGS: shiki.BundledLanguage[] = [
 	"http",
 	"prisma",
 	"rust",
+	"swift",
 	"toml",
 ];
 

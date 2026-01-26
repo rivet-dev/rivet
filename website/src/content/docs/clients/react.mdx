@@ -1,255 +1,49 @@
 ---
 title: "React"
-description: "Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates."
+description: "Connect React apps to Rivet Actors."
 skill: true
 ---
 
 import { InstallPackage } from "@/components/docs/InstallPackage";
 
-
-
 ## Getting Started
 
 See the [React quickstart guide](/docs/actors/quickstart/react) for getting started.
 
-## API Reference
+## Install
 
-### `createRivetKit(endpoint?, options?)`
+<InstallPackage name="rivetkit @rivetkit/react" />
 
-Creates the Rivet hooks for React integration.
+## Minimal Client
 
 <CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-export const counter = actor({
-  state: { count: 0 },
-  actions: {
-    increment: (c, x: number) => {
-      c.state.count += x;
-      c.broadcast("newCount", c.state.count);
-      return c.state.count;
-    },
-  },
-});
-
-export const registry = setup({
-  use: { counter },
-});
-```
-
-```tsx {{"title":"client.tsx"}}
+```tsx {{"title":"Counter.tsx"}}
 import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
-const { useActor } = createRivetKit<typeof registry>();
-```
-</CodeGroup>
-
-#### Parameters
-
-- `endpoint`: Optional endpoint URL (defaults to `http://localhost:6420` or `process.env.RIVET_ENDPOINT`)
-- `options`: Optional configuration object
-
-#### Returns
-
-An object containing:
-- `useActor`: Hook for connecting to actors
-
-### `useActor(options)`
-
-Hook that connects to an actor and manages the connection lifecycle.
-
-<CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-export const myActor = actor({
-  state: { value: "" },
-  actions: {
-    getValue: (c) => c.state.value,
-  },
+const { useActor } = createRivetKit<typeof registry>({
+  endpoint: "https://my-namespace:pk_...@api.rivet.dev",
 });
-
-export const registry = setup({
-  use: { myActor },
-});
-```
-
-```tsx {{"title":"component.tsx"}}
-import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
-
-const { useActor } = createRivetKit<typeof registry>();
-
-function MyComponent() {
-  const actor = useActor({
-    name: "myActor",
-    key: ["actor-id"],
-    params: { userId: "123" },
-    enabled: true
-  });
-
-  return <div>Status: {actor.connStatus}</div>;
-}
-```
-</CodeGroup>
-
-#### Parameters
-
-- `options`: Object containing:
-  - `name`: The name of the actor type (string)
-  - `key`: Array of strings identifying the specific actor instance
-  - `params`: Optional parameters passed to the actor connection
-  - `createWithInput`: Optional input to pass to the actor on creation
-  - `createInRegion`: Optional region to create the actor in if does not exist
-  - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
-
-#### Returns
-
-Actor object with the following properties:
-- `connection`: The actor connection for calling actions, or `null` if not connected
-- `connStatus`: The connection status (`"idle"`, `"connecting"`, `"connected"`, or `"disconnected"`)
-- `error`: Error object if the connection failed, or `null`
-- `useEvent(eventName, handler)`: Method to subscribe to actor events
-
-### `actor.useEvent(eventName, handler)`
-
-Subscribe to events emitted by the actor.
-
-<CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-export const counter = actor({
-  state: { count: 0 },
-  actions: {
-    increment: (c, x: number) => {
-      c.state.count += x;
-      c.broadcast("newCount", c.state.count);
-      return c.state.count;
-    },
-  },
-});
-
-export const registry = setup({
-  use: { counter },
-});
-```
-
-```tsx {{"title":"component.tsx"}}
-import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
-
-const { useActor } = createRivetKit<typeof registry>();
 
 function Counter() {
-  const actor = useActor({ name: "counter", key: ["my-counter"] });
+  const { connection, connStatus } = useActor({ name: "counter", key: ["my-counter"] });
 
-  actor.useEvent("newCount", (count: number) => {
-    console.log("Count changed:", count);
-  });
-
-  return <div>Counter Component</div>;
+  if (connStatus !== "connected" || !connection) return <div>Connecting...</div>;
+  return <button onClick={() => connection.increment(1)}>+</button>;
 }
 ```
-</CodeGroup>
 
-#### Parameters
-
-- `eventName`: The name of the event to listen for (string)
-- `handler`: Function called when the event is emitted
-
-#### Lifecycle
-
-The event subscription is automatically managed:
-- Subscribes when the actor connects
-- Cleans up when the component unmounts or actor disconnects
-- Re-subscribes on reconnection
-
-## Advanced Patterns
-
-### Multiple Actors
-
-Connect to multiple actors in a single component:
-
-<CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-export const userProfile = actor({
-  state: { name: "", email: "" },
-  actions: {
-    update: (c, data: { name?: string; email?: string }) => {
-      if (data.name) c.state.name = data.name;
-      if (data.email) c.state.email = data.email;
-      c.broadcast("profileUpdated", c.state);
-    },
-  },
-});
-
-export const notifications = actor({
-  state: { items: [] as string[] },
-  actions: {
-    add: (c, message: string) => {
-      c.state.items.push(message);
-      c.broadcast("newNotification", message);
-    },
-  },
-});
-
-export const registry = setup({
-  use: { userProfile, notifications },
-});
-```
-
-```tsx {{"title":"dashboard.tsx"}}
-import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
-
-const { useActor } = createRivetKit<typeof registry>();
-
-function Dashboard() {
-  const userProfile = useActor({
-    name: "userProfile",
-    key: ["user-123"]
-  });
-
-  const notifications = useActor({
-    name: "notifications",
-    key: ["user-123"]
-  });
-
-  userProfile.useEvent("profileUpdated", (profile) => {
-    console.log("Profile updated:", profile);
-  });
-
-  notifications.useEvent("newNotification", (notification) => {
-    console.log("New notification:", notification);
-  });
-
-  return (
-    <div>
-      <p>Profile Status: {userProfile.connStatus}</p>
-      <p>Notifications Status: {notifications.connStatus}</p>
-    </div>
-  );
-}
-```
-</CodeGroup>
-
-### Conditional Connections
-
-Control when actors connect using the `enabled` option:
-
-<CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
+```ts {{"title":"registry.ts"}} @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
   state: { count: 0 },
   actions: {
-    increment: (c) => ++c.state.count,
+    increment: (c, x: number) => {
+      c.state.count += x;
+      c.broadcast("newCount", c.state.count);
+      return c.state.count;
+    },
   },
 });
 
@@ -257,217 +51,224 @@ export const registry = setup({
   use: { counter },
 });
 ```
-
-```tsx {{"title":"component.tsx"}}
-import { useState } from "react";
-import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
-
-const { useActor } = createRivetKit<typeof registry>();
-
-function ConditionalActor() {
-  const [enabled, setEnabled] = useState(false);
-
-  const counter = useActor({
-    name: "counter",
-    key: ["conditional"],
-    enabled: enabled
-  });
-
-  return (
-    <div>
-      <button onClick={() => setEnabled(!enabled)}>
-        {enabled ? "Disconnect" : "Connect"}
-      </button>
-      {counter.connStatus === "connected" && (
-        <p>Connected!</p>
-      )}
-    </div>
-  );
-}
-```
 </CodeGroup>
 
-### Real-time Collaboration
+## Stateless vs Stateful
 
-Build collaborative features with multiple event listeners:
-
-<CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-interface Position {
-  x: number;
-  y: number;
-}
-
-export const document = actor({
-  state: {
-    content: "",
-    users: [] as string[]
-  },
-  actions: {
-    updateContent: (c, newContent: string) => {
-      c.state.content = newContent;
-      c.broadcast("contentChanged", newContent);
-    },
-    moveCursor: (c, userId: string, position: Position) => {
-      c.broadcast("cursorMoved", { userId, position });
-    },
-    join: (c, userId: string) => {
-      c.state.users.push(userId);
-      c.broadcast("userJoined", { userId });
-    },
-    leave: (c, userId: string) => {
-      c.state.users = c.state.users.filter(u => u !== userId);
-      c.broadcast("userLeft", { userId });
-    },
-  },
-});
-
-export const registry = setup({
-  use: { document },
-});
-```
-
-```tsx {{"title":"editor.tsx"}}
-import { useState } from "react";
+```tsx
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
 
-const { useActor } = createRivetKit<typeof registry>();
+const { useActor } = createRivetKit();
 
-interface Position {
-  x: number;
-  y: number;
-}
+function Counter() {
+  const counter = useActor({ name: "counter", key: ["my-counter"] });
 
-function CollaborativeEditor() {
-  const [content, setContent] = useState("");
-  const [cursors, setCursors] = useState<Record<string, Position>>({});
-
-  const document = useActor({
-    name: "document",
-    key: ["doc-123"],
-    params: { userId: "current-user" }
-  });
-
-  document.useEvent("contentChanged", (newContent: string) => {
-    setContent(newContent);
-  });
-
-  document.useEvent("cursorMoved", ({ userId, position }: { userId: string; position: Position }) => {
-    setCursors(prev => ({ ...prev, [userId]: position }));
-  });
-
-  document.useEvent("userJoined", ({ userId }: { userId: string }) => {
-    console.log(`${userId} joined the document`);
-  });
-
-  document.useEvent("userLeft", ({ userId }: { userId: string }) => {
-    setCursors(prev => {
-      const { [userId]: _, ...rest } = prev;
-      return rest;
-    });
-  });
-
-  const updateContent = async (newContent: string) => {
-    await document.connection?.updateContent(newContent);
+  const increment = async () => {
+    await counter.connection?.increment(1);
   };
 
-  return (
-    <div>
-      <textarea
-        value={content}
-        onChange={(e) => updateContent(e.target.value)}
-      />
-      <p>Active cursors: {Object.keys(cursors).length}</p>
-    </div>
-  );
+  return <button onClick={increment}>+</button>;
 }
 ```
-</CodeGroup>
 
-### Authentication
+```tsx
+// Stateless: use createClient for one-off calls (SSR or utilities)
+import { createClient } from "rivetkit/client";
 
-Connect authenticated actors in React:
-
-<CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
-import { actor, setup } from "rivetkit";
-
-export const protectedCounter = actor({
-  state: { count: 0 },
-  onBeforeConnect: (c, params: { authToken: string | null }) => {
-    if (!params.authToken) {
-      throw new Error("Authentication required");
-    }
-  },
-  actions: {
-    increment: (c) => ++c.state.count,
-    getCount: (c) => c.state.count,
-  },
-});
-
-export const registry = setup({
-  use: { protectedCounter },
-});
+const client = createClient();
+await client.counter.getOrCreate(["my-counter"]).increment(1);
 ```
 
-```tsx {{"title":"app.tsx"}}
-import { useState } from "react";
+## Getting Actors
+
+```tsx
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
+import { createClient } from "rivetkit/client";
 
-const { useActor } = createRivetKit<typeof registry>();
+const { useActor } = createRivetKit();
 
-async function authenticateUser(): Promise<string> {
-  return "jwt-token-here";
+function ChatRoom() {
+  const room = useActor({ name: "chatRoom", key: ["room-42"] });
+  return <div>{room.connStatus}</div>;
 }
 
-function AuthenticatedApp() {
-  const [authToken, setAuthToken] = useState<string | null>(null);
+// For get/getOrCreate/create/getForId, use createClient
+const client = createClient();
+const handle = client.chatRoom.getOrCreate(["room-42"]);
+const existing = client.chatRoom.get(["room-42"]);
+const created = await client.game.create(["game-1"], { input: { mode: "ranked" } });
+const byId = client.chatRoom.getForId("actor-id");
+const resolvedId = await handle.resolve();
+```
 
-  const counter = useActor({
-    name: "protectedCounter",
-    key: ["user-counter"],
-    params: {
-      authToken: authToken
-    },
-    enabled: !!authToken
+## Connection Parameters
+
+```tsx
+import { createRivetKit } from "@rivetkit/react";
+
+const { useActor } = createRivetKit();
+
+function Chat() {
+  const chat = useActor({
+    name: "chatRoom",
+    key: ["general"],
+    params: { authToken: "jwt-token-here" },
   });
 
-  const login = async () => {
-    const token = await authenticateUser();
-    setAuthToken(token);
-  };
+  return <div>{chat.connStatus}</div>;
+}
+```
 
-  if (!authToken) {
-    return <button onClick={login}>Login</button>;
+## Subscribing to Events
+
+```tsx
+import { createRivetKit } from "@rivetkit/react";
+
+const { useActor } = createRivetKit();
+
+function Chat() {
+  const chat = useActor({ name: "chatRoom", key: ["general"] });
+
+  chat.useEvent("message", (msg) => {
+    console.log("message:", msg);
+  });
+
+  return null;
+}
+```
+
+## Connection Lifecycle
+
+```tsx
+import { createRivetKit } from "@rivetkit/react";
+
+const { useActor } = createRivetKit();
+
+function CounterStatus() {
+  const actor = useActor({ name: "counter", key: ["my-counter"] });
+
+  if (actor.connStatus === "connected") {
+    console.log("connected");
   }
 
-  return (
-    <div>
-      <h1>Authenticated Counter</h1>
-      <p>Status: {counter.connStatus}</p>
-    </div>
-  );
+  if (actor.error) {
+    console.error(actor.error);
+  }
+
+  return null;
 }
+```
+
+## Low-Level HTTP & WebSocket
+
+Use the JavaScript client for raw HTTP and WebSocket access:
+
+```tsx
+import { createClient } from "rivetkit/client";
+
+const client = createClient();
+const handle = client.chatRoom.getOrCreate(["general"]);
+
+const response = await handle.fetch("history");
+const history = await response.json();
+
+const ws = await handle.websocket("stream");
+ws.addEventListener("message", (event) => {
+  console.log("message:", event.data);
+});
+ws.send("hello");
+```
+
+## Calling from Backend
+
+Use the JavaScript client on your backend (Node.js/Bun). See the [JavaScript client docs](/docs/clients/javascript).
+
+## Error Handling
+
+```tsx
+import { ActorError } from "rivetkit/client";
+import { createRivetKit } from "@rivetkit/react";
+
+const { useActor } = createRivetKit();
+
+function Profile() {
+  const actor = useActor({ name: "user", key: ["user-123"] });
+
+  const updateUsername = async () => {
+    try {
+      await actor.connection?.updateUsername("ab");
+    } catch (error) {
+      if (error instanceof ActorError) {
+        console.log(error.code, error.metadata);
+      }
+    }
+  };
+
+  return <button onClick={updateUsername}>Update</button>;
+}
+```
+
+## Concepts
+
+### Keys
+
+Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchical addressing:
+
+<CodeGroup workspace>
+```tsx {{"title":"ChatRoom.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function ChatRoom() {
+  const room = useActor({ name: "chatRoom", key: ["org-acme", "general"] });
+  return <div>{room.connStatus}</div>;
+}
+```
+
+```ts {{"title":"registry.ts"}} @hide
+import { actor, setup } from "rivetkit";
+
+export const chatRoom = actor({
+  state: { messages: [] as string[] },
+  actions: {
+    getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
+  },
+});
+
+export const registry = setup({
+  use: { chatRoom },
+});
 ```
 </CodeGroup>
 
-Learn more about [authentication](/docs/actors/authentication).
+Don't build keys with string interpolation like `"org:${userId}"` when `userId` contains user data. Use arrays instead to prevent key injection attacks.
+
+### Environment Variables
+
+`createRivetKit()` (and the underlying `createClient()` instance) automatically read:
+
+- `RIVET_ENDPOINT`
+- `RIVET_NAMESPACE`
+- `RIVET_TOKEN`
+- `RIVET_RUNNER`
+
+Defaults to `window.location.origin + "/api/rivet"` in the browser or `http://127.0.0.1:6420` on the server when unset.
+
+### Endpoint Format
+
+Endpoints support URL auth syntax:
+
+```
+https://namespace:token@api.rivet.dev
+```
+
+You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. For serverless deployments, use your app's `/api/rivet` URL. See [Endpoints](/docs/general/endpoints#url-auth-syntax) for details.
 
 ## API Reference
 
 **Package:** [@rivetkit/react](https://www.npmjs.com/package/@rivetkit/react)
 
-See the full React API documentation at [rivetkit.org/docs/actors/clients](https://rivetkit.org/docs/actors/clients).
-
-- [`RivetKitProvider`](https://rivetkit.org/docs/actors/clients/#react-provider) - React context provider
-- [`useActor`](https://rivetkit.org/docs/actors/clients/#useactor) - React hook for actor instances
-- [`createClient`](/typedoc/functions/rivetkit.client_mod.createClient.html) - Create a client
-- [`Client`](/typedoc/types/rivetkit.mod.Client.html) - Client type
-- [`ActorHandle`](/typedoc/types/rivetkit.client_mod.ActorHandle.html) - Handle for interacting with actors
-- [`ActorConn`](/typedoc/types/rivetkit.client_mod.ActorConn.html) - Connection to actors
-
+- [`createRivetKit`](/docs/clients/react) - Create hooks for React
+- [`useActor`](/docs/clients/react) - Hook for actor instances

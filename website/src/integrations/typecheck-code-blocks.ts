@@ -264,11 +264,16 @@ function wrapCodeForTypecheck(code: string): string {
 /**
  * Generate a unique filename for a snippet
  */
-function generateSnippetFilename(sourceFile: string, lineNumber: number): string {
+function generateSnippetFilename(
+	sourceFile: string,
+	lineNumber: number,
+	language: string
+): string {
 	// Convert source file path to a safe filename
 	const relativePath = relative(DOCS_DIR, sourceFile);
 	const safeName = relativePath.replace(/[/\\]/g, "_").replace(/\.mdx?$/, "");
-	return `${safeName}_L${lineNumber}.ts`;
+	const ext = language === "tsx" ? "tsx" : "ts";
+	return `${safeName}_L${lineNumber}.${ext}`;
 }
 
 /**
@@ -392,7 +397,11 @@ export function typecheckCodeBlocks(): AstroIntegration {
 
 				// Write individual code blocks
 				for (const block of blocksToCheck) {
-					const snippetFile = generateSnippetFilename(block.sourceFile, block.lineNumber);
+					const snippetFile = generateSnippetFilename(
+						block.sourceFile,
+						block.lineNumber,
+						block.language
+					);
 					const wrappedCode = wrapCodeForTypecheck(block.code);
 
 					writeFileSync(join(SNIPPETS_DIR, snippetFile), wrappedCode);

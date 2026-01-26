@@ -125,7 +125,7 @@ export class InvalidEncoding extends ActorError {
 		super(
 			"encoding",
 			"invalid",
-			`Invalid encoding \`${format}\`. (https://www.rivet.dev/docs/actors/clients/#actor-client)`,
+			`Invalid encoding \`${format}\`. (https://www.rivet.dev/docs/clients/javascript)`,
 			{
 				public: true,
 			},
@@ -243,8 +243,8 @@ export class ActorNotFound extends ActorError {
 			"actor",
 			"not_found",
 			identifier
-				? `Actor not found: ${identifier} (https://www.rivet.dev/docs/actors/clients/#actor-client)`
-				: "Actor not found (https://www.rivet.dev/docs/actors/clients/#actor-client)",
+				? `Actor not found: ${identifier} (https://www.rivet.dev/docs/clients/javascript)`
+				: "Actor not found (https://www.rivet.dev/docs/clients/javascript)",
 			{ public: true },
 		);
 	}
@@ -255,7 +255,7 @@ export class ActorDuplicateKey extends ActorError {
 		super(
 			"actor",
 			"duplicate_key",
-			`Actor already exists with name '${name}' and key '${JSON.stringify(key)}' (https://www.rivet.dev/docs/actors/clients/#actor-client)`,
+			`Actor already exists with name '${name}' and key '${JSON.stringify(key)}' (https://www.rivet.dev/docs/clients/javascript)`,
 			{ public: true },
 		);
 	}

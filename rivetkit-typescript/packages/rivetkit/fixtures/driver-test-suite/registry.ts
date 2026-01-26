@@ -35,6 +35,7 @@ import {
 import { rawHttpRequestPropertiesActor } from "./raw-http-request-properties";
 import { rawWebSocketActor, rawWebSocketBinaryActor } from "./raw-websocket";
 import { requestAccessActor } from "./request-access";
+import { rejectConnectionActor } from "./reject-connection";
 import { scheduled } from "./scheduled";
 import {
 	sleep,
@@ -108,6 +109,8 @@ export const registry = setup({
 		// From raw-websocket.ts
 		rawWebSocketActor,
 		rawWebSocketBinaryActor,
+		// From reject-connection.ts
+		rejectConnectionActor,
 		// From request-access.ts
 		requestAccessActor,
 		// From actor-onstatechange.ts

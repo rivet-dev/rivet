@@ -5,7 +5,7 @@ export function ConfigurationOptions() {
 				<a href="/docs/general/http-server">Server Setup</a>: Different ways to run your server with serve(), handler(), or framework adapters.
 			</li>
 			<li>
-				<a href="/docs/actors/clients">Clients</a>: Connect to actors from JavaScript, React, or other platforms.
+				<a href="/docs/clients">Clients</a>: Connect to actors from JavaScript, React, or other platforms.
 			</li>
 			<li>
 				<a href="/docs/actors/authentication">Authentication</a>: Secure actor connections with custom authentication logic.

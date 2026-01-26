@@ -18,7 +18,6 @@ import memoryLogo from '../images/platforms/memory.svg';
 
 // Client images
 import typescriptLogo from '../images/clients/typescript.svg';
-import rustLogo from '../images/clients/rust.svg';
 import reactLogo from '../images/clients/react.svg';
 import nextjsLogo from '../images/clients/nextjs.svg';
 import svelteLogo from '../images/clients/svelte.svg';
@@ -93,12 +92,6 @@ export function PlatformIcons() {
       src: svelteLogo,
       alt: 'Svelte',
       tooltip: 'Svelte (Frontend)'
-    },
-    {
-      href: '/docs/clients/rust',
-      src: rustLogo,
-      alt: 'Rust',
-      tooltip: 'Rust (Client)'
     },
     // {
     // 	href: "/docs/integrations/hono",

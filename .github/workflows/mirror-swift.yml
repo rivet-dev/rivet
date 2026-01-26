@@ -1,0 +1,60 @@
+# Mirrors the rivetkit-swift folder into a standalone repo so SwiftPM
+# can clone quickly without pulling the full monorepo.
+name: Mirror rivetkit-swift
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mirror repo
+        env:
+          MIRROR_TOKEN: ${{ secrets.RIVET_GITHUB_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MIRROR_TOKEN}" ]; then
+            echo "RIVET_GITHUB_PAT is not set"
+            exit 1
+          fi
+
+          git config user.name "rivet-bot"
+          git config user.email "bot@rivet.dev"
+
+          git remote remove swift 2>/dev/null || true
+          git remote add swift "https://x-access-token:${MIRROR_TOKEN}@github.com/rivet-dev/rivetkit-swift.git"
+
+          git subtree split --prefix=rivetkit-swift -b swift-mirror
+          git checkout swift-mirror
+
+          if [ ! -f "README.tpl.md" ]; then
+            echo "README.tpl.md not found in mirror subtree"
+            exit 1
+          fi
+
+          cp README.tpl.md README.md
+          git add README.md
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: sync README"
+          fi
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # SwiftPM expects bare SemVer tags; strip a leading "v" to keep tags consumable.
+            swift_tag="${GITHUB_REF_NAME#v}"
+            git tag -f "${swift_tag}" swift-mirror
+            git push --force swift "refs/tags/${swift_tag}"
+          else
+            git push --force swift "swift-mirror:refs/heads/${GITHUB_REF_NAME}"
+          fi
