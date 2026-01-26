@@ -1,6 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
-import { createProjectContext } from "@/app/data-providers/cloud-data-provider";
 import { RouteError } from "@/app/route-error";
 import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading } from "@/components";
@@ -11,16 +10,15 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 	beforeLoad: ({ context, params }) => {
 		return match(context)
-			.with({ __type: "cloud" }, (context) => ({
-				dataProvider: {
-					...context.dataProvider,
-					...createProjectContext({
-						...context.dataProvider,
-						organization: params.organization,
-						project: params.project,
-					}),
-				},
-			}))
+			.with({ __type: "cloud" }, (context) => {
+				return {
+					dataProvider: context.getOrCreateProjectContext(
+						context.dataProvider,
+						params.organization,
+						params.project,
+					),
+				};
+			})
 			.otherwise(() => {
 				throw new Error("Invalid context type for this route");
 			});
