@@ -3,7 +3,8 @@
 		"target": "esnext",
 		"lib": [
 			"esnext",
-			"dom"
+			"dom",
+			"dom.iterable"
 		],
 		"jsx": "react-jsx",
 		"module": "esnext",
