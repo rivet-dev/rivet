@@ -1,0 +1,29 @@
+name: swift
+
+on:
+  pull_request:
+    paths:
+      - rivetkit-swift/**
+      - rivetkit-typescript/**
+      - .github/workflows/swift.yml
+
+jobs:
+  swift-tests:
+    name: RivetKit Swift / Tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - run: pnpm --filter rivetkit build:schema
+      - run: pnpm --filter @rivetkit/virtual-websocket build
+      - run: pnpm --filter @rivetkit/engine-runner-protocol build
+      - run: pnpm --filter @rivetkit/engine-runner build
+      - run: FAST_BUILD=1 pnpm --filter rivetkit build
+      - run: swift test
+        working-directory: ./rivetkit-swift

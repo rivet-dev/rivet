@@ -3449,6 +3449,32 @@ importers:
         specifier: ^0.5.1
         version: 0.5.1
 
+  rivetkit-swift/examples/hello-world-cli/server:
+    dependencies:
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      srvx:
+        specifier: ^0.10.0
+        version: 0.10.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  rivetkit-swift/examples/hello-world-swiftui/server:
+    dependencies:
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      srvx:
+        specifier: ^0.10.0
+        version: 0.10.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   rivetkit-typescript/packages/cloudflare-workers:
     dependencies:
       hono:

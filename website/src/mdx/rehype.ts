@@ -82,6 +82,7 @@ function rehypeShiki() {
 				"http",
 				"prisma",
 				"rust",
+				"swift",
 				"toml",
 			],
 		});

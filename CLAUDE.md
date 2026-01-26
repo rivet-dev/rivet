@@ -69,6 +69,7 @@ gt m
 ## Documentation
 
 - If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at https://docs.rs/serde/
+- When adding new docs pages, update `website/src/sitemap/mod.ts` so the page appears in the sidebar.
 
 ## Content Frontmatter
 

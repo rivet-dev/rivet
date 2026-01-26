@@ -144,7 +144,7 @@ curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engin
 
 **Frameworks**: [Hono](https://rivet.dev/templates/hono) • [Elysia](https://rivet.dev/templates/elysia) • [tRPC](https://rivet.dev/templates/trpc)
 
-**Clients**: [JavaScript](https://www.rivet.dev/docs/clients/javascript) • [React](https://www.rivet.dev/docs/clients/react) • [Next.js](https://www.rivet.dev/docs/clients/next-js) • [Rust](https://www.rivet.dev/docs/clients/rust)
+**Clients**: [JavaScript](https://www.rivet.dev/docs/clients/javascript) • [React](https://www.rivet.dev/docs/clients/react) • [Next.js](https://www.rivet.dev/docs/clients/next-js)
 
 [Request an integration →](https://github.com/rivet-dev/rivet/issues/new)
 

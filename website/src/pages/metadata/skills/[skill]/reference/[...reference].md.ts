@@ -1,16 +1,28 @@
 import type { APIRoute } from "astro";
 
-import { getReferenceByFileId, listSkillReferences } from "../../../../../metadata/skills";
+import {
+	getReferenceByFileId,
+	listSkillIds,
+	listSkillReferences,
+	type SkillId,
+} from "../../../../../metadata/skills";
 
 export const prerender = true;
 
 export const GET: APIRoute = async ({ params }) => {
+	const skill = params.skill;
 	const referenceId = params.reference;
-	if (!referenceId) {
+	if (!skill || !referenceId) {
 		return new Response("reference missing", { status: 404 });
 	}
 
-	const reference = await getReferenceByFileId(referenceId);
+	let reference;
+	try {
+		reference = await getReferenceByFileId(skill as SkillId, referenceId);
+	} catch (error) {
+		console.error(`/metadata/skills/${skill}/reference/${referenceId} failed`, error);
+		return new Response("reference not found", { status: 404 });
+	}
 	if (!reference) {
 		return new Response("reference not found", { status: 404 });
 	}
@@ -34,8 +46,14 @@ export const GET: APIRoute = async ({ params }) => {
 };
 
 export async function getStaticPaths() {
-	const references = await listSkillReferences();
-	return references.map((reference) => ({
-		params: { reference: reference.fileId },
-	}));
+	const paths = [];
+	for (const skill of listSkillIds()) {
+		const references = await listSkillReferences(skill);
+		for (const reference of references) {
+			paths.push({
+				params: { skill, reference: reference.fileId },
+			});
+		}
+	}
+	return paths;
 }
