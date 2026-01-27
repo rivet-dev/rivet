@@ -1,6 +1,7 @@
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
+use rand::Rng;
 use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::{Arc, atomic::Ordering};
 use std::time::Duration;
@@ -25,6 +26,10 @@ pub async fn task(
 				return Ok(LifecycleResult::Aborted);
 			}
 		}
+
+		// Jitter sleep to prevent stampeding herds
+		let jitter = { rand::thread_rng().gen_range(0..128) };
+		tokio::time::sleep(Duration::from_millis(jitter)).await;
 
 		update_runner_ping(&ctx, &conn).await?;
 

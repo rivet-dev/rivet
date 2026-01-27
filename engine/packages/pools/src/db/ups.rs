@@ -95,7 +95,7 @@ pub async fn setup(config: Config, client_name: String) -> Result<UpsPool> {
 			) as ups::PubSubDriverHandle
 		}
 		config::PubSub::Memory(memory) => {
-			tracing::debug!(channel = ?memory.channel, "creating memory pubsub driver");
+			tracing::debug!(channel=%memory.channel, "creating memory pubsub driver");
 			Arc::new(ups::driver::memory::MemoryDriver::new(
 				memory.channel.clone(),
 			)) as ups::PubSubDriverHandle

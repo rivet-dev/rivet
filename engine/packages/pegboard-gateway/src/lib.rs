@@ -4,7 +4,7 @@ use bytes::Bytes;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode, body::Body};
 use rivet_error::*;
 use rivet_guard_core::{
 	WebSocketHandle,
@@ -15,7 +15,10 @@ use rivet_guard_core::{
 };
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
 use rivet_util::serde::HashableMap;
-use std::{sync::Arc, time::Duration};
+use std::{
+	sync::{Arc, atomic::AtomicU64},
+	time::Duration,
+};
 use tokio::sync::{Mutex, watch};
 use tokio_tungstenite::tungstenite::{
 	Message,
@@ -27,6 +30,7 @@ use crate::shared_state::{InFlightRequestHandle, SharedState};
 
 mod keepalive_task;
 mod metrics;
+mod metrics_task;
 mod ping_task;
 pub mod shared_state;
 mod tunnel_to_ws_task;
@@ -35,6 +39,7 @@ mod ws_to_tunnel_task;
 const WEBSOCKET_OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 const RESPONSE_START_TIMEOUT: Duration = Duration::from_secs(15);
 const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
+const UPDATE_METRICS_INTERVAL: Duration = Duration::from_secs(15);
 
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
@@ -78,18 +83,13 @@ impl PegboardGateway {
 	}
 }
 
-#[async_trait]
-impl CustomServeTrait for PegboardGateway {
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
-	async fn handle_request(
+impl PegboardGateway {
+	async fn handle_request_inner(
 		&self,
+		ctx: &StandaloneCtx,
 		req: Request<Full<Bytes>>,
-		ray_id: Id,
-		req_id: Id,
 		request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
-		let ctx = self.ctx.with_ray(ray_id, req_id)?;
-
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 
@@ -156,23 +156,14 @@ impl CustomServeTrait for PegboardGateway {
 			.context("failed to read body")?
 			.to_bytes();
 
-		let udb = ctx.udb()?;
-		let runner_id = self.runner_id;
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
-			// Read runner protocol version
-			udb.run(|tx| async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
-
-				let protocol_version_entry = tx
-					.read_opt(
-						&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
-						Serializable,
-					)
-					.await?;
-
-				Ok(protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION))
-			})
+			record_req_metrics(
+				&ctx,
+				self.runner_id,
+				self.actor_id,
+				Metric::HttpIngress(body_bytes.len()),
+			),
 		)?;
 
 		// Build subject to publish to
@@ -284,19 +275,14 @@ impl CustomServeTrait for PegboardGateway {
 		Ok(response)
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id, request_id=%protocol::util::id_to_string(&request_id)))]
-	async fn handle_websocket(
+	async fn handle_websocket_inner(
 		&self,
+		ctx: &StandaloneCtx,
 		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
-		_path: &str,
-		ray_id: Id,
-		req_id: Id,
 		request_id: protocol::RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
-		let ctx = self.ctx.with_ray(ray_id, req_id)?;
-
 		// Extract headers
 		let mut request_headers = HashableMap::new();
 		for (name, value) in headers {
@@ -305,23 +291,9 @@ impl CustomServeTrait for PegboardGateway {
 			}
 		}
 
-		let udb = ctx.udb()?;
-		let runner_id = self.runner_id;
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
-			// Read runner protocol version
-			udb.run(|tx| async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
-
-				let protocol_version_entry = tx
-					.read_opt(
-						&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
-						Serializable,
-					)
-					.await?;
-
-				Ok(protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION))
-			})
+			record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketOpen),
 		)?;
 
 		// Build subject to publish to
@@ -419,6 +391,9 @@ impl CustomServeTrait for PegboardGateway {
 			open_msg.can_hibernate
 		};
 
+		let ingress_bytes = Arc::new(AtomicU64::new(0));
+		let egress_bytes = Arc::new(AtomicU64::new(0));
+
 		// Send pending messages
 		self.shared_state
 			.resend_pending_websocket_messages(request_id)
@@ -430,6 +405,7 @@ impl CustomServeTrait for PegboardGateway {
 		let (ws_to_tunnel_abort_tx, ws_to_tunnel_abort_rx) = watch::channel(());
 		let (ping_abort_tx, ping_abort_rx) = watch::channel(());
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
+		let (metrics_abort_tx, metrics_abort_rx) = watch::channel(());
 
 		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
 			self.shared_state.clone(),
@@ -439,18 +415,28 @@ impl CustomServeTrait for PegboardGateway {
 			msg_rx,
 			drop_rx,
 			can_hibernate,
+			egress_bytes.clone(),
 			tunnel_to_ws_abort_rx,
 		));
 		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(
 			self.shared_state.clone(),
 			request_id,
 			ws_rx,
+			ingress_bytes.clone(),
 			ws_to_tunnel_abort_rx,
 		));
 		let ping = tokio::spawn(ping_task::task(
 			self.shared_state.clone(),
 			request_id,
 			ping_abort_rx,
+		));
+		let metrics = tokio::spawn(metrics_task::task(
+			ctx.clone(),
+			self.actor_id,
+			self.runner_id,
+			ingress_bytes,
+			egress_bytes,
+			metrics_abort_rx,
 		));
 		let keepalive = if can_hibernate {
 			Some(tokio::spawn(keepalive_task::task(
@@ -465,12 +451,8 @@ impl CustomServeTrait for PegboardGateway {
 			None
 		};
 
-		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
-		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
-		let ping_abort_tx2 = ping_abort_tx.clone();
-
 		// Wait for all tasks to complete
-		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, keepalive_res) = tokio::join!(
+		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, keepalive_res, metrics_res) = tokio::join!(
 			async {
 				let res = tunnel_to_ws.await?;
 
@@ -481,6 +463,7 @@ impl CustomServeTrait for PegboardGateway {
 					let _ = ping_abort_tx.send(());
 					let _ = ws_to_tunnel_abort_tx.send(());
 					let _ = keepalive_abort_tx.send(());
+					let _ = metrics_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "tunnel to ws task completed");
 				}
@@ -494,9 +477,10 @@ impl CustomServeTrait for PegboardGateway {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "ws to tunnel task completed, aborting counterpart");
 
-					let _ = ping_abort_tx2.send(());
+					let _ = ping_abort_tx.send(());
 					let _ = tunnel_to_ws_abort_tx.send(());
 					let _ = keepalive_abort_tx.send(());
+					let _ = metrics_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "ws to tunnel task completed");
 				}
@@ -510,9 +494,10 @@ impl CustomServeTrait for PegboardGateway {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "ping task completed, aborting others");
 
-					let _ = ws_to_tunnel_abort_tx2.send(());
-					let _ = tunnel_to_ws_abort_tx2.send(());
+					let _ = ws_to_tunnel_abort_tx.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
 					let _ = keepalive_abort_tx.send(());
+					let _ = metrics_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "ping task completed");
 				}
@@ -530,11 +515,29 @@ impl CustomServeTrait for PegboardGateway {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "keepalive task completed, aborting others");
 
-					let _ = ws_to_tunnel_abort_tx2.send(());
-					let _ = tunnel_to_ws_abort_tx2.send(());
-					let _ = ping_abort_tx2.send(());
+					let _ = ws_to_tunnel_abort_tx.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
+					let _ = ping_abort_tx.send(());
+					let _ = metrics_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "keepalive task completed");
+				}
+
+				res
+			},
+			async {
+				let res = metrics.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "metrics task completed, aborting others");
+
+					let _ = ws_to_tunnel_abort_tx.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
+					let _ = ping_abort_tx.send(());
+					let _ = keepalive_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "metrics task completed");
 				}
 
 				res
@@ -542,18 +545,24 @@ impl CustomServeTrait for PegboardGateway {
 		);
 
 		// Determine single result from all tasks
-		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, keepalive_res)
-		{
+		let mut lifecycle_res = match (
+			tunnel_to_ws_res,
+			ws_to_tunnel_res,
+			ping_res,
+			keepalive_res,
+			metrics_res,
+		) {
 			// Prefer error
-			(Err(err), _, _, _) => Err(err),
-			(_, Err(err), _, _) => Err(err),
-			(_, _, Err(err), _) => Err(err),
-			(_, _, _, Err(err)) => Err(err),
+			(Err(err), _, _, _, _) => Err(err),
+			(_, Err(err), _, _, _) => Err(err),
+			(_, _, Err(err), _, _) => Err(err),
+			(_, _, _, Err(err), _) => Err(err),
+			(_, _, _, _, Err(err)) => Err(err),
 			// Prefer non aborted result if all succeed
-			(Ok(res), Ok(LifecycleResult::Aborted), _, _) => Ok(res),
-			(Ok(LifecycleResult::Aborted), Ok(res), _, _) => Ok(res),
+			(Ok(res), Ok(LifecycleResult::Aborted), _, _, _) => Ok(res),
+			(Ok(LifecycleResult::Aborted), Ok(res), _, _, _) => Ok(res),
 			// Unlikely case
-			(res, _, _, _) => res,
+			(res, _, _, _, _) => res,
 		};
 
 		// Send close frame to runner if not hibernating
@@ -600,6 +609,56 @@ impl CustomServeTrait for PegboardGateway {
 			Ok(_) => Ok(None),
 			Err(err) => Err(err),
 		}
+	}
+}
+
+#[async_trait]
+impl CustomServeTrait for PegboardGateway {
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
+	async fn handle_request(
+		&self,
+		req: Request<Full<Bytes>>,
+		ray_id: Id,
+		req_id: Id,
+		request_id: protocol::RequestId,
+	) -> Result<Response<ResponseBody>> {
+		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+		let res = self.handle_request_inner(&ctx, req, request_id).await;
+		let response_size = match &res {
+			Ok(res) => res.size_hint().upper().unwrap_or(res.size_hint().lower()),
+			Err(_) => 0,
+		};
+
+		record_req_metrics(
+			&ctx,
+			self.runner_id,
+			self.actor_id,
+			Metric::HttpEgress(response_size as usize),
+		)
+		.await?;
+
+		res
+	}
+
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id, request_id=%protocol::util::id_to_string(&request_id)))]
+	async fn handle_websocket(
+		&self,
+		client_ws: WebSocketHandle,
+		headers: &hyper::HeaderMap,
+		_path: &str,
+		ray_id: Id,
+		req_id: Id,
+		request_id: protocol::RequestId,
+		after_hibernation: bool,
+	) -> Result<Option<CloseFrame>> {
+		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+		let res = self
+			.handle_websocket_inner(&ctx, client_ws, headers, request_id, after_hibernation)
+			.await;
+
+		record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketClose).await?;
+
+		res
 	}
 
 	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, request_id=%protocol::util::id_to_string(&request_id)))]
@@ -727,6 +786,177 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 			}
 		} else {
 			return Ok(HibernationResult::Close);
+		}
+	}
+}
+
+enum Metric {
+	HttpIngress(usize),
+	HttpEgress(usize),
+	WebsocketOpen,
+	// Ingress, Egress
+	WebsocketTransfer(usize, usize),
+	WebsocketClose,
+}
+
+async fn record_req_metrics(
+	ctx: &StandaloneCtx,
+	runner_id: Id,
+	actor_id: Id,
+	metric: Metric,
+) -> Result<u16> {
+	let metric = &metric;
+	// Read runner protocol version
+	let (protocol_version, has_name, actor_workflow_id) = ctx
+		.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(pegboard::keys::subspace());
+
+			let protocol_version_key = pegboard::keys::runner::ProtocolVersionKey::new(runner_id);
+			let namespace_id_key = pegboard::keys::runner::NamespaceIdKey::new(runner_id);
+			let actor_name_key = pegboard::keys::actor::NameKey::new(actor_id);
+			let actor_workflow_id_key = pegboard::keys::actor::WorkflowIdKey::new(actor_id);
+			let (protocol_version_entry, namespace_id, actor_name_entry, actor_workflow_id) = tokio::try_join!(
+				tx.read_opt(&protocol_version_key, Serializable),
+				tx.read(&namespace_id_key, Serializable),
+				tx.read_opt(&actor_name_key, Serializable),
+				tx.read(&actor_workflow_id_key, Serializable),
+			)?;
+			let has_name = actor_name_entry.is_some();
+
+			if let Some(name) = &actor_name_entry {
+				metric_inc(&tx, namespace_id, name, metric);
+			}
+
+			Ok((
+				protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION),
+				has_name,
+				actor_workflow_id,
+			))
+		})
+		.await?;
+
+	// NOTE: The name key was added via backfill. If the actor has not backfilled the key yet (key is none),
+	// we need to fetch it from the actor state
+	if !has_name {
+		let wf = ctx
+			.workflow::<pegboard::workflows::actor::Input>(actor_workflow_id)
+			.get()
+			.await?
+			.context("actor not found")?;
+		let actor_state = &wf
+			.parse_state::<Option<pegboard::workflows::actor::State>>()?
+			.context("actor did not initialize state yet")?;
+
+		// Record metrics
+		ctx.udb()?
+			.run(|tx| async move {
+				let tx = tx.with_subspace(pegboard::keys::subspace());
+				metric_inc(&tx, actor_state.namespace_id, &actor_state.name, metric);
+
+				Ok(())
+			})
+			.await?;
+	}
+
+	Ok(protocol_version)
+}
+
+fn metric_inc(tx: &universaldb::Transaction, namespace_id: Id, name: &str, metric: &Metric) {
+	match metric {
+		Metric::HttpIngress(size) => {
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::GatewayIngress(
+					name.to_string(),
+					"http".to_string(),
+				),
+				(*size).try_into().unwrap_or_default(),
+			);
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::Requests(name.to_string(), "http".to_string()),
+				1,
+			);
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::ActiveRequests(
+					name.to_string(),
+					"http".to_string(),
+				),
+				1,
+			);
+		}
+		Metric::HttpEgress(size) => {
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::GatewayEgress(
+					name.to_string(),
+					"http".to_string(),
+				),
+				(*size).try_into().unwrap_or_default(),
+			);
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::ActiveRequests(
+					name.to_string(),
+					"http".to_string(),
+				),
+				-1,
+			);
+		}
+		Metric::WebsocketOpen => {
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::Requests(name.to_string(), "ws".to_string()),
+				1,
+			);
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::ActiveRequests(
+					name.to_string(),
+					"ws".to_string(),
+				),
+				1,
+			);
+		}
+		Metric::WebsocketTransfer(ingress_size, egress_size) => {
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::GatewayIngress(
+					name.to_string(),
+					"ws".to_string(),
+				),
+				(*ingress_size).try_into().unwrap_or_default(),
+			);
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::GatewayEgress(
+					name.to_string(),
+					"ws".to_string(),
+				),
+				(*egress_size).try_into().unwrap_or_default(),
+			);
+		}
+		Metric::WebsocketClose => {
+			pegboard::keys::ns::metric::inc(
+				&tx.with_subspace(pegboard::keys::subspace()),
+				namespace_id,
+				pegboard::keys::ns::metric::Metric::ActiveRequests(
+					name.to_string(),
+					"ws".to_string(),
+				),
+				-1,
+			);
 		}
 	}
 }

@@ -1,3 +1,8 @@
+use std::sync::{
+	Arc,
+	atomic::{AtomicU64, Ordering},
+};
+
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{
@@ -19,6 +24,7 @@ pub async fn task(
 	mut msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<()>,
 	can_hibernate: bool,
+	egress_bytes: Arc<AtomicU64>,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
 	loop {
@@ -40,6 +46,8 @@ pub async fn task(
 									String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
 								)
 							};
+
+							egress_bytes.fetch_add(msg.len() as u64, Ordering::AcqRel);
 							client_ws.send(msg).await?;
 						}
 						protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {

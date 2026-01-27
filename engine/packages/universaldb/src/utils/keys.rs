@@ -85,7 +85,7 @@ define_keys! {
 	(57, FORGOTTEN, "forgotten"),
 	(58, EVENT_TYPE, "event_type"),
 	(59, VERSION, "version"),
-	// 60
+	(60, INNER_VERSION, "inner_version"),
 	(61, SIGNAL_ID, "signal_id"),
 	(62, SUB_WORKFLOW_ID, "sub_workflow_id"),
 	(63, ITERATION, "iteration"),

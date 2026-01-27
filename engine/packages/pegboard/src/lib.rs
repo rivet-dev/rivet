@@ -1,5 +1,6 @@
 use gas::prelude::*;
 
+pub mod actor_kv;
 pub mod errors;
 pub mod keys;
 pub mod metrics;

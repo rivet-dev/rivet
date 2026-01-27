@@ -30,6 +30,7 @@ use crate::{
 		event::{
 			ActivityEvent, Event, EventData, EventType, LoopEvent, MessageSendEvent, RemovedEvent,
 			SignalSendEvent, SignalsEvent, SleepEvent, SleepState, SubWorkflowEvent,
+			VersionCheckEvent,
 		},
 		location::Location,
 	},
@@ -223,7 +224,7 @@ impl DatabaseKv {
 		update_metric(
 			&tx.with_subspace(self.subspace.clone()),
 			None,
-			Some(keys::metric::GaugeMetric::SignalPending2(
+			Some(keys::metric::Metric::SignalPending2(
 				signal_name.to_string(),
 			)),
 		);
@@ -231,7 +232,7 @@ impl DatabaseKv {
 			&tx.with_subspace(self.subspace.clone()),
 			workflow_id,
 			None,
-			Some(keys::workflow::GaugeMetric::SignalPending(
+			Some(keys::workflow::Metric::SignalPending(
 				signal_name.to_string(),
 			)),
 		);
@@ -343,7 +344,7 @@ impl DatabaseKv {
 		update_metric(
 			&tx,
 			None,
-			Some(keys::metric::GaugeMetric::WorkflowSleeping(
+			Some(keys::metric::Metric::WorkflowSleeping(
 				workflow_name.to_string(),
 			)),
 		);
@@ -583,10 +584,10 @@ impl Database for DatabaseKv {
 
 							update_metric(
 								&tx.with_subspace(self.subspace.clone()),
-								Some(keys::metric::GaugeMetric::WorkflowActive(
+								Some(keys::metric::Metric::WorkflowActive(
 									workflow_name.to_string(),
 								)),
-								Some(keys::metric::GaugeMetric::WorkflowSleeping(
+								Some(keys::metric::Metric::WorkflowSleeping(
 									workflow_name.to_string(),
 								)),
 							);
@@ -667,9 +668,8 @@ impl Database for DatabaseKv {
 				.run(|tx| async move {
 					let tx = tx.with_subspace(self.subspace.clone());
 
-					let metrics_subspace = self
-						.subspace
-						.subspace(&keys::metric::GaugeMetricKey::subspace());
+					let metrics_subspace =
+						self.subspace.subspace(&keys::metric::MetricKey::subspace());
 					tx.get_ranges_keyvalues(
 						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
@@ -678,7 +678,7 @@ impl Database for DatabaseKv {
 						Serializable,
 					)
 					.map(|res| match res {
-						Ok(entry) => tx.read_entry::<keys::metric::GaugeMetricKey>(&entry),
+						Ok(entry) => tx.read_entry::<keys::metric::MetricKey>(&entry),
 						Err(err) => Err(err.into()),
 					})
 					.try_collect::<Vec<_>>()
@@ -689,14 +689,14 @@ impl Database for DatabaseKv {
 				.context("failed to read metrics")
 				.map_err(WorkflowError::Udb)?;
 
-			let mut total_workflow_counts: Vec<(String, usize)> = Vec::new();
+			let mut total_workflow_counts: Vec<(String, i64)> = Vec::new();
 
 			for (key, count) in entries {
 				match key.metric {
-					keys::metric::GaugeMetric::WorkflowActive(workflow_name) => {
+					keys::metric::Metric::WorkflowActive(workflow_name) => {
 						metrics::WORKFLOW_ACTIVE
 							.with_label_values(&[workflow_name.as_str()])
-							.set(count as i64);
+							.set(count);
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -707,10 +707,10 @@ impl Database for DatabaseKv {
 							total_workflow_counts.push((workflow_name, count));
 						}
 					}
-					keys::metric::GaugeMetric::WorkflowSleeping(workflow_name) => {
+					keys::metric::Metric::WorkflowSleeping(workflow_name) => {
 						metrics::WORKFLOW_SLEEPING
 							.with_label_values(&[workflow_name.as_str()])
-							.set(count as i64);
+							.set(count);
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -721,10 +721,10 @@ impl Database for DatabaseKv {
 							total_workflow_counts.push((workflow_name, count));
 						}
 					}
-					keys::metric::GaugeMetric::WorkflowDead(workflow_name, error) => {
+					keys::metric::Metric::WorkflowDead(workflow_name, error) => {
 						metrics::WORKFLOW_DEAD
 							.with_label_values(&[workflow_name.as_str(), error.as_str()])
-							.set(count as i64);
+							.set(count);
 
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
@@ -735,7 +735,7 @@ impl Database for DatabaseKv {
 							total_workflow_counts.push((workflow_name, count));
 						}
 					}
-					keys::metric::GaugeMetric::WorkflowComplete(workflow_name) => {
+					keys::metric::Metric::WorkflowComplete(workflow_name) => {
 						if let Some(entry) = total_workflow_counts
 							.iter_mut()
 							.find(|(name, _)| name == &workflow_name)
@@ -745,11 +745,11 @@ impl Database for DatabaseKv {
 							total_workflow_counts.push((workflow_name, count));
 						}
 					}
-					keys::metric::GaugeMetric::SignalPending(_) => {}
-					keys::metric::GaugeMetric::SignalPending2(signal_name) => {
+					keys::metric::Metric::SignalPending(_) => {}
+					keys::metric::Metric::SignalPending2(signal_name) => {
 						metrics::SIGNAL_PENDING
 							.with_label_values(&[signal_name.as_str()])
-							.set(count as i64);
+							.set(count);
 					}
 				}
 			}
@@ -757,7 +757,7 @@ impl Database for DatabaseKv {
 			for (workflow_name, count) in total_workflow_counts {
 				metrics::WORKFLOW_TOTAL
 					.with_label_values(&[workflow_name.as_str()])
-					.set(count as i64);
+					.set(count);
 			}
 
 			// Clear lock
@@ -1287,10 +1287,10 @@ impl Database for DatabaseKv {
 
 									update_metric(
 										&tx,
-										Some(keys::metric::GaugeMetric::WorkflowSleeping(
+										Some(keys::metric::Metric::WorkflowSleeping(
 											wf.workflow_name.clone(),
 										)),
-										Some(keys::metric::GaugeMetric::WorkflowActive(
+										Some(keys::metric::Metric::WorkflowActive(
 											wf.workflow_name.clone(),
 										)),
 									);
@@ -1611,6 +1611,15 @@ impl Database for DatabaseKv {
 													Some(inner_event_type);
 											} else if let Ok(key) = self
 												.subspace
+												.unpack::<keys::history::InnerVersionKey>(
+												entry.key(),
+											) {
+												let inner_version =
+													key.deserialize(entry.value())?;
+
+												current_event.inner_version = Some(inner_version);
+											} else if let Ok(key) = self
+												.subspace
 												.unpack::<keys::history::IndexedNameKey>(
 												entry.key(),
 											) {
@@ -1862,7 +1871,7 @@ impl Database for DatabaseKv {
 					// Clear pending signals metric for observability
 					let metrics_subspace = self
 						.subspace
-						.subspace(&keys::workflow::GaugeMetricKey::subspace(workflow_id));
+						.subspace(&keys::workflow::MetricKey::subspace(workflow_id));
 					let mut stream = tx.get_ranges_keyvalues(
 						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
@@ -1878,7 +1887,7 @@ impl Database for DatabaseKv {
 						};
 
 						let (key, metric_count) =
-							tx.read_entry::<keys::workflow::GaugeMetricKey>(&entry)?;
+							tx.read_entry::<keys::workflow::MetricKey>(&entry)?;
 
 						// Ignore negatives and zero
 						if metric_count as isize <= 0 {
@@ -1886,10 +1895,10 @@ impl Database for DatabaseKv {
 						}
 
 						match key.metric {
-							keys::workflow::GaugeMetric::SignalPending(signal_name) => {
+							keys::workflow::Metric::SignalPending(signal_name) => {
 								update_metric_by(
 									&tx,
-									Some(keys::metric::GaugeMetric::SignalPending2(signal_name)),
+									Some(keys::metric::Metric::SignalPending2(signal_name)),
 									None,
 									metric_count,
 								);
@@ -1900,10 +1909,10 @@ impl Database for DatabaseKv {
 
 					update_metric(
 						&tx,
-						Some(keys::metric::GaugeMetric::WorkflowActive(
+						Some(keys::metric::Metric::WorkflowActive(
 							workflow_name.to_string(),
 						)),
-						Some(keys::metric::GaugeMetric::WorkflowComplete(
+						Some(keys::metric::Metric::WorkflowComplete(
 							workflow_name.to_string(),
 						)),
 					);
@@ -2053,13 +2062,13 @@ impl Database for DatabaseKv {
 
 					update_metric(
 						&tx.with_subspace(self.subspace.clone()),
-						Some(keys::metric::GaugeMetric::WorkflowActive(
+						Some(keys::metric::Metric::WorkflowActive(
 							workflow_name.to_string(),
 						)),
 						Some(if has_wake_condition {
-							keys::metric::GaugeMetric::WorkflowSleeping(workflow_name.to_string())
+							keys::metric::Metric::WorkflowSleeping(workflow_name.to_string())
 						} else {
-							keys::metric::GaugeMetric::WorkflowDead(
+							keys::metric::Metric::WorkflowDead(
 								workflow_name.to_string(),
 								error.to_string(),
 							)
@@ -2203,7 +2212,7 @@ impl Database for DatabaseKv {
 
 										update_metric(
 											&tx.with_subspace(self.subspace.clone()),
-											Some(keys::metric::GaugeMetric::SignalPending2(
+											Some(keys::metric::Metric::SignalPending2(
 												key.signal_name.clone(),
 											)),
 											None,
@@ -2211,7 +2220,7 @@ impl Database for DatabaseKv {
 										update_wf_metric(
 											&tx.with_subspace(self.subspace.clone()),
 											workflow_id,
-											Some(keys::workflow::GaugeMetric::SignalPending(
+											Some(keys::workflow::Metric::SignalPending(
 												key.signal_name.clone(),
 											)),
 											None,
@@ -3007,6 +3016,7 @@ impl Database for DatabaseKv {
 		from_workflow_id: Id,
 		location: &Location,
 		version: usize,
+		inner_version: usize,
 		_loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.pools
@@ -3019,6 +3029,7 @@ impl Database for DatabaseKv {
 					from_workflow_id,
 					location,
 					version,
+					inner_version,
 					rivet_util::timestamp::now(),
 				)?;
 
@@ -3045,17 +3056,17 @@ struct MinimalPulledWorkflow {
 
 fn update_metric(
 	tx: &universaldb::Transaction,
-	previous: Option<keys::metric::GaugeMetric>,
-	current: Option<keys::metric::GaugeMetric>,
+	previous: Option<keys::metric::Metric>,
+	current: Option<keys::metric::Metric>,
 ) {
 	update_metric_by(tx, previous, current, 1)
 }
 
 fn update_metric_by(
 	tx: &universaldb::Transaction,
-	previous: Option<keys::metric::GaugeMetric>,
-	current: Option<keys::metric::GaugeMetric>,
-	by: usize,
+	previous: Option<keys::metric::Metric>,
+	current: Option<keys::metric::Metric>,
+	by: i64,
 ) {
 	if &previous == &current {
 		return;
@@ -3063,15 +3074,15 @@ fn update_metric_by(
 
 	if let Some(previous) = previous {
 		tx.atomic_op(
-			&keys::metric::GaugeMetricKey::new(previous),
-			&(by as isize * -1).to_le_bytes(),
+			&keys::metric::MetricKey::new(previous),
+			&(by * -1).to_le_bytes(),
 			MutationType::Add,
 		);
 	}
 
 	if let Some(current) = current {
 		tx.atomic_op(
-			&keys::metric::GaugeMetricKey::new(current),
+			&keys::metric::MetricKey::new(current),
 			&by.to_le_bytes(),
 			MutationType::Add,
 		);
@@ -3081,8 +3092,8 @@ fn update_metric_by(
 fn update_wf_metric(
 	tx: &universaldb::Transaction,
 	workflow_id: Id,
-	previous: Option<keys::workflow::GaugeMetric>,
-	current: Option<keys::workflow::GaugeMetric>,
+	previous: Option<keys::workflow::Metric>,
+	current: Option<keys::workflow::Metric>,
 ) {
 	if &previous == &current {
 		return;
@@ -3090,16 +3101,16 @@ fn update_wf_metric(
 
 	if let Some(previous) = previous {
 		tx.atomic_op(
-			&keys::workflow::GaugeMetricKey::new(workflow_id, previous),
-			&(-1isize).to_le_bytes(),
+			&keys::workflow::MetricKey::new(workflow_id, previous),
+			&(-1i64).to_le_bytes(),
 			MutationType::Add,
 		);
 	}
 
 	if let Some(current) = current {
 		tx.atomic_op(
-			&keys::workflow::GaugeMetricKey::new(workflow_id, current),
-			&1usize.to_le_bytes(),
+			&keys::workflow::MetricKey::new(workflow_id, current),
+			&1i64.to_le_bytes(),
 			MutationType::Add,
 		);
 	}
@@ -3120,6 +3131,7 @@ struct WorkflowHistoryEventBuilder {
 	deadline_ts: Option<i64>,
 	sleep_state: Option<SleepState>,
 	inner_event_type: Option<EventType>,
+	inner_version: Option<usize>,
 
 	indexed_names: Vec<String>,
 	indexed_input_chunks: Vec<Vec<Value>>,
@@ -3142,6 +3154,7 @@ impl WorkflowHistoryEventBuilder {
 			deadline_ts: None,
 			sleep_state: None,
 			inner_event_type: None,
+			inner_version: None,
 
 			indexed_names: Vec::new(),
 			indexed_input_chunks: Vec::new(),
@@ -3190,7 +3203,7 @@ impl TryFrom<WorkflowHistoryEventBuilder> for Event {
 				EventType::Sleep => EventData::Sleep(value.try_into()?),
 				EventType::Branch => EventData::Branch,
 				EventType::Removed => EventData::Removed(value.try_into()?),
-				EventType::VersionCheck => EventData::VersionCheck,
+				EventType::VersionCheck => EventData::VersionCheck(value.try_into()?),
 				EventType::Signals => EventData::Signals(value.try_into()?),
 			},
 		})
@@ -3322,6 +3335,21 @@ impl TryFrom<WorkflowHistoryEventBuilder> for RemovedEvent {
 			event_type: value
 				.inner_event_type
 				.ok_or(WorkflowError::MissingEventData("inner_event_type"))?,
+		})
+	}
+}
+
+impl TryFrom<WorkflowHistoryEventBuilder> for VersionCheckEvent {
+	type Error = WorkflowError;
+
+	fn try_from(value: WorkflowHistoryEventBuilder) -> WorkflowResult<Self> {
+		Ok(VersionCheckEvent {
+			// Fallback to event version for old events that don't have inner version
+			inner_version: value.inner_version.unwrap_or(
+				value
+					.version
+					.ok_or(WorkflowError::MissingEventData("version"))?,
+			),
 		})
 	}
 }

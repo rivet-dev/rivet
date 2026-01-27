@@ -9,7 +9,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	let ups = pools.ups()?;
 	let mut sub = ups.subscribe(CACHE_PURGE_TOPIC).await?;
 
-	tracing::debug!(subject=?CACHE_PURGE_TOPIC, "subscribed to cache purge updates");
+	tracing::debug!(subject=%CACHE_PURGE_TOPIC, "subscribed to cache purge updates");
 
 	// Get cache instance
 	let cache = rivet_cache::CacheInner::from_env(&config, pools)?;

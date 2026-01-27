@@ -555,15 +555,18 @@ impl Cursor {
 		}
 	}
 
-	pub fn compare_version_check(&self) -> WorkflowResult<Option<(bool, usize)>> {
+	pub fn compare_version_check(&self) -> WorkflowResult<CheckVersionHistoryResult> {
 		let Some(event) = self.current_event() else {
-			return Ok(None);
+			return Ok(CheckVersionHistoryResult::New);
 		};
 
-		Ok(Some((
-			matches!(event.data, EventData::VersionCheck),
-			event.version,
-		)))
+		// If the current event is a version check, return its inner version
+		if let EventData::VersionCheck(data) = &event.data {
+			Ok(CheckVersionHistoryResult::Event(data.inner_version))
+		} else {
+			// Current event is not a version check, one must be inserted with the same version
+			Ok(CheckVersionHistoryResult::Insertion(event.version))
+		}
 	}
 
 	pub fn compare_signals(&self, version: usize) -> WorkflowResult<HistoryResult<&SignalsEvent>> {
@@ -627,6 +630,28 @@ pub enum RemovedHistoryResult {
 	Skip,
 	/// An event for this location in history exists, but it does not match the removed filter.
 	Ignore(String),
+}
+
+pub enum CheckVersionHistoryResult {
+	/// A check version event for this location in history exists.
+	Event(usize),
+	/// An event for this location in history exists, but it is not a check version event. Therefore, an
+	/// insertion is required.
+	Insertion(usize),
+	/// No event for this location in history exists.
+	New,
+}
+
+impl CheckVersionHistoryResult {
+	/// Returns a history event thats equivalent to this one. Used to bypass ownership if its not
+	/// needed.
+	pub(crate) fn equivalent(&self) -> HistoryResult<()> {
+		match self {
+			CheckVersionHistoryResult::Event(_) => HistoryResult::Event(()),
+			CheckVersionHistoryResult::Insertion(_) => HistoryResult::Insertion,
+			CheckVersionHistoryResult::New => HistoryResult::New,
+		}
+	}
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
+use rand::Rng;
 use rivet_runner_protocol as protocol;
 use rivet_types::actors::CrashPolicy;
 
@@ -16,6 +17,7 @@ pub use runtime::AllocationOverride;
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
 /// How long an actor with crash_policy Restart should wait pending before setting itself to sleep.
 const RESTART_PENDING_TIMEOUT_MS: i64 = util::duration::seconds(60);
+const METRICS_INTERVAL_MS: i64 = util::duration::seconds(60);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
@@ -75,6 +77,10 @@ pub struct State {
 	/// - When actor becomes connectable
 	#[serde(default)]
 	pub failure_reason: Option<FailureReason>,
+
+	/// Bytes.
+	#[serde(default)]
+	pub last_kv_storage_size: i64,
 }
 
 /// Reason why an actor failed to allocate or run.
@@ -146,6 +152,7 @@ impl State {
 			runner_state: None,
 
 			failure_reason: None,
+			last_kv_storage_size: 0,
 		}
 	}
 }
@@ -193,7 +200,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			.send()
 			.await?;
 
-		// TODO(RVT-3928): return Ok(Err);
 		return Ok(());
 	}
 
@@ -207,6 +213,20 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		create_ts: ctx.create_ts(),
 	})
 	.await?;
+
+	match ctx.check_version(2).await? {
+		1 => {
+			ctx.v(2)
+				.activity(setup::BackfillUdbKeysAndMetricsInput {
+					actor_id: input.actor_id,
+				})
+				.await?;
+		}
+		_latest => {
+			// Do nothing, already using the new version of init_state_and_udb which has the new udb keys and
+			// metrics
+		}
+	}
 
 	if let Some(key) = &input.key {
 		match keys::reserve_key(
@@ -337,6 +357,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					} else {
 						signals
 					}
+				} else if let Some(metrics_ts) = state.metrics_ts {
+					// Listen for signals with timeout. if a timeout happens, it means this actor should
+					// record metrics. `metrics_ts` is only set if the actor is allocated
+					ctx.listen_n_until::<Main>(metrics_ts, 256).await?
 				} else if let Some(alarm_ts) = state.alarm_ts {
 					// Listen for signals with timeout. if a timeout happens, it means this actor should
 					// wake up
@@ -357,6 +381,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					// Listen for signals normally
 					ctx.listen_n::<Main>(256).await?
 				};
+
+				let now = util::timestamp::now();
 
 				for sig in signals {
 					match sig {
@@ -489,6 +515,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									protocol::EventActorSetAlarm { alarm_ts, .. },
 								) => {
 									state.alarm_ts = alarm_ts;
+
+									ctx.activity(runtime::SaveEventMetricsInput {
+										namespace_id: input.namespace_id,
+										name: input.name.clone(),
+										alarms_set: 1,
+									}).await?;
 								}
 							}
 						}
@@ -519,6 +551,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							let mut new_event_count = 0;
 							let new_last_event_idx =
 								new_events.clone().last().map(|event| event.checkpoint.index);
+							let mut alarms_set = 0;
 
 							for event in new_events {
 								new_event_count += 1;
@@ -621,6 +654,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										protocol::mk2::EventActorSetAlarm { alarm_ts, .. },
 									) => {
 										state.alarm_ts = *alarm_ts;
+										alarms_set += 1;
 									}
 								}
 							}
@@ -630,37 +664,53 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								tracing::warn!(count=%diff, "ignored events due to generation/index filter");
 							}
 
-							if let (Some(runner_state), Some(new_last_event_idx)) = (state.runner_state.as_mut(), new_last_event_idx) {
-								runner_state.last_event_idx = runner_state.last_event_idx.max(new_last_event_idx);
+							ctx.join((
+								if let (Some(runner_state), Some(new_last_event_idx)) = (state.runner_state.as_mut(), new_last_event_idx) {
+									runner_state.last_event_idx = runner_state.last_event_idx.max(new_last_event_idx);
 
-								// Ack events in batch
-								if runner_state.last_event_idx
-									> runner_state.last_event_ack_idx.saturating_add(EVENT_ACK_BATCH_SIZE)
-								{
-									runner_state.last_event_ack_idx = runner_state.last_event_idx;
+									// Ack events in batch
+									if runner_state.last_event_idx
+										> runner_state.last_event_ack_idx.saturating_add(EVENT_ACK_BATCH_SIZE)
+									{
+										runner_state.last_event_ack_idx = runner_state.last_event_idx;
 
-									ctx.activity(runtime::SendMessagesToRunnerInput {
-										runner_id,
-										messages: vec![protocol::mk2::ToRunner::ToClientAckEvents(
-											protocol::mk2::ToClientAckEvents {
-												last_event_checkpoints: vec![
-													protocol::mk2::ActorCheckpoint {
-														actor_id: input.actor_id.to_string(),
-														generation: state.generation,
-														index: runner_state.last_event_ack_idx,
-													},
-												],
-											},
-										)],
-									})
-									.await?;
-								}
-							}
+										Some(activity(runtime::SendMessagesToRunnerInput {
+											runner_id,
+											messages: vec![protocol::mk2::ToRunner::ToClientAckEvents(
+												protocol::mk2::ToClientAckEvents {
+													last_event_checkpoints: vec![
+														protocol::mk2::ActorCheckpoint {
+															actor_id: input.actor_id.to_string(),
+															generation: state.generation,
+															index: runner_state.last_event_ack_idx,
+														},
+													],
+												},
+											)],
+										}))
+									} else {
+										None
+									}
+								} else {
+									None
+								},
+								(alarms_set > 0).then(|| activity(runtime::SaveEventMetricsInput {
+									namespace_id: input.namespace_id,
+									name: input.name.clone(),
+									alarms_set,
+								}))
+							)).await?;
 						}
 						Main::Wake(sig) => {
+							// Clear alarm
+							if let Some(alarm_ts) = state.alarm_ts {
+								if now >= alarm_ts {
+									state.alarm_ts = None;
+								}
+							}
+
 							if state.sleeping {
 								if state.runner_id.is_none() {
-									state.alarm_ts = None;
 									state.sleeping = false;
 									state.will_wake = false;
 
@@ -831,6 +881,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					}
 				}
 
+				if let Some(metrics_ts) = &mut state.metrics_ts {
+					if now > *metrics_ts {
+						// Jitter sleep to prevent stampeding herds
+						let jitter = { rand::thread_rng().gen_range(0..128) };
+						// Move metrics timestamp
+						*metrics_ts = now + METRICS_INTERVAL_MS + jitter;
+
+						ctx.activity(runtime::RecordMetricsInput {
+							actor_id: input.actor_id,
+						}).await?;
+					}
+				}
+
 				Ok(Loop::Continue)
 			}
 			.boxed()
@@ -927,6 +990,7 @@ async fn handle_stopped(
 	let old_runner_workflow_id = state.runner_workflow_id.take();
 	let old_runner_protocol_version = state.runner_protocol_version.take();
 	state.runner_state = None;
+	state.metrics_ts = None;
 
 	let deallocate_res = ctx
 		.activity(runtime::DeallocateInput {
