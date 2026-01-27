@@ -16,6 +16,7 @@ http-body-util.workspace = true
 hyper = "1.6"
 hyper-tungstenite.workspace = true
 lazy_static.workspace = true
+namespace.workspace = true
 pegboard.workspace = true
 rand.workspace = true
 rivet-config.workspace = true

@@ -9,7 +9,7 @@ use crate::Error;
 pub type UpsPool = ups::PubSub;
 
 #[tracing::instrument(skip(config))]
-pub async fn setup(config: Config, client_name: String) -> Result<UpsPool> {
+pub async fn setup(config: &Config, client_name: &str) -> Result<UpsPool> {
 	let driver = match config.pubsub() {
 		config::PubSub::Nats(nats) => {
 			// Parse nodes

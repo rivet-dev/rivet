@@ -579,7 +579,6 @@ pub async fn start_guard_with_middleware(
 			cache_key_fn_clone,
 			middleware_fn_clone,
 			rivet_guard_core::proxy_service::PortType::Http, // Default port type for tests
-			None,                                            // No ClickHouse inserter for tests
 		));
 
 		// Run the server until shutdown signal

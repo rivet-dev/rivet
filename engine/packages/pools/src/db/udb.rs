@@ -17,7 +17,7 @@ impl Deref for UdbPool {
 }
 
 #[tracing::instrument(skip(config))]
-pub async fn setup(config: Config) -> Result<Option<UdbPool>> {
+pub async fn setup(config: &Config) -> Result<Option<UdbPool>> {
 	let db_driver = match config.database() {
 		config::Database::Postgres(pg) => {
 			let postgres_config = universaldb::driver::postgres::PostgresConfig {

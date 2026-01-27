@@ -17,7 +17,6 @@ pub mod pubsub;
 pub mod runtime;
 pub mod telemetry;
 pub mod topology;
-pub mod vector;
 
 pub use api_peer::*;
 pub use api_public::*;
@@ -33,7 +32,6 @@ pub use pubsub::PubSub;
 pub use runtime::*;
 pub use telemetry::*;
 pub use topology::*;
-pub use vector::*;
 
 // IMPORTANT:
 //
@@ -100,9 +98,6 @@ pub struct Root {
 	pub clickhouse: Option<ClickHouse>,
 
 	#[serde(default)]
-	pub vector_http: Option<VectorHttp>,
-
-	#[serde(default)]
 	pub telemetry: Telemetry,
 
 	#[serde(default)]
@@ -126,7 +121,6 @@ impl Default for Root {
 			pubsub: None,
 			cache: None,
 			clickhouse: None,
-			vector_http: None,
 			telemetry: Default::default(),
 			runtime: Default::default(),
 			metrics: Default::default(),
@@ -182,10 +176,6 @@ impl Root {
 
 	pub fn clickhouse(&self) -> Option<&ClickHouse> {
 		self.clickhouse.as_ref()
-	}
-
-	pub fn vector_http(&self) -> Option<&VectorHttp> {
-		self.vector_http.as_ref()
 	}
 
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {

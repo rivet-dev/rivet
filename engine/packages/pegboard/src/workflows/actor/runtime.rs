@@ -638,10 +638,10 @@ async fn record_kv_storage_metrics(
 ) -> Result<i64> {
 	let new_kv_storage_size = crate::actor_kv::estimate_kv_size(tx, actor_id).await?;
 
-	keys::ns::metric::inc(
-		&tx,
+	namespace::keys::metric::inc(
+		&tx.with_subspace(namespace::keys::subspace()),
 		namespace_id,
-		keys::ns::metric::Metric::KvStorageUsed(actor_name.to_string()),
+		namespace::keys::metric::Metric::KvStorageUsed(actor_name.to_string()),
 		new_kv_storage_size - last_kv_storage_size,
 	);
 
@@ -1252,10 +1252,10 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 
 			// Update metrics
 			if let Some(awake_duration) = awake_duration {
-				keys::ns::metric::inc(
-					&tx,
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
 					namespace_id,
-					keys::ns::metric::Metric::ActorAwake(name.clone()),
+					namespace::keys::metric::Metric::ActorAwake(name.clone()),
 					awake_duration,
 				);
 			}
@@ -1446,10 +1446,10 @@ pub async fn save_event_metrics(ctx: &ActivityCtx, input: &SaveEventMetricsInput
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
-			keys::ns::metric::inc(
-				&tx,
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				input.namespace_id,
-				keys::ns::metric::Metric::AlarmsSet(input.name.clone()),
+				namespace::keys::metric::Metric::AlarmsSet(input.name.clone()),
 				input.alarms_set as i64,
 			);
 

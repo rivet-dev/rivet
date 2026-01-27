@@ -161,17 +161,6 @@
           "type": "null"
         }
       ]
-    },
-    "vector_http": {
-      "default": null,
-      "anyOf": [
-        {
-          "$ref": "#/definitions/VectorHttp"
-        },
-        {
-          "type": "null"
-        }
-      ]
     }
   },
   "additionalProperties": false,
@@ -839,24 +828,6 @@
           "items": {
             "$ref": "#/definitions/Datacenter"
           }
-        }
-      },
-      "additionalProperties": false
-    },
-    "VectorHttp": {
-      "type": "object",
-      "required": [
-        "host",
-        "port"
-      ],
-      "properties": {
-        "host": {
-          "type": "string"
-        },
-        "port": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
         }
       },
       "additionalProperties": false

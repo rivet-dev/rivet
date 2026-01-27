@@ -111,18 +111,18 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 			}
 
 			// Update metrics
-			keys::ns::metric::inc(
-				&tx,
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				input.namespace_id,
-				keys::ns::metric::Metric::TotalActors(input.name.clone()),
+				namespace::keys::metric::Metric::TotalActors(input.name.clone()),
 				1,
 			);
 
 			// Update metrics
-			keys::ns::metric::inc(
-				&tx,
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				input.namespace_id,
-				keys::ns::metric::Metric::TotalActors(input.name.clone()),
+				namespace::keys::metric::Metric::TotalActors(input.name.clone()),
 				1,
 			);
 
@@ -226,10 +226,10 @@ pub async fn backfill_udb_keys_and_metrics(
 			}
 
 			// Update metrics
-			keys::ns::metric::inc(
-				&tx,
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				state.namespace_id,
-				keys::ns::metric::Metric::TotalActors(state.name.clone()),
+				namespace::keys::metric::Metric::TotalActors(state.name.clone()),
 				1,
 			);
 

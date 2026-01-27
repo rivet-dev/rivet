@@ -11,8 +11,6 @@ members = [
   "engine/packages/cache",
   "engine/packages/cache-purge",
   "engine/packages/cache-result",
-  "engine/packages/clickhouse-inserter",
-  "engine/packages/clickhouse-user-query",
   "engine/packages/config",
   "engine/packages/config-schema-gen",
   "engine/packages/engine",
@@ -365,12 +363,6 @@ members = [
 
     [workspace.dependencies.rivet-cache-result]
     path = "engine/packages/cache-result"
-
-    [workspace.dependencies.clickhouse-inserter]
-    path = "engine/packages/clickhouse-inserter"
-
-    [workspace.dependencies.clickhouse-user-query]
-    path = "engine/packages/clickhouse-user-query"
 
     [workspace.dependencies.rivet-config]
     path = "engine/packages/config"

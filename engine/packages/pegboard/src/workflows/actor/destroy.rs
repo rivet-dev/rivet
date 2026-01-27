@@ -142,10 +142,10 @@ async fn update_state_and_db(
 				}
 
 				// Update metrics
-				keys::ns::metric::inc(
-					&tx,
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
 					namespace_id,
-					keys::ns::metric::Metric::TotalActors(name.clone()),
+					namespace::keys::metric::Metric::TotalActors(name.clone()),
 					-1,
 				);
 

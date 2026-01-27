@@ -6,8 +6,8 @@ use rivet_config::Config;
 pub type ClickHousePool = clickhouse::Client;
 
 #[tracing::instrument(skip(config))]
-pub fn setup(config: Config) -> Result<Option<ClickHousePool>> {
-	if let Some(clickhouse) = &config.clickhouse() {
+pub fn setup(config: &Config) -> Result<Option<ClickHousePool>> {
+	if let Some(clickhouse) = config.clickhouse() {
 		tracing::debug!("clickhouse connecting");
 
 		// Build HTTP client
