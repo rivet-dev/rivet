@@ -1091,6 +1091,68 @@ impl<'de> TupleUnpack<'de> for InnerEventTypeKey {
 }
 
 #[derive(Debug)]
+pub struct InnerVersionKey {
+	workflow_id: Id,
+	location: Location,
+	forgotten: bool,
+}
+
+impl InnerVersionKey {
+	pub fn new(workflow_id: Id, location: Location) -> Self {
+		InnerVersionKey {
+			workflow_id,
+			location,
+			forgotten: false,
+		}
+	}
+}
+
+impl FormalKey for InnerVersionKey {
+	type Value = usize;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(usize::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok((value as usize).to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for InnerVersionKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		pack_history_key(
+			self.workflow_id,
+			&self.location,
+			w,
+			tuple_depth,
+			self.forgotten,
+			INNER_VERSION,
+		)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for InnerVersionKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (workflow_id, location, forgotten)) =
+			unpack_history_key(input, tuple_depth, INNER_VERSION, "INNER_VERSION")?;
+
+		Ok((
+			input,
+			InnerVersionKey {
+				workflow_id,
+				location,
+				forgotten,
+			},
+		))
+	}
+}
+
+#[derive(Debug)]
 pub struct TagKey {
 	workflow_id: Id,
 	location: Location,
@@ -2119,6 +2181,7 @@ pub mod insert {
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
+		inner_version: usize,
 		create_ts: i64,
 	) -> Result<()> {
 		common(
@@ -2130,6 +2193,12 @@ pub mod insert {
 			version,
 			create_ts,
 		)?;
+
+		let inner_version_key = super::InnerVersionKey::new(workflow_id, location.clone());
+		tx.set(
+			&subspace.pack(&inner_version_key),
+			&inner_version_key.serialize(inner_version)?,
+		);
 
 		Ok(())
 	}

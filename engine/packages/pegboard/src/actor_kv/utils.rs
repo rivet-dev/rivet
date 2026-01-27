@@ -1,20 +1,10 @@
-use std::result::Result::Ok;
-
-use anyhow::*;
+use anyhow::{Result, ensure};
 use rivet_runner_protocol::mk2 as rp;
 
-use crate::{
-	MAX_KEY_SIZE, MAX_KEYS, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE, key::KeyWrapper,
+use super::{
+	MAX_KEY_SIZE, MAX_KEYS, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE,
+	keys::actor_kv::KeyWrapper,
 };
-
-pub fn now() -> i64 {
-	std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.unwrap_or_else(|err| unreachable!("time is broken: {}", err))
-		.as_millis()
-		.try_into()
-		.expect("now doesn't fit in i64")
-}
 
 pub fn validate_list_query(query: &rp::KvListQuery) -> Result<()> {
 	match query {

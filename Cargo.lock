@@ -3440,12 +3440,15 @@ version = "2.0.42"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "bytes",
  "epoxy",
+ "foundationdb-tuple",
  "futures-util",
  "gasoline",
  "lazy_static",
  "namespace",
  "nix 0.30.1",
+ "portpicker",
  "rand 0.8.5",
  "reqwest",
  "reqwest-eventsource",
@@ -3458,43 +3461,22 @@ dependencies = [
  "rivet-pools",
  "rivet-runner-protocol",
  "rivet-runtime",
+ "rivet-test-deps",
  "rivet-types",
  "rivet-util",
  "serde",
  "serde_bare",
  "serde_json",
  "strum",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
  "universaldb",
  "universalpubsub",
  "url",
  "utoipa",
  "uuid",
  "vbare",
-]
-
-[[package]]
-name = "pegboard-actor-kv"
-version = "2.0.42"
-dependencies = [
- "anyhow",
- "futures-util",
- "gasoline",
- "pegboard",
- "portpicker",
- "rivet-config",
- "rivet-runner-protocol",
- "rivet-test-deps",
- "rivet-util-id",
- "serde",
- "serde_bare",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
- "universaldb",
- "url",
- "uuid",
 ]
 
 [[package]]
@@ -3547,7 +3529,7 @@ dependencies = [
  "lazy_static",
  "namespace",
  "pegboard",
- "pegboard-actor-kv",
+ "rand 0.8.5",
  "rivet-config",
  "rivet-data",
  "rivet-error",
@@ -4324,7 +4306,6 @@ dependencies = [
  "indexmap 2.10.0",
  "namespace",
  "pegboard",
- "pegboard-actor-kv",
  "rivet-api-builder",
  "rivet-api-types",
  "rivet-api-util",
@@ -4503,6 +4484,15 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "rivet-config-schema-gen"
+version = "2.0.38"
+dependencies = [
+ "rivet-config",
+ "schemars 0.8.22",
+ "serde_json",
 ]
 
 [[package]]
