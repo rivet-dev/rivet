@@ -2,17 +2,16 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
+import { pack, unpack } from "@rivetkit/fdb-tuple";
 import { decode as decodeCbor, encode as encodeCbor } from "cbor-x";
-import { pack, unpack } from "fdb-tuple";
 import {
-	CHUNK_VERSIONED,
-	CURRENT_VERSION,
-	encodeRecord,
 	type ActiveSpanRef,
 	type Attributes,
+	CHUNK_VERSIONED,
 	type Chunk,
+	CURRENT_VERSION,
+	encodeRecord,
 	type KeyValue,
-	type Record as TraceRecord,
 	type RecordBody,
 	type SpanEnd,
 	type SpanEvent,
@@ -26,6 +25,7 @@ import {
 	type SpanUpdate,
 	type StringId,
 	type TraceId,
+	type Record as TraceRecord,
 } from "../schemas/versioned.js";
 import {
 	hexFromBytes,
@@ -177,7 +177,10 @@ export function createTraces(
 		const unixMs = anchor.unixMs + (performance.now() - anchor.monoMs);
 		const wholeMs = Math.floor(unixMs);
 		const fracMs = unixMs - wholeMs;
-		return BigInt(wholeMs) * 1_000_000n + BigInt(Math.floor(fracMs * 1_000_000));
+		return (
+			BigInt(wholeMs) * 1_000_000n +
+			BigInt(Math.floor(fracMs * 1_000_000))
+		);
 	}
 
 	function createChunkState(bucketStartSec: number): ChunkState {
@@ -223,9 +226,10 @@ export function createTraces(
 		return id;
 	}
 
-	function encodeAttributes(
-		attributes?: Record<string, unknown>,
-	): { attributes: Attributes; dropped: number } {
+	function encodeAttributes(attributes?: Record<string, unknown>): {
+		attributes: Attributes;
+		dropped: number;
+	} {
 		const list: KeyValue[] = [];
 		let dropped = 0;
 		if (!attributes) {
@@ -239,7 +243,10 @@ export function createTraces(
 			}
 			try {
 				const encoded = encodeCbor(sanitized);
-				list.push({ key: internString(key), value: toArrayBuffer(encoded) });
+				list.push({
+					key: internString(key),
+					value: toArrayBuffer(encoded),
+				});
 			} catch {
 				dropped++;
 			}
@@ -275,11 +282,12 @@ export function createTraces(
 		return value;
 	}
 
-	function encodeLinks(
-		links?: StartSpanOptions["links"],
-	): { links: SpanLink[]; dropped: number } {
+	function encodeLinks(links?: StartSpanOptions["links"]): {
+		links: SpanLink[];
+		dropped: number;
+	} {
 		const result: SpanLink[] = [];
-		let dropped = 0;
+		const dropped = 0;
 		if (!links) {
 			return { links: result, dropped };
 		}
@@ -379,9 +387,10 @@ export function createTraces(
 		};
 	}
 
-	function encodeAttributeMap(
-		attributes: AttributeMap,
-	): { attributes: Attributes; dropped: number } {
+	function encodeAttributeMap(attributes: AttributeMap): {
+		attributes: Attributes;
+		dropped: number;
+	} {
 		const list: KeyValue[] = [];
 		let dropped = 0;
 		for (const [key, value] of attributes.entries()) {
@@ -392,7 +401,10 @@ export function createTraces(
 			}
 			try {
 				const encoded = encodeCbor(sanitized);
-				list.push({ key: internString(key), value: toArrayBuffer(encoded) });
+				list.push({
+					key: internString(key),
+					value: toArrayBuffer(encoded),
+				});
 			} catch {
 				dropped++;
 			}
@@ -425,9 +437,7 @@ export function createTraces(
 			const key = strings[kv.key] ?? "";
 			try {
 				map.set(key, decodeCbor(toUint8Array(kv.value)) as unknown);
-			} catch {
-				continue;
-			}
+			} catch {}
 		}
 		return map;
 	}
@@ -445,15 +455,15 @@ export function createTraces(
 		}));
 	}
 
-	function encodeLinkState(
-		links: LinkState[],
-	): { links: SpanLink[]; dropped: number } {
+	function encodeLinkState(links: LinkState[]): {
+		links: SpanLink[];
+		dropped: number;
+	} {
 		const result: SpanLink[] = [];
-		let dropped = 0;
+		const dropped = 0;
 		for (const link of links) {
-			const { attributes, dropped: droppedAttributes } = encodeAttributeMap(
-				link.attributes,
-			);
+			const { attributes, dropped: droppedAttributes } =
+				encodeAttributeMap(link.attributes);
 			result.push({
 				traceId: link.traceId,
 				spanId: link.spanId,
@@ -522,7 +532,10 @@ export function createTraces(
 			chunk,
 			CURRENT_VERSION,
 		);
-		const key = buildChunkKey(currentChunk.bucketStartSec, currentChunk.chunkId);
+		const key = buildChunkKey(
+			currentChunk.bucketStartSec,
+			currentChunk.chunkId,
+		);
 		const maxRecordNs =
 			chunk.records.length > 0
 				? chunk.baseUnixNs +
@@ -608,7 +621,9 @@ export function createTraces(
 			assertActive(parent);
 		}
 		const spanIdBytes = randomBytes(SPAN_ID_BYTES);
-		const traceIdBytes = parent ? parent.traceId : randomBytes(TRACE_ID_BYTES);
+		const traceIdBytes = parent
+			? parent.traceId
+			: randomBytes(TRACE_ID_BYTES);
 		const spanId = toArrayBuffer(spanIdBytes);
 		const traceId = toArrayBuffer(traceIdBytes);
 		const parentSpanId = parent ? toArrayBuffer(parent.spanId) : null;
@@ -650,7 +665,8 @@ export function createTraces(
 			droppedLinksCount: spanStart.droppedLinksCount,
 			status: null,
 			startTimeUnixNs:
-				currentChunk.baseUnixNs + currentChunk.records[recordIndex].timeOffsetNs,
+				currentChunk.baseUnixNs +
+				currentChunk.records[recordIndex].timeOffsetNs,
 			depth,
 			bytesSinceSnapshot: encodedBytes,
 			lastSnapshotMonoMs: performance.now(),
@@ -711,7 +727,11 @@ export function createTraces(
 		const { encodedBytes } = appendRecord(
 			() => ({
 				tag: "SpanEvent",
-				val: createSpanEventRecord(toArrayBuffer(handle.spanId), name, options),
+				val: createSpanEventRecord(
+					toArrayBuffer(handle.spanId),
+					name,
+					options,
+				),
 			}),
 			options?.timeUnixMs,
 		);
@@ -731,7 +751,10 @@ export function createTraces(
 		dropSpan(handle.spanId);
 	}
 
-	function maybeSnapshot(spanId: SpanId | Uint8Array, state: SpanState): void {
+	function maybeSnapshot(
+		spanId: SpanId | Uint8Array,
+		state: SpanState,
+	): void {
 		if (
 			state.bytesSinceSnapshot < snapshotBytesThreshold &&
 			performance.now() - state.lastSnapshotMonoMs < snapshotIntervalMs
@@ -748,10 +771,10 @@ export function createTraces(
 			activeSpanRefs.set(key, {
 				...ref,
 				latestSnapshotKey: {
-				prefix: KEY_PREFIX.DATA,
-				bucketStartSec: BigInt(currentChunk.bucketStartSec),
-				chunkId: currentChunk.chunkId,
-				recordIndex,
+					prefix: KEY_PREFIX.DATA,
+					bucketStartSec: BigInt(currentChunk.bucketStartSec),
+					chunkId: currentChunk.chunkId,
+					recordIndex,
 				},
 			});
 		}
@@ -1064,7 +1087,10 @@ export function createTraces(
 		};
 	}
 
-	function buildChunkKey(bucketStartSec: number, chunkId: number): Uint8Array {
+	function buildChunkKey(
+		bucketStartSec: number,
+		chunkId: number,
+	): Uint8Array {
 		return pack([KEY_PREFIX.DATA, bucketStartSec, chunkId]);
 	}
 
@@ -1076,11 +1102,11 @@ export function createTraces(
 		}
 	}
 
-	async function loadBaseRecord(
-		ref: ActiveSpanRef,
-	): Promise<
-		{ record: TraceRecord; strings: readonly string[]; absNs: bigint } | null
-	> {
+	async function loadBaseRecord(ref: ActiveSpanRef): Promise<{
+		record: TraceRecord;
+		strings: readonly string[];
+		absNs: bigint;
+	} | null> {
 		const key = ref.latestSnapshotKey ?? ref.startKey;
 		const bucketStartSec = toNumber(key.bucketStartSec);
 		const fromMemory = findChunkInMemory(bucketStartSec, key.chunkId);

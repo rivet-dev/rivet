@@ -3796,12 +3796,12 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/fdb-tuple':
+        specifier: https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2
+        version: https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
-      fdb-tuple:
-        specifier: ^1.0.0
-        version: 1.0.0
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
@@ -3833,12 +3833,12 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/fdb-tuple':
+        specifier: https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2
+        version: https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
-      fdb-tuple:
-        specifier: ^1.0.0
-        version: 1.0.0
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
@@ -8262,6 +8262,10 @@ packages:
   '@rivetkit/fast-json-patch@3.1.2':
     resolution: {integrity: sha512-CtA50xgsSSzICQduF/NDShPRzvucnNvsW/lQO0WgMTT1XAj9Lfae4pm7r3llFwilgG+9iq76Hv1LUqNy72v6yw==}
 
+  '@rivetkit/fdb-tuple@https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2}
+    version: 1.0.0
+
   '@rivetkit/on-change@6.0.2-rc.1':
     resolution: {integrity: sha512-5RC9Ze/wTKqSlJvopdCgr+EfyV93+iiH8Thog0QXrl8PT1unuBNw/jadXNMtwgAxrIaCJL+JLaHQH9w7rqpMDw==}
     engines: {node: '>=20'}
@@ -11619,9 +11623,6 @@ packages:
 
   fd-slicer@1.1.0:
     resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
-
-  fdb-tuple@1.0.0:
-    resolution: {integrity: sha512-8jSvKPCYCgTpi9Pt87qlfTk6griyMx4Gk3Xv31Dp72Qp8b6XgIyFsMm8KzPmFJ9iJ8K4pGvRxvOS8D0XGnrkjw==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -21285,6 +21286,8 @@ snapshots:
 
   '@rivetkit/fast-json-patch@3.1.2': {}
 
+  '@rivetkit/fdb-tuple@https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2': {}
+
   '@rivetkit/on-change@6.0.2-rc.1': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
@@ -25442,8 +25445,6 @@ snapshots:
   fd-slicer@1.1.0:
     dependencies:
       pend: 1.2.0
-
-  fdb-tuple@1.0.0: {}
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
