@@ -1,6 +1,5 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
-use rand::Rng;
 use rivet_runner_protocol as protocol;
 use rivet_types::actors::CrashPolicy;
 
@@ -8,6 +7,7 @@ use crate::{errors, workflows::runner2::AllocatePendingActorsInput};
 
 mod destroy;
 mod keys;
+pub mod metrics;
 mod runtime;
 mod setup;
 
@@ -17,7 +17,6 @@ pub use runtime::AllocationOverride;
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
 /// How long an actor with crash_policy Restart should wait pending before setting itself to sleep.
 const RESTART_PENDING_TIMEOUT_MS: i64 = util::duration::seconds(60);
-const METRICS_INTERVAL_MS: i64 = util::duration::seconds(60);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
@@ -77,43 +76,6 @@ pub struct State {
 	/// - When actor becomes connectable
 	#[serde(default)]
 	pub failure_reason: Option<FailureReason>,
-
-	/// Bytes.
-	#[serde(default)]
-	pub last_kv_storage_size: i64,
-}
-
-/// Reason why an actor failed to allocate or run.
-///
-/// Distinct from `errors::Actor` which represents user-facing API errors.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum FailureReason {
-	/// Actor cannot allocate due to no available runner capacity. Only set if `failure_reason`
-	/// is currently `None` (runner failures take precedence as root causes).
-	NoCapacity,
-	/// Runner did not respond with expected events (GC timeout).
-	RunnerNoResponse { runner_id: Id },
-	/// Runner connection was lost (no recent ping, network issue, or crash).
-	RunnerConnectionLost { runner_id: Id },
-	/// Runner was draining but actor didn't stop in time.
-	RunnerDrainingTimeout { runner_id: Id },
-	/// Actor crashed during execution.
-	Crashed { message: Option<String> },
-}
-
-impl FailureReason {
-	/// Used to determine the category of this error.
-	///
-	/// Actor errors will not override runner errors.
-	pub fn is_runner_failure(&self) -> bool {
-		match self {
-			FailureReason::NoCapacity | FailureReason::Crashed { .. } => false,
-			FailureReason::RunnerNoResponse { .. }
-			| FailureReason::RunnerConnectionLost { .. }
-			| FailureReason::RunnerDrainingTimeout { .. } => true,
-		}
-	}
 }
 
 impl State {
@@ -152,7 +114,39 @@ impl State {
 			runner_state: None,
 
 			failure_reason: None,
-			last_kv_storage_size: 0,
+		}
+	}
+}
+
+/// Reason why an actor failed to allocate or run.
+///
+/// Distinct from `errors::Actor` which represents user-facing API errors.
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureReason {
+	/// Actor cannot allocate due to no available runner capacity. Only set if `failure_reason`
+	/// is currently `None` (runner failures take precedence as root causes).
+	NoCapacity,
+	/// Runner did not respond with expected events (GC timeout).
+	RunnerNoResponse { runner_id: Id },
+	/// Runner connection was lost (no recent ping, network issue, or crash).
+	RunnerConnectionLost { runner_id: Id },
+	/// Runner was draining but actor didn't stop in time.
+	RunnerDrainingTimeout { runner_id: Id },
+	/// Actor crashed during execution.
+	Crashed { message: Option<String> },
+}
+
+impl FailureReason {
+	/// Used to determine the category of this error.
+	///
+	/// Actor errors will not override runner errors.
+	pub fn is_runner_failure(&self) -> bool {
+		match self {
+			FailureReason::NoCapacity | FailureReason::Crashed { .. } => false,
+			FailureReason::RunnerNoResponse { .. }
+			| FailureReason::RunnerConnectionLost { .. }
+			| FailureReason::RunnerDrainingTimeout { .. } => true,
 		}
 	}
 }
@@ -290,6 +284,16 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		}
 	}
 
+	let metrics_workflow_id = ctx
+		.v(2)
+		.workflow(metrics::Input {
+			actor_id: input.actor_id,
+			namespace_id: input.namespace_id,
+			name: input.name.clone(),
+		})
+		.dispatch()
+		.await?;
+
 	ctx.activity(setup::AddIndexesAndSetCreateCompleteInput {
 		actor_id: input.actor_id,
 	})
@@ -357,10 +361,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					} else {
 						signals
 					}
-				} else if let Some(metrics_ts) = state.metrics_ts {
-					// Listen for signals with timeout. if a timeout happens, it means this actor should
-					// record metrics. `metrics_ts` is only set if the actor is allocated
-					ctx.listen_n_until::<Main>(metrics_ts, 256).await?
 				} else if let Some(alarm_ts) = state.alarm_ts {
 					// Listen for signals with timeout. if a timeout happens, it means this actor should
 					// wake up
@@ -495,6 +495,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											ctx,
 											&input,
 											state,
+											metrics_workflow_id,
 											StoppedVariant::Normal {
 												code: match code {
 													protocol::StopCode::Ok => protocol::mk2::StopCode::Ok,
@@ -516,7 +517,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								) => {
 									state.alarm_ts = alarm_ts;
 
-									ctx.activity(runtime::SaveEventMetricsInput {
+									ctx.activity(runtime::RecordEventMetricsInput {
 										namespace_id: input.namespace_id,
 										name: input.name.clone(),
 										alarms_set: 1,
@@ -637,6 +638,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 												ctx,
 												&input,
 												state,
+												metrics_workflow_id,
 												StoppedVariant::Normal {
 													code: code.clone(),
 													message: message.clone(),
@@ -694,7 +696,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								} else {
 									None
 								},
-								(alarms_set > 0).then(|| activity(runtime::SaveEventMetricsInput {
+								(alarms_set > 0).then(|| activity(runtime::RecordEventMetricsInput {
 									namespace_id: input.namespace_id,
 									name: input.name.clone(),
 									alarms_set,
@@ -718,6 +720,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										ctx,
 										&input,
 										state,
+										metrics_workflow_id,
 										sig.allocation_override,
 									)
 									.await?
@@ -783,6 +786,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								ctx,
 								&input,
 								state,
+								metrics_workflow_id,
 								StoppedVariant::Lost {
 									force_reschedule: sig.force_reschedule,
 									failure_reason,
@@ -881,19 +885,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					}
 				}
 
-				if let Some(metrics_ts) = &mut state.metrics_ts {
-					if now > *metrics_ts {
-						// Jitter sleep to prevent stampeding herds
-						let jitter = { rand::thread_rng().gen_range(0..128) };
-						// Move metrics timestamp
-						*metrics_ts = now + METRICS_INTERVAL_MS + jitter;
-
-						ctx.activity(runtime::RecordMetricsInput {
-							actor_id: input.actor_id,
-						}).await?;
-					}
-				}
-
 				Ok(Loop::Continue)
 			}
 			.boxed()
@@ -902,6 +893,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 	// At this point, the actor is not allocated so no cleanup related to alloc idx/desired slots needs to be
 	// done.
+
+	ctx.v(2)
+		.signal(metrics::Destroy {
+			ts: util::timestamp::now(),
+		})
+		.to_workflow_id(metrics_workflow_id)
+		.send()
+		.await?;
 
 	ctx.workflow(destroy::Input {
 		namespace_id: input.namespace_id,
@@ -937,6 +936,7 @@ async fn handle_stopped(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	state: &mut runtime::LifecycleState,
+	metrics_workflow_id: Id,
 	variant: StoppedVariant,
 ) -> Result<StoppedResult> {
 	tracing::debug!(?variant, "actor stopped");
@@ -990,7 +990,6 @@ async fn handle_stopped(
 	let old_runner_workflow_id = state.runner_workflow_id.take();
 	let old_runner_protocol_version = state.runner_protocol_version.take();
 	state.runner_state = None;
-	state.metrics_ts = None;
 
 	let deallocate_res = ctx
 		.activity(runtime::DeallocateInput {
@@ -1004,6 +1003,15 @@ async fn handle_stopped(
 			namespace_id: input.namespace_id,
 			name: input.runner_name_selector.clone(),
 		})
+		.await?;
+
+	// Pause periodic metrics workflow
+	ctx.v(3)
+		.signal(metrics::Pause {
+			ts: util::timestamp::now(),
+		})
+		.to_workflow_id(metrics_workflow_id)
+		.send()
 		.await?;
 
 	if allocate_pending_res.allocations.is_empty() {
@@ -1086,6 +1094,7 @@ async fn handle_stopped(
 			ctx,
 			&input,
 			state,
+			metrics_workflow_id,
 			AllocationOverride::DontSleep {
 				pending_timeout: None,
 			},
@@ -1123,6 +1132,7 @@ async fn handle_stopped(
 					ctx,
 					&input,
 					state,
+					metrics_workflow_id,
 					AllocationOverride::PendingTimeout {
 						pending_timeout: RESTART_PENDING_TIMEOUT_MS,
 					},
@@ -1160,7 +1170,15 @@ async fn handle_stopped(
 	else if state.will_wake {
 		state.sleeping = false;
 
-		match runtime::reschedule_actor(ctx, &input, state, AllocationOverride::None).await? {
+		match runtime::reschedule_actor(
+			ctx,
+			&input,
+			state,
+			metrics_workflow_id,
+			AllocationOverride::None,
+		)
+		.await?
+		{
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;

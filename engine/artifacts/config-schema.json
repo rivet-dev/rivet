@@ -131,6 +131,7 @@
     "runtime": {
       "default": {
         "allow_version_rollback": null,
+        "force_shutdown_duration": null,
         "guard_shutdown_duration": null,
         "worker_cpu_max": null,
         "worker_shutdown_duration": null
@@ -545,6 +546,15 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "default_metadata_poll_interval": {
+          "description": "Default metadata poll interval for serverless runners when not specified in runner config.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "hibernating_request_eligible_threshold": {
           "description": "How long after last ping before considering a hibernating request disconnected.\n\nUnit is in milliseconds.\n\n**Experimental**",
           "type": [
@@ -552,6 +562,15 @@
             "null"
           ],
           "format": "int64"
+        },
+        "min_metadata_poll_interval": {
+          "description": "Minimum metadata poll interval for serverless runners.\n\nThe actual poll interval will be the maximum of this value and the runner config's `metadata_poll_interval` setting. This prevents excessive polling even if the runner config specifies a very short interval.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "pool_desired_max_override": {
           "description": "Global pool desired max.",
@@ -739,6 +758,15 @@
             "boolean",
             "null"
           ]
+        },
+        "force_shutdown_duration": {
+          "description": "Time (in seconds) after which the engine process will forcibly exit after receiving SIGTERM. Must be greater than both worker_shutdown_duration and guard_shutdown_duration. Defaults to guard_shutdown_duration + 30 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
         },
         "guard_shutdown_duration": {
           "description": "Time (in seconds) to allow for guard to wait for pending requests after receiving SIGTERM. Defaults to 1 hour.",
