@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
 import { performance } from "node:perf_hooks";
-import { pack, unpack } from "fdb-tuple";
+import { pack, unpack } from "@rivetkit/fdb-tuple";
+import { describe, expect, it, vi } from "vitest";
+import { CHUNK_VERSIONED } from "../schemas/versioned.js";
 import { createTraces } from "../src/index.js";
 import type { TracesDriver } from "../src/types.js";
-import { CHUNK_VERSIONED } from "../schemas/versioned.js";
 
 class InMemoryTracesDriver implements TracesDriver {
 	private store = new Map<string, Uint8Array>();
@@ -31,13 +31,18 @@ class InMemoryTracesDriver implements TracesDriver {
 		}
 	}
 
-	async list(prefix: Uint8Array): Promise<Array<{ key: Uint8Array; value: Uint8Array }>> {
+	async list(
+		prefix: Uint8Array,
+	): Promise<Array<{ key: Uint8Array; value: Uint8Array }>> {
 		const prefixBuf = Buffer.from(prefix);
 		const entries: Array<{ key: Uint8Array; value: Uint8Array }> = [];
 		for (const [key, value] of this.store.entries()) {
 			const keyBuf = Buffer.from(key, "hex");
 			if (hasPrefix(keyBuf, prefixBuf)) {
-				entries.push({ key: new Uint8Array(keyBuf), value: new Uint8Array(value) });
+				entries.push({
+					key: new Uint8Array(keyBuf),
+					value: new Uint8Array(value),
+				});
 			}
 		}
 		entries.sort((a, b) => Buffer.compare(a.key, b.key));
@@ -61,7 +66,10 @@ class InMemoryTracesDriver implements TracesDriver {
 			if (Buffer.compare(keyBuf, endBuf) >= 0) {
 				continue;
 			}
-			entries.push({ key: new Uint8Array(keyBuf), value: new Uint8Array(value) });
+			entries.push({
+				key: new Uint8Array(keyBuf),
+				value: new Uint8Array(value),
+			});
 		}
 
 		entries.sort((a, b) => Buffer.compare(a.key, b.key));
@@ -74,7 +82,9 @@ class InMemoryTracesDriver implements TracesDriver {
 		return entries;
 	}
 
-	async batch(writes: Array<{ key: Uint8Array; value: Uint8Array }>): Promise<void> {
+	async batch(
+		writes: Array<{ key: Uint8Array; value: Uint8Array }>,
+	): Promise<void> {
 		for (const write of writes) {
 			this.store.set(toKey(write.key), new Uint8Array(write.value));
 		}
@@ -143,7 +153,9 @@ function installFakeClock(initialUnixMs = 1_700_000_000_000): FakeClock {
 	let unixMs = initialUnixMs;
 	let monoMs = 0;
 	const dateSpy = vi.spyOn(Date, "now").mockImplementation(() => unixMs);
-	const perfSpy = vi.spyOn(performance, "now").mockImplementation(() => monoMs);
+	const perfSpy = vi
+		.spyOn(performance, "now")
+		.mockImplementation(() => monoMs);
 
 	return {
 		nowUnixMs: () => unixMs,
@@ -171,11 +183,15 @@ describe("traces", () => {
 			const traces = createTraces({
 				driver,
 				resource: {
-					attributes: [{ key: "service.name", value: { stringValue: "test" } }],
+					attributes: [
+						{ key: "service.name", value: { stringValue: "test" } },
+					],
 				},
 			});
 
-			const root = traces.startSpan("root", { attributes: { foo: "bar" } });
+			const root = traces.startSpan("root", {
+				attributes: { foo: "bar" },
+			});
 			traces.setAttributes(root, { count: 2 });
 			traces.emitEvent(root, "evt", { attributes: { ok: true } });
 			traces.setStatus(root, { code: "OK" });
@@ -257,8 +273,9 @@ describe("traces", () => {
 			const entries = driver.entries();
 			expect(entries.length).toBeGreaterThan(1);
 
-			const decoded = entries.map((entry) =>
-				unpack(Buffer.from(entry.key)) as [number, number, number],
+			const decoded = entries.map(
+				(entry) =>
+					unpack(Buffer.from(entry.key)) as [number, number, number],
 			);
 			for (const tuple of decoded) {
 				expect(tuple[0]).toBe(1);
@@ -267,7 +284,8 @@ describe("traces", () => {
 				const prev = decoded[i - 1];
 				const curr = decoded[i];
 				const inOrder =
-					curr[1] > prev[1] || (curr[1] === prev[1] && curr[2] >= prev[2]);
+					curr[1] > prev[1] ||
+					(curr[1] === prev[1] && curr[2] >= prev[2]);
 				expect(inOrder).toBe(true);
 			}
 		} finally {
@@ -290,7 +308,9 @@ describe("traces", () => {
 			await traces.flush();
 
 			const entry = driver.entries()[0];
-			const chunk = CHUNK_VERSIONED.deserializeWithEmbeddedVersion(entry.value);
+			const chunk = CHUNK_VERSIONED.deserializeWithEmbeddedVersion(
+				entry.value,
+			);
 			const hasSnapshot = chunk.records.some(
 				(record) => record.body.tag === "SpanSnapshot",
 			);
@@ -707,7 +727,9 @@ describe("traces", () => {
 
 			const spans = result.otlp.resourceSpans[0].scopeSpans[0].spans;
 			expect(spans).toHaveLength(1);
-			expect(spans[0].events?.map((evt) => evt.name)).toEqual(["forward"]);
+			expect(spans[0].events?.map((evt) => evt.name)).toEqual([
+				"forward",
+			]);
 		} finally {
 			clock.restore();
 		}

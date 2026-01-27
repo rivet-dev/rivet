@@ -53,7 +53,7 @@
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
 		"cbor-x": "^1.6.0",
-		"fdb-tuple": "^1.0.0",
+		"@rivetkit/fdb-tuple": "https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {

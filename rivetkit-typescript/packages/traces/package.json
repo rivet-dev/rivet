@@ -12,6 +12,16 @@
 	],
 	"exports": {
 		".": {
+			"browser": {
+				"import": {
+					"types": "./dist/tsup/browser.d.ts",
+					"default": "./dist/tsup/browser.js"
+				},
+				"require": {
+					"types": "./dist/tsup/browser.d.cts",
+					"default": "./dist/tsup/browser.cjs"
+				}
+			},
 			"import": {
 				"types": "./dist/tsup/index.d.ts",
 				"default": "./dist/tsup/index.js"
@@ -36,7 +46,7 @@
 		"node": ">=18.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts src/reader.ts",
+		"build": "pnpm run compile:bare && tsup src/index.ts src/reader.ts src/browser.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
 		"check-types": "pnpm run compile:bare && tsc --noEmit",
 		"test": "pnpm run compile:bare && vitest run"
@@ -44,7 +54,7 @@
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
 		"cbor-x": "^1.6.0",
-		"fdb-tuple": "^1.0.0",
+		"@rivetkit/fdb-tuple": "https://pkg.pr.new/rivet-dev/fdb-tuple/@rivetkit/fdb-tuple@32f95e2",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {
