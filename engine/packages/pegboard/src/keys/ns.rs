@@ -3,8 +3,6 @@ use gas::prelude::*;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
-pub mod metric;
-
 #[derive(Debug)]
 pub struct RunnerAllocIdxKey {
 	pub namespace_id: Id,

@@ -9,8 +9,6 @@ pub use crate::{
 	db::clickhouse::ClickHousePool, db::udb::UdbPool, db::ups::UpsPool, error::Error, pools::Pools,
 };
 
-pub use clickhouse_inserter::ClickHouseInserterHandle;
-
 // Re-export for macros
 #[doc(hidden)]
 pub use rivet_util as __rivet_util;

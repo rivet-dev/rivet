@@ -123,10 +123,10 @@ pub async fn get(
 			// Total read bytes (rounded up to nearest chunk)
 			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
 				* util::metric::KV_BILLABLE_CHUNK;
-			keys::ns::metric::inc(
-				&tx.with_subspace(keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				recipient.namespace_id,
-				keys::ns::metric::Metric::KvRead(recipient.name.clone()),
+				namespace::keys::metric::Metric::KvRead(recipient.name.clone()),
 				total_size_chunked.try_into().unwrap_or_default(),
 			);
 
@@ -235,10 +235,10 @@ pub async fn list(
 			// Total read bytes (rounded up to nearest chunk)
 			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
 				* util::metric::KV_BILLABLE_CHUNK;
-			keys::ns::metric::inc(
-				&tx.with_subspace(keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				recipient.namespace_id,
-				keys::ns::metric::Metric::KvRead(recipient.name.clone()),
+				namespace::keys::metric::Metric::KvRead(recipient.name.clone()),
 				total_size_chunked.try_into().unwrap_or_default(),
 			);
 
@@ -276,10 +276,10 @@ pub async fn put(
 				+ values.iter().fold(0, |s, value| s + value.len());
 			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
 				* util::metric::KV_BILLABLE_CHUNK;
-			keys::ns::metric::inc(
-				&tx.with_subspace(keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				recipient.namespace_id,
-				keys::ns::metric::Metric::KvWrite(recipient.name.clone()),
+				namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
 				total_size_chunked.try_into().unwrap_or_default(),
 			);
 
@@ -347,10 +347,10 @@ pub async fn delete(
 			let total_size = keys.iter().fold(0, |s, key| s + key.len());
 			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
 				* util::metric::KV_BILLABLE_CHUNK;
-			keys::ns::metric::inc(
-				&tx.with_subspace(keys::subspace()),
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
 				recipient.namespace_id,
-				keys::ns::metric::Metric::KvWrite(recipient.name.clone()),
+				namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
 				total_size_chunked.try_into().unwrap_or_default(),
 			);
 
@@ -377,10 +377,10 @@ pub async fn delete_all(db: &universaldb::Database, recipient: &Recipient) -> Re
 		tx.clear_subspace_range(&keys::actor_kv::subspace(recipient.actor_id));
 
 		// Total written bytes (rounded up to nearest chunk)
-		keys::ns::metric::inc(
-			&tx.with_subspace(keys::subspace()),
+		namespace::keys::metric::inc(
+			&tx.with_subspace(namespace::keys::subspace()),
 			recipient.namespace_id,
-			keys::ns::metric::Metric::KvWrite(recipient.name.clone()),
+			namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
 			util::metric::KV_BILLABLE_CHUNK
 				.try_into()
 				.unwrap_or_default(),

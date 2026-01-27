@@ -8,7 +8,6 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-nats.workspace = true
-clickhouse-inserter.workspace = true
 clickhouse.workspace = true
 futures-util.workspace = true
 governor.workspace = true

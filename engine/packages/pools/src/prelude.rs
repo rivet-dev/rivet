@@ -1,3 +1,3 @@
 pub use clickhouse;
 
-pub use crate::{ClickHouseInserterHandle, ClickHousePool, UdbPool, UpsPool};
+pub use crate::{ClickHousePool, UdbPool, UpsPool};
