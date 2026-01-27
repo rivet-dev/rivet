@@ -71,6 +71,23 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 				},
 			});
 		},
+		billingDetailsQueryOptions({
+			organization,
+			project,
+		}: {
+			organization: string;
+			project: string;
+		}) {
+			return queryOptions({
+				queryKey: [{ organization, project }, "billing-details"],
+				queryFn: async () => {
+					const response = await client.billing.details(project, {
+						org: organization,
+					});
+					return response;
+				},
+			});
+		},
 	};
 };
 
@@ -212,6 +229,31 @@ export const createOrganizationContext = ({
 			},
 		});
 
+	const billingProjectSubscriptionUpdateSessionQueryOptions = ({
+		project,
+		organization,
+	}: {
+		project: string;
+		organization: string;
+	}) =>
+		queryOptions({
+			queryKey: [
+				{ organization, project },
+				"subscription",
+				"update-session",
+			],
+			queryFn: async () => {
+				const response =
+					await client.billing.createSubscriptionUpdateSession(
+						project,
+						{
+							org: organization,
+						},
+					);
+				return response;
+			},
+		});
+
 	return {
 		...parent,
 		client,
@@ -255,6 +297,25 @@ export const createOrganizationContext = ({
 
 					return response;
 				},
+			});
+		},
+		billingProjectSubscriptionUpdateSessionQueryOptions,
+		currentOrgBillingProjectSubscriptionUpdateSessionQueryOptions(opts: {
+			project: string;
+		}) {
+			return billingProjectSubscriptionUpdateSessionQueryOptions({
+				organization,
+				project: opts.project,
+			});
+		},
+		currentOrganizationBillingDetailsQueryOptions({
+			project,
+		}: {
+			project: string;
+		}) {
+			return parent.billingDetailsQueryOptions({
+				organization,
+				project,
 			});
 		},
 	};
@@ -322,14 +383,8 @@ export const createProjectContext = ({
 			});
 		},
 		currentProjectBillingDetailsQueryOptions() {
-			return queryOptions({
-				queryKey: [{ organization, project }, "billing-details"],
-				queryFn: async () => {
-					const response = await client.billing.details(project, {
-						org: organization,
-					});
-					return response;
-				},
+			return parent.currentOrganizationBillingDetailsQueryOptions({
+				project,
 			});
 		},
 		changeCurrentProjectBillingPlanMutationOptions() {
@@ -353,7 +408,6 @@ export const createProjectContext = ({
 					"access-token",
 				],
 				queryFn: async () => {
-					console.log(client);
 					const response = await client.namespaces.createAccessToken(
 						project,
 						namespace,
@@ -415,6 +469,12 @@ export const createProjectContext = ({
 				},
 				onSuccess: opts?.onSuccess,
 			};
+		},
+		currentProjectBillingSubscriptionUpdateSessionQueryOptions() {
+			return parent.billingProjectSubscriptionUpdateSessionQueryOptions({
+				organization,
+				project,
+			});
 		},
 	};
 };
