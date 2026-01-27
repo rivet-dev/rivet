@@ -493,6 +493,9 @@ pub async fn print_history(
 					}
 				}
 			}
+			EventData::VersionCheck(data) => {
+				println!("version {}", style(data.inner_version).yellow());
+			}
 			_ => {}
 		}
 	}
@@ -567,7 +570,7 @@ pub fn event_style(event: &Event) -> Style {
 		EventData::Loop(_) => Style::new().magenta(),
 		EventData::Sleep(_) => Style::new().magenta(),
 		EventData::Removed(_) => Style::new().red(),
-		EventData::VersionCheck => Style::new().red(),
+		EventData::VersionCheck(_) => Style::new().red(),
 		EventData::Branch => Style::new(),
 		EventData::Signals(_) => Style::new().cyan(),
 	}
@@ -619,7 +622,7 @@ pub fn print_event_name(event: &Event) {
 				print!(" {}", style.apply_to(name))
 			}
 		}
-		EventData::VersionCheck => print!("{}", style.apply_to("version check").bold()),
+		EventData::VersionCheck(_) => print!("{}", style.apply_to("version check").bold()),
 		EventData::Branch => print!("{}", style.apply_to("branch").bold()),
 		EventData::Signals(signal) => print!(
 			"{} {}",
