@@ -30,7 +30,7 @@ use crate::{
 	},
 	error::{WorkflowError, WorkflowResult},
 	history::{
-		event::{EventType, RemovedEvent, SleepEvent, SleepState},
+		event::{EventType, RemovedEvent, SleepEvent, SleepState, VersionCheckEvent},
 		location::Location,
 	},
 };
@@ -907,6 +907,13 @@ impl DatabaseDebug for DatabaseKv {
 									let inner_event_type = key.deserialize(entry.value())?;
 
 									current_event.inner_event_type = Some(inner_event_type);
+								} else if let Ok(key) = self
+									.subspace
+									.unpack::<keys::history::InnerVersionKey>(entry.key())
+								{
+									let inner_version = key.deserialize(entry.value())?;
+
+									current_event.inner_version = Some(inner_version);
 								} else if let Ok(key) =
 									self.subspace
 										.unpack::<keys::history::IndexedSignalIdKey>(entry.key())
@@ -1434,6 +1441,7 @@ struct WorkflowHistoryEventBuilder {
 	deadline_ts: Option<i64>,
 	sleep_state: Option<SleepState>,
 	inner_event_type: Option<EventType>,
+	inner_version: Option<usize>,
 
 	indexed_signal_ids: Vec<Id>,
 	indexed_names: Vec<String>,
@@ -1459,6 +1467,7 @@ impl WorkflowHistoryEventBuilder {
 			deadline_ts: None,
 			sleep_state: None,
 			inner_event_type: None,
+			inner_version: None,
 
 			indexed_signal_ids: Vec::new(),
 			indexed_names: Vec::new(),
@@ -1494,7 +1503,7 @@ impl TryFrom<WorkflowHistoryEventBuilder> for Event {
 				EventType::Sleep => EventData::Sleep(value.try_into()?),
 				EventType::Branch => EventData::Branch,
 				EventType::Removed => EventData::Removed(value.try_into()?),
-				EventType::VersionCheck => EventData::VersionCheck,
+				EventType::VersionCheck => EventData::VersionCheck(value.try_into()?),
 				EventType::Signals => EventData::Signals(value.try_into()?),
 			},
 		})
@@ -1780,6 +1789,21 @@ impl TryFrom<WorkflowHistoryEventBuilder> for SignalsEvent {
 					})
 					.collect::<std::result::Result<_, _>>()?
 			},
+		})
+	}
+}
+
+impl TryFrom<WorkflowHistoryEventBuilder> for VersionCheckEvent {
+	type Error = WorkflowError;
+
+	fn try_from(value: WorkflowHistoryEventBuilder) -> WorkflowResult<Self> {
+		Ok(VersionCheckEvent {
+			// Fallback to event version for old events that don't have inner version
+			inner_version: value.inner_version.unwrap_or(
+				value
+					.version
+					.ok_or(WorkflowError::MissingEventData("version"))?,
+			),
 		})
 	}
 }

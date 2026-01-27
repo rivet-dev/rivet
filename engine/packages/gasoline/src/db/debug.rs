@@ -3,7 +3,7 @@ use rivet_util::Id;
 
 use super::Database;
 use crate::history::{
-	event::{RemovedEvent, SleepEvent},
+	event::{RemovedEvent, SleepEvent, VersionCheckEvent},
 	location::Location,
 };
 
@@ -97,7 +97,7 @@ pub enum EventData {
 	Loop(LoopEvent),
 	Sleep(SleepEvent),
 	Removed(RemovedEvent),
-	VersionCheck,
+	VersionCheck(VersionCheckEvent),
 	Branch,
 	Signals(SignalsEvent),
 }
@@ -123,7 +123,7 @@ impl std::fmt::Display for EventData {
 					write!(f, "removed {}", removed.event_type)
 				}
 			}
-			EventData::VersionCheck => write!(f, "version check"),
+			EventData::VersionCheck(_) => write!(f, "version check"),
 			EventData::Branch => write!(f, "branch"),
 			EventData::Signals(signals) => {
 				let mut unique_names = signals.names.clone();
