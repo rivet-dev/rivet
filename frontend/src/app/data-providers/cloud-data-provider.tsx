@@ -71,6 +71,23 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 				},
 			});
 		},
+		billingDetailsQueryOptions({
+			organization,
+			project,
+		}: {
+			organization: string;
+			project: string;
+		}) {
+			return queryOptions({
+				queryKey: [{ organization, project }, "billing-details"],
+				queryFn: async () => {
+					const response = await client.billing.details(project, {
+						org: organization,
+					});
+					return response;
+				},
+			});
+		},
 	};
 };
 
@@ -212,6 +229,90 @@ export const createOrganizationContext = ({
 			},
 		});
 
+	const billingProjectSubscriptionUpdateSessionQueryOptions = ({
+		project,
+		organization,
+	}: {
+		project: string;
+		organization: string;
+	}) =>
+		queryOptions({
+			queryKey: [
+				{ organization, project },
+				"subscription",
+				"update-session",
+			],
+			queryFn: async () => {
+				const response =
+					await client.billing.createSubscriptionUpdateSession(
+						project,
+						{
+							org: organization,
+						},
+					);
+				return response;
+			},
+		});
+
+	const projectMetricsQueryOptions = (opts: {
+		organization: string;
+		project: string;
+		namespace: string;
+		name:
+			| Rivet.namespaces.MetricsGetRequestNameItem
+			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		startAt?: string;
+		endAt?: string;
+		resolution?: number;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "metrics"],
+			queryFn: async () => {
+				const data = await client.namespaces.metrics.get(
+					opts.project,
+					opts.namespace,
+					{
+						name: opts.name,
+						org: opts.organization,
+						startAt: opts.startAt,
+						endAt: opts.endAt,
+						resolution: opts.resolution,
+					},
+				);
+				return data;
+			},
+		});
+
+	const projectLatestMetricsQueryOptions = (opts: {
+		organization: string;
+		project: string;
+		namespace: string;
+		name:
+			| Rivet.namespaces.MetricsGetRequestNameItem
+			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		endAt?: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "latest-metrics"],
+			queryFn: async () => {
+				const data = await client.namespaces.metrics.getLatest(
+					opts.project,
+					opts.namespace,
+					{
+						name: opts.name,
+						org: opts.organization,
+						endAt: opts.endAt,
+					},
+				);
+				const transformed = data.name.map((name, index) => ({
+					name: name as Rivet.namespaces.MetricsGetRequestNameItem,
+					ts: data.ts[index],
+					value: BigInt(String(data.value[index])),
+				}));
+				return transformed;
+			},
+		});
+
 	return {
 		...parent,
 		client,
@@ -255,6 +356,47 @@ export const createOrganizationContext = ({
 
 					return response;
 				},
+			});
+		},
+		billingProjectSubscriptionUpdateSessionQueryOptions,
+		currentOrgBillingProjectSubscriptionUpdateSessionQueryOptions(opts: {
+			project: string;
+		}) {
+			return billingProjectSubscriptionUpdateSessionQueryOptions({
+				organization,
+				project: opts.project,
+			});
+		},
+		currentOrganizationBillingDetailsQueryOptions({
+			project,
+		}: {
+			project: string;
+		}) {
+			return parent.billingDetailsQueryOptions({
+				organization,
+				project,
+			});
+		},
+		currentOrganizationProjectMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof projectMetricsQueryOptions>[0],
+				"organization"
+			>,
+		) {
+			return projectMetricsQueryOptions({
+				organization,
+				...opts,
+			});
+		},
+		currentOrganizationProjectLatestMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof projectLatestMetricsQueryOptions>[0],
+				"organization"
+			>,
+		) {
+			return projectLatestMetricsQueryOptions({
+				organization,
+				...opts,
 			});
 		},
 	};
@@ -322,20 +464,18 @@ export const createProjectContext = ({
 			});
 		},
 		currentProjectBillingDetailsQueryOptions() {
-			return queryOptions({
-				queryKey: [{ organization, project }, "billing-details"],
-				queryFn: async () => {
-					const response = await client.billing.details(project, {
-						org: organization,
-					});
-					return response;
-				},
+			return parent.currentOrganizationBillingDetailsQueryOptions({
+				project,
 			});
 		},
 		changeCurrentProjectBillingPlanMutationOptions() {
 			return {
 				mutationKey: [{ organization, project }, "billing"],
-				mutationFn: async (data: Rivet.BillingSetPlanRequest) => {
+				mutationFn: async (
+					data: Rivet.BillingSetPlanRequest & {
+						__from?: Rivet.BillingPlan;
+					},
+				) => {
 					const response = await client.billing.setPlan(project, {
 						plan: data.plan,
 						org: organization,
@@ -353,7 +493,6 @@ export const createProjectContext = ({
 					"access-token",
 				],
 				queryFn: async () => {
-					console.log(client);
 					const response = await client.namespaces.createAccessToken(
 						project,
 						namespace,
@@ -376,7 +515,7 @@ export const createProjectContext = ({
 			});
 		},
 		createApiTokenMutationOptions(opts?: {
-			onSuccess?: (data: Rivet.CreateApiTokenResponse) => void;
+			onSuccess?: (data: Rivet.ApiTokensCreateRequest) => void;
 		}) {
 			return {
 				mutationKey: [
@@ -415,6 +554,38 @@ export const createProjectContext = ({
 				},
 				onSuccess: opts?.onSuccess,
 			};
+		},
+		currentProjectBillingSubscriptionUpdateSessionQueryOptions() {
+			return parent.billingProjectSubscriptionUpdateSessionQueryOptions({
+				organization,
+				project,
+			});
+		},
+		currentProjectMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentOrganizationProjectMetricsQueryOptions
+				>[0],
+				"project"
+			>,
+		) {
+			return parent.currentOrganizationProjectMetricsQueryOptions({
+				project,
+				...opts,
+			});
+		},
+		currentProjectLatestMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentOrganizationProjectLatestMetricsQueryOptions
+				>[0],
+				"project"
+			>,
+		) {
+			return parent.currentOrganizationProjectLatestMetricsQueryOptions({
+				project,
+				...opts,
+			});
 		},
 	};
 };
@@ -500,6 +671,30 @@ export const createNamespaceContext = ({
 					const t = await f;
 					return t.token as string;
 				},
+			});
+		},
+		currentNamespaceMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof parent.currentProjectMetricsQueryOptions>[0],
+				"namespace"
+			>,
+		) {
+			return parent.currentProjectMetricsQueryOptions({
+				namespace,
+				...opts,
+			});
+		},
+		currentNamespaceLatestMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentProjectLatestMetricsQueryOptions
+				>[0],
+				"namespace"
+			>,
+		) {
+			return parent.currentProjectLatestMetricsQueryOptions({
+				namespace,
+				...opts,
 			});
 		},
 	};
