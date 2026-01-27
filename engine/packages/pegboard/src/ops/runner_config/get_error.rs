@@ -69,6 +69,7 @@ async fn runner_config_get_error_inner(
 	ctx: &OperationCtx,
 	runners: Vec<(Id, String)>,
 ) -> Result<Vec<RunnerPoolErrorCacheEntry>> {
+	// TODO: Query runner pool workflows as well to check if the workflow is dead
 	let queries: Vec<(&str, serde_json::Value)> = runners
 		.iter()
 		.map(|(namespace_id, runner_name)| {

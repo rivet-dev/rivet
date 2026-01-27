@@ -81,22 +81,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 		.await?;
 	}
 
-	// Check for pending actors (which happen when there is not enough runner capacity)
-	let res = ctx
-		.activity(AllocatePendingActorsInput {
-			namespace_id: input.namespace_id,
-			name: input.name.clone(),
-		})
-		.await?;
-
-	// Dispatch pending allocs
-	for alloc in res.allocations {
-		ctx.signal(alloc.signal)
-			.to_workflow::<crate::workflows::actor::Workflow>()
-			.tag("actor_id", alloc.actor_id)
-			.send()
-			.await?;
-	}
+	check_queue(ctx, input.namespace_id, &input.name).await?;
 
 	let exit_reason = ctx
 		.loope(LifecycleState::new(), |ctx, state| {
@@ -116,24 +101,11 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 							})
 							.await?;
 						}
+
+						check_queue(ctx, input.namespace_id, &input.name).await?;
 					}
 					Some(Main::CheckQueue(_)) => {
-						// Check for pending actors (which happen when there is not enough runner capacity)
-						let res = ctx
-							.activity(AllocatePendingActorsInput {
-								namespace_id: input.namespace_id,
-								name: input.name.clone(),
-							})
-							.await?;
-
-						// Dispatch pending allocs
-						for alloc in res.allocations {
-							ctx.signal(alloc.signal)
-								.to_workflow::<crate::workflows::actor::Workflow>()
-								.tag("actor_id", alloc.actor_id)
-								.send()
-								.await?;
-						}
+						check_queue(ctx, input.namespace_id, &input.name).await?;
 					}
 					Some(Main::Stop(sig)) => {
 						handle_stopping(ctx, &input, state, sig.reset_actor_rescheduling).await?;
@@ -211,6 +183,27 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 		messages: vec![protocol::mk2::ToRunner::ToRunnerClose],
 	})
 	.await?;
+
+	Ok(())
+}
+
+async fn check_queue(ctx: &mut WorkflowCtx, namespace_id: Id, name: &str) -> Result<()> {
+	// Check for pending actors (which happen when there is not enough runner capacity)
+	let res = ctx
+		.activity(AllocatePendingActorsInput {
+			namespace_id,
+			name: name.to_string(),
+		})
+		.await?;
+
+	// Dispatch pending allocs
+	for alloc in res.allocations {
+		ctx.signal(alloc.signal)
+			.to_workflow::<crate::workflows::actor::Workflow>()
+			.tag("actor_id", alloc.actor_id)
+			.send()
+			.await?;
+	}
 
 	Ok(())
 }
