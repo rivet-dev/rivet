@@ -658,9 +658,7 @@ impl Database for DatabaseKv {
 			.map_err(WorkflowError::Udb)?;
 
 		if acquired_lock {
-			metrics::WORKER_LAST_METRICS_PUBLISH
-				.with_label_values(&[worker_id.to_string().as_str()])
-				.set(rivet_util::timestamp::now());
+			metrics::WORKER_LAST_METRICS_PUBLISH.set(rivet_util::timestamp::now());
 
 			let entries = self
 				.pools
