@@ -61,14 +61,6 @@ export function generateDatacenterRivetEngine(
 				native_url: `http://${clickhouseHost}:9301`, // TODO:
 				username: "system",
 				password: "default",
-				// TODO: Move this to init migrations
-				provision_users: {
-					vector: {
-						username: "vector",
-						password: "vector",
-						role: "write",
-					},
-				},
 				secure: false,
 			},
 			vector_http: {
