@@ -14,6 +14,7 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 		enabled:
 			inspector.isInspectorAvailable &&
 			inspector.features.queue.supported,
+		refetchInterval: 1000,
 		refetchOnWindowFocus: false,
 	});
 	const queueSizeQuery = useQuery(
@@ -38,8 +39,9 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 	}
 
 	const status = queueStatusQuery.data;
-	const size =
-		Number.isFinite(status.size) ? status.size : queueSizeQuery.data ?? 0;
+	const size = Number.isFinite(status.size)
+		? status.size
+		: (queueSizeQuery.data ?? 0);
 
 	return (
 		<ScrollArea className="flex-1 w-full min-h-0 h-full">
@@ -65,10 +67,7 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 									{message.name}
 								</div>
 								<div className="text-muted-foreground">
-									{format(
-										new Date(message.createdAtMs),
-										"p",
-									)}
+									{format(new Date(message.createdAtMs), "p")}
 								</div>
 							</div>
 							<div className="mt-1 text-[11px] text-muted-foreground">
