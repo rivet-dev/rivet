@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import { getRunMetadata } from "@/actor/config";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { ENGINE_ENDPOINT } from "@/engine-process/constants";
 import { InspectorConfigSchema } from "@/inspector/config";
@@ -265,9 +266,21 @@ export type RegistryConfigInput<A extends RegistryActors> = Omit<
 
 export function buildActorNames(
 	config: RegistryConfig,
-): Record<string, { metadata: Record<string, any> }> {
+): Record<string, { metadata: Record<string, unknown> }> {
 	return Object.fromEntries(
-		Object.keys(config.use).map((name) => [name, { metadata: {} }]),
+		Object.keys(config.use).map((actorName) => {
+			const definition = config.use[actorName];
+			const options = definition.config.options ?? {};
+			const runMeta = getRunMetadata(definition.config.run);
+			const metadata: Record<string, unknown> = {};
+			// Actor options take precedence over run metadata
+			metadata.icon = options.icon ?? runMeta.icon;
+			metadata.name = options.name ?? runMeta.name;
+			// Remove undefined values
+			if (!metadata.icon) delete metadata.icon;
+			if (!metadata.name) delete metadata.name;
+			return [actorName, { metadata }];
+		}),
 	);
 }
 

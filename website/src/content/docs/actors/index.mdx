@@ -870,6 +870,22 @@ Find the full client guides here:
 - [React Client](/docs/clients/react)
 - [Swift Client](/docs/clients/swift)
 
+### Icons & Names
+
+Customize how actors appear in the UI with display names and icons:
+
+```typescript
+const chatRoom = actor({
+  options: {
+    name: "Chat Room",
+    icon: "💬",  // or FontAwesome: "comments", "chart-line", etc.
+  },
+  // ...
+});
+```
+
+[Documentation](/docs/actors/appearance).
+
 ## Authentication & Security
 
 Validate credentials in `onBeforeConnect` or `createConnState`. Throw an error to reject the connection. Use `c.conn.id` or `c.conn.state` to identify users in actions—never trust user IDs passed as action parameters.
