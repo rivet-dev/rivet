@@ -1,9 +1,11 @@
 export {
 	createTraces,
+} from "./traces.js";
+export {
 	decodeReadRangeWire,
 	encodeReadRangeWire,
 	readRangeWireToOtlp,
-} from "./traces.js";
+} from "./read-range.js";
 export type {
 	EndSpanOptions,
 	EventOptions,

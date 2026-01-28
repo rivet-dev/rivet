@@ -18,6 +18,7 @@ export async function handleWebSocketInspectorConnect({
 	actor: AnyActorInstance;
 }): Promise<UpgradeWebSocketArgs> {
 	const inspector = actor.inspector;
+	const maxQueueStatusLimit = 200;
 
 	const listeners: Unsubscribe[] = [];
 	return {
@@ -136,6 +137,20 @@ export async function handleWebSocketInspectorConnect({
 								payload: bufferToArrayBuffer(
 									encodeReadRangeWire(wire),
 								),
+							},
+						},
+					});
+				} else if (message.body.tag === "QueueRequest") {
+					const { id, limit } = message.body.val;
+					const status = await inspector.getQueueStatus(
+						Math.min(Number(limit), maxQueueStatusLimit),
+					);
+					sendMessage(ws, {
+						body: {
+							tag: "QueueResponse",
+							val: {
+								rid: id,
+								status,
 							},
 						},
 					});
