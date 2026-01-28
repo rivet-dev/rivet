@@ -270,13 +270,6 @@
             }
           ]
         },
-        "provision_users": {
-          "default": {},
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/ClickHouseUser"
-          }
-        },
         "secure": {
           "default": false,
           "type": "boolean"
@@ -286,34 +279,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "ClickHouseUser": {
-      "type": "object",
-      "required": [
-        "password",
-        "role",
-        "username"
-      ],
-      "properties": {
-        "password": {
-          "$ref": "#/definitions/Secret<String>"
-        },
-        "role": {
-          "$ref": "#/definitions/ClickHouseUserRole"
-        },
-        "username": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "ClickHouseUserRole": {
-      "type": "string",
-      "enum": [
-        "Admin",
-        "Write",
-        "ReadOnly"
-      ]
     },
     "Datacenter": {
       "type": "object",
