@@ -9,6 +9,8 @@ import React, { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
 import { Bot, Gamepad2, FileText, Workflow, ShoppingCart, Wand2, Network, Clock, Database, Globe } from "lucide-react";
+import actorsLogoUrl from "@/images/products/actors-logo.svg";
+import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
 import { LogoContextMenu } from "./LogoContextMenu";
@@ -42,6 +44,129 @@ function TextNavItem({
 					{children}
 				</a>
 			</RivetHeader.NavItem>
+		</div>
+	);
+}
+
+function ProductsDropdown({ active }: { active?: boolean }) {
+	const [isOpen, setIsOpen] = useState(false);
+	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const isHoveringRef = useRef(false);
+
+	const products = [
+		{
+			label: "Actors",
+			href: "/docs/actors",
+			logo: actorsLogoUrl,
+			description: "Build stateful backends",
+		},
+		{
+			label: "Sandbox Agent SDK",
+			href: "https://sandboxagent.dev/",
+			logo: sandboxAgentLogoUrl,
+			description: "SDK for coding agents",
+			external: true
+		},
+	];
+
+	const cancelClose = () => {
+		if (closeTimeoutRef.current) {
+			clearTimeout(closeTimeoutRef.current);
+			closeTimeoutRef.current = null;
+		}
+	};
+
+	const scheduleClose = () => {
+		cancelClose();
+		closeTimeoutRef.current = setTimeout(() => {
+			setIsOpen(false);
+		}, 150);
+	};
+
+	const handleMouseEnter = () => {
+		isHoveringRef.current = true;
+		cancelClose();
+		setIsOpen(true);
+	};
+
+	const handleMouseLeave = () => {
+		isHoveringRef.current = false;
+		scheduleClose();
+	};
+
+	const handleOpenChange = (open: boolean) => {
+		if (!open) {
+			cancelClose();
+			setIsOpen(false);
+		}
+	};
+
+	const handlePointerDown = (e: React.PointerEvent) => {
+		e.preventDefault();
+		cancelClose();
+		setIsOpen((prev) => !prev);
+	};
+
+	useEffect(() => {
+		return () => cancelClose();
+	}, []);
+
+	return (
+		<div
+			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200"
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
+		>
+			<DropdownMenu open={isOpen} onOpenChange={handleOpenChange} modal={false}>
+				<DropdownMenuTrigger asChild>
+					<RivetHeader.NavItem asChild>
+						<button
+							type="button"
+							className={cn(
+								"!text-white cursor-pointer flex items-center gap-1 relative",
+								active && "opacity-100",
+								"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
+							)}
+							onPointerDown={handlePointerDown}
+							onMouseEnter={handleMouseEnter}
+						>
+							Products
+							<Icon icon={faChevronDown} className="h-3 w-3 ml-0.5" />
+						</button>
+					</RivetHeader.NavItem>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent
+					align="start"
+					className="min-w-[280px] p-4 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
+					onMouseEnter={handleMouseEnter}
+					onMouseLeave={handleMouseLeave}
+					sideOffset={0}
+					alignOffset={0}
+					side="bottom"
+				>
+					<div className="flex flex-col gap-1">
+						{products.map((product) => (
+							<a
+								key={product.href}
+								href={product.href}
+								target={product.external ? "_blank" : undefined}
+								rel={product.external ? "noopener noreferrer" : undefined}
+								className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+							>
+								<img src={product.logo.src} alt={product.label} className="h-6 w-6" />
+								<div className="flex flex-col">
+									<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
+										{product.label}
+									</div>
+									<div className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors leading-relaxed">
+										{product.description}
+									</div>
+								</div>
+							</a>
+						))}
+					</div>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</div>
 	);
 }
@@ -306,6 +431,7 @@ export function Header({
 						}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
+								<ProductsDropdown active={active === "product"} />
 								<SolutionsDropdown active={active === "solutions"} />
 								<TextNavItem
 									href="/docs"
@@ -397,6 +523,7 @@ export function Header({
 			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
+					<ProductsDropdown active={active === "product"} />
 					<SolutionsDropdown active={active === "solutions"} />
 					<TextNavItem
 						href="/docs"
@@ -467,10 +594,43 @@ function DocsMobileNavigation({ tree }) {
 		{ label: "Per-Tenant Databases", href: "/solutions/per-tenant-db", icon: Database },
 	];
 
+	const products = [
+		{ label: "Actors", href: "/docs/actors", logo: actorsLogoUrl },
+		{ label: "Sandbox Agent SDK", href: "https://sandboxagent.dev/", logo: sandboxAgentLogoUrl, external: true },
+	];
+
 	const currentSection = sections.find(s => s.id === getCurrentSection());
 
 	return (
 		<div className="flex flex-col gap-1 font-v2 subpixel-antialiased text-sm">
+			{/* Products dropdown */}
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<button className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors flex items-center justify-between w-full text-left">
+						Products
+						<Icon icon={faChevronDown} className="h-3 w-3" />
+					</button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent
+					className="w-[calc(100%-2rem)] max-w-[292px]"
+					align="start"
+					sideOffset={4}
+				>
+					{products.map((product) => (
+						<DropdownMenuItem
+							key={product.href}
+							asChild
+							className="flex items-center gap-2"
+						>
+							<a href={product.href} target={product.external ? "_blank" : undefined} rel={product.external ? "noopener noreferrer" : undefined}>
+								<img src={product.logo.src} alt={product.label} className="h-4 w-4" />
+								{product.label}
+							</a>
+						</DropdownMenuItem>
+					))}
+				</DropdownMenuContent>
+			</DropdownMenu>
+
 			{/* Solutions dropdown */}
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>

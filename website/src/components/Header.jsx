@@ -189,6 +189,45 @@ export const Header = forwardRef(function Header(
 						</a>
 
 						<div className="hidden items-center gap-1 lg:flex">
+							<Popover className="relative">
+								<Popover.Button
+									className={clsx(
+										"text-cream-100 hover:bg-white/5 hover:text-white",
+										"border-1 flex items-center gap-2.5 border border-transparent px-3.5 py-1.5 transition",
+									)}
+								>
+									<span className="font-display text-lg">Products</span>
+								</Popover.Button>
+
+								<Transition
+									as={Fragment}
+									enter="transition ease-out duration-200"
+									enterFrom="opacity-0 translate-y-1"
+									enterTo="opacity-100 translate-y-0"
+									leave="transition ease-in duration-150"
+									leaveFrom="opacity-100 translate-y-0"
+									leaveTo="opacity-0 translate-y-1"
+								>
+									<Popover.Panel className="absolute left-0 z-10 mt-2 w-56 rounded-lg bg-charcole-900 border border-white/10 shadow-lg">
+										<div className="py-2">
+											<a
+												href="/docs/actors"
+												className="block px-4 py-2 text-sm text-cream-100 hover:bg-white/5 hover:text-white transition"
+											>
+												Actors
+											</a>
+											<a
+												href="https://sandboxagent.dev"
+												target="_blank"
+												rel="noopener noreferrer"
+												className="block px-4 py-2 text-sm text-cream-100 hover:bg-white/5 hover:text-white transition"
+											>
+												Sandbox Agent SDK
+											</a>
+										</div>
+									</Popover.Panel>
+								</Transition>
+							</Popover>
 							<TopLevelNavItem href="/docs">Docs</TopLevelNavItem>
 							<TopLevelNavItem href="/changelog">
 								Changelog
