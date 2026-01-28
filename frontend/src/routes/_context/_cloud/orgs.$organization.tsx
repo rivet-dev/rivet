@@ -1,6 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
-import { createOrganizationContext } from "@/app/data-providers/cloud-data-provider";
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
 	component: RouteComponent,
@@ -10,14 +9,12 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
 				context.clerk.setActive({
 					organization: params.organization,
 				});
+
 				return {
-					dataProvider: {
-						...context.dataProvider,
-						...createOrganizationContext({
-							...context.dataProvider,
-							organization: params.organization,
-						}),
-					},
+					dataProvider: context.getOrCreateOrganizationContext(
+						context.dataProvider,
+						params.organization,
+					),
 				};
 			})
 			.otherwise(() => {
