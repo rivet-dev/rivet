@@ -107,6 +107,12 @@ export const useCloudDataProvider = ({
 	}).dataProvider;
 };
 
+export const useCloudProjectDataProvider = () => {
+	return useRouteContext({
+		from: "/_context/_cloud/orgs/$organization/projects/$project",
+	}).dataProvider;
+};
+
 export const useCloudNamespaceDataProvider = () => {
 	return useRouteContext({
 		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
