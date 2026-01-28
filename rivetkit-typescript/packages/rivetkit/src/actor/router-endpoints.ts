@@ -13,17 +13,24 @@ import {
 	WS_PROTOCOL_ENCODING,
 } from "@/common/actor-router-consts";
 import { stringifyError } from "@/common/utils";
+import type { RegistryConfig } from "@/registry/config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
+	HTTP_QUEUE_SEND_REQUEST_VERSIONED,
+	HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
 import {
 	type HttpActionRequest as HttpActionRequestJson,
 	HttpActionRequestSchema,
 	type HttpActionResponse as HttpActionResponseJson,
 	HttpActionResponseSchema,
+	type HttpQueueSendRequest as HttpQueueSendRequestJson,
+	HttpQueueSendRequestSchema,
+	type HttpQueueSendResponse as HttpQueueSendResponseJson,
+	HttpQueueSendResponseSchema,
 } from "@/schemas/client-protocol-zod/mod";
 import {
 	contentTypeForEncoding,
@@ -35,7 +42,6 @@ import { createHttpDriver } from "./conn/drivers/http";
 import { createRawRequestDriver } from "./conn/drivers/raw-request";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
-import { RegistryConfig } from "@/registry/config";
 
 export interface ActionOpts {
 	req?: HonoRequest;
@@ -58,6 +64,13 @@ export interface ConnsMessageOpts {
 
 export interface FetchOpts {
 	request: Request;
+	actorId: string;
+}
+
+export interface QueueSendOpts {
+	req?: HonoRequest;
+	name: string;
+	body: unknown;
 	actorId: string;
 }
 
@@ -138,13 +151,71 @@ export async function handleAction(
 	);
 
 	// Check outgoing message size
-	const messageSize = serialized instanceof Uint8Array ? serialized.byteLength : serialized.length;
+	const messageSize =
+		serialized instanceof Uint8Array
+			? serialized.byteLength
+			: serialized.length;
 	if (messageSize > config.maxOutgoingMessageSize) {
 		throw new errors.OutgoingMessageTooLong();
 	}
 
 	// TODO: Remove any, Hono is being a dumbass
 	return c.body(serialized as Uint8Array as any, 200, {
+		"Content-Type": contentTypeForEncoding(encoding),
+	});
+}
+
+export async function handleQueueSend(
+	c: HonoContext,
+	config: RegistryConfig,
+	actorDriver: ActorDriver,
+	actorId: string,
+) {
+	const encoding = getRequestEncoding(c.req);
+	const params = getRequestConnParams(c.req);
+	const arrayBuffer = await c.req.arrayBuffer();
+
+	if (arrayBuffer.byteLength > config.maxIncomingMessageSize) {
+		throw new errors.IncomingMessageTooLong();
+	}
+
+	const request = deserializeWithEncoding(
+		encoding,
+		new Uint8Array(arrayBuffer),
+		HTTP_QUEUE_SEND_REQUEST_VERSIONED,
+		HttpQueueSendRequestSchema,
+		(json: HttpQueueSendRequestJson) => json,
+		(bare: protocol.HttpQueueSendRequest) => ({
+			name: bare.name,
+			body: cbor.decode(new Uint8Array(bare.body)),
+		}),
+	);
+
+	const actor = await actorDriver.loadActor(actorId);
+	const conn = await actor.connectionManager.prepareAndConnectConn(
+		createHttpDriver(),
+		params,
+		c.req.raw,
+		c.req.path,
+		c.req.header(),
+	);
+	try {
+		await actor.queueManager.enqueue(request.name, request.body);
+	} finally {
+		conn.disconnect();
+	}
+
+	const response = serializeWithEncoding(
+		encoding,
+		{ ok: true },
+		HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
+		HttpQueueSendResponseSchema,
+		(_value): HttpQueueSendResponseJson => ({ ok: true }),
+		(_value): protocol.HttpQueueSendResponse => ({ ok: true }),
+	);
+
+	return c.body(response as Uint8Array as any, 200, {
 		"Content-Type": contentTypeForEncoding(encoding),
 	});
 }

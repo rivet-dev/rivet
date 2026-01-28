@@ -29,6 +29,7 @@ import { checkForSchedulingError, queryActor } from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
 import { logger } from "./log";
+import { createQueueProxy, createQueueSender } from "./queue";
 import { rawHttpFetch, rawWebSocket } from "./raw-utils";
 import { sendHttpRequest } from "./utils";
 
@@ -44,6 +45,7 @@ export class ActorHandleRaw {
 	#encoding: Encoding;
 	#actorQuery: ActorQuery;
 	#params: unknown;
+	#queueSender: ReturnType<typeof createQueueSender>;
 
 	/**
 	 * Do not call this directly.
@@ -64,6 +66,22 @@ export class ActorHandleRaw {
 		this.#encoding = encoding;
 		this.#actorQuery = actorQuery;
 		this.#params = params;
+		this.#queueSender = createQueueSender({
+			encoding: this.#encoding,
+			params: this.#params,
+			customFetch: async (request: Request) => {
+				const { actorId } = await queryActor(
+					undefined,
+					this.#actorQuery,
+					this.#driver,
+				);
+				return this.#driver.sendRequest(actorId, request);
+			},
+		});
+	}
+
+	get queue() {
+		return createQueueProxy(this.#queueSender);
 	}
 
 	/**
@@ -199,16 +217,10 @@ export class ActorHandleRaw {
 	}
 
 	/**
-	 * Makes a raw HTTP request to the actor.
-	 *
-	 * @param input - The URL, path, or Request object
-	 * @param init - Standard fetch RequestInit options
-	 * @returns Promise<Response> - The raw HTTP response
+	 * Fetches a resource from this actor via the /request endpoint. This is a
+	 * convenience wrapper around the raw HTTP API.
 	 */
-	async fetch(
-		input: string | URL | Request,
-		init?: RequestInit,
-	): Promise<Response> {
+	fetch(input: string | URL | Request, init?: RequestInit) {
 		return rawHttpFetch(
 			this.#driver,
 			this.#actorQuery,
@@ -219,16 +231,9 @@ export class ActorHandleRaw {
 	}
 
 	/**
-	 * Creates a raw WebSocket connection to the actor.
-	 *
-	 * @param path - The path for the WebSocket connection (e.g., "stream")
-	 * @param protocols - Optional WebSocket subprotocols
-	 * @returns WebSocket - A raw WebSocket connection
+	 * Opens a raw WebSocket connection to this actor.
 	 */
-	async websocket(
-		path?: string,
-		protocols?: string | string[],
-	): Promise<WebSocket> {
+	webSocket(path?: string, protocols?: string | string[]) {
 		return rawWebSocket(
 			this.#driver,
 			this.#actorQuery,
@@ -241,21 +246,12 @@ export class ActorHandleRaw {
 	/**
 	 * Resolves the actor to get its unique actor ID.
 	 */
-	async resolve({ signal }: { signal?: AbortSignal } = {}): Promise<string> {
-		if (
-			"getForKey" in this.#actorQuery ||
-			"getOrCreateForKey" in this.#actorQuery
-		) {
-			// TODO:
-			let name: string;
-			if ("getForKey" in this.#actorQuery) {
-				name = this.#actorQuery.getForKey.name;
-			} else if ("getOrCreateForKey" in this.#actorQuery) {
-				name = this.#actorQuery.getOrCreateForKey.name;
-			} else {
-				assertUnreachable(this.#actorQuery);
-			}
+	async resolve(): Promise<string> {
+		if ("getForKey" in this.#actorQuery) {
+			const name = this.#actorQuery.getForKey.name;
+			const key = this.#actorQuery.getForKey.key;
 
+			// Query the actor to get the id
 			const { actorId } = await queryActor(
 				undefined,
 				this.#actorQuery,

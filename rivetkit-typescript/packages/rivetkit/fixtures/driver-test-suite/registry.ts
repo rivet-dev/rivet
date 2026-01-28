@@ -26,6 +26,7 @@ import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
 import { counterWithLifecycle } from "./lifecycle";
 import { metadataActor } from "./metadata";
+import { queueActor, queueLimitedActor } from "./queue";
 import {
 	rawHttpActor,
 	rawHttpHonoActor,
@@ -76,6 +77,9 @@ export const registry = setup({
 		inlineClientActor,
 		// From kv.ts
 		kvActor,
+		// From queue.ts
+		queueActor,
+		queueLimitedActor,
 		// From action-inputs.ts
 		inputActor,
 		// From action-timeout.ts
