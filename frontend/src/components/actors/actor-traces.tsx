@@ -21,9 +21,13 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../ui/select";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { useActorInspector } from "./actor-inspector-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import type { ActorId } from "./queries";
+import { SpanSidebar } from "./traces/span-sidebar";
+import { TimelineView } from "./traces/traces-timeline";
+import type { SpanNode } from "./traces/types";
 
 const PRESET_OPTIONS = [
 	{ label: "5 min", ms: 5 * 60 * 1000 },
@@ -43,20 +47,11 @@ const DEFAULT_PRESET_MS = 30 * 60 * 1000;
 const GAP_THRESHOLD_MS = 500;
 const DEFAULT_LIMIT = 1000;
 
-type SpanNode = {
-	span: OtlpSpan;
-	startNs: bigint;
-	endNs: bigint | null;
-	children: SpanNode[];
-	events: OtlpSpanEvent[];
-};
-
-type TraceItem =
-	| { type: "span"; node: SpanNode; timeNs: bigint }
-	| { type: "event"; event: OtlpSpanEvent; timeNs: bigint };
+type ViewType = "list" | "timeline";
 
 export function ActorTraces({ actorId }: { actorId: ActorId }) {
 	const inspector = useActorInspector();
+	const [viewType, setViewType] = useState<ViewType>("list");
 	const [isLive, setIsLive] = useState(true);
 	const [presetMs, setPresetMs] = useState(DEFAULT_PRESET_MS);
 	const [customRange, setCustomRange] = useState<DateRange | undefined>(
@@ -216,30 +211,71 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 							)}`
 						: "Select a time range"}
 				</div>
+				<div className="flex-1" />
+				<ToggleGroup
+					type="single"
+					value={viewType}
+					onValueChange={(value) =>
+						value && setViewType(value as ViewType)
+					}
+					size="sm"
+				>
+					<ToggleGroupItem value="list" aria-label="List view">
+						<Icon icon={faList} className="size-4" />
+					</ToggleGroupItem>
+					<ToggleGroupItem
+						value="timeline"
+						aria-label="Timeline view"
+					>
+						<Icon icon={faTimeline} className="size-4" />
+					</ToggleGroupItem>
+				</ToggleGroup>
 			</div>
 
-			<div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2">
-				{traceTree.length === 0 ? (
-					<div className="flex items-center justify-center text-sm text-muted-foreground">
-						No traces found for this time range.
+			{viewType === "list" ? (
+				<div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2">
+					{traceTree.length === 0 ? (
+						<div className="flex items-center justify-center text-sm text-muted-foreground">
+							No traces found for this time range.
+						</div>
+					) : (
+						renderItemsWithGaps(
+							traceTree.map((node) => ({
+								type: "span" as const,
+								node,
+								timeNs: node.startNs,
+							})),
+							0,
+							nowNs,
+						)
+					)}
+					{queryResult?.clamped ? (
+						<div className="text-xs text-muted-foreground">
+							Results truncated at {DEFAULT_LIMIT} spans.
+						</div>
+					) : null}
+				</div>
+			) : (
+				<div className="flex min-h-0 flex-1">
+					<SpanSidebar spans={traceTree} />
+					<div className="flex-1 flex flex-col min-w-0">
+						<TimelineView
+							spans={traceTree}
+							selectedSpanId={null}
+							selectedEventIndex={null}
+							onSelectSpan={(spanId: string | null): void => {
+								throw new Error("Function not implemented.");
+							}}
+							onSelectEvent={(
+								spanId: string,
+								eventIndex: number,
+							): void => {
+								throw new Error("Function not implemented.");
+							}}
+						/>
 					</div>
-				) : (
-					renderItemsWithGaps(
-						traceTree.map((node) => ({
-							type: "span" as const,
-							node,
-							timeNs: node.startNs,
-						})),
-						0,
-						nowNs,
-					)
-				)}
-				{queryResult?.clamped ? (
-					<div className="text-xs text-muted-foreground">
-						Results truncated at {DEFAULT_LIMIT} spans.
-					</div>
-				) : null}
-			</div>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -482,34 +518,6 @@ function buildSpanTree(spans: OtlpSpan[]): SpanNode[] {
 	return roots;
 }
 
-function buildSpanDetails(span: OtlpSpan): Record<string, unknown> | null {
-	const attributes = otlpAttributesToObject(span.attributes);
-	const links = span.links?.map((link) => ({
-		traceId: link.traceId,
-		spanId: link.spanId,
-		traceState: link.traceState,
-		attributes: otlpAttributesToObject(link.attributes),
-		droppedAttributesCount: link.droppedAttributesCount,
-	}));
-	const details: Record<string, unknown> = {};
-	if (attributes && Object.keys(attributes).length > 0) {
-		details.attributes = attributes;
-	}
-	if (span.status) {
-		details.status = span.status;
-	}
-	if (links && links.length > 0) {
-		details.links = links;
-	}
-	if (span.traceState) {
-		details.traceState = span.traceState;
-	}
-	if (span.flags !== undefined) {
-		details.flags = span.flags;
-	}
-	return Object.keys(details).length > 0 ? details : null;
-}
-
 function otlpAttributesToObject(
 	attributes?: OtlpKeyValue[],
 ): Record<string, unknown> | null {
@@ -602,4 +610,598 @@ function formatGap(ms: number): string {
 	}
 	const days = Math.floor(hours / 24);
 	return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+interface FlatSpan {
+	node: SpanNode;
+	depth: number;
+	row: number;
+}
+
+function flattenSpanTree(nodes: SpanNode[]): FlatSpan[] {
+	const result: FlatSpan[] = [];
+	let row = 0;
+
+	function traverse(node: SpanNode, depth: number) {
+		result.push({ node, depth, row: row++ });
+		for (const child of node.children) {
+			traverse(child, depth + 1);
+		}
+	}
+
+	for (const node of nodes) {
+		traverse(node, 0);
+	}
+	return result;
+}
+
+function getAllSpanNodes(nodes: SpanNode[]): SpanNode[] {
+	const result: SpanNode[] = [];
+
+	function traverse(node: SpanNode) {
+		result.push(node);
+		for (const child of node.children) {
+			traverse(child);
+		}
+	}
+
+	for (const node of nodes) {
+		traverse(node);
+	}
+	return result;
+}
+
+interface TimelineGap {
+	afterRow: number;
+	gapMs: number;
+	startNs: bigint;
+	endNs: bigint;
+}
+
+const GAP_VISUAL_WIDTH_PERCENT = 2;
+
+function TracesTimelineView({
+	spans,
+	nowNs,
+	clamped,
+	limit,
+}: {
+	spans: SpanNode[];
+	nowNs: bigint;
+	clamped?: boolean;
+	limit: number;
+}) {
+	const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
+	const sidebarRef = useRef<HTMLDivElement>(null);
+	const timelineRef = useRef<HTMLDivElement>(null);
+
+	const flatSpans = useMemo(() => flattenSpanTree(spans), [spans]);
+	const allSpans = useMemo(() => getAllSpanNodes(spans), [spans]);
+
+	const { minTime, maxTime } = useMemo(() => {
+		if (allSpans.length === 0) {
+			return { minTime: 0n, maxTime: 0n };
+		}
+
+		const starts = allSpans.map((s) => s.startNs);
+		const ends = allSpans.map((s) => s.endNs ?? nowNs);
+
+		const min = starts.reduce((a, b) => (a < b ? a : b), starts[0]);
+		const max = ends.reduce((a, b) => (a > b ? a : b), ends[0]);
+
+		return { minTime: min, maxTime: max };
+	}, [allSpans, nowNs]);
+
+	const horizontalGaps = useMemo(() => {
+		const result: TimelineGap[] = [];
+		const sorted = [...allSpans].sort((a, b) =>
+			a.startNs < b.startNs ? -1 : a.startNs > b.startNs ? 1 : 0,
+		);
+
+		let lastEndNs = minTime;
+		for (const span of sorted) {
+			const gapMs = nsToMs(span.startNs - lastEndNs);
+			if (gapMs > GAP_THRESHOLD_MS) {
+				result.push({
+					afterRow: -1,
+					gapMs,
+					startNs: lastEndNs,
+					endNs: span.startNs,
+				});
+			}
+			const spanEnd = span.endNs ?? nowNs;
+			if (spanEnd > lastEndNs) {
+				lastEndNs = spanEnd;
+			}
+		}
+		return result;
+	}, [allSpans, minTime, nowNs]);
+
+	const compressedDuration = useMemo(() => {
+		const totalGap = horizontalGaps.reduce((sum, g) => sum + g.gapMs, 0);
+		const fullDuration = nsToMs(maxTime - minTime);
+		const gapVisualTime =
+			(horizontalGaps.length * GAP_VISUAL_WIDTH_PERCENT * fullDuration) /
+			100;
+		const compressed = fullDuration - totalGap + gapVisualTime;
+		return Math.max(compressed, 1);
+	}, [horizontalGaps, minTime, maxTime]);
+
+	const verticalGaps = useMemo(() => {
+		const result: TimelineGap[] = [];
+		const sorted = [...flatSpans].sort((a, b) =>
+			a.node.startNs < b.node.startNs
+				? -1
+				: a.node.startNs > b.node.startNs
+					? 1
+					: 0,
+		);
+
+		for (let i = 1; i < sorted.length; i++) {
+			const prev = sorted[i - 1];
+			const curr = sorted[i];
+			const gapMs = nsToMs(curr.node.startNs - prev.node.startNs);
+			if (gapMs > GAP_THRESHOLD_MS) {
+				result.push({
+					afterRow: prev.row,
+					gapMs,
+					startNs: prev.node.startNs,
+					endNs: curr.node.startNs,
+				});
+			}
+		}
+		return result;
+	}, [flatSpans]);
+
+	const rowHeight = 36;
+	const rowGap = 4;
+	const gapMarkerHeight = 24;
+
+	const getRowTop = (row: number) => {
+		let top = row * (rowHeight + rowGap);
+		for (const gap of verticalGaps) {
+			if (gap.afterRow < row) {
+				top += gapMarkerHeight;
+			}
+		}
+		return top;
+	};
+
+	const totalHeight = useMemo(() => {
+		const baseHeight = flatSpans.length * (rowHeight + rowGap);
+		const gapsHeight = verticalGaps.length * gapMarkerHeight;
+		return baseHeight + gapsHeight;
+	}, [flatSpans.length, verticalGaps.length]);
+
+	const getCompressedPosition = (timeNs: bigint): number => {
+		if (compressedDuration === 0) return 0;
+
+		let position = nsToMs(timeNs - minTime);
+		let gapsBefore = 0;
+
+		for (const gap of horizontalGaps) {
+			if (timeNs > gap.endNs) {
+				position -= gap.gapMs;
+				gapsBefore++;
+			} else if (timeNs > gap.startNs) {
+				const gapProgress = nsToMs(timeNs - gap.startNs) / gap.gapMs;
+				const fullDuration = nsToMs(maxTime - minTime);
+				position -= gap.gapMs;
+				position +=
+					(gapProgress * GAP_VISUAL_WIDTH_PERCENT * fullDuration) /
+					100;
+				gapsBefore++;
+			}
+		}
+
+		const fullDuration = nsToMs(maxTime - minTime);
+		position +=
+			(gapsBefore * GAP_VISUAL_WIDTH_PERCENT * fullDuration) / 100;
+
+		return (position / compressedDuration) * 100;
+	};
+
+	const getSpanStyle = (node: SpanNode) => {
+		if (compressedDuration === 0) return { left: "0%", width: "100%" };
+
+		const startPercent = getCompressedPosition(node.startNs);
+		const endTime = node.endNs ?? nowNs;
+		const endPercent = getCompressedPosition(endTime);
+		const widthPercent = endPercent - startPercent;
+
+		return {
+			left: `${startPercent}%`,
+			width: `${Math.max(widthPercent, 0.5)}%`,
+		};
+	};
+
+	const selectedNode = useMemo(() => {
+		if (!selectedSpanId) return null;
+		return allSpans.find((s) => s.span.spanId === selectedSpanId) ?? null;
+	}, [allSpans, selectedSpanId]);
+
+	const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+		const scrollTop = e.currentTarget.scrollTop;
+		if (sidebarRef.current && e.currentTarget === timelineRef.current) {
+			sidebarRef.current.scrollTop = scrollTop;
+		} else if (
+			timelineRef.current &&
+			e.currentTarget === sidebarRef.current
+		) {
+			timelineRef.current.scrollTop = scrollTop;
+		}
+	};
+
+	if (spans.length === 0) {
+		return (
+			<div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+				No traces found for this time range.
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex-1 min-h-0 flex flex-col">
+			<div className="flex-1 flex min-h-0">
+				<div
+					ref={sidebarRef}
+					className="w-64 border-r overflow-y-auto shrink-0"
+					onScroll={handleScroll}
+				>
+					<div className="sticky top-0 z-10 h-8 border-b bg-background/95 backdrop-blur px-3 flex items-center">
+						<span className="text-xs font-medium text-muted-foreground">
+							Spans
+						</span>
+					</div>
+					<div
+						className="relative"
+						style={{ height: `${totalHeight}px` }}
+					>
+						{flatSpans.map(({ node, depth, row }) => {
+							const isSelected =
+								selectedSpanId === node.span.spanId;
+							const isActive = node.endNs == null;
+							const durationMs = node.endNs
+								? nsToMs(node.endNs - node.startNs)
+								: null;
+
+							return (
+								<button
+									key={node.span.spanId}
+									type="button"
+									onClick={() =>
+										setSelectedSpanId(
+											isSelected
+												? null
+												: node.span.spanId,
+										)
+									}
+									className={cn(
+										"absolute left-0 right-0 flex items-center gap-2 px-3 py-1 text-left transition-colors",
+										isSelected
+											? "bg-primary/10"
+											: "hover:bg-accent/50",
+									)}
+									style={{
+										top: `${getRowTop(row)}px`,
+										height: `${rowHeight}px`,
+										paddingLeft: `${12 + depth * 12}px`,
+									}}
+								>
+									{isActive && (
+										<Icon
+											icon={faSpinnerThird}
+											className="h-3 w-3 animate-spin text-muted-foreground shrink-0"
+										/>
+									)}
+									<span className="text-xs truncate flex-1">
+										{node.span.name || "Unnamed span"}
+									</span>
+									{durationMs !== null && (
+										<span className="text-[10px] text-muted-foreground shrink-0">
+											{formatDuration(durationMs)}
+										</span>
+									)}
+								</button>
+							);
+						})}
+						{verticalGaps.map((gap) => (
+							<div
+								key={`gap-${gap.afterRow}`}
+								className="absolute left-0 right-0 flex items-center gap-2 px-3"
+								style={{
+									top: `${getRowTop(gap.afterRow) + rowHeight + rowGap / 2}px`,
+									height: `${gapMarkerHeight}px`,
+								}}
+							>
+								<div className="h-px flex-1 bg-border" />
+								<span className="text-[10px] text-muted-foreground">
+									{formatGap(gap.gapMs)}
+								</span>
+								<div className="h-px flex-1 bg-border" />
+							</div>
+						))}
+					</div>
+				</div>
+
+				<div
+					ref={timelineRef}
+					className="flex-1 overflow-auto"
+					onScroll={handleScroll}
+				>
+					<div
+						className="relative min-w-full"
+						style={{ height: `${totalHeight + 32}px` }}
+					>
+						<TimelineScale
+							totalDuration={compressedDuration}
+							gaps={horizontalGaps}
+							getCompressedPosition={getCompressedPosition}
+						/>
+						<div className="relative px-4">
+							{flatSpans.map(({ node, depth, row }) => {
+								const style = getSpanStyle(node);
+								const isSelected =
+									selectedSpanId === node.span.spanId;
+								const durationMs = node.endNs
+									? nsToMs(node.endNs - node.startNs)
+									: null;
+								const isActive = node.endNs == null;
+
+								return (
+									<div
+										key={node.span.spanId}
+										className="absolute"
+										style={{
+											top: `${getRowTop(row)}px`,
+											left: style.left,
+											width: style.width,
+											height: `${rowHeight}px`,
+											marginLeft: `${depth * 8}px`,
+										}}
+									>
+										<button
+											type="button"
+											onClick={() =>
+												setSelectedSpanId(
+													isSelected
+														? null
+														: node.span.spanId,
+												)
+											}
+											className={cn(
+												"w-full h-full rounded border transition-all flex items-center px-2 gap-2 text-left overflow-hidden",
+												isSelected
+													? "bg-primary/20 border-primary ring-1 ring-primary"
+													: "bg-card border-border hover:bg-accent/50",
+											)}
+										>
+											{isActive && (
+												<Icon
+													icon={faSpinnerThird}
+													className="h-3 w-3 animate-spin text-muted-foreground shrink-0"
+												/>
+											)}
+											<span className="text-xs font-medium truncate flex-1">
+												{node.span.name ||
+													"Unnamed span"}
+											</span>
+											{durationMs !== null && (
+												<span className="text-xs text-muted-foreground shrink-0">
+													{formatDuration(durationMs)}
+												</span>
+											)}
+										</button>
+									</div>
+								);
+							})}
+							{verticalGaps.map((gap) => (
+								<div
+									key={`timeline-gap-${gap.afterRow}`}
+									className="absolute left-0 right-4 flex items-center"
+									style={{
+										top: `${getRowTop(gap.afterRow) + rowHeight + rowGap / 2}px`,
+										height: `${gapMarkerHeight}px`,
+									}}
+								>
+									<div className="h-px flex-1 bg-border/50 border-dashed" />
+								</div>
+							))}
+							{horizontalGaps.map((gap) => {
+								const startPercent = getCompressedPosition(
+									gap.startNs,
+								);
+								const endPercent = getCompressedPosition(
+									gap.endNs,
+								);
+								return (
+									<div
+										key={`h-gap-${gap.startNs.toString()}`}
+										className="absolute top-0 bottom-0 flex items-center justify-center bg-muted/30 border-x border-dashed border-border/50"
+										style={{
+											left: `${startPercent}%`,
+											width: `${endPercent - startPercent}%`,
+										}}
+									>
+										<span className="text-[10px] text-muted-foreground bg-background/80 px-1 rounded whitespace-nowrap">
+											{formatGap(gap.gapMs)}
+										</span>
+									</div>
+								);
+							})}
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{selectedNode ? (
+				<TimelineDetailsPanel
+					node={selectedNode}
+					nowNs={nowNs}
+					onClose={() => setSelectedSpanId(null)}
+				/>
+			) : null}
+
+			{clamped ? (
+				<div className="px-4 py-2 text-xs text-muted-foreground border-t">
+					Results truncated at {limit} spans.
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+function TimelineScale({
+	totalDuration,
+	gaps,
+	getCompressedPosition,
+}: {
+	totalDuration: number;
+	gaps: TimelineGap[];
+	getCompressedPosition: (timeNs: bigint) => number;
+}) {
+	const ticks = useMemo(() => {
+		if (totalDuration === 0) return [];
+
+		const numTicks = 10;
+		const tickInterval = totalDuration / numTicks;
+		const result = [];
+
+		for (let i = 0; i <= numTicks; i++) {
+			const ms = tickInterval * i;
+			result.push({
+				position: `${(i / numTicks) * 100}%`,
+				label: formatDuration(ms),
+			});
+		}
+
+		return result;
+	}, [totalDuration]);
+
+	return (
+		<div className="sticky top-0 z-10 h-8 border-b bg-background/95 backdrop-blur">
+			<div className="relative h-full px-4">
+				{ticks.map((tick) => (
+					<div
+						key={tick.position}
+						className="absolute top-0 h-full flex flex-col items-center"
+						style={{ left: tick.position }}
+					>
+						<div className="h-2 w-px bg-border" />
+						<span className="text-[10px] text-muted-foreground mt-0.5">
+							{tick.label}
+						</span>
+					</div>
+				))}
+				{gaps.map((gap) => {
+					const startPercent = getCompressedPosition(gap.startNs);
+					const endPercent = getCompressedPosition(gap.endNs);
+					return (
+						<div
+							key={`scale-gap-${gap.startNs.toString()}`}
+							className="absolute top-0 h-full bg-muted/50"
+							style={{
+								left: `${startPercent}%`,
+								width: `${endPercent - startPercent}%`,
+							}}
+						/>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+function TimelineDetailsPanel({
+	node,
+	nowNs,
+	onClose,
+}: {
+	node: SpanNode;
+	nowNs: bigint;
+	onClose: () => void;
+}) {
+	const startMs = nsToMs(node.startNs);
+	const endNs = node.endNs ?? nowNs;
+	const durationMs = nsToMs(endNs - node.startNs);
+	const details = buildSpanDetails(node.span);
+
+	return (
+		<div className="border-t bg-card max-h-64 overflow-y-auto">
+			<div className="flex items-center justify-between px-4 py-2 border-b sticky top-0 bg-card">
+				<div className="flex items-center gap-2 min-w-0">
+					<span className="font-medium truncate">
+						{node.span.name}
+					</span>
+					{node.endNs == null && (
+						<Icon
+							icon={faSpinnerThird}
+							className="h-3 w-3 animate-spin text-muted-foreground"
+						/>
+					)}
+				</div>
+				<Button variant="ghost" size="sm" onClick={onClose}>
+					Close
+				</Button>
+			</div>
+			<div className="p-4 space-y-3">
+				<div className="grid grid-cols-2 gap-4 text-sm">
+					<div>
+						<div className="text-xs text-muted-foreground mb-1">
+							Start
+						</div>
+						<div className="font-mono text-xs">
+							{format(new Date(startMs), "PPpp")}
+						</div>
+					</div>
+					<div>
+						<div className="text-xs text-muted-foreground mb-1">
+							Duration
+						</div>
+						<div className="font-mono text-xs">
+							{node.endNs
+								? formatDuration(durationMs)
+								: "In progress"}
+						</div>
+					</div>
+				</div>
+				{details ? (
+					<div className="rounded-md border bg-muted/20 p-3">
+						<div className="text-xs font-medium mb-2">
+							Span details
+						</div>
+						<ActorObjectInspector data={details} />
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+function buildSpanDetails(span: OtlpSpan): Record<string, unknown> | null {
+	const attributes = otlpAttributesToObject(span.attributes);
+	const links = span.links?.map((link) => ({
+		traceId: link.traceId,
+		spanId: link.spanId,
+		traceState: link.traceState,
+		attributes: otlpAttributesToObject(link.attributes),
+		droppedAttributesCount: link.droppedAttributesCount,
+	}));
+	const details: Record<string, unknown> = {};
+	if (attributes && Object.keys(attributes).length > 0) {
+		details.attributes = attributes;
+	}
+	if (span.status) {
+		details.status = span.status;
+	}
+	if (links && links.length > 0) {
+		details.links = links;
+	}
+	if (span.traceState) {
+		details.traceState = span.traceState;
+	}
+	if (span.flags !== undefined) {
+		details.flags = span.flags;
+	}
+	return Object.keys(details).length > 0 ? details : null;
 }
