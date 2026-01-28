@@ -206,7 +206,7 @@ spec:
     spec:
       containers:
       - name: rivet-engine
-        image: rivetkit/engine:latest
+        image: rivetdev/engine:latest
         args:
         - start
         - --except-services
@@ -297,7 +297,7 @@ spec:
     spec:
       containers:
       - name: rivet-engine
-        image: rivetkit/engine:latest
+        image: rivetdev/engine:latest
         args:
         - start
         - --services

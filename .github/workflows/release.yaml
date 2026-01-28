@@ -202,12 +202,12 @@ jobs:
           docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN}}
 
-      - name: Build & Push (rivetkit/engine:full)
+      - name: Build & Push (rivetdev/engine:full)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: rivetkit/engine:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          tags: rivetdev/engine:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
           file: engine/docker/universal/Dockerfile
           target: engine-full
           platforms: ${{ matrix.platform }}
@@ -219,12 +219,12 @@ jobs:
           # secret-files: |
           #   netrc=${{ runner.temp }}/netrc
 
-      - name: Build & Push (rivetkit/engine:slim)
+      - name: Build & Push (rivetdev/engine:slim)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: rivetkit/engine:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          tags: rivetdev/engine:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
           file: engine/docker/universal/Dockerfile
           target: engine-slim
           platforms: ${{ matrix.platform }}
