@@ -1,0 +1,196 @@
+import type { RunContext } from "@/actor/contexts/run";
+import type { AnyActorInstance } from "@/actor/instance/mod";
+import { KEYS, makeWorkflowKey } from "@/actor/instance/keys";
+import type {
+	EngineDriver,
+	KVEntry,
+	KVWrite,
+	Message,
+	WorkflowMessageDriver,
+} from "@rivetkit/workflow-engine";
+
+const WORKFLOW_QUEUE_PREFIX = "__workflow:";
+
+export function workflowQueueName(name: string): string {
+	return `${WORKFLOW_QUEUE_PREFIX}${name}`;
+}
+
+function stripWorkflowQueueName(name: string): string | null {
+	if (!name.startsWith(WORKFLOW_QUEUE_PREFIX)) {
+		return null;
+	}
+	return name.slice(WORKFLOW_QUEUE_PREFIX.length);
+}
+
+function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
+	return prefixed.slice(KEYS.WORKFLOW_PREFIX.length);
+}
+
+class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
+	#actor: AnyActorInstance;
+	#runCtx: RunContext<any, any, any, any, any, any>;
+
+	constructor(
+		actor: AnyActorInstance,
+		runCtx: RunContext<any, any, any, any, any, any>,
+	) {
+		this.#actor = actor;
+		this.#runCtx = runCtx;
+	}
+
+	async loadMessages(): Promise<Message[]> {
+		const queueMessages = await this.#runCtx.keepAwake(
+			this.#actor.queueManager.getMessages(),
+		);
+
+		const workflowMessages: Message[] = [];
+		for (const queueMessage of queueMessages) {
+			const workflowName = stripWorkflowQueueName(queueMessage.name);
+			if (!workflowName) continue;
+			workflowMessages.push({
+				id: queueMessage.id.toString(),
+				name: workflowName,
+				data: queueMessage.body,
+				sentAt: queueMessage.createdAt,
+			});
+		}
+
+		return workflowMessages;
+	}
+
+	async addMessage(message: Message): Promise<void> {
+		await this.#runCtx.keepAwake(
+			this.#actor.queueManager.enqueue(
+				workflowQueueName(message.name),
+				message.data,
+			),
+		);
+	}
+
+	async deleteMessages(messageIds: string[]): Promise<string[]> {
+		if (messageIds.length === 0) {
+			return [];
+		}
+
+		const ids = messageIds.map((id) => {
+			try {
+				return BigInt(id);
+			} catch {
+				return null;
+			}
+		});
+
+		const validIds = ids.filter(
+			(id): id is bigint => id !== null && id >= 0,
+		);
+		if (validIds.length === 0) {
+			return [];
+		}
+
+		const deleted = await this.#runCtx.keepAwake(
+			this.#actor.queueManager.deleteMessagesById(validIds),
+		);
+		return deleted.map((id) => id.toString());
+	}
+}
+
+export class ActorWorkflowDriver implements EngineDriver {
+	readonly workerPollInterval = 100;
+	readonly messageDriver: WorkflowMessageDriver;
+	#actor: AnyActorInstance;
+	#runCtx: RunContext<any, any, any, any, any, any>;
+
+	constructor(
+		actor: AnyActorInstance,
+		runCtx: RunContext<any, any, any, any, any, any>,
+	) {
+		this.#actor = actor;
+		this.#runCtx = runCtx;
+		this.messageDriver = new ActorWorkflowMessageDriver(actor, runCtx);
+	}
+
+	async get(key: Uint8Array): Promise<Uint8Array | null> {
+		const [value] = await this.#runCtx.keepAwake(
+			this.#actor.driver.kvBatchGet(this.#actor.id, [
+				makeWorkflowKey(key),
+			]),
+		);
+		return value ?? null;
+	}
+
+	async set(key: Uint8Array, value: Uint8Array): Promise<void> {
+		await this.#runCtx.keepAwake(
+			this.#actor.driver.kvBatchPut(this.#actor.id, [
+				[makeWorkflowKey(key), value],
+			]),
+		);
+	}
+
+	async delete(key: Uint8Array): Promise<void> {
+		await this.#runCtx.keepAwake(
+			this.#actor.driver.kvBatchDelete(this.#actor.id, [
+				makeWorkflowKey(key),
+			]),
+		);
+	}
+
+	async deletePrefix(prefix: Uint8Array): Promise<void> {
+		const entries = await this.#runCtx.keepAwake(
+			this.#actor.driver.kvListPrefix(
+				this.#actor.id,
+				makeWorkflowKey(prefix),
+			),
+		);
+		if (entries.length === 0) {
+			return;
+		}
+		await this.#runCtx.keepAwake(
+			this.#actor.driver.kvBatchDelete(
+				this.#actor.id,
+				entries.map(([key]) => key),
+			),
+		);
+	}
+
+	async list(prefix: Uint8Array): Promise<KVEntry[]> {
+		const entries = await this.#runCtx.keepAwake(
+			this.#actor.driver.kvListPrefix(
+				this.#actor.id,
+				makeWorkflowKey(prefix),
+			),
+		);
+		return entries.map(([key, value]) => ({
+			key: stripWorkflowKey(key),
+			value,
+		}));
+	}
+
+	async batch(writes: KVWrite[]): Promise<void> {
+		if (writes.length === 0) return;
+		await this.#runCtx.keepAwake(
+			this.#actor.driver.kvBatchPut(
+				this.#actor.id,
+				writes.map(({ key, value }) => [makeWorkflowKey(key), value]),
+			),
+		);
+	}
+
+	async setAlarm(_workflowId: string, wakeAt: number): Promise<void> {
+		await this.#runCtx.keepAwake(
+			this.#actor.driver.setAlarm(this.#actor, wakeAt),
+		);
+	}
+
+	async clearAlarm(_workflowId: string): Promise<void> {
+		// No dedicated clear alarm support in actor drivers.
+		return;
+	}
+
+	waitForMessages(
+		messageNames: string[],
+		abortSignal: AbortSignal,
+	): Promise<void> {
+		const queueNames = messageNames.map((name) => workflowQueueName(name));
+		return this.#actor.queueManager.waitForNames(queueNames, abortSignal);
+	}
+}

@@ -8,7 +8,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate(["basic"]);
 
-			const ws = await actor.websocket();
+			const ws = await actor.webSocket();
 
 			// The WebSocket should already be open since openWebSocket waits for openPromise
 			// But we still need to ensure any buffered events are processed
@@ -50,7 +50,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate(["echo"]);
 
-			const ws = await actor.websocket();
+			const ws = await actor.webSocket();
 
 			// Check if WebSocket is already open
 			if (ws.readyState !== WebSocket.OPEN) {
@@ -92,7 +92,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate(["ping"]);
 
-			const ws = await actor.websocket();
+			const ws = await actor.webSocket();
 
 			// Check if WebSocket is already open
 			if (ws.readyState !== WebSocket.OPEN) {
@@ -134,7 +134,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const actor1 = client.rawWebSocketActor.getOrCreate(["stats"]);
 
 			// Create first connection to ensure actor exists
-			const ws1 = await actor1.websocket();
+			const ws1 = await actor1.webSocket();
 			const ws1MessagePromise = new Promise<void>((resolve, reject) => {
 				ws1.addEventListener("message", () => resolve(), {
 					once: true,
@@ -147,7 +147,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 
 			// Now get reference to same actor
 			const actor2 = client.rawWebSocketActor.get(["stats"]);
-			const ws2 = await actor2.websocket();
+			const ws2 = await actor2.webSocket();
 			const ws2MessagePromise = new Promise<void>((resolve, reject) => {
 				ws2.addEventListener("message", () => resolve(), {
 					once: true,
@@ -203,7 +203,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 				"binary",
 			]);
 
-			const ws = await actor.websocket();
+			const ws = await actor.webSocket();
 
 			// Check if WebSocket is already open
 			if (ws.readyState !== WebSocket.OPEN) {
@@ -267,7 +267,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate(["paths"]);
 
-			const ws = await actor.websocket("custom/path");
+			const ws = await actor.webSocket("custom/path");
 
 			await new Promise<void>((resolve, reject) => {
 				ws.addEventListener("open", () => {
@@ -297,7 +297,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate(["close-test"]);
 
-			const ws = await actor.websocket();
+			const ws = await actor.webSocket();
 
 			// Check if WebSocket is already open
 			if (ws.readyState !== WebSocket.OPEN) {
@@ -343,7 +343,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			]);
 
 			// Create first connection
-			const ws1 = await actor.websocket();
+			const ws1 = await actor.webSocket();
 
 			// Wait for open event
 			await new Promise<void>((resolve, reject) => {
@@ -367,7 +367,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			expect(welcome1.connectionCount).toBe(1);
 
 			// Create second connection to same actor
-			const ws2 = await actor.websocket();
+			const ws2 = await actor.webSocket();
 
 			await new Promise<void>((resolve, reject) => {
 				ws2.addEventListener("open", () => resolve(), { once: true });
@@ -438,7 +438,7 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			]);
 
 			// Test WebSocket with query parameters
-			const ws = await actor.websocket(
+			const ws = await actor.webSocket(
 				"api/v1/stream?token=abc123&user=test",
 			);
 

@@ -3687,6 +3687,9 @@ importers:
       '@rivetkit/virtual-websocket':
         specifier: workspace:*
         version: link:../../../shared/typescript/virtual-websocket
+      '@rivetkit/workflow-engine':
+        specifier: workspace:*
+        version: link:../workflow-engine
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
