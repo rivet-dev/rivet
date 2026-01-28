@@ -1,0 +1,120 @@
+# MARK: Message To Server
+
+type PatchStateRequest struct {
+	state: data
+}
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: data
+}
+
+type StateRequest struct {
+	id: uint
+}
+
+type ConnectionsRequest struct {
+	id: uint
+}
+
+type RpcsListRequest struct {
+	id: uint
+}
+
+type TraceQueryRequest struct {
+	id: uint
+	startMs: uint
+	endMs: uint
+	limit: uint
+}
+
+type ToServerBody union {
+	PatchStateRequest |
+	StateRequest |
+	ConnectionsRequest |
+	ActionRequest |
+	RpcsListRequest |
+	TraceQueryRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+# MARK: Message To Client
+
+type State data
+
+type Connection struct {
+	id: str
+	details: data
+}
+
+type Init struct {
+	connections: list<Connection>
+	state: optional<State>
+	isStateEnabled: bool
+	rpcs: list<str>
+	isDatabaseEnabled: bool
+	queueSize: uint
+}
+
+type ConnectionsResponse struct {
+	rid: uint
+	connections: list<Connection>
+}
+
+type StateResponse struct {
+	rid: uint
+	state: optional<State>
+	isStateEnabled: bool
+}
+
+type ActionResponse struct {
+	rid: uint
+	output: data
+}
+
+type TraceQueryResponse struct {
+	rid: uint
+	payload: data
+}
+
+type StateUpdated struct {
+	state: State
+}
+
+type QueueUpdated struct {
+	queueSize: uint
+}
+
+type RpcsListResponse struct {
+	rid: uint
+	rpcs: list<str>
+}
+
+type ConnectionsUpdated struct {
+	connections: list<Connection>
+}
+
+type Error struct {
+	message: str
+}
+
+type ToClientBody union {
+	StateResponse |
+	ConnectionsResponse |
+	ActionResponse |
+	ConnectionsUpdated |
+	QueueUpdated |
+	StateUpdated |
+	RpcsListResponse |
+	TraceQueryResponse |
+	Error |
+	Init
+}
+
+type ToClient struct {
+	body: ToClientBody
+}

@@ -1,0 +1,177 @@
+# Traces BARE Schema v1
+#
+# Internal storage format for @rivetkit/traces. Records are stored as an
+# append-only Span[] stream and exported to OTLP v1 JSON on read.
+#
+# OTLP spec: https://opentelemetry.io/docs/specs/otlp/
+# OTel trace data model: https://opentelemetry.io/docs/specs/otel/trace/api/
+# OTLP proto: https://github.com/open-telemetry/opentelemetry-proto
+
+# Opaque CBOR bytes for attribute values
+# See cbor-x for encoding/decoding
+# https://github.com/kriszyp/cbor-x
+#
+# NOTE: AnyValue conversion happens at export time.
+#
+# BARE type for raw bytes
+#
+# type Cbor data
+
+# Raw bytes types
+
+type Cbor data
+
+type TraceId data
+
+type SpanId data
+
+# String table index
+
+type StringId u32
+
+# KeyValue (attribute)
+
+type KeyValue struct {
+	key: StringId
+	value: Cbor
+}
+
+type Attributes list<KeyValue>
+
+# Status
+
+type SpanStatusCode enum {
+	UNSET
+	OK
+	ERROR
+}
+
+type SpanStatus struct {
+	code: SpanStatusCode
+	message: optional<str>
+}
+
+# Link
+
+type SpanLink struct {
+	traceId: TraceId
+	spanId: SpanId
+	traceState: optional<str>
+	attributes: Attributes
+	droppedAttributesCount: u32
+}
+
+# Start
+
+type SpanStart struct {
+	traceId: TraceId
+	spanId: SpanId
+	parentSpanId: optional<SpanId>
+	name: StringId
+	kind: u32
+	traceState: optional<str>
+	flags: u32
+	attributes: Attributes
+	droppedAttributesCount: u32
+	links: list<SpanLink>
+	droppedLinksCount: u32
+}
+
+# Update
+
+type SpanUpdate struct {
+	spanId: SpanId
+	attributes: Attributes
+	droppedAttributesCount: u32
+	status: optional<SpanStatus>
+}
+
+# Event
+
+type SpanEvent struct {
+	spanId: SpanId
+	name: StringId
+	attributes: Attributes
+	droppedAttributesCount: u32
+}
+
+# End
+
+type SpanEnd struct {
+	spanId: SpanId
+	status: optional<SpanStatus>
+}
+
+# Snapshot
+
+type SpanSnapshot struct {
+	traceId: TraceId
+	spanId: SpanId
+	parentSpanId: optional<SpanId>
+	name: StringId
+	kind: u32
+	startTimeUnixNs: u64
+	traceState: optional<str>
+	flags: u32
+	attributes: Attributes
+	droppedAttributesCount: u32
+	links: list<SpanLink>
+	droppedLinksCount: u32
+	status: optional<SpanStatus>
+}
+
+# Record
+
+type RecordBody union {
+	SpanStart |
+	SpanEvent |
+	SpanUpdate |
+	SpanEnd |
+	SpanSnapshot
+}
+
+type Record struct {
+	timeOffsetNs: u64
+	body: RecordBody
+}
+
+# Record pointer
+
+type SpanRecordKey struct {
+	prefix: u32
+	bucketStartSec: u64
+	chunkId: u32
+	recordIndex: u32
+}
+
+# Active span reference (stored in every chunk)
+
+type ActiveSpanRef struct {
+	spanId: SpanId
+	startKey: SpanRecordKey
+	latestSnapshotKey: optional<SpanRecordKey>
+}
+
+# Chunk container
+
+type Chunk struct {
+	baseUnixNs: u64
+	strings: list<str>
+	records: list<Record>
+	activeSpans: list<ActiveSpanRef>
+}
+
+# Read range response wire format.
+# This reuses existing chunk structs for compactness.
+#
+# baseChunks contains the minimal records needed to hydrate spans that
+# started before the query range (e.g., start or snapshot records).
+
+type ReadRangeWire struct {
+	startTimeMs: u64
+	endTimeMs: u64
+	limit: u32
+	clamped: bool
+	baseChunks: list<Chunk>
+	chunks: list<Chunk>
+}

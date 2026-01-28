@@ -320,6 +320,15 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		const selected = matched.slice(0, count);
 		await this.#removeMessages(selected);
+		const now = Date.now();
+		for (const message of selected) {
+			this.#actor.emitTraceEvent("queue.message.receive", {
+				"rivet.queue.name": message.name,
+				"rivet.queue.message_id": message.id.toString(),
+				"rivet.queue.created_at_ms": message.createdAt,
+				"rivet.queue.latency_ms": now - message.createdAt,
+			});
+		}
 		return selected;
 	}
 
