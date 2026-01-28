@@ -1,3 +1,4 @@
+import type { Logger } from "pino";
 import type { EngineDriver } from "./driver.js";
 import {
 	CancelledError,
@@ -108,6 +109,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private rollbackCheckpointSet: boolean;
 	/** Track names used in current execution to detect duplicates */
 	private usedNamesInExecution = new Set<string>();
+	private logger?: Logger;
 
 	constructor(
 		public readonly workflowId: string,
@@ -119,12 +121,14 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		mode: "forward" | "rollback" = "forward",
 		rollbackActions?: RollbackAction[],
 		rollbackCheckpointSet = false,
+		logger?: Logger,
 	) {
 		this.currentLocation = location;
 		this.abortController = abortController ?? new AbortController();
 		this.mode = mode;
 		this.rollbackActions = rollbackActions;
 		this.rollbackCheckpointSet = rollbackCheckpointSet;
+		this.logger = logger;
 	}
 
 	get abortSignal(): AbortSignal {
@@ -164,7 +168,16 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.mode,
 			this.rollbackActions,
 			this.rollbackCheckpointSet,
+			this.logger,
 		);
+	}
+
+	/**
+	 * Log a debug message using the configured logger.
+	 */
+	private log(level: "debug" | "info" | "warn" | "error", data: Record<string, unknown>): void {
+		if (!this.logger) return;
+		this.logger[level](data);
 	}
 
 	/**
@@ -351,6 +364,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 			// Replay successful result
 			if (stepData.output !== undefined) {
+				this.log("debug", { msg: "replaying step from history", step: config.name, key });
 				return stepData.output as T;
 			}
 
@@ -387,10 +401,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			existing ?? createEntry(location, { type: "step", data: {} });
 		if (!existing) {
 			// New entry - register name
+			this.log("debug", { msg: "executing new step", step: config.name, key });
 			const nameIndex = registerName(this.storage, config.name);
 			entry.location = [...location];
 			entry.location[entry.location.length - 1] = nameIndex;
 			setEntry(this.storage, location, entry);
+		} else {
+			this.log("debug", { msg: "retrying step", step: config.name, key });
 		}
 
 		const metadata = getOrCreateMetadata(this.storage, entry.id);
@@ -423,9 +440,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// next flush from a non-ephemeral operation. The purpose of ephemeral
 			// is to batch writes, not to avoid persistence entirely.
 			if (!config.ephemeral) {
+				this.log("debug", { msg: "flushing step", step: config.name, key });
 				await flush(this.storage, this.driver);
 			}
 
+			this.log("debug", { msg: "step completed", step: config.name, key });
 			return output;
 		} catch (error) {
 			// Timeout errors are treated as critical (no retry)
@@ -855,6 +874,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				entry.kind.data.state = "completed";
 			}
 			entry.dirty = true;
+			await flush(this.storage, this.driver);
 			return;
 		}
 
@@ -1189,8 +1209,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			return message.data as T;
 		}
 
-		// Message not available, yield to scheduler until deadline
-		throw new SleepError(deadline);
+		// Message not available, yield to scheduler until deadline or message
+		throw new SleepError(deadline, [messageName]);
 	}
 
 	async listenNWithTimeout<T>(
@@ -1251,6 +1271,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			setEntry(this.storage, sleepLocation, sleepEntry);
 			sleepEntry.dirty = true;
+			// Flush immediately to persist deadline before potential SleepError
+			await flush(this.storage, this.driver);
 		}
 
 		return this.executeListenNUntilImpl<T>(
@@ -1355,8 +1377,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			if (!message) {
 				// No message available - check if we should wait
 				if (results.length === 0) {
-					// No messages yet - yield to scheduler until deadline
-					throw new SleepError(deadline);
+					// No messages yet - yield to scheduler until deadline or message
+					throw new SleepError(deadline, [messageName]);
 				}
 				// We have some messages - return what we have
 				break;
@@ -1446,6 +1468,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			setEntry(this.storage, location, entry);
 			entry.dirty = true;
+			// Flush immediately to persist entry before branches execute
+			await flush(this.storage, this.driver);
 		}
 
 		if (entry.kind.type !== "join") {
@@ -1595,6 +1619,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			setEntry(this.storage, location, entry);
 			entry.dirty = true;
+			// Flush immediately to persist entry before branches execute
+			await flush(this.storage, this.driver);
 		}
 
 		if (entry.kind.type !== "race") {
@@ -1616,6 +1642,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		let pendingCount = branches.length;
 		const errors: Record<string, Error> = {};
 		const lateErrors: Array<{ name: string; error: string }> = [];
+		// Track scheduler yield errors - we need to propagate these after allSettled
+		let yieldError: SleepError | MessageWaitError | null = null;
 
 		// Check for replay winners first
 		for (const branch of branches) {
@@ -1690,6 +1718,39 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				(error) => {
 					pendingCount--;
 
+					// Track sleep/message errors - they need to bubble up to the scheduler
+					// We'll re-throw after allSettled to allow cleanup
+					if (error instanceof SleepError) {
+						// Track the earliest deadline
+						if (
+							!yieldError ||
+							!(yieldError instanceof SleepError) ||
+							error.deadline < yieldError.deadline
+						) {
+							yieldError = error;
+						}
+						branchStatus.status = "running"; // Keep as running since we'll resume
+						entry.dirty = true;
+						return;
+					}
+					if (error instanceof MessageWaitError) {
+						// Track message wait errors, prefer sleep errors with deadlines
+						if (!yieldError || !(yieldError instanceof SleepError)) {
+							if (!yieldError) {
+								yieldError = error;
+							} else if (yieldError instanceof MessageWaitError) {
+								// Merge message names
+								yieldError = new MessageWaitError([
+									...yieldError.messageNames,
+									...error.messageNames,
+								]);
+							}
+						}
+						branchStatus.status = "running"; // Keep as running since we'll resume
+						entry.dirty = true;
+						return;
+					}
+
 					if (
 						error instanceof CancelledError ||
 						error instanceof EvictedError
@@ -1723,6 +1784,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// Wait for all branches to complete or be cancelled
 		await Promise.allSettled(branchPromises);
+
+		// If any branch needs to yield to the scheduler (sleep/message wait),
+		// save state and re-throw the error to exit the workflow execution
+		if (yieldError && !settled) {
+			await flush(this.storage, this.driver);
+			throw yieldError;
+		}
 
 		// Clean up entries from non-winning branches
 		if (winnerName !== null) {

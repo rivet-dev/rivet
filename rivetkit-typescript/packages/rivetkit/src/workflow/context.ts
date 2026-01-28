@@ -228,6 +228,10 @@ export class ActorWorkflowContext<
 		return this.#runCtx.actorId;
 	}
 
+	broadcast<Args extends Array<unknown>>(name: string, ...args: Args): void {
+		this.#runCtx.broadcast(name, ...args);
+	}
+
 	async #wrapActive<T>(run: () => Promise<T>): Promise<T> {
 		return await this.#runCtx.keepAwake(run());
 	}

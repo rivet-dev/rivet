@@ -109,6 +109,10 @@ export class ActorWorkflowDriver implements EngineDriver {
 		this.messageDriver = new ActorWorkflowMessageDriver(actor, runCtx);
 	}
 
+	#log(msg: string, data?: Record<string, unknown>) {
+		this.#runCtx.log.info({ msg: `[workflow-driver] ${msg}`, ...data });
+	}
+
 	async get(key: Uint8Array): Promise<Uint8Array | null> {
 		const [value] = await this.#runCtx.keepAwake(
 			this.#actor.driver.kvBatchGet(this.#actor.id, [
@@ -167,11 +171,17 @@ export class ActorWorkflowDriver implements EngineDriver {
 
 	async batch(writes: KVWrite[]): Promise<void> {
 		if (writes.length === 0) return;
+
+		// Flush actor state together with workflow state to ensure atomicity.
+		// If the server crashes after workflow flush, actor state must also be persisted.
 		await this.#runCtx.keepAwake(
-			this.#actor.driver.kvBatchPut(
-				this.#actor.id,
-				writes.map(({ key, value }) => [makeWorkflowKey(key), value]),
-			),
+			Promise.all([
+				this.#actor.driver.kvBatchPut(
+					this.#actor.id,
+					writes.map(({ key, value }) => [makeWorkflowKey(key), value]),
+				),
+				this.#actor.stateManager.saveState({ immediate: true }),
+			]),
 		);
 	}
 

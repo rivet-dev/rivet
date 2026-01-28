@@ -1,3 +1,5 @@
+import type { Logger } from "pino";
+
 // Types
 
 // Context
@@ -306,6 +308,7 @@ async function executeRollback<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	storage: Storage,
+	logger?: Logger,
 ): Promise<void> {
 	const rollbackActions: RollbackAction[] = [];
 	const ctx = new WorkflowContextImpl(
@@ -317,6 +320,8 @@ async function executeRollback<TInput, TOutput>(
 		abortController,
 		"rollback",
 		rollbackActions,
+		false,
+		logger,
 	);
 
 	try {
@@ -375,12 +380,17 @@ async function setSleepState<TOutput>(
 	driver: EngineDriver,
 	workflowId: string,
 	deadline: number,
+	messageNames?: string[],
 ): Promise<WorkflowResult<TOutput>> {
 	storage.state = "sleeping";
 	await flush(storage, driver);
 	await driver.setAlarm(workflowId, deadline);
 
-	return { state: "sleeping", sleepUntil: deadline };
+	return {
+		state: "sleeping",
+		sleepUntil: deadline,
+		waitingForMessages: messageNames,
+	};
 }
 
 async function setMessageWaitState<TOutput>(
@@ -476,6 +486,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	runtime: LiveRuntime,
+	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	let lastResult: WorkflowResult<TOutput> | undefined;
 
@@ -487,6 +498,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			driver,
 			messageDriver,
 			abortController,
+			logger,
 		);
 		lastResult = result;
 
@@ -494,12 +506,47 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			return result;
 		}
 
-		if (result.waitingForMessages && result.waitingForMessages.length > 0) {
+		const hasMessages =
+			result.waitingForMessages && result.waitingForMessages.length > 0;
+		const hasDeadline = result.sleepUntil !== undefined;
+
+		if (hasMessages && hasDeadline) {
+			// Wait for EITHER a message OR the deadline (for listenWithTimeout)
+			try {
+				const messagePromise = driver.waitForMessages
+					? awaitWithEviction(
+							driver.waitForMessages(
+								result.waitingForMessages!,
+								abortController.signal,
+							),
+							abortController.signal,
+						)
+					: waitForMessage(
+							runtime,
+							result.waitingForMessages!,
+							abortController.signal,
+						);
+				const sleepPromise = waitForSleep(
+					runtime,
+					result.sleepUntil!,
+					abortController.signal,
+				);
+				await Promise.race([messagePromise, sleepPromise]);
+			} catch (error) {
+				if (error instanceof EvictedError) {
+					return lastResult;
+				}
+				throw error;
+			}
+			continue;
+		}
+
+		if (hasMessages) {
 			try {
 				if (driver.waitForMessages) {
 					await awaitWithEviction(
 						driver.waitForMessages(
-							result.waitingForMessages,
+							result.waitingForMessages!,
 							abortController.signal,
 						),
 						abortController.signal,
@@ -507,7 +554,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 				} else {
 					await waitForMessage(
 						runtime,
-						result.waitingForMessages,
+						result.waitingForMessages!,
 						abortController.signal,
 					);
 				}
@@ -520,11 +567,11 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			continue;
 		}
 
-		if (result.sleepUntil !== undefined) {
+		if (hasDeadline) {
 			try {
 				await waitForSleep(
 					runtime,
-					result.sleepUntil,
+					result.sleepUntil!,
 					abortController.signal,
 				);
 			} catch (error) {
@@ -553,6 +600,8 @@ export function runWorkflow<TInput, TOutput>(
 	const mode: WorkflowRunMode = options.mode ?? "yield";
 	const liveRuntime = mode === "live" ? createLiveRuntime() : undefined;
 
+	const logger = options.logger;
+
 	const resultPromise =
 		mode === "live" && liveRuntime
 			? executeLiveWorkflow(
@@ -563,6 +612,7 @@ export function runWorkflow<TInput, TOutput>(
 					messageDriver,
 					abortController,
 					liveRuntime,
+					logger,
 				)
 			: executeWorkflow(
 					workflowId,
@@ -571,6 +621,7 @@ export function runWorkflow<TInput, TOutput>(
 					driver,
 					messageDriver,
 					abortController,
+					logger,
 				);
 
 	return {
@@ -700,8 +751,20 @@ async function executeWorkflow<TInput, TOutput>(
 	driver: EngineDriver,
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
+	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	const storage = await loadStorage(driver, messageDriver);
+
+	if (logger) {
+		const entryKeys = Array.from(storage.history.entries.keys());
+		logger.debug({
+			msg: "loaded workflow storage",
+			state: storage.state,
+			entryCount: entryKeys.length,
+			entries: entryKeys.slice(0, 10),
+			nameRegistry: storage.nameRegistry,
+		});
+	}
 
 	// Check if workflow was cancelled
 	if (storage.state === "cancelled") {
@@ -734,6 +797,7 @@ async function executeWorkflow<TInput, TOutput>(
 				messageDriver,
 				abortController,
 				storage,
+				logger,
 			);
 		} catch (error) {
 			if (error instanceof EvictedError) {
@@ -761,6 +825,10 @@ async function executeWorkflow<TInput, TOutput>(
 		messageDriver,
 		undefined,
 		abortController,
+		"forward",
+		undefined,
+		false,
+		logger,
 	);
 
 	storage.state = "running";
@@ -781,6 +849,7 @@ async function executeWorkflow<TInput, TOutput>(
 				driver,
 				workflowId,
 				error.deadline,
+				error.messageNames,
 			);
 		}
 
@@ -819,6 +888,7 @@ async function executeWorkflow<TInput, TOutput>(
 					messageDriver,
 					abortController,
 					storage,
+					logger,
 				);
 		} catch (rollbackError) {
 			if (rollbackError instanceof EvictedError) {
