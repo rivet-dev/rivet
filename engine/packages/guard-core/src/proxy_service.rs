@@ -7,318 +7,48 @@ use hyper_tungstenite;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
 use rand;
-use rivet_api_builder::{ErrorResponse, RawErrorResponse};
 use rivet_api_builder::{RequestIds, X_RIVET_RAY_ID};
-use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_util::Id;
-use serde_json;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use rivet_runner_protocol as protocol;
 use std::{
-	net::SocketAddr,
+	net::{IpAddr, SocketAddr},
 	sync::Arc,
 	time::{Duration, Instant},
 };
 use tokio::sync::Mutex;
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::{
-	client::IntoClientRequest,
-	protocol::{CloseFrame, frame::coding::CloseCode},
-};
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tracing::Instrument;
 use url::Url;
 
+use crate::RouteTarget;
+use crate::request_context::RequestContext;
+use crate::response_body::ResponseBody;
+use crate::route::{CacheKeyFn, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput};
+use crate::utils::{InFlightCounter, RateLimiter};
 use crate::{
-	WebSocketHandle,
-	custom_serve::{CustomServeTrait, HibernationResult},
-	errors, metrics,
-	task_group::TaskGroup,
+	WebSocketHandle, custom_serve::HibernationResult, errors, metrics, task_group::TaskGroup, utils,
 };
 
-const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
-const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
-const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
 
-const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
 const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(100); // Keep TCP connection open briefly after WebSocket close
-
-/// Response body type that can handle both streaming and buffered responses
-#[derive(Debug)]
-pub enum ResponseBody {
-	/// Buffered response body
-	Full(Full<Bytes>),
-	/// Streaming response body
-	Incoming(BodyIncoming),
-}
-
-impl http_body::Body for ResponseBody {
-	type Data = Bytes;
-	type Error = Box<dyn std::error::Error + Send + Sync>;
-
-	fn poll_frame(
-		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-	) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-		match self.get_mut() {
-			ResponseBody::Full(body) => {
-				let pin = std::pin::Pin::new(body);
-				match pin.poll_frame(cx) {
-					std::task::Poll::Ready(Some(Ok(frame))) => {
-						std::task::Poll::Ready(Some(Ok(frame)))
-					}
-					std::task::Poll::Ready(Some(Err(e))) => {
-						std::task::Poll::Ready(Some(Err(Box::new(e))))
-					}
-					std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
-					std::task::Poll::Pending => std::task::Poll::Pending,
-				}
-			}
-			ResponseBody::Incoming(body) => {
-				let pin = std::pin::Pin::new(body);
-				match pin.poll_frame(cx) {
-					std::task::Poll::Ready(Some(Ok(frame))) => {
-						std::task::Poll::Ready(Some(Ok(frame)))
-					}
-					std::task::Poll::Ready(Some(Err(e))) => {
-						std::task::Poll::Ready(Some(Err(Box::new(e))))
-					}
-					std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
-					std::task::Poll::Pending => std::task::Poll::Pending,
-				}
-			}
-		}
-	}
-
-	fn is_end_stream(&self) -> bool {
-		match self {
-			ResponseBody::Full(body) => body.is_end_stream(),
-			ResponseBody::Incoming(body) => body.is_end_stream(),
-		}
-	}
-
-	fn size_hint(&self) -> http_body::SizeHint {
-		match self {
-			ResponseBody::Full(body) => body.size_hint(),
-			ResponseBody::Incoming(body) => body.size_hint(),
-		}
-	}
-}
-
-// Routing types
-#[derive(Clone, Debug)]
-pub struct RouteTarget {
-	pub host: String,
-	pub port: u16,
-	pub path: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct RoutingTimeout {
-	pub routing_timeout: u64, // in seconds
-}
-
-#[derive(Clone, Debug)]
-pub struct RouteConfig {
-	pub targets: Vec<RouteTarget>,
-	pub timeout: RoutingTimeout,
-}
-
-#[derive(Clone)]
-pub enum RoutingOutput {
-	/// Return the data to route to.
-	Route(RouteConfig),
-	/// Return a custom serve handler.
-	CustomServe(Arc<dyn CustomServeTrait>),
-}
-
-#[derive(Clone)]
-enum ResolveRouteOutput {
-	Target(RouteTarget),
-	CustomServe(Arc<dyn CustomServeTrait>),
-}
-
-/// Enum defining the type of port the request came in on
-#[derive(Clone, Debug, PartialEq)]
-pub enum PortType {
-	Http,
-	Https,
-}
-
-pub type RoutingFn = Arc<
-	dyn for<'a> Fn(
-			&'a str,
-			&'a str,
-			Id,
-			Id,
-			PortType,
-			&'a hyper::HeaderMap,
-		) -> futures::future::BoxFuture<'a, Result<RoutingOutput>>
-		+ Send
-		+ Sync,
->;
-
-pub type CacheKeyFn = Arc<
-	dyn for<'a> Fn(
-			&'a str,
-			&'a str,
-			&'a hyper::Method,
-			PortType,
-			&'a hyper::HeaderMap,
-		) -> Result<u64>
-		+ Send
-		+ Sync,
->;
-
-#[derive(Clone, Debug)]
-pub struct MiddlewareConfig {
-	pub rate_limit: RateLimitConfig,
-	pub max_in_flight: MaxInFlightConfig,
-	pub retry: RetryConfig,
-	pub timeout: TimeoutConfig,
-}
-
-#[derive(Clone, Debug)]
-pub struct RateLimitConfig {
-	pub requests: u64,
-	pub period: u64, // in seconds
-}
-
-#[derive(Clone, Debug)]
-pub struct MaxInFlightConfig {
-	pub amount: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct RetryConfig {
-	pub max_attempts: u32,
-	pub initial_interval: u64, // in milliseconds
-}
-
-#[derive(Clone, Debug)]
-pub struct TimeoutConfig {
-	pub request_timeout: u64, // in seconds
-}
-
-#[derive(Clone, Debug)]
-pub enum MiddlewareResponse {
-	Ok(MiddlewareConfig),
-	NotFound,
-}
-
-pub type MiddlewareFn = Arc<
-	dyn for<'a> Fn(
-			&'a hyper::HeaderMap,
-		) -> futures::future::BoxFuture<'a, Result<MiddlewareResponse>>
-		+ Send
-		+ Sync,
->;
-
-// Cache for routing results
-struct RouteCache {
-	cache: Cache<u64, RouteConfig>,
-}
-
-impl RouteCache {
-	fn new() -> Self {
-		Self {
-			cache: Cache::builder()
-				.max_capacity(10_000)
-				.time_to_live(ROUTE_CACHE_TTL)
-				.build(),
-		}
-	}
-
-	#[tracing::instrument(skip_all)]
-	async fn get(&self, key: &u64) -> Option<RouteConfig> {
-		self.cache.get(key).await
-	}
-
-	#[tracing::instrument(skip_all)]
-	async fn insert(&self, key: u64, result: RouteConfig) {
-		self.cache.insert(key, result).await;
-
-		metrics::ROUTE_CACHE_COUNT.set(self.cache.entry_count() as i64);
-	}
-}
-
-// Rate limiter
-struct RateLimiter {
-	requests_remaining: u64,
-	reset_time: Instant,
-	requests_limit: u64,
-	period: Duration,
-}
-
-impl RateLimiter {
-	fn new(requests: u64, period_seconds: u64) -> Self {
-		Self {
-			requests_remaining: requests,
-			reset_time: Instant::now() + Duration::from_secs(period_seconds),
-			requests_limit: requests,
-			period: Duration::from_secs(period_seconds),
-		}
-	}
-
-	fn try_acquire(&mut self) -> bool {
-		let now = Instant::now();
-
-		// Check if we need to reset the counter
-		if now >= self.reset_time {
-			self.requests_remaining = self.requests_limit;
-			self.reset_time = now + self.period;
-		}
-
-		// Try to consume a request
-		if self.requests_remaining > 0 {
-			self.requests_remaining -= 1;
-			true
-		} else {
-			false
-		}
-	}
-}
-
-// In-flight requests counter
-struct InFlightCounter {
-	count: usize,
-	max: usize,
-}
-
-impl InFlightCounter {
-	fn new(max: usize) -> Self {
-		Self { count: 0, max }
-	}
-
-	fn try_acquire(&mut self) -> bool {
-		if self.count < self.max {
-			self.count += 1;
-			true
-		} else {
-			false
-		}
-	}
-
-	fn release(&mut self) {
-		self.count = self.count.saturating_sub(1);
-	}
-}
 
 // State shared across all request handlers
 pub struct ProxyState {
 	config: rivet_config::Config,
 	routing_fn: RoutingFn,
 	cache_key_fn: CacheKeyFn,
-	middleware_fn: MiddlewareFn,
 	route_cache: RouteCache,
 	// We use moka::Cache instead of scc::HashMap because it automatically handles TTL and capacity
 	rate_limiters: Cache<std::net::IpAddr, Arc<Mutex<RateLimiter>>>,
 	in_flight_counters: Cache<std::net::IpAddr, Arc<Mutex<InFlightCounter>>>,
 	in_flight_requests: Cache<protocol::RequestId, ()>,
-	port_type: PortType,
+
 	tasks: Arc<TaskGroup>,
 }
 
@@ -327,14 +57,11 @@ impl ProxyState {
 		config: rivet_config::Config,
 		routing_fn: RoutingFn,
 		cache_key_fn: CacheKeyFn,
-		middleware_fn: MiddlewareFn,
-		port_type: PortType,
 	) -> Self {
 		Self {
 			config,
 			routing_fn,
 			cache_key_fn,
-			middleware_fn,
 			route_cache: RouteCache::new(),
 			rate_limiters: Cache::builder()
 				.max_capacity(10_000)
@@ -345,36 +72,24 @@ impl ProxyState {
 				.time_to_live(PROXY_STATE_CACHE_TTL)
 				.build(),
 			in_flight_requests: Cache::builder().max_capacity(10_000_000).build(),
-			port_type,
 			tasks: TaskGroup::new(),
 		}
 	}
 
-	#[tracing::instrument(skip(self))]
+	#[tracing::instrument(skip_all)]
 	async fn resolve_route(
 		&self,
-		hostname: &str,
-		path: &str,
-		ray_id: Id,
-		req_id: Id,
-		method: &hyper::Method,
-		port_type: PortType,
-		headers: &hyper::HeaderMap,
+		req_ctx: &mut RequestContext,
 		ignore_cache: bool,
 	) -> Result<ResolveRouteOutput> {
-		// Extract just the hostname, stripping the port if present
-		let hostname_only = hostname.split(':').next().unwrap_or(hostname);
-
 		tracing::debug!(
-			hostname = %hostname_only,
-			path = %path,
-			method = %method,
-			port_type = ?port_type,
+			hostname = %req_ctx.hostname,
+			path = %req_ctx.path,
+			method = %req_ctx.method,
 			"Resolving route for request"
 		);
 
-		let cache_key =
-			(self.cache_key_fn)(hostname_only, &path, method, port_type.clone(), headers)?;
+		let cache_key = (self.cache_key_fn)(req_ctx)?;
 
 		// Check cache first
 		if !ignore_cache {
@@ -391,32 +106,28 @@ impl ProxyState {
 		let default_timeout = Duration::from_secs(15);
 
 		tracing::debug!(
-			hostname = %hostname_only,
-			path = %path,
+			hostname = %req_ctx.hostname,
+			path = %req_ctx.path,
 			cache_hit = false,
 			timeout_seconds = default_timeout.as_secs(),
 			"Cache miss, calling routing function"
 		);
 
-		let res = timeout(
-			default_timeout,
-			(self.routing_fn)(hostname_only, path, ray_id, req_id, port_type, headers),
-		)
-		.await
-		.map_err(|_| {
-			errors::RequestTimeout {
-				timeout_seconds: default_timeout.as_secs(),
-			}
-			.build()
-		})?;
+		let res = timeout(default_timeout, (self.routing_fn)(req_ctx))
+			.await
+			.map_err(|_| {
+				errors::RequestTimeout {
+					timeout_seconds: default_timeout.as_secs(),
+				}
+				.build()
+			})?;
 
 		match res? {
 			RoutingOutput::Route(result) => {
 				tracing::debug!(
-					hostname = %hostname_only,
-					path = %path,
+					hostname = %req_ctx.hostname,
+					path = %req_ctx.path,
 					targets_count = result.targets.len(),
-					timeout_secs = result.timeout.routing_timeout,
 					"Received routing result"
 				);
 
@@ -427,8 +138,8 @@ impl ProxyState {
 				// Choose a random target
 				if let Some(target) = choose_random_target(&result.targets) {
 					tracing::debug!(
-						hostname = %hostname_only,
-						path = %path,
+						hostname = %req_ctx.hostname,
+						path = %req_ctx.path,
 						target_host = %target.host,
 						target_port = target.port,
 						target_path = %target.path,
@@ -437,8 +148,8 @@ impl ProxyState {
 					Ok(ResolveRouteOutput::Target(target.clone()))
 				} else {
 					tracing::warn!(
-						hostname = %hostname_only,
-						path = %path,
+						hostname = %req_ctx.hostname,
+						path = %req_ctx.path,
 						"No route targets available from result"
 					);
 					Err(errors::NoRouteTargets.build())
@@ -446,8 +157,8 @@ impl ProxyState {
 			}
 			RoutingOutput::CustomServe(handler) => {
 				tracing::debug!(
-					hostname = %hostname_only,
-					path = %path,
+					hostname = %req_ctx.hostname,
+					path = %req_ctx.path,
 					"Routing returned custom serve handler"
 				);
 				Ok(ResolveRouteOutput::CustomServe(handler))
@@ -455,99 +166,38 @@ impl ProxyState {
 		}
 	}
 
+	/// Returns true if the rate limit was hit.
 	#[tracing::instrument(skip_all)]
-	async fn get_middleware_config(&self, headers: &hyper::HeaderMap) -> Result<MiddlewareConfig> {
-		// Call the middleware function with a timeout
-		let default_timeout = Duration::from_secs(5); // Default 5 seconds
-
-		let middleware_result = timeout(default_timeout, (self.middleware_fn)(headers)).await;
-
-		match middleware_result {
-			Ok(result) => match result? {
-				MiddlewareResponse::Ok(config) => Ok(config),
-				MiddlewareResponse::NotFound => {
-					// Default values
-					Ok(MiddlewareConfig {
-						rate_limit: RateLimitConfig {
-							requests: 10000, // 10000 requests
-							period: 60,      // per 60 seconds
-						},
-						max_in_flight: MaxInFlightConfig {
-							amount: 2000, // 2000 concurrent requests
-						},
-						retry: RetryConfig {
-							max_attempts: 7,       // 7 retry attempts
-							initial_interval: 150, // 150ms initial interval
-						},
-						timeout: TimeoutConfig {
-							request_timeout: 30, // 30 seconds for requests
-						},
-					})
-				}
-			},
-			Err(_) => {
-				// Default values if middleware times out
-				Ok(MiddlewareConfig {
-					rate_limit: RateLimitConfig {
-						requests: 100, // 100 requests
-						period: 60,    // per 60 seconds
-					},
-					max_in_flight: MaxInFlightConfig {
-						amount: 20, // 20 concurrent requests
-					},
-					retry: RetryConfig {
-						max_attempts: 3,       // 3 retry attempts
-						initial_interval: 100, // 100ms initial interval
-					},
-					timeout: TimeoutConfig {
-						request_timeout: 30, // 30 seconds for requests
-					},
-				})
-			}
-		}
-	}
-
-	#[tracing::instrument(skip_all)]
-	async fn check_rate_limit(
-		&self,
-		ip_addr: std::net::IpAddr,
-		headers: &hyper::HeaderMap,
-	) -> Result<bool> {
-		let middleware_config = self.get_middleware_config(headers).await?;
-
+	async fn check_rate_limit(&self, req_ctx: &RequestContext) -> Result<bool> {
 		// Get existing limiter or create a new one
-		let limiter_arc = if let Some(existing_limiter) = self.rate_limiters.get(&ip_addr).await {
-			existing_limiter
-		} else {
-			let new_limiter = Arc::new(Mutex::new(RateLimiter::new(
-				middleware_config.rate_limit.requests,
-				middleware_config.rate_limit.period,
-			)));
-			self.rate_limiters
-				.insert(ip_addr, new_limiter.clone())
-				.await;
-			metrics::RATE_LIMITER_COUNT.set(self.rate_limiters.entry_count() as i64);
-			new_limiter
-		};
+		let limiter_arc =
+			if let Some(existing_limiter) = self.rate_limiters.get(&req_ctx.client_ip).await {
+				existing_limiter
+			} else {
+				let new_limiter = Arc::new(Mutex::new(RateLimiter::new(
+					req_ctx.rate_limit.requests,
+					req_ctx.rate_limit.period,
+				)));
+				self.rate_limiters
+					.insert(req_ctx.client_ip, new_limiter.clone())
+					.await;
+				metrics::RATE_LIMITER_COUNT.set(self.rate_limiters.entry_count() as i64);
+				new_limiter
+			};
 
 		// Try to acquire from the limiter
-		let result = {
+		let acquired = {
 			let mut limiter = limiter_arc.lock().await;
 			limiter.try_acquire()
 		};
 
-		Ok(result)
+		Ok(!acquired)
 	}
 
+	/// Returns true if the counter could not be acquired.
 	#[tracing::instrument(skip_all)]
-	async fn acquire_in_flight(
-		&self,
-		ip_addr: std::net::IpAddr,
-		headers: &hyper::HeaderMap,
-	) -> Result<Option<protocol::RequestId>> {
-		let middleware_config = self.get_middleware_config(headers).await?;
-
-		let cache_key = ip_addr;
+	async fn acquire_in_flight(&self, req_ctx: &mut RequestContext) -> Result<bool> {
+		let cache_key = req_ctx.client_ip;
 
 		// Get existing counter or create a new one
 		let counter_arc =
@@ -555,7 +205,7 @@ impl ProxyState {
 				existing_counter
 			} else {
 				let new_counter = Arc::new(Mutex::new(InFlightCounter::new(
-					middleware_config.max_in_flight.amount,
+					req_ctx.max_in_flight.amount,
 				)));
 				self.in_flight_counters
 					.insert(cache_key, new_counter.clone())
@@ -571,28 +221,37 @@ impl ProxyState {
 		};
 
 		if !acquired {
-			return Ok(None); // Rate limited
+			return Ok(true); // Rate limited
 		}
 
 		// Generate unique request ID
-		let request_id = Some(self.generate_unique_request_id().await?);
-		Ok(request_id)
+		req_ctx.in_flight_request_id = Some(self.generate_unique_in_flight_request_id().await?);
+
+		Ok(false)
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn release_in_flight(&self, ip_addr: std::net::IpAddr, request_id: protocol::RequestId) {
-		if let Some(counter_arc) = self.in_flight_counters.get(&ip_addr).await {
+	async fn release_in_flight(
+		&self,
+		client_ip: IpAddr,
+		in_flight_request_id: Option<protocol::RequestId>,
+	) {
+		if let Some(counter_arc) = self.in_flight_counters.get(&client_ip).await {
 			let mut counter = counter_arc.lock().await;
 			counter.release();
 		}
 
-		// Release request ID
-		self.in_flight_requests.invalidate(&request_id).await;
-		metrics::IN_FLIGHT_REQUEST_COUNT.set(self.in_flight_requests.entry_count() as i64);
+		if let Some(in_flight_request_id) = in_flight_request_id {
+			// Release request ID
+			self.in_flight_requests
+				.invalidate(&in_flight_request_id)
+				.await;
+			metrics::IN_FLIGHT_REQUEST_COUNT.set(self.in_flight_requests.entry_count() as i64);
+		}
 	}
 
 	/// Generate a unique request ID that is not currently in flight
-	async fn generate_unique_request_id(&self) -> Result<protocol::RequestId> {
+	async fn generate_unique_in_flight_request_id(&self) -> Result<protocol::RequestId> {
 		const MAX_TRIES: u32 = 100;
 
 		for attempt in 0..MAX_TRIES {
@@ -663,52 +322,47 @@ impl ProxyService {
 		}
 	}
 
-	// Calculate backoff duration for a given retry attempt
-	pub fn calculate_backoff(attempt: u32, initial_interval: u64) -> Duration {
-		Duration::from_millis(initial_interval * 2u64.pow(attempt - 1))
-	}
+	/// Process an individual request.
+	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id))]
+	pub async fn process(&self, mut req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
+		let start_time = Instant::now();
 
-	#[tracing::instrument(skip_all)]
-	async fn handle_request(
-		&self,
-		req: Request<BodyIncoming>,
-		ray_id: Id,
-		req_id: Id,
-		start_time: Instant,
-	) -> Result<Response<ResponseBody>> {
+		let request_ids = RequestIds::new(self.state.config.dc_label());
+		req.extensions_mut().insert(request_ids);
+
+		let current_span = tracing::Span::current();
+
+		current_span.record("req_id", request_ids.req_id.to_string());
+		current_span.record("ray_id", request_ids.ray_id.to_string());
+
+		// Extract request information for logging and analytics before consuming the request
+		let incoming_ray_id = req
+			.headers()
+			.get(X_RIVET_RAY_ID)
+			.and_then(|h| h.to_str().ok())
+			.and_then(|id| Id::parse(id).ok());
 		let host = req
 			.headers()
 			.get(hyper::header::HOST)
 			.and_then(|h| h.to_str().ok())
-			.unwrap_or("unknown");
-
+			.unwrap_or("unknown")
+			.to_string();
+		let uri_string = req.uri().to_string();
 		let path = req
 			.uri()
 			.path_and_query()
 			.map(|x| x.to_string())
 			.unwrap_or_else(|| req.uri().path().to_string());
+		let method = req.method().clone();
 
-		// Set request body size in analytics (will be updated with actual size later)
+		current_span.set_attribute("http.request.method", method.to_string());
+		current_span.set_attribute("http.path", uri_string.clone());
 
-		let target_res = self
-			.state
-			.resolve_route(
-				host,
-				&path,
-				ray_id,
-				req_id,
-				req.method(),
-				self.state.port_type.clone(),
-				req.headers(),
-				false,
-			)
-			.await;
-
-		let duration_secs = start_time.elapsed().as_secs_f64();
-		metrics::RESOLVE_ROUTE_DURATION.observe(duration_secs);
-
-		// Resolve target
-		let target = target_res?;
+		let user_agent = req
+			.headers()
+			.get(hyper::header::USER_AGENT)
+			.and_then(|h| h.to_str().ok())
+			.map(|s| s.to_string());
 
 		// Extract IP address from X-Forwarded-For header or fall back to remote_addr
 		let client_ip = req
@@ -722,47 +376,256 @@ impl ProxyService {
 			.and_then(|ip_str| ip_str.parse::<std::net::IpAddr>().ok())
 			.unwrap_or_else(|| self.remote_addr.ip());
 
+		let mut req_ctx = RequestContext::new(
+			self.remote_addr,
+			request_ids.ray_id,
+			request_ids.req_id,
+			host,
+			path,
+			req.method().clone(),
+			req.headers().clone(),
+			client_ip,
+			start_time,
+		);
+
+		// TLS information would be set here if available (for HTTPS connections)
+		// This requires TLS connection introspection and is marked for future enhancement
+
+		// Debug log request information with structured fields (Apache-like access log)
+		tracing::debug!(
+			?incoming_ray_id,
+			ray_id=?req_ctx.ray_id,
+			req_id=?req_ctx.req_id,
+			method=%req_ctx.method,
+			path=%req_ctx.path,
+			host=%req_ctx.host,
+			remote_addr=%req_ctx.remote_addr,
+			uri=%uri_string,
+			user_agent=?user_agent,
+			"Request received"
+		);
+
+		let is_websocket = hyper_tungstenite::is_upgrade_request(&req);
+
+		// Used for ws error proxying later
+		let mut mock_req_builder = Request::builder()
+			.method(req.method().clone())
+			.uri(req.uri().clone())
+			.version(req.version().clone());
+		if let Some(headers) = mock_req_builder.headers_mut() {
+			*headers = req.headers().clone();
+		}
+		if let Some(extensions) = mock_req_builder.extensions_mut() {
+			*extensions = req.extensions().clone();
+		}
+		let mock_req = mock_req_builder.body(())?;
+
+		// Process the request
+		let mut res = match self.handle_request(req, &mut req_ctx).await {
+			Ok(res) => res,
+			Err(err) => {
+				// Log the error
+				tracing::error!(?err, "Request failed");
+
+				metrics::PROXY_REQUEST_ERROR_TOTAL
+					.with_label_values(&[&err.to_string()])
+					.inc();
+
+				// If we receive an error during a websocket request, we attempt to open the websocket anyway
+				// so we can send the error via websocket instead of http. Most websocket clients don't handle
+				// HTTP errors in a meaningful way resulting in unhelpful errors for the user
+				if is_websocket {
+					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
+					match hyper_tungstenite::upgrade(mock_req, None) {
+						Ok((client_response, client_ws)) => {
+							tracing::debug!("Client WebSocket upgrade for error proxy successful");
+
+							self.state.tasks.spawn(
+								async move {
+									let ws_handle = match WebSocketHandle::new(client_ws).await {
+										Ok(ws_handle) => ws_handle,
+										Err(err) => {
+											tracing::debug!(
+												?err,
+												"failed initiating websocket handle for error proxy"
+											);
+											return;
+										}
+									};
+									let frame = utils::err_to_close_frame(err, request_ids.ray_id);
+
+									// Manual conversion to handle different tungstenite versions
+									let code_num: u16 = frame.code.into();
+									let reason = frame.reason.clone();
+
+									if let Err(err) = ws_handle
+										.send(tokio_tungstenite::tungstenite::Message::Close(Some(
+											tokio_tungstenite::tungstenite::protocol::CloseFrame {
+												code: code_num.into(),
+												reason,
+											},
+										)))
+										.await
+									{
+										tracing::debug!(
+											?err,
+											"failed sending websocket error proxy"
+										);
+									}
+
+									// Flush to ensure close frame is sent
+									if let Err(err) = ws_handle.flush().await {
+										tracing::debug!(
+											?err,
+											"failed flushing websocket in error proxy"
+										);
+									}
+
+									// Keep TCP connection open briefly to allow client to process close
+									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+								}
+								.instrument(tracing::info_span!("ws_error_proxy_task")),
+							);
+
+							// Return the response that will upgrade the client connection
+							// For proper WebSocket handshaking, we need to preserve the original response
+							// structure but convert it to our expected return type without modifying its content
+							tracing::debug!(
+								"Returning WebSocket upgrade response for error proxy to client"
+							);
+							// Extract the parts from the response but preserve all headers and status
+							let (mut parts, _) = client_response.into_parts();
+
+							// Add Sec-WebSocket-Protocol header to the response
+							// Many WebSocket clients (e.g. node-ws & Cloudflare) require a protocol in the response
+							parts.headers.insert(
+								"sec-websocket-protocol",
+								hyper::header::HeaderValue::from_static("rivet"),
+							);
+
+							// Create a new response with an empty body - WebSocket upgrades don't need a body
+							Response::from_parts(
+								parts,
+								ResponseBody::Full(Full::<Bytes>::new(Bytes::new())),
+							)
+						}
+						Err(err) => {
+							tracing::error!(
+								?err,
+								"Failed to upgrade client WebSocket for error proxy"
+							);
+
+							utils::err_into_response(
+								errors::ConnectionError {
+									error_message: format!(
+										"Failed to upgrade client WebSocket for error proxy: {}",
+										err
+									),
+									remote_addr: req_ctx.remote_addr.to_string(),
+								}
+								.build(),
+							)?
+						}
+					}
+				} else {
+					utils::err_into_response(err)?
+				}
+			}
+		};
+
+		if is_websocket && res.status() != StatusCode::SWITCHING_PROTOCOLS {
+			tracing::debug!("returned non-101 response to websocket");
+		}
+
+		// Add ray_id to response headers
+		if let Ok(ray_id_value) = request_ids.ray_id.to_string().parse() {
+			if let Some(existing_ray_id_value) = res
+				.headers()
+				.get(X_RIVET_RAY_ID)
+				.and_then(|h| h.to_str().ok())
+			{
+				if ray_id_value != existing_ray_id_value {
+					tracing::warn!(
+						expected_ray_id=%request_ids.ray_id,
+						received_ray_id=%existing_ray_id_value,
+						"downstream service set ray id header to a different value",
+					);
+				}
+			}
+
+			res.headers_mut().insert(X_RIVET_RAY_ID, ray_id_value);
+		}
+
+		let status = res.status().as_u16();
+
+		current_span.set_attribute("http.response.status_code", status as i64);
+
+		let content_length = res
+			.headers()
+			.get(hyper::header::CONTENT_LENGTH)
+			.and_then(|h| h.to_str().ok())
+			.and_then(|s| s.parse::<usize>().ok())
+			.unwrap_or(0);
+
+		// Log information about the completed request
+		tracing::debug!(
+			?incoming_ray_id,
+			ray_id=?req_ctx.ray_id,
+			req_id=?req_ctx.req_id,
+			method = %req_ctx.method,
+			path = %req_ctx.path,
+			host = %req_ctx.host,
+			remote_addr = %req_ctx.remote_addr,
+			status = %status,
+			content_length = %content_length,
+			"Request completed"
+		);
+
+		Ok(res)
+	}
+
+	#[tracing::instrument(skip_all)]
+	async fn handle_request(
+		&self,
+		req: Request<BodyIncoming>,
+		req_ctx: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		// Resolve target
+		let target_res = self.state.resolve_route(req_ctx, false).await;
+
+		let duration_secs = req_ctx.start_time.elapsed().as_secs_f64();
+		metrics::RESOLVE_ROUTE_DURATION.observe(duration_secs);
+
+		let target = target_res?;
+
 		// Apply rate limiting
-		if !self
-			.state
-			.check_rate_limit(client_ip, req.headers())
-			.await?
-		{
+		if self.state.check_rate_limit(req_ctx).await? {
 			return Err(errors::RateLimit {
-				method: req.method().to_string(),
-				path: path.clone(),
-				ip: client_ip.to_string(),
+				method: req_ctx.method.to_string(),
+				path: req_ctx.path.clone(),
+				ip: req_ctx.client_ip.to_string(),
 			}
 			.build());
 		}
 
 		// Acquire in-flight limit and generate protocol request ID
-		let request_id = match self
-			.state
-			.acquire_in_flight(client_ip, req.headers())
-			.await?
-		{
-			Some(id) => id,
-			None => {
-				return Err(errors::RateLimit {
-					method: req.method().to_string(),
-					path: path.clone(),
-					ip: client_ip.to_string(),
-				}
-				.build());
+		if self.state.acquire_in_flight(req_ctx).await? {
+			return Err(errors::RateLimit {
+				method: req_ctx.method.to_string(),
+				path: req_ctx.path.clone(),
+				ip: req_ctx.client_ip.to_string(),
 			}
-		};
+			.build());
+		}
 
 		// Increment metrics
 		metrics::PROXY_REQUEST_PENDING.inc();
 		metrics::PROXY_REQUEST_TOTAL.inc();
 
 		let res = if hyper_tungstenite::is_upgrade_request(&req) {
-			self.handle_websocket_upgrade(req, target, client_ip, ray_id, req_id)
-				.await
+			self.handle_websocket_upgrade(req, req_ctx, target).await
 		} else {
-			self.handle_http_request(req, target, client_ip, ray_id, req_id)
-				.await
+			self.handle_http_request(req, req_ctx, target).await
 		};
 
 		let status = match &res {
@@ -771,7 +634,7 @@ impl ProxyService {
 		};
 
 		// Record metrics
-		let duration_secs = start_time.elapsed().as_secs_f64();
+		let duration_secs = req_ctx.start_time.elapsed().as_secs_f64();
 		metrics::PROXY_REQUEST_DURATION
 			.with_label_values(&[status])
 			.observe(duration_secs);
@@ -780,9 +643,13 @@ impl ProxyService {
 
 		// Release in-flight counter and request ID when done
 		let state_clone = self.state.clone();
+		let client_ip = req_ctx.client_ip;
+		let in_flight_request_id = req_ctx.in_flight_request_id;
 		tokio::spawn(
 			async move {
-				state_clone.release_in_flight(client_ip, request_id).await;
+				state_clone
+					.release_in_flight(client_ip, in_flight_request_id)
+					.await;
 			}
 			.instrument(tracing::info_span!("release_in_flight_task")),
 		);
@@ -794,30 +661,11 @@ impl ProxyService {
 	async fn handle_http_request(
 		&self,
 		req: Request<BodyIncoming>,
+		req_ctx: &mut RequestContext,
 		resolved_route: ResolveRouteOutput,
-		client_ip: std::net::IpAddr,
-		ray_id: Id,
-		req_id: Id,
 	) -> Result<Response<ResponseBody>> {
-		let middleware_config = self.state.get_middleware_config(req.headers()).await?;
-
-		let host = req
-			.headers()
-			.get(hyper::header::HOST)
-			.and_then(|h| h.to_str().ok())
-			.unwrap_or("unknown")
-			.to_string();
-
-		let path = req
-			.uri()
-			.path_and_query()
-			.map(|x| x.to_string())
-			.unwrap_or_else(|| req.uri().path().to_string());
-
-		// Set up retry with backoff from middleware config
-		let max_attempts = middleware_config.retry.max_attempts;
-		let initial_interval = middleware_config.retry.initial_interval;
-		let timeout_duration = Duration::from_secs(middleware_config.timeout.request_timeout);
+		// Set up retry with backoff
+		let timeout_duration = Duration::from_secs(req_ctx.timeout.request_timeout);
 
 		match resolved_route {
 			ResolveRouteOutput::Target(mut target) => {
@@ -833,12 +681,11 @@ impl ProxyService {
 
 				// Use a value-returning loop to handle both errors and successful responses
 				let mut attempts = 0;
-				while attempts < max_attempts {
+				while attempts < req_ctx.retry.max_attempts {
 					attempts += 1;
 
 					// Use the common function to build request parts
-					let builder = self
-						.proxied_request_builder(&req_parts, &target)
+					let builder = utils::proxied_request_builder(&req_parts, req_ctx, &target)
 						.map_err(|err| errors::HttpRequestBuildFailed(err.to_string()).build())?;
 
 					// Create the final request with body
@@ -859,31 +706,23 @@ impl ProxyService {
 					match res {
 						Ok(resp) => {
 							// Check if this is a retryable response
-							if should_retry_request_inner(resp.status(), resp.headers()) {
+							if utils::should_retry_request_inner(resp.status(), resp.headers()) {
 								// Request connect error, might retry
 								tracing::debug!(
 									"Request attempt {attempts} failed (service unavailable)"
 								);
 
 								// Use backoff and continue
-								let backoff = Self::calculate_backoff(attempts, initial_interval);
+								let backoff = utils::calculate_backoff(
+									attempts,
+									req_ctx.retry.initial_interval,
+								);
 								tokio::time::sleep(backoff).await;
 
 								// Resolve target again, this time ignoring cache. This makes sure
 								// we always re-fetch the route on error
-								let ResolveRouteOutput::Target(new_target) = self
-									.state
-									.resolve_route(
-										&host,
-										&path,
-										ray_id,
-										req_id,
-										&req_parts.method,
-										self.state.port_type.clone(),
-										&req_parts.headers,
-										true,
-									)
-									.await?
+								let ResolveRouteOutput::Target(new_target) =
+									self.state.resolve_route(req_ctx, true).await?
 								else {
 									bail!("resolved route does not match Target");
 								};
@@ -919,7 +758,7 @@ impl ProxyService {
 							}
 						}
 						Err(err) => {
-							if !err.is_connect() || attempts >= max_attempts {
+							if !err.is_connect() || attempts >= req_ctx.retry.max_attempts {
 								tracing::error!(
 									?err,
 									?target,
@@ -936,24 +775,16 @@ impl ProxyService {
 								tracing::debug!(?err, "Request attempt {attempts} failed");
 
 								// Use backoff and continue
-								let backoff = Self::calculate_backoff(attempts, initial_interval);
+								let backoff = utils::calculate_backoff(
+									attempts,
+									req_ctx.retry.initial_interval,
+								);
 								tokio::time::sleep(backoff).await;
 
 								// Resolve target again, this time ignoring cache. This makes sure
 								// we always re-fetch the route on error
-								let ResolveRouteOutput::Target(new_target) = self
-									.state
-									.resolve_route(
-										&host,
-										&path,
-										ray_id,
-										req_id,
-										&req_parts.method,
-										self.state.port_type.clone(),
-										&req_parts.headers,
-										true,
-									)
-									.await?
+								let ResolveRouteOutput::Target(new_target) =
+									self.state.resolve_route(req_ctx, true).await?
 								else {
 									bail!("resolved route does not match Target");
 								};
@@ -967,31 +798,11 @@ impl ProxyService {
 
 				// If we get here, all attempts failed
 				return Err(errors::RetryAttemptsExceeded {
-					attempts: max_attempts,
+					attempts: req_ctx.retry.max_attempts,
 				}
 				.build());
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
-				let req_headers = req.headers().clone();
-				let req_method = req.method().clone();
-
-				// Acquire in-flight limit and generate request ID
-				let request_id = match self
-					.state
-					.acquire_in_flight(client_ip, &req_headers)
-					.await?
-				{
-					Some(id) => id,
-					None => {
-						return Err(errors::RateLimit {
-							method: req_method.to_string(),
-							path: path.clone(),
-							ip: client_ip.to_string(),
-						}
-						.build());
-					}
-				};
-
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
 				let collected_body = match http_body_util::BodyExt::collect(body).await {
@@ -1001,41 +812,27 @@ impl ProxyService {
 						Bytes::new()
 					}
 				};
-				let req_collected = hyper::Request::from_parts(
-					req_parts,
-					Full::<Bytes>::new(collected_body.clone()),
-				);
+				let req_collected =
+					hyper::Request::from_parts(req_parts, Full::<Bytes>::new(collected_body));
 
 				// Attempt request
 				let mut attempts = 0;
-				while attempts < max_attempts {
+				while attempts < req_ctx.retry.max_attempts {
 					attempts += 1;
 
-					let res = handler
-						.handle_request(req_collected.clone(), ray_id, req_id, request_id)
-						.await;
-					if should_retry_request(&res) {
+					let res = handler.handle_request(req_collected.clone(), req_ctx).await;
+					if utils::should_retry_request(&res) {
 						// Request connect error, might retry
 						tracing::debug!("Request attempt {attempts} failed (service unavailable)");
 
 						// Use backoff and continue
-						let backoff = Self::calculate_backoff(attempts, initial_interval);
+						let backoff =
+							utils::calculate_backoff(attempts, req_ctx.retry.initial_interval);
 						tokio::time::sleep(backoff).await;
 
 						// Refresh route (ignore cache) so subsequent requests can hit new target
-						let ResolveRouteOutput::CustomServe(new_handler) = self
-							.state
-							.resolve_route(
-								&host,
-								&path,
-								ray_id,
-								req_id,
-								req_collected.method(),
-								self.state.port_type.clone(),
-								&req_headers,
-								true,
-							)
-							.await?
+						let ResolveRouteOutput::CustomServe(new_handler) =
+							self.state.resolve_route(req_ctx, true).await?
 						else {
 							bail!("resolved route does not match CustomServe");
 						};
@@ -1045,105 +842,42 @@ impl ProxyService {
 					}
 
 					// Release in-flight counter and request ID before returning
-					self.state.release_in_flight(client_ip, request_id).await;
+					self.state
+						.release_in_flight(req_ctx.client_ip, req_ctx.in_flight_request_id)
+						.await;
 					return res;
 				}
 
 				// If we get here, all attempts failed
 				// Release in-flight counter and request ID before returning error
-				self.state.release_in_flight(client_ip, request_id).await;
+				self.state
+					.release_in_flight(req_ctx.client_ip, req_ctx.in_flight_request_id)
+					.await;
 				return Err(errors::RetryAttemptsExceeded {
-					attempts: max_attempts,
+					attempts: req_ctx.retry.max_attempts,
 				}
 				.build());
 			}
 		}
 	}
 
-	/// Modifies the incoming request before it is proxied.
-	fn proxied_request_builder(
-		&self,
-		req_parts: &hyper::http::request::Parts,
-		target: &RouteTarget,
-	) -> Result<hyper::http::request::Builder> {
-		let scheme = if target.port == 443 { "https" } else { "http" };
-
-		// Bracket raw IPv6 hosts
-		let host = if target.host.contains(':') && !target.host.starts_with('[') {
-			format!("[{}]", target.host)
-		} else {
-			target.host.clone()
-		};
-
-		// Ensure path starts with a leading slash
-		let path = if target.path.starts_with('/') {
-			target.path.clone()
-		} else {
-			format!("/{}", target.path)
-		};
-
-		let url = Url::parse(&format!("{scheme}://{host}:{}{}", target.port, path))
-			.context("invalid scheme/host/port when building URL")?;
-
-		// Build the proxied request
-		let mut builder = hyper::Request::builder()
-			.method(req_parts.method.clone())
-			.uri(url.to_string());
-
-		// Modify proxy headers
-		let headers = builder
-			.headers_mut()
-			.expect("request builder unexpectedly in error state");
-
-		headers.remove(X_RIVET_TARGET);
-		headers.remove(X_RIVET_ACTOR);
-		headers.remove(X_RIVET_TOKEN);
-
-		add_proxy_headers_with_addr(headers, &req_parts.headers, self.remote_addr)?;
-
-		Ok(builder)
-	}
-
 	#[tracing::instrument(skip_all)]
 	async fn handle_websocket_upgrade(
 		&self,
 		req: Request<BodyIncoming>,
+		req_ctx: &mut RequestContext,
 		target: ResolveRouteOutput,
-		client_ip: std::net::IpAddr,
-		ray_id: Id,
-		req_id: Id,
 	) -> Result<Response<ResponseBody>> {
-		// Parsed for retries later
-		let req_host = req
-			.headers()
-			.get(hyper::header::HOST)
-			.and_then(|h| h.to_str().ok())
-			.unwrap_or("unknown")
-			.to_string();
-		let req_path = req
-			.uri()
-			.path_and_query()
-			.map(|x| x.to_string())
-			.unwrap_or_else(|| req.uri().path().to_string());
-		let req_headers = req.headers().clone();
-		let req_method = req.method().clone();
-
-		let middleware_config = self.state.get_middleware_config(req.headers()).await?;
-
-		// Set up retry with backoff from middleware config
-		let max_attempts = middleware_config.retry.max_attempts;
-		let initial_interval = middleware_config.retry.initial_interval;
-
 		// Log the headers for debugging
 		tracing::debug!("WebSocket upgrade request headers:");
-		for (name, value) in req.headers() {
+		for (name, value) in &req_ctx.headers {
 			if let Ok(val) = value.to_str() {
 				tracing::debug!("  {}: {}", name, val);
 			}
 		}
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
-		tracing::debug!(%req_path, "Upgrading client connection to WebSocket");
+		tracing::debug!(path=%req_ctx.path, "Upgrading client connection to WebSocket");
 		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, None) {
 			Ok(x) => {
 				tracing::debug!("Client WebSocket upgrade successful");
@@ -1153,7 +887,7 @@ impl ProxyService {
 				tracing::error!(?err, "Failed to upgrade client WebSocket");
 				return Err(errors::ConnectionError {
 					error_message: format!("Failed to upgrade client WebSocket: {}", err),
-					remote_addr: self.remote_addr.to_string(),
+					remote_addr: req_ctx.remote_addr.to_string(),
 				}
 				.build());
 			}
@@ -1172,14 +906,17 @@ impl ProxyService {
 
 		// Clone needed values for the spawned task
 		let state = self.state.clone();
-		let remote_addr = self.remote_addr;
 
 		// Spawn a new task to handle the WebSocket bidirectional communication
 		match target {
 			ResolveRouteOutput::Target(mut target) => {
 				tracing::debug!("Spawning task to handle WebSocket communication");
+				let mut req_ctx = req_ctx.clone();
+
 				self.state.tasks.spawn(
 					async move {
+						let req_ctx = &mut req_ctx;
+
 						// Set up a timeout for the entire operation
 						let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
 						tracing::debug!(
@@ -1214,7 +951,7 @@ impl ProxyService {
 
 						// Now attempt to connect to the upstream server
 						tracing::debug!("Attempting connect to upstream WebSocket");
-						while attempts < max_attempts {
+						while attempts < req_ctx.retry.max_attempts {
 							attempts += 1;
 
 							// Build the WebSocket URL using the url crate to properly handle IPv6 addresses
@@ -1259,7 +996,7 @@ impl ProxyService {
 							tracing::debug!(
 								"WebSocket request attempt {}/{} to {}",
 								attempts,
-								max_attempts,
+								req_ctx.retry.max_attempts,
 								target_url
 							);
 
@@ -1273,10 +1010,9 @@ impl ProxyService {
 							};
 
 							// Add proxy headers to the websocket request
-							if let Err(err) = add_proxy_headers_with_addr(
+							if let Err(err) = utils::add_proxy_headers_with_addr(
 								ws_request.headers_mut(),
-								&req_headers,
-								remote_addr,
+								req_ctx,
 							) {
 								tracing::error!(
 									?err,
@@ -1330,10 +1066,10 @@ impl ProxyService {
 							}
 
 							// Check if we've reached max attempts
-							if attempts >= max_attempts {
+							if attempts >= req_ctx.retry.max_attempts {
 								tracing::debug!(
 									"All {} WebSocket connection attempts failed",
-									max_attempts
+									req_ctx.retry.max_attempts
 								);
 
 								// Send a close message to the client since we can't connect to upstream
@@ -1344,7 +1080,10 @@ impl ProxyService {
 								);
 								let (mut client_sink, _) = client_ws.split();
 								match client_sink
-									.send(to_hyper_close(Some(err_to_close_frame(err, ray_id))))
+									.send(utils::to_hyper_close(Some(utils::err_to_close_frame(
+										err,
+										req_ctx.ray_id,
+									))))
 									.await
 								{
 									Ok(_) => {
@@ -1376,7 +1115,8 @@ impl ProxyService {
 							}
 
 							// Use backoff for the next attempt
-							let backoff = Self::calculate_backoff(attempts, initial_interval);
+							let backoff =
+								utils::calculate_backoff(attempts, req_ctx.retry.initial_interval);
 							tracing::debug!(
 								"Waiting for {:?} before next connection attempt",
 								backoff
@@ -1386,18 +1126,7 @@ impl ProxyService {
 
 							// Resolve target again, this time ignoring cache. This makes sure
 							// we always re-fetch the route on error
-							let new_target = state
-								.resolve_route(
-									&req_host,
-									&req_path,
-									ray_id,
-									req_id,
-									&req_method,
-									state.port_type.clone(),
-									&req_headers,
-									true,
-								)
-								.await;
+							let new_target = state.resolve_route(req_ctx, true).await;
 
 							match new_target {
 								Ok(ResolveRouteOutput::Target(new_target)) => {
@@ -1410,7 +1139,7 @@ impl ProxyService {
 										"websocket target changed to custom serve"
 									);
 									let _ = client_ws
-										.close(Some(err_to_close_frame(err, ray_id)))
+										.close(Some(utils::err_to_close_frame(err, req_ctx.ray_id)))
 										.await;
 									return;
 								}
@@ -1492,7 +1221,7 @@ impl ProxyService {
 														// Signal shutdown to other direction
 														let _ = shutdown_tx.send(true);
 
-														to_hyper_close(frame)
+														utils::to_hyper_close(frame)
 													},
 													hyper_tungstenite::tungstenite::Message::Frame(_) => {
 														// Skip frames - they're an implementation detail
@@ -1643,7 +1372,7 @@ impl ProxyService {
 														// Signal shutdown to other direction
 														let _ = shutdown_tx.send(true);
 
-														to_hyper_close(frame)
+														utils::to_hyper_close(frame)
 													},
 													tokio_tungstenite::tungstenite::Message::Frame(_) => {
 														// Skip frames - they're an implementation detail
@@ -1713,7 +1442,7 @@ impl ProxyService {
 
 							// Try to send a close frame - ignore errors as the connection might already be closed
 							tracing::trace!("Attempting to send close message to client");
-							match sink.send(to_hyper_close(None)).await {
+							match sink.send(utils::to_hyper_close(None)).await {
 								Ok(_) => {
 									tracing::trace!("Close message sent to client successfully")
 								}
@@ -1743,28 +1472,13 @@ impl ProxyService {
 				);
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
-				tracing::debug!(%req_path, "Spawning task to handle WebSocket communication");
+				tracing::debug!(path=%req_ctx.path, "Spawning task to handle WebSocket communication");
 				let state = self.state.clone();
-				let req_headers = req_headers.clone();
-				let req_path = req_path.clone();
-				let req_host = req_host.clone();
-				let req_method = req_method.clone();
+				let mut req_ctx = req_ctx.clone();
 
 				self.state.tasks.spawn(
 					async move {
-						let request_id =
-							match state.acquire_in_flight(client_ip, &req_headers).await? {
-								Some(id) => id,
-								None => {
-									return Err(errors::RateLimit {
-										method: req_method.to_string(),
-										path: req_path.clone(),
-										ip: client_ip.to_string(),
-									}
-									.build()
-									.into());
-								}
-							};
+						let req_ctx = &mut req_ctx;
 						let mut ws_hibernation_close = false;
 						let mut after_hibernation = false;
 						let mut attempts = 0u32;
@@ -1775,15 +1489,7 @@ impl ProxyService {
 
 						loop {
 							match handler
-								.handle_websocket(
-									ws_handle.clone(),
-									&req_headers,
-									&req_path,
-									ray_id,
-									req_id,
-									request_id,
-									after_hibernation,
-								)
+								.handle_websocket(req_ctx, ws_handle.clone(), after_hibernation)
 								.await
 							{
 								Ok(close_frame) => {
@@ -1792,7 +1498,7 @@ impl ProxyService {
 									// Send graceful close. This may fail if client already sent
 									// close frame, which is normal.
 									tracing::debug!(?close_frame, "sending close frame to client");
-									match ws_handle.send(to_hyper_close(close_frame)).await {
+									match ws_handle.send(utils::to_hyper_close(close_frame)).await {
 										Ok(_) => {
 											tracing::debug!("close frame sent successfully");
 										}
@@ -1827,7 +1533,7 @@ impl ProxyService {
 									tracing::debug!(?err, "websocket handler error");
 
 									// Denotes that the connection did not fail, but the downstream has closed
-									let ws_hibernate = is_ws_hibernate(&err);
+									let ws_hibernate = utils::is_ws_hibernate(&err);
 
 									if ws_hibernate {
 										attempts = 0;
@@ -1851,10 +1557,8 @@ impl ProxyService {
 										//   (starting with the message that caused the hibernation to end)
 										let res = handler
 											.handle_websocket_hibernation(
+												req_ctx,
 												ws_handle.clone(),
-												ray_id,
-												req_id,
-												request_id,
 											)
 											.await?;
 
@@ -1868,21 +1572,21 @@ impl ProxyService {
 
 											ws_hibernation_close = true;
 										}
-									} else if attempts > max_attempts
-										|| !is_retryable_ws_error(&err)
+									} else if attempts > req_ctx.retry.max_attempts
+										|| !utils::is_retryable_ws_error(&err)
 									{
 										tracing::debug!(
 											?err,
 											?attempts,
-											?max_attempts,
+											max_attempts=?req_ctx.retry.max_attempts,
 											"websocket failed"
 										);
 
 										// Close WebSocket with error
 										ws_handle
-											.send(to_hyper_close(Some(err_to_close_frame(
-												err, ray_id,
-											))))
+											.send(utils::to_hyper_close(Some(
+												utils::err_to_close_frame(err, req_ctx.ray_id),
+											)))
 											.await?;
 
 										// Flush to ensure close frame is sent
@@ -1893,9 +1597,9 @@ impl ProxyService {
 
 										break;
 									} else {
-										let backoff = ProxyService::calculate_backoff(
+										let backoff = utils::calculate_backoff(
 											attempts,
-											initial_interval,
+											req_ctx.retry.initial_interval,
 										);
 
 										tracing::debug!(
@@ -1908,19 +1612,7 @@ impl ProxyService {
 									}
 
 									// Retry route resolution
-									match state
-										.resolve_route(
-											&req_host,
-											&req_path,
-											ray_id,
-											req_id,
-											&req_method,
-											state.port_type.clone(),
-											&req_headers,
-											true,
-										)
-										.await
-									{
+									match state.resolve_route(req_ctx, true).await {
 										Ok(ResolveRouteOutput::CustomServe(new_handler)) => {
 											handler = new_handler;
 											continue;
@@ -1932,9 +1624,9 @@ impl ProxyService {
 												"websocket target changed to target"
 											);
 											ws_handle
-												.send(to_hyper_close(Some(err_to_close_frame(
-													err, ray_id,
-												))))
+												.send(utils::to_hyper_close(Some(
+													utils::err_to_close_frame(err, req_ctx.ray_id),
+												)))
 												.await?;
 
 											// Flush to ensure close frame is sent
@@ -1951,9 +1643,9 @@ impl ProxyService {
 												"closing websocket due to route resolution error"
 											);
 											ws_handle
-												.send(to_hyper_close(Some(err_to_close_frame(
-													err, ray_id,
-												))))
+												.send(utils::to_hyper_close(Some(
+													utils::err_to_close_frame(err, req_ctx.ray_id),
+												)))
 												.await?;
 
 											// Flush to ensure close frame is sent
@@ -1970,7 +1662,9 @@ impl ProxyService {
 						}
 
 						// Release in-flight counter and request ID when task completes
-						state.release_in_flight(client_ip, request_id).await;
+						state
+							.release_in_flight(req_ctx.client_ip, req_ctx.in_flight_request_id)
+							.await;
 
 						Ok(())
 					}
@@ -2001,250 +1695,6 @@ impl ProxyService {
 	}
 }
 
-impl ProxyService {
-	// Process an individual request
-	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id))]
-	pub async fn process(&self, mut req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
-		let start_time = Instant::now();
-
-		let request_ids = RequestIds::new(self.state.config.dc_label());
-		req.extensions_mut().insert(request_ids);
-
-		let current_span = tracing::Span::current();
-
-		current_span.record("req_id", request_ids.req_id.to_string());
-		current_span.record("ray_id", request_ids.ray_id.to_string());
-
-		// Extract request information for logging and analytics before consuming the request
-		let incoming_ray_id = req
-			.headers()
-			.get(X_RIVET_RAY_ID)
-			.and_then(|h| h.to_str().ok())
-			.and_then(|id| Id::parse(id).ok());
-		let host = req
-			.headers()
-			.get(hyper::header::HOST)
-			.and_then(|h| h.to_str().ok())
-			.unwrap_or("unknown")
-			.to_string();
-		let uri_string = req.uri().to_string();
-		let path = req
-			.uri()
-			.path_and_query()
-			.map(|x| x.to_string())
-			.unwrap_or_else(|| req.uri().path().to_string());
-		let method = req.method().clone();
-
-		current_span.set_attribute("http.request.method", method.to_string());
-		current_span.set_attribute("http.path", uri_string.clone());
-
-		let user_agent = req
-			.headers()
-			.get(hyper::header::USER_AGENT)
-			.and_then(|h| h.to_str().ok())
-			.map(|s| s.to_string());
-
-		// TLS information would be set here if available (for HTTPS connections)
-		// This requires TLS connection introspection and is marked for future enhancement
-
-		// Debug log request information with structured fields (Apache-like access log)
-		tracing::debug!(
-			?incoming_ray_id,
-			ray_id=?request_ids.ray_id,
-			req_id=?request_ids.req_id,
-			method = %method,
-			path = %path,
-			host = %host,
-			remote_addr = %self.remote_addr,
-			uri = %uri_string,
-			protocol = ?self.state.port_type,
-			user_agent = ?user_agent,
-			"Request received"
-		);
-
-		let is_websocket = hyper_tungstenite::is_upgrade_request(&req);
-
-		// Used for ws error proxying later
-		let mut mock_req_builder = Request::builder()
-			.method(req.method().clone())
-			.uri(req.uri().clone())
-			.version(req.version().clone());
-		if let Some(headers) = mock_req_builder.headers_mut() {
-			*headers = req.headers().clone();
-		}
-		if let Some(extensions) = mock_req_builder.extensions_mut() {
-			*extensions = req.extensions().clone();
-		}
-		let mock_req = mock_req_builder.body(())?;
-
-		// Process the request
-		let mut res = match self
-			.handle_request(req, request_ids.ray_id, request_ids.req_id, start_time)
-			.await
-		{
-			Ok(res) => res,
-			Err(err) => {
-				// Log the error
-				tracing::error!(?err, "Request failed");
-
-				metrics::PROXY_REQUEST_ERROR_TOTAL
-					.with_label_values(&[&err.to_string()])
-					.inc();
-
-				// If we receive an error during a websocket request, we attempt to open the websocket anyway
-				// so we can send the error via websocket instead of http. Most websocket clients don't handle
-				// HTTP errors in a meaningful way resulting in unhelpful errors for the user
-				if is_websocket {
-					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
-					match hyper_tungstenite::upgrade(mock_req, None) {
-						Ok((client_response, client_ws)) => {
-							tracing::debug!("Client WebSocket upgrade for error proxy successful");
-
-							self.state.tasks.spawn(
-								async move {
-									let ws_handle = match WebSocketHandle::new(client_ws).await {
-										Ok(ws_handle) => ws_handle,
-										Err(err) => {
-											tracing::debug!(
-												?err,
-												"failed initiating websocket handle for error proxy"
-											);
-											return;
-										}
-									};
-									let frame = err_to_close_frame(err, request_ids.ray_id);
-
-									// Manual conversion to handle different tungstenite versions
-									let code_num: u16 = frame.code.into();
-									let reason = frame.reason.clone();
-
-									if let Err(err) = ws_handle
-										.send(tokio_tungstenite::tungstenite::Message::Close(Some(
-											tokio_tungstenite::tungstenite::protocol::CloseFrame {
-												code: code_num.into(),
-												reason,
-											},
-										)))
-										.await
-									{
-										tracing::debug!(
-											?err,
-											"failed sending websocket error proxy"
-										);
-									}
-
-									// Flush to ensure close frame is sent
-									if let Err(err) = ws_handle.flush().await {
-										tracing::debug!(
-											?err,
-											"failed flushing websocket in error proxy"
-										);
-									}
-
-									// Keep TCP connection open briefly to allow client to process close
-									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
-								}
-								.instrument(tracing::info_span!("ws_error_proxy_task")),
-							);
-
-							// Return the response that will upgrade the client connection
-							// For proper WebSocket handshaking, we need to preserve the original response
-							// structure but convert it to our expected return type without modifying its content
-							tracing::debug!(
-								"Returning WebSocket upgrade response for error proxy to client"
-							);
-							// Extract the parts from the response but preserve all headers and status
-							let (mut parts, _) = client_response.into_parts();
-
-							// Add Sec-WebSocket-Protocol header to the response
-							// Many WebSocket clients (e.g. node-ws & Cloudflare) require a protocol in the response
-							parts.headers.insert(
-								"sec-websocket-protocol",
-								hyper::header::HeaderValue::from_static("rivet"),
-							);
-
-							// Create a new response with an empty body - WebSocket upgrades don't need a body
-							Response::from_parts(
-								parts,
-								ResponseBody::Full(Full::<Bytes>::new(Bytes::new())),
-							)
-						}
-						Err(err) => {
-							tracing::error!(
-								?err,
-								"Failed to upgrade client WebSocket for error proxy"
-							);
-
-							err_into_response(
-								errors::ConnectionError {
-									error_message: format!(
-										"Failed to upgrade client WebSocket for error proxy: {}",
-										err
-									),
-									remote_addr: self.remote_addr.to_string(),
-								}
-								.build(),
-							)?
-						}
-					}
-				} else {
-					err_into_response(err)?
-				}
-			}
-		};
-
-		if is_websocket && res.status() != StatusCode::SWITCHING_PROTOCOLS {
-			tracing::debug!("returned non-101 response to websocket");
-		}
-
-		// Add ray_id to response headers
-		if let Ok(ray_id_value) = request_ids.ray_id.to_string().parse() {
-			if let Some(existing_ray_id_value) = res
-				.headers()
-				.get(X_RIVET_RAY_ID)
-				.and_then(|h| h.to_str().ok())
-			{
-				if ray_id_value != existing_ray_id_value {
-					tracing::warn!(
-						expected_ray_id=%request_ids.ray_id,
-						received_ray_id=%existing_ray_id_value,
-						"downstream service set ray id header to a different value",
-					);
-				}
-			}
-
-			res.headers_mut().insert(X_RIVET_RAY_ID, ray_id_value);
-		}
-
-		let status = res.status().as_u16();
-
-		current_span.set_attribute("http.response.status_code", status as i64);
-
-		let content_length = res
-			.headers()
-			.get(hyper::header::CONTENT_LENGTH)
-			.and_then(|h| h.to_str().ok())
-			.and_then(|s| s.parse::<usize>().ok())
-			.unwrap_or(0);
-
-		// Log information about the completed request
-		tracing::debug!(
-			?incoming_ray_id,
-			ray_id=?request_ids.ray_id,
-			req_id=?request_ids.req_id,
-			method = %method,
-			path = %path,
-			host = %host,
-			remote_addr = %self.remote_addr,
-			status = %status,
-			content_length = %content_length,
-			"Request completed"
-		);
-
-		Ok(res)
-	}
-}
-
 impl Clone for ProxyService {
 	fn clone(&self) -> Self {
 		Self {
@@ -2265,16 +1715,8 @@ impl ProxyServiceFactory {
 		config: rivet_config::Config,
 		routing_fn: RoutingFn,
 		cache_key_fn: CacheKeyFn,
-		middleware_fn: MiddlewareFn,
-		port_type: PortType,
 	) -> Self {
-		let state = Arc::new(ProxyState::new(
-			config,
-			routing_fn,
-			cache_key_fn,
-			middleware_fn,
-			port_type,
-		));
+		let state = Arc::new(ProxyState::new(config, routing_fn, cache_key_fn));
 		Self { state }
 	}
 
@@ -2289,169 +1731,5 @@ impl ProxyServiceFactory {
 
 	pub fn remaining_tasks(&self) -> usize {
 		self.state.tasks.remaining_tasks()
-	}
-}
-
-fn add_proxy_headers_with_addr(
-	headers: &mut hyper::HeaderMap,
-	original_headers: &hyper::HeaderMap,
-	remote_addr: SocketAddr,
-) -> Result<()> {
-	// Copy headers except Host
-	for (key, value) in original_headers.iter() {
-		if key != hyper::header::HOST {
-			headers.insert(key.clone(), value.clone());
-		}
-	}
-
-	// Add X-Forwarded-For header
-	if let Some(existing) = original_headers.get(X_FORWARDED_FOR) {
-		if let Ok(forwarded) = existing.to_str() {
-			if !forwarded.contains(&remote_addr.ip().to_string()) {
-				headers.insert(
-					X_FORWARDED_FOR,
-					hyper::header::HeaderValue::from_str(&format!(
-						"{}, {}",
-						forwarded,
-						remote_addr.ip()
-					))?,
-				);
-			}
-		}
-	} else {
-		headers.insert(
-			X_FORWARDED_FOR,
-			hyper::header::HeaderValue::from_str(&remote_addr.ip().to_string())?,
-		);
-	}
-
-	Ok(())
-}
-
-fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseBody>> {
-	let (status, error_response) =
-		if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
-			let status = match (rivet_err.group(), rivet_err.code()) {
-				("api", "not_found") => StatusCode::NOT_FOUND,
-				("api", "unauthorized") => StatusCode::UNAUTHORIZED,
-				("api", "forbidden") => StatusCode::FORBIDDEN,
-				("guard", "rate_limit") => StatusCode::TOO_MANY_REQUESTS,
-				("guard", "upstream_error") => StatusCode::BAD_GATEWAY,
-				("guard", "routing_error") => StatusCode::BAD_GATEWAY,
-				("guard", "request_timeout") => StatusCode::GATEWAY_TIMEOUT,
-				("guard", "retry_attempts_exceeded") => StatusCode::BAD_GATEWAY,
-				("actor", "not_found") => StatusCode::NOT_FOUND,
-				("guard", "service_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
-				("guard", "actor_ready_timeout") => StatusCode::SERVICE_UNAVAILABLE,
-				("guard", "no_route") => StatusCode::NOT_FOUND,
-				_ => StatusCode::BAD_REQUEST,
-			};
-
-			(status, ErrorResponse::from(rivet_err))
-		} else if let Some(raw_err) = err
-			.chain()
-			.find_map(|x| x.downcast_ref::<RawErrorResponse>())
-		{
-			(raw_err.0, raw_err.1.clone())
-		} else {
-			(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				ErrorResponse::from(&RivetError {
-					schema: &rivet_error::INTERNAL_ERROR,
-					meta: None,
-					message: None,
-				}),
-			)
-		};
-
-	let body_json = serde_json::to_vec(&error_response)?;
-	let bytes = Bytes::from(body_json);
-
-	Response::builder()
-		.status(status)
-		.header(hyper::header::CONTENT_TYPE, "application/json")
-		.body(ResponseBody::Full(Full::new(bytes)))
-		.map_err(Into::into)
-}
-
-fn should_retry_request(res: &Result<Response<ResponseBody>>) -> bool {
-	match res {
-		Ok(resp) => should_retry_request_inner(resp.status(), resp.headers()),
-		Err(err) => {
-			if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
-				rivet_err.group() == "guard" && rivet_err.code() == "service_unavailable"
-			} else {
-				false
-			}
-		}
-	}
-}
-
-// Determine if a response should trigger a retry: 503 + x-rivet-error
-fn should_retry_request_inner(status: StatusCode, headers: &hyper::HeaderMap) -> bool {
-	status == StatusCode::SERVICE_UNAVAILABLE && headers.contains_key(X_RIVET_ERROR)
-}
-
-// Determine if a websocket error is retryable (e.g., transient UPS/tunnel issues)
-fn is_retryable_ws_error(err: &anyhow::Error) -> bool {
-	if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
-		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_unavailable"
-	} else {
-		false
-	}
-}
-
-pub fn is_ws_hibernate(err: &anyhow::Error) -> bool {
-	if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
-		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_hibernate"
-	} else {
-		false
-	}
-}
-
-fn err_to_close_frame(err: anyhow::Error, ray_id: Id) -> CloseFrame {
-	let rivet_err = err
-		.chain()
-		.find_map(|x| x.downcast_ref::<RivetError>())
-		.cloned()
-		.unwrap_or_else(|| RivetError::from(&INTERNAL_ERROR));
-
-	let code = match (rivet_err.group(), rivet_err.code()) {
-		("ws", "connection_closed") | ("ws", "eviction") => CloseCode::Normal,
-		_ => CloseCode::Error,
-	};
-
-	match code {
-		CloseCode::Normal => tracing::debug!("websocket closed"),
-		_ => tracing::error!(?err, "websocket failed"),
-	}
-
-	let reason = format!("{}.{}#{}", rivet_err.group(), rivet_err.code(), ray_id);
-
-	// NOTE: reason cannot be more than 123 bytes as per the WS protocol
-	let reason = rivet_util::safe_slice(&reason, 0, 123).into();
-
-	CloseFrame { code, reason }
-}
-
-fn to_hyper_close(frame: Option<CloseFrame>) -> hyper_tungstenite::tungstenite::Message {
-	if let Some(frame) = frame {
-		// Manual conversion to handle different tungstenite versions
-		let code_num: u16 = frame.code.into();
-		let reason = frame.reason.clone();
-
-		tokio_tungstenite::tungstenite::Message::Close(Some(
-			tokio_tungstenite::tungstenite::protocol::CloseFrame {
-				code: code_num.into(),
-				reason,
-			},
-		))
-	} else {
-		tokio_tungstenite::tungstenite::Message::Close(Some(
-			tokio_tungstenite::tungstenite::protocol::CloseFrame {
-				code: CloseCode::Normal,
-				reason: "ws.closed".into(),
-			},
-		))
 	}
 }

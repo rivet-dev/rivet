@@ -16,7 +16,6 @@ use rivet_guard_core::WebSocketHandle;
 use rivet_guard_core::custom_serve::{CustomServeTrait, HibernationResult};
 use rivet_guard_core::errors::WebSocketServiceHibernate;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingFn, RoutingOutput};
-use rivet_guard_core::request_context::RequestContext;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 
 const HIBERNATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
@@ -39,7 +38,6 @@ impl CustomServeTrait for TestCustomServe {
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
-		_request_context: &mut RequestContext,
 		_unique_request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
 		// Track this HTTP call
@@ -71,7 +69,6 @@ impl CustomServeTrait for TestCustomServe {
 		websocket: WebSocketHandle,
 		_headers: &hyper::HeaderMap,
 		_path: &str,
-		_request_context: &mut RequestContext,
 		_unique_request_id: protocol::RequestId,
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
