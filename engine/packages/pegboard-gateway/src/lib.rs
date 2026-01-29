@@ -289,7 +289,6 @@ impl PegboardGateway {
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
 			get_runner_protocol_version(&ctx, self.runner_id),
-			init_ns_metrics_exporter(&ctx, self.runner_id),
 		)?;
 
 		// Build subject to publish to

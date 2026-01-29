@@ -10,6 +10,7 @@ use std::{
 
 use anyhow::{Context, Result, ensure};
 use futures_util::{StreamExt, stream::FuturesUnordered};
+use tokio::task::JoinHandle;
 
 #[derive(Clone)]
 pub struct Service {
@@ -128,6 +129,12 @@ impl RunConfigData {
 	}
 }
 
+struct ServiceTask {
+	name: String,
+	handle: JoinHandle<()>,
+	requires_graceful_shutdown: bool,
+}
+
 /// Runs services & waits for completion.
 ///
 /// Useful in order to allow for easily configuring an entrypoint where a custom set of services
@@ -160,8 +167,10 @@ pub async fn start(
 				let config = config.clone();
 				let pools = pools.clone();
 				let shutting_down = shutting_down.clone();
+				let task_name = format!("rivet::service::{}", service.name);
+
 				let join_handle = tokio::task::Builder::new()
-					.name(&format!("rivet::service::{}", service.name))
+					.name(&task_name)
 					.spawn(async move {
 						tracing::debug!(service=%service.name, "starting service");
 
@@ -191,14 +200,20 @@ pub async fn start(
 					})
 					.context("failed to spawn service")?;
 
-				running_services.push((service.requires_graceful_shutdown, join_handle));
+				running_services.push(ServiceTask {
+					name: task_name,
+					handle: join_handle,
+					requires_graceful_shutdown: service.requires_graceful_shutdown,
+				});
 			}
 			ServiceBehavior::Oneshot => {
 				let config = config.clone();
 				let pools = pools.clone();
 				let shutting_down = shutting_down.clone();
+				let task_name = format!("rivet::oneoff::{}", service.name);
+
 				let join_handle = tokio::task::Builder::new()
-					.name(&format!("rivet::oneoff::{}", service.name))
+					.name(&task_name)
 					.spawn(async move {
 						tracing::debug!(oneoff=%service.name, "starting oneoff");
 
@@ -224,7 +239,11 @@ pub async fn start(
 					})
 					.context("failed to spawn oneoff")?;
 
-				running_services.push((service.requires_graceful_shutdown, join_handle));
+				running_services.push(ServiceTask {
+					name: task_name,
+					handle: join_handle,
+					requires_graceful_shutdown: service.requires_graceful_shutdown,
+				});
 			}
 			ServiceBehavior::Cron(cron_config) => {
 				// Spawn immediate task
@@ -233,8 +252,10 @@ pub async fn start(
 					let config = config.clone();
 					let pools = pools.clone();
 					let shutting_down = shutting_down.clone();
+					let task_name = format!("rivet::cron_immediate::{}", service.name);
+
 					let join_handle = tokio::task::Builder::new()
-						.name(&format!("rivet::cron_immediate::{}", service.name))
+						.name(&task_name)
 						.spawn(async move {
 							tracing::debug!(cron=%service.name, "starting immediate cron");
 
@@ -262,7 +283,11 @@ pub async fn start(
 						})
 						.context("failed to spawn cron")?;
 
-					running_services.push((service.requires_graceful_shutdown, join_handle));
+					running_services.push(ServiceTask {
+						name: task_name,
+						handle: join_handle,
+						requires_graceful_shutdown: service.requires_graceful_shutdown,
+					});
 				}
 
 				// Spawn cron
@@ -270,6 +295,8 @@ pub async fn start(
 				let pools = pools.clone();
 				let service2 = service.clone();
 				let shutting_down = shutting_down.clone();
+				let task_name = format!("rivet::cron_dummy::{}", service.name);
+
 				cron_schedule
 					.add(tokio_cron_scheduler::Job::new_async_tz(
 						&cron_config.schedule,
@@ -310,10 +337,15 @@ pub async fn start(
 
 				// Add dummy task to prevent start command from stopping if theres a cron
 				let join_handle = tokio::task::Builder::new()
-					.name(&format!("rivet::cron_dummy::{}", service.name))
+					.name(&task_name)
 					.spawn(std::future::pending())
 					.context("failed creating dummy cron task")?;
-				running_services.push((false, join_handle));
+
+				running_services.push(ServiceTask {
+					name: task_name,
+					handle: join_handle,
+					requires_graceful_shutdown: false,
+				});
 			}
 		}
 	}
@@ -325,7 +357,7 @@ pub async fn start(
 		let join_fut = async {
 			let mut handle_futs = running_services
 				.iter_mut()
-				.filter_map(|(_, handle)| (!handle.is_finished()).then_some(handle))
+				.filter_map(|task| (!task.handle.is_finished()).then_some(&mut task.handle))
 				.collect::<FuturesUnordered<_>>();
 
 			while let Some(_) = handle_futs.next().await {}
@@ -349,12 +381,13 @@ pub async fn start(
 				});
 
 				// Abort services that don't require graceful shutdown
-				running_services.retain(|(requires_graceful_shutdown, handle)| {
-					if !requires_graceful_shutdown {
-						handle.abort();
+				running_services.retain(|task| {
+					if !task.requires_graceful_shutdown {
+						tracing::debug!(name=%task.name, "aborting service");
+						task.handle.abort();
 					}
 
-					*requires_graceful_shutdown
+					task.requires_graceful_shutdown
 				});
 
 				if abort {
