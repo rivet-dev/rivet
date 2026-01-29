@@ -176,3 +176,5 @@ curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engin
 ## License
 
 [Apache 2.0](LICENSE)
+
+<!-- Testing Railway deployment after auth fix Thu Jan 29 16:51:13 UTC 2026 -->
