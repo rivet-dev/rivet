@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::RoutingFn;
