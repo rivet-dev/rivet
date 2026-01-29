@@ -115,12 +115,8 @@ impl TermSignal {
 
 	/// Returns true if the user should abort any graceful attempt to shutdown and shutdown immediately.
 	pub async fn recv(&mut self) -> bool {
-		let change = self.0.changed().await;
-		tracing::info!(?change, "hello?");
-
+		let _ = self.0.changed().await;
 		*self.0.borrow()
-		// let _ = std::future::pending::<()>().await;
-		// false
 	}
 
 	pub fn stop() {
