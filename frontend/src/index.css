@@ -11,6 +11,14 @@
 	body {
 		@apply bg-background text-foreground min-h-screen;
 	}
+	/* Comic Sans for light mode only - experimental */
+	:root:not(.dark) body {
+		font-family: "Comic Sans MS", cursive, sans-serif;
+	}
+	/* Keep default font for dark mode */
+	:root.dark body {
+		font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	}
 	#root {
 		@apply min-h-screen;
 	}
