@@ -5,21 +5,18 @@ use std::{
 
 use anyhow::Result;
 use gas::prelude::*;
+use rivet_guard_core::request_context::RequestContext;
 
 use crate::routing::pegboard_gateway::X_RIVET_ACTOR;
 
 #[tracing::instrument(skip_all)]
-pub fn build_cache_key(
-	target: &str,
-	path: &str,
-	method: &hyper::Method,
-	headers: &hyper::HeaderMap,
-) -> Result<u64> {
+pub fn build_cache_key(req_ctx: &RequestContext, target: &str) -> Result<u64> {
 	// Check target
 	ensure!(target == "actor", "wrong target");
 
 	// Find actor to route to
-	let actor_id_str = headers
+	let actor_id_str = req_ctx
+		.headers()
 		.get(X_RIVET_ACTOR)
 		.ok_or_else(|| {
 			crate::errors::MissingHeader {
@@ -35,8 +32,8 @@ pub fn build_cache_key(
 	let mut hasher = DefaultHasher::new();
 	target.hash(&mut hasher);
 	actor_id.hash(&mut hasher);
-	path.hash(&mut hasher);
-	method.as_str().hash(&mut hasher);
+	req_ctx.path().hash(&mut hasher);
+	req_ctx.method().as_str().hash(&mut hasher);
 	let hash = hasher.finish();
 
 	Ok(hash)

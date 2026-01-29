@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
-use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
+use rivet_guard_core::{RouteConfig, RouteTarget, RoutingOutput, request_context::RequestContext};
 
 use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN};
 use crate::{errors, shared_state::SharedState};
@@ -23,11 +23,10 @@ pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 pub async fn route_request_path_based(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
+	req_ctx: &RequestContext,
 	actor_id_str: &str,
 	token_from_path: Option<&str>,
-	original_path: &str,
 	stripped_path: &str,
-	headers: &hyper::HeaderMap,
 	is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Parse actor ID
@@ -38,7 +37,8 @@ pub async fn route_request_path_based(
 		Some(token)
 	} else if is_websocket {
 		// For WebSocket, parse the sec-websocket-protocol header
-		let protocols_header = headers
+		let protocols_header = req_ctx
+			.headers()
 			.get(SEC_WEBSOCKET_PROTOCOL)
 			.and_then(|protocols| protocols.to_str().ok())
 			.ok_or_else(|| {
@@ -57,22 +57,15 @@ pub async fn route_request_path_based(
 			.iter()
 			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
 	} else {
-		headers
+		req_ctx
+			.headers()
 			.get(X_RIVET_TOKEN)
 			.map(|x| x.to_str())
 			.transpose()
 			.context("invalid x-rivet-token header")?
 	};
 
-	route_request_inner(
-		ctx,
-		shared_state,
-		actor_id,
-		original_path,
-		stripped_path,
-		token,
-	)
-	.await
+	route_request_inner(ctx, shared_state, req_ctx, actor_id, stripped_path, token).await
 }
 
 /// Route requests to actor services based on headers
@@ -80,10 +73,8 @@ pub async fn route_request_path_based(
 pub async fn route_request(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
+	req_ctx: &RequestContext,
 	target: &str,
-	_host: &str,
-	path: &str,
-	headers: &hyper::HeaderMap,
 	is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
@@ -94,7 +85,8 @@ pub async fn route_request(
 	// Extract actor ID and token from WebSocket protocol or HTTP headers
 	let (actor_id_str, token) = if is_websocket {
 		// For WebSocket, parse the sec-websocket-protocol header
-		let protocols_header = headers
+		let protocols_header = req_ctx
+			.headers()
 			.get(SEC_WEBSOCKET_PROTOCOL)
 			.and_then(|protocols| protocols.to_str().ok())
 			.ok_or_else(|| {
@@ -127,7 +119,8 @@ pub async fn route_request(
 		(actor_id, token)
 	} else {
 		// For HTTP, use headers
-		let actor_id = headers
+		let actor_id = req_ctx
+			.headers()
 			.get(X_RIVET_ACTOR)
 			.map(|x| x.to_str())
 			.transpose()
@@ -139,7 +132,8 @@ pub async fn route_request(
 				.build()
 			})?;
 
-		let token = headers
+		let token = req_ctx
+			.headers()
 			.get(X_RIVET_TOKEN)
 			.map(|x| x.to_str())
 			.transpose()
@@ -151,14 +145,14 @@ pub async fn route_request(
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, actor_id, path, path, token).await
+	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token).await
 }
 
 async fn route_request_inner(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
+	req_ctx: &RequestContext,
 	actor_id: Id,
-	original_path: &str,
 	stripped_path: &str,
 	_token: Option<&str>,
 ) -> Result<Option<RoutingOutput>> {
@@ -182,11 +176,8 @@ async fn route_request_inner(
 				port: peer_dc
 					.proxy_url_port()
 					.context("bad peer dc proxy url port")?,
-				path: original_path.to_owned(),
+				path: req_ctx.path().to_owned(),
 			}],
-			timeout: RoutingTimeout {
-				routing_timeout: 10,
-			},
 		})));
 	}
 

@@ -6,9 +6,8 @@ use http_body_util::Full;
 use hyper::{Response, StatusCode};
 use pegboard::ops::runner::update_alloc_idx::Action;
 use rivet_guard_core::{
-	WebSocketHandle, custom_serve::CustomServeTrait, proxy_service::ResponseBody,
+	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait, request_context::RequestContext,
 };
-use rivet_runner_protocol as protocol;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
@@ -45,9 +44,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 	async fn handle_request(
 		&self,
 		_req: hyper::Request<http_body_util::Full<hyper::body::Bytes>>,
-		_ray_id: Id,
-		_req_id: Id,
-		_request_id: protocol::RequestId,
+		_req_ctx: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		// Pegboard runner ws doesn't handle regular HTTP requests
 		// Return a simple status response
@@ -63,26 +60,22 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 
 	async fn handle_websocket(
 		&self,
+		req_ctx: &mut RequestContext,
 		ws_handle: WebSocketHandle,
-		_headers: &hyper::HeaderMap,
-		path: &str,
-		ray_id: Id,
-		req_id: Id,
-		_request_id: protocol::RequestId,
 		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
-		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
 
 		// Get UPS
 		let ups = ctx.ups().context("failed to get UPS instance")?;
 
 		// Parse URL to extract parameters
-		let url = url::Url::parse(&format!("ws://placeholder/{path}"))
+		let url = url::Url::parse(&format!("ws://placeholder/{}", req_ctx.path()))
 			.context("failed to parse WebSocket URL")?;
 		let url_data = utils::UrlData::parse_url(url)
 			.map_err(|err| errors::WsError::InvalidUrl(err.to_string()).build())?;
 
-		tracing::debug!(?path, "tunnel ws connection established");
+		tracing::debug!(path=%req_ctx.path(), "tunnel ws connection established");
 
 		// Create connection
 		let conn = conn::init_conn(&ctx, ws_handle.clone(), url_data)

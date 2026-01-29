@@ -4,7 +4,6 @@ use gas::prelude::*;
 pub mod cache;
 pub mod errors;
 pub mod metrics;
-pub mod middleware;
 pub mod routing;
 pub mod shared_state;
 pub mod tls;
@@ -35,7 +34,6 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	// Create handlers
 	let routing_fn = routing::create_routing_function(&ctx, shared_state.clone());
 	let cache_key_fn = cache::create_cache_key_function();
-	let middleware_fn = middleware::create_middleware_function();
 	let cert_resolver = tls::create_cert_resolver(&ctx).await?;
 
 	if let Some(_) = &cert_resolver {
@@ -46,12 +44,5 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 
 	// Start the server
 	tracing::info!("starting proxy server");
-	rivet_guard_core::run_server(
-		config,
-		routing_fn,
-		cache_key_fn,
-		middleware_fn,
-		cert_resolver,
-	)
-	.await
+	rivet_guard_core::run_server(config, routing_fn, cache_key_fn, cert_resolver).await
 }
