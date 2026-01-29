@@ -24,7 +24,7 @@ import {
 } from "@/schemas/client-protocol-zod/mod";
 import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
-import { getLogMessage } from "@/utils/env-vars";
+import { getLogMessage, isLocalDev } from "@/utils/env-vars";
 import type { ActorDefinitionActions } from "./actor-common";
 import { checkForSchedulingError, queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
@@ -304,12 +304,23 @@ enc
 	#connectWithRetry() {
 		this.#setConnStatus("connecting");
 
+		const retryTimeouts = isLocalDev()
+			? {
+					minTimeout: 1_000,
+					maxTimeout: 1_000,
+					factor: 1,
+					randomize: false,
+			  }
+			: {
+					minTimeout: 250,
+					maxTimeout: 30_000,
+			  };
+
 		// Attempt to reconnect indefinitely
 		// This is intentionally not awaited - connection happens in background
 		pRetry(this.#connectAndWait.bind(this), {
 			forever: true,
-			minTimeout: 250,
-			maxTimeout: 30_000,
+			...retryTimeouts,
 
 			onFailedAttempt: (error) => {
 				logger().warn({
