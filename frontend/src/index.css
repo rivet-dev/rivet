@@ -15,9 +15,23 @@
 	:root body {
 		font-family: "Comic Sans MS", cursive, sans-serif;
 	}
+	/* Apply Comic Sans to all text elements in light mode */
+	:root h1, :root h2, :root h3, :root h4, :root h5, :root h6,
+	:root p, :root span, :root div, :root a, :root li, :root button,
+	:root input, :root textarea, :root select, :root label {
+		font-family: "Comic Sans MS", cursive, sans-serif !important;
+	}
 	/* Keep default font for dark mode */
 	:root[class~="dark"] body {
 		font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	}
+	:root[class~="dark"] h1, :root[class~="dark"] h2, :root[class~="dark"] h3, 
+	:root[class~="dark"] h4, :root[class~="dark"] h5, :root[class~="dark"] h6,
+	:root[class~="dark"] p, :root[class~="dark"] span, :root[class~="dark"] div, 
+	:root[class~="dark"] a, :root[class~="dark"] li, :root[class~="dark"] button,
+	:root[class~="dark"] input, :root[class~="dark"] textarea, :root[class~="dark"] select, 
+	:root[class~="dark"] label {
+		font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
 	}
 	#root {
 		@apply min-h-screen;
