@@ -8,6 +8,7 @@ use crate::metrics;
 use crate::request_context::RequestContext;
 
 const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
+pub(crate) const DEFAULT_ROUTE_TIMEOUT: Duration = Duration::from_secs(15);
 
 // Routing types
 #[derive(Clone, Debug)]
@@ -46,7 +47,7 @@ pub type CacheKeyFn = Arc<dyn for<'a> Fn(&'a mut RequestContext) -> Result<u64> 
 
 // Cache for routing results
 pub(crate) struct RouteCache {
-	cache: Cache<u64, RouteConfig>,
+	cache: Cache<u64, RoutingOutput>,
 }
 
 impl RouteCache {
@@ -60,13 +61,13 @@ impl RouteCache {
 	}
 
 	#[tracing::instrument(skip_all)]
-	pub(crate) async fn get(&self, key: &u64) -> Option<RouteConfig> {
+	pub(crate) async fn get(&self, key: &u64) -> Option<RoutingOutput> {
 		self.cache.get(key).await
 	}
 
 	#[tracing::instrument(skip_all)]
-	pub(crate) async fn insert(&self, key: u64, result: RouteConfig) {
-		self.cache.insert(key, result).await;
+	pub(crate) async fn insert(&self, key: u64, output: RoutingOutput) {
+		self.cache.insert(key, output).await;
 
 		metrics::ROUTE_CACHE_COUNT.set(self.cache.entry_count() as i64);
 	}
