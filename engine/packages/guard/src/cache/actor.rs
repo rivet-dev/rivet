@@ -32,6 +32,7 @@ pub fn build_cache_key(req_ctx: &RequestContext, target: &str) -> Result<u64> {
 	let mut hasher = DefaultHasher::new();
 	target.hash(&mut hasher);
 	actor_id.hash(&mut hasher);
+	// TODO: Should this include query for cache key?
 	req_ctx.path().hash(&mut hasher);
 	req_ctx.method().as_str().hash(&mut hasher);
 	let hash = hasher.finish();
