@@ -112,6 +112,8 @@ export interface GetOrCreateOptions extends QueryOptions {
 	createInRegion?: string;
 	/** Input data to pass to the actor. */
 	createWithInput?: unknown;
+	/** Runner name to create the actor on. Overrides the client's default runner. */
+	createOnRunner?: string;
 }
 
 /**
@@ -124,6 +126,8 @@ export interface CreateOptions extends QueryOptions {
 	region?: string;
 	/** Input data to pass to the actor. */
 	input?: unknown;
+	/** Runner name to create the actor on. Overrides the client's default runner. */
+	runner?: string;
 }
 
 /**
@@ -270,6 +274,7 @@ export class ClientRaw {
 				key: keyArray,
 				input: opts?.createWithInput,
 				region: opts?.createInRegion,
+				runner: opts?.createOnRunner,
 			},
 		};
 

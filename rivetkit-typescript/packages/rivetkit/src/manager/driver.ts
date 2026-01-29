@@ -76,6 +76,7 @@ export interface GetOrCreateWithKeyInput<E extends Env = any> {
 	key: ActorKey;
 	input?: unknown;
 	region?: string;
+	runner?: string;
 }
 
 export interface CreateInput<E extends Env = any> {
@@ -84,6 +85,7 @@ export interface CreateInput<E extends Env = any> {
 	key: ActorKey;
 	input?: unknown;
 	region?: string;
+	runner?: string;
 }
 
 export interface ListActorsInput<E extends Env = any> {
