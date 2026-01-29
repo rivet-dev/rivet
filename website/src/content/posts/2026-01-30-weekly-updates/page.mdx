@@ -2,79 +2,33 @@
 author: nicholas-kissel
 published: "2026-01-30"
 category: changelog
-keywords: ["weekly-update", "swift-sdk", "sandbox-agent", "comic-sans", "serverless", "mcp", "skills", "vercel", "actor-metrics", "dashboard"]
+keywords: ["weekly-update", "swift-sdk", "sandbox-agent", "comic-sans", "vercel", "actor-metrics"]
 title: "Rivet Weekly Changelog 2026-05"
-description: "🚀 PRIORITY FEATURES: Swift SDK for native iOS/macOS development, MCP Server for AI agent tooling, comprehensive skill files system, and auto-detection of serverless upgrades. Plus Comic Sans UI experiment, Sandbox Agent enhancements, new dashboard onboarding, Vercel integration, and actor metrics infrastructure."
+description: "Swift SDK for native iOS/macOS development, Comic Sans UI experiment, Sandbox Agent enhancements with Netlify integration, Vercel deployment examples, and actor metrics infrastructure improvements."
 ---
 
-## 🚀 Priority Features (from Discord)
+## 🚀 Priority Features
 
 ### **Swift SDK** (Jan 26)
 - **Native Swift SDK** for iOS and macOS development with RivetKit
 - Full Swift package manager integration
 - Native actor client support
 
-### **MCP Server & Skills System** (Jan 22)
+### **MCP Server Integration** (Jan 22)
 - **MCP (Model Context Protocol) server** for enhanced AI agent capabilities
-- **Skill files** system for portable AI agent functionality
 - Comprehensive skill packaging and distribution
 
-### **Actor Runtime Enhancements** (Jan 22-23)
-- **`c.keepAwake()`** API to keep actors alive while promises are running
-- **Actor `run` handler** for procedural actor logic and queue processing
-- **Actor queues** for reliable message processing
-- **Auto-detection of serverless upgrades** to preemptively drain actors
 
----
-
-## 📦 Repository Updates
-
-### Rivet Core
-- **feat**: Comprehensive Comic Sans implementation for both frontend and website (experimental UI testing)
-- **feat**: Swift SDK integration with RivetKit packages
-- **feat**: Actor and KV metrics collection infrastructure
-- **feat**: Dashboard onboarding flow with agentic experience
-- **feat**: Vercel-flavored examples for seamless deployment
-- **chore**: Pool cleanup and unused crate removal
-- **fix**: Actor queue initialization checks
-- **fix**: Actor metrics workflow separation
-- **fix**: Website type checking improvements
-
-### Sandbox Agent (Major Updates)
-- **feat**: Netlify deployment integration
-- **feat**: Claude adapter improvements with HITL (Human-in-the-Loop) support
-- **feat**: Structured stderr output for enhanced error diagnostics
-- **feat**: PostHog analytics integration
-- **feat**: Inspector section with debugger capabilities
-- **feat**: Universal agent schema standardization
-- **docs**: Complete documentation overhaul with universal schema reference
-- **ci**: Claude assistant GitHub Actions workflows
-- **fix**: Multi-architecture Docker builds (ARM64/AMD64)
-- **fix**: CORS handling for inspector defaults
-- **fix**: Credential extraction in test infrastructure
-
-### Infrastructure & DevOps
-- **feat**: GitHub Action to publish skills to rivet-dev/skills repository
-- **feat**: Automated skill generation and deployment workflows
-- **feat**: Enhanced CI/CD pipeline with Docker multi-arch support
-- **chore**: Release automation improvements (v2.0.42)
-- **fix**: Build optimization and dependency management
-
----
-
-## 🔧 Developer Experience
-- **Enhanced error reporting** with structured stderr output
-- **Improved test infrastructure** for sandbox environments
-- **Better Docker support** with multi-architecture builds
-- **Simplified integration** with Hono/Elysia/Express frameworks
-- **Inspector performance improvements** and UI enhancements
-
-## 🌐 Platform Integrations
-- **Vercel**: Zero-config deployment support for all examples
-- **Netlify**: New deployment integration via Sandbox Agent
-- **E2B**: Enhanced sandbox environment support
-- **Daytona**: Improved SDK compatibility
-
----
-
-*This changelog aggregates commits from rivet, rivet-ee, and sandbox-agent repositories from January 22-29, 2026, with priority features highlighted based on Discord team communications.*
+- Comprehensive Comic Sans implementation for experimental UI testing
+- Swift SDK integration with RivetKit packages  
+- Actor and KV metrics collection infrastructure
+- Vercel-flavored examples for seamless deployment
+- Netlify deployment integration via Sandbox Agent
+- Claude adapter improvements with Human-in-the-Loop support
+- Structured stderr output for enhanced error diagnostics
+- PostHog analytics integration
+- Inspector debugging capabilities
+- Universal agent schema standardization
+- Multi-architecture Docker builds (ARM64/AMD64)
+- GitHub Action to publish skills to rivet-dev/skills repository
+- Enhanced CI/CD pipeline improvements
