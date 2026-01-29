@@ -11,6 +11,10 @@
 	body {
 		@apply bg-background text-foreground min-h-screen;
 	}
+	/* Comic Sans for light mode only - experimental feature */
+	:root:not(.dark) body {
+		font-family: "Comic Sans MS", cursive, sans-serif;
+	}
 	#root {
 		@apply min-h-screen;
 	}
