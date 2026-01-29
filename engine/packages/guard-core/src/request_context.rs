@@ -26,6 +26,7 @@ pub struct RequestContext {
 	pub(crate) timeout: TimeoutConfig,
 
 	pub(crate) in_flight_request_id: Option<protocol::RequestId>,
+	pub(crate) cors: Option<CorsConfig>,
 }
 
 impl RequestContext {
@@ -70,6 +71,7 @@ impl RequestContext {
 			},
 
 			in_flight_request_id: None,
+			cors: None,
 		}
 	}
 
@@ -105,6 +107,10 @@ impl RequestContext {
 		self.in_flight_request_id
 			.context("no in flight request id acquired")
 	}
+
+	pub fn set_cors(&mut self, cors_config: CorsConfig) {
+		self.cors = Some(cors_config);
+	}
 }
 
 #[derive(Clone, Debug)]
@@ -127,4 +133,11 @@ pub struct RetryConfig {
 #[derive(Clone, Debug)]
 pub struct TimeoutConfig {
 	pub request_timeout: u64, // in seconds
+}
+
+#[derive(Clone, Debug)]
+pub struct CorsConfig {
+	pub allow_origin: String,
+	pub allow_credentials: bool,
+	pub expose_headers: String,
 }
