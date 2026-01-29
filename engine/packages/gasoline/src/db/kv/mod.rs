@@ -621,7 +621,7 @@ impl Database for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn publish_metrics(&self, worker_id: Id) -> WorkflowResult<()> {
+	async fn publish_metrics(&self, _worker_id: Id) -> WorkflowResult<()> {
 		// Attempt to be the only worker publishing metrics by writing to the lock key
 		let acquired_lock = self
 			.pools

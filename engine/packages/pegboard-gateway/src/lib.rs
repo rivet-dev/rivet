@@ -158,12 +158,7 @@ impl PegboardGateway {
 
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
-			record_req_metrics(
-				&ctx,
-				self.runner_id,
-				self.actor_id,
-				Metric::HttpIngress(body_bytes.len()),
-			),
+			get_runner_protocol_version(&ctx, self.runner_id),
 		)?;
 
 		// Build subject to publish to
@@ -293,7 +288,8 @@ impl PegboardGateway {
 
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
-			record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketOpen),
+			get_runner_protocol_version(&ctx, self.runner_id),
+			init_ns_metrics_exporter(&ctx, self.runner_id),
 		)?;
 
 		// Build subject to publish to
@@ -623,19 +619,44 @@ impl CustomServeTrait for PegboardGateway {
 		request_id: protocol::RequestId,
 	) -> Result<Response<ResponseBody>> {
 		let ctx = self.ctx.with_ray(ray_id, req_id)?;
-		let res = self.handle_request_inner(&ctx, req, request_id).await;
+		let req_body_size_hint = req.body().size_hint();
+		let (res, metrics_res) = tokio::join!(
+			self.handle_request_inner(&ctx, req, request_id),
+			record_req_metrics(
+				&ctx,
+				self.runner_id,
+				self.actor_id,
+				Metric::HttpIngress(
+					req_body_size_hint
+						.upper()
+						.unwrap_or(req_body_size_hint.lower()) as usize
+				),
+			),
+		);
+
 		let response_size = match &res {
 			Ok(res) => res.size_hint().upper().unwrap_or(res.size_hint().lower()),
 			Err(_) => 0,
 		};
 
-		record_req_metrics(
-			&ctx,
-			self.runner_id,
-			self.actor_id,
-			Metric::HttpEgress(response_size as usize),
-		)
-		.await?;
+		if let Err(err) = metrics_res {
+			tracing::error!(?err, "http req ingress metrics failed");
+		} else {
+			if let Err(err) = record_req_metrics(
+				&ctx,
+				self.runner_id,
+				self.actor_id,
+				Metric::HttpEgress(response_size as usize),
+			)
+			.await
+			{
+				tracing::error!(
+					?err,
+					runner_id=?self.runner_id,
+					"http req egress metrics failed, likely corrupt now",
+				);
+			}
+		}
 
 		res
 	}
@@ -652,11 +673,25 @@ impl CustomServeTrait for PegboardGateway {
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		let ctx = self.ctx.with_ray(ray_id, req_id)?;
-		let res = self
-			.handle_websocket_inner(&ctx, client_ws, headers, request_id, after_hibernation)
-			.await;
+		let (res, metrics_res) = tokio::join!(
+			self.handle_websocket_inner(&ctx, client_ws, headers, request_id, after_hibernation),
+			record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketOpen),
+		);
 
-		record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketClose).await?;
+		if let Err(err) = metrics_res {
+			tracing::error!(?err, "ws open metrics failed");
+		} else {
+			if let Err(err) =
+				record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketClose)
+					.await
+			{
+				tracing::error!(
+					?err,
+					runner_id=?self.runner_id,
+					"ws close metrics failed, likely corrupt now",
+				);
+			}
+		}
 
 		res
 	}
@@ -693,23 +728,59 @@ impl CustomServeTrait for PegboardGateway {
 			keepalive_abort_rx,
 		));
 
-		let res = self.handle_websocket_hibernation_inner(client_ws).await;
+		let (res, metrics_res) = tokio::join!(
+			self.handle_websocket_hibernation_inner(client_ws),
+			record_req_metrics(
+				&ctx,
+				self.runner_id,
+				self.actor_id,
+				Metric::WebsocketHibernate
+			)
+		);
 
 		let _ = keepalive_abort_tx.send(());
 		let _ = keepalive_handle.await;
 
-		match &res {
-			Ok(HibernationResult::Continue) => {}
-			Ok(HibernationResult::Close) | Err(_) => {
-				// No longer an active hibernating request, delete entry
-				ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
-					actor_id: self.actor_id,
-					gateway_id: self.shared_state.gateway_id(),
-					request_id,
-				})
-				.await?;
-			}
-		}
+		let (delete_res, _) = tokio::join!(
+			async {
+				match &res {
+					Ok(HibernationResult::Continue) => {}
+					Ok(HibernationResult::Close) | Err(_) => {
+						// No longer an active hibernating request, delete entry
+						ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
+							actor_id: self.actor_id,
+							gateway_id: self.shared_state.gateway_id(),
+							request_id,
+						})
+						.await?;
+					}
+				}
+
+				anyhow::Ok(())
+			},
+			async {
+				if let Err(err) = metrics_res {
+					tracing::error!(?err, "ws hibernate metrics failed");
+				} else {
+					if let Err(err) = record_req_metrics(
+						&ctx,
+						self.runner_id,
+						self.actor_id,
+						Metric::WebsocketStopHibernate,
+					)
+					.await
+					{
+						tracing::error!(
+							?err,
+							runner_id=?self.runner_id,
+							"ws stop hibernate metrics failed, likely corrupt now"
+						);
+					}
+				}
+			},
+		);
+
+		delete_res?;
 
 		res
 	}
@@ -790,6 +861,23 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 	}
 }
 
+async fn get_runner_protocol_version(ctx: &StandaloneCtx, runner_id: Id) -> Result<u16> {
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(pegboard::keys::subspace());
+
+			let protocol_version_entry = tx
+				.read_opt(
+					&pegboard::keys::runner::ProtocolVersionKey::new(runner_id),
+					Serializable,
+				)
+				.await?;
+
+			Ok(protocol_version_entry.unwrap_or(PROTOCOL_MK1_VERSION))
+		})
+		.await
+}
+
 enum Metric {
 	HttpIngress(usize),
 	HttpEgress(usize),
@@ -797,6 +885,8 @@ enum Metric {
 	// Ingress, Egress
 	WebsocketTransfer(usize, usize),
 	WebsocketClose,
+	WebsocketHibernate,
+	WebsocketStopHibernate,
 }
 
 async fn record_req_metrics(
@@ -943,6 +1033,34 @@ fn metric_inc(tx: &universaldb::Transaction, namespace_id: Id, name: &str, metri
 				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
 				namespace::keys::metric::Metric::ActiveRequests(name.to_string(), "ws".to_string()),
+				-1,
+			);
+		}
+		Metric::WebsocketHibernate => {
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
+				namespace_id,
+				namespace::keys::metric::Metric::Requests(name.to_string(), "hws".to_string()),
+				1,
+			);
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
+				namespace_id,
+				namespace::keys::metric::Metric::ActiveRequests(
+					name.to_string(),
+					"hws".to_string(),
+				),
+				1,
+			);
+		}
+		Metric::WebsocketStopHibernate => {
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
+				namespace_id,
+				namespace::keys::metric::Metric::ActiveRequests(
+					name.to_string(),
+					"hws".to_string(),
+				),
 				-1,
 			);
 		}
