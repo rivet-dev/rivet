@@ -3,7 +3,7 @@
  * All keys are encoded as tuples with integer prefixes for proper sorting.
  */
 
-import * as tuple from "fdb-tuple";
+import * as tuple from "@rivetkit/fdb-tuple";
 import type { Location, LoopIterationMarker, PathSegment } from "./types.js";
 
 // === Key Prefixes ===
@@ -81,33 +81,18 @@ function tupleElementsToLocation(elements: TupleItem[]): Location {
 // === Helper Functions ===
 
 /**
- * Convert Buffer to Uint8Array.
- */
-function bufferToUint8Array(buf: Buffer): Uint8Array {
-	return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-}
-
-/**
- * Convert Uint8Array to Buffer.
- */
-function uint8ArrayToBuffer(arr: Uint8Array): Buffer {
-	return Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength);
-}
-
-/**
  * Pack tuple items and return as Uint8Array.
  */
 function pack(items: TupleItem | TupleItem[]): Uint8Array {
 	const buf = tuple.pack(items);
-	return bufferToUint8Array(buf);
+	return buf;
 }
 
 /**
  * Unpack a Uint8Array and return tuple items.
  */
 function unpack(data: Uint8Array): TupleItem[] {
-	const buf = uint8ArrayToBuffer(data);
-	return tuple.unpack(buf) as TupleItem[];
+	return tuple.unpack(data) as TupleItem[];
 }
 
 // === Key Builders ===
