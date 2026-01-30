@@ -1,8 +1,3 @@
-> **Note:** This is the Netlify-optimized version of the [hello-world](../hello-world) example.
-> It uses Netlify Functions and is configured for Netlify deployment.
-
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/rivet-dev/rivet&base=examples/hello-world-netlify)
-
 # Hello World - Netlify
 
 A minimal example demonstrating RivetKit with a real-time counter shared across multiple clients, deployed on Netlify Functions.
@@ -15,6 +10,7 @@ cd rivet/examples/hello-world-netlify
 npm install
 npm run dev
 ```
+
 
 ## Deployment
 

@@ -61,6 +61,22 @@ export const templates: Template[] = [
     }
   },
   {
+    "name": "hello-world-netlify",
+    "displayName": "Hello World - Netlify",
+    "description": "A minimal example demonstrating RivetKit with a real-time counter shared across multiple clients, deployed on Netlify Functions.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "starter"
+    ],
+    "noFrontend": false,
+    "priority": 100,
+    "providers": {}
+  },
+  {
     "name": "chat-room",
     "displayName": "Chat Room",
     "description": "Example project demonstrating real-time messaging and actor state management.",

@@ -201,7 +201,6 @@ export const IntegrationCode = ({ plan }: { plan: string }) => {
 					</FormItem>
 				)}
 			/>
-		</div>
 
 			{framework === "next-js" && (
 				<>

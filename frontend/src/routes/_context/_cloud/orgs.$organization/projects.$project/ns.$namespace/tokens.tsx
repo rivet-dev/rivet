@@ -451,144 +451,194 @@ export function CloudApiTokens() {
 					<CodeFrame
 						language="typescript"
 						title="Create Namespace"
-						code={() => `const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}",
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    displayName: "my-namespace"
-  })
-});
-
-const data = await response.json();
-console.log(data.namespace);`}
+						code={() => {
+							const codeText = [
+								`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}", {`,
+								'  method: "POST",',
+								'  headers: {',
+								'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}",',
+								'    "Content-Type": "application/json"',
+								'  },',
+								'  body: JSON.stringify({',
+								'    displayName: "my-namespace"',
+								'  })',
+								'});',
+								'',
+								'const data = await response.json();',
+								'console.log(data.namespace);'
+							].join('\n');
+							return codeText;
+						}}
 					>
 						<CodePreview
 							className="w-full min-w-0"
 							language="typescript"
-							code={`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}",
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    displayName: "my-namespace"
-  })
-});
-
-const data = await response.json();
-console.log(data.namespace);`}
+							code={(() => {
+								const codeText = [
+									`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}", {`,
+									'  method: "POST",',
+									'  headers: {',
+									'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}",',
+									'    "Content-Type": "application/json"',
+									'  },',
+									'  body: JSON.stringify({',
+									'    displayName: "my-namespace"',
+									'  })',
+									'});',
+									'',
+									'const data = await response.json();',
+									'console.log(data.namespace);'
+								].join('\n');
+								return codeText;
+							})()}
 						/>
 					</CodeFrame>
 					<CodeFrame
 						language="typescript"
 						title="List Namespaces"
-						code={() => `const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}&limit=10", {
-  method: "GET",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.namespaces);`}
+						code={() => {
+							const codeText = [
+								`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}&limit=10", {`,
+								'  method: "GET",',
+								'  headers: {',
+								'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+								'  }',
+								'});',
+								'',
+								'const data = await response.json();',
+								'console.log(data.namespaces);'
+							].join('\n');
+							return codeText;
+						}}
 					>
 						<CodePreview
 							className="w-full min-w-0"
 							language="typescript"
-							code={`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}&limit=10", {
-  method: "GET",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.namespaces);`}
+							code={(() => {
+								const codeText = [
+									`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces?org=${organization}&limit=10", {`,
+									'  method: "GET",',
+									'  headers: {',
+									'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+									'  }',
+									'});',
+									'',
+									'const data = await response.json();',
+									'console.log(data.namespaces);'
+								].join('\n');
+								return codeText;
+							})()}
 						/>
 					</CodeFrame>
 					<CodeFrame
 						language="typescript"
 						title="Get Namespace"
-						code={() => `const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}?org=${organization}", {
-  method: "GET",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.namespace);`}
+						code={() => {
+							const codeText = [
+								`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}?org=${organization}", {`,
+								'  method: "GET",',
+								'  headers: {',
+								'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+								'  }',
+								'});',
+								'',
+								'const data = await response.json();',
+								'console.log(data.namespace);'
+							].join('\n');
+							return codeText;
+						}}
 					>
 						<CodePreview
 							className="w-full min-w-0"
 							language="typescript"
-							code={`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}?org=${organization}", {
-  method: "GET",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.namespace);`}
+							code={(() => {
+								const codeText = [
+									`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}?org=${organization}", {`,
+									'  method: "GET",',
+									'  headers: {',
+									'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+									'  }',
+									'});',
+									'',
+									'const data = await response.json();',
+									'console.log(data.namespace);'
+								].join('\n');
+								return codeText;
+							})()}
 						/>
 					</CodeFrame>
 					<CodeFrame
 						language="typescript"
 						title="Create Runner Token"
-						code={() => `const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/secret?org=${organization}", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.token);`}
+						code={() => {
+							const codeText = [
+								`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/secret?org=${organization}", {`,
+								'  method: "POST",',
+								'  headers: {',
+								'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+								'  }',
+								'});',
+								'',
+								'const data = await response.json();',
+								'console.log(data.token);'
+							].join('\n');
+							return codeText;
+						}}
 					>
 						<CodePreview
 							className="w-full min-w-0"
 							language="typescript"
-							code={`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/secret?org=${organization}", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.token);`}
+							code={(() => {
+								const codeText = [
+									`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/secret?org=${organization}", {`,
+									'  method: "POST",',
+									'  headers: {',
+									'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+									'  }',
+									'});',
+									'',
+									'const data = await response.json();',
+									'console.log(data.token);'
+								].join('\n');
+								return codeText;
+							})()}
 						/>
 					</CodeFrame>
 					<CodeFrame
 						language="typescript"
 						title="Create Client Token"
-						code={() => `const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/publishable?org=${organization}", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.token);`}
+						code={() => {
+							const codeText = [
+								`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/publishable?org=${organization}", {`,
+								'  method: "POST",',
+								'  headers: {',
+								'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+								'  }',
+								'});',
+								'',
+								'const data = await response.json();',
+								'console.log(data.token);'
+							].join('\n');
+							return codeText;
+						}}
 					>
 						<CodePreview
 							className="w-full min-w-0"
 							language="typescript"
-							code={`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/publishable?org=${organization}", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer \${YOUR_CLOUD_API_TOKEN}"
-  }
-});
-
-const data = await response.json();
-console.log(data.token);`}
+							code={(() => {
+								const codeText = [
+									`const response = await fetch("${cloudApiUrl}/projects/${project}/namespaces/${namespace}/tokens/publishable?org=${organization}", {`,
+									'  method: "POST",',
+									'  headers: {',
+									'    "Authorization": "Bearer ${YOUR_CLOUD_API_TOKEN}"',
+									'  }',
+									'});',
+									'',
+									'const data = await response.json();',
+									'console.log(data.token);'
+								].join('\n');
+								return codeText;
+							})()}
 						/>
 					</CodeFrame>
 				</CodeGroup>
