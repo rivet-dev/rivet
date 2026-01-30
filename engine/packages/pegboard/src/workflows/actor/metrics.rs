@@ -64,7 +64,7 @@ pub(crate) async fn pegboard_actor_metrics(ctx: &mut WorkflowCtx, input: &Input)
 			};
 
 			let mut new_awake_duration = 0;
-			let mut destroy = true;
+			let mut destroy = false;
 			for sig in &sigs {
 				match sig {
 					Main::Pause(sig) => {
