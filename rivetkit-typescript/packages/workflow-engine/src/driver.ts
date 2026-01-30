@@ -1,3 +1,5 @@
+import type { WorkflowMessageDriver } from "./types.js";
+
 /**
  * A key-value entry returned from list operations.
  */
@@ -85,4 +87,20 @@ export interface EngineDriver {
 	 * Affects the threshold for in-memory vs scheduled sleeps.
 	 */
 	readonly workerPollInterval: number;
+
+	/**
+	 * Optional custom message driver to override the default KV-backed implementation.
+	 * If not provided, the workflow engine persists messages using the standard KV calls.
+	 */
+	readonly messageDriver?: WorkflowMessageDriver;
+
+	/**
+	 * Optional hook to wait for incoming messages when running in live mode.
+	 * Implementations should resolve when any of the specified message names are available.
+	 * If not provided, the workflow engine falls back to in-memory runtime tracking.
+	 */
+	waitForMessages?(
+		messageNames: string[],
+		abortSignal: AbortSignal,
+	): Promise<void>;
 }
