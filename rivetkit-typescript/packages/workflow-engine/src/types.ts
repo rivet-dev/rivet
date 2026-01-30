@@ -1,3 +1,5 @@
+import type { Logger } from "pino";
+
 /**
  * Index into the entry name registry.
  * Names are stored once and referenced by this index to avoid repetition.
@@ -379,6 +381,7 @@ export type WorkflowRunMode = "yield" | "live";
 
 export interface RunWorkflowOptions {
 	mode?: WorkflowRunMode;
+	logger?: Logger;
 }
 
 export type WorkflowFunction<TInput = unknown, TOutput = unknown> = (

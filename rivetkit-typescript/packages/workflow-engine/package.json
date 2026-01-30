@@ -54,6 +54,7 @@
 		"@rivetkit/bare-ts": "^0.6.2",
 		"cbor-x": "^1.6.0",
 		"fdb-tuple": "^1.0.0",
+		"pino": "^9.6.0",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {
