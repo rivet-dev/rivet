@@ -118,49 +118,57 @@ export const RunnerMargin = ConnectManualServerlessForm.RunnerMargin;
 
 export const Headers = ConnectManualServerlessForm.Headers;
 
-const netlifyFunctionCode = () =>
-	`import type { Handler } from "@netlify/functions";
-import { registry } from "../src/actors.ts";
-
-export const handler: Handler = async (event, context) => {
-  const { httpMethod, path, queryStringParameters, headers, body } = event;
-  
-  // Convert Netlify event to standard Request
-  const url = \`https://\${headers.host}\${path}\${
-    queryStringParameters 
-      ? '?' + new URLSearchParams(queryStringParameters).toString() 
-      : ''
-  }\`;
-  
-  const request = new Request(url, {
-    method: httpMethod,
-    headers: headers as HeadersInit,
-    body: body ? body : undefined,
-  });
-
-  const response = await registry.handler(request);
-  
-  // Convert Response to Netlify format
-  const responseHeaders: Record<string, string> = {};
-  response.headers.forEach((value, key) => {
-    responseHeaders[key] = value;
-  });
-
-  return {
-    statusCode: response.status,
-    headers: responseHeaders,
-    body: await response.text(),
-  };
-};`;
+const netlifyFunctionCode = () => {
+	// Avoid nested template literals to prevent Babel parser issues
+	const codeLines = [
+		'import type { Handler } from "@netlify/functions";',
+		'import app from "../src/server.ts";',
+		'',
+		'export const handler: Handler = async (event, context) => {',
+		'  const { httpMethod, path, queryStringParameters, headers, body } = event;',
+		'  ',
+		'  // Convert Netlify event to standard Request',
+		'  const url = `https://${headers.host}${path}${',
+		'    queryStringParameters ',
+		'      ? "?" + new URLSearchParams(queryStringParameters).toString() ',
+		'      : ""',
+		'  }`;',
+		'  ',
+		'  const request = new Request(url, {',
+		'    method: httpMethod,',
+		'    headers: headers as HeadersInit,',
+		'    body: body ? body : undefined,',
+		'  });',
+		'',
+		'  const response = await app.fetch(request);',
+		'  ',
+		'  // Convert Response to Netlify format',
+		'  const responseHeaders: Record<string, string> = {};',
+		'  response.headers.forEach((value, key) => {',
+		'    responseHeaders[key] = value;',
+		'  });',
+		'',
+		'  return {',
+		'    statusCode: response.status,',
+		'    headers: responseHeaders,',
+		'    body: await response.text(),',
+		'  };',
+		'};'
+	];
+	return codeLines.join('\n');
+};
 
 const nextJsIntegrationCode = (plan: string) => {
 	const maxDuration = plan === "starter" ? 10 : 26;
-	return `import { toNextHandler } from "@rivetkit/next-js";
-import { registry } from "@/rivet/registry";
-
-export const maxDuration = ${maxDuration};
-
-export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);`;
+	const codeLines = [
+		'import { toNextHandler } from "@rivetkit/next-js";',
+		'import { registry } from "@/rivet/registry";',
+		'',
+		`export const maxDuration = ${maxDuration};`,
+		'',
+		'export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);'
+	];
+	return codeLines.join('\n');
 };
 
 export const IntegrationCode = ({ plan }: { plan: string }) => {
