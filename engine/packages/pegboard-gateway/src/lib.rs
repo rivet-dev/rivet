@@ -10,7 +10,7 @@ use rivet_guard_core::{
 	ResponseBody, WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
-	request_context::RequestContext,
+	request_context::{CorsConfig, RequestContext},
 	utils::is_ws_hibernate,
 	websocket_handle::WebSocketReceiver,
 };
@@ -89,7 +89,7 @@ impl PegboardGateway {
 		&self,
 		ctx: &StandaloneCtx,
 		req: Request<Full<Bytes>>,
-		req_ctx: &RequestContext,
+		req_ctx: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
@@ -105,16 +105,20 @@ impl PegboardGateway {
 			.to_string();
 
 		// Extract request parts
-		let mut headers = HashableMap::new();
-		for (name, value) in req.headers() {
-			if let Result::Ok(value_str) = value.to_str() {
-				headers.insert(name.to_string(), value_str.to_string());
-			}
-		}
+		let headers = req
+			.headers()
+			.iter()
+			.filter_map(|(name, value)| {
+				value
+					.to_str()
+					.ok()
+					.map(|value_str| (name.to_string(), value_str.to_string()))
+			})
+			.collect::<HashableMap<_, _>>();
 
 		// Handle CORS preflight OPTIONS requests at gateway level
 		//
-		// We need to do this in Guard because there is no way of sending an OPTIONS request to the
+		// We need to do this in the gateway because there is no way of sending an OPTIONS request to the
 		// actor since we don't have the `x-rivet-token` header. This implementation allows
 		// requests from anywhere and lets the actor handle CORS manually in `onBeforeConnect`.
 		// This had the added benefit of also applying to WebSockets.
@@ -147,6 +151,13 @@ impl PegboardGateway {
 
 			return Ok(response.body(ResponseBody::Full(Full::new(Bytes::new())))?);
 		}
+
+		// Set CORS headers through guard
+		req_ctx.set_cors(CorsConfig {
+			allow_origin: origin.clone(),
+			allow_credentials: true,
+			expose_headers: "*".to_string(),
+		});
 
 		let body_bytes = req
 			.into_body()
@@ -249,17 +260,6 @@ impl PegboardGateway {
 		// Add headers from actor
 		for (key, value) in response_start.headers {
 			response_builder = response_builder.header(key, value);
-		}
-
-		// Add CORS headers to actual request
-		response_builder = response_builder
-			.header("access-control-allow-origin", &origin)
-			.header("access-control-allow-credentials", "true")
-			.header("access-control-expose-headers", "*");
-
-		// Add Vary header to prevent cache poisoning when echoing origin
-		if origin != "*" {
-			response_builder = response_builder.header("vary", "Origin");
 		}
 
 		// Add body
