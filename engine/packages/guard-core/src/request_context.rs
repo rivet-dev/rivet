@@ -12,8 +12,11 @@ pub struct RequestContext {
 	pub(crate) remote_addr: SocketAddr,
 	pub(crate) ray_id: Id,
 	pub(crate) req_id: Id,
+	/// Entire host including port (if present)
 	pub(crate) host: String,
+	/// Only hostname, no port.
 	pub(crate) hostname: String,
+	/// Includes path and query.
 	pub(crate) path: String,
 	pub(crate) method: Method,
 	pub(crate) headers: HeaderMap,
