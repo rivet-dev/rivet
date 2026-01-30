@@ -4,13 +4,14 @@ use std::{
 	sync::Arc,
 };
 
-use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{CacheKeyFn, request_context::RequestContext};
 
-pub mod actor;
+pub mod pegboard_gateway;
 
-use crate::routing::X_RIVET_TARGET;
+use crate::routing::{
+	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_TARGET, X_RIVET_TARGET, parse_actor_path,
+};
 
 /// Creates the main cache key function that handles all incoming requests
 #[tracing::instrument(skip_all)]
@@ -18,43 +19,52 @@ pub fn create_cache_key_function() -> CacheKeyFn {
 	Arc::new(move |req_ctx| {
 		tracing::debug!("building cache key");
 
-		let target = match read_target(req_ctx.headers()) {
-			Ok(target) => target,
-			Err(err) => {
-				tracing::debug!(?err, "failed parsing target for cache key");
+		// MARK: Path-based cache key
+		// Check for path-based actor routing
+		if let Some(actor_path_info) = parse_actor_path(req_ctx.path()) {
+			tracing::debug!("using path-based cache key for actor");
 
-				return Ok(host_path_method_cache_key(req_ctx));
+			if let Ok(cache_key) =
+				pegboard_gateway::build_cache_key_path_based(req_ctx, &actor_path_info)
+			{
+				return Ok(cache_key);
 			}
-		};
+		}
 
-		let cache_key = match actor::build_cache_key(req_ctx, target) {
-			Ok(key) => Some(key),
-			Err(err) => {
-				tracing::debug!(?err, "failed to create actor cache key");
-
-				None
-			}
-		};
-
-		// Fallback to hostname + path + method hash if actor did not work
-		if let Some(cache_key) = cache_key {
-			Ok(cache_key)
+		// MARK: Header- & protocol-based cache key (X-Rivet-Target)
+		// Determine target
+		let target = if req_ctx.is_websocket() {
+			// For WebSocket, parse the sec-websocket-protocol header
+			req_ctx
+				.headers()
+				.get(SEC_WEBSOCKET_PROTOCOL)
+				.and_then(|protocols| protocols.to_str().ok())
+				.and_then(|protocols| {
+					// Parse protocols to find target.{value}
+					protocols
+						.split(',')
+						.map(|p| p.trim())
+						.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
+				})
 		} else {
-			Ok(host_path_method_cache_key(req_ctx))
+			// For HTTP, use the x-rivet-target header
+			req_ctx
+				.headers()
+				.get(X_RIVET_TARGET)
+				.and_then(|x| x.to_str().ok())
+		};
+
+		// Check target-based cache functions
+		if let Some(target) = target {
+			if let Ok(cache_key) = pegboard_gateway::build_cache_key_target_based(req_ctx, target) {
+				return Ok(cache_key);
+			}
 		}
+
+		// MARK: Fallback
+		tracing::debug!("using fallback cache key");
+		Ok(host_path_method_cache_key(req_ctx))
 	})
-}
-
-fn read_target(headers: &hyper::HeaderMap) -> Result<&str> {
-	// Read target
-	let target = headers.get(X_RIVET_TARGET).ok_or_else(|| {
-		crate::errors::MissingHeader {
-			header: X_RIVET_TARGET.to_string(),
-		}
-		.build()
-	})?;
-
-	Ok(target.to_str()?)
 }
 
 fn host_path_method_cache_key(req_ctx: &RequestContext) -> u64 {
