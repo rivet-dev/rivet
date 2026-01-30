@@ -20,6 +20,7 @@ pub struct RequestContext {
 	pub(crate) path: String,
 	pub(crate) method: Method,
 	pub(crate) headers: HeaderMap,
+	pub(crate) is_websocket: bool,
 	pub(crate) client_ip: IpAddr,
 	pub(crate) start_time: Instant,
 
@@ -41,6 +42,7 @@ impl RequestContext {
 		path: String,
 		method: Method,
 		headers: HeaderMap,
+		is_websocket: bool,
 		client_ip: IpAddr,
 		start_time: Instant,
 	) -> Self {
@@ -55,6 +57,7 @@ impl RequestContext {
 			path,
 			method,
 			headers,
+			is_websocket,
 			client_ip,
 			start_time,
 
@@ -104,6 +107,10 @@ impl RequestContext {
 
 	pub fn headers(&self) -> &HeaderMap {
 		&self.headers
+	}
+
+	pub fn is_websocket(&self) -> bool {
+		self.is_websocket
 	}
 
 	pub fn in_flight_request_id(&self) -> Result<protocol::RequestId> {

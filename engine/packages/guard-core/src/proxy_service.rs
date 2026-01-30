@@ -380,6 +380,7 @@ impl ProxyService {
 			.and_then(|ip_str| ip_str.parse::<std::net::IpAddr>().ok())
 			.unwrap_or_else(|| self.remote_addr.ip());
 
+		let is_websocket = hyper_tungstenite::is_upgrade_request(&req);
 		let mut req_ctx = RequestContext::new(
 			self.remote_addr,
 			request_ids.ray_id,
@@ -388,6 +389,7 @@ impl ProxyService {
 			path,
 			req.method().clone(),
 			req.headers().clone(),
+			is_websocket,
 			client_ip,
 			start_time,
 		);
@@ -408,8 +410,6 @@ impl ProxyService {
 			user_agent=?user_agent,
 			"Request received"
 		);
-
-		let is_websocket = hyper_tungstenite::is_upgrade_request(&req);
 
 		// Used for ws error proxying later
 		let mut mock_req_builder = Request::builder()

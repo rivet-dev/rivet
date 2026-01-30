@@ -27,7 +27,6 @@ pub async fn route_request_path_based(
 	actor_id_str: &str,
 	token_from_path: Option<&str>,
 	stripped_path: &str,
-	is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Parse actor ID
 	let actor_id = Id::parse(actor_id_str).context("invalid actor id in path")?;
@@ -35,7 +34,7 @@ pub async fn route_request_path_based(
 	// Prefer token from path, otherwise read headers
 	let token = if let Some(token) = token_from_path {
 		Some(token)
-	} else if is_websocket {
+	} else if req_ctx.is_websocket() {
 		// For WebSocket, parse the sec-websocket-protocol header
 		let protocols_header = req_ctx
 			.headers()
@@ -75,7 +74,6 @@ pub async fn route_request(
 	shared_state: &SharedState,
 	req_ctx: &RequestContext,
 	target: &str,
-	is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "actor" {
@@ -83,7 +81,7 @@ pub async fn route_request(
 	}
 
 	// Extract actor ID and token from WebSocket protocol or HTTP headers
-	let (actor_id_str, token) = if is_websocket {
+	let (actor_id_str, token) = if req_ctx.is_websocket() {
 		// For WebSocket, parse the sec-websocket-protocol header
 		let protocols_header = req_ctx
 			.headers()

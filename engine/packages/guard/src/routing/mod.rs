@@ -39,14 +39,6 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 			async move {
 				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "Routing request");
 
-				// Check if this is a WebSocket upgrade request
-				let is_websocket = req_ctx
-					.headers()
-					.get("upgrade")
-					.and_then(|v| v.to_str().ok())
-					.map(|v| v.eq_ignore_ascii_case("websocket"))
-					.unwrap_or(false);
-
 				// MARK: Path-based routing
 				// Route actor
 				if let Some(actor_path_info) = parse_actor_path(req_ctx.path()) {
@@ -60,7 +52,6 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 						&actor_path_info.actor_id,
 						actor_path_info.token.as_deref(),
 						&actor_path_info.stripped_path,
-						is_websocket,
 					)
 					.await?
 					{
@@ -81,7 +72,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 
 				// MARK: Header- & protocol-based routing (X-Rivet-Target)
 				// Determine target
-				let target = if is_websocket {
+				let target = if req_ctx.is_websocket() {
 					// For WebSocket, parse the sec-websocket-protocol header
 					req_ctx
 						.headers()
@@ -112,14 +103,9 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 						return Ok(routing_output);
 					}
 
-					if let Some(routing_output) = pegboard_gateway::route_request(
-						&ctx,
-						&shared_state,
-						req_ctx,
-						target,
-						is_websocket,
-					)
-					.await?
+					if let Some(routing_output) =
+						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, target)
+							.await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
 
