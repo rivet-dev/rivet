@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::*;
+use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::RoutingFn;
@@ -30,140 +30,131 @@ pub struct ActorPathInfo {
 #[tracing::instrument(skip_all)]
 pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -> RoutingFn {
 	let ctx = ctx.clone();
-	Arc::new(
-		move |hostname: &str,
-		      path: &str,
-		      ray_id: Id,
-		      req_id: Id,
-		      port_type: rivet_guard_core::proxy_service::PortType,
-		      headers: &hyper::HeaderMap| {
-			let ctx = ctx.with_ray(ray_id, req_id).unwrap();
-			let shared_state = shared_state.clone();
+	Arc::new(move |req_ctx| {
+		let ctx = ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id()).unwrap();
+		let shared_state = shared_state.clone();
+		let hostname = req_ctx.hostname().to_string();
+		let path = req_ctx.path().to_string();
 
-			Box::pin(
-				async move {
-					// Extract just the host, stripping the port if present
-					let host = hostname.split(':').next().unwrap_or(hostname);
+		Box::pin(
+			async move {
+				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "Routing request");
 
-					tracing::debug!("Routing request for hostname: {host}, path: {path}");
+				// Check if this is a WebSocket upgrade request
+				let is_websocket = req_ctx
+					.headers()
+					.get("upgrade")
+					.and_then(|v| v.to_str().ok())
+					.map(|v| v.eq_ignore_ascii_case("websocket"))
+					.unwrap_or(false);
 
-					// Check if this is a WebSocket upgrade request
-					let is_websocket = headers
-						.get("upgrade")
-						.and_then(|v| v.to_str().ok())
-						.map(|v| v.eq_ignore_ascii_case("websocket"))
-						.unwrap_or(false);
+				// MARK: Path-based routing
+				// Route actor
+				if let Some(actor_path_info) = parse_actor_path(req_ctx.path()) {
+					tracing::debug!(?actor_path_info, "routing using path-based actor routing");
 
-					// MARK: Path-based routing
-					// Route actor
-					if let Some(actor_path_info) = parse_actor_path(path) {
-						tracing::debug!(?actor_path_info, "routing using path-based actor routing");
+					// Route to pegboard gateway with the extracted information
+					if let Some(routing_output) = pegboard_gateway::route_request_path_based(
+						&ctx,
+						&shared_state,
+						req_ctx,
+						&actor_path_info.actor_id,
+						actor_path_info.token.as_deref(),
+						&actor_path_info.stripped_path,
+						is_websocket,
+					)
+					.await?
+					{
+						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
 
-						// Route to pegboard gateway with the extracted information
-						if let Some(routing_output) = pegboard_gateway::route_request_path_based(
-							&ctx,
-							&shared_state,
-							&actor_path_info.actor_id,
-							actor_path_info.token.as_deref(),
-							path,
-							&actor_path_info.stripped_path,
-							headers,
-							is_websocket,
-						)
-						.await?
-						{
-							metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
-
-							return Ok(routing_output);
-						}
+						return Ok(routing_output);
 					}
+				}
 
-					// Route runner
+				// Route runner
+				if let Some(routing_output) =
+					runner::route_request_path_based(&ctx, req_ctx).await?
+				{
+					metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
+
+					return Ok(routing_output);
+				}
+
+				// MARK: Header- & protocol-based routing (X-Rivet-Target)
+				// Determine target
+				let target = if is_websocket {
+					// For WebSocket, parse the sec-websocket-protocol header
+					req_ctx
+						.headers()
+						.get(SEC_WEBSOCKET_PROTOCOL)
+						.and_then(|protocols| protocols.to_str().ok())
+						.and_then(|protocols| {
+							// Parse protocols to find target.{value}
+							protocols
+								.split(',')
+								.map(|p| p.trim())
+								.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
+						})
+				} else {
+					// For HTTP, use the x-rivet-target header
+					req_ctx
+						.headers()
+						.get(X_RIVET_TARGET)
+						.and_then(|x| x.to_str().ok())
+				};
+
+				// Read target
+				if let Some(target) = target {
 					if let Some(routing_output) =
-						runner::route_request_path_based(&ctx, host, path, headers).await?
+						runner::route_request(&ctx, req_ctx, target).await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
 
 						return Ok(routing_output);
 					}
 
-					// MARK: Header- & protocol-based routing (X-Rivet-Target)
-					// Determine target
-					let target = if is_websocket {
-						// For WebSocket, parse the sec-websocket-protocol header
-						headers
-							.get(SEC_WEBSOCKET_PROTOCOL)
-							.and_then(|protocols| protocols.to_str().ok())
-							.and_then(|protocols| {
-								// Parse protocols to find target.{value}
-								protocols
-									.split(',')
-									.map(|p| p.trim())
-									.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
-							})
-					} else {
-						// For HTTP, use the x-rivet-target header
-						headers.get(X_RIVET_TARGET).and_then(|x| x.to_str().ok())
-					};
+					if let Some(routing_output) = pegboard_gateway::route_request(
+						&ctx,
+						&shared_state,
+						req_ctx,
+						target,
+						is_websocket,
+					)
+					.await?
+					{
+						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
 
-					// Read target
-					if let Some(target) = target {
-						if let Some(routing_output) =
-							runner::route_request(&ctx, target, host, path, headers).await?
-						{
-							metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
-
-							return Ok(routing_output);
-						}
-
-						if let Some(routing_output) = pegboard_gateway::route_request(
-							&ctx,
-							&shared_state,
-							target,
-							host,
-							path,
-							headers,
-							is_websocket,
-						)
-						.await?
-						{
-							metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
-
-							return Ok(routing_output);
-						}
-
-						if let Some(routing_output) =
-							api_public::route_request(&ctx, target, host, path).await?
-						{
-							metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
-
-							return Ok(routing_output);
-						}
-					} else {
-						// No x-rivet-target header, try routing to api-public by default
-						if let Some(routing_output) =
-							api_public::route_request(&ctx, "api-public", host, path).await?
-						{
-							metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
-
-							return Ok(routing_output);
-						}
+						return Ok(routing_output);
 					}
 
-					metrics::ROUTE_TOTAL.with_label_values(&["none"]).inc();
+					if let Some(routing_output) = api_public::route_request(&ctx, target).await? {
+						metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
 
-					// No matching route found
-					tracing::debug!("No route found for: {host} {path}");
-					Err(errors::NoRoute {
-						host: host.to_string(),
-						path: path.to_string(),
+						return Ok(routing_output);
 					}
-					.build())
+				} else {
+					// No x-rivet-target header, try routing to api-public by default
+					if let Some(routing_output) =
+						api_public::route_request(&ctx, "api-public").await?
+					{
+						metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
+
+						return Ok(routing_output);
+					}
 				}
-				.instrument(tracing::info_span!("routing_fn", %hostname, %path, ?port_type)),
-			)
-		},
-	)
+
+				metrics::ROUTE_TOTAL.with_label_values(&["none"]).inc();
+
+				tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "No route found");
+				Err(errors::NoRoute {
+					host: req_ctx.hostname().to_string(),
+					path: req_ctx.path().to_string(),
+				}
+				.build())
+			}
+			.instrument(tracing::info_span!("routing_fn", %hostname, %path)),
+		)
+	})
 }
 
 /// Parse actor routing information from path

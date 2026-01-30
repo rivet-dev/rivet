@@ -7,10 +7,11 @@ use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode, body::Body};
 use rivet_error::*;
 use rivet_guard_core::{
-	WebSocketHandle,
+	ResponseBody, WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
-	proxy_service::{ResponseBody, is_ws_hibernate},
+	request_context::RequestContext,
+	utils::is_ws_hibernate,
 	websocket_handle::WebSocketReceiver,
 };
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
@@ -88,10 +89,11 @@ impl PegboardGateway {
 		&self,
 		ctx: &StandaloneCtx,
 		req: Request<Full<Bytes>>,
-		request_id: protocol::RequestId,
+		req_ctx: &RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
+		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Extract origin for CORS (before consuming request)
 		// When credentials: true, we must echo back the actual origin, not "*"
@@ -109,9 +111,6 @@ impl PegboardGateway {
 				headers.insert(name.to_string(), value_str.to_string());
 			}
 		}
-
-		// Extract method and path before consuming the request
-		let method = req.method().to_string();
 
 		// Handle CORS preflight OPTIONS requests at gateway level
 		//
@@ -179,7 +178,7 @@ impl PegboardGateway {
 		let message = protocol::mk2::ToClientTunnelMessageKind::ToClientRequestStart(
 			protocol::mk2::ToClientRequestStart {
 				actor_id: actor_id.clone(),
-				method,
+				method: req_ctx.method().to_string(),
 				path: self.path.clone(),
 				headers,
 				body: if body_bytes.is_empty() {
@@ -273,14 +272,15 @@ impl PegboardGateway {
 	async fn handle_websocket_inner(
 		&self,
 		ctx: &StandaloneCtx,
+		req_ctx: &mut RequestContext,
 		client_ws: WebSocketHandle,
-		headers: &hyper::HeaderMap,
-		request_id: protocol::RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
+		let request_id = req_ctx.in_flight_request_id()?;
+
 		// Extract headers
 		let mut request_headers = HashableMap::new();
-		for (name, value) in headers {
+		for (name, value) in req_ctx.headers() {
 			if let Result::Ok(value_str) = value.to_str() {
 				request_headers.insert(name.to_string(), value_str.to_string());
 			}
@@ -614,14 +614,13 @@ impl CustomServeTrait for PegboardGateway {
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
-		ray_id: Id,
-		req_id: Id,
-		request_id: protocol::RequestId,
+		req_ctx: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
-		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
 		let req_body_size_hint = req.body().size_hint();
+
 		let (res, metrics_res) = tokio::join!(
-			self.handle_request_inner(&ctx, req, request_id),
+			self.handle_request_inner(&ctx, req, req_ctx),
 			record_req_metrics(
 				&ctx,
 				self.runner_id,
@@ -661,20 +660,16 @@ impl CustomServeTrait for PegboardGateway {
 		res
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id, request_id=%protocol::util::id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
 	async fn handle_websocket(
 		&self,
+		req_ctx: &mut RequestContext,
 		client_ws: WebSocketHandle,
-		headers: &hyper::HeaderMap,
-		_path: &str,
-		ray_id: Id,
-		req_id: Id,
-		request_id: protocol::RequestId,
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
-		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
 		let (res, metrics_res) = tokio::join!(
-			self.handle_websocket_inner(&ctx, client_ws, headers, request_id, after_hibernation),
+			self.handle_websocket_inner(&ctx, req_ctx, client_ws, after_hibernation),
 			record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketOpen),
 		);
 
@@ -696,15 +691,14 @@ impl CustomServeTrait for PegboardGateway {
 		res
 	}
 
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, request_id=%protocol::util::id_to_string(&request_id)))]
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id))]
 	async fn handle_websocket_hibernation(
 		&self,
+		req_ctx: &mut RequestContext,
 		client_ws: WebSocketHandle,
-		ray_id: Id,
-		req_id: Id,
-		request_id: protocol::RequestId,
 	) -> Result<HibernationResult> {
-		let ctx = self.ctx.with_ray(ray_id, req_id)?;
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
+		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Immediately rewake if we have pending messages
 		if self

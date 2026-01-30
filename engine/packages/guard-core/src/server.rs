@@ -16,7 +16,8 @@ use tracing::Instrument;
 
 use crate::cert_resolver::{CertResolverFn, create_tls_config};
 use crate::metrics;
-use crate::proxy_service::{CacheKeyFn, MiddlewareFn, ProxyServiceFactory, RoutingFn};
+use crate::proxy_service::ProxyServiceFactory;
+use crate::route::{CacheKeyFn, RoutingFn};
 
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 
@@ -26,7 +27,6 @@ pub async fn run_server(
 	config: rivet_config::Config,
 	routing_fn: RoutingFn,
 	cache_key_fn: CacheKeyFn,
-	middleware_fn: MiddlewareFn,
 	cert_resolver_fn: Option<CertResolverFn>,
 ) -> Result<()> {
 	// Set up HTTP server
@@ -35,8 +35,6 @@ pub async fn run_server(
 		config.clone(),
 		routing_fn.clone(),
 		cache_key_fn.clone(),
-		middleware_fn.clone(),
-		crate::proxy_service::PortType::Http,
 	));
 	let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 
@@ -49,8 +47,6 @@ pub async fn run_server(
 			config.clone(),
 			routing_fn.clone(),
 			cache_key_fn.clone(),
-			middleware_fn.clone(),
-			crate::proxy_service::PortType::Https,
 		));
 		let listener = tokio::net::TcpListener::bind(https_addr).await?;
 
