@@ -60,20 +60,11 @@ pub enum TransactionCommand {
 pub struct TransactionTask {
 	pool: Pool,
 	receiver: mpsc::Receiver<TransactionCommand>,
-	unstable_disable_lock_customization: bool,
 }
 
 impl TransactionTask {
-	pub fn new(
-		pool: Pool,
-		receiver: mpsc::Receiver<TransactionCommand>,
-		unstable_disable_lock_customization: bool,
-	) -> Self {
-		Self {
-			pool,
-			receiver,
-			unstable_disable_lock_customization,
-		}
+	pub fn new(pool: Pool, receiver: mpsc::Receiver<TransactionCommand>) -> Self {
+		Self { pool, receiver }
 	}
 
 	pub async fn run(mut self) {
@@ -87,6 +78,7 @@ impl TransactionTask {
 			}
 		};
 
+		// Start the read transaction
 		let tx = match conn
 			.build_transaction()
 			.isolation_level(IsolationLevel::RepeatableRead)
@@ -101,6 +93,7 @@ impl TransactionTask {
 			}
 		};
 
+		// TODO: Parallelize future
 		let start_version = match tx
 			.query_one("SELECT nextval('global_version_seq')", &[])
 			.await
@@ -163,9 +156,11 @@ impl TransactionTask {
 					conflict_ranges,
 					response,
 				} => {
-					let result = self
-						.handle_commit(tx, start_version, operations, conflict_ranges)
-						.await;
+					let (_, result) = tokio::join!(
+						// Read-only txn, we don't care about the result
+						tx.commit(),
+						self.handle_commit(start_version, operations, conflict_ranges),
+					);
 
 					let _ = response.send(result);
 					// Exit after commit
@@ -336,34 +331,20 @@ impl TransactionTask {
 
 	async fn handle_commit(
 		&mut self,
-		tx: Transaction<'_>,
 		start_version: i64,
 		operations: Vec<Operation>,
 		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 	) -> Result<()> {
-		// // Defer all constraint checks until commit
-		// tx.execute("SET CONSTRAINTS ALL DEFERRED", &[])
-		// 	.await
-		// 	.map_err(map_postgres_error)?;
+		// Get connection from pool
+		let mut conn = self.pool.get().await?;
 
-		let version_res = if self.unstable_disable_lock_customization {
-			// Don't customize lock settings - just get the version
-			tx.query_one("SELECT nextval('global_version_seq')", &[])
-				.await
-		} else {
-			// Apply lock customization (default behavior)
-			let (_, _, version_res) = tokio::join!(
-				tx.execute("SET LOCAL lock_timeout = '0'", &[],),
-				tx.execute("SET LOCAL deadlock_timeout = '10ms'", &[],),
-				tx.query_one("SELECT nextval('global_version_seq')", &[]),
-			);
-
-			version_res
-		};
-
-		let commit_version = version_res
-			.context("failed to get postgres txn commit_version")?
-			.get::<_, i64>(0);
+		// Start write transaction
+		let tx = conn
+			.build_transaction()
+			.isolation_level(IsolationLevel::ReadCommitted)
+			.start()
+			.await
+			.context("failed to start write txn")?;
 
 		let mut begins = Vec::with_capacity(conflict_ranges.len());
 		let mut ends = Vec::with_capacity(conflict_ranges.len());
@@ -381,28 +362,22 @@ impl TransactionTask {
 		}
 
 		let query = "
+			WITH data AS (
+				SELECT nextval('global_version_seq') AS commit_version
+			)
 			INSERT INTO conflict_ranges (range_data, conflict_type, start_version, commit_version)
 			SELECT
 				bytearange(begin_key, end_key, '[)'),
 				conflict_type::range_type,
 				$4,
-				$5
-			FROM UNNEST($1::bytea[], $2::bytea[], $3::text[]) AS t(begin_key, end_key, conflict_type)";
+				data.commit_version
+			FROM UNNEST($1::bytea[], $2::bytea[], $3::text[]) AS t(begin_key, end_key, conflict_type), data";
 		let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
 
 		// Insert all conflict ranges at once
-		tx.execute(
-			&stmt,
-			&[
-				&begins,
-				&ends,
-				&conflict_types,
-				&start_version,
-				&commit_version,
-			],
-		)
-		.await
-		.map_err(map_postgres_error)?;
+		tx.execute(&stmt, &[&begins, &ends, &conflict_types, &start_version])
+			.await
+			.map_err(map_postgres_error)?;
 
 		for op in operations {
 			match op {
@@ -410,16 +385,6 @@ impl TransactionTask {
 					// TODO: versionstamps need to be calculated on the sql side, not in rust
 					let value = substitute_versionstamp_if_incomplete(value.clone(), 0);
 
-					// // Poor man's upsert, you cant use ON CONFLICT with deferred constraints
-					// let query = "WITH updated AS (
-					// 		UPDATE kv
-					// 		SET value = $2
-					// 		WHERE key = $1
-					// 		RETURNING 1
-					// 	)
-					// 	INSERT INTO kv (key, value)
-					// 	SELECT $1, $2
-					// 	WHERE NOT EXISTS (SELECT 1 FROM updated)";
 					let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
 					let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
 
@@ -471,16 +436,6 @@ impl TransactionTask {
 
 					// Store the result
 					if let Some(new_value) = new_value {
-						// // Poor man's upsert, you cant use ON CONFLICT with deferred constraints
-						// let update_query = "WITH updated AS (
-						// 		UPDATE kv
-						// 		SET value = $2
-						// 		WHERE key = $1
-						// 		RETURNING 1
-						// 	)
-						// 	INSERT INTO kv (key, value)
-						// 	SELECT $1, $2
-						// 	WHERE NOT EXISTS (SELECT 1 FROM updated)";
 						let update_query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
 						let stmt = tx
 							.prepare_cached(update_query)
@@ -533,7 +488,12 @@ impl TransactionTask {
 
 /// Maps PostgreSQL error to DatabaseError
 fn map_postgres_error(err: tokio_postgres::Error) -> anyhow::Error {
-	let error_str = err.to_string();
+	let error_str = if let Some(err) = err.as_db_error() {
+		err.to_string()
+	} else {
+		err.to_string()
+	};
+
 	if error_str.contains("exclusion_violation")
 		|| error_str.contains("violates exclusion constraint")
 	{

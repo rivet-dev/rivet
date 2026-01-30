@@ -44,18 +44,6 @@ pub struct Postgres {
 	/// See: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url
 	pub url: Secret<String>,
 
-	/// UNSTABLE: Disable lock timeout customization
-	///
-	/// When `false` (default), the driver sets `lock_timeout = '0'` and `deadlock_timeout = '10ms'`
-	/// during transaction commits to optimize conflict detection.
-	///
-	/// When `true`, these settings are NOT applied, which may be necessary for some PostgreSQL
-	/// configurations or hosted services that don't support these settings.
-	///
-	/// **This is an unstable feature and may change or be removed in future versions.**
-	#[serde(default)]
-	pub unstable_disable_lock_customization: bool,
-
 	/// SSL configuration options
 	#[serde(default)]
 	pub ssl: Option<PostgresSsl>,
@@ -65,7 +53,6 @@ impl Default for Postgres {
 	fn default() -> Self {
 		Self {
 			url: Secret::new("postgresql://postgres:postgres@127.0.0.1:5432/postgres".into()),
-			unstable_disable_lock_customization: false,
 			ssl: None,
 		}
 	}

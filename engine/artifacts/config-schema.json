@@ -635,11 +635,6 @@
             }
           ]
         },
-        "unstable_disable_lock_customization": {
-          "description": "UNSTABLE: Disable lock timeout customization\n\nWhen `false` (default), the driver sets `lock_timeout = '0'` and `deadlock_timeout = '10ms'` during transaction commits to optimize conflict detection.\n\nWhen `true`, these settings are NOT applied, which may be necessary for some PostgreSQL configurations or hosted services that don't support these settings.\n\n**This is an unstable feature and may change or be removed in future versions.**",
-          "default": false,
-          "type": "boolean"
-        },
         "url": {
           "description": "URL to connect to Postgres with\n\nSupports standard PostgreSQL connection parameters including `sslmode`. Supported sslmode values: `disable`, `prefer` (default), `require`. To verify server certificates, use `sslmode=require` with `ssl.root_cert_path`.\n\nExample with sslmode: `postgresql://user:pass@host:5432/db?sslmode=require`\n\nSee: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url",
           "allOf": [

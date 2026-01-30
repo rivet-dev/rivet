@@ -28,17 +28,15 @@ pub struct PostgresTransactionDriver {
 	operations: TransactionOperations,
 	committed: AtomicBool,
 	tx_sender: OnceCell<mpsc::Sender<TransactionCommand>>,
-	unstable_disable_lock_customization: bool,
 }
 
 impl PostgresTransactionDriver {
-	pub fn with_config(pool: Arc<Pool>, unstable_disable_lock_customization: bool) -> Self {
+	pub fn with_config(pool: Arc<Pool>) -> Self {
 		PostgresTransactionDriver {
 			pool,
 			operations: TransactionOperations::default(),
 			committed: AtomicBool::new(false),
 			tx_sender: OnceCell::new(),
-			unstable_disable_lock_customization,
 		}
 	}
 
@@ -49,11 +47,7 @@ impl PostgresTransactionDriver {
 				let (sender, receiver) = mpsc::channel(100);
 
 				// Spawn the transaction task with serializable isolation
-				let task = TransactionTask::new(
-					self.pool.as_ref().clone(),
-					receiver,
-					self.unstable_disable_lock_customization,
-				);
+				let task = TransactionTask::new(self.pool.as_ref().clone(), receiver);
 				tokio::spawn(task.run());
 
 				anyhow::Ok(sender)

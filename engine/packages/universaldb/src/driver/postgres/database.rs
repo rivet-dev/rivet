@@ -29,7 +29,6 @@ const GC_INTERVAL: Duration = Duration::from_secs(5);
 #[derive(Clone, Debug)]
 pub struct PostgresConfig {
 	pub connection_string: String,
-	pub unstable_disable_lock_customization: bool,
 	pub ssl_config: Option<PostgresSslConfig>,
 }
 
@@ -45,7 +44,6 @@ impl PostgresConfig {
 	pub fn new(connection_string: String) -> Self {
 		Self {
 			connection_string,
-			unstable_disable_lock_customization: false,
 			ssl_config: None,
 		}
 	}
@@ -55,7 +53,6 @@ pub struct PostgresDatabaseDriver {
 	pool: Arc<Pool>,
 	max_retries: AtomicI32,
 	gc_handle: JoinHandle<()>,
-	unstable_disable_lock_customization: bool,
 }
 
 impl PostgresDatabaseDriver {
@@ -63,7 +60,6 @@ impl PostgresDatabaseDriver {
 	pub async fn new_with_config(config: PostgresConfig) -> Result<Self> {
 		tracing::debug!(
 			connection_string = ?config.connection_string,
-			unstable_disable_lock_customization = config.unstable_disable_lock_customization,
 			"creating PostgresDatabaseDriver"
 		);
 
@@ -166,9 +162,9 @@ impl PostgresDatabaseDriver {
 				EXCLUDE USING gist (
 					-- Conflict if byte range overlaps...
 					range_data WITH &&,
-					-- And f conflict types are different...
+					-- And if conflict types are different...
 					conflict_type WITH <>,
-					-- And f the txn versions overlap...
+					-- And if the txn versions overlap...
 					int8range(start_version, commit_version, '[]') WITH &&,
 					-- But not if the start_version is the same (from the same txn)
 					start_version WITH <>
@@ -212,7 +208,6 @@ impl PostgresDatabaseDriver {
 			pool: Arc::new(pool),
 			max_retries: AtomicI32::new(100),
 			gc_handle,
-			unstable_disable_lock_customization: config.unstable_disable_lock_customization,
 		})
 	}
 }
@@ -221,10 +216,7 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 	fn create_trx(&self) -> Result<Transaction> {
 		// Pass the connection pool and config to the transaction driver
 		Ok(Transaction::new(Arc::new(
-			PostgresTransactionDriver::with_config(
-				self.pool.clone(),
-				self.unstable_disable_lock_customization,
-			),
+			PostgresTransactionDriver::with_config(self.pool.clone()),
 		)))
 	}
 
