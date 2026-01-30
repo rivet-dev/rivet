@@ -59,6 +59,12 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			args: bufferToArrayBuffer(cbor.encode(args)),
 		};
 
+		this.#actor.emitTraceEvent("schedule.created", {
+			"rivet.schedule.event_id": newEvent.eventId,
+			"rivet.schedule.action": newEvent.action,
+			"rivet.schedule.timestamp_ms": newEvent.timestamp,
+		});
+
 		await this.#scheduleEventInner(newEvent);
 	}
 
@@ -252,7 +258,25 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #executeDueEvents(events: PersistedScheduleEvent[]): Promise<void> {
 		for (const event of events) {
+			const span = this.#actor.startTraceSpan(
+				`actor.action.${event.action}`,
+				{
+					"rivet.action.name": event.action,
+					"rivet.action.scheduled": true,
+					"rivet.schedule.event_id": event.eventId,
+					"rivet.schedule.timestamp_ms": event.timestamp,
+				},
+			);
 			try {
+				this.#actor.emitTraceEvent(
+					"schedule.triggered",
+					{
+						"rivet.schedule.event_id": event.eventId,
+						"rivet.schedule.action": event.action,
+						"rivet.schedule.timestamp_ms": event.timestamp,
+					},
+					span,
+				);
 				this.#actor.log.info({
 					msg: "executing scheduled event",
 					eventId: event.eventId,
@@ -281,10 +305,8 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					? cbor.decode(new Uint8Array(event.args))
 					: [];
 
-				const result = fn.call(
-					undefined,
-					this.#actor.actorContext,
-					...args,
+				const result = this.#actor.traces.withSpan(span, () =>
+					fn.call(undefined, this.#actor.actorContext, ...args),
 				);
 
 				// Handle async actions
@@ -292,12 +314,22 @@ export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					await result;
 				}
 
+				this.#actor.endTraceSpan(span, { code: "OK" });
 				this.#actor.log.debug({
 					msg: "scheduled event completed",
 					eventId: event.eventId,
 					action: event.action,
 				});
 			} catch (error) {
+				this.#actor.traces.setAttributes(span, {
+					"error.message": stringifyError(error),
+					"error.type":
+						error instanceof Error ? error.name : typeof error,
+				});
+				this.#actor.endTraceSpan(span, {
+					code: "ERROR",
+					message: stringifyError(error),
+				});
 				this.#actor.log.error({
 					msg: "error executing scheduled event",
 					error: stringifyError(error),
