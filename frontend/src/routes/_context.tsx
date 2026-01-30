@@ -1,5 +1,6 @@
 import {
 	createFileRoute,
+	isRedirect,
 	Outlet,
 	redirect,
 	useNavigate,
@@ -7,9 +8,7 @@ import {
 import { zodValidator } from "@tanstack/zod-adapter";
 import { match } from "ts-pattern";
 import z from "zod";
-import { createGlobalContext as createGlobalCloudContext } from "@/app/data-providers/cloud-data-provider";
-import { createGlobalContext as createGlobalEngineContext } from "@/app/data-providers/engine-data-provider";
-import { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
+import { getInspectorClientEndpoint } from "@/app/data-providers/inspector-data-provider";
 import { getConfig, ls, useDialog } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { waitForClerk } from "@/lib/waitForClerk";
@@ -44,24 +43,21 @@ export const Route = createFileRoute("/_context")({
 	context: ({ location: { search }, context }) => {
 		return match(__APP_TYPE__)
 			.with("engine", () => ({
-				dataProvider: createGlobalEngineContext({
-					engineToken: () =>
-						ls.engineCredentials.get(getConfig().apiUrl) || "",
-				}),
+				dataProvider: context.getOrCreateEngineContext(
+					() => ls.engineCredentials.get(getConfig().apiUrl) || "",
+				),
 				__type: "engine" as const,
 			}))
 			.with("cloud", () => ({
-				dataProvider: createGlobalCloudContext({
-					clerk: context.clerk,
-				}),
+				dataProvider: context.getOrCreateCloudContext(context.clerk),
 				__type: "cloud" as const,
 			}))
 			.with("inspector", () => {
+				const typedSearch = search as z.infer<typeof searchSchema>;
 				return {
-					dataProvider: createGlobalInspectorContext({
-						url:
-							(search as z.infer<typeof searchSchema>).u ||
-							"http://localhost:6420",
+					dataProvider: context.getOrCreateInspectorContext({
+						url: typedSearch.u || "http://localhost:6420",
+						token: typedSearch.t,
 					}),
 					__type: "inspector" as const,
 				};
@@ -91,6 +87,29 @@ export const Route = createFileRoute("/_context")({
 							from: route.location.pathname,
 						}),
 					});
+				}
+			})
+			.with({ __type: "inspector" }, () => async () => {
+				if (route.search.u) {
+					try {
+						const realUrl = await getInspectorClientEndpoint(
+							route.search.u,
+						);
+						if (realUrl !== route.search.u) {
+							throw redirect({
+								to: route.location.pathname,
+								search: {
+									...route.search,
+									u: realUrl,
+								},
+							});
+						}
+					} catch (e) {
+						if (isRedirect(e)) {
+							throw e;
+						}
+						// ignore errors here
+					}
 				}
 			})
 			.otherwise(() => () => {})();

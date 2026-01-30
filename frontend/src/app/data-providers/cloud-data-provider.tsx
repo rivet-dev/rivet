@@ -77,6 +77,7 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 export const createOrganizationContext = ({
 	client,
 	organization,
+	...parent
 }: {
 	organization: string;
 } & ReturnType<typeof createGlobalContext>) => {
@@ -212,6 +213,8 @@ export const createOrganizationContext = ({
 		});
 
 	return {
+		...parent,
+		client,
 		organization,
 		organizationsQueryOptions,
 		orgProjectNamespacesQueryOptions,
@@ -269,6 +272,9 @@ export const createProjectContext = ({
 } & ReturnType<typeof createOrganizationContext> &
 	ReturnType<typeof createGlobalContext>) => {
 	return {
+		...parent,
+		client,
+		organization,
 		project,
 		createNamespaceMutationOptions(opts: {
 			onSuccess?: (data: Namespace) => void;
@@ -347,6 +353,7 @@ export const createProjectContext = ({
 					"access-token",
 				],
 				queryFn: async () => {
+					console.log(client);
 					const response = await client.namespaces.createAccessToken(
 						project,
 						namespace,
@@ -432,6 +439,7 @@ export const createNamespaceContext = ({
 		return response.token;
 	};
 	return {
+		...parent,
 		...createEngineNamespaceContext({
 			...parent,
 			namespace: engineNamespaceName,
