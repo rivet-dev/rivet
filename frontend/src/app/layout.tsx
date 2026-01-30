@@ -8,6 +8,7 @@ import {
 	faLinkSlash,
 	faMessageSmile,
 	faSpinnerThird,
+	faWallet,
 	Icon,
 } from "@rivet-gg/icons";
 import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
@@ -43,6 +44,8 @@ import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
+import { BillingPlanBadge } from "./billing/billing-plan-badge";
+import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { HelpDropdown } from "./help-dropdown";
@@ -205,6 +208,53 @@ const Sidebar = ({
 												>
 													Settings
 												</HeaderLink>
+											) : null}
+											{matchRoute({
+												to: "/orgs/$organization/projects/$project/ns/$namespace",
+												fuzzy: true,
+											}) ? (
+												<HeaderButton asChild>
+													<Link
+														from="/orgs/$organization/projects/$project/ns/$namespace"
+														to="/orgs/$organization/projects/$project/ns/$namespace/billing"
+														className="font-normal justify-between flex w-full"
+													>
+														<p>
+															<Icon
+																icon={faWallet}
+																className="me-1.5"
+															/>
+															Billing
+														</p>
+														<div className="flex gap-1">
+															<BillingUsageGauge />
+															<BillingPlanBadge />
+														</div>
+													</Link>
+												</HeaderButton>
+											) : matchRoute({
+													to: "/orgs/$organization/projects/$project",
+													fuzzy: true,
+												}) ? (
+												<HeaderButton asChild>
+													<Link
+														from="/orgs/$organization/projects/$project"
+														to="/orgs/$organization/projects/$project/billing"
+														className="font-normal justify-between flex w-full"
+													>
+														<p>
+															<Icon
+																icon={faWallet}
+																className="me-1.5"
+															/>
+															Billing
+														</p>
+														<div className="flex gap-1">
+															<BillingUsageGauge />
+															<BillingPlanBadge />
+														</div>
+													</Link>
+												</HeaderButton>
 											) : null}
 											<HelpDropdown>
 												<HeaderButton

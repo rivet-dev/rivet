@@ -5,7 +5,8 @@
 			"frontend/**/*.{tsx,ts,js}",
 			"!frontend/packages",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
-			"examples/**/*.{ts,tsx}"
+			"examples/**/*.{ts,tsx}",
+			"!/**/node_modules"
 		],
 		"ignoreUnknown": true
 	},

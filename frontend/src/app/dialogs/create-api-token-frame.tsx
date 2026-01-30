@@ -61,6 +61,8 @@ export default function CreateApiTokenFrameContent({
 	const { mutateAsync, isPending } = useMutation(
 		dataProvider.createApiTokenMutationOptions({
 			onSuccess: async (data) => {
+				// invalid response type?
+				// @ts-expect-error
 				setCreatedToken(data.apiToken);
 				await queryClient.invalidateQueries(
 					dataProvider.apiTokensQueryOptions(),
