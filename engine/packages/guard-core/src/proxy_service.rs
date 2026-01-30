@@ -10,7 +10,7 @@ use hyper::{
 use hyper_tungstenite;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
-use rand;
+use rand::seq::SliceRandom;
 use rivet_api_builder::{RequestIds, X_RIVET_RAY_ID};
 use rivet_util::Id;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -30,7 +30,9 @@ use url::Url;
 use crate::RouteTarget;
 use crate::request_context::RequestContext;
 use crate::response_body::ResponseBody;
-use crate::route::{CacheKeyFn, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput};
+use crate::route::{
+	CacheKeyFn, DEFAULT_ROUTE_TIMEOUT, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput,
+};
 use crate::utils::{InFlightCounter, RateLimiter};
 use crate::{
 	WebSocketHandle, custom_serve::HibernationResult, errors, metrics, task_group::TaskGroup, utils,
@@ -96,37 +98,45 @@ impl ProxyState {
 		let cache_key = (self.cache_key_fn)(req_ctx)?;
 
 		// Check cache first
-		if !ignore_cache {
-			if let Some(result) = self.route_cache.get(&cache_key).await {
-				// Choose a random target from the cached targets
-				if let Some(target) = choose_random_target(&result.targets) {
-					return Ok(ResolveRouteOutput::Target(target.clone()));
-				}
-			}
-		}
+		let cache_res = if !ignore_cache {
+			self.route_cache.get(&cache_key).await
+		} else {
+			None
+		};
 
-		// Not in cache, call routing function with a default timeout
-		// Default 15 seconds, routing functions should have their own internal timeouts that are shorter
-		let default_timeout = Duration::from_secs(15);
+		let res = if let Some(res) = cache_res {
+			res
+		} else {
+			// Not in cache, call routing function with a default timeout
+			// Default 15 seconds, routing functions should have their own internal timeouts that are shorter
+			tracing::debug!(
+				hostname = %req_ctx.hostname,
+				path = %req_ctx.path,
+				cache_hit = false,
+				timeout_seconds = DEFAULT_ROUTE_TIMEOUT.as_secs(),
+				"Cache miss, calling routing function"
+			);
 
-		tracing::debug!(
-			hostname = %req_ctx.hostname,
-			path = %req_ctx.path,
-			cache_hit = false,
-			timeout_seconds = default_timeout.as_secs(),
-			"Cache miss, calling routing function"
-		);
+			let routing_res = timeout(DEFAULT_ROUTE_TIMEOUT, (self.routing_fn)(req_ctx))
+				.await
+				.map_err(|_| {
+					errors::RequestTimeout {
+						timeout_seconds: DEFAULT_ROUTE_TIMEOUT.as_secs(),
+					}
+					.build()
+				})??;
 
-		let res = timeout(default_timeout, (self.routing_fn)(req_ctx))
-			.await
-			.map_err(|_| {
-				errors::RequestTimeout {
-					timeout_seconds: default_timeout.as_secs(),
-				}
-				.build()
-			})?;
+			// TODO: Disable route caching for now, determine edge cases with gateway
+			// // Cache the result
+			// self.route_cache
+			// 	.insert(cache_key, routing_res.clone())
+			// 	.await;
+			// tracing::debug!("Added route to cache");
 
-		match res? {
+			routing_res
+		};
+
+		match res {
 			RoutingOutput::Route(result) => {
 				tracing::debug!(
 					hostname = %req_ctx.hostname,
@@ -134,10 +144,6 @@ impl ProxyState {
 					targets_count = result.targets.len(),
 					"Received routing result"
 				);
-
-				// Cache the result
-				self.route_cache.insert(cache_key, result.clone()).await;
-				tracing::debug!("Added route to cache");
 
 				// Choose a random target
 				if let Some(target) = choose_random_target(&result.targets) {
@@ -294,13 +300,7 @@ impl ProxyState {
 
 // Helper function to choose a random target from a list of targets
 fn choose_random_target(targets: &[RouteTarget]) -> Option<&RouteTarget> {
-	if targets.is_empty() {
-		return None;
-	}
-
-	// Use a simple random index selection
-	let random_index = rand::random::<usize>() % targets.len();
-	targets.get(random_index)
+	targets.choose(&mut rand::thread_rng())
 }
 
 // Proxy service
