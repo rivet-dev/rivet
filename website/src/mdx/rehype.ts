@@ -167,9 +167,30 @@ function rehypeTableOfContents() {
 	};
 }
 
+// Create conditional Mermaid plugin - can be disabled via environment variable
+const mermaidPlugin = process.env.SKIP_MERMAID === 'true' 
+	? null 
+	: [rehypeMermaid, { 
+		colorScheme: "dark", 
+		mermaidConfig: { theme: "dark" },
+		// More robust browser configuration for Docker environments
+		launchOptions: {
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage',
+				'--disable-gpu',
+				'--no-first-run',
+				'--disable-default-apps',
+				'--disable-extensions'
+			],
+			headless: true
+		}
+	}];
+
 export const rehypePlugins = [
 	mdxAnnotations.rehype,
-	[rehypeMermaid, { colorScheme: "dark", mermaidConfig: { theme: "dark" } }],
+	...(mermaidPlugin ? [mermaidPlugin] : []),
 	rehypeParseCodeBlocks,
 	rehypeShiki,
 	rehypeSlugify,

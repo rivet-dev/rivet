@@ -44,8 +44,14 @@ ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 RUN --mount=type=cache,id=s/3e31e381-166e-4a85-983a-a49830a88b96-/pnpm/store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
+# Clear any existing Playwright cache to prevent version conflicts
+RUN rm -rf /root/.cache/ms-playwright/ || true
+
 # Install Playwright browsers using workspace version (after dependencies are installed)
 RUN pnpm --filter website exec playwright install --with-deps chromium
+
+# Verify browser installation
+RUN ls -la /root/.cache/ms-playwright/ && pnpm --filter website exec playwright --version
 
 # Build arguments for PUBLIC_* environment variables
 ARG PUBLIC_SITE_URL="https://rivet.gg"
@@ -63,7 +69,12 @@ ENV PUBLIC_TYPESENSE_API_KEY=${PUBLIC_TYPESENSE_API_KEY}
 
 WORKDIR /app/website
 
-# Build the website (static export to 'dist' directory)
+# Initialize git repository if needed (some build processes expect a git repo)
+RUN git config --global user.email "build@rivet.dev" && \
+    git config --global user.name "Docker Build" && \
+    (git rev-parse --git-dir >/dev/null 2>&1 || git init)
+
+# Build the website (static export to 'dist' directory)  
 RUN pnpm run build
 
 # =============================================================================
