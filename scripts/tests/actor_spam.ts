@@ -66,7 +66,7 @@ async function testActor(i: number) {
 }
 
 function testWebSocket(actorId: string): Promise<void> {
-	console.log(`Testing WebSocket connection to actor...`);
+	console.log(`Testing WebSocket connection to actor ${actorId}...`);
 
 	return new Promise((resolve, reject) => {
 		// Parse the RIVET_ENDPOINT to get WebSocket URL
@@ -90,7 +90,7 @@ function testWebSocket(actorId: string): Promise<void> {
 		let echoReceived = false;
 		const timeout = setTimeout(() => {
 			console.log(
-				"No response received within timeout, but connection was established",
+				"No websocket response received within timeout, but connection was established",
 			);
 			// Connection was established, that's enough for the test
 			ws.close();
