@@ -37,6 +37,13 @@ import { rawHttpRequestPropertiesActor } from "./raw-http-request-properties";
 import { rawWebSocketActor, rawWebSocketBinaryActor } from "./raw-websocket";
 import { requestAccessActor } from "./request-access";
 import { rejectConnectionActor } from "./reject-connection";
+import {
+	runWithError,
+	runWithEarlyExit,
+	runWithoutHandler,
+	runWithQueueConsumer,
+	runWithTicks,
+} from "./run";
 import { scheduled } from "./scheduled";
 import {
 	sleep,
@@ -127,5 +134,11 @@ export const registry = setup({
 		// From large-payloads.ts
 		largePayloadActor,
 		largePayloadConnActor,
+		// From run.ts
+		runWithTicks,
+		runWithQueueConsumer,
+		runWithEarlyExit,
+		runWithError,
+		runWithoutHandler,
 	},
 });
