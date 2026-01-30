@@ -2,7 +2,11 @@ use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode, body::Incoming as BodyIncoming, header::HeaderName};
+use hyper::{
+	Request, Response, StatusCode,
+	body::Incoming as BodyIncoming,
+	header::{HeaderName, HeaderValue},
+};
 use hyper_tungstenite;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
@@ -556,8 +560,34 @@ impl ProxyService {
 			res.headers_mut().insert(X_RIVET_RAY_ID, ray_id_value);
 		}
 
-		let status = res.status().as_u16();
+		// Add cors headers to response
+		if let Some(cors) = &req_ctx.cors {
+			let headers = res.headers_mut();
 
+			headers.insert(
+				"access-control-allow-origin",
+				HeaderValue::from_str(&cors.allow_origin)?,
+			);
+			headers.insert(
+				"access-control-allow-credentials",
+				HeaderValue::from_static(if cors.allow_credentials {
+					"true"
+				} else {
+					"false"
+				}),
+			);
+			headers.insert(
+				"access-control-expose-headers",
+				HeaderValue::from_str(&cors.expose_headers)?,
+			);
+
+			if cors.allow_origin != "*" {
+				headers.insert("vary", HeaderValue::from_static("Origin"));
+			}
+		}
+
+		// Set span status code
+		let status = res.status().as_u16();
 		current_span.set_attribute("http.response.status_code", status as i64);
 
 		let content_length = res
