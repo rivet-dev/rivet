@@ -72,19 +72,10 @@ async fn route_runner_internal(
 
 	tracing::debug!(datacenter = ?current_dc.name, "validated host for datacenter");
 
-	let is_websocket = req_ctx
-		.headers()
-		.get("upgrade")
-		.and_then(|v| v.to_str().ok())
-		.map(|v| v.eq_ignore_ascii_case("websocket"))
-		.unwrap_or(false);
-
-	tracing::debug!(is_websocket, "connection type");
-
 	// Check auth (if enabled)
 	if let Some(auth) = &ctx.config().auth {
 		// Extract token from protocol or header
-		let token = if is_websocket {
+		let token = if req_ctx.is_websocket() {
 			req_ctx
 				.headers()
 				.get(SEC_WEBSOCKET_PROTOCOL)
