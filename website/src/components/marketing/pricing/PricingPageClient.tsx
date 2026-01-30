@@ -419,7 +419,7 @@ const SelfHostingComparison = () => {
 
 const ComparisonTable = () => {
     const features = [
-      { name: "Awake Actor Hours", free: "100,000 Cap", hobby: "400,000 Included", team: "400,000 Included", ent: "Custom" },
+      { name: "Awake Actor Hours", free: "100,000", hobby: "400,000", team: "400,000", ent: "Custom" },
       { name: "Storage", free: "5GB", hobby: "5GB", team: "5GB", ent: "Custom" },
       { name: "Reads / mo", free: "200 Million", hobby: "25 Billion", team: "25 Billion", ent: "Custom" },
       { name: "Writes / mo", free: "5 Million", hobby: "50 Million", team: "50 Million", ent: "Custom" },
@@ -486,7 +486,7 @@ const Pricing = () => {
             period: "/mo",
             desc: "For prototyping and small projects.",
             features: [
-                "100,000 Awake Actor Hours Cap",
+                "100,000 Awake Actor Hours /mo limit",
                 "5GB Limit",
                 "5 Million Writes /mo Limit",
                 "200 Million Reads /mo Limit",
