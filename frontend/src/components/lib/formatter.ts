@@ -43,8 +43,10 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 	currency: "USD",
 });
 
-export function formatCurrency(amount: number) {
-	return currencyFormatter.format(amount);
+export function formatCurrency(amount: number | bigint) {
+	return currencyFormatter.format(
+		typeof amount === "bigint" ? Number(amount) : amount,
+	);
 }
 
 export function formatCurrencyToParts(amount: number) {

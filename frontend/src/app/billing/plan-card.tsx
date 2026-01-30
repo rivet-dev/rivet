@@ -47,8 +47,7 @@ function PlanCard({
 					<p className="text-sm text-muted-foreground">+ Usage</p>
 				) : null}
 			</div>
-			<div className="text-sm text-primary-foreground border-t pt-2 flex-1">
-				<p>Includes:</p>
+			<div className="text-sm text-primary-foreground flex-1">
 				<ul className="text-muted-foreground mt-2 space-y-1">
 					{features?.map((feature, index) => (
 						<li key={`${feature.label}-${index}`}>
@@ -82,9 +81,11 @@ export const CommunityPlan = (props: Partial<PlanCardProps>) => {
 			title="Free"
 			price="$0"
 			features={[
-				{ icon: faCheck, label: "5GB Limit" },
-				{ icon: faCheck, label: "5 Million Writes /mo" },
-				{ icon: faCheck, label: "200 Million Reads /mo" },
+				{ icon: faCheck, label: "5 Million Writes /mo Limit" },
+				{ icon: faCheck, label: "200 Million Reads /mo Limit" },
+				{ icon: faCheck, label: "5GB Storage Limit" },
+				{ icon: faCheck, label: "100GB Egress Limit" },
+				{ icon: faCheck, label: "100,000 Awake Actors Hours Limit" },
 				{ icon: faCheck, label: "Community Support" },
 			]}
 			{...props}
@@ -101,17 +102,18 @@ export const ProPlan = (props: Partial<PlanCardProps>) => {
 			features={[
 				{
 					icon: faPlus,
-					label: "20 Billion Read /mo",
+					label: "25 Billion Read /mo included",
 				},
 				{
 					icon: faPlus,
-					label: "50 Million Read /mo",
+					label: "50 Million Writes /mo included",
 				},
 				{
 					icon: faPlus,
-					label: "5GB Storage",
+					label: "5GB Storage included",
 				},
-				{ icon: faCheck, label: "Unlimited Seats" },
+				{ icon: faPlus, label: "1TB Egress included" },
+				{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
 				{ icon: faCheck, label: "Email Support" },
 			]}
 			{...props}
@@ -126,10 +128,11 @@ export const TeamPlan = (props: Partial<PlanCardProps>) => {
 			price="$200"
 			usageBased
 			features={[
-				{ icon: faPlus, label: "25 Billion Reads /mo" },
-				{ icon: faPlus, label: "50 Million Writes /mo" },
-				{ icon: faPlus, label: "5GB Storage" },
-				{ icon: faCheck, label: "Unlimited Seats" },
+				{ icon: faPlus, label: "25 Billion Reads /mo included" },
+				{ icon: faPlus, label: "50 Million Writes /mo included" },
+				{ icon: faPlus, label: "5GB Storage included" },
+				{ icon: faPlus, label: "1TB Egress included" },
+				{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
 				{ icon: faCheck, label: "MFA" },
 				{ icon: faCheck, label: "Slack Support" },
 			]}
@@ -149,10 +152,10 @@ export const EnterprisePlan = (props: Partial<PlanCardProps>) => {
 				{ icon: faCheck, label: "Priority Support" },
 				{ icon: faCheck, label: "SLA" },
 				{ icon: faCheck, label: "OIDC SSO provider" },
-				{ icon: faCheck, label: "On-Prem Deployment" },
 				{ icon: faCheck, label: "Audit logs" },
 				{ icon: faCheck, label: "Custom Roles" },
 				{ icon: faCheck, label: "Device Tracking" },
+				{ icon: faCheck, label: "Volume Pricing" },
 			]}
 			{...props}
 		/>
