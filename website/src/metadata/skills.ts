@@ -9,13 +9,15 @@ import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.m
 import skillBaseClientReact from "./skill-base-rivetkit-client-react.md?raw";
 import skillBaseClientSwift from "./skill-base-rivetkit-client-swift.md?raw";
 import skillBaseClientSwiftUI from "./skill-base-rivetkit-client-swiftui.md?raw";
+import skillBaseNetlify from "./skill-base-netlify.md?raw";
 
 export type SkillId =
 	| "rivetkit"
 	| "rivetkit-client-javascript"
 	| "rivetkit-client-react"
 	| "rivetkit-client-swift"
-	| "rivetkit-client-swiftui";
+	| "rivetkit-client-swiftui"
+	| "netlify";
 
 type SkillContentSource = {
 	docId: string;
@@ -100,6 +102,19 @@ const SKILL_CONFIGS = {
 		baseTemplate: skillBaseClientSwiftUI,
 		content: {
 			docId: "clients/swiftui",
+		},
+		includeReferences: false,
+		includeOpenApi: false,
+	},
+	netlify: {
+		id: "netlify",
+		name: "netlify",
+		directory: "netlify",
+		description:
+			"Netlify deployment guidance for RivetKit. Use when deploying a RivetKit app to Netlify, configuring Netlify Functions with Rivet Actors, or connecting a Netlify site to the Rivet Engine.",
+		baseTemplate: skillBaseNetlify,
+		content: {
+			docId: "connect/netlify",
 		},
 		includeReferences: false,
 		includeOpenApi: false,

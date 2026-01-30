@@ -110,6 +110,7 @@ export function ServerlessConnectionCheck({
 							{match(provider)
 								.with("railway", () => "Railway")
 								.with("vercel", () => "Vercel")
+								.with("netlify", () => "Netlify")
 								.with("aws-ecs", () => "AWS ECS")
 								.with(
 									"cloudflare-workers",

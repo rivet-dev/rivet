@@ -1,5 +1,6 @@
 import {
 	faAws,
+	faCloud,
 	faCloudflare,
 	faEllipsisVertical,
 	faGoogleCloud,
@@ -388,6 +389,13 @@ function Provider({ metadata }: { metadata: unknown }) {
 			return (
 				<div className="whitespace-nowrap">
 					<Icon icon={faVercel} className="mr-1" /> Vercel
+				</div>
+			);
+		}
+		if (metadata.provider === "netlify") {
+			return (
+				<div className="whitespace-nowrap">
+					<Icon icon={faCloud} className="mr-1" /> Netlify
 				</div>
 			);
 		}

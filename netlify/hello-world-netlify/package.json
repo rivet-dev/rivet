@@ -1,0 +1,45 @@
+{
+	"name": "hello-world-netlify",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "netlify dev",
+		"build": "vite build && netlify functions:build",
+		"start": "netlify dev",
+		"test": "vitest",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@netlify/functions": "^2.8.0",
+		"@rivetkit/react": "^2.0.38",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"rivetkit": "^2.0.38"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
+		"@vitejs/plugin-react": "^4.2.0",
+		"netlify-cli": "^17.0.0",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2",
+		"vite": "^5.0.0",
+		"vitest": "^3.1.1"
+	},
+	"template": {
+		"technologies": [
+			"react",
+			"typescript"
+		],
+		"tags": [
+			"starter"
+		],
+		"priority": 100,
+		"frontendPort": 5173,
+		"skipVercel": true
+	},
+	"stableVersion": "0.8.0",
+	"license": "MIT"
+}

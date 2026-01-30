@@ -47,11 +47,25 @@ RUN --mount=type=cache,id=s/3e31e381-166e-4a85-983a-a49830a88b96-/pnpm/store,tar
 # Clear any existing Playwright cache to prevent version conflicts
 RUN rm -rf /root/.cache/ms-playwright/ || true
 
-# Install Playwright browsers using workspace version (after dependencies are installed)
-RUN pnpm --filter website exec playwright install --with-deps chromium
+# Install Playwright browsers with system dependencies
+# Set environment variable to skip download prompts  
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=false
 
-# Verify browser installation
-RUN ls -la /root/.cache/ms-playwright/ && pnpm --filter website exec playwright --version
+# Install system dependencies that Playwright needs
+RUN apt-get update && apt-get install -y \
+    libnss3-dev \
+    libatk-bridge2.0-dev \
+    libdrm2 \
+    libxkbcommon0 \
+    libgtk-3-dev \
+    libgbm-dev \
+    libasound2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright browsers from the website directory  
+WORKDIR /app/website
+RUN npx playwright install chromium
+WORKDIR /app
 
 # Build arguments for PUBLIC_* environment variables
 ARG PUBLIC_SITE_URL="https://rivet.gg"
