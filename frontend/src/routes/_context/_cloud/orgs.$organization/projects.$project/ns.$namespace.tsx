@@ -1,11 +1,5 @@
-import {
-	createFileRoute,
-	redirect,
-	useNavigate,
-	useSearch,
-} from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { posthog } from "posthog-js";
-import { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
@@ -39,15 +33,12 @@ export const Route = createFileRoute(
 		}
 
 		return {
-			dataProvider: {
-				...context.dataProvider,
-				...createNamespaceContext({
-					...context.dataProvider,
-					namespace: params.namespace,
-					engineNamespaceId: ns.access.engineNamespaceId,
-					engineNamespaceName: ns.access.engineNamespaceName,
-				}),
-			},
+			dataProvider: context.getOrCreateCloudNamespaceContext(
+				context.dataProvider,
+				params.namespace,
+				ns.access.engineNamespaceName,
+				ns.access.engineNamespaceId,
+			),
 		};
 	},
 	loaderDeps(opts) {
