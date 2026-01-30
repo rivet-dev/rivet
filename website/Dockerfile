@@ -7,9 +7,8 @@
 # Use Debian-based Node image (required for Playwright/mermaid rendering)
 FROM node:22-bookworm AS builder
 
-# Install git-lfs and Playwright browser dependencies
+# Install git-lfs and system dependencies for Playwright
 RUN apt-get update && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
-RUN npx -y playwright install --with-deps chromium
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -44,6 +43,9 @@ ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 # Install dependencies (with pnpm store cache)
 RUN --mount=type=cache,id=s/3e31e381-166e-4a85-983a-a49830a88b96-/pnpm/store,target=/pnpm/store \
     pnpm install --frozen-lockfile
+
+# Install Playwright browsers using workspace version (after dependencies are installed)
+RUN pnpm --filter website exec playwright install --with-deps chromium
 
 # Build arguments for PUBLIC_* environment variables
 ARG PUBLIC_SITE_URL="https://rivet.gg"
