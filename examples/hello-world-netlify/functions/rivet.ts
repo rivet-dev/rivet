@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { registry } from "../src/actors.ts";
+import app from "../src/server.ts";
 
 export const handler: Handler = async (event, context) => {
   const { httpMethod, path, queryStringParameters, headers, body } = event;
@@ -17,7 +17,7 @@ export const handler: Handler = async (event, context) => {
     body: body ? body : undefined,
   });
 
-  const response = await registry.handler(request);
+  const response = await app.fetch(request);
   
   // Convert Response to Netlify format
   const responseHeaders: Record<string, string> = {};

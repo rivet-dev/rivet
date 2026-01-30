@@ -31,6 +31,11 @@
   --shiki-token-punctuation: theme('colors.zinc.200');
 }
 
+	/* Fonts */
+	.font-heading {
+		font-family: "Satoshi", sans-serif;
+	}
+
 /* Text selection styles */
 ::selection {
   background-color: #ff4f00;
