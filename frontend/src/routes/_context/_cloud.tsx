@@ -39,6 +39,7 @@ function CloudModals() {
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
+	const ConnectNetlifyDialog = useDialog.ConnectNetlify.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
 	const ConnectQuickRailwayDialog = useDialog.ConnectQuickRailway.Dialog;
 	const ConnectManualDialog = useDialog.ConnectManual.Dialog;
@@ -114,6 +115,26 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search?.modal === "connect-q-vercel",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectNetlifyDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search?.modal === "connect-netlify",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

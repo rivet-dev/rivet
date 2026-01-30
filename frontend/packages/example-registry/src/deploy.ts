@@ -1,5 +1,6 @@
 import {
     faAws,
+    faCloud,
     faCloudflare,
     faGoogleCloud,
     faHetznerH,
@@ -31,6 +32,15 @@ export const deployOptions = [
 		description:
 			"Deploy Next.js + RivetKit apps to Vercel's edge network",
 		icon: faVercel as any,
+		badge: "1-Click Deploy",
+	},
+	{
+		displayName: "Netlify",
+		name: "netlify" as const,
+		href: "/docs/connect/netlify",
+		description:
+			"Deploy RivetKit apps to Netlify Functions with JAMstack",
+		icon: faCloud as any,
 		badge: "1-Click Deploy",
 	},
 	{

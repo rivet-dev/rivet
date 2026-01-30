@@ -14,6 +14,9 @@ export const useDialog = {
 	ConnectQuickVercel: createDialogHook(
 		() => import("@/app/dialogs/connect-quick-vercel-frame"),
 	),
+	ConnectNetlify: createDialogHook(
+		() => import("@/app/dialogs/connect-netlify-frame"),
+	),
 	ConnectRailway: createDialogHook(
 		() => import("@/app/dialogs/connect-railway-frame"),
 	),

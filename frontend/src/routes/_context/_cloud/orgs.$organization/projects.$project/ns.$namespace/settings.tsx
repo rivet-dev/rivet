@@ -1,5 +1,6 @@
 import {
 	faAws,
+	faCloud,
 	faGoogleCloud,
 	faHetznerH,
 	faPlus,
@@ -186,6 +187,17 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 					}
 				>
 					Vercel
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					indicator={<Icon icon={faCloud} />}
+					onSelect={() =>
+						navigate({
+							to: ".",
+							search: { modal: "connect-netlify" },
+						})
+					}
+				>
+					Netlify
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					indicator={<Icon icon={faRailway} />}
