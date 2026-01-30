@@ -1,6 +1,6 @@
 use anyhow::*;
 use gas::prelude::*;
-use rivet_guard_core::proxy_service::RoutingOutput;
+use rivet_guard_core::{RoutingOutput, request_context::RequestContext};
 use std::sync::Arc;
 
 use super::{SEC_WEBSOCKET_PROTOCOL, X_RIVET_TOKEN};
@@ -10,18 +10,16 @@ pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 #[tracing::instrument(skip_all)]
 pub async fn route_request(
 	ctx: &StandaloneCtx,
+	req_ctx: &RequestContext,
 	target: &str,
-	host: &str,
-	path: &str,
-	headers: &hyper::HeaderMap,
 ) -> Result<Option<RoutingOutput>> {
 	if target != "runner" {
 		return Ok(None);
 	}
 
-	tracing::debug!(?host, path, "routing to runner via header");
+	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "routing to runner via header");
 
-	route_runner_internal(ctx, host, headers).await.map(Some)
+	route_runner_internal(ctx, req_ctx).await.map(Some)
 }
 
 /// Route requests to the runner service using path-based routing
@@ -29,32 +27,29 @@ pub async fn route_request(
 #[tracing::instrument(skip_all)]
 pub async fn route_request_path_based(
 	ctx: &StandaloneCtx,
-	host: &str,
-	path: &str,
-	headers: &hyper::HeaderMap,
+	req_ctx: &RequestContext,
 ) -> Result<Option<RoutingOutput>> {
 	// Check if path matches /runners/connect
-	let path_without_query = path.split('?').next().unwrap_or(path);
+	let path_without_query = req_ctx.path().split('?').next().unwrap_or(req_ctx.path());
 	if path_without_query != "/runners/connect" {
 		return Ok(None);
 	}
 
-	tracing::debug!(?host, path, "routing to runner via path");
+	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "routing to runner via path");
 
-	route_runner_internal(ctx, host, headers).await.map(Some)
+	route_runner_internal(ctx, req_ctx).await.map(Some)
 }
 
 /// Internal runner routing logic shared by both header-based and path-based routing
 #[tracing::instrument(skip_all)]
 async fn route_runner_internal(
 	ctx: &StandaloneCtx,
-	host: &str,
-	headers: &hyper::HeaderMap,
+	req_ctx: &RequestContext,
 ) -> Result<RoutingOutput> {
 	// Validate that the host is valid for the current datacenter
 	let current_dc = ctx.config().topology().current_dc()?;
-	if !current_dc.is_valid_regional_host(host) {
-		tracing::warn!(?host, datacenter=?current_dc.name, "invalid host for current datacenter");
+	if !current_dc.is_valid_regional_host(req_ctx.hostname()) {
+		tracing::warn!(hostname=%req_ctx.hostname(), datacenter=?current_dc.name, "invalid host for current datacenter");
 
 		// Determine valid hosts for error message
 		let valid_hosts = if let Some(hosts) = &current_dc.valid_hosts {
@@ -68,7 +63,7 @@ async fn route_runner_internal(
 		};
 
 		return Err(crate::errors::MustUseRegionalHost {
-			host: host.to_string(),
+			host: req_ctx.hostname().to_string(),
 			datacenter: current_dc.name.clone(),
 			valid_hosts,
 		}
@@ -77,7 +72,8 @@ async fn route_runner_internal(
 
 	tracing::debug!(datacenter = ?current_dc.name, "validated host for datacenter");
 
-	let is_websocket = headers
+	let is_websocket = req_ctx
+		.headers()
 		.get("upgrade")
 		.and_then(|v| v.to_str().ok())
 		.map(|v| v.eq_ignore_ascii_case("websocket"))
@@ -89,7 +85,8 @@ async fn route_runner_internal(
 	if let Some(auth) = &ctx.config().auth {
 		// Extract token from protocol or header
 		let token = if is_websocket {
-			headers
+			req_ctx
+				.headers()
 				.get(SEC_WEBSOCKET_PROTOCOL)
 				.and_then(|protocols| protocols.to_str().ok())
 				.and_then(|protocols| {
@@ -105,7 +102,8 @@ async fn route_runner_internal(
 					.build()
 				})?
 		} else {
-			headers
+			req_ctx
+				.headers()
 				.get(X_RIVET_TOKEN)
 				.and_then(|x| x.to_str().ok())
 				.ok_or_else(|| {

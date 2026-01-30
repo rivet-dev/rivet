@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_guard_core::CacheKeyFn;
+use rivet_guard_core::{CacheKeyFn, request_context::RequestContext};
 
 pub mod actor;
 
@@ -15,19 +15,19 @@ use crate::routing::X_RIVET_TARGET;
 /// Creates the main cache key function that handles all incoming requests
 #[tracing::instrument(skip_all)]
 pub fn create_cache_key_function() -> CacheKeyFn {
-	Arc::new(move |hostname, path, method, _port_type, headers| {
+	Arc::new(move |req_ctx| {
 		tracing::debug!("building cache key");
 
-		let target = match read_target(headers) {
+		let target = match read_target(req_ctx.headers()) {
 			Ok(target) => target,
 			Err(err) => {
 				tracing::debug!(?err, "failed parsing target for cache key");
 
-				return Ok(host_path_method_cache_key(hostname, path, method));
+				return Ok(host_path_method_cache_key(req_ctx));
 			}
 		};
 
-		let cache_key = match actor::build_cache_key(target, path, method, headers) {
+		let cache_key = match actor::build_cache_key(req_ctx, target) {
 			Ok(key) => Some(key),
 			Err(err) => {
 				tracing::debug!(?err, "failed to create actor cache key");
@@ -40,7 +40,7 @@ pub fn create_cache_key_function() -> CacheKeyFn {
 		if let Some(cache_key) = cache_key {
 			Ok(cache_key)
 		} else {
-			Ok(host_path_method_cache_key(hostname, path, method))
+			Ok(host_path_method_cache_key(req_ctx))
 		}
 	})
 }
@@ -57,13 +57,10 @@ fn read_target(headers: &hyper::HeaderMap) -> Result<&str> {
 	Ok(target.to_str()?)
 }
 
-fn host_path_method_cache_key(hostname: &str, path: &str, method: &hyper::Method) -> u64 {
-	// Extract just the hostname, stripping the port if present
-	let hostname_only = hostname.split(':').next().unwrap_or(hostname);
-
+fn host_path_method_cache_key(req_ctx: &RequestContext) -> u64 {
 	let mut hasher = DefaultHasher::new();
-	hostname_only.hash(&mut hasher);
-	path.hash(&mut hasher);
-	method.as_str().hash(&mut hasher);
+	req_ctx.hostname().hash(&mut hasher);
+	req_ctx.path().hash(&mut hasher);
+	req_ctx.method().as_str().hash(&mut hasher);
 	hasher.finish()
 }
