@@ -34,4 +34,4 @@ RUST_BACKTRACE=full \
 RIVET__POSTGRES__URL=postgres://postgres:postgres@localhost:5432/postgres \
 RUST_LOG=debug \
 RUST_LOG_TARGET=1 \
-cargo run --bin rivet-engine -- start "$@" 2>&1 | tee /tmp/rivet-engine.log
+cargo run --bin rivet-engine -- start 2>&1 | tee -i /tmp/rivet-engine.log

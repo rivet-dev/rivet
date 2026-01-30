@@ -57,7 +57,6 @@ impl TestDatabase {
 				let config =
 					rivet_config::config::Database::Postgres(rivet_config::config::db::Postgres {
 						url: rivet_config::secret::Secret::new(connection_string.clone()),
-						unstable_disable_lock_customization: false,
 						ssl: None,
 					});
 
