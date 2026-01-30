@@ -1,0 +1,23 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"lib": ["esnext", "dom"],
+		"jsx": "react-jsx",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"types": ["node", "vite/client"],
+		"resolveJsonModule": true,
+		"allowJs": true,
+		"checkJs": false,
+		"noEmit": true,
+		"isolatedModules": true,
+		"allowSyntheticDefaultImports": true,
+		"forceConsistentCasingInFileNames": true,
+		"strict": true,
+		"noImplicitAny": false,
+		"skipLibCheck": true,
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true
+	},
+	"include": ["src/**/*", "frontend/**/*"]
+}
