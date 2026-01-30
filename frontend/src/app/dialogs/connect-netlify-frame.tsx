@@ -103,6 +103,7 @@ function FormStepper({
 				});
 			}}
 			defaultValues={{
+				framework: "netlify-functions",
 				plan: "starter",
 				runnerName: "default",
 				slotsPerRunner: 1,

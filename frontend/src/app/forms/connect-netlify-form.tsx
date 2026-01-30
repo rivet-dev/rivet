@@ -30,7 +30,9 @@ export const stepper = defineStepper(
 		id: "api-route",
 		title: "Add API Route",
 		assist: false,
-		schema: z.object({}),
+		schema: z.object({
+			framework: z.string().min(1, "Please select a framework"),
+		}),
 		next: "Next",
 	},
 	{
@@ -151,34 +153,47 @@ export const handler: Handler = async (event, context) => {
   };
 };`;
 
-const nextJsIntegrationCode = () =>
-	`import { toNextHandler } from "@rivetkit/next-js";
+const nextJsIntegrationCode = (plan: string) => {
+	const maxDuration = plan === "starter" ? 10 : 26;
+	return `import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 
-export const maxDuration = 300;
+export const maxDuration = ${maxDuration};
 
 export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);`;
+};
 
 export const IntegrationCode = ({ plan }: { plan: string }) => {
-	const [framework, setFramework] = useState("netlify-functions");
+	const { control } = useFormContext();
+	const framework = useWatch({ control, name: "framework" }) || "netlify-functions";
 
 	return (
 		<div className="space-y-4 mt-2">
-			<div className="space-y-2">
-				<label className="text-sm font-medium">Framework</label>
-				<Select
-					value={framework}
-					onValueChange={setFramework}
-				>
-					<SelectTrigger>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="netlify-functions">Netlify Functions</SelectItem>
-						<SelectItem value="next-js">Next.js</SelectItem>
-					</SelectContent>
-				</Select>
-			</div>
+			<FormField
+				control={control}
+				name="framework"
+				render={({ field }) => (
+					<FormItem>
+						<FormLabel>Framework</FormLabel>
+						<FormControl>
+							<Select
+								onValueChange={field.onChange}
+								value={field.value || "netlify-functions"}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Select framework..." />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="netlify-functions">Netlify Functions</SelectItem>
+									<SelectItem value="next-js">Next.js</SelectItem>
+								</SelectContent>
+							</Select>
+						</FormControl>
+						<FormMessage />
+					</FormItem>
+				)}
+			/>
+		</div>
 
 			{framework === "next-js" && (
 				<>
@@ -223,12 +238,12 @@ export const IntegrationCode = ({ plan }: { plan: string }) => {
 					<CodeFrame
 						language="typescript"
 						title="src/app/api/rivet/[...all]/route.ts"
-						code={() => nextJsIntegrationCode()}
+						code={() => nextJsIntegrationCode(plan)}
 					>
 						<CodePreview
 							className="w-full min-w-0"
 							language="typescript"
-							code={nextJsIntegrationCode()}
+							code={nextJsIntegrationCode(plan)}
 						/>
 					</CodeFrame>
 				</>
@@ -316,12 +331,15 @@ export const Endpoint = ConnectManualServerlessForm.Endpoint;
 export const ConnectionCheck = ConnectManualServerlessForm.ConnectionCheck;
 
 export const FrontendIntegrationCode = () => {
+	const framework = useWatch({ name: "framework" }) || "netlify-functions";
 	const endpoint = useRivetDsn({
 		endpoint: useEndpoint(),
 		kind: "publishable",
 	});
+
+	const clientPackage = framework === "next-js" ? "@rivetkit/next-js/client" : "@rivetkit/react";
 	const clientCode = `"use client";
-import { createRivetKit } from "@rivetkit/react";
+import { createRivetKit } from "${clientPackage}";
 import type { registry } from "@/rivet/registry";
 
 export const { useActor } = createRivetKit<typeof registry>("${endpoint}");
