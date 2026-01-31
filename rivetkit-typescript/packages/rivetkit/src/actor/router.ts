@@ -170,6 +170,16 @@ export function createActorRouter(
 		return handleQueueSend(c, config, actorDriver, c.env.actorId);
 	});
 
+	router.post("/queue/:name", async (c) => {
+		return handleQueueSend(
+			c,
+			config,
+			actorDriver,
+			c.env.actorId,
+			c.req.param("name"),
+		);
+	});
+
 	router.all("/request/*", async (c) => {
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path
 		// Strip the /http prefix from the URL to get the original path

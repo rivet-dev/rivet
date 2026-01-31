@@ -86,13 +86,16 @@ export type HttpActionResponse = z.infer<typeof HttpActionResponseSchema>;
 
 // MARK: HTTP Queue
 export const HttpQueueSendRequestSchema = z.object({
-	name: z.string(),
 	body: z.unknown(),
+	name: z.string().optional(),
+	wait: z.boolean().optional(),
+	timeout: z.number().optional(),
 });
 export type HttpQueueSendRequest = z.infer<typeof HttpQueueSendRequestSchema>;
 
 export const HttpQueueSendResponseSchema = z.object({
-	ok: z.boolean(),
+	status: z.enum(["completed", "timedOut"]),
+	response: z.unknown().optional(),
 });
 export type HttpQueueSendResponse = z.infer<typeof HttpQueueSendResponseSchema>;
 

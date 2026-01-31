@@ -122,5 +122,80 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 				expect((error as ActorError).code).toBe("message_too_large");
 			}
 		});
+
+		test("wait send returns completion response", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["wait-complete"]);
+
+			const actionPromise = handle.receiveAndComplete("tasks");
+			const result = await handle.queue.tasks.send(
+				{ value: 123 },
+				{ wait: true, timeout: 1_000 },
+			);
+
+			await actionPromise;
+			expect(result).toEqual({
+				status: "completed",
+				response: { echo: { value: 123 } },
+			});
+		});
+
+		test("wait send times out", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["wait-timeout"]);
+
+			const resultPromise = handle.queue.timeout.send(
+				{ value: 456 },
+				{ wait: true, timeout: 50 },
+			);
+
+			await waitFor(driverTestConfig, 60);
+			const result = await resultPromise;
+
+			expect(result.status).toBe("timedOut");
+		});
+
+		test("complete throws when wait is false", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"complete-not-allowed",
+			]);
+
+			await handle.queue.nowait.send({ value: "test" });
+			const result = await handle.receiveWithoutWaitComplete("nowait");
+
+			expect(result).toEqual({
+				group: "queue",
+				code: "complete_not_allowed",
+			});
+		});
+
+		test("complete throws when called twice", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"complete-twice",
+			]);
+
+			await handle.queue.twice.send({ value: "test" });
+			const result = await handle.receiveAndCompleteTwice("twice");
+
+			expect(result).toEqual({
+				group: "queue",
+				code: "already_completed",
+			});
+		});
+
+		test("next throws when message pending", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["pending-next"]);
+
+			await handle.queue.pending.send({ value: "test" });
+			const result = await handle.receiveWhilePending("pending");
+
+			expect(result).toEqual({
+				group: "queue",
+				code: "message_pending",
+			});
+		});
 	});
 }

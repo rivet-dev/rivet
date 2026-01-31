@@ -17,16 +17,34 @@ import { bufferToArrayBuffer } from "@/utils";
 import { sendHttpRequest } from "./utils";
 
 export interface QueueSender {
-	send(name: string, body: unknown, signal?: AbortSignal): Promise<void>;
+	send(
+		name: string,
+		body: unknown,
+		options?: QueueSendOptions | AbortSignal,
+	): Promise<QueueSendResult | void>;
 }
 
 export interface QueueNameSender {
-	send(body: unknown, signal?: AbortSignal): Promise<void>;
+	send(
+		body: unknown,
+		options?: QueueSendOptions | AbortSignal,
+	): Promise<QueueSendResult | void>;
 }
 
 export type QueueProxy = QueueSender & {
 	[key: string]: QueueNameSender;
 };
+
+export interface QueueSendOptions {
+	wait?: boolean;
+	timeout?: number;
+	signal?: AbortSignal;
+}
+
+export interface QueueSendResult {
+	status: "completed" | "timedOut";
+	response?: unknown;
+}
 
 interface QueueSenderOptions {
 	encoding: Encoding;
@@ -39,17 +57,22 @@ export function createQueueSender(options: QueueSenderOptions): QueueSender {
 		async send(
 			name: string,
 			body: unknown,
-			signal?: AbortSignal,
-		): Promise<void> {
-			await sendHttpRequest<
+			options?: QueueSendOptions | AbortSignal,
+		): Promise<QueueSendResult | void> {
+			const normalizedOptions =
+				options instanceof AbortSignal ? { signal: options } : options;
+			const wait = normalizedOptions?.wait ?? false;
+			const timeout = normalizedOptions?.timeout;
+
+			const result = await sendHttpRequest<
 				protocol.HttpQueueSendRequest,
 				protocol.HttpQueueSendResponse,
 				HttpQueueSendRequestJson,
 				HttpQueueSendResponseJson,
-				{ name: string; body: unknown },
-				{ ok: true }
+				{ body: unknown; wait?: boolean; timeout?: number; name?: string },
+				QueueSendResult
 			>({
-				url: "http://actor/queue",
+				url: `http://actor/queue/${encodeURIComponent(name)}`,
 				method: "POST",
 				headers: {
 					[HEADER_ENCODING]: options.encoding,
@@ -61,10 +84,10 @@ export function createQueueSender(options: QueueSenderOptions): QueueSender {
 							}
 						: {}),
 				},
-				body: { name, body },
+				body: { body, wait, timeout },
 				encoding: options.encoding,
 				customFetch: options.customFetch,
-				signal,
+				signal: normalizedOptions?.signal,
 				requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
 				requestVersionedDataHandler: HTTP_QUEUE_SEND_REQUEST_VERSIONED,
 				responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -72,14 +95,40 @@ export function createQueueSender(options: QueueSenderOptions): QueueSender {
 					HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
 				requestZodSchema: HttpQueueSendRequestSchema,
 				responseZodSchema: HttpQueueSendResponseSchema,
-				requestToJson: (value): HttpQueueSendRequestJson => value,
-				requestToBare: (value): protocol.HttpQueueSendRequest => ({
-					name: value.name,
-					body: bufferToArrayBuffer(cbor.encode(value.body)),
+				requestToJson: (value): HttpQueueSendRequestJson => ({
+					...value,
+					name,
 				}),
-				responseFromJson: (_json): { ok: true } => ({ ok: true }),
-				responseFromBare: (_bare): { ok: true } => ({ ok: true }),
+				requestToBare: (value): protocol.HttpQueueSendRequest => ({
+					name: value.name ?? name,
+					body: bufferToArrayBuffer(cbor.encode(value.body)),
+					wait: value.wait ?? false,
+					timeout: value.timeout ?? null,
+				}),
+				responseFromJson: (json): QueueSendResult => {
+					if (json.response === undefined) {
+						return { status: json.status };
+					}
+					return {
+						status: json.status,
+						response: json.response,
+					};
+				},
+				responseFromBare: (bare): QueueSendResult => {
+					if (bare.response === null || bare.response === undefined) {
+						return { status: bare.status };
+					}
+					return {
+						status: bare.status,
+						response: cbor.decode(new Uint8Array(bare.response)),
+					};
+				},
 			});
+
+			if (wait) {
+				return result;
+			}
+			return;
 		},
 	};
 }
@@ -106,8 +155,10 @@ export function createQueueProxy(sender: QueueSender): QueueProxy {
 				let method = methodCache.get(prop);
 				if (!method) {
 					method = {
-						send: (body: unknown, signal?: AbortSignal) =>
-							target.send(prop, body, signal),
+						send: (
+							body: unknown,
+							options?: QueueSendOptions | AbortSignal,
+						) => target.send(prop, body, options),
 					};
 					methodCache.set(prop, method);
 				}

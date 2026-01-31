@@ -71,6 +71,8 @@ export interface QueueSendOpts {
 	req?: HonoRequest;
 	name: string;
 	body: unknown;
+	wait?: boolean;
+	timeout?: number;
 	actorId: string;
 }
 
@@ -170,6 +172,7 @@ export async function handleQueueSend(
 	config: RegistryConfig,
 	actorDriver: ActorDriver,
 	actorId: string,
+	queueName?: string,
 ) {
 	const encoding = getRequestEncoding(c.req);
 	const params = getRequestConnParams(c.req);
@@ -186,10 +189,20 @@ export async function handleQueueSend(
 		HttpQueueSendRequestSchema,
 		(json: HttpQueueSendRequestJson) => json,
 		(bare: protocol.HttpQueueSendRequest) => ({
-			name: bare.name,
+			name: bare.name ?? undefined,
 			body: cbor.decode(new Uint8Array(bare.body)),
+			wait: bare.wait ?? undefined,
+			timeout:
+				bare.timeout !== null && bare.timeout !== undefined
+					? Number(bare.timeout)
+					: undefined,
 		}),
 	);
+
+	const name = queueName ?? request.name;
+	if (!name) {
+		throw new errors.InvalidRequest("missing queue name");
+	}
 
 	const actor = await actorDriver.loadActor(actorId);
 	const conn = await actor.connectionManager.prepareAndConnectConn(
@@ -199,20 +212,40 @@ export async function handleQueueSend(
 		c.req.path,
 		c.req.header(),
 	);
+	let result: { status: "completed" | "timedOut"; response?: unknown } = {
+		status: "completed",
+	};
 	try {
-		await actor.queueManager.enqueue(request.name, request.body);
+		if (request.wait) {
+			result = await actor.queueManager.enqueueAndWait(
+				name,
+				request.body,
+				request.timeout,
+			);
+		} else {
+			await actor.queueManager.enqueue(name, request.body);
+		}
 	} finally {
 		conn.disconnect();
 	}
 
 	const response = serializeWithEncoding(
 		encoding,
-		{ ok: true },
+		result,
 		HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
 		CLIENT_PROTOCOL_CURRENT_VERSION,
 		HttpQueueSendResponseSchema,
-		(_value): HttpQueueSendResponseJson => ({ ok: true }),
-		(_value): protocol.HttpQueueSendResponse => ({ ok: true }),
+		(value): HttpQueueSendResponseJson => ({
+			status: value.status,
+			response: value.response,
+		}),
+		(value): protocol.HttpQueueSendResponse => ({
+			status: value.status,
+			response:
+				value.response !== undefined
+					? bufferToArrayBuffer(cbor.encode(value.response))
+					: null,
+		}),
 	);
 
 	return c.body(response as Uint8Array as any, 200, {

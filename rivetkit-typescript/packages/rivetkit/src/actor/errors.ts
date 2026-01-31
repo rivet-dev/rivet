@@ -221,6 +221,39 @@ export class QueueMessageInvalid extends ActorError {
 	}
 }
 
+export class QueueCompleteNotAllowed extends ActorError {
+	constructor() {
+		super(
+			"queue",
+			"complete_not_allowed",
+			"Queue message completion is only allowed when wait is enabled.",
+			{ public: true },
+		);
+	}
+}
+
+export class QueueMessagePending extends ActorError {
+	constructor() {
+		super(
+			"queue",
+			"message_pending",
+			"Queue message is already pending completion.",
+			{ public: true },
+		);
+	}
+}
+
+export class QueueAlreadyCompleted extends ActorError {
+	constructor() {
+		super(
+			"queue",
+			"already_completed",
+			"Queue message has already been completed.",
+			{ public: true },
+		);
+	}
+}
+
 export class ActorAborted extends ActorError {
 	constructor() {
 		super("actor", "aborted", "Actor aborted.", { public: true });
