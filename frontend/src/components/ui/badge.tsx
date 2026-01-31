@@ -23,6 +23,8 @@ const badgeVariants = cva(
 					"border-transparent bg-muted-destructive text-muted-destructive-foreground",
 				warning: "border-warning/60 text-foreground",
 				outline: "text-foreground",
+				premium: "border-transparent",
+				"premium-blue": "border-transparent",
 			},
 		},
 		defaultVariants: {
@@ -39,8 +41,50 @@ export interface BadgeProps
 }
 
 const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
-	({ className, variant, asChild, ...props }, ref) => {
+	({ className, variant, asChild, children, ...props }, ref) => {
 		const Comp = asChild ? Slot : "div";
+
+		if (variant === "premium" || variant === "premium-blue") {
+			const isBlue = variant === "premium-blue";
+			const gradientClasses = isBlue
+				? "from-blue-500 via-sky-400 to-blue-500"
+				: "from-primary via-orange-400 to-primary";
+			const shimmerClasses = isBlue
+				? "via-blue-500/10"
+				: "via-primary/10";
+
+			return (
+				<div
+					ref={ref}
+					className={cn(
+						"relative inline-flex items-center justify-center rounded-full px-2.5 py-0.5 shrink-0",
+						`bg-gradient-to-r ${gradientClasses}`,
+						getCommonHelperClass(props),
+						className,
+					)}
+					{...omitCommonHelperProps(props)}
+				>
+					<div className="absolute inset-px rounded-full bg-background" />
+					<div className="pointer-events-none absolute inset-px overflow-hidden rounded-full">
+						<div
+							className={cn(
+								`absolute inset-0 bg-gradient-to-r from-transparent to-transparent animate-shimmer-slide`,
+								shimmerClasses,
+							)}
+						/>
+					</div>
+					<span
+						className={cn(
+							`relative z-10 text-xs font-semibold bg-gradient-to-r bg-clip-text text-transparent whitespace-nowrap`,
+							gradientClasses,
+						)}
+					>
+						{children}
+					</span>
+				</div>
+			);
+		}
+
 		return (
 			<Comp
 				ref={ref}
@@ -50,7 +94,9 @@ const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
 					className,
 				)}
 				{...omitCommonHelperProps(props)}
-			/>
+			>
+				{children}
+			</Comp>
 		);
 	},
 );

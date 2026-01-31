@@ -108,7 +108,7 @@ export const createOrganizationContext = ({
 			queryFn: async ({ pageParam }) => {
 				const data = await client.namespaces.list(opts.project, {
 					org: opts.organization,
-					limit: RECORDS_PER_PAGE,
+					limit: 100,
 					cursor: pageParam ?? undefined,
 				});
 				return {
@@ -122,7 +122,7 @@ export const createOrganizationContext = ({
 				};
 			},
 			getNextPageParam: (lastPage) => {
-				if (lastPage.namespaces.length < RECORDS_PER_PAGE) {
+				if (lastPage.namespaces.length < 100) {
 					return undefined;
 				}
 				return lastPage.pagination.cursor;

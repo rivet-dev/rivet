@@ -1,4 +1,7 @@
+import { faExclamationTriangle, Icon } from "@rivet-gg/icons";
+import { useQuery } from "@tanstack/react-query";
 import { cn, WithTooltip } from "@/components";
+import { useCloudProjectDataProvider } from "@/components/actors";
 import { useHighestUsagePercent } from "./hooks";
 
 const progressColors = {
@@ -13,21 +16,32 @@ const progressColors = {
 		border: "border-amber-900/30",
 	},
 	high: {
-		stroke: "stroke-orange-500",
-		background: "bg-orange-950/50",
-		border: "border-orange-900/30",
+		stroke: "stroke-destructive",
+		background: "bg-destructive/20",
+		border: "border-destructive/60",
 	},
 };
+
+const radius = 9;
+const circumference = 2 * Math.PI * radius;
 
 export function BillingUsageGauge() {
 	const progress = useHighestUsagePercent();
 
-	if (progress < 50) {
+	const dataProvider = useCloudProjectDataProvider();
+	const { data: billingData } = useQuery({
+		...dataProvider.currentProjectBillingDetailsQueryOptions(),
+	});
+
+	const plan = billingData?.billing.activePlan || "free";
+
+	if (
+		(plan !== "free" && progress < 80) ||
+		(plan === "free" && progress < 50)
+	) {
 		return null;
 	}
 
-	const radius = 9;
-	const circumference = 2 * Math.PI * radius;
 	const strokeDashoffset = circumference - (progress / 100) * circumference;
 
 	const progressVariant =
@@ -35,35 +49,50 @@ export function BillingUsageGauge() {
 
 	return (
 		<WithTooltip
-			content={`${progress}% of usage included in your plan`}
+			content={
+				progress >= 100
+					? plan === "free"
+						? "You have reached your included usage limit. Upgrade your plan."
+						: "You have reached 100% of your included usage."
+					: `You have used ${progress}% of your included usage.`
+			}
 			trigger={
 				<div
 					className={cn(
-						"rounded-full p-1 border",
+						"rounded-full border size-6 flex items-center justify-center",
 						progressColors[progressVariant].border,
 						progressColors[progressVariant].background,
 					)}
 				>
-					<svg
-						className="h-6 w-6"
-						viewBox="0 0 24 24"
-						fill="none"
-						strokeWidth="3"
-						strokeLinecap="round"
-						aria-label="Usage Gauge"
-						role="img"
-					>
-						<circle cx="12" cy="12" r={radius} />
-						<circle
-							cx="12"
-							cy="12"
-							r={radius}
-							className={progressColors[progressVariant].stroke}
-							strokeDasharray={circumference}
-							strokeDashoffset={strokeDashoffset}
-							transform="rotate(-90 12 12)"
+					{progress >= 100 ? (
+						<Icon
+							icon={faExclamationTriangle}
+							className="text-destructive text-xs"
 						/>
-					</svg>
+					) : (
+						<svg
+							className="h-6 w-6"
+							viewBox="0 0 24 24"
+							fill="none"
+							strokeWidth="3"
+							strokeLinecap="round"
+							aria-label="Usage Gauge"
+							role="img"
+						>
+							<circle cx="12" cy="12" r={radius} />
+							<circle
+								cx="12"
+								cy="12"
+								r={radius}
+								className={
+									progressColors[progressVariant].stroke
+								}
+								strokeDasharray={circumference}
+								strokeDashoffset={strokeDashoffset}
+								transform="rotate(-90 12 12)"
+							/>
+						</svg>
+					)}
 				</div>
 			}
 		/>

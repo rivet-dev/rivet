@@ -156,8 +156,9 @@ function buttonText(
 		);
 	}
 	if (plan === data.activePlan) {
-		return "Cancel";
+		return "Current Plan";
 	}
+
 	return comparePlans(plan, data.futurePlan || Rivet.BillingPlan.Free) > 0
 		? "Upgrade"
 		: "Downgrade";

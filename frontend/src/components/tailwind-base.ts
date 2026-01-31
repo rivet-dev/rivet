@@ -148,6 +148,14 @@ const config = {
 						transform: "translate3d(4px, 0, 0)",
 					},
 				},
+				"shimmer-slide": {
+					"0%": { transform: "translateX(-100%)" },
+					"100%": { transform: "translateX(100%)" },
+				},
+				"border-glow": {
+					"0%, 100%": { opacity: "0.5" },
+					"50%": { opacity: "1" },
+				},
 			},
 			animation: {
 				shake: "shake 0.82s cubic-bezier(.36,.07,.19,.97) both",
@@ -155,6 +163,8 @@ const config = {
 				"accordion-up": "accordion-up 0.2s ease-out",
 				"caret-blink": "caret-blink 1.25s ease-out infinite",
 				"bounce-x": "bounce-x 5s ease infinite",
+				"shimmer-slide": "shimmer-slide 2s ease-in-out infinite",
+				"border-glow": "border-glow 2s ease-in-out infinite",
 			},
 
 			typography: {

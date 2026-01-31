@@ -44,6 +44,7 @@ import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
+import { BillingLimitAlert } from "./billing/billing-limit-alert";
 import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
@@ -648,6 +649,7 @@ function CloudSidebarContentInner() {
 		<div className="flex gap-0.5 flex-col">
 			{hasDataProvider && hasQuery ? (
 				<div className="w-full pt-1.5">
+					<BillingLimitAlert />
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 						Actors
 					</span>
