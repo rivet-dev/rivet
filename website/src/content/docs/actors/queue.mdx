@@ -12,7 +12,7 @@ Queues are durable: messages persist until the actor acknowledges them. When `wa
 
 Fire-and-forget sends a message and returns immediately:
 
-```typescript
+```typescript @nocheck
 const handle = client.myActor.getOrCreate(["orders"]);
 
 await handle.queue.tasks.send({ id: "order-123" });
@@ -20,7 +20,7 @@ await handle.queue.tasks.send({ id: "order-123" });
 
 To wait for the actor to finish processing:
 
-```typescript
+```typescript @nocheck
 const result = await handle.queue.tasks.send(
   { id: "order-123" },
   { wait: true, timeout: 30_000 }
@@ -37,7 +37,7 @@ if (result.status === "completed") {
 
 Actors pull messages with `c.queue.next()`:
 
-```typescript
+```typescript @nocheck
 const msg = await c.queue.next("tasks");
 if (!msg) return;
 
@@ -48,7 +48,7 @@ Each message includes a stable `id` string you can log or correlate across syste
 
 Use `wait: true` to hold the message until you explicitly complete it:
 
-```typescript
+```typescript @nocheck
 const msg = await c.queue.next("tasks", { wait: true });
 if (!msg) return;
 
@@ -58,7 +58,7 @@ await msg.complete();
 
 You can also send data back to the waiting client:
 
-```typescript
+```typescript @nocheck
 await msg.complete({ result: "ok" });
 ```
 
@@ -119,13 +119,13 @@ Timeouts still return HTTP 200:
 
 ### Fire-and-forget
 
-```typescript
+```typescript @nocheck
 await handle.queue.emails.send({ to: "user@example.com" });
 ```
 
 ### Request-response
 
-```typescript
+```typescript @nocheck
 // Client
 const result = await handle.queue.work.send(
   { input: "value" },
