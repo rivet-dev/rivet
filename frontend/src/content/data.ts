@@ -11,4 +11,5 @@ export const docsLinks = {
 		nextjs: "https://www.rivet.dev/docs/actors/quickstart/next-js",
 	},
 	runtimeModes: "https://www.rivet.dev/docs/general/runtime-modes/",
+	runnersSetup: "https://www.rivet.dev/docs/connect/",
 };

@@ -55,6 +55,17 @@ export const Route = createFileRoute(
 			ls.onboarding.getSkipWelcome(params.project, params.namespace) ||
 			deps.skipOnboarding;
 
+		const namespace = await context.queryClient.fetchQuery(
+			context.dataProvider.currentNamespaceQueryOptions(),
+		);
+
+		if (namespace.displayName !== "Production" || isSkipped === true) {
+			return {
+				displayOnboarding: false,
+				displayBackendOnboarding: false,
+			};
+		}
+
 		const [runnerNames, runnerConfigs] = await Promise.all([
 			context.queryClient.fetchInfiniteQuery(
 				context.dataProvider.runnerNamesQueryOptions(),
@@ -74,11 +85,9 @@ export const Route = createFileRoute(
 		const hasActors = actors > 0;
 
 		const displayOnboarding =
-			!isSkipped &&
-			((!hasRunnerNames && !hasRunnerConfigs) || !hasActors);
+			(!hasRunnerNames && !hasRunnerConfigs) || !hasActors;
 
-		const displayBackendOnboarding =
-			!isSkipped && !hasRunnerNames && !hasRunnerConfigs;
+		const displayBackendOnboarding = !hasRunnerNames && !hasRunnerConfigs;
 
 		return { displayOnboarding, displayBackendOnboarding };
 	},
