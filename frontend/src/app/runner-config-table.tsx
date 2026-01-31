@@ -40,7 +40,7 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
-import { RivetActorError } from "@/queries/types";
+import type { RivetActorError } from "@/queries/types";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;

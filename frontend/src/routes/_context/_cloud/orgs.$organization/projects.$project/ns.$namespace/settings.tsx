@@ -1,5 +1,7 @@
 import {
 	faAws,
+	faBook,
+	faExclamationTriangle,
 	faGoogleCloud,
 	faHetznerH,
 	faPlus,
@@ -38,7 +40,12 @@ import {
 	Ping,
 	Skeleton,
 } from "@/components";
-import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
+import {
+	ActorRegion,
+	useDataProvider,
+	useEngineCompatDataProvider,
+} from "@/components/actors";
+import { docsLinks } from "@/content/data";
 import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 
 export const Route = createFileRoute(
@@ -78,12 +85,79 @@ export function RouteComponent() {
 				<hr className="mb-6" />
 
 				<div className="px-4">
+					<NoRunnersAlert />
 					<Providers />
 					<Runners />
 					<Advanced />
 				</div>
 			</div>
 		</Content>
+	);
+}
+
+function NoRunnersAlert() {
+	const dataProvider = useDataProvider();
+	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
+		...dataProvider.runnerNamesQueryOptions(),
+		select: (data) => data.pages.flatMap((page) => page.names).length,
+	});
+
+	const { data: runnerConfigsCount = 0 } = useInfiniteQuery({
+		...dataProvider.runnerConfigsQueryOptions(),
+		select: (data) =>
+			data.pages.flatMap((page) => Object.keys(page.runnerConfigs))
+				.length,
+	});
+
+	const runnersCount = runnerConfigsCount + runnerNamesCount;
+
+	if (runnersCount > 0) {
+		return null;
+	}
+
+	return (
+		<div className="max-w-5xl mx-auto mb-6 px-6 @6xl:px-0 flex flex-col items-start">
+			<div className="bg-amber-950/50 text-warning-foreground rounded-md p-4 flex gap-4 border border-amber-900 w-full">
+				<div className="flex-1 flex gap-2">
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-warning-foreground text-xl mt-1"
+					/>
+					<div>
+						<H4 className="mb-2">No Providers Connected</H4>
+						<p>
+							You currently have no Providers connected. Connect a
+							Provider to start deploying and running Rivet
+							Actors.
+						</p>
+					</div>
+				</div>
+
+				<div className="flex-col flex gap-4">
+					<ProviderDropdown>
+						<Button
+							variant="ghost"
+							startIcon={<Icon icon={faPlus} />}
+						>
+							Connect Runner
+						</Button>
+					</ProviderDropdown>
+					<Button
+						startIcon={<Icon icon={faBook} />}
+						asChild
+						variant="ghost"
+					>
+						<a
+							href={docsLinks.runnersSetup}
+							target="_blank"
+							rel="noreferrer"
+						>
+							Read Docs
+						</a>
+					</Button>
+				</div>
+			</div>
+		</div>
 	);
 }
 

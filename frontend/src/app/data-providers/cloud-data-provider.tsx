@@ -673,6 +673,9 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
+		currentNamespaceQueryOptions() {
+			return parent.currentProjectNamespaceQueryOptions({ namespace });
+		},
 		currentNamespaceMetricsQueryOptions(
 			opts: Omit<
 				Parameters<typeof parent.currentProjectMetricsQueryOptions>[0],
