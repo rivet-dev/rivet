@@ -1,4 +1,4 @@
-import { Icon, faCaretDown, faCaretRight } from "@rivet-gg/icons";
+import { Icon, faCaretRight } from "@rivet-gg/icons";
 import { clsx } from "clsx";
 
 function getAccordionStyleFromVariant(variant) {
@@ -54,18 +54,10 @@ export function Accordion({
 				<div className="mr-0.5">
 					<Icon
 						icon={faCaretRight}
-						data-accordion-icon-closed
+						data-accordion-icon
 						className={clsx(
-							"h-3 w-3 text-charcole-800 opacity-75 dark:text-cream-100",
-							defaultOpen && "hidden"
-						)}
-					/>
-					<Icon
-						icon={faCaretDown}
-						data-accordion-icon-open
-						className={clsx(
-							"h-3 w-3 text-charcole-800 opacity-75 dark:text-cream-100",
-							!defaultOpen && "hidden"
+							"h-3 w-3 text-charcole-800 opacity-75 dark:text-cream-100 transition-transform duration-200",
+							defaultOpen && "rotate-90"
 						)}
 					/>
 				</div>
