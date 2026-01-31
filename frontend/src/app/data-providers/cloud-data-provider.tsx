@@ -108,13 +108,11 @@ export const createOrganizationContext = ({
 			queryFn: async ({ pageParam }) => {
 				const data = await client.namespaces.list(opts.project, {
 					org: opts.organization,
-					limit: RECORDS_PER_PAGE,
-					offset: pageParam
-						? Number.parseInt(pageParam, 10)
-						: undefined,
+					limit: 100,
+					cursor: pageParam ?? undefined,
 				});
 				return {
-					pagination: { cursor: undefined } as { cursor?: string },
+					pagination: data.pagination,
 					namespaces: data.namespaces.map((ns) => ({
 						id: ns.id,
 						name: ns.name,
@@ -123,15 +121,11 @@ export const createOrganizationContext = ({
 					})),
 				};
 			},
-			getNextPageParam: (lastPage, allPages) => {
-				return lastPage.namespaces.length >= RECORDS_PER_PAGE
-					? String(
-							allPages.reduce(
-								(prev, cur) => prev + cur.namespaces.length,
-								0,
-							),
-						)
-					: undefined;
+			getNextPageParam: (lastPage) => {
+				if (lastPage.namespaces.length < 100) {
+					return undefined;
+				}
+				return lastPage.pagination.cursor;
 			},
 			select: (data) => data.pages.flatMap((page) => page.namespaces),
 		});
@@ -143,22 +137,16 @@ export const createOrganizationContext = ({
 			queryFn: async ({ pageParam }) => {
 				const data = await client.projects.list({
 					org: opts.organization,
-					offset: pageParam
-						? Number.parseInt(pageParam, 10)
-						: undefined,
+					cursor: pageParam ?? undefined,
 					limit: RECORDS_PER_PAGE,
 				});
 				return data;
 			},
-			getNextPageParam: (lastPage, allPages) => {
-				return lastPage.projects.length >= RECORDS_PER_PAGE
-					? String(
-							allPages.reduce(
-								(prev, cur) => prev + cur.projects.length,
-								0,
-							),
-						)
-					: undefined;
+			getNextPageParam: (lastPage) => {
+				if (lastPage.projects.length < RECORDS_PER_PAGE) {
+					return undefined;
+				}
+				return lastPage.pagination.cursor;
 			},
 			select: (data) => data.pages.flatMap((page) => page.projects),
 		});
@@ -621,45 +609,15 @@ export const createNamespaceContext = ({
 
 		return response.token;
 	};
-	const engineClient = createEngineClient(cloudEnv().VITE_APP_API_URL, {
-		token,
-	});
 	return {
 		...parent,
 		...createEngineNamespaceContext({
 			...parent,
 			namespace: engineNamespaceName,
 			engineToken: token,
-			client: engineClient,
-			// Override namespacesQueryOptions to match expected pagination type
-			namespacesQueryOptions: () =>
-				infiniteQueryOptions({
-					queryKey: ["namespaces"] as QueryKey,
-					initialPageParam: undefined as string | undefined,
-					queryFn: async ({ pageParam }) => {
-						const data = await engineClient.namespaces.list({
-							limit: RECORDS_PER_PAGE,
-							cursor: pageParam ?? undefined,
-						});
-						return {
-							...data,
-							namespaces: data.namespaces.map((ns) => ({
-								id: ns.namespaceId,
-								displayName: ns.displayName,
-								name: ns.name,
-								createdAt: new Date(ns.createTs).toISOString(),
-							})),
-						};
-					},
-					getNextPageParam: (lastPage) => {
-						if (lastPage.namespaces.length < RECORDS_PER_PAGE) {
-							return undefined;
-						}
-						return lastPage.pagination.cursor;
-					},
-					select: (data) =>
-						data.pages.flatMap((page) => page.namespaces),
-				}),
+			client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
+				token,
+			}),
 		}),
 		namespaceQueryOptions() {
 			return parent.currentProjectNamespaceQueryOptions({ namespace });
