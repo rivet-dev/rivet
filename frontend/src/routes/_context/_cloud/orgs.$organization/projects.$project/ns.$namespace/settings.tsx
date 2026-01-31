@@ -1,10 +1,10 @@
 import {
 	faAws,
-	faCloud,
 	faGoogleCloud,
 	faHetznerH,
 	faPlus,
 	faQuestionCircle,
+	faNetlify,
 	faRailway,
 	faServer,
 	faVercel,
@@ -189,7 +189,7 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 					Vercel
 				</DropdownMenuItem>
 				<DropdownMenuItem
-					indicator={<Icon icon={faCloud} />}
+					indicator={<Icon icon={faNetlify} />}
 					onSelect={() =>
 						navigate({
 							to: ".",

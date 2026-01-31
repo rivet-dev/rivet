@@ -37,7 +37,7 @@ const PATHS = {
 
 const FA_PACKAGES_CONFIG = {
 	// Custom kit with Rivet-specific icons
-	"@awesome.me/kit-63db24046b": "1.0.31",
+	"@awesome.me/kit-63db24046b": "1.0.32",
 	// Pro packages (regular and solid styles)
 	"@fortawesome/pro-regular-svg-icons": "6.6.0",
 	"@fortawesome/pro-solid-svg-icons": "6.6.0",
