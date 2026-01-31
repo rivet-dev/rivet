@@ -49,10 +49,16 @@ export class Registry<A extends RegistryActors> {
 		this.#config = config;
 
 		// Auto-prepare on next tick (gives time for sync config modification)
-		setTimeout(() => {
-			// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-			this.#ensureRuntime();
-		}, 0);
+		// Skip for Cloudflare Workers since setTimeout is not allowed in global scope
+		const isCloudflareWorkers =
+			typeof navigator !== "undefined" &&
+			navigator.userAgent === "Cloudflare-Workers";
+		if (!isCloudflareWorkers) {
+			setTimeout(() => {
+				// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
+				this.#ensureRuntime();
+			}, 0);
+		}
 	}
 
 	/** Creates runtime if not already created. Idempotent. */
