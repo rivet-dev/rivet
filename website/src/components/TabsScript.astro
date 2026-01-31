@@ -198,23 +198,20 @@
 
 				const isOpen = container.getAttribute('data-accordion-open') === 'true';
 				const content = container.querySelector('[data-accordion-content]');
-				const iconClosed = container.querySelector('[data-accordion-icon-closed]');
-				const iconOpen = container.querySelector('[data-accordion-icon-open]');
+				const icon = container.querySelector('[data-accordion-icon]');
 
 				if (isOpen) {
 					// Close
 					container.setAttribute('data-accordion-open', 'false');
 					accordionTrigger.setAttribute('aria-expanded', 'false');
 					content?.classList.add('hidden');
-					iconClosed?.classList.remove('hidden');
-					iconOpen?.classList.add('hidden');
+					icon?.classList.remove('rotate-90');
 				} else {
 					// Open
 					container.setAttribute('data-accordion-open', 'true');
 					accordionTrigger.setAttribute('aria-expanded', 'true');
 					content?.classList.remove('hidden');
-					iconClosed?.classList.add('hidden');
-					iconOpen?.classList.remove('hidden');
+					icon?.classList.add('rotate-90');
 				}
 			}
 		});
