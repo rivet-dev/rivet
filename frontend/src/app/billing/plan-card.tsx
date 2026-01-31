@@ -62,13 +62,9 @@ function PlanCard({
 						variant="secondary"
 						className="w-full mt-4"
 						{...buttonProps}
-					>
-						Current Plan
-					</Button>
+					/>
 				) : (
-					<Button className="w-full mt-4" {...buttonProps}>
-						{custom ? "Contact Us" : "Upgrade"}
-					</Button>
+					<Button className="w-full mt-4" {...buttonProps} />
 				)
 			) : null}
 		</div>
@@ -158,6 +154,10 @@ export const EnterprisePlan = (props: Partial<PlanCardProps>) => {
 				{ icon: faCheck, label: "Volume Pricing" },
 			]}
 			{...props}
+			buttonProps={{
+				...props.buttonProps,
+				children: "Contact Us",
+			}}
 		/>
 	);
 };
