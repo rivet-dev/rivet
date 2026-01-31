@@ -1,5 +1,16 @@
 # CLAUDE.md
 
+## Important Domain Information
+
+**ALWAYS use `rivet.dev` - NEVER use `rivet.gg`**
+
+- API endpoint: `https://api.rivet.dev`
+- Cloud API endpoint: `https://cloud-api.rivet.dev`
+- Dashboard: `https://hub.rivet.dev`
+- Documentation: `https://rivet.dev/docs`
+
+The `rivet.gg` domain is deprecated and should never be used in this codebase.
+
 ## Commands
 
 ### Build Commands

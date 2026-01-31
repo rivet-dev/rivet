@@ -86,24 +86,105 @@ For other frameworks, consider deploying to [Railway](/docs/connect/railway), [K
 </Step>
 <Step title="Deploy to Vercel">
 
-1. Connect your GitHub project to Vercel
-2. Select your repository containing your RivetKit app
-3. Vercel will deploy your app
-
-More information on deployments are available in [Vercel's docs](https://vercel.com/docs/deployments).
+1. Connect your GitHub repository to Vercel
+2. Vercel will deploy your app
 
 </Step>
-<Step title="Connect and Verify">
+<Step title="Configure GitHub Action">
 
-1. Visit the [Rivet dashboard](https://dashboard.rivet.dev)
-2. Navigate to _Connect > Vercel_
-3. Skip to the _Deploy to Vercel_ step
-4. Input your deployed Vercel site URL
-	- e.g. `https://my-app.vercel.app/api/rivet`
-5. Once it shows as successfully connected, click _Done_
+Add the [Rivet Preview Action](https://github.com/rivet-dev/preview-namespace-action) to automatically configure Rivet for each deployment.
 
-Your Vercel Functions deployment is now connected to Rivet.
+1. Add these secrets to your GitHub repository:
+   - `RIVET_CLOUD_TOKEN` - Get from [Rivet Dashboard](https://dashboard.rivet.dev) → Settings → Advanced → Manual Client Configuration
+   - `VERCEL_TOKEN` - Get from [Vercel Account Settings](https://vercel.com/account/tokens)
+
+2. Create `.github/workflows/rivet-preview.yml`:
+
+```yaml
+name: Rivet Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+concurrency:
+  group: rivet-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rivet-preview:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: rivet-dev/preview-namespace-action@v1
+        with:
+          platform: vercel
+          rivet-token: ${{ secrets.RIVET_CLOUD_TOKEN }}
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+```
+
+The action creates isolated Rivet namespaces for each PR and automatically configures the `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` environment variables on Vercel.
 
 </Step>
 
 </Steps>
+
+## Troubleshooting
+
+### ENOENT: no such file or directory (rivetkit state)
+
+```
+Error: ENOENT: no such file or directory, mkdir '.../rivetkit/.../state'
+```
+
+**Cause:** The `RIVET_ENDPOINT` environment variable is not configured. RivetKit falls back to the file system driver, which fails in Vercel's read-only serverless environment.
+
+**Solution:** Ensure `RIVET_ENDPOINT` is set with your Rivet endpoint using the URL auth format:
+
+```
+RIVET_ENDPOINT=https://namespace:token@api.rivet.dev
+```
+
+If using the [preview-namespace-action](https://github.com/rivet-dev/preview-namespace-action), this is configured automatically.
+
+### Metadata endpoint missing clientEndpoint
+
+The `/api/rivet/metadata` endpoint returns data but `clientEndpoint`, `clientNamespace`, and `clientToken` are missing.
+
+**Cause:** The `RIVET_PUBLIC_ENDPOINT` environment variable is not configured. This tells the metadata endpoint what connection info to provide to clients.
+
+**Solution:** Set `RIVET_PUBLIC_ENDPOINT` with the publishable token (for client access):
+
+```
+RIVET_PUBLIC_ENDPOINT=https://namespace:publishableToken@api.rivet.dev
+```
+
+If using the [preview-namespace-action](https://github.com/rivet-dev/preview-namespace-action), this is configured automatically.
+
+### 401 Authentication Required from Rivet Engine
+
+The Rivet engine fails to connect to your Vercel deployment with a 401 error mentioning "Authentication Required".
+
+**Cause:** Vercel Deployment Protection is blocking requests from the Rivet engine. The action couldn't create a bypass secret, likely due to hitting Vercel's limit of 10 bypass secrets per account.
+
+**Solution:**
+1. Go to your [Vercel Dashboard](https://vercel.com/dashboard)
+2. Check other projects for unused bypass secrets and delete them
+3. Or manually create a bypass secret for this project and pass it via the `runner-config` input:
+
+```yaml
+- uses: rivet-dev/preview-namespace-action@v1
+  with:
+    platform: vercel
+    rivet-token: ${{ secrets.RIVET_CLOUD_TOKEN }}
+    vercel-token: ${{ secrets.VERCEL_TOKEN }}
+    runner-config: '{"headers": {"x-vercel-protection-bypass": "your-bypass-secret"}}'
+```
+
+## Support
+
+- [Discord](https://rivet.dev/discord)
+- [GitHub Issues](https://github.com/rivet-dev/rivet/issues)
