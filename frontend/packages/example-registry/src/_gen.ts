@@ -61,22 +61,6 @@ export const templates: Template[] = [
     }
   },
   {
-    "name": "hello-world-netlify",
-    "displayName": "Hello World - Netlify",
-    "description": "A minimal example demonstrating RivetKit with a real-time counter shared across multiple clients, deployed on Netlify Functions.",
-    "technologies": [
-      "rivet",
-      "react",
-      "typescript"
-    ],
-    "tags": [
-      "starter"
-    ],
-    "noFrontend": false,
-    "priority": 100,
-    "providers": {}
-  },
-  {
     "name": "chat-room",
     "displayName": "Chat Room",
     "description": "Example project demonstrating real-time messaging and actor state management.",
@@ -343,7 +327,12 @@ export const templates: Template[] = [
       "database"
     ],
     "noFrontend": true,
-    "providers": {}
+    "providers": {
+      "vercel": {
+        "name": "drizzle-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fdrizzle-vercel&project-name=drizzle-vercel"
+      }
+    }
   },
   {
     "name": "elysia",
