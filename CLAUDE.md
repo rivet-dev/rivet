@@ -63,6 +63,7 @@ docker-compose up -d
 ### Git Commands
 ```bash
 # When committing changes, use Graphite CLI with conventional commits
+# Always use a single-line commit message, no co-author
 gt c -m "chore(my-pkg): foo bar"
 ```
 
