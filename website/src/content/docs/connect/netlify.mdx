@@ -21,6 +21,72 @@ Make sure your project is configured correctly for Netlify deployment.
 
 <Tabs>
 
+<Tab title="Hono">
+
+Your Hono project needs:
+
+1. Install the Netlify Functions package:
+
+```bash
+npm install @netlify/functions
+```
+
+2. A `netlify.toml` file with the functions and redirect configuration:
+
+```toml {{"title":"netlify.toml"}}
+[build]
+  command = "npm run build"
+  publish = "public"
+  functions = "functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/rivet/*"
+  to = "/.netlify/functions/rivet"
+  status = 200
+```
+
+3. A function handler that forwards requests to your Hono app:
+
+```ts {{"title":"functions/rivet.ts"}} @nocheck
+import type { Handler } from "@netlify/functions";
+import app from "../src/server.ts";
+
+export const handler: Handler = async (event) => {
+  const { httpMethod, path, queryStringParameters, headers, body } = event;
+
+  const qs = queryStringParameters
+    ? "?" + new URLSearchParams(queryStringParameters).toString()
+    : "";
+  const url = `https://${headers.host}${path}${qs}`;
+
+  const request = new Request(url, {
+    method: httpMethod,
+    headers: headers as HeadersInit,
+    body: body ? body : undefined,
+  });
+
+  const response = await app.fetch(request);
+
+  const responseHeaders: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value;
+  });
+
+  return {
+    statusCode: response.status,
+    headers: responseHeaders,
+    body: await response.text(),
+  };
+};
+```
+
+See the [Hello World template](/templates/hello-world) for a complete example.
+
+</Tab>
+
 <Tab title="Next.js">
 
 Your Next.js project should have the following structure:
@@ -51,93 +117,16 @@ See the [Next.js quickstart](/docs/actors/quickstart/next-js) to get started wit
 
 </Tab>
 
-<Tab title="Netlify Functions">
-
-Your Netlify Functions project needs:
-
-1. A `netlify.toml` file with the functions configuration:
-
-```toml {{"title":"netlify.toml"}}
-[build]
-  functions = "functions"
-  publish = "dist"
-
-[functions]
-  node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/api/rivet/*"
-  to = "/.netlify/functions/rivet"
-  status = 200
-```
-
-2. Your function handler in the `functions/` directory:
-
-```ts {{"title":"functions/rivet.ts"}} @nocheck
-import type { Handler } from "@netlify/functions";
-import { registry } from "../src/actors.ts";
-
-export const handler: Handler = async (event, context) => {
-  const { httpMethod, path, queryStringParameters, headers, body } = event;
-  
-  // Convert Netlify event to standard Request
-  const url = `https://${headers.host}${path}${
-    queryStringParameters 
-      ? '?' + new URLSearchParams(queryStringParameters).toString() 
-      : ''
-  }`;
-  
-  const request = new Request(url, {
-    method: httpMethod,
-    headers: headers as HeadersInit,
-    body: body ? body : undefined,
-  });
-
-  const response = await registry.handler(request);
-  
-  // Convert Response to Netlify format
-  const responseHeaders: Record<string, string> = {};
-  response.headers.forEach((value, key) => {
-    responseHeaders[key] = value;
-  });
-
-  return {
-    statusCode: response.status,
-    headers: responseHeaders,
-    body: await response.text(),
-  };
-};
-```
-
-3. Use `.ts` file extensions in imports and configure your `tsconfig.json`:
-
-```json {{"title":"tsconfig.json"}}
-{
-  "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
-    "target": "ES2020",
-    "lib": ["ES2020"],
-    "module": "ESNext",
-    "moduleResolution": "bundler"
-  }
-}
-```
-
-See the [Hello World example](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world) for a complete starting point.
-
-</Tab>
-
 <Tab title="Other">
 
 Netlify supports many frameworks through build plugins and adapters:
 
 - **Astro**: Use `@astrojs/netlify` adapter
-- **SvelteKit**: Use `@sveltejs/adapter-netlify` 
+- **SvelteKit**: Use `@sveltejs/adapter-netlify`
 - **Nuxt**: Use `@nuxtjs/netlify-builder`
 - **Remix**: Use `@netlify/remix-adapter`
 
-For frameworks not listed above, you can usually deploy using Netlify Functions with the patterns shown in the "Netlify Functions" tab.
+For frameworks not listed above, you can usually deploy using Netlify Functions with the patterns shown in the "Hono" tab.
 
 </Tab>
 
@@ -152,9 +141,7 @@ For frameworks not listed above, you can usually deploy using Netlify Functions 
    - Connect your Git provider and select your repository
 
 2. Configure build settings:
-   - Build command: Usually auto-detected based on your framework
-   - Publish directory: Usually auto-detected (e.g., `dist`, `build`, `.next`)
-   - Functions directory: Set to `functions` if using Netlify Functions
+   - Build command and publish directory are configured in your `netlify.toml`
 
 3. Deploy your site:
    - Netlify will automatically build and deploy your app
@@ -169,7 +156,6 @@ More information on deployments is available in [Netlify's docs](https://docs.ne
 2. Add the following environment variables (provided after creating your project in the Rivet dashboard):
    - `RIVET_ENDPOINT`: Your Rivet backend endpoint
    - `RIVET_PUBLIC_ENDPOINT`: Your frontend-safe Rivet endpoint
-   - `RIVET_TOKEN`: Your Rivet authentication token
 
 3. Redeploy your site to apply the environment variables
 
@@ -185,7 +171,7 @@ See [Netlify's environment variables docs](https://docs.netlify.com/configure-bu
 	- e.g. `https://amazing-app-123456.netlify.app/api/rivet`
 5. Once it shows as successfully connected, click _Done_
 
-Your Netlify Functions deployment is now connected to Rivet.
+Your Netlify deployment is now connected to Rivet.
 
 </Step>
 

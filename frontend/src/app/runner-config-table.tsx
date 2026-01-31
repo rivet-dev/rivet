@@ -1,12 +1,12 @@
 import {
 	faAws,
-	faCloud,
 	faCloudflare,
 	faEllipsisVertical,
 	faGoogleCloud,
 	faHetznerH,
 	faNextjs,
 	faPencil,
+	faNetlify,
 	faRailway,
 	faTrash,
 	faTriangleExclamation,
@@ -395,7 +395,7 @@ function Provider({ metadata }: { metadata: unknown }) {
 		if (metadata.provider === "netlify") {
 			return (
 				<div className="whitespace-nowrap">
-					<Icon icon={faCloud} className="mr-1" /> Netlify
+					<Icon icon={faNetlify} className="mr-1" /> Netlify
 				</div>
 			);
 		}

@@ -1,4 +1,4 @@
-import { faCloud, Icon } from "@rivet-gg/icons";
+import { faNetlify, Icon } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
 import {
 	useMutation,
@@ -39,7 +39,7 @@ export default function ConnectNetlifyFrameContent({
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
-						Add <Icon icon={faCloud} className="ml-0.5" />
+						Add <Icon icon={faNetlify} className="ml-0.5" />
 						Netlify
 					</div>
 				</Frame.Title>

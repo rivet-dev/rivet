@@ -8,9 +8,14 @@ Use this skill when deploying a RivetKit app to Netlify or connecting a Netlify 
    ```bash
    npx giget@latest gh:rivet-dev/rivet/examples/hello-world hello-world --install
    ```
-2. Prepare your project for Netlify deployment.
-3. Deploy to Netlify and set the required environment variables.
-4. Connect your Netlify site to Rivet via the dashboard.
+2. Install the Netlify Functions package:
+   ```bash
+   npm install @netlify/functions
+   ```
+3. Add a `netlify.toml` with build, functions, and redirect configuration. Set `publish` to match your frontend build output directory (e.g. `public` for the hello-world example).
+4. Add a `functions/rivet.ts` handler that converts Netlify events to standard `Request` objects and forwards them to your Hono app via `app.fetch(request)`.
+5. Set environment variables (`RIVET_ENDPOINT`, `RIVET_PUBLIC_ENDPOINT`) in the Netlify dashboard.
+6. Deploy to Netlify and connect your site via the Rivet dashboard.
 
 <!-- CONTENT -->
 

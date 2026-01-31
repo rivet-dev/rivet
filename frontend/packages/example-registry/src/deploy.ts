@@ -1,10 +1,10 @@
 import {
     faAws,
-    faCloud,
     faCloudflare,
     faGoogleCloud,
     faHetznerH,
     faKubernetes,
+    faNetlify,
     faRailway,
     faRocket,
     faServer,
@@ -40,7 +40,7 @@ export const deployOptions = [
 		href: "/docs/connect/netlify",
 		description:
 			"Deploy RivetKit apps to Netlify Functions with JAMstack",
-		icon: faCloud as any,
+		icon: faNetlify as any,
 		badge: "1-Click Deploy",
 	},
 	{

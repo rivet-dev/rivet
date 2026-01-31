@@ -23946,6 +23946,12 @@
         ]
       },
       {
+        "icon": "faNetlify",
+        "aliases": [
+          "faNetlify"
+        ]
+      },
+      {
         "icon": "faVercel",
         "aliases": [
           "faVercel"
