@@ -8,6 +8,7 @@ interface Props {
 	title: string;
 	description?: string;
 	canonicalUrl?: string;
+	ogImage?: string;
 	act?: string;
 	subtitle?: string;
 	tableOfContents?: Array<{ title: string; id: string; children: Array<{ title: string; id: string }> }>;
@@ -15,13 +16,13 @@ interface Props {
 	scene?: string;
 }
 
-const { title, description, canonicalUrl, act, subtitle, tableOfContents = [], isIndex = false, scene = '' } = Astro.props;
+const { title, description, canonicalUrl, ogImage, act, subtitle, tableOfContents = [], isIndex = false, scene = '' } = Astro.props;
 
 // Extract page title from title prop (remove " - Rivet" suffix if present)
 const pageTitle = title.replace(/ - Rivet$/, '');
 ---
 
-<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage}>
 	<Header active="learn" variant="full-width" learnMode client:load />
 
 	<div class="learn-container">
