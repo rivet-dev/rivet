@@ -30,6 +30,7 @@ import {
 import { useCloudDataProvider } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
 
 export function ContextSwitcher({ inline }: { inline?: boolean }) {
 	const match = useContextSwitcherMatch();
@@ -304,33 +305,40 @@ function ProjectList({
 							</CommandEmpty>
 						) : null}
 
-						{data?.map((project, index) => {
-							const Component =
-								index < 5
-									? PrefetchedProjectListItem
-									: ProjectListItem;
-							return (
-								<Component
-									key={project.id}
-									{...project}
-									onHover={() => onHover?.(project.name)}
-									onSelect={() => {
-										onClose?.();
-										clerk.setActive({
-											organization,
-										});
-										return navigate({
-											to: "/orgs/$organization/projects/$project",
-											params: {
-												organization: organization,
-												project: project.name,
-											},
-											search: {},
-										});
-									}}
-								/>
-							);
-						})}
+						{data
+							?.sort((a, b) => {
+								if (a.name === project) return -1;
+								if (b.name === project) return 1;
+								return 0;
+							})
+							.map((project, index) => {
+								const Component =
+									index < 5
+										? PrefetchedProjectListItem
+										: ProjectListItem;
+								return (
+									<Component
+										key={project.id}
+										{...project}
+										onHover={() => onHover?.(project.name)}
+										organization={organization}
+										onSelect={() => {
+											onClose?.();
+											clerk.setActive({
+												organization,
+											});
+											return navigate({
+												to: "/orgs/$organization/projects/$project",
+												params: {
+													organization: organization,
+													project: project.name,
+												},
+												search: {},
+											});
+										}}
+									/>
+								);
+							})}
 						{isLoading || isFetchingNextPage ? (
 							<>
 								<ListItemSkeleton />
@@ -375,7 +383,7 @@ function PrefetchedProjectListItem({
 	name,
 	displayName,
 	...props
-}: Rivet.Project) {
+}: Rivet.Project & { organization: string }) {
 	usePrefetchInfiniteQuery({
 		...useCloudDataProvider().currentOrgProjectNamespacesQueryOptions({
 			project: name,
@@ -396,11 +404,13 @@ function ProjectListItem({
 	id,
 	name,
 	displayName,
+	organization,
 	onHover,
 	onSelect,
 }: Rivet.Project & {
 	onHover?: () => void;
 	onSelect?: () => void;
+	organization: string;
 }) {
 	return (
 		<SafeHover key={id} offset={40}>
@@ -412,7 +422,11 @@ function ProjectListItem({
 				onMouseEnter={onHover}
 				onFocus={onHover}
 			>
-				<span className="truncate w-full">{displayName}</span>
+				<span className="truncate flex-1">{displayName}</span>
+				<LazyBillingPlanBadge
+					project={name}
+					organization={organization}
+				/>
 			</CommandItem>
 		</SafeHover>
 	);
@@ -483,36 +497,42 @@ function NamespaceList({
 							</CommandEmpty>
 						) : null}
 
-						{data?.map((namespace) => (
-							<SafeHover key={namespace.id} offset={40}>
-								<CommandItem
-									value={namespace.name}
-									keywords={[
-										namespace.displayName,
-										namespace.name,
-									]}
-									className="static w-full"
-									onSelect={() => {
-										onClose?.();
-										clerk.setActive({
-											organization,
-										});
-										return navigate({
-											to: "/orgs/$organization/projects/$project/ns/$namespace",
-											params: {
-												organization: organization,
-												project: project,
-												namespace: namespace.name,
-											},
-										});
-									}}
-								>
-									<span className="truncate w-full">
-										{namespace.displayName}
-									</span>
-								</CommandItem>
-							</SafeHover>
-						))}
+						{data
+							?.sort((a, b) => {
+								if (a.name === namespace) return -1;
+								if (b.name === namespace) return 1;
+								return 0;
+							})
+							.map((namespace) => (
+								<SafeHover key={namespace.id} offset={40}>
+									<CommandItem
+										value={namespace.name}
+										keywords={[
+											namespace.displayName,
+											namespace.name,
+										]}
+										className="static w-full"
+										onSelect={() => {
+											onClose?.();
+											clerk.setActive({
+												organization,
+											});
+											return navigate({
+												to: "/orgs/$organization/projects/$project/ns/$namespace",
+												params: {
+													organization: organization,
+													project: project,
+													namespace: namespace.name,
+												},
+											});
+										}}
+									>
+										<span className="truncate w-full">
+											{namespace.displayName}
+										</span>
+									</CommandItem>
+								</SafeHover>
+							))}
 						{isLoading || isFetchingNextPage ? (
 							<>
 								<ListItemSkeleton />

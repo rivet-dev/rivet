@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Skeleton } from "@/components";
+import { Badge, cn, Skeleton } from "@/components";
 import {
 	useCloudDataProvider,
 	useCloudProjectDataProvider,
@@ -9,8 +9,17 @@ import { VisibilitySensor } from "@/components/visibility-sensor";
 
 const planLabels: Record<string, string> = {
 	free: "Free",
+	team: "Team",
 	pro: "Pro",
 	enterprise: "Enterprise",
+};
+
+const getPlanVariant = (
+	plan: string | undefined,
+): "secondary" | "premium" | "premium-blue" => {
+	if (plan === "team") return "premium-blue";
+	if (plan === "pro" || plan === "enterprise") return "premium";
+	return "secondary";
 };
 
 export function BillingPlanBadge() {
@@ -22,9 +31,15 @@ export function BillingPlanBadge() {
 	if (isLoading) {
 		return <SkeletonBadge />;
 	}
+
+	const plan = data?.billing.activePlan || "free";
+
 	return (
-		<Badge variant="secondary">
-			{planLabels[data?.billing.activePlan || "free"]}
+		<Badge
+			variant={getPlanVariant(plan)}
+			className="min-w-12 justify-center my-px"
+		>
+			{planLabels[plan]}
 		</Badge>
 	);
 }
@@ -32,9 +47,11 @@ export function BillingPlanBadge() {
 export function LazyBillingPlanBadge({
 	project,
 	organization,
+	className,
 }: {
 	project: string;
 	organization: string;
+	className?: string;
 }) {
 	const [isVisible, setIsVisible] = useState(false);
 	const dataProvider = useCloudDataProvider();
@@ -43,18 +60,22 @@ export function LazyBillingPlanBadge({
 		...dataProvider.billingDetailsQueryOptions({ project, organization }),
 	});
 
-	if (isLoading) {
-		return (
-			<>
-				<SkeletonBadge />
-				<VisibilitySensor onChange={() => setIsVisible(true)} />
-			</>
-		);
-	}
+	const plan = data?.billing.activePlan || "free";
+
 	return (
-		<Badge variant="secondary">
-			{planLabels[data?.billing.activePlan || "free"]}
-		</Badge>
+		<>
+			{isLoading || !isVisible ? (
+				<SkeletonBadge />
+			) : (
+				<Badge
+					variant={getPlanVariant(plan)}
+					className={cn("min-w-12 justify-center my-px", className)}
+				>
+					{planLabels[plan]}
+				</Badge>
+			)}
+			<VisibilitySensor onChange={() => setIsVisible(true)} />
+		</>
 	);
 }
 
