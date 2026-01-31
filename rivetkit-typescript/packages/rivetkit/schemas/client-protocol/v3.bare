@@ -2,7 +2,6 @@
 type Init struct {
 	actorId: str
 	connectionId: str
-	connectionToken: str
 }
 
 type Error struct {
@@ -65,6 +64,17 @@ type HttpActionRequest struct {
 
 type HttpActionResponse struct {
 	output: data
+}
+
+# MARK: HTTP Queue
+
+type HttpQueueSendRequest struct {
+	name: str
+	body: data
+}
+
+type HttpQueueSendResponse struct {
+	ok: bool
 }
 
 # MARK: HTTP Error
