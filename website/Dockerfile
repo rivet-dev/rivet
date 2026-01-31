@@ -45,9 +45,6 @@ ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 RUN --mount=type=cache,id=s/3e31e381-166e-4a85-983a-a49830a88b96-/pnpm/store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Re-install Playwright browsers for the correct version (pnpm may install a different version)
-RUN npx -y playwright install chromium
-
 # Build arguments for PUBLIC_* environment variables
 ARG PUBLIC_SITE_URL="https://rivet.gg"
 ARG PUBLIC_POSTHOG_KEY=""
@@ -63,6 +60,9 @@ ENV PUBLIC_TYPESENSE_HOST=${PUBLIC_TYPESENSE_HOST}
 ENV PUBLIC_TYPESENSE_API_KEY=${PUBLIC_TYPESENSE_API_KEY}
 
 WORKDIR /app/website
+
+# Re-install Playwright browsers for the correct version (pnpm may install a different version)
+RUN pnpm exec playwright install chromium
 
 # Build the website (static export to 'dist' directory)
 RUN pnpm run build
