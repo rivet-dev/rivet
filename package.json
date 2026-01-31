@@ -45,7 +45,7 @@
 		"overrides": {
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
-			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@632b0c3",
+			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff",
 			"@codemirror/state": "^6.5.2"
 		}
 	}
