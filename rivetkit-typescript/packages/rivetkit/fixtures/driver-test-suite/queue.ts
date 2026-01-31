@@ -57,6 +57,59 @@ export const queueActor = actor({
 			await c.queue.next("abort", { timeout: 10_000 });
 			return true;
 		},
+		receiveAndComplete: async (c, name: string) => {
+			const message = await c.queue.next(name, { wait: true });
+			if (!message) {
+				return null;
+			}
+			await message.complete({ echo: message.body });
+			return { name: message.name, body: message.body };
+		},
+		receiveAndCompleteTwice: async (c, name: string) => {
+			const message = await c.queue.next(name, { wait: true });
+			if (!message) {
+				return null;
+			}
+			await message.complete({ ok: true });
+			try {
+				await message.complete({ ok: false });
+				return { ok: false };
+			} catch (error) {
+				const actorError = error as { group?: string; code?: string };
+				return { group: actorError.group, code: actorError.code };
+			}
+		},
+		receiveWithoutWaitComplete: async (c, name: string) => {
+			const message = await c.queue.next(name);
+			if (!message) {
+				return null;
+			}
+			try {
+				await message.complete();
+				return { ok: false };
+			} catch (error) {
+				const actorError = error as { group?: string; code?: string };
+				return { group: actorError.group, code: actorError.code };
+			}
+		},
+		receiveWhilePending: async (c, name: string) => {
+			const message = await c.queue.next(name, { wait: true });
+			if (!message) {
+				return null;
+			}
+			let errorPayload: { group?: string; code?: string } | undefined;
+			try {
+				await c.queue.next(name);
+			} catch (error) {
+				const actorError = error as { group?: string; code?: string };
+				errorPayload = {
+					group: actorError.group,
+					code: actorError.code,
+				};
+			}
+			await message.complete({ ok: true });
+			return errorPayload ?? { ok: false };
+		},
 	},
 });
 
