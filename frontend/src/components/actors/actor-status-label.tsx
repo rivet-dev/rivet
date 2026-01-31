@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
 import { isObject } from "lodash";
 import { match, P } from "ts-pattern";
+import type { RivetActorError } from "@/queries/types";
 import { CodePreview } from "../code-preview/code-preview";
 import { RelativeTime } from "../relative-time";
 import {
@@ -14,7 +15,6 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Code } from "../ui/typography";
 import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
-import { RivetActorError } from "@/queries/types";
 
 export const ACTOR_STATUS_LABEL_MAP = {
 	unknown: "Unknown",

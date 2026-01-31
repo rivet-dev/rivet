@@ -206,8 +206,13 @@ export function UsageCard({
 											<motion.div
 												className="absolute h-1.5 rounded-l-full bg-primary"
 												initial={{ width: 0 }}
-												animate={{ width: `${currentPercent}%` }}
-												transition={{ duration: 1, ease: "circIn" }}
+												animate={{
+													width: `${currentPercent}%`,
+												}}
+												transition={{
+													duration: 1,
+													ease: "circIn",
+												}}
 											/>
 										</div>
 

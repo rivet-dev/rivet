@@ -1,6 +1,6 @@
 import { Slot, Slottable } from "@radix-ui/react-slot";
 import { faChevronRight, Icon, type IconProp } from "@rivet-gg/icons";
-import { cloneElement, type ComponentProps } from "react";
+import { type ComponentProps, cloneElement } from "react";
 import { cn } from "./lib/utils";
 
 interface ExternalLinkCardProps {
@@ -49,13 +49,11 @@ export function ExternalCard({
 	icon,
 	title,
 	description = "Opens in a new tab",
-}: Omit<ExternalLinkCardProps, "href"> ) {
-	
+}: Omit<ExternalLinkCardProps, "href">) {
 	return (
-				<div className="border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer">
-					<Card icon={icon} title={title} description={description} />
-				</div>
-		
+		<div className="border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer">
+			<Card icon={icon} title={title} description={description} />
+		</div>
 	);
 }
 

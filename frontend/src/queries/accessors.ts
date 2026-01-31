@@ -1,5 +1,5 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 import { getConfig } from "@/components";
 import {

@@ -1,11 +1,14 @@
 import {
 	faActors,
+	faBook,
+	faExclamationTriangle,
 	faMagnifyingGlass,
 	faNextjs,
 	faQuestionSquare,
 	faReact,
 	faSidebar,
 	faSidebarFlip,
+	faTriangleExclamation,
 	faTs,
 	Icon,
 } from "@rivet-gg/icons";
@@ -13,7 +16,7 @@ import {
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import { Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { Suspense, useCallback } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
@@ -21,6 +24,7 @@ import {
 	Button,
 	FilterCreator,
 	FiltersDisplay,
+	H4,
 	ls,
 	type OnFiltersChange,
 	ScrollArea,
@@ -208,6 +212,26 @@ export function ListSkeleton() {
 	);
 }
 
+const useRunnerConfigs = () => {
+	if (__APP_TYPE__ === "inspector") {
+		return 1;
+	}
+	const dataProvider = useDataProvider();
+	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
+		...dataProvider.runnerNamesQueryOptions(),
+		select: (data) => data.pages.flatMap((page) => page.names).length,
+	});
+
+	const { data: runnerConfigsCount = 0 } = useInfiniteQuery({
+		...dataProvider.runnerConfigsQueryOptions(),
+		select: (data) =>
+			data.pages.flatMap((page) => Object.keys(page.runnerConfigs))
+				.length,
+	});
+
+	return runnerConfigsCount + runnerNamesCount;
+};
+
 function EmptyState({ count }: { count: number }) {
 	const navigate = useNavigate();
 	const names = useSearch({
@@ -217,9 +241,13 @@ function EmptyState({ count }: { count: number }) {
 	const { copy } = useActorsView();
 	const { remove, pick } = useActorsFilters();
 
+	const dataProvider = useDataProvider();
+
 	const { data: availableNamesCount = 0 } = useInfiniteQuery(
-		useDataProvider().buildsCountQueryOptions(),
+		dataProvider.buildsCountQueryOptions(),
 	);
+
+	const runnerConfigsCount = useRunnerConfigs();
 
 	const filtersCount = useSearch({
 		from: "/_context",
@@ -251,64 +279,125 @@ function EmptyState({ count }: { count: number }) {
 				</div>
 			) : count === 0 ? (
 				filtersCount === 0 ? (
-					<div className="gap-2 flex flex-col items-center justify-center">
-						<Icon icon={faActors} className="text-4xl mt-8" />
-						<SmallText className="text-center my-0">
-							{copy.noActorsFound}
-						</SmallText>
-						<div className="mt-4 flex flex-col gap-2 items-center justify-center">
-							<CreateActorButton variant="secondary" />{" "}
-							<SmallText className="mt-4 mb-1">
-								Use one of the quick start guides to get
-								started.
-							</SmallText>
-							<div className="flex gap-2">
-								<Button
-									className="flex-1"
-									variant="outline"
-									startIcon={<Icon icon={faTs} />}
-									asChild
-								>
-									<a
-										href={docsLinks.gettingStarted.js}
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										JavaScript
-									</a>
-								</Button>
-								<Button
-									className="flex-1"
-									variant="outline"
-									startIcon={<Icon icon={faReact} />}
-									asChild
-								>
-									<a
-										href={docsLinks.gettingStarted.react}
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										React
-									</a>
-								</Button>
+					runnerConfigsCount === 0 ? (
+						<div className="bg-amber-950/50 text-warning-foreground rounded-md p-4 mx-4 flex gap-4 border border-amber-900">
+							<div className="flex-1 flex gap-2">
+								<Icon
+									icon={faExclamationTriangle}
+									className="text-warning-foreground text-xl mt-1"
+								/>
+								<div>
+									<H4 className="mb-2">
+										No Providers Connected
+									</H4>
+									<p>
+										You currently have no Providers
+										connected. Connect a Provider to start
+										deploying and running Rivet Actors.
+									</p>
+								</div>
+							</div>
 
+							<div className="flex-col flex gap-4">
+								{__APP_TYPE__ === "cloud" ? (
+									<Button asChild variant="outline">
+										<Link
+											to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+											from="/orgs/$organization/projects/$project/ns/$namespace"
+										>
+											Go to Settings
+										</Link>
+									</Button>
+								) : null}
+								{__APP_TYPE__ === "engine" ? (
+									<Button asChild variant="secondary">
+										<Link
+											to="/ns/$namespace"
+											from="/ns/$namespace/connect"
+										>
+											Go to Settings
+										</Link>
+									</Button>
+								) : null}
 								<Button
-									className="flex-1"
-									variant="outline"
-									startIcon={<Icon icon={faNextjs} />}
+									startIcon={<Icon icon={faBook} />}
 									asChild
+									variant="ghost"
 								>
 									<a
-										href={docsLinks.gettingStarted.nextjs}
+										href={docsLinks.runnersSetup}
 										target="_blank"
-										rel="noopener noreferrer"
+										rel="noreferrer"
 									>
-										Next.js
+										Read Docs
 									</a>
 								</Button>
 							</div>
 						</div>
-					</div>
+					) : (
+						<div className="gap-2 flex flex-col items-center justify-center">
+							<Icon icon={faActors} className="text-4xl mt-8" />
+							<SmallText className="text-center my-0">
+								{copy.noActorsFound}
+							</SmallText>
+							<div className="mt-4 flex flex-col gap-2 items-center justify-center">
+								<CreateActorButton variant="secondary" />{" "}
+								<SmallText className="mt-4 mb-1">
+									Use one of the quick start guides to get
+									started.
+								</SmallText>
+								<div className="flex gap-2">
+									<Button
+										className="flex-1"
+										variant="outline"
+										startIcon={<Icon icon={faTs} />}
+										asChild
+									>
+										<a
+											href={docsLinks.gettingStarted.js}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											JavaScript
+										</a>
+									</Button>
+									<Button
+										className="flex-1"
+										variant="outline"
+										startIcon={<Icon icon={faReact} />}
+										asChild
+									>
+										<a
+											href={
+												docsLinks.gettingStarted.react
+											}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											React
+										</a>
+									</Button>
+
+									<Button
+										className="flex-1"
+										variant="outline"
+										startIcon={<Icon icon={faNextjs} />}
+										asChild
+									>
+										<a
+											href={
+												docsLinks.gettingStarted.nextjs
+											}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											Next.js
+										</a>
+									</Button>
+								</div>
+							</div>
+						</div>
+					)
 				) : (
 					<>
 						<SmallText className="text-foreground text-center mt-8 mb-2">
