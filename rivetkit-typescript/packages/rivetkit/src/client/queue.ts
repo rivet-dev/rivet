@@ -52,7 +52,7 @@ interface QueueSenderOptions {
 	customFetch: (request: Request) => Promise<Response>;
 }
 
-export function createQueueSender(options: QueueSenderOptions): QueueSender {
+export function createQueueSender(senderOptions: QueueSenderOptions): QueueSender {
 	return {
 		async send(
 			name: string,
@@ -75,18 +75,18 @@ export function createQueueSender(options: QueueSenderOptions): QueueSender {
 				url: `http://actor/queue/${encodeURIComponent(name)}`,
 				method: "POST",
 				headers: {
-					[HEADER_ENCODING]: options.encoding,
-					...(options.params !== undefined
+					[HEADER_ENCODING]: senderOptions.encoding,
+					...(senderOptions.params !== undefined
 						? {
 								[HEADER_CONN_PARAMS]: JSON.stringify(
-									options.params,
+									senderOptions.params,
 								),
 							}
 						: {}),
 				},
 				body: { body, wait, timeout },
-				encoding: options.encoding,
-				customFetch: options.customFetch,
+				encoding: senderOptions.encoding,
+				customFetch: senderOptions.customFetch,
 				signal: normalizedOptions?.signal,
 				requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
 				requestVersionedDataHandler: HTTP_QUEUE_SEND_REQUEST_VERSIONED,
@@ -103,23 +103,23 @@ export function createQueueSender(options: QueueSenderOptions): QueueSender {
 					name: value.name ?? name,
 					body: bufferToArrayBuffer(cbor.encode(value.body)),
 					wait: value.wait ?? false,
-					timeout: value.timeout ?? null,
+					timeout: value.timeout !== undefined ? BigInt(value.timeout) : null,
 				}),
 				responseFromJson: (json): QueueSendResult => {
 					if (json.response === undefined) {
-						return { status: json.status };
+						return { status: json.status as "completed" | "timedOut" };
 					}
 					return {
-						status: json.status,
+						status: json.status as "completed" | "timedOut",
 						response: json.response,
 					};
 				},
 				responseFromBare: (bare): QueueSendResult => {
 					if (bare.response === null || bare.response === undefined) {
-						return { status: bare.status };
+						return { status: bare.status as "completed" | "timedOut" };
 					}
 					return {
-						status: bare.status,
+						status: bare.status as "completed" | "timedOut",
 						response: cbor.decode(new Uint8Array(bare.response)),
 					};
 				},
