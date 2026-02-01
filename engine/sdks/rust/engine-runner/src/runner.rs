@@ -1,11 +1,9 @@
-use super::{actor::*, protocol};
-use anyhow::*;
+use crate::{actor::*, protocol};
+use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use rivet_runner_protocol::mk2 as rp;
-use rivet_util::Id;
 use std::{
 	collections::HashMap,
-	str::FromStr,
 	sync::{
 		Arc,
 		atomic::{AtomicBool, Ordering},
@@ -13,12 +11,7 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
-use tokio_tungstenite::{
-	connect_async,
-	tungstenite::{self, Message},
-};
-
-use super::actor::KvRequest;
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const RUNNER_PING_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -33,9 +26,111 @@ pub enum ActorLifecycleEvent {
 	Stopped { actor_id: String, generation: u32 },
 }
 
-/// Configuration for test runner
+/// Configuration for the engine runner.
+///
+/// This matches the TypeScript RunnerConfig interface.
 #[derive(Clone)]
-struct Config {
+pub struct RunnerConfig {
+	/// The endpoint URL to connect to (e.g., "http://127.0.0.1:8080")
+	pub endpoint: String,
+	/// Authentication token
+	pub token: String,
+	/// Namespace to connect to
+	pub namespace: String,
+	/// Name of this runner (machine-readable)
+	pub runner_name: String,
+	/// Unique key for this runner instance
+	pub runner_key: String,
+	/// Protocol version number
+	pub version: u32,
+	/// Total number of actor slots this runner supports
+	pub total_slots: u32,
+	/// Optional metadata to attach to the runner
+	pub metadata: Option<serde_json::Value>,
+}
+
+impl RunnerConfig {
+	/// Create a new builder for RunnerConfig
+	pub fn builder() -> RunnerConfigBuilder {
+		RunnerConfigBuilder::default()
+	}
+}
+
+/// Builder for RunnerConfig
+#[derive(Default)]
+pub struct RunnerConfigBuilder {
+	endpoint: Option<String>,
+	token: Option<String>,
+	namespace: Option<String>,
+	runner_name: Option<String>,
+	runner_key: Option<String>,
+	version: Option<u32>,
+	total_slots: Option<u32>,
+	metadata: Option<serde_json::Value>,
+}
+
+impl RunnerConfigBuilder {
+	pub fn endpoint(mut self, endpoint: impl Into<String>) -> Self {
+		self.endpoint = Some(endpoint.into());
+		self
+	}
+
+	pub fn token(mut self, token: impl Into<String>) -> Self {
+		self.token = Some(token.into());
+		self
+	}
+
+	pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+		self.namespace = Some(namespace.into());
+		self
+	}
+
+	pub fn runner_name(mut self, name: impl Into<String>) -> Self {
+		self.runner_name = Some(name.into());
+		self
+	}
+
+	pub fn runner_key(mut self, key: impl Into<String>) -> Self {
+		self.runner_key = Some(key.into());
+		self
+	}
+
+	pub fn version(mut self, version: u32) -> Self {
+		self.version = Some(version);
+		self
+	}
+
+	pub fn total_slots(mut self, slots: u32) -> Self {
+		self.total_slots = Some(slots);
+		self
+	}
+
+	pub fn metadata(mut self, metadata: serde_json::Value) -> Self {
+		self.metadata = Some(metadata);
+		self
+	}
+
+	pub fn build(self) -> Result<RunnerConfig> {
+		Ok(RunnerConfig {
+			endpoint: self.endpoint.context("endpoint is required")?,
+			token: self.token.unwrap_or_else(|| "dev".to_string()),
+			namespace: self.namespace.context("namespace is required")?,
+			runner_name: self
+				.runner_name
+				.unwrap_or_else(|| "engine-runner".to_string()),
+			runner_key: self
+				.runner_key
+				.unwrap_or_else(|| format!("key-{:012x}", rand::random::<u64>())),
+			version: self.version.unwrap_or(1),
+			total_slots: self.total_slots.unwrap_or(100),
+			metadata: self.metadata,
+		})
+	}
+}
+
+/// Internal configuration with actor factories
+#[derive(Clone)]
+struct InternalConfig {
 	namespace: String,
 	runner_name: String,
 	runner_key: String,
@@ -46,9 +141,9 @@ struct Config {
 	actor_factories: HashMap<String, ActorFactory>,
 }
 
-/// Test runner for actor lifecycle testing
-pub struct TestRunner {
-	config: Config,
+/// Engine runner for programmatic actor lifecycle control
+pub struct Runner {
+	config: InternalConfig,
 
 	// State
 	pub runner_id: Arc<Mutex<Option<String>>>,
@@ -77,13 +172,96 @@ pub struct TestRunner {
 }
 
 struct ActorState {
+	#[allow(dead_code)]
 	actor_id: String,
+	#[allow(dead_code)]
 	generation: u32,
 	actor: Box<dyn TestActor>,
 }
 
-/// Builder for test runner
-pub struct TestRunnerBuilder {
+/// Builder for creating a Runner instance
+pub struct RunnerBuilder {
+	config: RunnerConfig,
+	actor_factories: HashMap<String, ActorFactory>,
+}
+
+impl RunnerBuilder {
+	/// Create a new RunnerBuilder with the given configuration
+	pub fn new(config: RunnerConfig) -> Self {
+		Self {
+			config,
+			actor_factories: HashMap::new(),
+		}
+	}
+
+	/// Create a new RunnerBuilder from a namespace (for backwards compatibility)
+	///
+	/// This is a convenience method that requires endpoint and token to be set later.
+	pub fn from_namespace(namespace: &str) -> RunnerBuilderLegacy {
+		RunnerBuilderLegacy {
+			namespace: namespace.to_string(),
+			runner_name: "engine-runner".to_string(),
+			runner_key: format!("key-{:012x}", rand::random::<u64>()),
+			version: 1,
+			total_slots: 100,
+			actor_factories: HashMap::new(),
+		}
+	}
+
+	/// Register an actor factory for a specific actor name
+	pub fn with_actor_behavior<F>(mut self, actor_name: &str, factory: F) -> Self
+	where
+		F: Fn(ActorConfig) -> Box<dyn TestActor> + Send + Sync + 'static,
+	{
+		self.actor_factories
+			.insert(actor_name.to_string(), Arc::new(factory));
+		self
+	}
+
+	/// Build the Runner instance
+	pub fn build(self) -> Result<Runner> {
+		let config = InternalConfig {
+			namespace: self.config.namespace,
+			runner_name: self.config.runner_name,
+			runner_key: self.config.runner_key,
+			version: self.config.version,
+			total_slots: self.config.total_slots,
+			endpoint: self.config.endpoint,
+			token: self.config.token,
+			actor_factories: self.actor_factories,
+		};
+
+		// Create event channel for actors to push events
+		let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+		// Create KV request channel for actors to send KV requests
+		let (kv_request_tx, kv_request_rx) = mpsc::unbounded_channel();
+
+		// Create lifecycle event broadcast channel (capacity of 100 for buffering)
+		let (lifecycle_tx, _) = broadcast::channel(100);
+
+		Ok(Runner {
+			config,
+			runner_id: Arc::new(Mutex::new(None)),
+			actors: Arc::new(Mutex::new(HashMap::new())),
+			actor_event_indices: Arc::new(Mutex::new(HashMap::new())),
+			event_history: Arc::new(Mutex::new(Vec::new())),
+			shutdown: Arc::new(AtomicBool::new(false)),
+			is_child_task: false,
+			event_tx,
+			event_rx: Arc::new(Mutex::new(event_rx)),
+			kv_request_tx,
+			kv_request_rx: Arc::new(Mutex::new(kv_request_rx)),
+			next_kv_request_id: Arc::new(Mutex::new(0)),
+			kv_pending_requests: Arc::new(Mutex::new(HashMap::new())),
+			lifecycle_tx,
+			shutdown_tx: Arc::new(Mutex::new(None)),
+		})
+	}
+}
+
+/// Legacy builder for backwards compatibility with test code
+pub struct RunnerBuilderLegacy {
 	namespace: String,
 	runner_name: String,
 	runner_key: String,
@@ -92,18 +270,7 @@ pub struct TestRunnerBuilder {
 	actor_factories: HashMap<String, ActorFactory>,
 }
 
-impl TestRunnerBuilder {
-	pub fn new(namespace: &str) -> Self {
-		Self {
-			namespace: namespace.to_string(),
-			runner_name: "test-runner".to_string(),
-			runner_key: format!("key-{:012x}", rand::random::<u64>()),
-			version: 1,
-			total_slots: 100,
-			actor_factories: HashMap::new(),
-		}
-	}
-
+impl RunnerBuilderLegacy {
 	pub fn with_runner_name(mut self, name: &str) -> Self {
 		self.runner_name = name.to_string();
 		self
@@ -134,18 +301,16 @@ impl TestRunnerBuilder {
 		self
 	}
 
-	pub async fn build(self, dc: &super::super::TestDatacenter) -> Result<TestRunner> {
-		let endpoint = format!("http://127.0.0.1:{}", dc.guard_port());
-		let token = "dev".to_string();
-
-		let config = Config {
+	/// Build the Runner with an endpoint and token
+	pub fn build_with_endpoint(self, endpoint: &str, token: &str) -> Result<Runner> {
+		let config = InternalConfig {
 			namespace: self.namespace,
 			runner_name: self.runner_name,
 			runner_key: self.runner_key,
 			version: self.version,
 			total_slots: self.total_slots,
-			endpoint,
-			token,
+			endpoint: endpoint.to_string(),
+			token: token.to_string(),
 			actor_factories: self.actor_factories,
 		};
 
@@ -158,7 +323,7 @@ impl TestRunnerBuilder {
 		// Create lifecycle event broadcast channel (capacity of 100 for buffering)
 		let (lifecycle_tx, _) = broadcast::channel(100);
 
-		Ok(TestRunner {
+		Ok(Runner {
 			config,
 			runner_id: Arc::new(Mutex::new(None)),
 			actors: Arc::new(Mutex::new(HashMap::new())),
@@ -178,19 +343,19 @@ impl TestRunnerBuilder {
 	}
 }
 
-impl TestRunner {
+impl Runner {
 	/// Subscribe to actor lifecycle events
 	pub fn subscribe_lifecycle_events(&self) -> broadcast::Receiver<ActorLifecycleEvent> {
 		self.lifecycle_tx.subscribe()
 	}
 
-	/// Start the test runner
+	/// Start the runner
 	pub async fn start(&self) -> Result<()> {
 		tracing::info!(
 			namespace = %self.config.namespace,
 			runner_name = %self.config.runner_name,
 			runner_key = %self.config.runner_key,
-			"starting test runner"
+			"starting engine runner"
 		);
 
 		let ws_url = self.build_ws_url();
@@ -227,7 +392,7 @@ impl TestRunner {
 
 		tokio::spawn(async move {
 			if let Err(err) = runner.run_message_loop(ws_stream, shutdown_rx).await {
-				tracing::error!(?err, "test runner message loop failed");
+				tracing::error!(?err, "engine runner message loop failed");
 			}
 		});
 
@@ -281,14 +446,10 @@ impl TestRunner {
 		actors.contains_key(actor_id)
 	}
 
-	/// Get runner's current actors
-	pub async fn get_actor_ids(&self) -> Vec<Id> {
+	/// Get runner's current actor IDs
+	pub async fn get_actor_ids(&self) -> Vec<String> {
 		let actors = self.actors.lock().await;
-
-		actors
-			.keys()
-			.map(|x| Id::from_str(x).expect("failed to parse actor_id"))
-			.collect::<Vec<_>>()
+		actors.keys().cloned().collect()
 	}
 
 	pub fn name(&self) -> &str {
@@ -297,7 +458,7 @@ impl TestRunner {
 
 	/// Shutdown the runner gracefully (destroys actors first)
 	pub async fn shutdown(&self) {
-		tracing::info!("shutting down test runner");
+		tracing::info!("shutting down engine runner");
 		self.shutdown.store(true, Ordering::SeqCst);
 
 		// Send shutdown signal to close ws_stream
@@ -310,7 +471,7 @@ impl TestRunner {
 	/// This simulates an ungraceful disconnect where the runner stops responding
 	/// without destroying its actors first. Use this to test RunnerNoResponse errors.
 	pub async fn crash(&self) {
-		tracing::info!("crashing test runner (ungraceful disconnect)");
+		tracing::info!("crashing engine runner (ungraceful disconnect)");
 		self.shutdown.store(true, Ordering::SeqCst);
 
 		// Just drop the websocket without cleanup - don't send any signals
@@ -329,7 +490,7 @@ impl TestRunner {
 		format!(
 			"{}/runners/connect?protocol_version={}&namespace={}&runner_key={}",
 			ws_endpoint.trim_end_matches('/'),
-			super::protocol::PROTOCOL_VERSION,
+			protocol::PROTOCOL_VERSION,
 			urlencoding::encode(&self.config.namespace),
 			urlencoding::encode(&self.config.runner_key)
 		)
@@ -445,7 +606,7 @@ impl TestRunner {
 			}
 		}
 
-		tracing::info!("test runner message loop exiting");
+		tracing::info!("engine runner message loop exiting");
 		Ok(())
 	}
 
@@ -486,7 +647,7 @@ impl TestRunner {
 	}
 
 	async fn handle_message(&self, ws_stream: &mut WsStream, buf: &[u8]) -> Result<()> {
-		let msg = protocol::decode_to_client(buf, super::protocol::PROTOCOL_VERSION)?;
+		let msg = protocol::decode_to_client(buf, protocol::PROTOCOL_VERSION)?;
 
 		match msg {
 			rp::ToClient::ToClientInit(init) => {
@@ -518,7 +679,7 @@ impl TestRunner {
 		*self.runner_id.lock().await = Some(init.runner_id.clone());
 
 		// MK2 doesn't have lastEventIdx in init - events are acked via checkpoints
-		// For simplicity, we don't resend events on reconnect in the test runner
+		// For simplicity, we don't resend events on reconnect in the engine runner
 
 		Ok(())
 	}
@@ -612,7 +773,7 @@ impl TestRunner {
 
 			// Call on_start
 			let start_result = match actor.on_start(config).await {
-				Result::Ok(result) => result,
+				std::result::Result::Ok(result) => result,
 				Err(err) => {
 					tracing::error!(?actor_id_clone, generation, ?err, "actor on_start failed");
 					return;
@@ -906,13 +1067,13 @@ impl TestRunner {
 	}
 }
 
-impl Drop for TestRunner {
+impl Drop for Runner {
 	fn drop(&mut self) {
 		if self.is_child_task {
 			return;
 		}
 		// Signal shutdown when runner is dropped
 		self.shutdown.store(true, Ordering::SeqCst);
-		tracing::debug!("test runner dropped, shutdown signaled");
+		tracing::debug!("engine runner dropped, shutdown signaled");
 	}
 }

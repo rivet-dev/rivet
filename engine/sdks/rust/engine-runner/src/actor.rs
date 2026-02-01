@@ -1,10 +1,10 @@
-use anyhow::*;
+use anyhow::Result;
 use async_trait::async_trait;
 use rivet_runner_protocol::mk2 as rp;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
-use super::protocol;
+use crate::protocol;
 
 /// Configuration passed to actor when it starts
 #[derive(Clone)]
@@ -89,17 +89,17 @@ impl ActorConfig {
 		};
 		self.kv_request_tx
 			.send(request)
-			.map_err(|_| anyhow!("failed to send KV get request"))?;
+			.map_err(|_| anyhow::anyhow!("failed to send KV get request"))?;
 		let response: rp::KvResponseData = response_rx
 			.await
-			.map_err(|_| anyhow!("KV get request response channel closed"))?;
+			.map_err(|_| anyhow::anyhow!("KV get request response channel closed"))?;
 
 		match response {
 			rp::KvResponseData::KvGetResponse(data) => Ok(data),
 			rp::KvResponseData::KvErrorResponse(err) => {
-				Err(anyhow!("KV get failed: {}", err.message))
+				Err(anyhow::anyhow!("KV get failed: {}", err.message))
 			}
-			_ => Err(anyhow!("unexpected response type for KV get")),
+			_ => Err(anyhow::anyhow!("unexpected response type for KV get")),
 		}
 	}
 
@@ -122,17 +122,17 @@ impl ActorConfig {
 		};
 		self.kv_request_tx
 			.send(request)
-			.map_err(|_| anyhow!("failed to send KV list request"))?;
+			.map_err(|_| anyhow::anyhow!("failed to send KV list request"))?;
 		let response: rp::KvResponseData = response_rx
 			.await
-			.map_err(|_| anyhow!("KV list request response channel closed"))?;
+			.map_err(|_| anyhow::anyhow!("KV list request response channel closed"))?;
 
 		match response {
 			rp::KvResponseData::KvListResponse(data) => Ok(data),
 			rp::KvResponseData::KvErrorResponse(err) => {
-				Err(anyhow!("KV list failed: {}", err.message))
+				Err(anyhow::anyhow!("KV list failed: {}", err.message))
 			}
-			_ => Err(anyhow!("unexpected response type for KV list")),
+			_ => Err(anyhow::anyhow!("unexpected response type for KV list")),
 		}
 	}
 
@@ -147,18 +147,18 @@ impl ActorConfig {
 
 		self.kv_request_tx
 			.send(request)
-			.map_err(|_| anyhow!("failed to send KV put request"))?;
+			.map_err(|_| anyhow::anyhow!("failed to send KV put request"))?;
 
 		let response: rp::KvResponseData = response_rx
 			.await
-			.map_err(|_| anyhow!("KV put request response channel closed"))?;
+			.map_err(|_| anyhow::anyhow!("KV put request response channel closed"))?;
 
 		match response {
 			rp::KvResponseData::KvPutResponse => Ok(()),
 			rp::KvResponseData::KvErrorResponse(err) => {
-				Err(anyhow!("KV put failed: {}", err.message))
+				Err(anyhow::anyhow!("KV put failed: {}", err.message))
 			}
-			_ => Err(anyhow!("unexpected response type for KV put")),
+			_ => Err(anyhow::anyhow!("unexpected response type for KV put")),
 		}
 	}
 
@@ -172,17 +172,17 @@ impl ActorConfig {
 		};
 		self.kv_request_tx
 			.send(request)
-			.map_err(|_| anyhow!("failed to send KV delete request"))?;
+			.map_err(|_| anyhow::anyhow!("failed to send KV delete request"))?;
 		let response: rp::KvResponseData = response_rx
 			.await
-			.map_err(|_| anyhow!("KV delete request response channel closed"))?;
+			.map_err(|_| anyhow::anyhow!("KV delete request response channel closed"))?;
 
 		match response {
 			rp::KvResponseData::KvDeleteResponse => Ok(()),
 			rp::KvResponseData::KvErrorResponse(err) => {
-				Err(anyhow!("KV delete failed: {}", err.message))
+				Err(anyhow::anyhow!("KV delete failed: {}", err.message))
 			}
-			_ => Err(anyhow!("unexpected response type for KV delete")),
+			_ => Err(anyhow::anyhow!("unexpected response type for KV delete")),
 		}
 	}
 
@@ -196,17 +196,17 @@ impl ActorConfig {
 		};
 		self.kv_request_tx
 			.send(request)
-			.map_err(|_| anyhow!("failed to send KV drop request"))?;
+			.map_err(|_| anyhow::anyhow!("failed to send KV drop request"))?;
 		let response: rp::KvResponseData = response_rx
 			.await
-			.map_err(|_| anyhow!("KV drop request response channel closed"))?;
+			.map_err(|_| anyhow::anyhow!("KV drop request response channel closed"))?;
 
 		match response {
 			rp::KvResponseData::KvDropResponse => Ok(()),
 			rp::KvResponseData::KvErrorResponse(err) => {
-				Err(anyhow!("KV drop failed: {}", err.message))
+				Err(anyhow::anyhow!("KV drop failed: {}", err.message))
 			}
-			_ => Err(anyhow!("unexpected response type for KV drop")),
+			_ => Err(anyhow::anyhow!("unexpected response type for KV drop")),
 		}
 	}
 }
