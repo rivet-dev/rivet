@@ -163,7 +163,7 @@ function CounterStatus() {
 
 Use the JavaScript client for raw HTTP and WebSocket access:
 
-```tsx
+```tsx @nocheck
 import { createClient } from "rivetkit/client";
 
 const client = createClient();
@@ -172,7 +172,7 @@ const handle = client.chatRoom.getOrCreate(["general"]);
 const response = await handle.fetch("history");
 const history = await response.json();
 
-const ws = await handle.websocket("stream");
+const ws = await handle.webSocket("stream");
 ws.addEventListener("message", (event) => {
   console.log("message:", event.data);
 });

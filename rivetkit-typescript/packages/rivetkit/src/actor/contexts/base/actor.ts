@@ -7,6 +7,7 @@ import type { AnyDatabaseProvider, InferDatabaseClient } from "../../database";
 import type { ActorDefinition, AnyActorDefinition } from "../../definition";
 import type { ActorInstance, SaveStateOptions } from "../../instance/mod";
 import { ActorKv } from "../../instance/kv";
+import { ActorQueue } from "../../instance/queue";
 import type { Schedule } from "../../schedule";
 
 /**
@@ -29,6 +30,9 @@ export class ActorContext<
 		TDatabase
 	>;
 	#kv: ActorKv | undefined;
+	#queue:
+		| ActorQueue<TState, TConnParams, TConnState, TVars, TInput, TDatabase>
+		| undefined;
 
 	constructor(
 		actor: ActorInstance<
@@ -89,6 +93,26 @@ export class ActorContext<
 	 */
 	get log(): Logger {
 		return this.#actor.log;
+	}
+
+	/**
+	 * Access to queue receive helpers.
+	 */
+	get queue(): ActorQueue<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase
+	> {
+		if (!this.#queue) {
+			this.#queue = new ActorQueue(
+				this.#actor.queueManager,
+				this.#actor.abortSignal,
+			);
+		}
+		return this.#queue;
 	}
 
 	/**

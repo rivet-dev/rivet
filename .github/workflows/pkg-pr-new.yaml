@@ -11,6 +11,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: corepack enable
       - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - run: pnpm install
       - run: pnpm build -F '@rivetkit/*' -F '!@rivetkit/example-registry' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub'
       - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/runner/' 'engine/sdks/typescript/runner-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'

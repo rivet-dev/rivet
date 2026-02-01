@@ -4,8 +4,10 @@ import {
 	type ActionOutput,
 	type ConnsMessageOpts,
 	handleAction,
+	handleQueueSend,
 	handleRawRequest,
 } from "@/actor/router-endpoints";
+
 import {
 	PATH_CONNECT,
 	PATH_INSPECTOR_CONNECT,
@@ -162,6 +164,20 @@ export function createActorRouter(
 		const actionName = c.req.param("action");
 
 		return handleAction(c, config, actorDriver, actionName, c.env.actorId);
+	});
+
+	router.post("/queue", async (c) => {
+		return handleQueueSend(c, config, actorDriver, c.env.actorId);
+	});
+
+	router.post("/queue/:name", async (c) => {
+		return handleQueueSend(
+			c,
+			config,
+			actorDriver,
+			c.env.actorId,
+			c.req.param("name"),
+		);
 	});
 
 	router.all("/request/*", async (c) => {
