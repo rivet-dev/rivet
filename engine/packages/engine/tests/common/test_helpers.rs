@@ -122,29 +122,6 @@ pub async fn assert_actor_in_dc(actor_id_str: &str, expected_dc_label: u16) {
 	);
 }
 
-pub async fn assert_actor_in_runner(
-	dc: &super::TestDatacenter,
-	actor_id_str: &str,
-	expected_runner_id: &str,
-) {
-	let actor_id: rivet_util::Id = actor_id_str.parse().expect("Failed to parse actor ID");
-
-	let actors_res = dc
-		.workflow_ctx
-		.op(pegboard::ops::actor::get_runner::Input {
-			actor_ids: vec![actor_id],
-		})
-		.await
-		.expect("actor::get_runners operation failed");
-	let runner_id = actors_res.actors.first().map(|x| x.runner_id.to_string());
-
-	assert_eq!(
-		runner_id,
-		Some(expected_runner_id.to_string()),
-		"Actor {actor_id} should be in runner {expected_runner_id} (actually in runner {runner_id:?})",
-	);
-}
-
 pub fn assert_actors_equal(
 	actor1: &rivet_types::actors::Actor,
 	actor2: &rivet_types::actors::Actor,

@@ -46,6 +46,7 @@ members = [
   "engine/packages/workflow-worker",
   "engine/sdks/rust/api-full",
   "engine/sdks/rust/data",
+  "engine/sdks/rust/engine-runner",
   "engine/sdks/rust/epoxy-protocol",
   "engine/sdks/rust/runner-protocol",
   "engine/sdks/rust/ups-protocol"
@@ -479,6 +480,9 @@ members = [
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
+
+    [workspace.dependencies.rivet-engine-runner]
+    path = "engine/sdks/rust/engine-runner"
 
     [workspace.dependencies.rivet-runner-protocol]
     path = "engine/sdks/rust/runner-protocol"

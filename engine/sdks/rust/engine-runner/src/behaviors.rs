@@ -1,5 +1,5 @@
-use super::actor::*;
-use anyhow::*;
+use crate::actor::*;
+use anyhow::Result;
 use async_trait::async_trait;
 use std::{
 	sync::{Arc, Mutex},
@@ -12,6 +12,12 @@ pub struct EchoActor;
 impl EchoActor {
 	pub fn new() -> Self {
 		Self {}
+	}
+}
+
+impl Default for EchoActor {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
@@ -134,6 +140,12 @@ impl TimeoutActor {
 	}
 }
 
+impl Default for TimeoutActor {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 #[async_trait]
 impl TestActor for TimeoutActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
@@ -170,6 +182,12 @@ impl SleepImmediatelyActor {
 		Self {
 			notify_tx: Some(notify_tx),
 		}
+	}
+}
+
+impl Default for SleepImmediatelyActor {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
@@ -212,6 +230,12 @@ pub struct StopImmediatelyActor;
 impl StopImmediatelyActor {
 	pub fn new() -> Self {
 		Self
+	}
+}
+
+impl Default for StopImmediatelyActor {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
@@ -533,6 +557,12 @@ impl CustomActorBuilder {
 				})
 			}),
 		}
+	}
+}
+
+impl Default for CustomActorBuilder {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
