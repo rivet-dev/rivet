@@ -264,7 +264,7 @@ export const createNamespaceContext = ({
 					if (lastPage.actors.length < RECORDS_PER_PAGE) {
 						return undefined;
 					}
-					return lastPage.pagination.cursor;
+					return lastPage.pagination?.cursor;
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
@@ -288,10 +288,10 @@ export const createNamespaceContext = ({
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
-					// TEMPORARILY DISABLED PAGINATION
-					// FIXME(@NathanFlurry)
-					return undefined;
-					// return lastPage.pagination?.cursor;
+					if (Object.keys(lastPage.names).length < RECORDS_PER_PAGE) {
+						return undefined;
+					}
+					return lastPage.pagination?.cursor;
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
