@@ -18,6 +18,7 @@ export const TECHNOLOGIES = [
 	{ name: "typescript", displayName: "TypeScript" },
 	{ name: "durable-streams", displayName: "Durable Streams" },
 	{ name: "react", displayName: "React" },
+	{ name: "tanstack-start", displayName: "TanStack Start" },
 ] as const;
 
 export const TAGS = [
