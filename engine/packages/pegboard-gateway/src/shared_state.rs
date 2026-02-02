@@ -27,7 +27,7 @@ pub struct InFlightRequestHandle {
 	///
 	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
 	/// request after `msg_rx` has dropped.
-	pub drop_rx: watch::Receiver<()>,
+	pub drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	pub new: bool,
 }
 
@@ -38,7 +38,7 @@ struct InFlightRequest {
 	/// Sender for incoming messages to this request.
 	msg_tx: mpsc::Sender<protocol::mk2::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
-	drop_tx: watch::Sender<()>,
+	drop_tx: watch::Sender<Option<MsgGcReason>>,
 	/// True once first message for this request has been sent (so runner learned reply_to).
 	opened: bool,
 	/// Message index counter for this request.
@@ -59,6 +59,22 @@ pub struct PendingWebsocketMessage {
 	payload: Vec<u8>,
 	send_instant: Instant,
 	message_index: protocol::mk2::MessageIndex,
+}
+
+#[derive(Debug)]
+pub enum MsgGcReason {
+	/// Gateway channel is closed and is not hibernating
+	GatewayClosed,
+	/// WebSocket pending messages (ToServerWebSocketMessageAck)
+	WebSocketMessageNotAcked {
+		#[allow(dead_code)]
+		first_msg_index: u16,
+		#[allow(dead_code)]
+		last_msg_index: u16,
+	},
+	/// The gateway has not kept alive the in flight request during hibernation for the given timeout
+	/// duration.
+	HibernationTimeout,
 }
 
 pub struct SharedStateInner {
@@ -113,7 +129,7 @@ impl SharedState {
 		request_id: protocol::mk2::RequestId,
 	) -> InFlightRequestHandle {
 		let (msg_tx, msg_rx) = mpsc::channel(128);
-		let (drop_tx, drop_rx) = watch::channel(());
+		let (drop_tx, drop_rx) = watch::channel(None);
 
 		let new = match self.in_flight_requests.entry_async(request_id).await {
 			Entry::Vacant(entry) => {
@@ -131,11 +147,13 @@ impl SharedState {
 
 				true
 			}
+			// If the entry already exists it means we transition from hibernating to active
 			Entry::Occupied(mut entry) => {
 				entry.receiver_subject = receiver_subject;
 				entry.msg_tx = msg_tx;
 				entry.drop_tx = drop_tx;
 				entry.opened = false;
+				entry.last_pong = util::timestamp::now();
 
 				if entry.stopping {
 					entry.hibernation_state = None;
@@ -251,7 +269,7 @@ impl SharedState {
 
 		// Verify ping timeout
 		if now.saturating_sub(req.last_pong) > TUNNEL_PING_TIMEOUT {
-			tracing::warn!("tunnel timeout");
+			tracing::warn!(runner_topic=%req.receiver_subject, "tunnel timeout");
 			return Err(WebSocketServiceTimeout.build());
 		}
 
@@ -501,22 +519,6 @@ impl SharedState {
 	/// 2a. Remove all requests where it was flagged as stopping and `drop_rx` has been dropped
 	#[tracing::instrument(skip_all)]
 	async fn gc_in_flight_requests(&self) {
-		#[derive(Debug)]
-		enum MsgGcReason {
-			/// Gateway channel is closed and is not hibernating
-			GatewayClosed,
-			/// WebSocket pending messages (ToServerWebSocketMessageAck)
-			WebSocketMessageNotAcked {
-				#[allow(dead_code)]
-				first_msg_index: u16,
-				#[allow(dead_code)]
-				last_msg_index: u16,
-			},
-			/// The gateway has not kept alive the in flight request during hibernation for the given timeout
-			/// duration.
-			HibernationTimeout,
-		}
-
 		let now = Instant::now();
 		let hibernation_timeout =
 			Duration::from_millis(self.hibernation_timeout.try_into().unwrap_or(90_000));
@@ -558,14 +560,14 @@ impl SharedState {
 					None
 				};
 
-				if let Some(reason) = &reason {
+				if let Some(reason) = reason {
 					tracing::debug!(
 						request_id=%protocol::util::id_to_string(request_id),
 						?reason,
 						"gc stopping in flight request"
 					);
 
-					if req.drop_tx.send(()).is_err() {
+					if req.drop_tx.send(Some(reason)).is_err() {
 						tracing::debug!(request_id=%protocol::util::id_to_string(request_id), "failed to send timeout msg to tunnel");
 					}
 
