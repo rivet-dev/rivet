@@ -1,5 +1,5 @@
 import type { Rivet } from "@rivet-gg/cloud";
-import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { endOfMonth } from "date-fns";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { BILLING } from "@/content/billing";
@@ -14,23 +14,24 @@ const BILLED_METRICS = [
 
 export function useBilledMetrics() {
 	const dataProvider = useCloudProjectDataProvider();
-	const {data} = useQuery({
+	const { data } = useQuery({
 		...dataProvider.currentProjectLatestMetricsQueryOptions({
 			name: BILLED_METRICS,
 			endAt: endOfMonth(new Date()).toISOString(),
-		})
-	})
+		}),
+	});
 
-	const aggregated: Record<typeof BILLED_METRICS[number], bigint> = {
+	const aggregated: Record<(typeof BILLED_METRICS)[number], bigint> = {
 		actor_awake: 0n,
 		kv_storage_used: 0n,
 		kv_read: 0n,
 		kv_write: 0n,
-		gateway_egress: 0n
+		gateway_egress: 0n,
 	};
 	if (data) {
 		for (const metric of data) {
-			aggregated[metric.name as typeof BILLED_METRICS[number]] = metric.value;
+			aggregated[metric.name as (typeof BILLED_METRICS)[number]] =
+				metric.value;
 		}
 	}
 
