@@ -132,24 +132,18 @@ impl PegboardGateway {
 				.and_then(|v| v.to_str().ok())
 				.unwrap_or("*");
 
-			let mut response = Response::builder()
+			req_ctx.set_cors(CorsConfig {
+				allow_origin: origin.clone(),
+				allow_credentials: true,
+				expose_headers: "*".to_string(),
+				allow_methods: Some("GET, POST, PUT, DELETE, OPTIONS, PATCH".to_string()),
+				allow_headers: Some(requested_headers.to_string()),
+				max_age: Some(86400),
+			});
+
+			return Ok(Response::builder()
 				.status(StatusCode::NO_CONTENT)
-				.header("access-control-allow-origin", &origin)
-				.header("access-control-allow-credentials", "true")
-				.header(
-					"access-control-allow-methods",
-					"GET, POST, PUT, DELETE, OPTIONS, PATCH",
-				)
-				.header("access-control-allow-headers", requested_headers)
-				.header("access-control-expose-headers", "*")
-				.header("access-control-max-age", "86400");
-
-			// Add Vary header to prevent cache poisoning when echoing origin
-			if origin != "*" {
-				response = response.header("vary", "Origin");
-			}
-
-			return Ok(response.body(ResponseBody::Full(Full::new(Bytes::new())))?);
+				.body(ResponseBody::Full(Full::new(Bytes::new())))?);
 		}
 
 		// Set CORS headers through guard
@@ -157,6 +151,10 @@ impl PegboardGateway {
 			allow_origin: origin.clone(),
 			allow_credentials: true,
 			expose_headers: "*".to_string(),
+			// Not an options req, not required
+			allow_methods: None,
+			allow_headers: None,
+			max_age: None,
 		});
 
 		let body_bytes = req

@@ -150,4 +150,11 @@ pub struct CorsConfig {
 	pub allow_origin: String,
 	pub allow_credentials: bool,
 	pub expose_headers: String,
+
+	// Only set for OPTIONS requests
+	// TODO: Vec of Method
+	pub allow_methods: Option<String>,
+	pub allow_headers: Option<String>,
+	// Seconds
+	pub max_age: Option<u32>,
 }
