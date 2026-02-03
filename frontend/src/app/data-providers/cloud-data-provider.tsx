@@ -250,11 +250,63 @@ export const createOrganizationContext = ({
 							org: organization,
 						},
 					);
-				return response;
+				return response.url;
 			},
 		});
 
 	const projectMetricsQueryOptions = (opts: {
+		organization: string;
+		project: string;
+		name:
+			| Rivet.namespaces.MetricsGetRequestNameItem
+			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		startAt?: string;
+		endAt?: string;
+		resolution?: number;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "metrics"],
+			queryFn: async () => {
+				const data = await client.projects.metrics.get(opts.project, {
+					name: opts.name,
+					org: opts.organization,
+					startAt: opts.startAt,
+					endAt: opts.endAt,
+					resolution: opts.resolution,
+				});
+				return data;
+			},
+		});
+
+	const projectLatestMetricsQueryOptions = (opts: {
+		organization: string;
+		project: string;
+		name:
+			| Rivet.namespaces.MetricsGetRequestNameItem
+			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		endAt?: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "latest-metrics"],
+			queryFn: async () => {
+				const data = await client.projects.metrics.getLatest(
+					opts.project,
+					{
+						name: opts.name,
+						org: opts.organization,
+						endAt: opts.endAt,
+					},
+				);
+				const transformed = data.name.map((name, index) => ({
+					name: name as Rivet.namespaces.MetricsGetRequestNameItem,
+					ts: data.ts[index],
+					value: BigInt(String(data.value[index])),
+				}));
+				return transformed;
+			},
+		});
+
+	const namespaceMetricsQueryOptions = (opts: {
 		organization: string;
 		project: string;
 		namespace: string;
@@ -283,7 +335,7 @@ export const createOrganizationContext = ({
 			},
 		});
 
-	const projectLatestMetricsQueryOptions = (opts: {
+	const namespaceLatestMetricsQueryOptions = (opts: {
 		organization: string;
 		project: string;
 		namespace: string;
@@ -395,6 +447,28 @@ export const createOrganizationContext = ({
 			>,
 		) {
 			return projectLatestMetricsQueryOptions({
+				organization,
+				...opts,
+			});
+		},
+		currentOrganizationNamespaceMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof namespaceMetricsQueryOptions>[0],
+				"organization"
+			>,
+		) {
+			return namespaceMetricsQueryOptions({
+				organization,
+				...opts,
+			});
+		},
+		currentOrganizationNamespaceLatestMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof namespaceLatestMetricsQueryOptions>[0],
+				"organization"
+			>,
+		) {
+			return namespaceLatestMetricsQueryOptions({
 				organization,
 				...opts,
 			});
@@ -587,6 +661,34 @@ export const createProjectContext = ({
 				...opts,
 			});
 		},
+		currentProjectNamespaceMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentOrganizationNamespaceMetricsQueryOptions
+				>[0],
+				"project"
+			>,
+		) {
+			return parent.currentOrganizationNamespaceMetricsQueryOptions({
+				project,
+				...opts,
+			});
+		},
+		currentProjectNamespaceLatestMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentOrganizationNamespaceLatestMetricsQueryOptions
+				>[0],
+				"project"
+			>,
+		) {
+			return parent.currentOrganizationNamespaceLatestMetricsQueryOptions(
+				{
+					project,
+					...opts,
+				},
+			);
+		},
 	};
 };
 
@@ -678,11 +780,13 @@ export const createNamespaceContext = ({
 		},
 		currentNamespaceMetricsQueryOptions(
 			opts: Omit<
-				Parameters<typeof parent.currentProjectMetricsQueryOptions>[0],
+				Parameters<
+					typeof parent.currentProjectNamespaceMetricsQueryOptions
+				>[0],
 				"namespace"
 			>,
 		) {
-			return parent.currentProjectMetricsQueryOptions({
+			return parent.currentProjectNamespaceMetricsQueryOptions({
 				namespace,
 				...opts,
 			});
@@ -690,12 +794,12 @@ export const createNamespaceContext = ({
 		currentNamespaceLatestMetricsQueryOptions(
 			opts: Omit<
 				Parameters<
-					typeof parent.currentProjectLatestMetricsQueryOptions
+					typeof parent.currentProjectNamespaceLatestMetricsQueryOptions
 				>[0],
 				"namespace"
 			>,
 		) {
-			return parent.currentProjectLatestMetricsQueryOptions({
+			return parent.currentProjectNamespaceLatestMetricsQueryOptions({
 				namespace,
 				...opts,
 			});

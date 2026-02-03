@@ -16,7 +16,7 @@ overrides:
   '@clerk/shared': 3.27.1
   react: 19.1.0
   react-dom: 19.1.0
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
   '@codemirror/state': ^6.5.2
 
 importers:
@@ -492,8 +492,8 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../../engine/sdks/typescript/api-full
@@ -2879,8 +2879,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -3866,8 +3866,8 @@ importers:
         specifier: 25.5.3
         version: 25.5.3
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -8166,8 +8166,8 @@ packages:
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -11860,6 +11860,7 @@ packages:
 
   glob@10.5.0:
     resolution: {integrity: sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
   glob@11.0.3:
@@ -15280,7 +15281,7 @@ packages:
   tar@7.5.2:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
     engines: {node: '>=18'}
-    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   temp-dir@2.0.0:
     resolution: {integrity: sha512-aoBAniQmmwtcKp/7BzsH8Cxzv8OL736p7v1ihGb5e9DJ9kTwGWHrQrVB5+lfVDzfGrdRzXch+ig7LHaY1JTOrg==}
@@ -21167,7 +21168,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@199a6ff':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@2243d29':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5
