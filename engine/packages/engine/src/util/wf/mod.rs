@@ -494,6 +494,7 @@ pub async fn print_history(
 				}
 			}
 			EventData::VersionCheck(data) => {
+				print!("{}{c} ", "  ".repeat(indent));
 				println!("version {}", style(data.inner_version).yellow());
 			}
 			_ => {}
