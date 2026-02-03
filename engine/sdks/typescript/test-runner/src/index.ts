@@ -21,8 +21,8 @@ const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
 	: 10000;
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
-const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER === undefined;
-const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER === undefined;
+const AUTOSTART_SERVER = process.env.DISABLE_SERVER === undefined;
+const AUTOSTART_RUNNER = process.env.AUTOSTART_RUNNER !== undefined;
 
 const runnerStarted = Promise.withResolvers<Runner>();
 const runnerStopped = Promise.withResolvers<Runner>();
@@ -78,7 +78,9 @@ app.get("/shutdown", async (c) => {
 
 app.get("/start", async (c) => {
 	return streamSSE(c, async (stream) => {
-		runner = await startRunner(runnerStarted, runnerStopped);
+		const runnerStarted = Promise.withResolvers<Runner>();
+		const runnerStopped = Promise.withResolvers<Runner>();
+		const runner = await startRunner(runnerStarted, runnerStopped);
 
 		c.req.raw.signal.addEventListener("abort", () => {
 			getLogger().debug("SSE aborted, shutting down runner");
@@ -90,6 +92,13 @@ app.get("/start", async (c) => {
 		stream.writeSSE({ data: runner.getServerlessInitPacket()! });
 
 		await runnerStopped.promise;
+	});
+});
+
+app.get("/metadata", async (c) => {
+	return c.json({
+		runtime: "test-runner",
+		version: "1",
 	});
 });
 
@@ -107,7 +116,24 @@ if (AUTOSTART_RUNNER) {
 	runner = await startRunner(runnerStarted, runnerStopped);
 } else await autoConfigureServerless();
 
+process.on("SIGTERM", async () => {
+	getLogger().debug("received SIGTERM, force exiting in 3s");
+
+	await new Promise(res => setTimeout(res, 3000));
+
+	process.exit(0);
+});
+process.on("SIGINT", async () => {
+	getLogger().debug("received SIGTERM, force exiting in 3s");
+
+	await new Promise(res => setTimeout(res, 3000));
+
+	process.exit(0);
+});
+
 async function autoConfigureServerless() {
+	getLogger().info("Configuring serverless");
+
 	const res = await fetch(
 		`http://127.0.0.1:6420/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`,
 		{
@@ -158,7 +184,7 @@ async function startRunner(
 		onConnected: () => {
 			runnerStarted.resolve(runner);
 		},
-		onDisconnected: () => {},
+		onDisconnected: () => { },
 		onShutdown: () => {
 			runnerStopped.resolve(runner);
 		},

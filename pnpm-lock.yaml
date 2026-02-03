@@ -227,33 +227,6 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
-  engine/tests/load:
-    devDependencies:
-      '@biomejs/biome':
-        specifier: ^2.3
-        version: 2.3.11
-      '@types/k6':
-        specifier: ^0.47.3
-        version: 0.47.3
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.2
-
-  engine/tests/smoke:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.18.1
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../../rivetkit-typescript/packages/rivetkit
-      tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.2
-
   examples/actor-actions:
     dependencies:
       '@hono/node-server':
@@ -9049,9 +9022,6 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
-
-  '@types/k6@0.47.3':
-    resolution: {integrity: sha512-5epuxqaZ6oFYMDuzIK9H7GxJfApkCPiupiF5cKTfJvetmsImP/3F2nS22DoJ7/2XoieTLSffR8yyicGco9dpMw==}
 
   '@types/lodash@4.17.20':
     resolution: {integrity: sha512-H3MHACvFUEiujabxhaI/ImO6gUrd8oOurg7LQtS7mbwIXA/cUqWrvBsaeJ23aZEPk1TAYkurjfMbSELfoCXlGA==}
@@ -22301,8 +22271,6 @@ snapshots:
   '@types/js-yaml@4.0.9': {}
 
   '@types/json-schema@7.0.15': {}
-
-  '@types/k6@0.47.3': {}
 
   '@types/lodash@4.17.20': {}
 
