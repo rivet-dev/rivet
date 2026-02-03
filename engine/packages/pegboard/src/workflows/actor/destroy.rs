@@ -174,6 +174,7 @@ struct ClearKvInput {
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct ClearKvOutput {
+	// Simply an estimate, not accurate under 3MiB
 	final_size: i64,
 }
 
