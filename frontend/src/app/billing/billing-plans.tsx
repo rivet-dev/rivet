@@ -1,5 +1,10 @@
 import { Rivet } from "@rivet-gg/cloud";
-import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+	type UseQueryOptions,
+	useMutation,
+	useQuery,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { Button, type ButtonProps } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
@@ -25,10 +30,12 @@ export function BillingPlans() {
 				predicate(query) {
 					return (
 						query.queryKey[1] ===
-						dataProvider.currentProjectLatestMetricsQueryOptions({
-							name: [],
-							namespace: "",
-						}).queryKey[1]
+						dataProvider.currentProjectNamespaceLatestMetricsQueryOptions(
+							{
+								name: [],
+								namespace: "",
+							},
+						).queryKey[1]
 					);
 				},
 			});
@@ -36,7 +43,13 @@ export function BillingPlans() {
 	});
 
 	const { refetch: createUpdateSubscriptionSession, data } = useQuery({
-		...dataProvider.currentProjectBillingSubscriptionUpdateSessionQueryOptions(),
+		...((billing.activePlan !== Rivet.BillingPlan.Free
+			? dataProvider.currentProjectBillingSubscriptionUpdateSessionQueryOptions()
+			: dataProvider.billingCustomerPortalSessionQueryOptions()) as UseQueryOptions<
+			string,
+			unknown,
+			string
+		>),
 	});
 
 	return (
@@ -63,7 +76,7 @@ export function BillingPlans() {
 							},
 							onClick: () => {
 								if (!billing.canChangePlan) {
-									return window.open(data?.url, "_blank");
+									return window.open(data, "_blank");
 								}
 								if (billing.futurePlan === plan) {
 									return mutate({

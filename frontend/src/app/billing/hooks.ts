@@ -10,38 +10,30 @@ const BILLED_METRICS = [
 	"kv_read",
 	"kv_write",
 	"gateway_egress",
-] as const;
+] satisfies Rivet.namespaces.MetricsGetRequestNameItem[];
 
-export function useAggregatedMetrics() {
+export function useBilledMetrics() {
 	const dataProvider = useCloudProjectDataProvider();
-	const { data: namespaces } = useInfiniteQuery({
-		...dataProvider.currentProjectNamespacesQueryOptions(),
-	});
-	const metricQueries = useQueries({
-		queries:
-			namespaces?.map((ns) => ({
-				...dataProvider.currentProjectLatestMetricsQueryOptions({
-					name: [...BILLED_METRICS],
-					namespace: ns.name,
-					endAt: endOfMonth(new Date()).toISOString(),
-				}),
-			})) ?? [],
-	});
+	const {data} = useQuery({
+		...dataProvider.currentProjectLatestMetricsQueryOptions({
+			name: BILLED_METRICS,
+			endAt: endOfMonth(new Date()).toISOString(),
+		})
+	})
 
-	const aggregated = metricQueries.reduce(
-		(acc, query) => {
-			if (query.data) {
-				query.data.forEach((metric) => {
-					if (!acc[metric.name]) {
-						acc[metric.name] = 0n;
-					}
-					acc[metric.name] += metric.value;
-				});
-			}
-			return acc;
-		},
-		{} as Record<Rivet.namespaces.MetricsGetRequestNameItem, bigint>,
-	);
+	const aggregated: Record<typeof BILLED_METRICS[number], bigint> = {
+		actor_awake: 0n,
+		kv_storage_used: 0n,
+		kv_read: 0n,
+		kv_write: 0n,
+		gateway_egress: 0n
+	};
+	if (data) {
+		for (const metric of data) {
+			aggregated[metric.name as typeof BILLED_METRICS[number]] = metric.value;
+		}
+	}
+
 	return aggregated;
 }
 
@@ -52,12 +44,12 @@ export function useHighestUsagePercent(): number {
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
 	});
 
-	const aggregated = useAggregatedMetrics();
+	const aggregated = useBilledMetrics();
 	const plan = billingData?.billing.activePlan || "free";
 
 	let highestPercent = 0;
 	for (const key of BILLED_METRICS) {
-		const current = aggregated[key] || 0n;
+		const current = aggregated?.[key] || 0n;
 		const included = BILLING.included[plan][key];
 		if (included && included > 0n) {
 			const percent = Number((current * 100n) / included);
