@@ -58,6 +58,27 @@ export type ComboboxProps<Option extends ComboboxOption> =
 		(ComboboxNewOptionsProps | ComboboxDefaultProps) &
 		(ComboboxSingleProps | ComboboxMultipleProps);
 
+export const defaultRenderCurrentOptions = <Option extends ComboboxOption>(
+	currentOptions: Option[],
+	maxToShow: number = 3,
+) => {
+	return (
+		<>
+			{currentOptions
+				.map((option) => (
+					<Fragment key={option.value}>{option.label}</Fragment>
+				))
+				.slice(0, maxToShow)}
+
+			{currentOptions.length > maxToShow ? (
+				<Badge variant="outline">
+					+{currentOptions.length - maxToShow}
+				</Badge>
+			) : null}
+		</>
+	);
+};
+
 export const Combobox = <Option extends ComboboxOption>({
 	options,
 	placeholder,
@@ -147,32 +168,14 @@ export const Combobox = <Option extends ComboboxOption>({
 					)}
 				>
 					<div className="flex gap-4">
-						{currentOptions.length > 0 ? (
-							renderCurrentOptions ? (
-								renderCurrentOptions(currentOptions)
-							) : (
-								<>
-									{currentOptions
-										.map((option) => (
-											<Fragment key={option.value}>
-												{option.label}
-											</Fragment>
-										))
-										.slice(0, showSelectedOptions)}
-
-									{currentOptions.length >
-									showSelectedOptions ? (
-										<Badge variant="outline">
-											+
-											{currentOptions.length -
-												showSelectedOptions}
-										</Badge>
-									) : null}
-								</>
-							)
-						) : (
-							placeholder
-						)}
+						{currentOptions.length > 0
+							? renderCurrentOptions
+								? renderCurrentOptions(currentOptions)
+								: defaultRenderCurrentOptions(
+										currentOptions,
+										showSelectedOptions,
+									)
+							: placeholder}
 					</div>
 
 					<Icon
