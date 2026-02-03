@@ -26,4 +26,23 @@ export const chatRoom = actor({
 // Register actors for use: https://rivet.dev/docs/setup
 export const registry = setup({
 	use: { chatRoom },
+	// Connect to external engine instance
+	endpoint: "http://localhost:6420",
+	// Don't start local manager (using external engine)
+	serveManager: false,
+	serverless: {
+		// Don't spawn engine (already running externally)
+		spawnEngine: false,
+		// Base path is "/" since Hono route strips /api/rivet prefix
+		basePath: "/",
+		// Configure engine to send requests to this worker
+		configureRunnerPool: {
+			url: "http://localhost:8787/api/rivet",
+			minRunners: 0,
+			maxRunners: 100_000,
+			requestLifespan: 300,
+			slotsPerRunner: 1,
+			metadata: { provider: "cloudflare-workers" },
+		},
+	},
 });

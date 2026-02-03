@@ -1,0 +1,7 @@
+  {
+    "name": "worker-name",
+    "compatibility_date": "2026-01-13",
+    "compatibility_flags": ["nodejs_compat"],
+    "main": "src/server.ts"
+  }
+
