@@ -13,7 +13,7 @@ import { endOfMonth, startOfMonth } from "date-fns";
 import { BillingPlans } from "@/app/billing/billing-plans";
 import { BillingStatus } from "@/app/billing/billing-status";
 import { CurrentBillTotal } from "@/app/billing/current-bill-card";
-import { useAggregatedMetrics } from "@/app/billing/hooks";
+import { useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { type MetricType, UsageCard } from "@/app/billing/usage-card";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -88,7 +88,7 @@ export function BillingPage() {
 	const { data } = useSuspenseQuery({
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
 	});
-	const metrics = useAggregatedMetrics();
+	const metrics = useBilledMetrics();
 	const plan = data?.billing.activePlan || "free";
 
 	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
