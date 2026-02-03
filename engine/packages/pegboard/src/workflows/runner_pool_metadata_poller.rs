@@ -12,6 +12,12 @@ pub struct Input {
 	pub runner_name: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+struct State {
+	last_retry_ts: i64,
+	retry_count: usize,
+}
+
 #[workflow]
 pub async fn pegboard_runner_pool_metadata_poller(
 	ctx: &mut WorkflowCtx,
@@ -105,6 +111,12 @@ enum PollMetadataOutput {
 /// Combined activity that fetches metadata, updates actor names, and drains older versions.
 #[activity(PollMetadata)]
 async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<PollMetadataOutput> {
+	let mut state = ctx.state::<Option<State>>()?;
+	if state.is_none() {
+		*state = Some(State::default());
+	}
+	let state = state.as_mut().unwrap();
+
 	tracing::debug!(
 		namespace_id = %input.namespace_id,
 		runner_name = %input.runner_name,
@@ -143,12 +155,25 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 		return Ok(PollMetadataOutput::Break);
 	};
 
+	// Reset backoff
+	if state.last_retry_ts < util::timestamp::now() - util::duration::minutes(10) {
+		state.retry_count = 0;
+	}
+
 	// Calculate effective poll interval (in milliseconds)
 	let min_poll_interval = ctx.config().pegboard().min_metadata_poll_interval();
 	let default_poll_interval = ctx.config().pegboard().default_metadata_poll_interval();
-	let poll_interval = metadata_poll_interval
+	let base_poll_interval = metadata_poll_interval
 		.unwrap_or(default_poll_interval)
 		.max(min_poll_interval);
+	let backoff = util::backoff::Backoff::new_at(
+		8,
+		None,
+		base_poll_interval as usize,
+		500,
+		state.retry_count,
+	);
+	let backoff_poll_interval = backoff.current_duration() as u64;
 
 	// Fetch metadata using the shared op
 	let result = ctx
@@ -164,7 +189,13 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 				?error,
 				"failed to fetch metadata, will retry"
 			);
-			return Ok(PollMetadataOutput::FetchError { poll_interval });
+
+			state.last_retry_ts = util::timestamp::now();
+			state.retry_count += 1;
+
+			return Ok(PollMetadataOutput::FetchError {
+				poll_interval: backoff_poll_interval,
+			});
 		}
 	};
 
@@ -203,7 +234,7 @@ async fn poll_metadata(ctx: &ActivityCtx, input: &PollMetadataInput) -> Result<P
 	};
 
 	Ok(PollMetadataOutput::Success {
-		poll_interval,
+		poll_interval: base_poll_interval,
 		older_runner_workflow_ids,
 	})
 }
