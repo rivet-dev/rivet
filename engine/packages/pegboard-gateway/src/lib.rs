@@ -236,7 +236,7 @@ impl PegboardGateway {
 						return Err(ServiceUnavailable.build());
 					}
 					_ = drop_rx.changed() => {
-						tracing::warn!("tunnel message timeout");
+						tracing::warn!(reason=?drop_rx.borrow(), "tunnel message timeout");
 						return Err(ServiceUnavailable.build());
 					}
 				}
@@ -362,7 +362,7 @@ impl PegboardGateway {
 							return Err(WebSocketServiceUnavailable.build());
 						}
 						_ = drop_rx.changed() => {
-							tracing::warn!("websocket open timeout");
+							tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
 							return Err(WebSocketServiceUnavailable.build());
 						}
 					}

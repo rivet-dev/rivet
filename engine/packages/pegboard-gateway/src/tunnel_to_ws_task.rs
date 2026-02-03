@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::LifecycleResult;
-use crate::shared_state::SharedState;
+use crate::shared_state::{MsgGcReason, SharedState};
 
 pub async fn task(
 	shared_state: SharedState,
@@ -22,7 +22,7 @@ pub async fn task(
 	request_id: protocol::RequestId,
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor::Stopped>,
 	mut msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
-	mut drop_rx: watch::Receiver<()>,
+	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	can_hibernate: bool,
 	egress_bytes: Arc<AtomicU64>,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
@@ -87,7 +87,7 @@ pub async fn task(
 				}
 			}
 			_ = drop_rx.changed() => {
-				tracing::warn!("garbage collected");
+				tracing::warn!(reason=?drop_rx.borrow(), "garbage collected");
 				return Err(WebSocketServiceTimeout.build());
 			}
 			_ = tunnel_to_ws_abort_rx.changed() => {

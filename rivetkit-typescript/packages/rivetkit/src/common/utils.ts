@@ -253,7 +253,7 @@ export function deconstructError(
 		} else {
 			statusCode = 500;
 			public_ = false;
-			group = "internal";
+			group = "rivetkit";
 			code = errors.INTERNAL_ERROR_CODE;
 			message = getErrorMessage(error);
 
@@ -270,7 +270,7 @@ export function deconstructError(
 	} else {
 		statusCode = 500;
 		public_ = false;
-		group = "internal";
+		group = "rivetkit";
 		code = errors.INTERNAL_ERROR_CODE;
 		message = errors.INTERNAL_ERROR_DESCRIPTION;
 		metadata = {
@@ -335,5 +335,5 @@ function getErrorMessage(err: unknown): string {
 
 /** Generates a `Next` handler to pass to middleware in order to be able to call arbitrary middleware. */
 export function noopNext(): Next {
-	return async () => {};
+	return async () => { };
 }
