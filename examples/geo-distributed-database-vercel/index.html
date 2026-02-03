@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geo-Distributed Database</title>
+    <style>
+        @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+        :root {
+            color-scheme: light;
+            --ink: #0f1c2e;
+            --ink-soft: #38485f;
+            --accent: #1f6f78;
+            --accent-strong: #0f5f66;
+            --sun: #f2a541;
+            --panel: rgba(255, 255, 255, 0.92);
+            --panel-border: #d7e0ea;
+            --shadow: 0 28px 60px rgba(17, 31, 51, 0.16);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", "Avenir Next", "Avenir", sans-serif;
+            color: var(--ink);
+            background: radial-gradient(circle at top, #fff4dc 0%, #e6f0f7 45%, #d7e2ef 100%);
+            min-height: 100vh;
+        }
+
+        .app {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 48px 24px 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 32px;
+            padding: 34px;
+            border-radius: 28px;
+            background: linear-gradient(120deg, #0f1c2e 0%, #1f6f78 100%);
+            color: #fef6e7;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 20% 20%, rgba(242, 165, 65, 0.35), transparent 45%);
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .hero-copy {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .eyebrow {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(254, 246, 231, 0.75);
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 3vw, 2.9rem);
+            line-height: 1.05;
+        }
+
+        .hero p {
+            margin: 0;
+            color: rgba(254, 246, 231, 0.85);
+            font-size: 1.05rem;
+        }
+
+        .status-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        .status.connected::before,
+        .status.connecting::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--sun);
+            display: inline-block;
+        }
+
+        .status.connecting::before {
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .status.detail {
+            font-family: "IBM Plex Mono", "Courier New", monospace;
+        }
+
+        .hero-region {
+            position: relative;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 20px;
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .region-label {
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            font-size: 0.75rem;
+            color: rgba(254, 246, 231, 0.65);
+        }
+
+        .region-name {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .region-meta {
+            font-family: "IBM Plex Mono", "Courier New", monospace;
+            font-size: 0.85rem;
+            color: rgba(254, 246, 231, 0.85);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+            gap: 24px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 18px 40px rgba(15, 28, 46, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.4rem;
+        }
+
+        .panel-header p {
+            margin: 0;
+            color: var(--ink-soft);
+        }
+
+        .chip {
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(31, 111, 120, 0.12);
+            color: var(--accent-strong);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .world-map {
+            width: 100%;
+            height: auto;
+            border-radius: 20px;
+            background: #f6fafc;
+            border: 1px solid #e1e8f0;
+            padding: 12px;
+        }
+
+        .map-lands path {
+            fill: #cfdbe7;
+            stroke: #b3c2d3;
+            stroke-width: 2;
+        }
+
+        .map-grid line {
+            stroke: rgba(15, 28, 46, 0.08);
+            stroke-width: 1;
+        }
+
+        .map-marker circle {
+            fill: #f2a541;
+            stroke: #fff;
+            stroke-width: 3;
+        }
+
+        .map-marker text {
+            font-family: "IBM Plex Mono", "Courier New", monospace;
+            font-size: 11px;
+            fill: #4a5a70;
+        }
+
+        .map-marker.active circle {
+            fill: #1f6f78;
+        }
+
+        .map-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .map-stat {
+            background: #f9f3e9;
+            border-radius: 16px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .map-stat span {
+            font-size: 0.8rem;
+            color: var(--ink-soft);
+        }
+
+        .map-stat strong {
+            font-size: 1rem;
+        }
+
+        .form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-row label {
+            font-weight: 600;
+            color: var(--ink-soft);
+        }
+
+        select {
+            border-radius: 12px;
+            padding: 10px 12px;
+            border: 1px solid #d3dbe4;
+            font-size: 1rem;
+            font-family: "Space Grotesk", "Avenir Next", "Avenir", sans-serif;
+            background: #fff;
+        }
+
+        .region-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid #d6dee8;
+            background: #fff;
+            cursor: pointer;
+            font-family: "IBM Plex Mono", "Courier New", monospace;
+        }
+
+        .tag.active {
+            background: rgba(31, 111, 120, 0.12);
+            border-color: rgba(31, 111, 120, 0.4);
+            color: var(--accent-strong);
+        }
+
+        .divider {
+            height: 1px;
+            background: #e4eaf1;
+        }
+
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .activity-list ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .activity-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #f6f9fb;
+            font-family: "IBM Plex Mono", "Courier New", monospace;
+            font-size: 0.85rem;
+        }
+
+        .activity-list time {
+            color: #6a7a8f;
+        }
+
+        .empty {
+            color: #7a899d;
+            font-size: 0.95rem;
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+            font-family: "Space Grotesk", "Avenir Next", "Avenir", sans-serif;
+        }
+
+        .ghost {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid #d7e0ea;
+            background: transparent;
+            font-size: 0.85rem;
+        }
+
+        .page-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .page {
+            padding: 12px 18px;
+            border-radius: 14px;
+            background: #0f1c2e;
+            color: #fef6e7;
+            font-size: 0.95rem;
+        }
+
+        .page:hover {
+            background: #14263d;
+        }
+
+        @media (max-width: 960px) {
+            .hero {
+                grid-template-columns: 1fr;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .app {
+                padding: 28px 18px 60px;
+            }
+
+            .hero {
+                padding: 24px;
+            }
+
+            .region-name {
+                font-size: 1.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/frontend/main.tsx"></script>
+</body>
+</html>

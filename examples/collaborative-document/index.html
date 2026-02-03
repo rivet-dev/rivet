@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Document Example</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f5f1e8;
+            --surface: #ffffff;
+            --surface-2: #fef7ed;
+            --border: #e2d8c7;
+            --text: #1f2a37;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --accent-2: #f97316;
+            --shadow: 0 18px 60px rgba(15, 23, 42, 0.12);
+            --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+            --sans: "Space Grotesk", "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--sans);
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, #fef3c7 0%, transparent 45%),
+                radial-gradient(circle at 80% 10%, #ecfccb 0%, transparent 45%),
+                linear-gradient(120deg, #f5f1e8 0%, #fef7ed 50%, #fef3c7 100%);
+            min-height: 100vh;
+        }
+
+        #root {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 48px 24px 72px;
+        }
+
+        .page {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .hero {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .hero h1 {
+            margin: 12px 0 12px;
+            font-size: clamp(2rem, 4vw, 3.2rem);
+        }
+
+        .hero p {
+            max-width: 560px;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .eyebrow {
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            font-size: 0.75rem;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .hero-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 16px;
+            min-width: 280px;
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 14px;
+        }
+
+        .hero-card label {
+            display: grid;
+            gap: 6px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        input {
+            font: inherit;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+
+        button {
+            font: inherit;
+            border-radius: 999px;
+            border: none;
+            padding: 10px 18px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 10px 20px rgba(15, 118, 110, 0.2);
+        }
+
+        button.secondary {
+            background: #f1f5f9;
+            color: var(--text);
+            box-shadow: none;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        button:not(:disabled):hover {
+            transform: translateY(-1px);
+        }
+
+        .color-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .color-chip::before {
+            content: "";
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--cursor-color, #94a3b8);
+        }
+
+        .documents {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 20px;
+        }
+
+        .documents-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .create-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .documents-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .document-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid transparent;
+            background: var(--surface-2);
+        }
+
+        .document-card.active {
+            border-color: var(--accent);
+            background: #ecfeff;
+        }
+
+        .document-card h3 {
+            margin: 0 0 4px;
+        }
+
+        .document-card p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .document-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .editor {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 24px;
+        }
+
+        .editor.empty {
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .editor-header h2 {
+            margin: 0 0 6px;
+        }
+
+        .editor-header p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .editor-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #f59e0b;
+        }
+
+        .status-dot.online {
+            background: #10b981;
+        }
+
+        .editor-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+            gap: 24px;
+        }
+
+        .editor-panel {
+            display: grid;
+            gap: 12px;
+        }
+
+        .editor-canvas {
+            position: relative;
+            min-height: 320px;
+        }
+
+        textarea,
+        .cursor-overlay {
+            width: 100%;
+            min-height: 320px;
+            padding: 18px;
+            font-family: var(--mono);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: #fff;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        textarea {
+            position: relative;
+            z-index: 2;
+            resize: vertical;
+        }
+
+        .cursor-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            color: transparent;
+            pointer-events: none;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        .cursor-marker {
+            display: inline-block;
+            position: relative;
+            height: 1.4em;
+            margin-left: -1px;
+            border-left: 2px solid var(--cursor-color, #94a3b8);
+        }
+
+        .cursor-marker::after {
+            content: attr(data-name);
+            position: absolute;
+            top: -1.4em;
+            left: 0;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: var(--cursor-color, #94a3b8);
+            color: white;
+            font-size: 0.65rem;
+            white-space: nowrap;
+        }
+
+        .editor-hint {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .presence-panel {
+            background: #0f172a;
+            color: white;
+            border-radius: 16px;
+            padding: 18px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .presence-panel h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .presence-panel ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 12px;
+        }
+
+        .presence-panel li {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .presence-panel li span {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+
+        .presence-color {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--cursor-color, #94a3b8);
+        }
+
+        .empty {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        @media (max-width: 900px) {
+            .editor-body {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/frontend/main.tsx"></script>
+</body>
+</html>
