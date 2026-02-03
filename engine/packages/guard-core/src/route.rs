@@ -65,6 +65,8 @@ impl RouteCache {
 		self.cache.get(key).await
 	}
 
+	// TODO: Disable route caching for now, determine edge cases with gateway
+	#[allow(dead_code)]
 	#[tracing::instrument(skip_all)]
 	pub(crate) async fn insert(&self, key: u64, output: RoutingOutput) {
 		self.cache.insert(key, output).await;

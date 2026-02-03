@@ -242,6 +242,8 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			);
 		}
 
+		tracing::debug!(%topic, "runner websocket closed");
+
 		metrics::CONNECTION_ACTIVE
 			.with_label_values(&[
 				conn.namespace_id.to_string().as_str(),

@@ -188,13 +188,13 @@ export async function routeWebSocket(
 		return {
 			conn: createdConn!,
 			onOpen: (_evt: any, ws: WSContext) => {
-				ws.close(1011, code);
+				ws.close(1011, `${group}.${code}`);
 			},
 			onMessage: (_evt: { data: any }, ws: WSContext) => {
 				ws.close(1011, "actor.not_loaded");
 			},
-			onClose: (_event: any, _ws: WSContext) => {},
-			onError: (_error: unknown) => {},
+			onClose: (_event: any, _ws: WSContext) => { },
+			onError: (_error: unknown) => { },
 		};
 	}
 }
@@ -240,7 +240,7 @@ export async function handleWebSocketConnect(
 			})
 				.then((message) => {
 					actor.processMessage(message, conn).catch((error) => {
-						const { code } = deconstructError(
+						const { group, code } = deconstructError(
 							error,
 							actor.rLog,
 							{
@@ -248,7 +248,7 @@ export async function handleWebSocketConnect(
 							},
 							exposeInternalError,
 						);
-						ws.close(1011, code);
+						ws.close(1011, `${group}.${code}`);
 					});
 				})
 				.catch((error) => {
@@ -256,7 +256,7 @@ export async function handleWebSocketConnect(
 					// This is fail-fast behavior: we cannot send an error response for a
 					// message we couldn't parse (no actionId), and skipping the message
 					// could cause request/response ordering corruption.
-					const { code } = deconstructError(
+					const { group, code } = deconstructError(
 						error,
 						actor.rLog,
 						{
@@ -264,7 +264,7 @@ export async function handleWebSocketConnect(
 						},
 						exposeInternalError,
 					);
-					ws.close(1011, code);
+					ws.close(1011, `${group}.${code}`);
 				});
 		},
 		onClose: (
@@ -350,7 +350,7 @@ export async function handleRawWebSocket(
 		},
 		// Raw websocket messages are handled directly by the actor's event
 		// listeners on the WebSocket object, not through this callback
-		onMessage: (_evt: any, _ws: any) => {},
+		onMessage: (_evt: any, _ws: any) => { },
 		onClose: (evt: any, ws: any) => {
 			// Resolve the close promise
 			closePromiseResolvers.resolve();
@@ -358,7 +358,7 @@ export async function handleRawWebSocket(
 			// Clean up the connection
 			conn.disconnect(evt?.reason);
 		},
-		onError: (error: any, ws: any) => {},
+		onError: (error: any, ws: any) => { },
 	};
 }
 
