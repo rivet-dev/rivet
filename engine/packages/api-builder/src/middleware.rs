@@ -91,7 +91,12 @@ pub async fn http_logging_middleware(
 
 	let method = req.method().clone();
 	let uri = req.uri().clone();
-	let path = uri.path().to_string();
+	// Used matched path if it exists
+	let path = if let Some(path) = req.extensions().get::<MatchedPath>() {
+		path.as_str().to_string()
+	} else {
+		uri.path().to_string()
+	};
 	let protocol = req.version();
 
 	// Log request metadata
@@ -110,10 +115,6 @@ pub async fn http_logging_middleware(
 	metrics::API_REQUEST_TOTAL
 		.with_label_values(&[router_name, method.as_str(), path.as_str()])
 		.inc();
-
-	// Clone values for the async block
-	let method_clone = method.clone();
-	let path_clone = path.clone();
 
 	// Process the request
 	let response = async move {
@@ -185,7 +186,7 @@ pub async fn http_logging_middleware(
 		);
 
 		// Update metrics
-		metrics::API_REQUEST_PENDING.with_label_values(&[router_name, method_clone.as_str(), path_clone.as_str()]).dec();
+		metrics::API_REQUEST_PENDING.with_label_values(&[router_name, method.as_str(), path.as_str()]).dec();
 
 		let error_str: String = if status.is_success() {
 			String::new()
@@ -195,12 +196,12 @@ pub async fn http_logging_middleware(
 			String::new()
 		};
  			metrics::API_REQUEST_DURATION
-			.with_label_values(&[router_name, method_clone.as_str(), path_clone.as_str(), status.as_str(), error_str.as_str()])
+			.with_label_values(&[router_name, method.as_str(), path.as_str(), status.as_str(), error_str.as_str()])
 			.observe(duration);
 
 		if !status.is_success() {
 			metrics::API_REQUEST_ERRORS
-			.with_label_values(&[router_name, method_clone.as_str(), path_clone.as_str(), status.as_str(), error_str.as_str()])
+			.with_label_values(&[router_name, method.as_str(), path.as_str(), status.as_str(), error_str.as_str()])
 			.inc();
 		}
 
