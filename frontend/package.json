@@ -65,6 +65,7 @@
 		"@rivet-gg/icons": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
 		"@rivetkit/example-registry": "workspace:^",
+		"@rivetkit/traces": "workspace:*",
 		"@sentry/react": "^8.55.0",
 		"@sentry/vite-plugin": "^2.23.1",
 		"@shikijs/langs": "^3.12.2",
