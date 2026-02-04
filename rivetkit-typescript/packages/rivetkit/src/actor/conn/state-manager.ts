@@ -39,7 +39,7 @@ export type ConnData<CP, CS> =
  * Handles automatic state change detection for connection-specific state.
  */
 export class StateManager<CP, CS> {
-	#conn: Conn<any, CP, CS, any, any, any>;
+	#conn: Conn<any, CP, CS, any, any, any, any, any>;
 
 	/**
 	 * Data representing this connection.
@@ -50,7 +50,7 @@ export class StateManager<CP, CS> {
 	#data!: ConnData<CP, CS>;
 
 	constructor(
-		conn: Conn<any, CP, CS, any, any, any>,
+		conn: Conn<any, CP, CS, any, any, any, any, any>,
 		data: ConnDataInput<CP, CS>,
 	) {
 		this.#conn = conn;

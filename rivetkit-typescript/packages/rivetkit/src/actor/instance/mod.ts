@@ -1,11 +1,11 @@
-import invariant from "invariant";
+import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import {
 	createTraces,
 	type SpanHandle,
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
+import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
@@ -18,7 +18,7 @@ import {
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
-import { getRunFunction, type ActorConfig } from "../config";
+import { type ActorConfig, getRunFunction } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -44,6 +44,7 @@ import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
 import { Schedule } from "../schedule";
+import type { SchemaConfig } from "../schema";
 import {
 	assertUnreachable,
 	DeadlineError,
@@ -53,7 +54,6 @@ import {
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./keys";
-import { ActorTracesDriver } from "./traces-driver";
 import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
@@ -61,6 +61,7 @@ import {
 import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
+import { ActorTracesDriver } from "./traces-driver";
 
 export type { SaveStateOptions };
 
@@ -74,28 +75,46 @@ enum CanSleep {
 }
 
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
-export type AnyActorInstance = ActorInstance<any, any, any, any, any, any>;
+export type AnyActorInstance = ActorInstance<
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any
+>;
 
 export type ExtractActorState<A extends AnyActorInstance> =
-	A extends ActorInstance<infer State, any, any, any, any, any>
+	A extends ActorInstance<infer State, any, any, any, any, any, any, any>
 		? State
 		: never;
 
 export type ExtractActorConnParams<A extends AnyActorInstance> =
-	A extends ActorInstance<any, infer ConnParams, any, any, any, any>
+	A extends ActorInstance<any, infer ConnParams, any, any, any, any, any, any>
 		? ConnParams
 		: never;
 
 export type ExtractActorConnState<A extends AnyActorInstance> =
-	A extends ActorInstance<any, any, infer ConnState, any, any, any>
+	A extends ActorInstance<any, any, infer ConnState, any, any, any, any, any>
 		? ConnState
 		: never;
 
 // MARK: - Main ActorInstance Class
-export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
+export class ActorInstance<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig = Record<never, never>,
+	Q extends SchemaConfig = Record<never, never>,
+> {
 	// MARK: - Core Properties
-	actorContext: ActorContext<S, CP, CS, V, I, DB>;
-	#config: ActorConfig<S, CP, CS, V, I, DB>;
+	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
+	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
 	driver!: ActorDriver;
 	#inlineClient!: Client<Registry<any>>;
 	#actorId!: string;
@@ -105,15 +124,15 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#region!: string;
 
 	// MARK: - Managers
-	connectionManager!: ConnectionManager<S, CP, CS, V, I, DB>;
+	connectionManager!: ConnectionManager<S, CP, CS, V, I, DB, E, Q>;
 
-	stateManager!: StateManager<S, CP, CS, I>;
+	stateManager!: StateManager<S, CP, CS, I, E, Q>;
 
-	eventManager!: EventManager<S, CP, CS, V, I, DB>;
+	eventManager!: EventManager<S, CP, CS, V, I, DB, E, Q>;
 
-	#scheduleManager!: ScheduleManager<S, CP, CS, V, I, DB>;
+	#scheduleManager!: ScheduleManager<S, CP, CS, V, I, DB, E, Q>;
 
-	queueManager!: QueueManager<S, CP, CS, V, I, DB>;
+	queueManager!: QueueManager<S, CP, CS, V, I, DB, E, Q>;
 
 	// MARK: - Logging
 	#log!: Logger;
@@ -155,17 +174,15 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Inspector
 	#inspectorToken?: string;
-	#inspector!: ActorInspector;
+	#inspector = new ActorInspector(this);
 
 	// MARK: - Tracing
 	#traces!: Traces<OtlpExportTraceServiceRequestJson>;
 
 	// MARK: - Constructor
-	constructor(config: ActorConfig<S, CP, CS, V, I, DB>) {
+	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {
 		this.#config = config;
-		this.#inspector = new ActorInspector(this);
 		this.actorContext = new ActorContext(this);
-		this.#inspector = new ActorInspector(this);
 	}
 
 	// MARK: - Public Getters
@@ -230,14 +247,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		});
 	}
 
-	endTraceSpan(
-		handle: SpanHandle,
-		status?: SpanStatusInput,
-	): void {
-		this.#traces.endSpan(
-			handle,
-			status ? { status } : undefined,
-		);
+	endTraceSpan(handle: SpanHandle, status?: SpanStatusInput): void {
+		this.#traces.endSpan(handle, status ? { status } : undefined);
 	}
 
 	async runInTraceSpan<T>(
@@ -248,8 +259,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		const span = this.startTraceSpan(name, attributes);
 		try {
 			const result = this.#traces.withSpan(span, fn);
-			const resolved =
-				result instanceof Promise ? await result : result;
+			const resolved = result instanceof Promise ? await result : result;
 			this.#traces.endSpan(span, {
 				status: { code: "OK" },
 			});
@@ -280,7 +290,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		});
 	}
 
-	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
+	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>> {
 		return this.connectionManager.connections;
 	}
 
@@ -296,7 +306,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return Object.keys(this.#config.actions ?? {});
 	}
 
-	get config(): ActorConfig<S, CP, CS, V, I, DB> {
+	get config(): ActorConfig<S, CP, CS, V, I, DB, E, Q> {
 		return this.#config;
 	}
 
@@ -580,7 +590,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						val: { eventName: string; subscribe: boolean };
 				  };
 		},
-		conn: Conn<S, CP, CS, V, I, DB>,
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) {
 		await processMessage(message, this, conn, {
 			onExecuteAction: async (ctx, name, args) => {
@@ -597,7 +607,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Action Execution
 	async executeAction(
-		ctx: ActionContext<S, CP, CS, V, I, DB>,
+		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
 		actionName: string,
 		args: unknown[],
 	): Promise<unknown> {
@@ -619,15 +629,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			throw new errors.ActionNotFound(actionName);
 		}
 
-		this.#activeKeepAwakeCount++;
-		this.resetSleepTimer();
-
-		const actionSpan = this.startTraceSpan(
-			`actor.action.${actionName}`,
-			{
-				"rivet.action.name": actionName,
-			},
-		);
+		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
+			"rivet.action.name": actionName,
+		});
 		let spanEnded = false;
 
 		try {
@@ -645,12 +649,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				);
 
 				let output: unknown;
-				const maybeThenable = outputOrPromise as {
-					then?: (onfulfilled?: unknown, onrejected?: unknown) => unknown;
-				};
-				if (maybeThenable && typeof maybeThenable.then === "function") {
+				if (outputOrPromise instanceof Promise) {
 					output = await deadline(
-						Promise.resolve(outputOrPromise),
+						outputOrPromise,
 						this.#config.options.actionTimeout,
 					);
 				} else {
@@ -710,22 +711,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					status: { code: "OK" },
 				});
 			}
-			this.#activeKeepAwakeCount--;
-			if (this.#activeKeepAwakeCount < 0) {
-				this.#activeKeepAwakeCount = 0;
-				this.#rLog.warn({
-					msg: "active keep awake count went below 0, this is a RivetKit bug",
-					...EXTRA_ERROR_LOG,
-				});
-			}
-			this.resetSleepTimer();
 			this.stateManager.savePersistThrottled();
 		}
 	}
 
 	// MARK: - HTTP/WebSocket Handlers
 	async handleRawRequest(
-		conn: Conn<S, CP, CS, V, I, DB>,
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 		request: Request,
 	): Promise<Response> {
 		this.assertReady();
@@ -742,10 +734,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				"http.url": request.url,
 				"rivet.conn.id": conn.id,
 			},
-				async () => {
-					try {
-						const ctx = new RequestContext(this, conn, request);
-						const response = await onRequest(ctx, request);
+			async () => {
+				try {
+					const ctx = new RequestContext(this, conn, request);
+					const response = await onRequest(ctx, request);
 					if (!response) {
 						throw new errors.InvalidRequestHandlerResponse();
 					}
@@ -764,7 +756,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	handleRawWebSocket(
-		conn: Conn<S, CP, CS, V, I, DB>,
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 		websocket: UniversalWebSocket,
 		request?: Request,
 	) {
@@ -950,7 +942,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const [value] = args;
 			if (typeof value === "string") {
 				message = value;
-			} else if (typeof value === "number" || typeof value === "boolean") {
+			} else if (
+				typeof value === "number" ||
+				typeof value === "boolean"
+			) {
 				message = String(value);
 			} else if (value && typeof value === "object") {
 				const maybeMsg = (value as { msg?: unknown }).msg;
@@ -1100,19 +1095,23 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		let vars: V | undefined;
 		if ("createVars" in this.#config) {
 			const createVars = this.#config.createVars;
-			vars = await this.runInTraceSpan("actor.createVars", undefined, () => {
-				const dataOrPromise = createVars!(
-					this.actorContext as any,
-					this.driver.getContext(this.#actorId),
-				);
-				if (dataOrPromise instanceof Promise) {
-					return deadline(
-						dataOrPromise,
-						this.#config.options.createVarsTimeout,
+			vars = await this.runInTraceSpan(
+				"actor.createVars",
+				undefined,
+				() => {
+					const dataOrPromise = createVars!(
+						this.actorContext as any,
+						this.driver.getContext(this.#actorId),
 					);
-				}
-				return dataOrPromise;
-			});
+					if (dataOrPromise instanceof Promise) {
+						return deadline(
+							dataOrPromise,
+							this.#config.options.createVarsTimeout,
+						);
+					}
+					return dataOrPromise;
+				},
+			);
 		} else if ("vars" in this.#config) {
 			vars = structuredClone(this.#config.vars);
 		} else {
@@ -1138,15 +1137,19 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const onSleep = this.#config.onSleep;
 			try {
 				this.#rLog.debug({ msg: "calling onSleep" });
-				await this.runInTraceSpan("actor.onSleep", undefined, async () => {
-					const result = onSleep(this.actorContext);
-					if (result instanceof Promise) {
-						await deadline(
-							result,
-							this.#config.options.onSleepTimeout,
-						);
-					}
-				});
+				await this.runInTraceSpan(
+					"actor.onSleep",
+					undefined,
+					async () => {
+						const result = onSleep(this.actorContext);
+						if (result instanceof Promise) {
+							await deadline(
+								result,
+								this.#config.options.onSleepTimeout,
+							);
+						}
+					},
+				);
 				this.#rLog.debug({ msg: "onSleep completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
@@ -1162,34 +1165,23 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	async #callOnDestroy() {
-		// Clean up database first
-		if ("db" in this.#config && this.#config.db && this.#db) {
-			try {
-				this.#rLog.debug({ msg: "cleaning up database" });
-				await this.#config.db.onDestroy?.(this.#db);
-				this.#rLog.debug({ msg: "database cleanup completed" });
-			} catch (error) {
-				this.#rLog.error({
-					msg: "error cleaning up database",
-					error: stringifyError(error),
-				});
-			}
-		}
-
-		// Then call user's onDestroy
 		if (this.#config.onDestroy) {
 			const onDestroy = this.#config.onDestroy;
 			try {
 				this.#rLog.debug({ msg: "calling onDestroy" });
-				await this.runInTraceSpan("actor.onDestroy", undefined, async () => {
-					const result = onDestroy(this.actorContext);
-					if (result instanceof Promise) {
-						await deadline(
-							result,
-							this.#config.options.onDestroyTimeout,
-						);
-					}
-				});
+				await this.runInTraceSpan(
+					"actor.onDestroy",
+					undefined,
+					async () => {
+						const result = onDestroy(this.actorContext);
+						if (result instanceof Promise) {
+							await deadline(
+								result,
+								this.#config.options.onDestroyTimeout,
+							);
+						}
+					},
+				);
 				this.#rLog.debug({ msg: "onDestroy completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
@@ -1284,48 +1276,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #setupDatabase() {
 		if ("db" in this.#config && this.#config.db) {
-			try {
-				const client = await this.#config.db.createClient({
-					actorId: this.#actorId,
-					overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
-						? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
-						: undefined,
-					overrideDrizzleDatabaseClient: this.driver
-						.overrideDrizzleDatabaseClient
-						? () => this.driver.overrideDrizzleDatabaseClient!(this.#actorId)
-						: undefined,
-					kv: {
-						batchPut: (entries) =>
-							this.driver.kvBatchPut(this.#actorId, entries),
-						batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
-						batchDelete: (keys) =>
-							this.driver.kvBatchDelete(this.#actorId, keys),
-					},
-					sqliteVfs: this.driver.sqliteVfs,
-				});
-				this.#rLog.info({ msg: "database migration starting" });
-				await this.#config.db.onMigrate?.(client);
-				this.#rLog.info({ msg: "database migration complete" });
-				this.#db = client;
-			} catch (error) {
-				// Ensure error is properly formatted
-				if (error instanceof Error) {
-					this.#rLog.error({
-						msg: "database setup failed",
-						error: stringifyError(error),
-					});
-					throw error;
-				}
-				const wrappedError = new Error(
-					`Database setup failed: ${String(error)}`,
-				);
-				this.#rLog.error({
-					msg: "database setup failed with non-Error object",
-					error: String(error),
-					errorType: typeof error,
-				});
-				throw wrappedError;
-			}
+			const client = await this.#config.db.createClient({
+				getDatabase: () => this.driver.getDatabase(this.#actorId),
+			});
+			this.#rLog.info({ msg: "database migration starting" });
+			await this.#config.db.onMigrate?.(client);
+			this.#rLog.info({ msg: "database migration complete" });
+			this.#db = client;
 		}
 	}
 

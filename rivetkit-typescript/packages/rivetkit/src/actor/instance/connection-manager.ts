@@ -30,6 +30,7 @@ import {
 } from "../contexts";
 import type { AnyDatabaseProvider } from "../database";
 import { CachedSerializer } from "../protocol/serde";
+import type { SchemaConfig } from "../schema";
 import { deadline } from "../utils";
 import { makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
@@ -44,22 +45,24 @@ export class ConnectionManager<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig = Record<never, never>,
+	Q extends SchemaConfig = Record<never, never>,
 > {
-	#actor: ActorInstance<S, CP, CS, V, I, DB>;
-	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB>>();
+	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>>();
 
 	/** Connections that have had their state changed and need to be persisted. */
 	#connsWithPersistChanged = new Set<ConnId>();
 
-	constructor(actor: ActorInstance<S, CP, CS, V, I, DB>) {
+	constructor(actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>) {
 		this.#actor = actor;
 	}
 
-	get connections(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
+	get connections(): Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>> {
 		return this.#connections;
 	}
 
-	getConnForId(id: string): Conn<S, CP, CS, V, I, DB> | undefined {
+	getConnForId(id: string): Conn<S, CP, CS, V, I, DB, E, Q> | undefined {
 		return this.#connections.get(id);
 	}
 
@@ -71,7 +74,7 @@ export class ConnectionManager<
 		this.#connsWithPersistChanged.clear();
 	}
 
-	markConnWithPersistChanged(conn: Conn<S, CP, CS, V, I, DB>) {
+	markConnWithPersistChanged(conn: Conn<S, CP, CS, V, I, DB, E, Q>) {
 		invariant(
 			conn.isHibernatable,
 			"cannot mark non-hibernatable conn for persist",
@@ -100,7 +103,7 @@ export class ConnectionManager<
 		requestHeaders: Record<string, string> | undefined,
 		isHibernatable: boolean,
 		isRestoringHibernatable: boolean,
-	): Promise<Conn<S, CP, CS, V, I, DB>> {
+	): Promise<Conn<S, CP, CS, V, I, DB, E, Q>> {
 		this.#actor.assertReady();
 
 		// TODO: Add back
@@ -169,7 +172,7 @@ export class ConnectionManager<
 		}
 
 		// Create connection instance
-		const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, connData);
+		const conn = new Conn<S, CP, CS, V, I, DB, E, Q>(this.#actor, connData);
 		conn[CONN_DRIVER_SYMBOL] = driver;
 
 		return conn;
@@ -183,7 +186,7 @@ export class ConnectionManager<
 	 * be messed up and cause race conditions that can drop WebSocket messages.
 	 * So all async work in prepareConn.
 	 */
-	connectConn(conn: Conn<S, CP, CS, V, I, DB>) {
+	connectConn(conn: Conn<S, CP, CS, V, I, DB, E, Q>) {
 		invariant(!this.#connections.has(conn.id), "conn already connected");
 
 		this.#connections.set(conn.id, conn);
@@ -236,7 +239,9 @@ export class ConnectionManager<
 		}
 	}
 
-	#reconnectHibernatableConn(driver: ConnDriver): Conn<S, CP, CS, V, I, DB> {
+	#reconnectHibernatableConn(
+		driver: ConnDriver,
+	): Conn<S, CP, CS, V, I, DB, E, Q> {
 		invariant(driver.hibernatable, "missing requestIdBuf");
 		const existingConn = this.findHibernatableConn(
 			driver.hibernatable.gatewayId,
@@ -271,7 +276,7 @@ export class ConnectionManager<
 		return existingConn;
 	}
 
-	#disconnectExistingDriver(conn: Conn<S, CP, CS, V, I, DB>) {
+	#disconnectExistingDriver(conn: Conn<S, CP, CS, V, I, DB, E, Q>) {
 		const driver = conn[CONN_DRIVER_SYMBOL];
 		if (driver?.disconnect) {
 			driver.disconnect(
@@ -287,7 +292,7 @@ export class ConnectionManager<
 	 *
 	 * This is called by `Conn.disconnect`. This should not call `Conn.disconnect.`
 	 */
-	async connDisconnected(conn: Conn<S, CP, CS, V, I, DB>) {
+	async connDisconnected(conn: Conn<S, CP, CS, V, I, DB, E, Q>) {
 		// Remove from tracking
 		this.#connections.delete(conn.id);
 
@@ -400,7 +405,7 @@ export class ConnectionManager<
 		request: Request | undefined,
 		requestPath: string | undefined,
 		requestHeaders: Record<string, string> | undefined,
-	): Promise<Conn<S, CP, CS, V, I, DB>> {
+	): Promise<Conn<S, CP, CS, V, I, DB, E, Q>> {
 		const conn = await this.prepareConn(
 			driver,
 			params,
@@ -422,7 +427,7 @@ export class ConnectionManager<
 	restoreConnections(connections: PersistedConn<CP, CS>[]) {
 		for (const connPersist of connections) {
 			// Create connection instance
-			const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, {
+			const conn = new Conn<S, CP, CS, V, I, DB, E, Q>(this.#actor, {
 				hibernatable: connPersist,
 			});
 			this.#connections.set(conn.id, conn);
@@ -448,7 +453,7 @@ export class ConnectionManager<
 	findHibernatableConn(
 		gatewayIdBuf: ArrayBuffer,
 		requestIdBuf: ArrayBuffer,
-	): Conn<S, CP, CS, V, I, DB> | undefined {
+	): Conn<S, CP, CS, V, I, DB, E, Q> | undefined {
 		return Array.from(this.#connections.values()).find((conn) => {
 			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
 			const h = connStateManager.hibernatableDataRaw;
@@ -471,8 +476,7 @@ export class ConnectionManager<
 				"actor.createConnState",
 				undefined,
 				() => {
-					const dataOrPromise =
-						createConnState!(ctx, params);
+					const dataOrPromise = createConnState!(ctx, params);
 					if (dataOrPromise instanceof Promise) {
 						return deadline(
 							dataOrPromise,
@@ -491,7 +495,7 @@ export class ConnectionManager<
 		);
 	}
 
-	#callOnConnect(conn: Conn<S, CP, CS, V, I, DB>) {
+	#callOnConnect(conn: Conn<S, CP, CS, V, I, DB, E, Q>) {
 		const attributes = {
 			"rivet.conn.id": conn.id,
 			"rivet.conn.type": conn[CONN_DRIVER_SYMBOL]?.type,
