@@ -581,6 +581,28 @@ impl ProxyService {
 				HeaderValue::from_str(&cors.expose_headers)?,
 			);
 
+			if let Some(allow_methods) = &cors.allow_methods {
+				headers.insert(
+					"access-control-allow-methods",
+					HeaderValue::from_str(allow_methods)?,
+				);
+			}
+
+			if let Some(allow_headers) = &cors.allow_headers {
+				headers.insert(
+					"access-control-allow-headers",
+					HeaderValue::from_str(allow_headers)?,
+				);
+			}
+
+			if let Some(max_age) = &cors.max_age {
+				headers.insert(
+					"access-control-max-age",
+					HeaderValue::from_str(&max_age.to_string())?,
+				);
+			}
+
+			// Add Vary header to prevent cache poisoning when echoing origin
 			if cors.allow_origin != "*" {
 				headers.insert("vary", HeaderValue::from_static("Origin"));
 			}
