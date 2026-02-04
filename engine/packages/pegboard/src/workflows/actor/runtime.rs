@@ -138,6 +138,17 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 	state.runner_id = Some(input.runner_id);
 	state.runner_workflow_id = Some(input.runner_workflow_id);
 
+	ctx.udb()?
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
+
+			// Set actor as not sleeping
+			tx.delete(&keys::actor::SleepTsKey::new(input.actor_id));
+
+			Ok(())
+		})
+		.await?;
+
 	Ok(())
 }
 
