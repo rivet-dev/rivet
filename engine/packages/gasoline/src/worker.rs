@@ -194,6 +194,7 @@ impl Worker {
 			}
 
 			let (stop_tx, stop_rx) = watch::channel(());
+			let name = workflow.workflow_name.clone();
 
 			let ctx = WorkflowCtx::new(
 				self.registry.clone(),
@@ -223,10 +224,18 @@ impl Worker {
 			self.running_workflows.insert(
 				workflow_id,
 				WorkflowHandle {
+					name,
 					stop: stop_tx,
 					handle,
 				},
 			);
+		}
+
+		metrics::WORKER_WORKFLOW_ACTIVE.reset();
+		for (_, wf) in &self.running_workflows {
+			metrics::WORKER_WORKFLOW_ACTIVE
+				.with_label_values(&[self.worker_id.to_string().as_str(), wf.name.as_str()])
+				.inc();
 		}
 
 		Ok(())
@@ -337,6 +346,8 @@ impl Worker {
 			}
 		}
 
+		metrics::WORKER_WORKFLOW_ACTIVE.reset();
+
 		let remaining_workflows = wf_futs.into_iter().count();
 		if remaining_workflows == 0 {
 			tracing::info!("all workflows evicted");
@@ -349,6 +360,7 @@ impl Worker {
 }
 
 struct WorkflowHandle {
+	name: String,
 	stop: watch::Sender<()>,
 	handle: JoinHandle<()>,
 }
