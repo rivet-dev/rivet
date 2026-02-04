@@ -217,6 +217,7 @@
 		"@rivetkit/sqlite-vfs": "workspace:*",
 		"@rivetkit/traces": "workspace:*",
 		"@rivetkit/virtual-websocket": "workspace:*",
+		"@standard-schema/spec": "^1.0.0",
 		"cbor-x": "^1.6.0",
 		"get-port": "^7.1.0",
 		"hono": "^4.7.0",

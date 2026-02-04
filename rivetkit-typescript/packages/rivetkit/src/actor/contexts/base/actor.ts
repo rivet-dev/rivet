@@ -5,14 +5,21 @@ import type { Registry } from "@/registry";
 import type { Conn, ConnId } from "../../conn/mod";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../../database";
 import type { ActorDefinition, AnyActorDefinition } from "../../definition";
+import * as errors from "../../errors";
+import { ActorKv } from "../../instance/kv";
 import type {
 	ActorInstance,
 	AnyActorInstance,
 	SaveStateOptions,
 } from "../../instance/mod";
-import { ActorKv } from "../../instance/kv";
 import { ActorQueue } from "../../instance/queue";
 import type { Schedule } from "../../schedule";
+import {
+	type InferEventArgs,
+	type InferSchemaMap,
+	type SchemaConfig,
+	validateSchemaSync,
+} from "../../schema";
 
 export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol.for(
 	"rivetkit.actorContextInternal",
@@ -28,6 +35,8 @@ export class ActorContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
 > {
 	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyActorInstance;
 	#actor: ActorInstance<
@@ -36,11 +45,22 @@ export class ActorContext<
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	>;
 	#kv: ActorKv | undefined;
 	#queue:
-		| ActorQueue<TState, TConnParams, TConnState, TVars, TInput, TDatabase>
+		| ActorQueue<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+		  >
 		| undefined;
 
 	constructor(
@@ -50,7 +70,9 @@ export class ActorContext<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 	) {
 		this.#actor = actor;
@@ -93,9 +115,36 @@ export class ActorContext<
 	 * @param name - The name of the event.
 	 * @param args - The arguments to send with the event.
 	 */
-	broadcast<Args extends Array<unknown>>(name: string, ...args: Args): void {
+	broadcast<K extends keyof TEvents & string>(
+		name: K,
+		...args: InferEventArgs<InferSchemaMap<TEvents>[K]>
+	): void;
+	broadcast(
+		name: keyof TEvents extends never ? string : never,
+		...args: Array<unknown>
+	): void;
+	broadcast(name: string, ...args: Array<unknown>): void {
+		const payload = args.length === 1 ? args[0] : args;
+		const result = validateSchemaSync(
+			this.#actor.config.events,
+			name as keyof TEvents & string,
+			payload,
+		);
+		if (!result.success) {
+			throw new errors.EventPayloadInvalid(name, result.issues);
+		}
+		if (args.length === 1) {
+			this.#actor.eventManager.broadcast(name, result.data);
+			return;
+		}
+		if (Array.isArray(result.data)) {
+			this.#actor.eventManager.broadcast(
+				name,
+				...(result.data as unknown[]),
+			);
+			return;
+		}
 		this.#actor.eventManager.broadcast(name, ...args);
-		return;
 	}
 
 	/**
@@ -114,7 +163,9 @@ export class ActorContext<
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	> {
 		if (!this.#queue) {
 			this.#queue = new ActorQueue(
@@ -165,7 +216,16 @@ export class ActorContext<
 	 */
 	get conns(): Map<
 		ConnId,
-		Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>
+		Conn<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>
 	> {
 		return this.#actor.conns;
 	}
@@ -254,7 +314,9 @@ export type ActorContextOf<AD extends AnyActorDefinition> =
 		infer V,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
+		infer E extends SchemaConfig,
+		infer Q extends SchemaConfig,
 		any
 	>
-		? ActorContext<S, CP, CS, V, I, DB>
+		? ActorContext<S, CP, CS, V, I, DB, E, Q>
 		: never;

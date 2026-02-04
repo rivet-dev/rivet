@@ -221,35 +221,24 @@ export class QueueMessageInvalid extends ActorError {
 	}
 }
 
-export class QueueCompleteNotAllowed extends ActorError {
-	constructor() {
+export class EventPayloadInvalid extends ActorError {
+	constructor(name: string, issues?: unknown[]) {
 		super(
-			"queue",
-			"complete_not_allowed",
-			"Queue message completion is only allowed when wait is enabled.",
-			{ public: true },
+			"event",
+			"invalid_payload",
+			`Event payload failed validation for '${name}'.`,
+			{ public: true, metadata: { name, issues } },
 		);
 	}
 }
 
-export class QueueMessagePending extends ActorError {
-	constructor() {
+export class QueuePayloadInvalid extends ActorError {
+	constructor(name: string, issues?: unknown[]) {
 		super(
 			"queue",
-			"message_pending",
-			"Queue message is already pending completion.",
-			{ public: true },
-		);
-	}
-}
-
-export class QueueAlreadyCompleted extends ActorError {
-	constructor() {
-		super(
-			"queue",
-			"already_completed",
-			"Queue message has already been completed.",
-			{ public: true },
+			"invalid_payload",
+			`Queue payload failed validation for '${name}'.`,
+			{ public: true, metadata: { name, issues } },
 		);
 	}
 }

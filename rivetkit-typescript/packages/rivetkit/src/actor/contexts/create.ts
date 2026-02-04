@@ -1,5 +1,6 @@
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDefinition, AnyActorDefinition } from "../definition";
+import type { SchemaConfig } from "../schema";
 import { ActorContext } from "./base/actor";
 
 /**
@@ -9,8 +10,18 @@ export class CreateContext<
 	TState,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-> extends ActorContext<TState, never, never, never, TInput, TDatabase> {}
-
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
+> extends ActorContext<
+	TState,
+	never,
+	never,
+	never,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+> {}
 
 export type CreateContextOf<AD extends AnyActorDefinition> =
 	AD extends ActorDefinition<
@@ -20,7 +31,9 @@ export type CreateContextOf<AD extends AnyActorDefinition> =
 		any,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
+		infer E extends SchemaConfig,
+		infer Q extends SchemaConfig,
 		any
 	>
-		? CreateContext<S, I, DB>
+		? CreateContext<S, I, DB, E, Q>
 		: never;

@@ -42,6 +42,8 @@ describe("ActorDefinition", () => {
 				TestVars,
 				TestInput,
 				TestDatabase,
+				Record<never, never>,
+				Record<never, never>,
 				TestActions
 			>;
 
@@ -55,7 +57,9 @@ describe("ActorDefinition", () => {
 					TestConnState,
 					TestVars,
 					TestInput,
-					TestDatabase
+					TestDatabase,
+					Record<never, never>,
+					Record<never, never>
 				>
 			>();
 
@@ -73,7 +77,9 @@ describe("ActorDefinition", () => {
 					TestConnState,
 					TestVars,
 					TestInput,
-					TestDatabase
+					TestDatabase,
+					Record<never, never>,
+					Record<never, never>
 				>
 			>();
 		});

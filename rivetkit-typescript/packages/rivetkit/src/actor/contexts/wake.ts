@@ -1,5 +1,6 @@
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDefinition, AnyActorDefinition } from "../definition";
+import type { SchemaConfig } from "../schema";
 import { ActorContext } from "./base/actor";
 
 /**
@@ -12,15 +13,18 @@ export class WakeContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
 > extends ActorContext<
 	TState,
 	TConnParams,
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase
+	TDatabase,
+	TEvents,
+	TQueues
 > {}
-
 
 export type WakeContextOf<AD extends AnyActorDefinition> =
 	AD extends ActorDefinition<
@@ -30,7 +34,9 @@ export type WakeContextOf<AD extends AnyActorDefinition> =
 		infer V,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
+		infer E extends SchemaConfig,
+		infer Q extends SchemaConfig,
 		any
 	>
-		? WakeContext<S, CP, CS, V, I, DB>
+		? WakeContext<S, CP, CS, V, I, DB, E, Q>
 		: never;
