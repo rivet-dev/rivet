@@ -5,6 +5,7 @@ import {
 	CONN_DRIVER_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
 } from "@/actor/conn/mod";
+import { getRunInspectorConfig } from "@/actor/config";
 import { ActionContext } from "@/actor/contexts/action";
 import * as actorErrors from "@/actor/errors";
 import type { AnyActorInstance } from "@/mod";
@@ -15,6 +16,7 @@ interface ActorInspectorEmitterEvents {
 	stateUpdated: (state: unknown) => void;
 	connectionsUpdated: () => void;
 	queueUpdated: () => void;
+	workflowHistoryUpdated: (history: schema.WorkflowHistory) => void;
 }
 
 export type Connection = Omit<schema.Connection, "details"> & {
@@ -29,9 +31,22 @@ export class ActorInspector {
 	public readonly emitter = createNanoEvents<ActorInspectorEmitterEvents>();
 
 	#lastQueueSize = 0;
+	#workflowInspector?: NonNullable<
+		ReturnType<typeof getRunInspectorConfig>
+	>["workflow"];
 
 	constructor(private readonly actor: AnyActorInstance) {
 		this.#lastQueueSize = actor.queueManager?.size ?? 0;
+		const runInspector = getRunInspectorConfig(actor.config.run);
+		this.#workflowInspector = runInspector?.workflow;
+		if (this.#workflowInspector?.onHistoryUpdated) {
+			this.#workflowInspector.onHistoryUpdated((history) => {
+				this.emitter.emit(
+					"workflowHistoryUpdated",
+					history as schema.WorkflowHistory,
+				);
+			});
+		}
 	}
 
 	getQueueSize() {
@@ -64,6 +79,18 @@ export class ActorInspector {
 		}
 		this.#lastQueueSize = size;
 		this.emitter.emit("queueUpdated");
+	}
+
+	isWorkflowEnabled() {
+		return this.#workflowInspector !== undefined;
+	}
+
+	getWorkflowHistory(): schema.WorkflowHistory | null {
+		if (!this.#workflowInspector) {
+			return null;
+		}
+		const history = this.#workflowInspector.getHistory();
+		return (history ?? null) as schema.WorkflowHistory | null;
 	}
 
 	// actor accessor methods

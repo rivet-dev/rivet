@@ -5,6 +5,8 @@
 		"resolveJsonModule": true,
 		"paths": {
 			"@/*": ["./src/*"],
+			"@rivetkit/workflow-engine": ["../workflow-engine/src/index.ts"],
+			"@rivetkit/traces": ["../traces/src/index.ts"],
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"]

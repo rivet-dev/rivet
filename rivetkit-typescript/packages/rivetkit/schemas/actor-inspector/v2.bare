@@ -1,7 +1,7 @@
 # MARK: Message To Server
 
 type PatchStateRequest struct {
- 	state: data
+	state: data
 }
 
 type ActionRequest struct {
@@ -18,15 +18,23 @@ type ConnectionsRequest struct {
 	id: uint
 }
 
-type EventsRequest struct {
-	id: uint
-}
-
-type ClearEventsRequest struct {
-	id: uint
-}
-
 type RpcsListRequest struct {
+	id: uint
+}
+
+type TraceQueryRequest struct {
+	id: uint
+	startMs: uint
+	endMs: uint
+	limit: uint
+}
+
+type QueueRequest struct {
+	id: uint
+	limit: uint
+}
+
+type WorkflowHistoryRequest struct {
 	id: uint
 }
 
@@ -35,9 +43,10 @@ type ToServerBody union {
 	StateRequest |
 	ConnectionsRequest |
 	ActionRequest |
-	EventsRequest |
-	ClearEventsRequest |
-	RpcsListRequest
+	RpcsListRequest |
+	TraceQueryRequest |
+	QueueRequest |
+	WorkflowHistoryRequest
 }
 
 type ToServer struct {
@@ -53,55 +62,18 @@ type Connection struct {
 	details: data
 }
 
-type ActionEvent struct {
-	name: str
-	args: data
-	connId: str
-}
-
-type BroadcastEvent struct {
-	eventName: str
-	args: data
-}
-
-type SubscribeEvent struct {
-	eventName: str
-	connId: str
-}
-
-type UnSubscribeEvent struct {
-	eventName: str
-	connId: str
-}
-
-type FiredEvent struct {
-	eventName: str
-	args: data
-	connId: str
-}
-
-type EventBody union {
-	ActionEvent |
-	BroadcastEvent |
-	SubscribeEvent |
-	UnSubscribeEvent |
-	FiredEvent
-}
-
-type Event struct {
-	id: str
-	timestamp: uint
-	body: EventBody
-}
+# Workflow history is encoded using schemas/transport.
+type WorkflowHistory data
 
 type Init struct {
 	connections: list<Connection>
-	events: list<Event>
 	state: optional<State>
 	isStateEnabled: bool
 	rpcs: list<str>
 	isDatabaseEnabled: bool
 	queueSize: uint
+	workflowHistory: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
 }
 
 type ConnectionsResponse struct {
@@ -115,26 +87,50 @@ type StateResponse struct {
 	isStateEnabled: bool
 }
 
-type EventsResponse struct {
-	rid: uint
-	events: list<Event>
-}
-
 type ActionResponse struct {
 	rid: uint
 	output: data
+}
+
+type TraceQueryResponse struct {
+	rid: uint
+	payload: data
+}
+
+type QueueMessageSummary struct {
+	id: uint
+	name: str
+	createdAtMs: uint
+}
+
+type QueueStatus struct {
+	size: uint
+	maxSize: uint
+	messages: list<QueueMessageSummary>
+	truncated: bool
+}
+
+type QueueResponse struct {
+	rid: uint
+	status: QueueStatus
+}
+
+type WorkflowHistoryResponse struct {
+	rid: uint
+	history: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
 }
 
 type StateUpdated struct {
 	state: State
 }
 
-type EventsUpdated struct {
-	events: list<Event>
-}
-
 type QueueUpdated struct {
 	queueSize: uint
+}
+
+type WorkflowHistoryUpdated struct {
+	history: WorkflowHistory
 }
 
 type RpcsListResponse struct {
@@ -145,6 +141,7 @@ type RpcsListResponse struct {
 type ConnectionsUpdated struct {
 	connections: list<Connection>
 }
+
 type Error struct {
 	message: str
 }
@@ -152,13 +149,15 @@ type Error struct {
 type ToClientBody union {
 	StateResponse |
 	ConnectionsResponse |
-	EventsResponse |
 	ActionResponse |
 	ConnectionsUpdated |
-	EventsUpdated |
 	QueueUpdated |
 	StateUpdated |
+	WorkflowHistoryUpdated |
 	RpcsListResponse |
+	TraceQueryResponse |
+	QueueResponse |
+	WorkflowHistoryResponse |
 	Error |
 	Init
 }

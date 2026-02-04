@@ -42,6 +42,32 @@ const zFunction = <
 	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,
 >() => z.custom<T>((val) => typeof val === "function");
 
+export type InspectorUnsubscribe = () => void;
+
+export interface WorkflowInspectorConfig<THistory = unknown> {
+	getHistory: () => THistory | null;
+	onHistoryUpdated?: (
+		listener: (history: THistory) => void,
+	) => InspectorUnsubscribe;
+}
+
+export interface RunInspectorConfig<THistory = unknown> {
+	workflow?: WorkflowInspectorConfig<THistory>;
+}
+
+const WorkflowInspectorConfigSchema = z.object({
+	getHistory: zFunction<WorkflowInspectorConfig<unknown>["getHistory"]>(),
+	onHistoryUpdated: zFunction<
+		NonNullable<WorkflowInspectorConfig<unknown>["onHistoryUpdated"]>
+	>().optional(),
+});
+
+const RunInspectorConfigSchema = z
+	.object({
+		workflow: WorkflowInspectorConfigSchema.optional(),
+	})
+	.optional();
+
 // Schema for run handler with metadata
 export const RunConfigSchema = z.object({
 	/** Display name for the actor in the Inspector UI. */
@@ -50,6 +76,8 @@ export const RunConfigSchema = z.object({
 	icon: z.string().optional(),
 	/** The run handler function. */
 	run: zFunction(),
+	/** Inspector integration for long-running run handlers. */
+	inspector: RunInspectorConfigSchema.optional(),
 });
 export type RunConfig = z.infer<typeof RunConfigSchema>;
 
@@ -71,6 +99,14 @@ export function getRunMetadata(
 ): { name?: string; icon?: string } {
 	if (!run || typeof run === "function") return {};
 	return { name: run.name, icon: run.icon };
+}
+
+/** Extract run inspector configuration if provided. */
+export function getRunInspectorConfig(
+	run: ((...args: any[]) => any) | RunConfig | undefined,
+): RunInspectorConfig | undefined {
+	if (!run || typeof run === "function") return undefined;
+	return run.inspector;
 }
 
 // This schema is used to validate the input at runtime. The generic types are defined below in `ActorConfig`.
