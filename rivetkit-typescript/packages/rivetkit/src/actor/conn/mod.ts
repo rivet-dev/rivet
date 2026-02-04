@@ -10,15 +10,21 @@ import {
 } from "@/schemas/client-protocol-zod/mod";
 import { bufferToArrayBuffer } from "@/utils";
 import type { AnyDatabaseProvider } from "../database";
-import { InternalError } from "../errors";
+import { EventPayloadInvalid, InternalError } from "../errors";
 import type { ActorInstance } from "../instance/mod";
 import { CachedSerializer } from "../protocol/serde";
+import {
+	type InferEventArgs,
+	type InferSchemaMap,
+	type SchemaConfig,
+	validateSchemaSync,
+} from "../schema";
 import type { ConnDriver } from "./driver";
 import { type ConnDataInput, StateManager } from "./state-manager";
 
 export type ConnId = string;
 
-export type AnyConn = Conn<any, any, any, any, any, any>;
+export type AnyConn = Conn<any, any, any, any, any, any, any, any>;
 
 export const CONN_CONNECTED_SYMBOL = Symbol("connected");
 export const CONN_SPEAKS_RIVETKIT_SYMBOL = Symbol("speaksRivetKit");
@@ -34,10 +40,19 @@ export const CONN_SEND_MESSAGE_SYMBOL = Symbol("sendMessage");
  *
  * @see {@link https://rivet.dev/docs/connections|Connection Documentation}
  */
-export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
-	#actor: ActorInstance<S, CP, CS, V, I, DB>;
+export class Conn<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig = Record<never, never>,
+	Q extends SchemaConfig = Record<never, never>,
+> {
+	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
 
-	get [CONN_ACTOR_SYMBOL](): ActorInstance<S, CP, CS, V, I, DB> {
+	get [CONN_ACTOR_SYMBOL](): ActorInstance<S, CP, CS, V, I, DB, E, Q> {
 		return this.#actor;
 	}
 
@@ -122,7 +137,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * @protected
 	 */
 	constructor(
-		actor: ActorInstance<S, CP, CS, V, I, DB>,
+		actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
 		data: ConnDataInput<CP, CS>,
 	) {
 		this.#actor = actor;
@@ -159,6 +174,14 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * @param args - The arguments for the event.
 	 * @see {@link https://rivet.dev/docs/events|Events Documentation}
 	 */
+	send<K extends keyof E & string>(
+		eventName: K,
+		...args: InferEventArgs<InferSchemaMap<E>[K]>
+	): void;
+	send(
+		eventName: keyof E extends never ? string : never,
+		...args: unknown[]
+	): void;
 	send(eventName: string, ...args: unknown[]) {
 		this.#assertConnected();
 		if (!this[CONN_SPEAKS_RIVETKIT_SYMBOL]) {
@@ -168,11 +191,27 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				connType: this[CONN_DRIVER_SYMBOL]?.type,
 			});
 		}
+
+		const payload = args.length === 1 ? args[0] : args;
+		const result = validateSchemaSync(
+			this.#actor.config.events,
+			eventName as keyof E & string,
+			payload,
+		);
+		if (!result.success) {
+			throw new EventPayloadInvalid(eventName, result.issues);
+		}
+		const eventArgs =
+			args.length === 1
+				? [result.data]
+				: Array.isArray(result.data)
+					? (result.data as unknown[])
+					: args;
 		this.#actor.emitTraceEvent("message.send", {
 			"rivet.event.name": eventName,
 			"rivet.conn.id": this.id,
 		});
-		const eventData = { name: eventName, args };
+		const eventData = { name: eventName, args: eventArgs };
 		this[CONN_SEND_MESSAGE_SYMBOL](
 			new CachedSerializer(
 				eventData,

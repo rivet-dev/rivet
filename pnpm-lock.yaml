@@ -4281,6 +4281,9 @@ importers:
       '@rivetkit/workflow-engine':
         specifier: workspace:*
         version: link:../workflow-engine
+      '@standard-schema/spec':
+        specifier: ^1.0.0
+        version: 1.0.0
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0

@@ -7,6 +7,7 @@ import {
 } from "./config";
 import type { AnyDatabaseProvider } from "./database";
 import { ActorDefinition } from "./definition";
+import type { SchemaConfig } from "./schema";
 
 export function actor<
 	TState,
@@ -15,13 +16,26 @@ export function actor<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
 	TActions extends Actions<
 		TState,
 		TConnParams,
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
+	> = Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
 	>,
 >(
 	input: ActorConfigInput<
@@ -31,6 +45,8 @@ export function actor<
 		TVars,
 		TInput,
 		TDatabase,
+		TEvents,
+		TQueues,
 		TActions
 	>,
 ): ActorDefinition<
@@ -40,6 +56,8 @@ export function actor<
 	TVars,
 	TInput,
 	TDatabase,
+	TEvents,
+	TQueues,
 	TActions
 > {
 	const config = ActorConfigSchema.parse(input) as ActorConfig<
@@ -48,7 +66,9 @@ export function actor<
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	>;
 	return new ActorDefinition(config);
 }
@@ -84,3 +104,4 @@ export {
 	createActorRouter,
 } from "./router";
 export { routeWebSocket } from "./router-websocket-endpoints";
+export { type Raw, raw } from "./schema";

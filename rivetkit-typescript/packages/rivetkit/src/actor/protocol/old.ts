@@ -29,6 +29,7 @@ import {
 import { CONN_SEND_MESSAGE_SYMBOL, type Conn } from "../conn/mod";
 import { ActionContext } from "../contexts";
 import type { ActorInstance } from "../instance/mod";
+import type { SchemaConfig } from "../schema";
 
 interface MessageEventOpts {
 	encoding: Encoding;
@@ -139,19 +140,21 @@ export interface ProcessMessageHandler<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig,
+	Q extends SchemaConfig,
 > {
 	onExecuteAction?: (
-		ctx: ActionContext<S, CP, CS, V, I, DB>,
+		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
 		name: string,
 		args: unknown[],
 	) => Promise<unknown>;
 	onSubscribe?: (
 		eventName: string,
-		conn: Conn<S, CP, CS, V, I, DB>,
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) => Promise<void>;
 	onUnsubscribe?: (
 		eventName: string,
-		conn: Conn<S, CP, CS, V, I, DB>,
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) => Promise<void>;
 }
 
@@ -162,6 +165,8 @@ export async function processMessage<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig,
+	Q extends SchemaConfig,
 >(
 	message: {
 		body:
@@ -174,9 +179,9 @@ export async function processMessage<
 					val: { eventName: string; subscribe: boolean };
 			  };
 	},
-	actor: ActorInstance<S, CP, CS, V, I, DB>,
-	conn: Conn<S, CP, CS, V, I, DB>,
-	handler: ProcessMessageHandler<S, CP, CS, V, I, DB>,
+	actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
+	conn: Conn<S, CP, CS, V, I, DB, E, Q>,
+	handler: ProcessMessageHandler<S, CP, CS, V, I, DB, E, Q>,
 ) {
 	let actionId: bigint | undefined;
 	let actionName: string | undefined;
@@ -199,7 +204,10 @@ export async function processMessage<
 				actionName: name,
 			});
 
-			const ctx = new ActionContext<S, CP, CS, V, I, DB>(actor, conn);
+			const ctx = new ActionContext<S, CP, CS, V, I, DB, E, Q>(
+				actor,
+				conn,
+			);
 
 			// Process the action request and wait for the result
 			// This will wait for async actions to complete
