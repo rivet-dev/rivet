@@ -84,6 +84,18 @@ export const HttpActionResponseSchema = z.object({
 });
 export type HttpActionResponse = z.infer<typeof HttpActionResponseSchema>;
 
+// MARK: HTTP Queue
+export const HttpQueueSendRequestSchema = z.object({
+	name: z.string(),
+	body: z.unknown(),
+});
+export type HttpQueueSendRequest = z.infer<typeof HttpQueueSendRequestSchema>;
+
+export const HttpQueueSendResponseSchema = z.object({
+	ok: z.boolean(),
+});
+export type HttpQueueSendResponse = z.infer<typeof HttpQueueSendResponseSchema>;
+
 // MARK: HTTP Error
 export const HttpResponseErrorSchema = z.object({
 	group: z.string(),
