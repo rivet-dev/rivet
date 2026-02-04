@@ -205,6 +205,25 @@ export interface History {
 }
 
 /**
+ * History entry snapshot without internal dirty flags.
+ */
+export type WorkflowHistoryEntry = Omit<Entry, "dirty">;
+
+/**
+ * Entry metadata snapshot without internal dirty flags.
+ */
+export type WorkflowEntryMetadataSnapshot = Omit<EntryMetadata, "dirty">;
+
+/**
+ * Snapshot of workflow history for observers.
+ */
+export interface WorkflowHistorySnapshot {
+	nameRegistry: string[];
+	entries: WorkflowHistoryEntry[];
+	entryMetadata: ReadonlyMap<string, WorkflowEntryMetadataSnapshot>;
+}
+
+/**
  * Structured error information for workflow failures.
  */
 export interface WorkflowError {
@@ -382,6 +401,7 @@ export type WorkflowRunMode = "yield" | "live";
 export interface RunWorkflowOptions {
 	mode?: WorkflowRunMode;
 	logger?: Logger;
+	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void;
 }
 
 export type WorkflowFunction<TInput = unknown, TOutput = unknown> = (

@@ -109,6 +109,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private rollbackCheckpointSet: boolean;
 	/** Track names used in current execution to detect duplicates */
 	private usedNamesInExecution = new Set<string>();
+	private historyNotifier?: () => void;
 	private logger?: Logger;
 
 	constructor(
@@ -121,6 +122,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		mode: "forward" | "rollback" = "forward",
 		rollbackActions?: RollbackAction[],
 		rollbackCheckpointSet = false,
+		historyNotifier?: () => void,
 		logger?: Logger,
 	) {
 		this.currentLocation = location;
@@ -128,6 +130,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		this.mode = mode;
 		this.rollbackActions = rollbackActions;
 		this.rollbackCheckpointSet = rollbackCheckpointSet;
+		this.historyNotifier = historyNotifier;
 		this.logger = logger;
 	}
 
@@ -151,6 +154,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 	}
 
+	private async flushStorage(): Promise<void> {
+		await flush(this.storage, this.driver, this.historyNotifier);
+	}
+
 	/**
 	 * Create a new branch context for parallel/nested execution.
 	 */
@@ -168,6 +175,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.mode,
 			this.rollbackActions,
 			this.rollbackCheckpointSet,
+			this.historyNotifier,
 			this.logger,
 		);
 	}
@@ -441,7 +449,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// is to batch writes, not to avoid persistence entirely.
 			if (!config.ephemeral) {
 				this.log("debug", { msg: "flushing step", step: config.name, key });
-				await flush(this.storage, this.driver);
+				await this.flushStorage();
 			}
 
 			this.log("debug", { msg: "step completed", step: config.name, key });
@@ -454,7 +462,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				}
 				entry.dirty = true;
 				metadata.status = "exhausted";
-				await flush(this.storage, this.driver);
+				await this.flushStorage();
 				throw new CriticalError(error.message);
 			}
 
@@ -467,7 +475,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				}
 				entry.dirty = true;
 				metadata.status = "exhausted";
-				await flush(this.storage, this.driver);
+				await this.flushStorage();
 				throw error;
 			}
 
@@ -477,7 +485,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			entry.dirty = true;
 			metadata.status = "failed";
 
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 
 			throw new StepFailedError(config.name, error, metadata.attempts);
 		}
@@ -695,7 +703,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				}
 				entry.dirty = true;
 
-				await flush(this.storage, this.driver);
+				await this.flushStorage();
 				await this.forgetOldIterations(
 					location,
 					iteration + 1,
@@ -726,7 +734,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				}
 				entry.dirty = true;
 
-				await flush(this.storage, this.driver);
+				await this.flushStorage();
 				await this.forgetOldIterations(
 					location,
 					iteration,
@@ -781,6 +789,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				this.storage,
 				this.driver,
 				iterationLocation,
+				this.historyNotifier,
 			);
 		}
 	}
@@ -848,7 +857,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			setEntry(this.storage, location, entry);
 			entry.dirty = true;
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 		}
 
 		const now = Date.now();
@@ -860,7 +869,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				entry.kind.data.state = "completed";
 			}
 			entry.dirty = true;
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 			return;
 		}
 
@@ -874,7 +883,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				entry.kind.data.state = "completed";
 			}
 			entry.dirty = true;
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 			return;
 		}
 
@@ -927,7 +936,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		});
 		setEntry(this.storage, location, entry);
 		entry.dirty = true;
-		await flush(this.storage, this.driver);
+		await this.flushStorage();
 
 		this.rollbackCheckpointSet = true;
 	}
@@ -1045,7 +1054,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			setEntry(this.storage, countLocation, countEntry);
 
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 
 			return messages.map((message) => message.data as T);
 		}
@@ -1147,7 +1156,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			setEntry(this.storage, sleepLocation, sleepEntry);
 			sleepEntry.dirty = true;
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 		}
 
 		const now = Date.now();
@@ -1173,7 +1182,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					data: { name: messageName, data: message.data },
 				});
 				setEntry(this.storage, messageLocation, messageEntry);
-				await flush(this.storage, this.driver);
+				await this.flushStorage();
 
 				return message.data as T;
 			}
@@ -1182,7 +1191,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				sleepEntry.kind.data.state = "completed";
 			}
 			sleepEntry.dirty = true;
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 			return null;
 		}
 
@@ -1204,7 +1213,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				data: { name: messageName, data: message.data },
 			});
 			setEntry(this.storage, messageLocation, messageEntry);
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 
 			return message.data as T;
 		}
@@ -1272,7 +1281,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			setEntry(this.storage, sleepLocation, sleepEntry);
 			sleepEntry.dirty = true;
 			// Flush immediately to persist deadline before potential SleepError
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 		}
 
 		return this.executeListenNUntilImpl<T>(
@@ -1407,7 +1416,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		});
 		setEntry(this.storage, countLocation, countEntry);
 
-		await flush(this.storage, this.driver);
+		await this.flushStorage();
 
 		return results;
 	}
@@ -1469,7 +1478,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			setEntry(this.storage, location, entry);
 			entry.dirty = true;
 			// Flush immediately to persist entry before branches execute
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 		}
 
 		if (entry.kind.type !== "join") {
@@ -1533,7 +1542,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// Wait for ALL branches (no short-circuit on error)
 		await Promise.allSettled(branchPromises);
-		await flush(this.storage, this.driver);
+		await this.flushStorage();
 
 		// Throw if any branches failed
 		if (Object.keys(errors).length > 0) {
@@ -1620,7 +1629,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			setEntry(this.storage, location, entry);
 			entry.dirty = true;
 			// Flush immediately to persist entry before branches execute
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 		}
 
 		if (entry.kind.type !== "race") {
@@ -1788,7 +1797,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// If any branch needs to yield to the scheduler (sleep/message wait),
 		// save state and re-throw the error to exit the workflow execution
 		if (yieldError && !settled) {
-			await flush(this.storage, this.driver);
+			await this.flushStorage();
 			throw yieldError;
 		}
 
@@ -1805,13 +1814,14 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 						this.storage,
 						this.driver,
 						branchLocation,
+						this.historyNotifier,
 					);
 				}
 			}
 		}
 
 		// Flush final state
-		await flush(this.storage, this.driver);
+		await this.flushStorage();
 
 		// Log late errors if any (these occurred after a winner was determined)
 		if (lateErrors.length > 0) {
@@ -1887,6 +1897,6 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			data: { originalType, originalName: name },
 		});
 		setEntry(this.storage, location, entry);
-		await flush(this.storage, this.driver);
+		await this.flushStorage();
 	}
 }

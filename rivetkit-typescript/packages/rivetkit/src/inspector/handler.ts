@@ -36,6 +36,8 @@ export async function handleWebSocketInspectorConnect({
 						isStateEnabled: inspector.isStateEnabled(),
 						isDatabaseEnabled: inspector.isDatabaseEnabled(),
 						queueSize: BigInt(inspector.getQueueSize()),
+						workflowHistory: inspector.getWorkflowHistory(),
+						isWorkflowEnabled: inspector.isWorkflowEnabled(),
 					},
 				},
 			});
@@ -64,6 +66,14 @@ export async function handleWebSocketInspectorConnect({
 							val: {
 								queueSize: BigInt(inspector.getQueueSize()),
 							},
+						},
+					});
+				}),
+				inspector.emitter.on("workflowHistoryUpdated", (history) => {
+					sendMessage(ws, {
+						body: {
+							tag: "WorkflowHistoryUpdated",
+							val: { history },
 						},
 					});
 				}),
@@ -151,6 +161,18 @@ export async function handleWebSocketInspectorConnect({
 							val: {
 								rid: id,
 								status,
+							},
+						},
+					});
+				} else if (message.body.tag === "WorkflowHistoryRequest") {
+					sendMessage(ws, {
+						body: {
+							tag: "WorkflowHistoryResponse",
+							val: {
+								rid: message.body.val.id,
+								history: inspector.getWorkflowHistory(),
+								isWorkflowEnabled:
+									inspector.isWorkflowEnabled(),
 							},
 						},
 					});
