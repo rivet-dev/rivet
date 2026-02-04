@@ -10,21 +10,12 @@ import {
 export type { Logger } from "pino";
 
 let baseLogger: Logger | undefined;
-let configuredLogLevel: Level | undefined;
 
 /** Cache of child loggers by logger name. */
 const loggerCache = new Map<string, Logger>();
 
-export function getPinoLevel(logLevel?: Level): LevelWithSilent {
-	// Priority: provided > configured > env > default
-	if (logLevel) {
-		return logLevel;
-	}
-
-	if (configuredLogLevel) {
-		return configuredLogLevel;
-	}
-
+export function getPinoLevel(): LevelWithSilent {
+	// Priority: env > default
 	return (process.env["LOG_LEVEL"] || "warn")
 		.toString()
 		.toLowerCase() as LevelWithSilent;
@@ -90,14 +81,9 @@ function customWrite(level: string, o: any) {
 /**
  * Configure the default logger with optional log level.
  */
-export async function configureDefaultLogger(logLevel?: Level): Promise<void> {
-	// Store the configured log level
-	if (logLevel) {
-		configuredLogLevel = logLevel;
-	}
-
+export async function configureDefaultLogger(): Promise<void> {
 	baseLogger = pino({
-		level: getPinoLevel(logLevel),
+		level: getPinoLevel(),
 		messageKey: "msg",
 		// Do not include pid/hostname in output
 		base: {},

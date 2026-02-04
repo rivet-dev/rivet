@@ -4,13 +4,17 @@
 	"description": "",
 	"main": "index.js",
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"load-test": "tsx load-test/run.ts",
+		"load-test:quick": "tsx load-test/run.ts --stages '1m:5'",
+		"load-test:stress": "tsx load-test/run.ts --stages '2m:10,5m:50,2m:0'"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
 	"packageManager": "pnpm@10.13.1",
 	"devDependencies": {
-		"@types/node": "^24.3.1"
+		"@types/node": "^24.3.1",
+		"tsx": "^4.20.5"
 	}
 }
