@@ -71,7 +71,9 @@ impl<T: Executable> Executable for Option<T> {
 	}
 
 	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
-		ctx.cursor_mut().inc();
+		if self.is_some() {
+			ctx.cursor_mut().inc();
+		}
 		Ok(())
 	}
 }
