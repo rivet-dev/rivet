@@ -8,6 +8,7 @@ import { runWorkflow } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
 import { ActorWorkflowContext } from "./context";
 import { ActorWorkflowDriver, workflowQueueName } from "./driver";
+import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
 export { workflowQueueName } from "./driver";
@@ -32,6 +33,8 @@ export function workflow<
 		>,
 	) => Promise<unknown>,
 ): RunConfig {
+	const workflowInspector = createWorkflowInspectorAdapter();
+
 	async function run(
 		runCtx: RunContext<
 			TState,
@@ -56,7 +59,11 @@ export function workflow<
 			async (ctx) => await fn(new ActorWorkflowContext(ctx, runCtx)),
 			undefined,
 			driver,
-			{ mode: "live", logger: runCtx.log },
+			{
+				mode: "live",
+				logger: runCtx.log,
+				onHistoryUpdated: workflowInspector.update,
+			},
 		);
 
 		runCtx.abortSignal.addEventListener(
@@ -87,6 +94,7 @@ export function workflow<
 
 	return {
 		icon: "diagram-project",
-		run,
+		run: run as RunConfig["run"],
+		inspector: { workflow: workflowInspector.adapter },
 	};
 }

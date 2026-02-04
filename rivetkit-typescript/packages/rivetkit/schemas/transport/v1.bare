@@ -1,0 +1,175 @@
+# Workflow History Transport Schema v1
+#
+# This schema defines the binary encoding for workflow history snapshots
+# sent over the inspector.
+
+# Opaque user data (CBOR-encoded)
+type WorkflowCbor data
+
+# MARK: Location
+# Index into the entry name registry
+type WorkflowNameIndex u32
+
+# Marker for a loop iteration in a location path
+type WorkflowLoopIterationMarker struct {
+	loop: WorkflowNameIndex
+	iteration: u32
+}
+
+# A segment in a location path - either a name index or a loop iteration marker
+type WorkflowPathSegment union {
+	WorkflowNameIndex |
+	WorkflowLoopIterationMarker
+}
+
+# Location identifies where an entry exists in the workflow execution tree
+type WorkflowLocation list<WorkflowPathSegment>
+
+# MARK: Entry Status
+type WorkflowEntryStatus enum {
+	PENDING
+	RUNNING
+	COMPLETED
+	FAILED
+	EXHAUSTED
+}
+
+# MARK: Sleep State
+type WorkflowSleepState enum {
+	PENDING
+	COMPLETED
+	INTERRUPTED
+}
+
+# MARK: Branch Status
+type WorkflowBranchStatusType enum {
+	PENDING
+	RUNNING
+	COMPLETED
+	FAILED
+	CANCELLED
+}
+
+# MARK: Step Entry
+type WorkflowStepEntry struct {
+	# Output value (CBOR-encoded arbitrary data)
+	output: optional<WorkflowCbor>
+	# Error message if step failed
+	error: optional<str>
+}
+
+# MARK: Loop Entry
+type WorkflowLoopEntry struct {
+	# Loop state (CBOR-encoded arbitrary data)
+	state: WorkflowCbor
+	# Current iteration number
+	iteration: u32
+	# Output value if loop completed (CBOR-encoded arbitrary data)
+	output: optional<WorkflowCbor>
+}
+
+# MARK: Sleep Entry
+type WorkflowSleepEntry struct {
+	# Deadline timestamp in milliseconds
+	deadline: u64
+	# Current sleep state
+	state: WorkflowSleepState
+}
+
+# MARK: Message Entry
+ type WorkflowMessageEntry struct {
+ 	# Message name
+ 	name: str
+ 	# Message data (CBOR-encoded arbitrary data)
+ 	messageData: WorkflowCbor
+ }
+
+ # MARK: Rollback Checkpoint Entry
+ type WorkflowRollbackCheckpointEntry struct {
+ 	# Checkpoint name
+ 	name: str
+ }
+
+ # MARK: Branch Status
+
+type WorkflowBranchStatus struct {
+	status: WorkflowBranchStatusType
+	# Output value if completed (CBOR-encoded arbitrary data)
+	output: optional<WorkflowCbor>
+	# Error message if failed
+	error: optional<str>
+}
+
+# MARK: Join Entry
+type WorkflowJoinEntry struct {
+	# Map of branch name to status
+	branches: map<str><WorkflowBranchStatus>
+}
+
+# MARK: Race Entry
+type WorkflowRaceEntry struct {
+	# Name of the winning branch, or null if no winner yet
+	winner: optional<str>
+	# Map of branch name to status
+	branches: map<str><WorkflowBranchStatus>
+}
+
+# MARK: Removed Entry
+type WorkflowRemovedEntry struct {
+	# Original entry type before removal
+	originalType: str
+	# Original entry name
+	originalName: optional<str>
+}
+
+# MARK: Entry Kind
+# Type-specific entry data
+type WorkflowEntryKind union {
+	WorkflowStepEntry |
+	WorkflowLoopEntry |
+	WorkflowSleepEntry |
+	WorkflowMessageEntry |
+	WorkflowRollbackCheckpointEntry |
+	WorkflowJoinEntry |
+	WorkflowRaceEntry |
+	WorkflowRemovedEntry
+}
+
+# MARK: Entry
+# An entry in the workflow history
+type WorkflowEntry struct {
+	# Unique entry ID
+	id: str
+	# Location in the workflow tree
+	location: WorkflowLocation
+	# Entry kind and data
+	kind: WorkflowEntryKind
+}
+
+# MARK: Entry Metadata
+# Metadata for an entry (stored separately, lazily loaded)
+type WorkflowEntryMetadata struct {
+	status: WorkflowEntryStatus
+	# Error message if failed
+	error: optional<str>
+	# Number of execution attempts
+	attempts: u32
+	# Last attempt timestamp in milliseconds
+	lastAttemptAt: u64
+	# Creation timestamp in milliseconds
+	createdAt: u64
+	# Completion timestamp in milliseconds
+	completedAt: optional<u64>
+	# Rollback completion timestamp in milliseconds
+	rollbackCompletedAt: optional<u64>
+	# Rollback error message if failed
+	rollbackError: optional<str>
+}
+
+# MARK: Workflow History
+# A snapshot of workflow history for inspector transport.
+type WorkflowHistory struct {
+	nameRegistry: list<str>
+	entries: list<WorkflowEntry>
+	entryMetadata: map<str><WorkflowEntryMetadata>
+}

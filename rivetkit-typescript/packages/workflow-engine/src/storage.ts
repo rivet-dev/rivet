@@ -38,6 +38,9 @@ import type {
 	Location,
 	Message,
 	Storage,
+	WorkflowEntryMetadataSnapshot,
+	WorkflowHistoryEntry,
+	WorkflowHistorySnapshot,
 	WorkflowMessageDriver,
 } from "./types.js";
 
@@ -57,6 +60,34 @@ export function createStorage(): Storage {
 		error: undefined,
 		flushedError: undefined,
 		flushedOutput: undefined,
+	};
+}
+
+/**
+ * Create a snapshot of workflow history for observers.
+ */
+export function createHistorySnapshot(
+	storage: Storage,
+): WorkflowHistorySnapshot {
+	const entryMetadata = new Map<string, WorkflowEntryMetadataSnapshot>();
+	for (const [id, metadata] of storage.entryMetadata) {
+		const { dirty, ...rest } = metadata;
+		entryMetadata.set(id, rest);
+	}
+
+	const entries: WorkflowHistoryEntry[] = [];
+	const entryKeys = Array.from(storage.history.entries.keys()).sort();
+	for (const key of entryKeys) {
+		const entry = storage.history.entries.get(key);
+		if (!entry) continue;
+		const { dirty, ...rest } = entry;
+		entries.push(rest);
+	}
+
+	return {
+		nameRegistry: [...storage.nameRegistry],
+		entries,
+		entryMetadata,
 	};
 }
 
@@ -234,8 +265,10 @@ export async function loadMetadata(
 export async function flush(
 	storage: Storage,
 	driver: EngineDriver,
+	onHistoryUpdated?: () => void,
 ): Promise<void> {
 	const writes: KVWrite[] = [];
+	let historyUpdated = false;
 
 	// Flush only new names (those added since last flush)
 	for (
@@ -249,6 +282,7 @@ export async function flush(
 				key: buildNameKey(i),
 				value: serializeName(name),
 			});
+			historyUpdated = true;
 		}
 	}
 
@@ -260,6 +294,7 @@ export async function flush(
 				value: serializeEntry(entry),
 			});
 			entry.dirty = false;
+			historyUpdated = true;
 		}
 	}
 
@@ -271,6 +306,7 @@ export async function flush(
 				value: serializeEntryMetadata(metadata),
 			});
 			metadata.dirty = false;
+			historyUpdated = true;
 		}
 	}
 
@@ -315,6 +351,10 @@ export async function flush(
 	storage.flushedState = storage.state;
 	storage.flushedOutput = storage.output;
 	storage.flushedError = storage.error;
+
+	if (historyUpdated && onHistoryUpdated) {
+		onHistoryUpdated();
+	}
 }
 
 /**
@@ -413,6 +453,7 @@ export async function deleteEntriesWithPrefix(
 	storage: Storage,
 	driver: EngineDriver,
 	prefixLocation: Location,
+	onHistoryUpdated?: () => void,
 ): Promise<void> {
 	// Collect entry IDs for metadata cleanup
 	const entryIds: string[] = [];
@@ -434,6 +475,10 @@ export async function deleteEntriesWithPrefix(
 	await Promise.all(
 		entryIds.map((id) => driver.delete(buildEntryMetadataKey(id))),
 	);
+
+	if (entryIds.length > 0 && onHistoryUpdated) {
+		onHistoryUpdated();
+	}
 }
 
 /**

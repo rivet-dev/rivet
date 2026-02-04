@@ -1,1 +1,1 @@
-export * from "../../../dist/schemas/actor-inspector/v4";
+export * from "../../../dist/schemas/actor-inspector/v2";

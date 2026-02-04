@@ -2,14 +2,15 @@ import { createVersionedDataHandler } from "vbare";
 
 import * as v1 from "../../../dist/schemas/actor-inspector/v1";
 import * as v2 from "../../../dist/schemas/actor-inspector/v2";
-import * as v3 from "../../../dist/schemas/actor-inspector/v3";
-import * as v4 from "../../../dist/schemas/actor-inspector/v4";
 
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 2;
 
 const EVENTS_DROPPED_ERROR = "inspector.events_dropped";
+const WORKFLOW_HISTORY_DROPPED_ERROR = "inspector.workflow_history_dropped";
+const QUEUE_DROPPED_ERROR = "inspector.queue_dropped";
+const TRACE_DROPPED_ERROR = "inspector.trace_dropped";
 
-// Converter from v1 to v2: Add queueSize field to Init message
+// Converter from v1 to v2: Drop events in Init and add new fields
 const v1ToClientToV2 = (v1Data: v1.ToClient): v2.ToClient => {
 	if (v1Data.body.tag === "Init") {
 		const init = v1Data.body.val as v1.Init;
@@ -17,49 +18,21 @@ const v1ToClientToV2 = (v1Data: v1.ToClient): v2.ToClient => {
 			body: {
 				tag: "Init",
 				val: {
-					...init,
+					connections: init.connections,
+					state: init.state,
+					isStateEnabled: init.isStateEnabled,
+					rpcs: init.rpcs,
+					isDatabaseEnabled: init.isDatabaseEnabled,
 					queueSize: 0n,
+					workflowHistory: null,
+					isWorkflowEnabled: false,
 				},
 			},
 		};
 	}
-	return v1Data as unknown as v2.ToClient;
-};
-
-// Converter from v2 to v1: Remove queueSize field from Init, filter out QueueUpdated
-const v2ToClientToV1 = (v2Data: v2.ToClient): v1.ToClient => {
-	if (v2Data.body.tag === "Init") {
-		const init = v2Data.body.val;
-		const { queueSize, ...rest } = init;
-		return {
-			body: {
-				tag: "Init",
-				val: rest,
-			},
-		};
-	}
-	// QueueUpdated doesn't exist in v1, so we can't convert it
-	if (v2Data.body.tag === "QueueUpdated") {
-		throw new Error("Cannot convert QueueUpdated to v1");
-	}
-	return v2Data as unknown as v1.ToClient;
-};
-
-// Converter from v2 to v3: Remove events from Init, drop event updates
-const v2ToClientToV3 = (v2Data: v2.ToClient): v3.ToClient => {
-	if (v2Data.body.tag === "Init") {
-		const init = v2Data.body.val;
-		const { events, ...rest } = init;
-		return {
-			body: {
-				tag: "Init",
-				val: rest,
-			},
-		};
-	}
 	if (
-		v2Data.body.tag === "EventsUpdated" ||
-		v2Data.body.tag === "EventsResponse"
+		v1Data.body.tag === "EventsUpdated" ||
+		v1Data.body.tag === "EventsResponse"
 	) {
 		return {
 			body: {
@@ -70,94 +43,103 @@ const v2ToClientToV3 = (v2Data: v2.ToClient): v3.ToClient => {
 			},
 		};
 	}
-	return v2Data as unknown as v3.ToClient;
+	return v1Data as unknown as v2.ToClient;
 };
 
-// Converter from v3 to v2: Add empty events to Init, drop TraceQueryResponse
-const v3ToClientToV2 = (v3Data: v3.ToClient): v2.ToClient => {
-	if (v3Data.body.tag === "Init") {
-		const init = v3Data.body.val;
+// Converter from v2 to v1: Add empty events to Init, drop newer updates
+const v2ToClientToV1 = (v2Data: v2.ToClient): v1.ToClient => {
+	if (v2Data.body.tag === "Init") {
+		const init = v2Data.body.val;
 		return {
 			body: {
 				tag: "Init",
 				val: {
-					...init,
+					connections: init.connections,
 					events: [],
+					state: init.state,
+					isStateEnabled: init.isStateEnabled,
+					rpcs: init.rpcs,
+					isDatabaseEnabled: init.isDatabaseEnabled,
 				},
 			},
 		};
 	}
-	if (v3Data.body.tag === "TraceQueryResponse") {
-		throw new Error("Cannot convert TraceQueryResponse to v2");
+	if (
+		v2Data.body.tag === "WorkflowHistoryUpdated" ||
+		v2Data.body.tag === "WorkflowHistoryResponse"
+	) {
+		return {
+			body: {
+				tag: "Error",
+				val: {
+					message: WORKFLOW_HISTORY_DROPPED_ERROR,
+				},
+			},
+		};
 	}
-	return v3Data as unknown as v2.ToClient;
-};
-
-// Converter from v3 to v4: No changes to client structure
-const v3ToClientToV4 = (v3Data: v3.ToClient): v4.ToClient => {
-	return v3Data as unknown as v4.ToClient;
-};
-
-// Converter from v4 to v3: Drop queue responses
-const v4ToClientToV3 = (v4Data: v4.ToClient): v3.ToClient => {
-	if (v4Data.body.tag === "QueueResponse") {
-		throw new Error("Cannot convert QueueResponse to v3");
+	if (v2Data.body.tag === "QueueUpdated") {
+		return {
+			body: {
+				tag: "Error",
+				val: {
+					message: QUEUE_DROPPED_ERROR,
+				},
+			},
+		};
 	}
-	return v4Data as unknown as v3.ToClient;
+	if (v2Data.body.tag === "QueueResponse") {
+		return {
+			body: {
+				tag: "Error",
+				val: {
+					message: QUEUE_DROPPED_ERROR,
+				},
+			},
+		};
+	}
+	if (v2Data.body.tag === "TraceQueryResponse") {
+		return {
+			body: {
+				tag: "Error",
+				val: {
+					message: TRACE_DROPPED_ERROR,
+				},
+			},
+		};
+	}
+	return v2Data as unknown as v1.ToClient;
 };
 
-// ToServer is identical between v1 and v2
+// Converter from v1 to v2: Drop events requests
 const v1ToServerToV2 = (v1Data: v1.ToServer): v2.ToServer => {
+	if (
+		v1Data.body.tag === "EventsRequest" ||
+		v1Data.body.tag === "ClearEventsRequest"
+	) {
+		throw new Error("Cannot convert events requests to v2");
+	}
 	return v1Data as unknown as v2.ToServer;
 };
 
+// Converter from v2 to v1: Drop newer requests
 const v2ToServerToV1 = (v2Data: v2.ToServer): v1.ToServer => {
+	if (
+		v2Data.body.tag === "TraceQueryRequest" ||
+		v2Data.body.tag === "QueueRequest" ||
+		v2Data.body.tag === "WorkflowHistoryRequest"
+	) {
+		throw new Error("Cannot convert v2-only requests to v1");
+	}
 	return v2Data as unknown as v1.ToServer;
 };
 
-// Converter from v2 to v3: Drop events requests
-const v2ToServerToV3 = (v2Data: v2.ToServer): v3.ToServer => {
-	if (
-		v2Data.body.tag === "EventsRequest" ||
-		v2Data.body.tag === "ClearEventsRequest"
-	) {
-		throw new Error("Cannot convert events requests to v3");
-	}
-	return v2Data as unknown as v3.ToServer;
-};
-
-// Converter from v3 to v2: Drop trace query
-const v3ToServerToV2 = (v3Data: v3.ToServer): v2.ToServer => {
-	if (v3Data.body.tag === "TraceQueryRequest") {
-		throw new Error("Cannot convert TraceQueryRequest to v2");
-	}
-	return v3Data as unknown as v2.ToServer;
-};
-
-// Converter from v3 to v4: No changes to server structure
-const v3ToServerToV4 = (v3Data: v3.ToServer): v4.ToServer => {
-	return v3Data as unknown as v4.ToServer;
-};
-
-// Converter from v4 to v3: Drop queue request
-const v4ToServerToV3 = (v4Data: v4.ToServer): v3.ToServer => {
-	if (v4Data.body.tag === "QueueRequest") {
-		throw new Error("Cannot convert QueueRequest to v3");
-	}
-	return v4Data as unknown as v3.ToServer;
-};
-
-export const TO_SERVER_VERSIONED = createVersionedDataHandler<v4.ToServer>({
+export const TO_SERVER_VERSIONED = createVersionedDataHandler<v2.ToServer>({
 	serializeVersion: (data, version) => {
 		switch (version) {
 			case 1:
 				return v1.encodeToServer(data as v1.ToServer);
 			case 2:
 				return v2.encodeToServer(data as v2.ToServer);
-			case 3:
-				return v3.encodeToServer(data);
-			case 4:
-				return v4.encodeToServer(data);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -168,29 +150,21 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v4.ToServer>({
 				return v1.decodeToServer(bytes);
 			case 2:
 				return v2.decodeToServer(bytes);
-			case 3:
-				return v3.decodeToServer(bytes);
-			case 4:
-				return v4.decodeToServer(bytes);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
 	},
-	deserializeConverters: () => [v1ToServerToV2, v2ToServerToV3, v3ToServerToV4],
-	serializeConverters: () => [v4ToServerToV3, v3ToServerToV2, v2ToServerToV1],
+	deserializeConverters: () => [v1ToServerToV2],
+	serializeConverters: () => [v2ToServerToV1],
 });
 
-export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v4.ToClient>({
+export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v2.ToClient>({
 	serializeVersion: (data, version) => {
 		switch (version) {
 			case 1:
 				return v1.encodeToClient(data as v1.ToClient);
 			case 2:
 				return v2.encodeToClient(data as v2.ToClient);
-			case 3:
-				return v3.encodeToClient(data);
-			case 4:
-				return v4.encodeToClient(data);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -201,14 +175,10 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v4.ToClient>({
 				return v1.decodeToClient(bytes);
 			case 2:
 				return v2.decodeToClient(bytes);
-			case 3:
-				return v3.decodeToClient(bytes);
-			case 4:
-				return v4.decodeToClient(bytes);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
 	},
-	deserializeConverters: () => [v1ToClientToV2, v2ToClientToV3, v3ToClientToV4],
-	serializeConverters: () => [v4ToClientToV3, v3ToClientToV2, v2ToClientToV1],
+	deserializeConverters: () => [v1ToClientToV2],
+	serializeConverters: () => [v2ToClientToV1],
 });

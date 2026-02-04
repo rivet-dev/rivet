@@ -52,6 +52,7 @@ export {
 	consumeMessage,
 	consumeMessages,
 	createEntry,
+	createHistorySnapshot,
 	createStorage,
 	deleteEntriesWithPrefix,
 	flush,
@@ -66,6 +67,7 @@ export type {
 	BranchConfig,
 	BranchOutput,
 	BranchStatus,
+	BranchStatusType,
 	Entry,
 	EntryKind,
 	EntryKindType,
@@ -84,6 +86,9 @@ export type {
 	PathSegment,
 	RaceEntry,
 	RemovedEntry,
+	WorkflowEntryMetadataSnapshot,
+	WorkflowHistoryEntry,
+	WorkflowHistorySnapshot,
 	RollbackCheckpointEntry,
 	RollbackContextInterface,
 	RunWorkflowOptions,
@@ -142,6 +147,7 @@ import {
 } from "./keys.js";
 import {
 	createDefaultMessageDriver,
+	createHistorySnapshot,
 	flush,
 	generateId,
 	loadMetadata,
@@ -151,6 +157,7 @@ import type {
 	RollbackContextInterface,
 	RunWorkflowOptions,
 	Storage,
+	WorkflowHistorySnapshot,
 	WorkflowFunction,
 	WorkflowHandle,
 	WorkflowMessageDriver,
@@ -176,6 +183,8 @@ interface LiveRuntime {
 	sleepWaiter?: () => void;
 	isSleeping: boolean;
 }
+
+type HistoryNotifier = (() => void) | undefined;
 
 function createLiveRuntime(): LiveRuntime {
 	return {
@@ -308,6 +317,7 @@ async function executeRollback<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	storage: Storage,
+	historyNotifier?: HistoryNotifier,
 	logger?: Logger,
 ): Promise<void> {
 	const rollbackActions: RollbackAction[] = [];
@@ -321,6 +331,7 @@ async function executeRollback<TInput, TOutput>(
 		"rollback",
 		rollbackActions,
 		false,
+		historyNotifier,
 		logger,
 	);
 
@@ -370,7 +381,7 @@ async function executeRollback<TInput, TOutput>(
 			throw error;
 		} finally {
 			metadata.dirty = true;
-			await flush(storage, driver);
+			await flush(storage, driver, historyNotifier);
 		}
 	}
 }
@@ -381,9 +392,10 @@ async function setSleepState<TOutput>(
 	workflowId: string,
 	deadline: number,
 	messageNames?: string[],
+	historyNotifier?: HistoryNotifier,
 ): Promise<WorkflowResult<TOutput>> {
 	storage.state = "sleeping";
-	await flush(storage, driver);
+	await flush(storage, driver, historyNotifier);
 	await driver.setAlarm(workflowId, deadline);
 
 	return {
@@ -397,9 +409,10 @@ async function setMessageWaitState<TOutput>(
 	storage: Storage,
 	driver: EngineDriver,
 	messageNames: string[],
+	historyNotifier?: HistoryNotifier,
 ): Promise<WorkflowResult<TOutput>> {
 	storage.state = "sleeping";
-	await flush(storage, driver);
+	await flush(storage, driver, historyNotifier);
 
 	return { state: "sleeping", waitingForMessages: messageNames };
 }
@@ -407,8 +420,9 @@ async function setMessageWaitState<TOutput>(
 async function setEvictedState<TOutput>(
 	storage: Storage,
 	driver: EngineDriver,
+	historyNotifier?: HistoryNotifier,
 ): Promise<WorkflowResult<TOutput>> {
-	await flush(storage, driver);
+	await flush(storage, driver, historyNotifier);
 	return { state: storage.state };
 }
 
@@ -416,9 +430,10 @@ async function setRetryState<TOutput>(
 	storage: Storage,
 	driver: EngineDriver,
 	workflowId: string,
+	historyNotifier?: HistoryNotifier,
 ): Promise<WorkflowResult<TOutput>> {
 	storage.state = "sleeping";
-	await flush(storage, driver);
+	await flush(storage, driver, historyNotifier);
 
 	const retryAt = Date.now() + 100;
 	await driver.setAlarm(workflowId, retryAt);
@@ -430,10 +445,11 @@ async function setFailedState(
 	storage: Storage,
 	driver: EngineDriver,
 	error: unknown,
+	historyNotifier?: HistoryNotifier,
 ): Promise<void> {
 	storage.state = "failed";
 	storage.error = extractErrorInfo(error);
-	await flush(storage, driver);
+	await flush(storage, driver, historyNotifier);
 }
 
 async function waitForSleep(
@@ -486,6 +502,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
 	runtime: LiveRuntime,
+	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void,
 	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	let lastResult: WorkflowResult<TOutput> | undefined;
@@ -498,6 +515,7 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			driver,
 			messageDriver,
 			abortController,
+			onHistoryUpdated,
 			logger,
 		);
 		lastResult = result;
@@ -612,6 +630,7 @@ export function runWorkflow<TInput, TOutput>(
 					messageDriver,
 					abortController,
 					liveRuntime,
+					options.onHistoryUpdated,
 					logger,
 				)
 			: executeWorkflow(
@@ -621,6 +640,7 @@ export function runWorkflow<TInput, TOutput>(
 					driver,
 					messageDriver,
 					abortController,
+					options.onHistoryUpdated,
 					logger,
 				);
 
@@ -751,9 +771,16 @@ async function executeWorkflow<TInput, TOutput>(
 	driver: EngineDriver,
 	messageDriver: WorkflowMessageDriver,
 	abortController: AbortController,
+	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void,
 	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
 	const storage = await loadStorage(driver, messageDriver);
+	const historyNotifier: HistoryNotifier = onHistoryUpdated
+		? () => onHistoryUpdated(createHistorySnapshot(storage))
+		: undefined;
+	if (historyNotifier) {
+		historyNotifier();
+	}
 
 	if (logger) {
 		const entryKeys = Array.from(storage.history.entries.keys());
@@ -797,6 +824,7 @@ async function executeWorkflow<TInput, TOutput>(
 				messageDriver,
 				abortController,
 				storage,
+				historyNotifier,
 				logger,
 			);
 		} catch (error) {
@@ -807,7 +835,7 @@ async function executeWorkflow<TInput, TOutput>(
 		}
 
 		storage.state = "failed";
-		await flush(storage, driver);
+		await flush(storage, driver, historyNotifier);
 
 		const storedError = storage.error
 			? new Error(storage.error.message)
@@ -828,6 +856,7 @@ async function executeWorkflow<TInput, TOutput>(
 		"forward",
 		undefined,
 		false,
+		historyNotifier,
 		logger,
 	);
 
@@ -838,7 +867,7 @@ async function executeWorkflow<TInput, TOutput>(
 
 		storage.state = "completed";
 		storage.output = output;
-		await flush(storage, driver);
+		await flush(storage, driver, historyNotifier);
 		await driver.clearAlarm(workflowId);
 
 		return { state: "completed", output };
@@ -850,6 +879,7 @@ async function executeWorkflow<TInput, TOutput>(
 				workflowId,
 				error.deadline,
 				error.messageNames,
+				historyNotifier,
 			);
 		}
 
@@ -858,38 +888,45 @@ async function executeWorkflow<TInput, TOutput>(
 				storage,
 				driver,
 				error.messageNames,
+				historyNotifier,
 			);
 		}
 
 		if (error instanceof EvictedError) {
-			return await setEvictedState(storage, driver);
+			return await setEvictedState(storage, driver, historyNotifier);
 		}
 
 		if (error instanceof StepFailedError) {
-			return await setRetryState(storage, driver, workflowId);
+			return await setRetryState(
+				storage,
+				driver,
+				workflowId,
+				historyNotifier,
+			);
 		}
 
 		if (error instanceof RollbackCheckpointError) {
-			await setFailedState(storage, driver, error);
+			await setFailedState(storage, driver, error, historyNotifier);
 			throw error;
 		}
 
 		// Unrecoverable error
 		storage.error = extractErrorInfo(error);
-			storage.state = "rolling_back";
-			await flush(storage, driver);
+		storage.state = "rolling_back";
+		await flush(storage, driver, historyNotifier);
 
-			try {
-				await executeRollback(
-					workflowId,
-					workflowFn,
-					effectiveInput,
-					driver,
-					messageDriver,
-					abortController,
-					storage,
-					logger,
-				);
+		try {
+			await executeRollback(
+				workflowId,
+				workflowFn,
+				effectiveInput,
+				driver,
+				messageDriver,
+				abortController,
+				storage,
+				historyNotifier,
+				logger,
+			);
 		} catch (rollbackError) {
 			if (rollbackError instanceof EvictedError) {
 				return { state: storage.state };
@@ -898,7 +935,7 @@ async function executeWorkflow<TInput, TOutput>(
 		}
 
 		storage.state = "failed";
-		await flush(storage, driver);
+		await flush(storage, driver, historyNotifier);
 
 		throw error;
 	}
