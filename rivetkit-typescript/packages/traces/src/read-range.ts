@@ -1,7 +1,5 @@
 import { decode as decodeCbor } from "cbor-x";
 import {
-	CURRENT_VERSION,
-	READ_RANGE_VERSIONED,
 	type Attributes,
 	type Chunk,
 	type ReadRangeWire,
@@ -85,17 +83,6 @@ function normalizeBytes(input: Uint8Array | ArrayBuffer): Uint8Array {
 
 function spanKey(spanId: Uint8Array | SpanId): string {
 	return hexFromBytes(normalizeBytes(spanId));
-}
-
-export function encodeReadRangeWire(wire: ReadRangeWire): Uint8Array {
-	return READ_RANGE_VERSIONED.serializeWithEmbeddedVersion(
-		wire,
-		CURRENT_VERSION,
-	);
-}
-
-export function decodeReadRangeWire(bytes: Uint8Array): ReadRangeWire {
-	return READ_RANGE_VERSIONED.deserializeWithEmbeddedVersion(bytes);
 }
 
 export function readRangeWireToOtlp(
