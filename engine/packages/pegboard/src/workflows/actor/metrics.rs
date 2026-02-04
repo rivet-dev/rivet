@@ -93,7 +93,7 @@ pub(crate) async fn pegboard_actor_metrics(ctx: &mut WorkflowCtx, input: &Input)
 
 			// Timeout was reached, record duration up till now
 			if sigs.is_empty() {
-				let now = util::timestamp::now();
+				let now = ctx.v(2).activity(GetTsInput {}).await?;
 				if let Some(last_recorded_awake_ts) = state.last_recorded_awake_ts {
 					new_awake_duration += now - last_recorded_awake_ts;
 				}
@@ -124,14 +124,14 @@ pub(crate) async fn pegboard_actor_metrics(ctx: &mut WorkflowCtx, input: &Input)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct InitStateInput {
+struct InitStateInput {
 	actor_id: Id,
 	namespace_id: Id,
 	name: String,
 }
 
 #[activity(InitState)]
-pub async fn init_state(ctx: &ActivityCtx, input: &InitStateInput) -> Result<bool> {
+async fn init_state(ctx: &ActivityCtx, input: &InitStateInput) -> Result<bool> {
 	let mut state = ctx.state::<Option<State>>()?;
 
 	*state = Some(State {
@@ -155,13 +155,21 @@ pub async fn init_state(ctx: &ActivityCtx, input: &InitStateInput) -> Result<boo
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct RecordMetricsInput {
+struct GetTsInput {}
+
+#[activity(GetTs)]
+async fn get_ts(ctx: &ActivityCtx, input: &GetTsInput) -> Result<i64> {
+	Ok(util::timestamp::now())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct RecordMetricsInput {
 	/// Milliseconds.
 	awake_duration: i64,
 }
 
 #[activity(RecordMetrics)]
-pub async fn record_metrics(ctx: &ActivityCtx, input: &RecordMetricsInput) -> Result<()> {
+async fn record_metrics(ctx: &ActivityCtx, input: &RecordMetricsInput) -> Result<()> {
 	let state = ctx.state::<State>()?;
 
 	// Seconds (rounded up)
@@ -193,10 +201,10 @@ enum KvStorageQueryResult {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct RecordKvMetricsInput {}
+struct RecordKvMetricsInput {}
 
 #[activity(RecordKvMetrics)]
-pub async fn record_kv_metrics(ctx: &ActivityCtx, input: &RecordKvMetricsInput) -> Result<()> {
+async fn record_kv_metrics(ctx: &ActivityCtx, input: &RecordKvMetricsInput) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
 
 	let actor_id = state.actor_id;
