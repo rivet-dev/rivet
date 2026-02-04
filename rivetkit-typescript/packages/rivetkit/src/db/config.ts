@@ -1,5 +1,3 @@
-import type { SqliteVfs } from "./vfs/mod";
-
 export type AnyDatabaseProvider = DatabaseProvider<any> | undefined;
 
 /**
@@ -33,12 +31,6 @@ export interface DatabaseProviderContext {
 		batchGet: (keys: Uint8Array[]) => Promise<(Uint8Array | null)[]>;
 		batchDelete: (keys: Uint8Array[]) => Promise<void>;
 	};
-
-	/**
-	 * SQLite VFS instance for creating KV-backed databases.
-	 * Each driver creates its own instance to avoid concurrency issues.
-	 */
-	sqliteVfs?: SqliteVfs;
 }
 
 export type DatabaseProvider<DB extends RawAccess> = {

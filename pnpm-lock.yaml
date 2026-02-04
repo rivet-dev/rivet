@@ -10,6 +10,7 @@ overrides:
   '@rivetkit/cloudflare-workers': workspace:*
   '@rivetkit/next-js': workspace:*
   '@rivetkit/db': workspace:*
+  '@rivetkit/sqlite-vfs': workspace:*
   '@rivetkit/engine-api-full': workspace:*
   '@types/react': ^19
   '@types/react-dom': ^19
@@ -2934,7 +2935,7 @@ importers:
         version: 0.31.5
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(bun-types@1.3.0(@types/react@19.2.2))(kysely@0.28.8)
+        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@11.10.0)(bun-types@1.3.0(@types/react@19.2.2))(kysely@0.28.8)(pg@8.17.2)
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -3856,7 +3857,7 @@ importers:
         version: 3.13.12(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -4292,6 +4293,9 @@ importers:
       '@rivetkit/on-change':
         specifier: ^6.0.2-rc.1
         version: 6.0.2-rc.1
+      '@rivetkit/sqlite-vfs':
+        specifier: workspace:*
+        version: link:../sqlite-vfs
       '@rivetkit/traces':
         specifier: workspace:*
         version: link:../traces
@@ -4312,7 +4316,7 @@ importers:
         version: 0.31.5
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(bun-types@1.3.0(@types/react@19.2.2))(kysely@0.28.8)
+        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@11.10.0)(bun-types@1.3.0(@types/react@19.2.2))(kysely@0.28.8)(pg@8.17.2)
       get-port:
         specifier: ^7.1.0
         version: 7.1.0
@@ -4337,9 +4341,6 @@ importers:
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
-      wa-sqlite:
-        specifier: ^1.0.0
-        version: 1.0.0
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -4413,6 +4414,40 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.0(@microsoft/api-extractor@7.53.2(@types/node@22.18.1))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.2)
+
+  rivetkit-typescript/packages/sqlite-vfs:
+    dependencies:
+      '@rivetkit/bare-ts':
+        specifier: ^0.6.2
+        version: 0.6.2
+      vbare:
+        specifier: ^0.0.4
+        version: 0.0.4
+      wa-sqlite:
+        specifier: ^1.0.0
+        version: 1.0.0
+    devDependencies:
+      '@bare-ts/tools':
+        specifier: ^0.13.0
+        version: 0.13.0(@bare-ts/lib@0.6.0)
+      '@types/node':
+        specifier: ^22.13.1
+        version: 22.19.5
+      commander:
+        specifier: ^12.0.0
+        version: 12.1.0
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.5))(jiti@1.21.7)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.2)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.20.6
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
   rivetkit-typescript/packages/traces:
     dependencies:
@@ -5874,9 +5909,6 @@ packages:
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
     engines: {node: '>=0.1.90'}
-
-  '@corex/deepmerge@4.0.43':
-    resolution: {integrity: sha512-N8uEMrMPL0cu/bdboEWpQYb/0i2K5Qn8eCsxzOmxSggJbbQte7ljMRoXm917AbntqTGOzdTu+vP3KOOzoC70HQ==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -10861,10 +10893,6 @@ packages:
   cli-table3@0.6.5:
     resolution: {integrity: sha512-+W/5efTR7y5HRD7gACw9yQjqMVvEMLBHmboM/kPWam+H+Hmyrgjh6YncVKK122YZkXrLudzTuAukUw9FnMf7IQ==}
     engines: {node: 10.* || >= 12.*}
-
-  cli-width@4.1.0:
-    resolution: {integrity: sha512-ouuZd4/dm2Sw5Gmqy6bGyNNNe1qt9RpmxveLSO7KcgsTnU7RXfsw+/bukWGo1abgBiMAic068rclZsO4IWmmxQ==}
-    engines: {node: '>= 12'}
 
   client-only@0.0.1:
     resolution: {integrity: sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==}
@@ -18743,8 +18771,6 @@ snapshots:
   '@colors/colors@1.5.0':
     optional: true
 
-  '@corex/deepmerge@4.0.43': {}
-
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
@@ -19930,6 +19956,7 @@ snapshots:
     dependencies:
       hono: 4.9.8
     optional: true
+
   '@hono/node-ws@1.2.0(@hono/node-server@1.19.1(hono@4.11.3))(hono@4.11.3)':
     dependencies:
       '@hono/node-server': 1.19.1(hono@4.11.3)
@@ -20702,7 +20729,7 @@ snapshots:
       react-simple-code-editor: 0.14.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       serve-handler: 6.1.6
       tailwind-merge: 2.6.0
-      tailwindcss-animate: 1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@20.19.13)(typescript@5.9.2)))
+      tailwindcss-animate: 1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@20.19.13)(typescript@5.9.3)))
       zod: 3.25.76
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -23200,6 +23227,16 @@ snapshots:
       '@codemirror/state': 6.5.2
       '@codemirror/view': 6.38.2
 
+  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
+    dependencies:
+      '@codemirror/autocomplete': 6.19.0
+      '@codemirror/commands': 6.9.0
+      '@codemirror/language': 6.11.3
+      '@codemirror/lint': 6.9.0
+      '@codemirror/search': 6.5.11
+      '@codemirror/state': 6.5.2
+      '@codemirror/view': 6.38.2
+
   '@uiw/codemirror-theme-github@4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
     dependencies:
       '@uiw/codemirror-themes': 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -24619,8 +24656,6 @@ snapshots:
       string-width: 4.2.3
     optionalDependencies:
       '@colors/colors': 1.5.0
-
-  cli-width@4.1.0: {}
 
   client-only@0.0.1: {}
 

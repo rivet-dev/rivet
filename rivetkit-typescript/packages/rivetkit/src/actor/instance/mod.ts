@@ -155,7 +155,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Inspector
 	#inspectorToken?: string;
-	#inspector = new ActorInspector(this);
+	#inspector!: ActorInspector;
 
 	// MARK: - Tracing
 	#traces!: Traces<OtlpExportTraceServiceRequestJson>;
@@ -164,6 +164,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB>) {
 		this.#config = config;
 		this.actorContext = new ActorContext(this);
+		this.#inspector = new ActorInspector(this);
 	}
 
 	// MARK: - Public Getters
@@ -1280,7 +1281,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						batchDelete: (keys) =>
 							this.driver.kvBatchDelete(this.#actorId, keys),
 					},
-					sqliteVfs: this.driver.sqliteVfs,
 				});
 				this.#rLog.info({ msg: "database migration starting" });
 				await this.#config.db.onMigrate?.(client);

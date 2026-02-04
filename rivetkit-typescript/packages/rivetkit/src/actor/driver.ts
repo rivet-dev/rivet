@@ -7,7 +7,6 @@ import type { RegistryConfig } from "@/registry/config";
 import type {
 	RawDatabaseClient,
 } from "@/db/config";
-import type { SqliteVfs } from "@/db/vfs/mod";
 import { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 
 export type ActorDriverBuilder = (
@@ -67,14 +66,6 @@ export interface ActorDriver {
 	overrideDrizzleDatabaseClient?(
 		actorId: string,
 	): Promise<BaseSQLiteDatabase<any,any,any,any> | undefined>;
-
-	/**
-	 * SQLite VFS instance for creating KV-backed databases.
-	 * Each driver should create its own instance to avoid concurrency issues.
-	 * If not provided, the db() provider will throw an error.
-	 * @experimental
-	 */
-	sqliteVfs?: SqliteVfs;
 
 	/**
 	 * Requests the actor to go to sleep.

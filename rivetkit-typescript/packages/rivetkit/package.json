@@ -214,6 +214,7 @@
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/fast-json-patch": "^3.1.2",
 		"@rivetkit/on-change": "^6.0.2-rc.1",
+		"@rivetkit/sqlite-vfs": "workspace:*",
 		"@rivetkit/traces": "workspace:*",
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"cbor-x": "^1.6.0",
@@ -225,7 +226,6 @@
 		"pino": "^9.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
-		"wa-sqlite": "^1.0.0",
 		"zod": "^4.1.0"
 	},
 	"devDependencies": {
