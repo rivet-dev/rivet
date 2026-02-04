@@ -1,5 +1,6 @@
 import type { AnyDatabaseProvider } from "../database";
-import type { QueueManager, QueueMessage } from "./queue-manager";
+import * as errors from "../errors";
+import type { QueueManager, QueueMessage as QueueMessageRecord } from "./queue-manager";
 
 /** Options for receiving messages from the queue. */
 export interface QueueReceiveOptions {
@@ -7,6 +8,8 @@ export interface QueueReceiveOptions {
 	count?: number;
 	/** Timeout in milliseconds to wait for messages. Waits indefinitely if not specified. */
 	timeout?: number;
+	/** When true, message must be manually completed. */
+	wait?: boolean;
 }
 
 /** Request object for receiving messages from the queue. */
@@ -59,21 +62,50 @@ export class ActorQueue<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			count,
 			mergedOptions.timeout,
 			this.#abortSignal,
+			mergedOptions.wait ?? false,
 		);
 
 		if (Array.isArray(request.name)) {
-			return messages;
+			return messages?.map((message) =>
+				this.#toQueueMessage(message, mergedOptions.wait ?? false),
+			);
 		}
 
 		if (!messages || messages.length === 0) {
 			return undefined;
 		}
 
-		return messages[0];
+		return this.#toQueueMessage(messages[0], mergedOptions.wait ?? false);
+	}
+
+	#toQueueMessage(
+		message: QueueMessageRecord,
+		wait: boolean,
+	): QueueMessage {
+		const base: QueueMessage = {
+			id: message.id.toString(),
+			name: message.name,
+			body: message.body,
+			complete: async (data?: unknown) => {
+				if (!wait) {
+					throw new errors.QueueCompleteNotAllowed();
+				}
+				await this.#queueManager.complete(message, data);
+			},
+		};
+
+		return base;
 	}
 
 	/** Sends a message to the specified queue. */
 	async send(name: string, body: unknown): Promise<QueueMessage> {
 		return await this.#queueManager.enqueue(name, body);
 	}
+}
+
+export interface QueueMessage<T = unknown> {
+	name: string;
+	body: T;
+	id: string;
+	complete(data?: unknown): Promise<void>;
 }

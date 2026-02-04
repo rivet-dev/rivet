@@ -69,12 +69,15 @@ type HttpActionResponse struct {
 # MARK: HTTP Queue
 
 type HttpQueueSendRequest struct {
-	name: str
 	body: data
+	name: optional<str>
+	wait: optional<bool>
+	timeout: optional<u64>
 }
 
 type HttpQueueSendResponse struct {
-	ok: bool
+	status: str
+	response: optional<data>
 }
 
 # MARK: HTTP Error

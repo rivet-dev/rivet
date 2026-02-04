@@ -53,4 +53,8 @@ type QueueMessage struct {
 	name: str
 	body: Cbor
 	createdAt: i64
+	failureCount: optional<u32>
+	availableAt: optional<i64>
+	inFlight: optional<bool>
+	inFlightAt: optional<i64>
 }
