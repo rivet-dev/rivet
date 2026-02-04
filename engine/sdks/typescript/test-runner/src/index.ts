@@ -147,9 +147,9 @@ async function autoConfigureServerless() {
 					default: {
 						serverless: {
 							url: `http://localhost:${INTERNAL_SERVER_PORT}`,
-							max_runners: 10,
+							max_runners: 10000,
 							slots_per_runner: 1,
-							request_lifespan: 15,
+							request_lifespan: 300,
 						},
 					},
 				},
