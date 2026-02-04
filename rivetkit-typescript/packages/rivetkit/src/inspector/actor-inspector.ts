@@ -38,6 +38,26 @@ export class ActorInspector {
 		return this.#lastQueueSize;
 	}
 
+	async getQueueStatus(limit: number): Promise<schema.QueueStatus> {
+		const maxSize = this.actor.config.options.maxQueueSize;
+		const safeLimit = Math.max(0, Math.floor(limit));
+		const messages = await this.actor.queueManager.getMessages();
+		const sorted = messages.sort(
+			(a, b) => a.createdAt - b.createdAt,
+		);
+		const limited = safeLimit > 0 ? sorted.slice(0, safeLimit) : [];
+		return {
+			size: BigInt(this.#lastQueueSize),
+			maxSize: BigInt(maxSize),
+			truncated: sorted.length > limited.length,
+			messages: limited.map((message) => ({
+				id: message.id,
+				name: message.name,
+				createdAtMs: BigInt(message.createdAt),
+			})),
+		};
+	}
+
 	updateQueueSize(size: number) {
 		if (this.#lastQueueSize === size) {
 			return;

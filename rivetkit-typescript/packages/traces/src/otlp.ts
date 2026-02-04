@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { decode as decodeCbor } from "cbor-x";
 
 export interface OtlpAnyValue {
@@ -92,7 +91,19 @@ export function hexFromBytes(bytes: Uint8Array): string {
 }
 
 export function base64FromBytes(bytes: Uint8Array): string {
-	return Buffer.from(bytes).toString("base64");
+	const bufferCtor = (globalThis as { Buffer?: { from: (data: Uint8Array) => { toString: (encoding: string) => string } } }).Buffer;
+	if (bufferCtor) {
+		return bufferCtor.from(bytes).toString("base64");
+	}
+	let binary = "";
+	for (let i = 0; i < bytes.length; i++) {
+		binary += String.fromCharCode(bytes[i]);
+	}
+	const btoaFn = (globalThis as { btoa?: (data: string) => string }).btoa;
+	if (!btoaFn) {
+		throw new Error("No base64 encoder available");
+	}
+	return btoaFn(binary);
 }
 
 export function anyValueFromCborBytes(bytes: Uint8Array): OtlpAnyValue {

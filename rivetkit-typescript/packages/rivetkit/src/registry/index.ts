@@ -1,6 +1,6 @@
 import type { Client } from "@/client/client";
 import { createClient } from "@/client/mod";
-import { isDev } from "@/utils/env-vars";
+import { getNodeEnv, isDev } from "@/utils/env-vars";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -49,10 +49,12 @@ export class Registry<A extends RegistryActors> {
 		this.#config = config;
 
 		// Auto-prepare on next tick (gives time for sync config modification)
-		setTimeout(() => {
-			// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-			this.#ensureRuntime();
-		}, 0);
+		if (getNodeEnv() !== "test") {
+			setTimeout(() => {
+				// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
+				this.#ensureRuntime();
+			}, 0);
+		}
 	}
 
 	/** Creates runtime if not already created. Idempotent. */
