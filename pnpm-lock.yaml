@@ -4072,6 +4072,9 @@ importers:
       '@types/node':
         specifier: ^24.3.1
         version: 24.3.1
+      tsx:
+        specifier: ^4.20.5
+        version: 4.20.6
 
   shared/typescript/virtual-websocket:
     devDependencies:
