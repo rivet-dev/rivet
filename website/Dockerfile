@@ -7,9 +7,8 @@
 # Use Debian-based Node image (required for Playwright/mermaid rendering)
 FROM node:22-bookworm AS builder
 
-# Install git-lfs and Playwright browser dependencies
+# Install git-lfs and Playwright system dependencies
 RUN apt-get update && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
-RUN npx -y playwright install --with-deps chromium
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate

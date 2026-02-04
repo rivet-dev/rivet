@@ -175,6 +175,11 @@ export const sitemap = [
 								//icon: faArrowsTurnToDots,
 							},
 							{
+								title: "Queue Messages",
+								href: "/docs/actors/queue",
+								icon: faListUl,
+							},
+							{
 								title: "Low-Level WebSocket Handler",
 								href: "/docs/actors/websocket-handler"
 							},

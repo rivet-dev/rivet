@@ -824,7 +824,7 @@ const client = createClient<typeof registry>();
 const actor = client.chat.getOrCreate(["my-chat"]);
 
 // Use built-in websocket method
-const ws = await actor.websocket("/");
+const ws = await actor.webSocket("/");
 
 // Or get raw URL for external tools
 const url = await actor.getGatewayUrl();
