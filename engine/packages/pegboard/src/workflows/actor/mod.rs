@@ -291,6 +291,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			namespace_id: input.namespace_id,
 			name: input.name.clone(),
 		})
+		.tag("actor_id", input.actor_id)
 		.dispatch()
 		.await?;
 
