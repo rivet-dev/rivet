@@ -1,0 +1,6 @@
+- get all parts tabs & buttons of the examples/workflow-sandbox/ example working as you'd expect. fix any bugs in the example or rivetkit.
+- write oneoff throwaway test to starting a workflow, killing the process, and ensure workflow continues from mid-run. be 100% sure that worklfows can be terminated and proceed to run from the correct place.
+- ensure that all parts of examples/queue-sandbox/ works as intended. fix any bugs in the example or rivetkit.
+- read driver test suite actors & tests & examples/queue-sandbox for queue. write documentation page on queues. add to sitemap. read other docs pages to see good structure first. cover all features of queues.
+- read driver test suite actors & test & examples/workflow-sandbox for workflows. write documentation page on workflows. add to sitemap. read other docs pages to see good structure first. cover all features of workflows.
+- update rivetkit client to allow overriding the runner name configured in the client in the getorcreate and create calls. also enable this in the react integration.
