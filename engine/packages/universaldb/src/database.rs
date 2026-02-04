@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow};
 use futures_util::FutureExt;
@@ -41,6 +42,7 @@ impl Database {
 		Fut: Future<Output = Result<T>> + Send,
 		T: Send + 'a + 'static,
 	{
+		let start = Instant::now();
 		metrics::TRANSACTION_TOTAL.with_label_values(&[name]).inc();
 		metrics::TRANSACTION_PENDING
 			.with_label_values(&[name])
@@ -65,6 +67,9 @@ impl Database {
 		metrics::TRANSACTION_PENDING
 			.with_label_values(&[name])
 			.dec();
+		metrics::TRANSACTION_DURATION
+			.with_label_values(&[name])
+			.observe(start.elapsed().as_secs_f64());
 
 		res
 	}
