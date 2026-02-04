@@ -1,10 +1,10 @@
 // Base contexts
-export { ActorContext, type ActorContextOf } from "./base/actor";
-export { ConnContext, type ConnContextOf } from "./base/conn";
-export { ConnInitContext, type ConnInitContextOf } from "./base/conn-init";
 
 // Lifecycle contexts
 export { ActionContext, type ActionContextOf } from "./action";
+export { ActorContext, type ActorContextOf } from "./base/actor";
+export { ConnContext, type ConnContextOf } from "./base/conn";
+export { ConnInitContext, type ConnInitContextOf } from "./base/conn-init";
 export {
 	BeforeActionResponseContext,
 	type BeforeActionResponseContextOf,

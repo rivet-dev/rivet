@@ -30,6 +30,7 @@ import { checkForSchedulingError, queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { logger } from "./log";
+import { createQueueProxy, createQueueSender } from "./queue";
 import {
 	type WebSocketMessage as ConnMessage,
 	messageLength,
@@ -135,6 +136,7 @@ export class ActorConnRaw {
 	#statusChangeHandlers = new Set<StatusChangeCallback>();
 
 	#actionIdCounter = 0;
+	#queueSender: ReturnType<typeof createQueueSender>;
 
 	/**
 	 * Interval that keeps the NodeJS process alive if this is the only thing running.
@@ -175,8 +177,27 @@ export class ActorConnRaw {
 		this.#params = params;
 		this.#encoding = encoding;
 		this.#actorQuery = actorQuery;
+		this.#queueSender = createQueueSender({
+			encoding: this.#encoding,
+			params: this.#params,
+			customFetch: async (request: Request) => {
+				if (!this.#actorId) {
+					const { actorId } = await queryActor(
+						undefined,
+						this.#actorQuery,
+						this.#driver,
+					);
+					this.#actorId = actorId;
+				}
+				return this.#driver.sendRequest(this.#actorId, request);
+			},
+		});
 
 		this.#keepNodeAliveInterval = setInterval(() => 60_000);
+	}
+
+	get queue() {
+		return createQueueProxy(this.#queueSender);
 	}
 
 	/**
@@ -243,7 +264,6 @@ export class ActorConnRaw {
 
 	/**
 	 * Do not call this directly.
-enc
 	 * Establishes a connection to the server using the specified endpoint & encoding & driver.
 	 *
 	 * @protected
