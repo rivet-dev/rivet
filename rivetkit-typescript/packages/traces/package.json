@@ -1,0 +1,49 @@
+{
+	"name": "@rivetkit/traces",
+	"version": "0.0.1",
+	"description": "Generic tracing storage and OTLP export for RivetKit",
+	"license": "Apache-2.0",
+	"type": "module",
+	"files": [
+		"dist",
+		"src",
+		"schemas",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/tsup/index.d.ts",
+				"default": "./dist/tsup/index.js"
+			},
+			"require": {
+				"types": "./dist/tsup/index.d.cts",
+				"default": "./dist/tsup/index.cjs"
+			}
+		}
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"scripts": {
+		"build": "pnpm run compile:bare && tsup src/index.ts",
+		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
+		"check-types": "pnpm run compile:bare && tsc --noEmit",
+		"test": "pnpm run compile:bare && vitest run"
+	},
+	"dependencies": {
+		"@rivetkit/bare-ts": "^0.6.2",
+		"cbor-x": "^1.6.0",
+		"fdb-tuple": "^1.0.0",
+		"vbare": "^0.0.4"
+	},
+	"devDependencies": {
+		"@bare-ts/tools": "^0.13.0",
+		"@types/node": "^22.13.1",
+		"commander": "^12.0.0",
+		"tsx": "^4.7.0",
+		"tsup": "^8.4.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.1.1"
+	}
+}
