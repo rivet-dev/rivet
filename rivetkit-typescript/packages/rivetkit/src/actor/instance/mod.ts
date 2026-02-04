@@ -834,6 +834,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		await this.#scheduleManager.scheduleEvent(timestamp, action, args);
 	}
 
+	async clearAlarm(): Promise<void> {
+		await this.#scheduleManager.clearAlarm();
+	}
+
 	async onAlarm() {
 		this.resetSleepTimer();
 		await this.#scheduleManager.onAlarm();
