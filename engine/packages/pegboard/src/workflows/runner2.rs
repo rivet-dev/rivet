@@ -237,14 +237,23 @@ async fn handle_stopping(
 		// Set all remaining actors as going away immediately
 		if !actors.is_empty() {
 			for (actor_id, generation) in &actors {
-				ctx.signal(crate::workflows::actor::GoingAway {
-					generation: *generation,
-					reset_rescheduling: reset_actor_rescheduling,
-				})
-				.to_workflow::<crate::workflows::actor::Workflow>()
-				.tag("actor_id", actor_id)
-				.send()
-				.await?;
+				let res = ctx
+					.signal(crate::workflows::actor::GoingAway {
+						generation: *generation,
+						reset_rescheduling: reset_actor_rescheduling,
+					})
+					.to_workflow::<crate::workflows::actor::Workflow>()
+					.tag("actor_id", actor_id)
+					.graceful_not_found()
+					.send()
+					.await?;
+
+				if res.is_none() {
+					tracing::warn!(
+						?actor_id,
+						"actor workflow not found, likely already stopped"
+					);
+				}
 			}
 		}
 	}
