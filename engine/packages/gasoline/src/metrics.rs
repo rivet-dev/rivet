@@ -58,6 +58,12 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
+	pub static ref WORKER_WORKFLOW_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"gasoline_worker_workflow_active",
+		"Total active workflows in memory for the given worker.",
+		&["worker_id", "workflow_name"],
+		*REGISTRY
+	).unwrap();
 
 	pub static ref FIND_WORKFLOWS_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"gasoline_find_workflows_duration",
@@ -108,6 +114,13 @@ lazy_static::lazy_static! {
 		"Duration from wake condition insertion to pull.",
 		&["workflow_name"],
 		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref WORKFLOW_LEASED: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_workflow_leased",
+		"Amount of workflows leased per pull.",
+		&["workflow_name"],
+		vec![1.0, 2.0, 3.0, 4.0, 8.0, 16.0, 30.0, 60.0, 125.0, 250.0, 500.0, 1000.0],
 		*REGISTRY
 	).unwrap();
 

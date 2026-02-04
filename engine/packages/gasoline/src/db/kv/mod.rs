@@ -1386,6 +1386,12 @@ impl Database for DatabaseKv {
 
 		let start_instant2 = Instant::now();
 
+		for leased_workflow in &leased_workflows {
+			metrics::WORKFLOW_LEASED
+				.with_label_values(&[leased_workflow.workflow_name.as_str()])
+				.observe(1.0);
+		}
+
 		let pulled_workflows = self
 			.pools
 			.udb()

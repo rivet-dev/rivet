@@ -1,4 +1,4 @@
-use rivet_metrics::{REGISTRY, prometheus::*};
+use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
 	pub static ref KEY_PACK_COUNT: IntCounterVec = register_int_counter_vec_with_registry!(
@@ -24,6 +24,13 @@ lazy_static::lazy_static! {
 		"udb_transaction_pending",
 		"How many transactions have been started.",
 		&["name"],
+		*REGISTRY
+	).unwrap();
+	pub static ref TRANSACTION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"udb_transaction_duration",
+		"Duration of a transaction.",
+		&["name"],
+		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 }
