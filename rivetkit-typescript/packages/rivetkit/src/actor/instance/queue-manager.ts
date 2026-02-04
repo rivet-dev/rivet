@@ -56,6 +56,15 @@ interface QueueCompletionWaiter {
 	timeoutHandle?: ReturnType<typeof setTimeout>;
 }
 
+interface MessageListener {
+	nameSet: Set<string>;
+	resolve: () => void;
+	reject: (error: Error) => void;
+	actorAbortCleanup?: () => void;
+	signal?: AbortSignal;
+	signalAbortCleanup?: () => void;
+}
+
 const DEFAULT_METADATA: QueueMetadata = {
 	nextId: 1n,
 	size: 0,
@@ -75,6 +84,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#pendingWarningHandle: ReturnType<typeof setTimeout> | undefined;
 	#redeliveryTimeout: ReturnType<typeof setTimeout> | undefined;
 	#redeliveryAt: number | undefined;
+	#messageListeners = new Set<MessageListener>();
 
 	constructor(
 		actor: ActorInstance<S, CP, CS, V, I, DB>,
@@ -197,6 +207,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (!options.deferWaiters) {
 			await this.#maybeResolveWaiters();
 		}
+		this.#notifyMessageListeners(name);
 
 		return message;
 	}
@@ -352,6 +363,59 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		await this.#maybeResolveWaiters();
 	}
 
+	/** Waits for messages with any of the specified names to appear in the queue. */
+	async waitForNames(
+		names: string[],
+		abortSignal?: AbortSignal,
+	): Promise<void> {
+		const nameSet = new Set(names);
+		const existing = await this.#loadQueueMessages();
+		if (existing.some((message) => nameSet.has(message.name))) {
+			return;
+		}
+
+		return await new Promise<void>((resolve, reject) => {
+			const listener: MessageListener = {
+				nameSet,
+				resolve: () => {
+					this.#removeMessageListener(listener);
+					resolve();
+				},
+				reject: (error) => {
+					this.#removeMessageListener(listener);
+					reject(error);
+				},
+			};
+
+			const actorAbortSignal = this.#actor.abortSignal;
+			const onActorAbort = () =>
+				listener.reject(new errors.ActorAborted());
+			if (actorAbortSignal.aborted) {
+				onActorAbort();
+				return;
+			}
+			actorAbortSignal.addEventListener("abort", onActorAbort, {
+				once: true,
+			});
+			listener.actorAbortCleanup = () =>
+				actorAbortSignal.removeEventListener("abort", onActorAbort);
+
+			if (abortSignal) {
+				const onAbort = () =>
+					listener.reject(new errors.ActorAborted());
+				if (abortSignal.aborted) {
+					onAbort();
+					return;
+				}
+				abortSignal.addEventListener("abort", onAbort, { once: true });
+				listener.signalAbortCleanup = () =>
+					abortSignal.removeEventListener("abort", onAbort);
+			}
+
+			this.#messageListeners.add(listener);
+		});
+	}
+
 	/** Returns all messages currently in the queue without removing them. */
 	async getMessages(): Promise<QueueMessage[]> {
 		return await this.#loadQueueMessages();
@@ -471,6 +535,26 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#actor.inspector.updateQueueSize(this.#metadata.size);
 		}
 		return decoded;
+	}
+
+	#removeMessageListener(listener: MessageListener): void {
+		if (this.#messageListeners.delete(listener)) {
+			listener.actorAbortCleanup?.();
+			listener.signalAbortCleanup?.();
+		}
+	}
+
+	#notifyMessageListeners(name: string): void {
+		if (this.#messageListeners.size === 0) {
+			return;
+		}
+		for (const listener of [...this.#messageListeners]) {
+			if (!listener.nameSet.has(name)) {
+				continue;
+			}
+			this.#removeMessageListener(listener);
+			listener.resolve();
+		}
 	}
 
 	async #removeMessages(
