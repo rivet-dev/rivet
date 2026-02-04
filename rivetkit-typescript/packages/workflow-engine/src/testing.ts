@@ -1,4 +1,5 @@
 import type { EngineDriver, KVEntry, KVWrite } from "./driver.js";
+import { createDefaultMessageDriver } from "./storage.js";
 import { compareKeys, keyStartsWith, keyToHex } from "./keys.js";
 import { sleep } from "./utils.js";
 
@@ -16,6 +17,7 @@ export class InMemoryDriver implements EngineDriver {
 
 	/** How often the worker polls for work */
 	workerPollInterval = 100;
+	messageDriver = createDefaultMessageDriver(this);
 
 	async get(key: Uint8Array): Promise<Uint8Array | null> {
 		await sleep(this.latency);
