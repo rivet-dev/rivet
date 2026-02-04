@@ -1,0 +1,43 @@
+# Progress Log
+
+## 2026-01-24 Session
+
+### Fixed: Workflow listenWithTimeout not waking on message arrival
+
+**Problem:** The `listenWithTimeout` and `listenUntil` methods in the workflow engine would not wake up when a message arrived - they would only wake when the deadline passed. This meant approval workflows and other human-in-the-loop patterns were broken.
+
+**Root Cause:**
+1. `listenWithTimeout`/`listenUntil` threw `SleepError(deadline)` when no message was available
+2. `SleepError` only carried a deadline, not message names to wait for
+3. The execution loop only checked `sleepUntil` for these cases, not `waitingForMessages`
+4. Result: workflows would sleep until deadline without subscribing to message notifications
+
+**Fix:**
+1. Extended `SleepError` to optionally carry `messageNames` array
+2. Modified `executeListenUntil` and `executeListenNUntilImpl` to pass message names when throwing `SleepError`
+3. Updated `setSleepState` to include `waitingForMessages` in the result
+4. Modified `executeLiveWorkflow` to wait for EITHER messages OR deadline when both are present
+
+**Additional Fix:** Race branches throwing SleepError
+
+When a race branch called `sleep()`, the `SleepError` was being treated as a branch failure instead of a yield to the scheduler. Fixed by:
+1. Tracking yield errors (`SleepError`/`MessageWaitError`) separately in race execution
+2. Re-throwing the yield error after `Promise.allSettled` to allow proper scheduler yielding
+3. Keeping branch status as "running" for yield errors (not "failed")
+
+**Files Changed:**
+- `rivetkit-typescript/packages/workflow-engine/src/errors.ts` - Extended `SleepError` with optional `messageNames`
+- `rivetkit-typescript/packages/workflow-engine/src/context.ts` - Pass message names in `SleepError`, handle yield errors in race
+- `rivetkit-typescript/packages/workflow-engine/src/index.ts` - Handle combined sleep+message waiting in execution loop
+
+**Testing:**
+- All 128 workflow-engine unit tests pass
+- All 18 rivetkit workflow tests pass
+- Verified workflow-sandbox examples:
+  - Order (steps) - works
+  - Batch (loops) - works
+  - Approval (listen with timeout) - NOW WORKS
+  - Dashboard (join) - works
+  - Race - NOW WORKS
+  - Payment (rollback) - works
+  - Timer (sleep) - works
