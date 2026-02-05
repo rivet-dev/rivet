@@ -135,7 +135,7 @@ async function autoConfigureServerless() {
 	getLogger().info("Configuring serverless");
 
 	const res = await fetch(
-		`http://127.0.0.1:6420/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`,
+		`${RIVET_ENDPOINT}/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`,
 		{
 			method: "PUT",
 			headers: {

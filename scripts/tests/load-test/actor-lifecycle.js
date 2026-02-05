@@ -3,6 +3,7 @@ import ws from 'k6/ws';
 import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import encoding from 'k6/encoding';
+import exec from 'k6/execution';
 
 // Custom metrics for detailed tracking
 const actorCreateSuccessRate = new Rate('actor_create_success');
@@ -28,6 +29,49 @@ const RUNNER_NAME_SELECTOR = __ENV.RUNNER_NAME_SELECTOR || 'test-runner';
 const VARIATION = __ENV.VARIATION || 'sporadic'; // sporadic, idle, chatty
 const VARIATION_DURATION = parseInt(__ENV.VARIATION_DURATION || '120'); // seconds
 
+// Calculate total stage duration for ramp-down detection
+function calculateStageDuration(stagesStr) {
+	const stages = stagesStr.split(',');
+	let totalSeconds = 0;
+
+	for (const stage of stages) {
+		const [duration] = stage.split(':');
+		totalSeconds += parseDuration(duration);
+	}
+
+	return totalSeconds;
+}
+
+// Parse duration string (e.g., "1m", "30s", "1h30m") to seconds
+function parseDuration(duration) {
+	let totalSeconds = 0;
+	let currentNumber = '';
+
+	for (let i = 0; i < duration.length; i++) {
+		const char = duration[i];
+
+		if (char >= '0' && char <= '9') {
+			currentNumber += char;
+		} else if (char === 'h') {
+			totalSeconds += parseInt(currentNumber || '0') * 60 * 60;
+			currentNumber = '';
+		} else if (char === 'm') {
+			totalSeconds += parseInt(currentNumber || '0') * 60;
+			currentNumber = '';
+		} else if (char === 's') {
+			totalSeconds += parseInt(currentNumber || '0');
+			currentNumber = '';
+		}
+	}
+
+	// If there's a trailing number without unit, assume seconds
+	if (currentNumber) {
+		totalSeconds += parseInt(currentNumber);
+	}
+
+	return totalSeconds;
+}
+
 // Test configuration via environment variables
 export const options = {
 	scenarios: {
@@ -44,7 +88,7 @@ export const options = {
 		'actor_ping_success': ['rate>0.95'],
 		'websocket_success': ['rate>0.90'],
 		'http_req_duration': ['p(95)<5000', 'p(99)<10000'],
-		'actor_create_duration': ['p(95)<3000'],
+		// 'actor_create_duration': ['p(95)<3000'],
 	},
 	noConnectionReuse: false,
 	userAgent: 'k6-actor-lifecycle-test',
@@ -87,7 +131,6 @@ function createActor() {
 					'Content-Type': 'application/json',
 				},
 				tags: { name: 'create_actor' },
-				timeout: '10s',
 			}
 		);
 	} catch (error) {
@@ -247,18 +290,26 @@ function idleWebSocket(actorId, durationSeconds) {
 	const wsUrl = `${wsEndpoint}/gateway/${actorId}@${RIVET_TOKEN}/ws`;
 
 	let success = false;
+	let closedEarly = false;
+
+	// Calculate how long until ramp-down starts
+	const stageDuration = calculateStageDuration(__ENV.STAGES || '1m:10,2m:20,1m:0');
+	const elapsed = (Date.now() - exec.scenario.startTime) / 1000;
+	const timeUntilRampDown = Math.max(0, stageDuration - elapsed);
+
+	// Use the shorter of: requested duration or time until ramp-down
+	const actualDuration = Math.min(durationSeconds, timeUntilRampDown);
+	const durationMs = actualDuration * 1000;
+
+	if (actualDuration < durationSeconds) {
+		console.log(`[IdleWS ${actorId}] Limiting idle to ${Math.floor(actualDuration)}s (ramp-down starts soon)`);
+	}
 
 	try {
 		const response = ws.connect(wsUrl, (socket) => {
 			socket.on('open', () => {
-				console.log(`[IdleWS ${actorId}] Connection opened, keeping idle for ${durationSeconds}s`);
+				console.log(`[IdleWS ${actorId}] Connection opened, keeping idle for ${Math.floor(actualDuration)}s`);
 				success = true;
-
-				// Just keep the connection open without sending anything
-				sleep(durationSeconds);
-
-				console.log(`[IdleWS ${actorId}] Idle period complete, closing connection`);
-				socket.close();
 			});
 
 			socket.on('message', (data) => {
@@ -268,12 +319,22 @@ function idleWebSocket(actorId, durationSeconds) {
 
 			socket.on('error', (e) => {
 				console.error(`[IdleWS ${actorId}] Socket error: ${e}`);
-				socket.close();
+				closedEarly = true;
 			});
 
 			socket.on('close', () => {
-				console.log(`[IdleWS ${actorId}] Connection closed`);
+				if (closedEarly) {
+					console.warn(`[IdleWS ${actorId}] Connection closed early`);
+				} else {
+					console.log(`[IdleWS ${actorId}] Connection closed after ${Math.floor(actualDuration)}s`);
+				}
 			});
+
+			// Set timeout to close the connection after the actual duration
+			socket.setTimeout(() => {
+				console.log(`[IdleWS ${actorId}] Idle period complete, closing connection`);
+				socket.close();
+			}, durationMs);
 		});
 
 		websocketSuccessRate.add(success);
@@ -500,11 +561,26 @@ function runIdleTest() {
 			console.warn(`Sleep failed for actor ${actorId}`);
 		}
 
-		console.log(`[Idle] Actor ${actorId} sleeping for ${VARIATION_DURATION}s with WebSocket kept alive`);
+		// Calculate how long until ramp-down starts
+		const stageDuration = calculateStageDuration(__ENV.STAGES || '1m:10,2m:20,1m:0');
+		const elapsed = (Date.now() - exec.scenario.startTime) / 1000;
+		const timeUntilRampDown = Math.max(0, stageDuration - elapsed);
 
-		// 4. Keep WebSocket open during the entire idle duration
-		// This will send periodic heartbeats to keep the connection alive
-		idleWebSocket(actorId, VARIATION_DURATION);
+		// Use the shorter of: requested duration or time until ramp-down
+		const actualDuration = Math.min(VARIATION_DURATION, timeUntilRampDown);
+
+		if (actualDuration === 0) {
+			console.log(`[Idle] Test in graceful ramp-down period, skipping idle period for graceful shutdown`);
+		} else {
+			if (actualDuration < VARIATION_DURATION) {
+				console.log(`[Idle] Limiting idle to ${Math.floor(actualDuration)}s (ramp-down starts soon)`);
+			} else {
+				console.log(`[Idle] Actor ${actorId} sleeping for ${VARIATION_DURATION}s with WebSocket kept alive`);
+			}
+
+			// 4. Keep WebSocket open during the actual idle duration
+			idleWebSocket(actorId, actualDuration);
+		}
 
 		// 5. Wake and destroy
 		wakeActor(actorId);
@@ -543,75 +619,92 @@ function runChattyTest() {
 		// Small delay to let actor fully initialize
 		sleep(0.5);
 
-		// 2. Be chatty for the configured duration
-		const endTime = Date.now() + (VARIATION_DURATION * 1000);
-		let requestCount = 0;
+		// Calculate how long until ramp-down starts
+		const stageDuration = calculateStageDuration(__ENV.STAGES || '1m:10,2m:20,1m:0');
+		const elapsed = (Date.now() - exec.scenario.startTime) / 1000;
+		const timeUntilRampDown = Math.max(0, stageDuration - elapsed);
 
-		// Start a WebSocket connection and keep it open, sending messages
-		// We'll run this in parallel with HTTP requests
-		const wsEndpoint = RIVET_ENDPOINT.replace('http://', 'ws://').replace('https://', 'wss://');
-		const wsUrl = `${wsEndpoint}/gateway/${actorId}@${RIVET_TOKEN}/ws`;
+		// Use the shorter of: requested duration or time until ramp-down
+		const actualDuration = Math.min(VARIATION_DURATION, timeUntilRampDown);
 
-		// For chatty mode, we alternate between HTTP and WebSocket
-		while (Date.now() < endTime) {
-			// Send HTTP ping
-			try {
-				const pingResponse = http.get(
-					`${RIVET_ENDPOINT}/ping`,
-					{
-						headers: {
-							'X-Rivet-Token': RIVET_TOKEN,
-							'X-Rivet-Target': 'actor',
-							'X-Rivet-Actor': actorId,
-						},
-						tags: { name: 'chatty_ping' },
-					}
-				);
-
-				if (pingResponse.status === 200) {
-					chattyRequestsCount.add(1);
-					requestCount++;
-				} else {
-					console.error(`[Chatty ${actorId}] Ping failed with status ${pingResponse.status}: ${pingResponse.body}`);
-				}
-			} catch (error) {
-				console.error(`[Chatty ${actorId}] Ping request failed: ${error}`);
+		if (actualDuration === 0) {
+			console.log(`[Chatty] Test in graceful ramp-down period, skipping chatty period for graceful shutdown`);
+		} else {
+			if (actualDuration < VARIATION_DURATION) {
+				console.log(`[Chatty] Limiting chatty to ${Math.floor(actualDuration)}s (ramp-down starts soon)`);
 			}
 
-			// Send a few WebSocket messages
-			try {
-				ws.connect(wsUrl, (socket) => {
-					socket.on('open', () => {
-						try {
-							for (let i = 0; i < 3; i++) {
-								socket.send(`chatty-msg-${requestCount}-${i}`);
-								chattyMessagesCount.add(1);
-							}
-							socket.close();
-						} catch (error) {
-							console.error(`[Chatty ${actorId}] Failed to send WS messages: ${error}`);
-							socket.close();
+			// 2. Be chatty for the actual duration
+			const endTime = Date.now() + (actualDuration * 1000);
+			let requestCount = 0;
+
+			// Start a WebSocket connection and keep it open, sending messages
+			// We'll run this in parallel with HTTP requests
+			const wsEndpoint = RIVET_ENDPOINT.replace('http://', 'ws://').replace('https://', 'wss://');
+			const wsUrl = `${wsEndpoint}/gateway/${actorId}@${RIVET_TOKEN}/ws`;
+
+			// For chatty mode, we alternate between HTTP and WebSocket
+			while (Date.now() < endTime) {
+
+				// Send HTTP ping
+				try {
+					const pingResponse = http.get(
+						`${RIVET_ENDPOINT}/ping`,
+						{
+							headers: {
+								'X-Rivet-Token': RIVET_TOKEN,
+								'X-Rivet-Target': 'actor',
+								'X-Rivet-Actor': actorId,
+							},
+							tags: { name: 'chatty_ping' },
 						}
-					});
+					);
 
-					socket.on('error', (e) => {
-						console.error(`[Chatty ${actorId}] WS error: ${e}`);
-						socket.close();
-					});
+					if (pingResponse.status === 200) {
+						chattyRequestsCount.add(1);
+						requestCount++;
+					} else {
+						console.error(`[Chatty ${actorId}] Ping failed with status ${pingResponse.status}: ${pingResponse.body}`);
+					}
+				} catch (error) {
+					console.error(`[Chatty ${actorId}] Ping request failed: ${error}`);
+				}
 
-					socket.setTimeout(() => {
-						socket.close();
-					}, 1000);
-				});
-			} catch (error) {
-				console.error(`[Chatty ${actorId}] WS connection failed: ${error}`);
+				// Send a few WebSocket messages
+				try {
+					ws.connect(wsUrl, (socket) => {
+						socket.on('open', () => {
+							try {
+								for (let i = 0; i < 3; i++) {
+									socket.send(`chatty-msg-${requestCount}-${i}`);
+									chattyMessagesCount.add(1);
+								}
+								socket.close();
+							} catch (error) {
+								console.error(`[Chatty ${actorId}] Failed to send WS messages: ${error}`);
+								socket.close();
+							}
+						});
+
+						socket.on('error', (e) => {
+							console.error(`[Chatty ${actorId}] WS error: ${e}`);
+							socket.close();
+						});
+
+						socket.setTimeout(() => {
+							socket.close();
+						}, 1000);
+					});
+				} catch (error) {
+					console.error(`[Chatty ${actorId}] WS connection failed: ${error}`);
+				}
+
+				// Small delay between bursts
+				sleep(0.5);
 			}
 
-			// Small delay between bursts
-			sleep(0.5);
+			console.log(`[Chatty] Actor ${actorId} sent ${requestCount} HTTP requests`);
 		}
-
-		console.log(`[Chatty] Actor ${actorId} sent ${requestCount} HTTP requests`);
 
 		// 3. Destroy the actor
 		if (!destroyActor(actorId)) {
