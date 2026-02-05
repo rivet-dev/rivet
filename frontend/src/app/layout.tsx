@@ -209,6 +209,17 @@ const Sidebar = ({
 												>
 													Settings
 												</HeaderLink>
+											) : matchRoute({
+													to: "/orgs/$organization/projects/$project",
+													fuzzy: true,
+												}) ? (
+												<HeaderLink
+													to="/orgs/$organization/projects/$project/settings"
+													className="font-normal"
+													icon={faCog}
+												>
+													Settings
+												</HeaderLink>
 											) : null}
 											{matchRoute({
 												to: "/orgs/$organization/projects/$project/ns/$namespace",

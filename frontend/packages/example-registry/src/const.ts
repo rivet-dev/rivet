@@ -27,6 +27,7 @@ export const TAGS = [
 	{ name: "database", displayName: "Database" },
 	{ name: "gaming", displayName: "Gaming" },
 	{ name: "experimental", displayName: "Experimental" },
+	{ name: 'queues', displayName: 'Queues' },
 ] as const;
 
 export type Technology = (typeof TECHNOLOGIES)[number]["name"];

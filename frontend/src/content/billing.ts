@@ -44,7 +44,7 @@ const ACTOR_AWAKE_PRICE_PER_SECOND =
  */
 
 type BilledMetrics = Extract<
-	Rivet.namespaces.MetricsGetRequestNameItem,
+	Rivet.MetricName,
 	| "actor_awake"
 	| "kv_storage_used"
 	| "kv_read"

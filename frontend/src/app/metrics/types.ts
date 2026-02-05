@@ -1,6 +1,6 @@
 import type { Rivet } from "@rivet-gg/cloud";
 
-export type MetricName = Rivet.namespaces.MetricsGetRequestNameItem;
+export type MetricName = Rivet.MetricName;
 
 export interface MetricConfig {
 	name: MetricName;

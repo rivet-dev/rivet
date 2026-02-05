@@ -33,6 +33,24 @@ function lookupFaIcon(iconName: string): IconProp | null {
 	return iconDef ?? null;
 }
 
+function getActorIcon(iconValue: string | null) {
+	if (iconValue && isEmoji(iconValue)) {
+		return (
+			<span className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 text-sm">
+				{iconValue}
+			</span>
+		);
+	}
+
+	const faIcon = iconValue ? lookupFaIcon(iconValue) : null;
+	return (
+		<Icon
+			icon={faIcon ?? faActorsBorderless}
+			className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100"
+		/>
+	);
+}
+
 export function ActorBuildsList() {
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(useDataProvider().buildsQueryOptions());
@@ -57,23 +75,7 @@ export function ActorBuildsList() {
 							? build.name.metadata.name
 							: build.id;
 
-					const iconElement = useMemo(() => {
-						if (iconValue && isEmoji(iconValue)) {
-							return (
-								<span className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 text-sm">
-									{iconValue}
-								</span>
-							);
-						}
-
-						const faIcon = iconValue ? lookupFaIcon(iconValue) : null;
-						return (
-							<Icon
-								icon={faIcon ?? faActorsBorderless}
-								className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100"
-							/>
-						);
-					}, [iconValue]);
+					const iconElement = getActorIcon(iconValue);
 
 					return (
 						<Button
