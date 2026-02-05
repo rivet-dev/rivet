@@ -152,7 +152,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			await waitFor(driverTestConfig, 60);
 			const result = await resultPromise;
 
-			expect(result.status).toBe("timedOut");
+			expect(result?.status).toBe("timedOut");
 		});
 
 		test("complete throws when wait is false", async (c) => {

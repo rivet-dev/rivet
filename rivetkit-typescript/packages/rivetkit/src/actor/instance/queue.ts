@@ -99,7 +99,8 @@ export class ActorQueue<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	/** Sends a message to the specified queue. */
 	async send(name: string, body: unknown): Promise<QueueMessage> {
-		return await this.#queueManager.enqueue(name, body);
+		const message = await this.#queueManager.enqueue(name, body);
+		return this.#toQueueMessage(message, false);
 	}
 }
 
