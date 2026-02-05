@@ -26,6 +26,8 @@ COPY engine/sdks/typescript/api-full/ engine/sdks/typescript/api-full/
 COPY engine/sdks/typescript/runner/ engine/sdks/typescript/runner/
 COPY engine/sdks/typescript/runner-protocol/ engine/sdks/typescript/runner-protocol/
 COPY rivetkit-typescript/packages/rivetkit/ rivetkit-typescript/packages/rivetkit/
+COPY rivetkit-typescript/packages/traces/ rivetkit-typescript/packages/traces/
+COPY rivetkit-typescript/packages/workflow-engine/ rivetkit-typescript/packages/workflow-engine/
 COPY shared/typescript/virtual-websocket/ shared/typescript/virtual-websocket/
 COPY examples/ examples/
 COPY frontend/public/examples/ frontend/public/examples/
