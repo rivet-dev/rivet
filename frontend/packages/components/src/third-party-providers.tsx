@@ -43,6 +43,8 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 				"cloud-api.staging.rivet.dev",
 				/localhost/,
 			],
+			tunnel: __APP_TYPE__ === "cloud" ? cloudEnv().VITE_APP_SENTRY_TUNNEL_URL : undefined,
+
 		});
 	}
 }

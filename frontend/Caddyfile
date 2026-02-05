@@ -8,6 +8,11 @@
 		respond "healthy" 200
 	}
 
+	# Sentry tunnel proxy
+	handle /tunnel* {
+		reverse_proxy sentry-tunnel.railway.internal
+	}
+
 	# Main site handler
 	handle {
 		root * /srv
