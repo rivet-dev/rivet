@@ -1,6 +1,6 @@
 import * as cbor from "cbor-x";
 import type { VersionedDataHandler } from "vbare";
-import { z } from "zod";
+import { z } from "zod/v4";
 import * as errors from "@/actor/errors";
 import { serializeWithEncoding } from "@/serde";
 import { loggerWithoutContext } from "../log";

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
 import { combineUrlPath } from "@/utils";

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 import { getRunMetadata } from "@/actor/config";
 import { type Logger, LogLevelSchema } from "@/common/log";

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import {
 	HEADER_ACTOR_ID,

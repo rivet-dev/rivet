@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
-import type { z } from "zod";
+import type { z } from "zod/v4";
 import { assertUnreachable } from "@/common/utils";
 import type { Encoding } from "@/mod";
 import { jsonParseCompat, jsonStringifyCompat } from "./actor/protocol/serde";
