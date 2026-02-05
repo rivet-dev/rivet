@@ -1,5 +1,5 @@
 import type { Client } from "rivetkit";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 const ConfigSchemaBase = z.object({
 	/** Path that the Rivet manager API will be mounted. */

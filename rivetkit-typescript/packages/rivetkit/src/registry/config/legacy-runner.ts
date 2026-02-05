@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import { z } from "zod";
+import { z } from "zod/v4";
 import type { ActorDriverBuilder } from "@/actor/driver";
 import { LogLevelSchema } from "@/common/log";
 import {
