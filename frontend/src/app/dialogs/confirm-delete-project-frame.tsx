@@ -28,7 +28,7 @@ export default function ConfirmDeleteProjectContent({
 			posthog.capture("project_deleted", {
 				displayName,
 			});
-			await queryClient.invalidateQueries();
+			queryClient.invalidateQueries();
 			onClose?.();
 			return navigate({
 				to: "/orgs/$organization",
