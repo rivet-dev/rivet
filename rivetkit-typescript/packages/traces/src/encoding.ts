@@ -5,6 +5,7 @@ import {
 } from "../schemas/versioned.js";
 
 export type { ReadRangeWire };
+export type { ReadRangeOptions } from "./types.js";
 
 export function encodeReadRangeWire(wire: ReadRangeWire): Uint8Array {
 	return READ_RANGE_VERSIONED.serializeWithEmbeddedVersion(

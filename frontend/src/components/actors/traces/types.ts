@@ -1,4 +1,4 @@
-import type { OtlpSpan, OtlpSpanEvent } from "@rivetkit/traces";
+import type { OtlpSpan, OtlpSpanEvent } from "@rivetkit/traces/otlp";
 import type { ReactNode } from "react";
 
 export interface FlattenedSpan {

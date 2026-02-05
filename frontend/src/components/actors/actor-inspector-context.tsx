@@ -15,8 +15,7 @@ import {
 	TO_SERVER_VERSIONED as toServer,
 	type QueueStatus,
 } from "rivetkit/inspector";
-import type { ReadRangeOptions, ReadRangeWire } from "@rivetkit/traces";
-import { decodeReadRangeWire } from "@rivetkit/traces/encoding";
+import { decodeReadRangeWire, type ReadRangeOptions, type ReadRangeWire } from "@rivetkit/traces/encoding";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";

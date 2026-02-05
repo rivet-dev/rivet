@@ -12,6 +12,11 @@
 	],
 	"exports": {
 		".": {
+			"browser": {
+				"types": "./dist/tsup/index.browser.d.ts",
+				"import": "./dist/tsup/index.browser.js",
+				"require": "./dist/tsup/index.browser.cjs"
+			},
 			"import": {
 				"types": "./dist/tsup/index.d.ts",
 				"default": "./dist/tsup/index.js"
@@ -22,6 +27,11 @@
 			}
 		},
 		"./encoding": {
+			"browser": {
+				"types": "./dist/tsup/encoding.d.ts",
+				"import": "./dist/tsup/encoding.js",
+				"default": "./dist/tsup/encoding.js"
+			},
 			"import": {
 				"types": "./dist/tsup/encoding.d.ts",
 				"default": "./dist/tsup/encoding.js"
@@ -32,6 +42,11 @@
 			}
 		},
 		"./otlp": {
+			"browser": {
+				"types": "./dist/tsup/otlp-entry.d.ts",
+				"import": "./dist/tsup/otlp-entry.js",
+				"default": "./dist/tsup/otlp-entry.js"
+			},
 			"import": {
 				"types": "./dist/tsup/otlp-entry.d.ts",
 				"default": "./dist/tsup/otlp-entry.js"
@@ -46,15 +61,15 @@
 		"node": ">=18.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts src/encoding.ts src/otlp-entry.ts",
+		"build": "pnpm run compile:bare && tsup src/index.ts src/index.browser.ts src/encoding.ts src/otlp-entry.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
 		"check-types": "pnpm run compile:bare && tsc --noEmit",
 		"test": "pnpm run compile:bare && vitest run"
 	},
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
-		"cbor-x": "^1.6.0",
 		"fdb-tuple": "^1.0.0",
+		"cbor-x": "^1.6.0",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {

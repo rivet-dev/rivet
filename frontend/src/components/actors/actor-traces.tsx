@@ -1,12 +1,12 @@
 import { faChevronDown, faSpinnerThird, Icon } from "@rivet-gg/icons";
-import type {
-	OtlpAnyValue,
-	OtlpExportTraceServiceRequestJson,
-	OtlpKeyValue,
-	OtlpSpan,
-	OtlpSpanEvent,
-} from "@rivetkit/traces";
-import { readRangeWireToOtlp } from "@rivetkit/traces/otlp";
+import {
+	readRangeWireToOtlp,
+	type OtlpAnyValue,
+	type OtlpExportTraceServiceRequestJson,
+	type OtlpKeyValue,
+	type OtlpSpan,
+	type OtlpSpanEvent,
+} from "@rivetkit/traces/otlp";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { type ReactElement, useMemo, useState } from "react";
