@@ -1058,10 +1058,7 @@ export function createTraces(
 		chunkId: number;
 	} {
 		const tuple = unpack(Buffer.from(key)) as [number, number, number];
-		return {
-			bucketStartSec: tuple[1],
-			chunkId: tuple[2],
-		};
+		return { bucketStartSec: tuple[1], chunkId: tuple[2] };
 	}
 
 	function buildChunkKey(bucketStartSec: number, chunkId: number): Uint8Array {
