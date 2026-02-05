@@ -12,6 +12,11 @@
 	],
 	"exports": {
 		".": {
+			"browser": {
+				"types": "./dist/tsup/index.browser.d.ts",
+				"import": "./dist/tsup/index.browser.js",
+				"require": "./dist/tsup/index.browser.cjs"
+			},
 			"import": {
 				"types": "./dist/tsup/index.d.ts",
 				"default": "./dist/tsup/index.js"
@@ -43,8 +48,8 @@
 	},
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
-		"cbor-x": "^1.6.0",
 		"fdb-tuple": "^1.0.0",
+		"cbor-x": "^1.6.0",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {
