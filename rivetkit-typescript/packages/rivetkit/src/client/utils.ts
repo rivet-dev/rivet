@@ -1,7 +1,7 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
-import type { z } from "zod";
+import type { z } from "zod/v4";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/common/utils";
 import type { HttpResponseError } from "@/schemas/client-protocol/mod";

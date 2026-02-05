@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import { type GetUpgradeWebSocket } from "@/utils";
 import {
