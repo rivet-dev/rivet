@@ -26,14 +26,24 @@
 				"default": "./dist/tsup/index.cjs"
 			}
 		},
-		"./reader": {
+		"./encoding": {
 			"import": {
-				"types": "./dist/tsup/reader.d.ts",
-				"default": "./dist/tsup/reader.js"
+				"types": "./dist/tsup/encoding.d.ts",
+				"default": "./dist/tsup/encoding.js"
 			},
 			"require": {
-				"types": "./dist/tsup/reader.d.cts",
-				"default": "./dist/tsup/reader.cjs"
+				"types": "./dist/tsup/encoding.d.cts",
+				"default": "./dist/tsup/encoding.cjs"
+			}
+		},
+		"./otlp": {
+			"import": {
+				"types": "./dist/tsup/otlp-entry.d.ts",
+				"default": "./dist/tsup/otlp-entry.js"
+			},
+			"require": {
+				"types": "./dist/tsup/otlp-entry.d.cts",
+				"default": "./dist/tsup/otlp-entry.cjs"
 			}
 		}
 	},
@@ -41,7 +51,7 @@
 		"node": ">=18.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts src/reader.ts",
+		"build": "pnpm run compile:bare && tsup src/index.ts src/index.browser.ts src/encoding.ts src/otlp-entry.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/v1.bare -o dist/schemas/v1.ts",
 		"check-types": "pnpm run compile:bare && tsc --noEmit",
 		"test": "pnpm run compile:bare && vitest run"

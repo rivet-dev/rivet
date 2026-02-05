@@ -3,7 +3,7 @@ import type { Unsubscribe } from "nanoevents";
 import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import type { AnyActorInstance, RivetMessageEvent } from "@/mod";
 import type { ToClient } from "@/schemas/actor-inspector/mod";
-import { encodeReadRangeWire } from "@rivetkit/traces";
+import { encodeReadRangeWire } from "@rivetkit/traces/encoding";
 import {
 	CURRENT_VERSION as INSPECTOR_CURRENT_VERSION,
 	TO_CLIENT_VERSIONED as toClient,

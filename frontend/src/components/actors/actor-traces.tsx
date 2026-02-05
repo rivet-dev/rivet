@@ -1,13 +1,18 @@
 import { faChevronDown, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import type {
+	OtlpAnyValue,
+	OtlpExportTraceServiceRequestJson,
+	OtlpKeyValue,
+	OtlpSpan,
+	OtlpSpanEvent,
+} from "@rivetkit/traces";
+import { readRangeWireToOtlp } from "@rivetkit/traces/otlp";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import {
-	useMemo,
-	useState,
-	type ReactElement,
-} from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import type { DateRange } from "../datepicker";
 import { RangeDatePicker } from "../datepicker";
+import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import {
 	Select,
@@ -16,18 +21,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../ui/select";
-import { cn } from "../lib/utils";
-import { ActorObjectInspector } from "./console/actor-inspector";
 import { useActorInspector } from "./actor-inspector-context";
+import { ActorObjectInspector } from "./console/actor-inspector";
 import type { ActorId } from "./queries";
-import { readRangeWireToOtlp } from "@rivetkit/traces/reader";
-import type {
-	OtlpAnyValue,
-	OtlpExportTraceServiceRequestJson,
-	OtlpKeyValue,
-	OtlpSpan,
-	OtlpSpanEvent,
-} from "@rivetkit/traces";
 
 const PRESET_OPTIONS = [
 	{ label: "5 min", ms: 5 * 60 * 1000 },
@@ -63,13 +59,15 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 	const inspector = useActorInspector();
 	const [isLive, setIsLive] = useState(true);
 	const [presetMs, setPresetMs] = useState(DEFAULT_PRESET_MS);
-	const [customRange, setCustomRange] = useState<DateRange | undefined>(() => {
-		const now = Date.now();
-		return {
-			from: new Date(now - DEFAULT_PRESET_MS),
-			to: new Date(now),
-		};
-	});
+	const [customRange, setCustomRange] = useState<DateRange | undefined>(
+		() => {
+			const now = Date.now();
+			return {
+				from: new Date(now - DEFAULT_PRESET_MS),
+				to: new Date(now),
+			};
+		},
+	);
 
 	const query = useQuery({
 		queryKey: [
@@ -86,10 +84,10 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 			const now = Date.now();
 			const rangeStartMs = isLive
 				? now - presetMs
-				: customRange?.from?.getTime() ?? now - presetMs;
+				: (customRange?.from?.getTime() ?? now - presetMs);
 			const rangeEndMs = isLive
 				? now
-				: customRange?.to?.getTime() ?? now;
+				: (customRange?.to?.getTime() ?? now);
 			const startMs = Math.min(rangeStartMs, rangeEndMs);
 			const endMs = Math.max(rangeStartMs, rangeEndMs);
 			return inspector.api.getTraces({
@@ -98,7 +96,9 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 				limit: DEFAULT_LIMIT,
 			});
 		},
-		enabled: inspector.isInspectorAvailable && inspector.features.traces.supported,
+		enabled:
+			inspector.isInspectorAvailable &&
+			inspector.features.traces.supported,
 		refetchInterval: isLive ? 1000 : false,
 		staleTime: 0,
 	});
@@ -433,9 +433,7 @@ function GapMarker({ ms, depth }: { ms: number; depth: number }) {
 	);
 }
 
-function extractSpans(
-	otlp: OtlpExportTraceServiceRequestJson,
-): OtlpSpan[] {
+function extractSpans(otlp: OtlpExportTraceServiceRequestJson): OtlpSpan[] {
 	const spans: OtlpSpan[] = [];
 	for (const resource of otlp.resourceSpans ?? []) {
 		for (const scope of resource.scopeSpans ?? []) {
@@ -548,9 +546,7 @@ function otlpAnyValueToJs(value?: OtlpAnyValue): unknown {
 		return value.bytesValue;
 	}
 	if (value.arrayValue?.values) {
-		return value.arrayValue.values.map((item) =>
-			otlpAnyValueToJs(item),
-		);
+		return value.arrayValue.values.map((item) => otlpAnyValueToJs(item));
 	}
 	if (value.kvlistValue?.values) {
 		const obj: Record<string, unknown> = {};

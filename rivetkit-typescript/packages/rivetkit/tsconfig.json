@@ -7,6 +7,8 @@
 			"@/*": ["./src/*"],
 			"@rivetkit/workflow-engine": ["../workflow-engine/src/index.ts"],
 			"@rivetkit/traces": ["../traces/src/index.ts"],
+			"@rivetkit/traces/encoding": ["../traces/src/encoding.ts"],
+			"@rivetkit/traces/otlp": ["../traces/src/otlp-entry.ts"],
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"]
