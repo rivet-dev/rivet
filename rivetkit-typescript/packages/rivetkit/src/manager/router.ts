@@ -3,7 +3,7 @@ import * as cbor from "cbor-x";
 
 import type { Hono } from "hono";
 import invariant from "invariant";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { Forbidden, RestrictedFeature } from "@/actor/errors";
 
 import { serializeActorKey } from "@/actor/keys";

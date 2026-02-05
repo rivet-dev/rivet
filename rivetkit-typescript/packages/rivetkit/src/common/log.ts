@@ -4,7 +4,7 @@ import {
 	pino,
 	stdTimeFunctions,
 } from "pino";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { getLogLevel, getLogTarget, getLogTimestamp } from "@/utils/env-vars";
 import {
 	castToLogValue,

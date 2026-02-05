@@ -1,5 +1,5 @@
 import * as cbor from "cbor-x";
-import { z } from "zod";
+import { z } from "zod/v4";
 import type { AnyDatabaseProvider } from "@/actor/database";
 import * as errors from "@/actor/errors";
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { z } from "zod";
+import type { z } from "zod/v4";
 import { tryParseEndpoint } from "./endpoint-parser";
 
 // Helper to create a mock Zod refinement context for testing

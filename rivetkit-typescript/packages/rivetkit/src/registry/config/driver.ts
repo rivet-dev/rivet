@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 import { ActorDriverBuilder } from "@/actor/driver";
 import { ManagerDriverBuilder } from "@/manager/driver";
 

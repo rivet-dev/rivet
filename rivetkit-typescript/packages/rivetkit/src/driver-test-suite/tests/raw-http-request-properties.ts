@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { registry } from "../../../fixtures/driver-test-suite/registry";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
