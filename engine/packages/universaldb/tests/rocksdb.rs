@@ -1,12 +1,21 @@
-use std::{path::Path, sync::Arc};
+use std::{
+	path::Path,
+	sync::{
+		Arc,
+		atomic::{AtomicUsize, Ordering},
+	},
+	time::{Duration, Instant},
+};
 
 use anyhow::Context;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, TryStreamExt};
+use rand::{distributions::WeightedError, seq::SliceRandom};
 use rivet_test_deps_docker::TestDatabase;
 use rocksdb::{OptimisticTransactionDB, Options, WriteOptions};
 use universaldb::{
 	Database,
-	utils::{IsolationLevel::*, calculate_tx_retry_backoff},
+	prelude::*,
+	utils::{calculate_tx_retry_backoff, end_of_key_range},
 };
 use uuid::Uuid;
 
@@ -106,36 +115,160 @@ async fn rocksdb_udb() {
 		.unwrap();
 	let db = Database::new(Arc::new(driver));
 
+	db.run(|tx| async move {
+		for i in 0..=255 {
+			for j in 0..=0 {
+				let key = vec![1, 2, 3, i, j];
+				let value = b"";
+
+				tx.set(&key, value);
+			}
+		}
+
+		Ok(())
+	})
+	.await
+	.unwrap();
+
 	let mut handles = Vec::new();
 
-	for _ in 0..64 {
+	for i in 0..64 {
 		let db = db.clone();
 
 		let handle = tokio::spawn(async move {
-			db.run(|tx| async move {
-				let key = vec![1, 2, 3];
-				let value = vec![4, 5, 6];
+			let tries = AtomicUsize::new(0);
+			let start = Instant::now();
 
-				tx.get(&key, Serializable).await.unwrap();
-				tx.set(&key, &value);
+			let alloc = db
+				.run(|tx| {
+					let tries = &tries;
 
-				Ok(())
-			})
-			.await
-			.unwrap();
+					async move {
+						tries.fetch_add(1, Ordering::SeqCst);
 
-			tracing::info!("success");
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
+								begin: KeySelector::first_greater_or_equal(vec![1, 2, 3]),
+								end: KeySelector::last_less_or_equal(vec![1, 2, 3, 255, 255]),
+								mode: StreamingMode::Iterator,
+								..RangeOption::default()
+							},
+							Snapshot,
+						);
+
+						let mut chunk = Vec::with_capacity(100);
+
+						loop {
+							let empty = if chunk.len() >= 100 {
+								false
+							} else if let Some(entry) = stream.try_next().await? {
+								chunk.push(entry);
+								continue;
+							} else {
+								true
+							};
+
+							let entry = match chunk.choose_weighted(&mut rand::thread_rng(), |_| 1)
+							{
+								Ok(entry) => entry,
+								Err(WeightedError::NoItem) => break,
+								Err(err) => return Err(err.into()),
+							};
+
+							tx.add_conflict_range(
+								entry.key(),
+								&end_of_key_range(entry.key()),
+								ConflictRangeType::Read,
+							)?;
+
+							tx.clear(entry.key());
+
+							return Ok(Some(entry.key().to_vec()));
+
+							if empty {
+								break;
+							} else {
+								chunk.clear();
+							}
+						}
+
+						Ok(None)
+					}
+				})
+				.await?;
+
+			let tries = tries.load(Ordering::SeqCst);
+			let duration = start.elapsed();
+
+			tracing::info!(%i, %tries, ?alloc, ?duration, "success");
+
+			anyhow::Ok(alloc.map(|_| (tries, duration)))
 		});
 
 		handles.push(handle);
 	}
 
-	futures_util::stream::iter(handles)
-		.buffer_unordered(1024)
-		.for_each(|result| async {
-			if let Err(err) = result {
-				tracing::error!(?err, "task failed");
+	let res = futures_util::stream::iter(handles)
+		.map(|result| async {
+			match result.await {
+				Ok(Ok(result)) => result,
+				Ok(Err(err)) => {
+					tracing::error!(?err, "task failed");
+					None
+				}
+				Err(err) => {
+					tracing::error!(?err, "task failed");
+					None
+				}
 			}
 		})
+		.buffer_unordered(1024)
+		.filter_map(|x| std::future::ready(x))
+		.collect::<Vec<_>>()
 		.await;
+
+	let mut retry_distribution = Vec::<(usize, usize)>::new();
+	let mut duration_buckets = vec![
+		(Duration::from_micros(0), Duration::from_micros(1000), 0),
+		(Duration::from_micros(1000), Duration::from_micros(2500), 0),
+		(Duration::from_micros(2500), Duration::from_micros(5000), 0),
+		(Duration::from_micros(5000), Duration::from_micros(10000), 0),
+		(Duration::from_millis(10), Duration::from_millis(25), 0),
+		(Duration::from_millis(25), Duration::from_millis(50), 0),
+		(Duration::from_millis(50), Duration::from_millis(100), 0),
+		(Duration::from_millis(100), Duration::from_millis(250), 0),
+		(Duration::from_millis(250), Duration::from_millis(500), 0),
+		(Duration::from_millis(500), Duration::from_millis(1000), 0),
+		(Duration::from_millis(1000), Duration::from_millis(2500), 0),
+		(Duration::from_millis(2500), Duration::MAX, 0),
+	];
+
+	for (retries, duration) in res {
+		if let Some((_, count)) = retry_distribution.iter_mut().find(|(n, _)| n == &retries) {
+			*count += 1;
+		} else {
+			retry_distribution.push((retries, 1));
+		}
+
+		for (_, end, count) in &mut duration_buckets {
+			if &duration < end {
+				*count += 1;
+				break;
+			}
+		}
+	}
+
+	for (retries, count) in retry_distribution {
+		println!("{retries}: {count}");
+	}
+
+	println!();
+
+	for (start, end, count) in duration_buckets {
+		if end == Duration::MAX {
+			println!("{start:?}-Inf: {count}");
+		} else {
+			println!("{start:?}-{end:?}: {count}");
+		}
+	}
 }

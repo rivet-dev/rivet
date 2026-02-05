@@ -204,7 +204,7 @@ impl Root {
 		}
 
 		// Validate force_shutdown_duration is greater than worker and guard shutdown durations
-		let worker = self.runtime.worker_shutdown_duration();
+		let worker = self.runtime.worker.shutdown_duration();
 		let guard = self.runtime.guard_shutdown_duration();
 		let force = self.runtime.force_shutdown_duration();
 		let max_graceful = worker.max(guard);
