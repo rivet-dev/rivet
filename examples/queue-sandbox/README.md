@@ -4,11 +4,13 @@ Interactive demo showcasing all the ways to use queues in RivetKit. Each tab dem
 
 ## Getting Started
 
-```bash
-cd examples/queue-sandbox
-pnpm install
-pnpm dev
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/queue-sandbox
+npm install
+npm run dev
 ```
+
 
 ## Features
 

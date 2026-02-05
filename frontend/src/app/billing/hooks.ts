@@ -10,7 +10,7 @@ const BILLED_METRICS = [
 	"kv_read",
 	"kv_write",
 	"gateway_egress",
-] satisfies Rivet.namespaces.MetricsGetRequestNameItem[];
+] satisfies Rivet.MetricName[];
 
 export function useBilledMetrics() {
 	const dataProvider = useCloudProjectDataProvider();

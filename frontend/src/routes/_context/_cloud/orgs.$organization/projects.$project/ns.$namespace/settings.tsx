@@ -14,6 +14,7 @@ import {
 import {
 	useInfiniteQuery,
 	usePrefetchInfiniteQuery,
+	useQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { match } from "ts-pattern";
@@ -42,6 +43,7 @@ import {
 } from "@/components";
 import {
 	ActorRegion,
+	useCloudNamespaceDataProvider,
 	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
@@ -367,6 +369,7 @@ function Advanced() {
 					<PublishableToken />
 					{__APP_TYPE__ === "cloud" ? <CloudApiTokens /> : null}
 					<DatacenterStatus />
+					{__APP_TYPE__ === "cloud" ? <DangerZone /> : null}
 				</AccordionContent>
 			</AccordionItem>
 		</Accordion>
@@ -406,6 +409,81 @@ function DatacenterStatus() {
 					</li>
 				))}
 			</ul>
+		</div>
+	);
+}
+
+function DangerZone() {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const navigate = useNavigate();
+
+	const { data: project } = useQuery(
+		dataProvider.currentProjectQueryOptions(),
+	);
+
+	const { data: namespace } = useQuery(
+		dataProvider.currentNamespaceQueryOptions(),
+	);
+
+	return (
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-t @6xl:border @6xl:rounded-lg">
+			<div className="flex gap-2 items-center mb-2 mt-6">
+				<H3>Danger Zone</H3>
+			</div>
+			<p className="mb-6 text-muted-foreground">
+				Perform actions that could affect the stability of your Rivet
+				Actors and Runners.
+			</p>
+
+			<div className="border border-destructive rounded-md p-4 bg-destructive/10 mb-4">
+				<H4 className="mb-2 text-destructive-foreground">
+					Archive namespace '{namespace?.displayName}'
+				</H4>
+				<p className=" mb-4">
+					Archiving this namespace will permanently remove all
+					associated Rivet Actors, Runners, and configurations. This
+					action cannot be undone.
+				</p>
+				<Button
+					variant="destructive"
+					onClick={() =>
+						navigate({
+							to: ".",
+							search: {
+								modal: "delete-namespace",
+								displayName: namespace?.displayName,
+							},
+						})
+					}
+				>
+					Archive namespace
+				</Button>
+			</div>
+
+			<div className="border border-destructive rounded-md p-4 bg-destructive/10 mb-4">
+				<H4 className="mb-2 text-destructive-foreground">
+					Archive project '{project?.displayName}'
+				</H4>
+				<p className=" mb-4">
+					Archiving this project will permanently remove all
+					associated Rivet Actors, Runners, and configurations. This
+					action cannot be undone.
+				</p>
+				<Button
+					variant="destructive"
+					onClick={() =>
+						navigate({
+							to: ".",
+							search: {
+								modal: "delete-project",
+								displayName: project?.displayName,
+							},
+						})
+					}
+				>
+					Archive project
+				</Button>
+			</div>
 		</div>
 	);
 }

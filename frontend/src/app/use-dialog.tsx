@@ -41,6 +41,12 @@ export const useDialog = {
 	DeleteConfig: createDialogHook(
 		() => import("@/app/dialogs/confirm-delete-config-frame"),
 	),
+	DeleteNamespace: createDialogHook(
+		() => import("@/app/dialogs/confirm-delete-namespace-frame"),
+	),
+	DeleteProject: createDialogHook(
+		() => import("@/app/dialogs/confirm-delete-project-frame"),
+	),
 	Billing: createDialogHook(() => import("@/app/dialogs/billing-frame")),
 	ProvideEngineCredentials: createDialogHook(
 		() => import("@/app/dialogs/provide-engine-credentials-frame"),

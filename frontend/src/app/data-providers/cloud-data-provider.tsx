@@ -257,9 +257,7 @@ export const createOrganizationContext = ({
 	const projectMetricsQueryOptions = (opts: {
 		organization: string;
 		project: string;
-		name:
-			| Rivet.namespaces.MetricsGetRequestNameItem
-			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		name: Rivet.MetricName | Rivet.MetricName[];
 		startAt?: string;
 		endAt?: string;
 		resolution?: number;
@@ -281,9 +279,7 @@ export const createOrganizationContext = ({
 	const projectLatestMetricsQueryOptions = (opts: {
 		organization: string;
 		project: string;
-		name:
-			| Rivet.namespaces.MetricsGetRequestNameItem
-			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		name: Rivet.MetricName | Rivet.MetricName[];
 		endAt?: string;
 	}) =>
 		queryOptions({
@@ -298,7 +294,7 @@ export const createOrganizationContext = ({
 					},
 				);
 				const transformed = data.name.map((name, index) => ({
-					name: name as Rivet.namespaces.MetricsGetRequestNameItem,
+					name: name as Rivet.MetricName,
 					ts: data.ts[index],
 					value: BigInt(String(data.value[index])),
 				}));
@@ -310,9 +306,7 @@ export const createOrganizationContext = ({
 		organization: string;
 		project: string;
 		namespace: string;
-		name:
-			| Rivet.namespaces.MetricsGetRequestNameItem
-			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		name: Rivet.MetricName | Rivet.MetricName[];
 		startAt?: string;
 		endAt?: string;
 		resolution?: number;
@@ -339,9 +333,7 @@ export const createOrganizationContext = ({
 		organization: string;
 		project: string;
 		namespace: string;
-		name:
-			| Rivet.namespaces.MetricsGetRequestNameItem
-			| Rivet.namespaces.MetricsGetRequestNameItem[];
+		name: Rivet.MetricName | Rivet.MetricName[];
 		endAt?: string;
 	}) =>
 		queryOptions({
@@ -357,13 +349,44 @@ export const createOrganizationContext = ({
 					},
 				);
 				const transformed = data.name.map((name, index) => ({
-					name: name as Rivet.namespaces.MetricsGetRequestNameItem,
+					name: name as Rivet.MetricName,
 					ts: data.ts[index],
 					value: BigInt(String(data.value[index])),
 				}));
 				return transformed;
 			},
 		});
+
+	const archiveProjectMutationOptions = () => {
+		return mutationOptions({
+			mutationKey: [{ organization }, "projects", "archive"],
+			mutationFn: async (data: { project: string }) => {
+				const response = await client.projects.delete(data.project, {
+					org: organization,
+				});
+				return response;
+			},
+		});
+	};
+
+	const archiveNamespaceMutationOptions = () => {
+		return mutationOptions({
+			mutationKey: [{ organization }, "namespaces", "archive"],
+			mutationFn: async (data: {
+				project: string;
+				namespace: string;
+			}) => {
+				const response = await client.namespaces.delete(
+					data.project,
+					data.namespace,
+					{
+						org: organization,
+					},
+				);
+				return response;
+			},
+		});
+	};
 
 	return {
 		...parent,
@@ -473,6 +496,8 @@ export const createOrganizationContext = ({
 				...opts,
 			});
 		},
+		archiveProjectMutationOptions,
+		archiveNamespaceMutationOptions,
 	};
 };
 
@@ -689,6 +714,17 @@ export const createProjectContext = ({
 				},
 			);
 		},
+		archiveCurrentProjectMutationOptions() {
+			return mutationOptions({
+				mutationKey: parent.archiveProjectMutationOptions().mutationKey,
+				mutationFn: async () => {
+					const response = await client.projects.delete(project, {
+						org: organization,
+					});
+					return response;
+				},
+			});
+		},
 	};
 };
 
@@ -802,6 +838,20 @@ export const createNamespaceContext = ({
 			return parent.currentProjectNamespaceLatestMetricsQueryOptions({
 				namespace,
 				...opts,
+			});
+		},
+		archiveCurrentNamespaceMutationOptions() {
+			return mutationOptions({
+				mutationKey:
+					parent.archiveNamespaceMutationOptions().mutationKey,
+				mutationFn: async () => {
+					const response = await parent.client.namespaces.delete(
+						parent.project,
+						namespace,
+						{ org: parent.organization },
+					);
+					return response;
+				},
 			});
 		},
 	};

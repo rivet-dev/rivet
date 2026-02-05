@@ -61,6 +61,27 @@ export const templates: Template[] = [
     }
   },
   {
+    "name": "queue-sandbox",
+    "displayName": "Queue Sandbox",
+    "description": "Interactive demo showcasing all the ways to use queues in RivetKit. Each tab demonstrates a different queue pattern with real-time feedback.",
+    "technologies": [
+      "rivet",
+      "typescript",
+      "react"
+    ],
+    "tags": [
+      "queues"
+    ],
+    "noFrontend": false,
+    "priority": 100,
+    "providers": {
+      "vercel": {
+        "name": "queue-sandbox-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fqueue-sandbox-vercel&project-name=queue-sandbox-vercel"
+      }
+    }
+  },
+  {
     "name": "chat-room",
     "displayName": "Chat Room",
     "description": "Example project demonstrating real-time messaging and actor state management.",
@@ -327,7 +348,12 @@ export const templates: Template[] = [
       "database"
     ],
     "noFrontend": true,
-    "providers": {}
+    "providers": {
+      "vercel": {
+        "name": "drizzle-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fdrizzle-vercel&project-name=drizzle-vercel"
+      }
+    }
   },
   {
     "name": "elysia",
@@ -531,6 +557,26 @@ export const templates: Template[] = [
       "vercel": {
         "name": "trpc-vercel",
         "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Ftrpc-vercel&project-name=trpc-vercel"
+      }
+    }
+  },
+  {
+    "name": "workflow-sandbox",
+    "displayName": "Workflow Sandbox",
+    "description": "Interactive sandbox for testing all RivetKit workflow patterns.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "experimental"
+    ],
+    "noFrontend": false,
+    "providers": {
+      "vercel": {
+        "name": "workflow-sandbox-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fworkflow-sandbox-vercel&project-name=workflow-sandbox-vercel"
       }
     }
   }

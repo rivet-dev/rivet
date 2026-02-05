@@ -47,6 +47,8 @@ function CloudModals() {
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
+	const DeleteNamespaceDialog = useDialog.DeleteNamespace.Dialog;
+	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
 	const CreateOrganizationDialog = useDialog.CreateOrganization.Dialog;
 
 	return (
@@ -285,6 +287,42 @@ function CloudModals() {
 									...old,
 									modal: undefined,
 									config: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteNamespaceDialog
+				displayName={search?.displayName}
+				dialogProps={{
+					open: search?.modal === "delete-namespace",
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+									displayName: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteProjectDialog
+				displayName={search?.displayName}
+				dialogProps={{
+					open: search?.modal === "delete-project",
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+									displayName: undefined,
 								}),
 							});
 						}
