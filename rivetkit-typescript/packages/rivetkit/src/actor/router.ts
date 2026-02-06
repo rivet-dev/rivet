@@ -19,6 +19,9 @@ import {
 	loggerMiddleware,
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
+import { inspectorLogger } from "@/inspector/log";
+import { timingSafeEqual } from "@/utils/crypto";
+import { getNodeEnv } from "@/utils/env-vars";
 
 import type { RegistryConfig } from "@/registry/config";
 import { type GetUpgradeWebSocket, VERSION } from "@/utils";
@@ -158,6 +161,163 @@ export function createActorRouter(
 				}
 			},
 		);
+	}
+
+	// Inspector HTTP endpoints for agent-based debugging
+	if (config.inspector.enabled) {
+		// Auth middleware for inspector routes
+		const inspectorAuth = async (c: any): Promise<Response | undefined> => {
+			if (getNodeEnv() === "development" && !config.inspector.token()) {
+				inspectorLogger().warn({
+					msg: "RIVET_INSPECTOR_TOKEN is not set, skipping inspector auth in development mode",
+				});
+				return undefined;
+			}
+
+			const userToken = c.req.header("Authorization")?.replace("Bearer ", "");
+			if (!userToken) {
+				return c.text("Unauthorized", 401);
+			}
+
+			const inspectorToken = config.inspector.token();
+			if (!inspectorToken) {
+				return c.text("Unauthorized", 401);
+			}
+
+			if (!timingSafeEqual(userToken, inspectorToken)) {
+				return c.text("Unauthorized", 401);
+			}
+
+			return undefined;
+		};
+
+		router.get("/inspector/state", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const state = actor.inspector.getStateJson();
+			return c.json({ state });
+		});
+
+		router.patch("/inspector/state", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const body = await c.req.json<{ state: unknown }>();
+			await actor.inspector.setStateJson(body.state);
+			return c.json({ ok: true });
+		});
+
+		router.get("/inspector/connections", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const connections = actor.inspector.getConnectionsJson();
+			return c.json({ connections });
+		});
+
+		router.get("/inspector/rpcs", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const rpcs = actor.inspector.getRpcs();
+			return c.json({ rpcs });
+		});
+
+		router.post("/inspector/action/:name", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const name = c.req.param("name");
+			const body = await c.req.json<{ args: unknown[] }>();
+			const output = await actor.inspector.executeActionJson(
+				name,
+				body.args ?? [],
+			);
+			return c.json({ output });
+		});
+
+		router.get("/inspector/queue", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const limit = parseInt(c.req.query("limit") ?? "50", 10);
+			const status = await actor.inspector.getQueueStatusJson(limit);
+			return c.json(status);
+		});
+
+		router.get("/inspector/traces", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const startMs = parseInt(c.req.query("startMs") ?? "0", 10);
+			const endMs = parseInt(
+				c.req.query("endMs") ?? String(Date.now()),
+				10,
+			);
+			const limit = parseInt(c.req.query("limit") ?? "1000", 10);
+
+			await actor.traces.flush();
+			const result = await actor.inspector.getTracesJson({
+				startMs,
+				endMs,
+				limit,
+			});
+			return c.json(result);
+		});
+
+		router.get("/inspector/workflow-history", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+			const result = actor.inspector.getWorkflowHistoryJson();
+			return c.json(result);
+		});
+
+		router.get("/inspector/summary", async (c) => {
+			const authResponse = await inspectorAuth(c);
+			if (authResponse) return authResponse;
+
+			const actor = await actorDriver.loadActor(c.env.actorId);
+
+			const isStateEnabled = actor.inspector.isStateEnabled();
+			const isDatabaseEnabled = actor.inspector.isDatabaseEnabled();
+			const isWorkflowEnabled = actor.inspector.isWorkflowEnabled();
+
+			const state = isStateEnabled
+				? actor.inspector.getStateJson()
+				: undefined;
+			const connections = actor.inspector.getConnectionsJson();
+			const rpcs = actor.inspector.getRpcs();
+			const queueSize = actor.inspector.getQueueSize();
+			const workflowHistory = actor.inspector.getWorkflowHistory();
+
+			// Convert BigInt values in workflow history to numbers for JSON serialization.
+			const bigIntReplacer = (_key: string, value: unknown) =>
+				typeof value === "bigint" ? Number(value) : value;
+			const safeWorkflowHistory = workflowHistory
+				? JSON.parse(JSON.stringify(workflowHistory, bigIntReplacer))
+				: null;
+
+			return c.json({
+				state,
+				connections,
+				rpcs,
+				queueSize,
+				isStateEnabled,
+				isDatabaseEnabled,
+				isWorkflowEnabled,
+				workflowHistory: safeWorkflowHistory,
+			});
+		});
 	}
 
 	router.post("/action/:action", async (c) => {
