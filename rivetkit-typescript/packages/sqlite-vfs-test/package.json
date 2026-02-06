@@ -1,0 +1,20 @@
+{
+	"name": "@rivetkit/sqlite-vfs-test",
+	"version": "0.0.1",
+	"description": "Vitest wrapper for sqlite-vfs backends",
+	"license": "Apache-2.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"test": "pnpm --filter @rivetkit/sqlite-vfs build && RIVETKIT_SQLITE_BACKEND=wasm vitest run && pnpm --filter @rivetkit/sqlite-vfs build:native && RIVETKIT_SQLITE_BACKEND=native vitest run"
+	},
+	"dependencies": {
+		"@rivetkit/sqlite-vfs": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.1",
+		"tsx": "^4.7.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.1.1"
+	}
+}

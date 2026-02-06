@@ -1,0 +1,11 @@
+{
+	"name": "@rivetkit/sqlite-vfs-linux-arm64",
+	"version": "0.0.1",
+	"description": "Native sqlite-vfs binary for Linux arm64",
+	"license": "Apache-2.0",
+	"main": "index.js",
+	"type": "commonjs",
+	"os": ["linux"],
+	"cpu": ["arm64"],
+	"files": ["index.js", "bin"]
+}

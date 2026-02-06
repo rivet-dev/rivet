@@ -132,6 +132,7 @@ export class ActorConnRaw {
 
 	#errorHandlers = new Set<ActorErrorCallback>();
 	#openHandlers = new Set<ConnectionStateCallback>();
+	#openScheduled = false;
 	#closeHandlers = new Set<ConnectionStateCallback>();
 	#statusChangeHandlers = new Set<StatusChangeCallback>();
 
@@ -444,39 +445,58 @@ export class ActorConnRaw {
 			return;
 		}
 
-		logger().debug({
-			msg: "socket open",
-			messageQueueLength: this.#messageQueue.length,
-			connId: this.#connId,
+		if (this.#connStatus === "connected" || this.#openScheduled) {
+			return;
+		}
+		this.#openScheduled = true;
+
+		queueMicrotask(() => {
+			this.#openScheduled = false;
+			if (this.#disposed) {
+				logger().debug({
+					msg: "handleOnOpen scheduled after dispose, closing websocket",
+				});
+				if (this.#websocket) {
+					this.#websocket.close(1000, "Disposed");
+					this.#websocket = undefined;
+				}
+				return;
+			}
+
+			logger().debug({
+				msg: "socket open",
+				messageQueueLength: this.#messageQueue.length,
+				connId: this.#connId,
+			});
+
+			// Update connection state (this also notifies handlers)
+			this.#setConnStatus("connected");
+
+			// Resolve open promise
+			if (this.#onOpenPromise) {
+				this.#onOpenPromise.resolve(undefined);
+			} else {
+				logger().warn({ msg: "#onOpenPromise is undefined" });
+			}
+
+			// Resubscribe to all active events
+			for (const eventName of this.#eventSubscriptions.keys()) {
+				this.#sendSubscription(eventName, true);
+			}
+
+			// Flush queue
+			//
+			// If the message fails to send, the message will be re-queued
+			const queue = this.#messageQueue;
+			this.#messageQueue = [];
+			logger().debug({
+				msg: "flushing message queue",
+				queueLength: queue.length,
+			});
+			for (const msg of queue) {
+				this.#sendMessage(msg);
+			}
 		});
-
-		// Update connection state (this also notifies handlers)
-		this.#setConnStatus("connected");
-
-		// Resolve open promise
-		if (this.#onOpenPromise) {
-			this.#onOpenPromise.resolve(undefined);
-		} else {
-			logger().warn({ msg: "#onOpenPromise is undefined" });
-		}
-
-		// Resubscribe to all active events
-		for (const eventName of this.#eventSubscriptions.keys()) {
-			this.#sendSubscription(eventName, true);
-		}
-
-		// Flush queue
-		//
-		// If the message fails to send, the message will be re-queued
-		const queue = this.#messageQueue;
-		this.#messageQueue = [];
-		logger().debug({
-			msg: "flushing message queue",
-			queueLength: queue.length,
-		});
-		for (const msg of queue) {
-			this.#sendMessage(msg);
-		}
 	}
 
 	/** Called by the onmessage event from drivers. */

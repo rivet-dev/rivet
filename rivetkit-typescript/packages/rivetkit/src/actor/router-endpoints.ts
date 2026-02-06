@@ -111,30 +111,49 @@ export async function handleAction(
 	const actionArgs = request;
 
 	// Invoke the action
-	let actor: AnyActorInstance | undefined;
-	let conn: AnyConn | undefined;
 	let output: unknown | undefined;
-	try {
-		actor = await actorDriver.loadActor(actorId);
+	let outputReady = false;
+	const maxAttempts = 3;
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		let actor: AnyActorInstance | undefined;
+		let conn: AnyConn | undefined;
+		try {
+			actor = await actorDriver.loadActor(actorId);
 
-		actor.rLog.debug({ msg: "handling action", actionName, encoding });
+			actor.rLog.debug({ msg: "handling action", actionName, encoding });
 
-		// Create conn
-		conn = await actor.connectionManager.prepareAndConnectConn(
-			createHttpDriver(),
-			parameters,
-			c.req.raw,
-			c.req.path,
-			c.req.header(),
-		);
+			// Create conn
+			conn = await actor.connectionManager.prepareAndConnectConn(
+				createHttpDriver(),
+				parameters,
+				c.req.raw,
+				c.req.path,
+				c.req.header(),
+			);
 
-		// Call action
-		const ctx = new ActionContext(actor, conn!);
-		output = await actor.executeAction(ctx, actionName, actionArgs);
-	} finally {
-		if (conn) {
-			conn.disconnect();
+			// Call action
+			const ctx = new ActionContext(actor, conn);
+			output = await actor.executeAction(ctx, actionName, actionArgs);
+			outputReady = true;
+			break;
+		} catch (error) {
+			const shouldRetry =
+				error instanceof errors.InternalError &&
+				error.message === "Actor is stopping" &&
+				attempt < maxAttempts - 1;
+			if (shouldRetry) {
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				continue;
+			}
+			throw error;
+		} finally {
+			if (conn) {
+				conn.disconnect();
+			}
 		}
+	}
+	if (!outputReady) {
+		throw new errors.InternalError("Action did not complete");
 	}
 
 	// Send response
