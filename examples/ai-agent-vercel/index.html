@@ -1,116 +1,340 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Agent Example</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .ai-chat {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        .messages {
-            height: 400px;
-            overflow-y: auto;
-            padding: 20px;
-            border-bottom: 1px solid #eee;
-        }
-        .message {
-            display: flex;
-            margin-bottom: 16px;
-            align-items: flex-start;
-        }
-        .message.user {
-            justify-content: flex-end;
-        }
-        .message.assistant {
-            justify-content: flex-start;
-        }
-        .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #007bff;
-            color: white;
-            font-size: 18px;
-            flex-shrink: 0;
-        }
-        .message.user .avatar {
-            background: #28a745;
-            margin-left: 10px;
-        }
-        .message.assistant .avatar {
-            background: #007bff;
-            margin-right: 10px;
-        }
-        .content {
-            max-width: 60%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            background: #f1f1f1;
-            word-wrap: break-word;
-        }
-        .message.user .content {
-            background: #007bff;
-            color: white;
-        }
-        .message.assistant .content {
-            background: #f1f1f1;
-        }
-        .message.loading .content {
-            background: #e9ecef;
-            font-style: italic;
-        }
-        .empty-message {
-            text-align: center;
-            color: #666;
-            padding: 40px;
-        }
-        .input-area {
-            display: flex;
-            padding: 20px;
-            gap: 10px;
-        }
-        .input-area input {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
-        }
-        .input-area button {
-            padding: 12px 24px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .input-area button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        .input-area button:hover:not(:disabled) {
-            background: #0056b3;
-        }
-    </style>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>AI Agent Example</title>
+	<style>
+		@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&display=swap");
+
+		:root {
+			color-scheme: light;
+			--ink: #1a1d22;
+			--muted: #5b6069;
+			--surface: #ffffff;
+			--surface-muted: #f4f6f8;
+			--accent: #1f7a75;
+			--accent-strong: #0c5f5a;
+			--highlight: #f2b93b;
+			--border: rgba(26, 29, 34, 0.12);
+			--shadow: rgba(20, 24, 31, 0.08);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: "Space Grotesk", "Helvetica Neue", sans-serif;
+			color: var(--ink);
+			background:
+				radial-gradient(circle at top left, #fef1d8 0%, transparent 45%),
+				radial-gradient(circle at 20% 30%, #e0f2f1 0%, transparent 50%),
+				linear-gradient(120deg, #f7f5ef 0%, #f2f7f7 100%);
+			min-height: 100vh;
+		}
+
+		h1,
+		h2,
+		h3,
+		p {
+			margin: 0;
+		}
+
+		button,
+		input,
+		textarea {
+			font-family: inherit;
+		}
+
+		.layout {
+			max-width: 1200px;
+			margin: 0 auto;
+			padding: 32px 20px 48px;
+			display: flex;
+			flex-direction: column;
+			gap: 28px;
+		}
+
+		.hero {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 24px;
+			align-items: center;
+			justify-content: space-between;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 20px;
+			padding: 28px;
+			box-shadow: 0 18px 40px var(--shadow);
+		}
+
+		.hero__eyebrow {
+			text-transform: uppercase;
+			letter-spacing: 0.2em;
+			font-size: 0.75rem;
+			color: var(--accent-strong);
+			margin-bottom: 12px;
+		}
+
+		.hero h1 {
+			font-size: clamp(2.2rem, 3vw, 3.2rem);
+			line-height: 1.1;
+			max-width: 520px;
+		}
+
+		.hero__subtitle {
+			margin-top: 12px;
+			max-width: 520px;
+			color: var(--muted);
+		}
+
+		.hero__controls {
+			flex: 1;
+			min-width: 260px;
+			background: var(--surface-muted);
+			border-radius: 16px;
+			padding: 20px;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+
+		.control {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			font-size: 0.9rem;
+			color: var(--muted);
+		}
+
+		.control input {
+			padding: 10px 12px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			font-size: 1rem;
+		}
+
+		.hero__controls button {
+			padding: 12px 16px;
+			border: none;
+			border-radius: 12px;
+			background: var(--accent);
+			color: white;
+			font-weight: 600;
+			cursor: pointer;
+			transition: transform 0.2s ease, box-shadow 0.2s ease;
+		}
+
+		.hero__controls button:hover:not(:disabled) {
+			transform: translateY(-1px);
+			box-shadow: 0 10px 18px rgba(31, 122, 117, 0.25);
+		}
+
+		.hero__controls button:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+
+		.agents {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+
+		.agents__header {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.agents__header h2 {
+			font-size: 1.4rem;
+		}
+
+		.agents__count {
+			background: var(--highlight);
+			color: #3f2a00;
+			padding: 4px 10px;
+			border-radius: 999px;
+			font-weight: 600;
+			font-size: 0.9rem;
+		}
+
+		.agents__grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+			gap: 18px;
+		}
+
+		.agents__empty {
+			padding: 20px;
+			background: var(--surface-muted);
+			border-radius: 14px;
+			color: var(--muted);
+			border: 1px dashed var(--border);
+		}
+
+		.agent-card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 16px;
+			padding: 18px;
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+			min-height: 420px;
+			box-shadow: 0 12px 24px var(--shadow);
+		}
+
+		.agent-card__header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.agent-card__title {
+			font-weight: 600;
+			font-size: 1.1rem;
+		}
+
+		.agent-card__meta {
+			font-size: 0.75rem;
+			color: var(--muted);
+			font-family: "IBM Plex Mono", monospace;
+		}
+
+		.agent-card__status {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
+		.status-dot {
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			background: #9aa1ab;
+		}
+
+		.status-dot--thinking {
+			background: var(--highlight);
+		}
+
+		.status-dot--error {
+			background: #d95040;
+		}
+
+		.status-dot--idle {
+			background: #5bc184;
+		}
+
+		.agent-card__timeline {
+			background: var(--surface-muted);
+			border-radius: 12px;
+			padding: 12px;
+			flex: 1;
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+
+		.agent-card__empty {
+			color: var(--muted);
+			font-size: 0.95rem;
+		}
+
+		.message {
+			background: var(--surface);
+			border-radius: 12px;
+			padding: 10px 12px;
+			box-shadow: inset 0 0 0 1px var(--border);
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.message--user {
+			border-left: 4px solid var(--accent);
+		}
+
+		.message--assistant {
+			border-left: 4px solid #f0a33b;
+		}
+
+		.message__header {
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.75rem;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+		}
+
+		.message__content {
+			margin: 0;
+			white-space: pre-wrap;
+			line-height: 1.4;
+			font-size: 0.95rem;
+		}
+
+		.agent-card__footer {
+			display: flex;
+			gap: 10px;
+			align-items: center;
+		}
+
+		.agent-card__footer textarea {
+			flex: 1;
+			resize: vertical;
+			border-radius: 12px;
+			border: 1px solid var(--border);
+			padding: 10px 12px;
+			background: white;
+		}
+
+		.agent-card__footer button {
+			padding: 10px 16px;
+			border-radius: 12px;
+			border: none;
+			background: var(--accent-strong);
+			color: white;
+			font-weight: 600;
+			cursor: pointer;
+		}
+
+		.agent-card__footer button:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+
+		.agent-card__error {
+			font-size: 0.85rem;
+			color: #b04032;
+			background: #fdebe8;
+			padding: 8px 10px;
+			border-radius: 10px;
+			border: 1px solid #f5c3bb;
+		}
+
+		@media (max-width: 720px) {
+			.hero {
+				padding: 20px;
+			}
+
+			.hero__controls {
+				width: 100%;
+			}
+		}
+	</style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="module" src="/frontend/main.tsx"></script>
+	<div id="root"></div>
+	<script type="module" src="/frontend/main.tsx"></script>
 </body>
 </html>
