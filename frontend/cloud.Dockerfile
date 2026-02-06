@@ -73,6 +73,7 @@ ENV VITE_APP_POSTHOG_API_KEY=${VITE_APP_POSTHOG_API_KEY}
 ENV VITE_APP_POSTHOG_HOST=${VITE_APP_POSTHOG_HOST}
 ENV DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
+ENV VITE_APP_SENTRY_TUNNEL="/tunnel"
 
 # Build the cloud frontend using turbo (automatically builds all dependencies, with turbo cache)
 RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-/app/.turbo,target=/app/.turbo \
