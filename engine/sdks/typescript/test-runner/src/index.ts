@@ -16,13 +16,12 @@ const RIVET_RUNNER_KEY = process.env.RIVET_RUNNER_KEY;
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 	? Number(process.env.RIVET_RUNNER_VERSION)
 	: 1;
-const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
-	? Number(process.env.RIVET_RUNNER_TOTAL_SLOTS)
-	: 10000;
+const RIVET_RUNNER_TOTAL_SLOTS = parseInt(process.env.RIVET_RUNNER_TOTAL_SLOTS ?? "1");
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
-const AUTOSTART_SERVER = process.env.DISABLE_SERVER === undefined;
-const AUTOSTART_RUNNER = process.env.AUTOSTART_RUNNER !== undefined;
+const AUTOSTART_SERVER = (process.env.AUTOSTART_SERVER ?? "1") == "1";
+const AUTOSTART_RUNNER = (process.env.AUTOSTART_RUNNER ?? "0") == "1";
+const AUTOCONFIGURE_SERVERLESS = (process.env.AUTOCONFIGURE_SERVERLESS ?? "1") == "1";
 
 const runnerStarted = Promise.withResolvers<Runner>();
 const runnerStopped = Promise.withResolvers<Runner>();
@@ -76,7 +75,7 @@ app.get("/shutdown", async (c) => {
 	return c.text("ok");
 });
 
-app.get("/start", async (c) => {
+app.get("/api/rivet/start", async (c) => {
 	return streamSSE(c, async (stream) => {
 		const runnerStarted = Promise.withResolvers<Runner>();
 		const runnerStopped = Promise.withResolvers<Runner>();
@@ -95,7 +94,7 @@ app.get("/start", async (c) => {
 	});
 });
 
-app.get("/metadata", async (c) => {
+app.get("/api/rivet/metadata", async (c) => {
 	return c.json({
 		runtime: "test-runner",
 		version: "1",
@@ -114,7 +113,9 @@ if (AUTOSTART_SERVER) {
 
 if (AUTOSTART_RUNNER) {
 	runner = await startRunner(runnerStarted, runnerStopped);
-} else await autoConfigureServerless();
+} else if (AUTOCONFIGURE_SERVERLESS) {
+	await autoConfigureServerless();
+}
 
 process.on("SIGTERM", async () => {
 	getLogger().debug("received SIGTERM, force exiting in 3s");

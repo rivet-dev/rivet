@@ -516,7 +516,7 @@ async fn allocate_actor_v2(
 			pending_allocation_ts,
 			..
 		} => {
-			tracing::warn!(
+			tracing::debug!(
 				actor_id=?input.actor_id,
 				"failed to allocate (no availability), waiting for allocation",
 			);
@@ -1112,6 +1112,9 @@ pub async fn clear_pending_allocation(
 			if exists {
 				tx.clear(&pending_alloc_key);
 
+				// If the pending actor key still exists, we must clear its desired slot because after this
+				// activity the actor will go to sleep or be destroyed. We don't clear the slot if the key
+				// doesn't exist because the actor may either be allocated or destroyed.
 				if allocated_serverless_slot {
 					tx.atomic_op(
 						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
@@ -1129,7 +1132,10 @@ pub async fn clear_pending_allocation(
 		.custom_instrument(tracing::info_span!("actor_clear_pending_alloc_tx"))
 		.await?;
 
-	state.allocated_serverless_slot = false;
+	// Only mark allocated_serverless_slot as false if it was allocated before and cleared now
+	if allocated_serverless_slot && cleared {
+		state.allocated_serverless_slot = false;
+	}
 
 	Ok(cleared)
 }
