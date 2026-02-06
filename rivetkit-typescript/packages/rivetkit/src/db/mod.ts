@@ -1,4 +1,4 @@
-import type { KvVfsOptions } from "./vfs/mod";
+import { SqliteVfs, type KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import type { DatabaseProvider, RawAccess } from "./config";
 
 interface DatabaseFactoryConfig {
@@ -55,13 +55,11 @@ export function db({
 				} satisfies RawAccess;
 			}
 
-			// Construct KV-backed client using actor driver's KV operations
-			if (!ctx.sqliteVfs) {
-				throw new Error("SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.");
-			}
+			const sqliteVfs = new SqliteVfs();
 
+			// Construct KV-backed client using actor driver's KV operations
 			const kvStore = createActorKvStore(ctx.kv);
-			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
+			const db = await sqliteVfs.open(ctx.actorId, kvStore);
 
 			return {
 				execute: async (query, ...args) => {

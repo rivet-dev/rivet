@@ -37,9 +37,41 @@ export class ActorDefinition<
 	instantiate(): ActorInstance<S, CP, CS, V, I, DB> {
 		// Lazy import to avoid pulling server-only dependencies (traces, fdb-tuple, etc.)
 		// into browser bundles. This method is only called on the server.
-		const { ActorInstance: ActorInstanceClass } = require("./instance/mod");
-		return new ActorInstanceClass(this.#config);
+		const requireFn = typeof require === "undefined" ? undefined : require;
+		if (!requireFn) {
+			throw new Error(
+				"ActorDefinition.instantiate requires a Node.js environment",
+			);
+		}
+
+		try {
+			const { ActorInstance: ActorInstanceClass } =
+				requireFn("./instance/mod");
+			return new ActorInstanceClass(this.#config);
+		} catch (error) {
+			if (!isInstanceModuleNotFound(error)) {
+				throw error;
+			}
+
+			try {
+				// In tests, register tsx so require() can resolve .ts files.
+				requireFn("tsx/cjs");
+			} catch {
+				throw error;
+			}
+
+			const { ActorInstance: ActorInstanceClass } =
+				requireFn("./instance/mod");
+			return new ActorInstanceClass(this.#config);
+		}
 	}
+}
+
+function isInstanceModuleNotFound(error: unknown): boolean {
+	if (!error || typeof error !== "object") return false;
+	const err = error as { code?: string; message?: string };
+	if (err.code !== "MODULE_NOT_FOUND") return false;
+	return (err.message ?? "").includes("./instance/mod");
 }
 
 export function lookupInRegistry(

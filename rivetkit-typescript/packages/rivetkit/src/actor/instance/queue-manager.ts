@@ -48,6 +48,15 @@ interface QueueWaiter {
 	timeoutHandle?: ReturnType<typeof setTimeout>;
 }
 
+interface QueueNameWaiter {
+	id: string;
+	nameSet: Set<string>;
+	resolve: () => void;
+	reject: (error: Error) => void;
+	signal?: AbortSignal;
+	abortHandler?: () => void;
+}
+
 interface QueueCompletionWaiter {
 	id: string;
 	messageId: bigint;
@@ -78,6 +87,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#actor: ActorInstance<S, CP, CS, V, I, DB>;
 	#driver: ActorDriver;
 	#waiters = new Map<string, QueueWaiter>();
+	#nameWaiters = new Map<string, QueueNameWaiter>();
 	#completionWaiters = new Map<bigint, QueueCompletionWaiter>();
 	#metadata: QueueMetadata = { ...DEFAULT_METADATA };
 	#pendingMessageId: bigint | undefined;
@@ -302,6 +312,53 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return promise;
 	}
 
+	/** Waits until any message for the provided queue names is available. */
+	async waitForNames(
+		names: string[],
+		abortSignal: AbortSignal,
+	): Promise<void> {
+		this.#actor.assertReady();
+
+		const nameSet = new Set(names);
+		const now = Date.now();
+		const existing = await this.#loadQueueMessages();
+		if (
+			existing.some(
+				(message) =>
+					nameSet.has(message.name) &&
+					!message.inFlight &&
+					message.availableAt <= now,
+			)
+		) {
+			return;
+		}
+
+		const { promise, resolve, reject } = promiseWithResolvers<void>();
+		const waiterId = crypto.randomUUID();
+		const waiter: QueueNameWaiter = {
+			id: waiterId,
+			nameSet,
+			resolve,
+			reject,
+			signal: abortSignal,
+		};
+
+		const onAbort = () => {
+			this.#nameWaiters.delete(waiterId);
+			waiter.reject(new errors.ActorAborted());
+		};
+
+		if (abortSignal.aborted) {
+			onAbort();
+			return promise;
+		}
+		abortSignal.addEventListener("abort", onAbort, { once: true });
+		waiter.abortHandler = onAbort;
+
+		this.#nameWaiters.set(waiterId, waiter);
+		return promise;
+	}
+
 	/** Waits for a specific queue message to complete. */
 	async waitForCompletion(
 		messageId: bigint,
@@ -326,20 +383,6 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		this.#completionWaiters.set(messageId, waiter);
-
-		const [messageEntry] = await this.#driver.kvBatchGet(this.#actor.id, [
-			makeQueueMessageKey(messageId),
-		]);
-		if (!messageEntry) {
-			const existing = this.#completionWaiters.get(messageId);
-			if (existing?.id === waiterId) {
-				this.#completionWaiters.delete(messageId);
-				if (existing.timeoutHandle) {
-					clearTimeout(existing.timeoutHandle);
-				}
-				resolve({ status: "completed", response: undefined });
-			}
-		}
 		return promise;
 	}
 
@@ -597,7 +640,45 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#redeliveryTimeout = undefined;
 			this.#redeliveryAt = undefined;
 		}
-		if (this.#waiters.size === 0) {
+		const hasReceiveWaiters = this.#waiters.size > 0;
+		const hasNameWaiters = this.#nameWaiters.size > 0;
+		if (!hasReceiveWaiters && !hasNameWaiters) {
+			return;
+		}
+
+		if (hasNameWaiters) {
+			const entries = await this.#loadQueueMessages();
+			const now = Date.now();
+			const nameWaiters = [...this.#nameWaiters.values()];
+			for (const waiter of nameWaiters) {
+				if (waiter.signal?.aborted) {
+					this.#nameWaiters.delete(waiter.id);
+					waiter.reject(new errors.ActorAborted());
+					continue;
+				}
+
+				const hasMatch = entries.some(
+					(message) =>
+						waiter.nameSet.has(message.name) &&
+						!message.inFlight &&
+						message.availableAt <= now,
+				);
+				if (!hasMatch) {
+					continue;
+				}
+
+				this.#nameWaiters.delete(waiter.id);
+				if (waiter.abortHandler) {
+					waiter.signal?.removeEventListener(
+						"abort",
+						waiter.abortHandler,
+					);
+				}
+				waiter.resolve();
+			}
+		}
+
+		if (!hasReceiveWaiters) {
 			return;
 		}
 		const pending = [...this.#waiters.values()];

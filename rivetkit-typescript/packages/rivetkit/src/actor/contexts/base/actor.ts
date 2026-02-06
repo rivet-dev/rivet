@@ -14,7 +14,9 @@ import { ActorKv } from "../../instance/kv";
 import { ActorQueue } from "../../instance/queue";
 import type { Schedule } from "../../schedule";
 
-export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol("actorContextInternal");
+export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol.for(
+	"rivetkit.actorContextInternal",
+);
 
 /**
  * ActorContext class that provides access to actor methods and state

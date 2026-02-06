@@ -1,6 +1,5 @@
 import type { AnyClient } from "@/client/client";
 import type { RawDatabaseClient } from "@/db/config";
-import type { SqliteVfs } from "@/db/vfs/mod";
 import type {
 	ActorDriver,
 	AnyActorInstance,
@@ -193,11 +192,6 @@ export class FileSystemActorDriver implements ActorDriver {
 				`Failed to load drizzle-orm. Make sure it's installed: ${error}`,
 			);
 		}
-	}
-
-	/** SQLite VFS instance for creating KV-backed databases */
-	get sqliteVfs(): SqliteVfs {
-		return this.#state.sqliteVfs;
 	}
 
 	startSleep(actorId: string): void {

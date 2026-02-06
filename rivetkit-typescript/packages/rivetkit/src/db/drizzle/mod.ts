@@ -4,7 +4,7 @@ import {
 } from "drizzle-orm/better-sqlite3";
 import { drizzle as durableDrizzle } from "drizzle-orm/durable-sqlite";
 import { migrate as durableMigrate } from "drizzle-orm/durable-sqlite/migrator";
-import type { KvVfsOptions } from "../vfs/mod";
+import { SqliteVfs, type KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import type { DatabaseProvider, RawAccess } from "../config";
 
 export * from "drizzle-orm/sqlite-core";
@@ -61,6 +61,8 @@ export function db<
 >(
 	config?: DatabaseFactoryConfig<TSchema>,
 ): DatabaseProvider<BetterSQLite3Database<TSchema> & RawAccess> {
+	const sqliteVfs = new SqliteVfs();
+
 	return {
 		createClient: async (ctx) => {
 			// Check if override is provided
@@ -83,12 +85,8 @@ export function db<
 			}
 
 			// Construct KV-backed client using actor driver's KV operations
-			if (!ctx.sqliteVfs) {
-				throw new Error("SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.");
-			}
-
 			const kvStore = createActorKvStore(ctx.kv);
-			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
+			const db = await sqliteVfs.open(ctx.actorId, kvStore);
 
 			// Wrap the KV-backed client with Drizzle
 			const rawClient = {
