@@ -200,6 +200,335 @@ function injectActorRouter(openApiDoc: any) {
 		head: requestPath,
 		options: requestPath,
 	};
+
+	// Inspector endpoints
+	const inspectorAuthHeader = {
+		name: "Authorization",
+		in: "header" as const,
+		required: false,
+		schema: {
+			type: "string",
+		},
+		description:
+			"Bearer token for inspector authentication. Required in production, optional in development.",
+	};
+
+	// GET /gateway/{actorId}/inspector/state
+	openApiDoc.paths["/gateway/{actorId}/inspector/state"] = {
+		get: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			responses: {
+				200: {
+					description: "Current actor state",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									state: {},
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+		patch: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			requestBody: {
+				content: {
+					"application/json": {
+						schema: {
+							type: "object",
+							properties: {
+								state: {},
+							},
+							required: ["state"],
+						},
+					},
+				},
+			},
+			responses: {
+				200: {
+					description: "State updated",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									ok: { type: "boolean" },
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// GET /gateway/{actorId}/inspector/connections
+	openApiDoc.paths["/gateway/{actorId}/inspector/connections"] = {
+		get: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			responses: {
+				200: {
+					description: "Current actor connections",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									connections: {
+										type: "array",
+										items: { type: "object" },
+									},
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// GET /gateway/{actorId}/inspector/rpcs
+	openApiDoc.paths["/gateway/{actorId}/inspector/rpcs"] = {
+		get: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			responses: {
+				200: {
+					description: "Available actor actions/RPCs",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									rpcs: { type: "object" },
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// POST /gateway/{actorId}/inspector/action/{name}
+	openApiDoc.paths["/gateway/{actorId}/inspector/action/{name}"] = {
+		post: {
+			parameters: [
+				actorIdParam,
+				{
+					name: "name",
+					in: "path" as const,
+					required: true,
+					schema: {
+						type: "string",
+					},
+					description: "The name of the action to execute",
+				},
+				inspectorAuthHeader,
+			],
+			requestBody: {
+				content: {
+					"application/json": {
+						schema: {
+							type: "object",
+							properties: {
+								args: {
+									type: "array",
+									items: {},
+								},
+							},
+						},
+					},
+				},
+			},
+			responses: {
+				200: {
+					description: "Action executed successfully",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									output: {},
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// GET /gateway/{actorId}/inspector/queue
+	openApiDoc.paths["/gateway/{actorId}/inspector/queue"] = {
+		get: {
+			parameters: [
+				actorIdParam,
+				{
+					name: "limit",
+					in: "query" as const,
+					required: false,
+					schema: {
+						type: "integer",
+						default: 50,
+					},
+					description: "Maximum number of queue messages to return",
+				},
+				inspectorAuthHeader,
+			],
+			responses: {
+				200: {
+					description: "Queue status",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									size: { type: "integer" },
+									maxSize: { type: "integer" },
+									truncated: { type: "boolean" },
+									messages: {
+										type: "array",
+										items: {
+											type: "object",
+											properties: {
+												id: { type: "string" },
+												name: { type: "string" },
+												createdAtMs: { type: "integer" },
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// GET /gateway/{actorId}/inspector/traces
+	openApiDoc.paths["/gateway/{actorId}/inspector/traces"] = {
+		get: {
+			parameters: [
+				actorIdParam,
+				{
+					name: "startMs",
+					in: "query" as const,
+					required: false,
+					schema: {
+						type: "integer",
+						default: 0,
+					},
+					description: "Start of time range in epoch milliseconds",
+				},
+				{
+					name: "endMs",
+					in: "query" as const,
+					required: false,
+					schema: {
+						type: "integer",
+					},
+					description:
+						"End of time range in epoch milliseconds. Defaults to now.",
+				},
+				{
+					name: "limit",
+					in: "query" as const,
+					required: false,
+					schema: {
+						type: "integer",
+						default: 1000,
+					},
+					description: "Maximum number of spans to return",
+				},
+				inspectorAuthHeader,
+			],
+			responses: {
+				200: {
+					description: "Trace spans in OTLP JSON format",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									otlp: { type: "object" },
+									clamped: { type: "boolean" },
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// GET /gateway/{actorId}/inspector/workflow-history
+	openApiDoc.paths["/gateway/{actorId}/inspector/workflow-history"] = {
+		get: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			responses: {
+				200: {
+					description: "Workflow history and status",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									history: {},
+									isWorkflowEnabled: { type: "boolean" },
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
+
+	// GET /gateway/{actorId}/inspector/summary
+	openApiDoc.paths["/gateway/{actorId}/inspector/summary"] = {
+		get: {
+			parameters: [actorIdParam, inspectorAuthHeader],
+			responses: {
+				200: {
+					description: "Full actor inspector summary",
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									state: {},
+									connections: {
+										type: "array",
+										items: { type: "object" },
+									},
+									rpcs: { type: "object" },
+									queueSize: { type: "integer" },
+									isStateEnabled: { type: "boolean" },
+									isDatabaseEnabled: { type: "boolean" },
+									isWorkflowEnabled: { type: "boolean" },
+									workflowHistory: {},
+								},
+							},
+						},
+					},
+				},
+				401: { description: "Unauthorized" },
+			},
+		},
+	};
 }
 
 function unimplemented(): never {
