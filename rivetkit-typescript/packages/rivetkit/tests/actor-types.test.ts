@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest";
 import type { ActorContext, ActorContextOf } from "@/actor/contexts";
 import type { ActorDefinition } from "@/actor/definition";
+import type { DatabaseProviderContext } from "@/db/config";
 
 describe("ActorDefinition", () => {
 	describe("ActorContextOf type utility", () => {
@@ -27,9 +28,7 @@ describe("ActorDefinition", () => {
 			}
 
 			interface TestDatabase {
-				createClient: (ctx: {
-					getDatabase: () => Promise<string | unknown>;
-				}) => Promise<{ execute: (query: string) => any }>;
+				createClient: (ctx: DatabaseProviderContext) => Promise<{ execute: (query: string) => any }>;
 				onMigrate: () => void;
 			}
 

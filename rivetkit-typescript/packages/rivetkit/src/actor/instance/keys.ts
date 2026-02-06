@@ -7,6 +7,7 @@ export const KEYS = {
 	QUEUE_METADATA: Uint8Array.from([6]), // Queue metadata key
 	WORKFLOW_PREFIX: Uint8Array.from([7]), // Prefix for workflow storage
 	TRACES_PREFIX: Uint8Array.from([8]), // Prefix for traces storage
+	SQLITE_PREFIX: Uint8Array.from([9]), // Prefix for SQLite VFS data
 };
 
 const QUEUE_ID_BYTES = 8;

@@ -16,7 +16,10 @@ runDriverTests({
 				return {
 					driver: createFileSystemOrMemoryDriver(
 						true,
-						{ path: `/tmp/test-${crypto.randomUUID()}` },
+						{
+							path: `/tmp/test-${crypto.randomUUID()}`,
+							useNativeSqlite: true,
+						},
 					),
 				};
 			},

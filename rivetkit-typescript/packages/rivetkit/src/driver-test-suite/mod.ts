@@ -15,6 +15,7 @@ import { runActionFeaturesTests } from "./tests/action-features";
 import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
+import { runActorDbRawTests } from "./tests/actor-db-raw";
 import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
@@ -26,6 +27,7 @@ import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
 import { runActorRunTests } from "./tests/actor-run";
+import { runActorStatelessTests } from "./tests/actor-stateless";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runActorWorkflowTests } from "./tests/actor-workflow";
 import { runManagerDriverTests } from "./tests/manager-driver";
@@ -83,73 +85,79 @@ export interface DriverDeployOutput {
 export function runDriverTests(
 	driverTestConfigPartial: Omit<DriverTestConfig, "clientType" | "encoding">,
 ) {
-	const clientTypes: ClientType[] = driverTestConfigPartial.skip?.inline
-		? ["http"]
-		: ["http", "inline"];
-	for (const clientType of clientTypes) {
-		describe(`client type (${clientType})`, () => {
-			const encodings: Encoding[] = ["bare", "cbor", "json"];
+	describe("Driver Tests", () => {
+		const clientTypes: ClientType[] = driverTestConfigPartial.skip?.inline
+			? ["http"]
+			: ["http", "inline"];
+		for (const clientType of clientTypes) {
+			describe(`client type (${clientType})`, () => {
+				const encodings: Encoding[] = ["bare", "cbor", "json"];
 
-			for (const encoding of encodings) {
-				describe(`encoding (${encoding})`, () => {
-					const driverTestConfig: DriverTestConfig = {
-						...driverTestConfigPartial,
-						clientType,
-						encoding,
-					};
+				for (const encoding of encodings) {
+					describe(`encoding (${encoding})`, () => {
+						const driverTestConfig: DriverTestConfig = {
+							...driverTestConfigPartial,
+							clientType,
+							encoding,
+						};
 
-					runActorDriverTests(driverTestConfig);
-					runManagerDriverTests(driverTestConfig);
+						runActorDriverTests(driverTestConfig);
+						runManagerDriverTests(driverTestConfig);
 
-					runActorConnTests(driverTestConfig);
+						runActorConnTests(driverTestConfig);
 
-					runActorConnStateTests(driverTestConfig);
+						runActorConnStateTests(driverTestConfig);
 
-					runActorConnHibernationTests(driverTestConfig);
+						runActorConnHibernationTests(driverTestConfig);
 
-					runActorDestroyTests(driverTestConfig);
+						runActorDbRawTests(driverTestConfig);
 
-					runRequestAccessTests(driverTestConfig);
+						runActorDestroyTests(driverTestConfig);
 
-					runActorHandleTests(driverTestConfig);
+						runRequestAccessTests(driverTestConfig);
 
-					runActionFeaturesTests(driverTestConfig);
+						runActorHandleTests(driverTestConfig);
 
-					runActorVarsTests(driverTestConfig);
+						runActionFeaturesTests(driverTestConfig);
 
-					runActorMetadataTests(driverTestConfig);
+						runActorVarsTests(driverTestConfig);
 
-					runActorOnStateChangeTests(driverTestConfig);
+						runActorMetadataTests(driverTestConfig);
 
-					runActorErrorHandlingTests(driverTestConfig);
+						runActorOnStateChangeTests(driverTestConfig);
 
-					runActorQueueTests(driverTestConfig);
+						runActorErrorHandlingTests(driverTestConfig);
 
-					runActorRunTests(driverTestConfig);
+						runActorQueueTests(driverTestConfig);
 
-					runActorInlineClientTests(driverTestConfig);
+						runActorRunTests(driverTestConfig);
 
-					runActorKvTests(driverTestConfig);
+						runActorInlineClientTests(driverTestConfig);
 
-					runActorWorkflowTests(driverTestConfig);
+						runActorKvTests(driverTestConfig);
 
-					runRawHttpTests(driverTestConfig);
+						runActorWorkflowTests(driverTestConfig);
 
-					runRawHttpRequestPropertiesTests(driverTestConfig);
+						runActorStatelessTests(driverTestConfig);
 
-					runRawWebSocketTests(driverTestConfig);
+						runRawHttpTests(driverTestConfig);
 
-					// TODO: re-expose this once we can have actor queries on the gateway
-					// runRawHttpDirectRegistryTests(driverTestConfig);
+						runRawHttpRequestPropertiesTests(driverTestConfig);
 
-					// TODO: re-expose this once we can have actor queries on the gateway
-					// runRawWebSocketDirectRegistryTests(driverTestConfig);
+						runRawWebSocketTests(driverTestConfig);
 
-					runActorInspectorTests(driverTestConfig);
-				});
-			}
-		});
-	}
+						// TODO: re-expose this once we can have actor queries on the gateway
+						// runRawHttpDirectRegistryTests(driverTestConfig);
+
+						// TODO: re-expose this once we can have actor queries on the gateway
+						// runRawWebSocketDirectRegistryTests(driverTestConfig);
+
+						runActorInspectorTests(driverTestConfig);
+					});
+				}
+			});
+		}
+	});
 }
 
 /**
