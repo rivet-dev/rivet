@@ -6,7 +6,6 @@ import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
 import type { RegistryConfig } from "@/registry/config";
-import type { RunnerConfig } from "@/registry/run-config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
 	ACTOR_ALARM_VERSIONED,
@@ -33,7 +32,6 @@ import {
 	ensureDirectoryExistsSync,
 	getStoragePath,
 } from "./utils";
-import { RegistryConfig } from "@/registry/config";
 
 // Actor handler to track running instances
 
@@ -901,11 +899,8 @@ export class FileSystemGlobalState {
 
 		try {
 			// Create actor
-			const definition = lookupInRegistry(
-				config,
-				entry.state.name,
-			);
-			entry.actor = definition.instantiate();
+			const definition = lookupInRegistry(config, entry.state.name);
+			entry.actor = await definition.instantiate();
 			entry.lifecycleState = ActorLifecycleState.AWAKE;
 
 			// Start actor

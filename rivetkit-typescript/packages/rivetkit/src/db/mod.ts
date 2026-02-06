@@ -1,6 +1,6 @@
 import type { DatabaseProvider, RawAccess } from "./config";
-import { getSqliteVfs } from "./sqlite-vfs";
 import type { KvVfsOptions } from "./sqlite-vfs";
+import { getSqliteVfs } from "./sqlite-vfs";
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -65,18 +65,21 @@ export function db({
 				execute: async (query, ...args) => {
 					const results: Record<string, unknown>[] = [];
 					let columnNames: string[] | null = null;
-					await db.exec(query, (row: unknown[], columns: string[]) => {
-						// Capture column names on first row
-						if (!columnNames) {
-							columnNames = columns;
-						}
-						// Convert array row to object
-						const rowObj: Record<string, unknown> = {};
-						for (let i = 0; i < row.length; i++) {
-							rowObj[columnNames[i]] = row[i];
-						}
-						results.push(rowObj);
-					});
+					await db.exec(
+						query,
+						(row: unknown[], columns: string[]) => {
+							// Capture column names on first row
+							if (!columnNames) {
+								columnNames = columns;
+							}
+							// Convert array row to object
+							const rowObj: Record<string, unknown> = {};
+							for (let i = 0; i < row.length; i++) {
+								rowObj[columnNames[i]] = row[i];
+							}
+							results.push(rowObj);
+						},
+					);
 					return results;
 				},
 				close: async () => {

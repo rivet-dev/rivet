@@ -456,7 +456,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Create actor instance
 		const definition = lookupInRegistry(this.#config, actorConfig.name);
-		handler.actor = definition.instantiate();
+		handler.actor = await definition.instantiate();
 
 		// Start actor
 		await handler.actor.start(
