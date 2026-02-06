@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+	"packages/client",
+	"packages/sqlite-vfs-core",
+	"packages/sqlite-vfs-native",
+	"packages/sqlite-vfs-wasm"
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"

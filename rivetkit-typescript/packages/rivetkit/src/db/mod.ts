@@ -1,5 +1,6 @@
-import { SqliteVfs, type KvVfsOptions } from "@rivetkit/sqlite-vfs";
 import type { DatabaseProvider, RawAccess } from "./config";
+import { getSqliteVfs } from "./sqlite-vfs";
+import type { KvVfsOptions } from "./sqlite-vfs";
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -55,10 +56,9 @@ export function db({
 				} satisfies RawAccess;
 			}
 
-			const sqliteVfs = new SqliteVfs();
-
 			// Construct KV-backed client using actor driver's KV operations
 			const kvStore = createActorKvStore(ctx.kv);
+			const sqliteVfs = await getSqliteVfs();
 			const db = await sqliteVfs.open(ctx.actorId, kvStore);
 
 			return {

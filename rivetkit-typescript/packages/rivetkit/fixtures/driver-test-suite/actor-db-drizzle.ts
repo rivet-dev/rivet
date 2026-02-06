@@ -1,0 +1,134 @@
+import { actor } from "rivetkit";
+import { db } from "rivetkit/db/drizzle";
+import { migrations } from "./db/migrations";
+import { schema } from "./db/schema";
+
+export const dbActorDrizzle = actor({
+	db: db({
+		schema,
+		migrations,
+	}),
+	actions: {
+		reset: async (c) => {
+			await c.db.execute(`DELETE FROM test_data`);
+		},
+		insertValue: async (c, value: string) => {
+			await c.db.execute(
+				`INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()})`,
+			);
+			const results = (await c.db.execute(
+				`SELECT last_insert_rowid() as id`,
+			)) as Array<{ id: number }>;
+			return { id: results[0].id };
+		},
+		getValues: async (c) => {
+			const results = (await c.db.execute(
+				`SELECT * FROM test_data ORDER BY id`,
+			)) as Array<{
+				id: number;
+				value: string;
+				payload: string;
+				created_at: number;
+			}>;
+			return results;
+		},
+		getValue: async (c, id: number) => {
+			const results = (await c.db.execute(
+				`SELECT value FROM test_data WHERE id = ${id}`,
+			)) as Array<{ value: string }>;
+			return results[0]?.value ?? null;
+		},
+		getCount: async (c) => {
+			const results = (await c.db.execute(
+				`SELECT COUNT(*) as count FROM test_data`,
+			)) as Array<{ count: number }>;
+			return results[0].count;
+		},
+		rawSelectCount: async (c) => {
+			const results = (await c.db.execute(
+				`SELECT COUNT(*) as count FROM test_data`,
+			)) as Array<{ count: number }>;
+			return results[0]?.count ?? 0;
+		},
+		insertMany: async (c, count: number) => {
+			if (count <= 0) {
+				return { count: 0 };
+			}
+			const now = Date.now();
+			const values: string[] = [];
+			for (let i = 0; i < count; i++) {
+				values.push(`('User ${i}', '', ${now})`);
+			}
+			await c.db.execute(
+				`INSERT INTO test_data (value, payload, created_at) VALUES ${values.join(", ")}`,
+			);
+			return { count };
+		},
+		updateValue: async (c, id: number, value: string) => {
+			await c.db.execute(
+				`UPDATE test_data SET value = '${value}' WHERE id = ${id}`,
+			);
+			return { success: true };
+		},
+		deleteValue: async (c, id: number) => {
+			await c.db.execute(`DELETE FROM test_data WHERE id = ${id}`);
+		},
+		transactionCommit: async (c, value: string) => {
+			await c.db.execute(
+				`BEGIN; INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()}); COMMIT;`,
+			);
+		},
+		transactionRollback: async (c, value: string) => {
+			await c.db.execute(
+				`BEGIN; INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()}); ROLLBACK;`,
+			);
+		},
+		insertPayloadOfSize: async (c, size: number) => {
+			const payload = "x".repeat(size);
+			await c.db.execute(
+				`INSERT INTO test_data (value, payload, created_at) VALUES ('payload', '${payload}', ${Date.now()})`,
+			);
+			const results = (await c.db.execute(
+				`SELECT last_insert_rowid() as id`,
+			)) as Array<{ id: number }>;
+			return { id: results[0].id, size };
+		},
+		getPayloadSize: async (c, id: number) => {
+			const results = (await c.db.execute(
+				`SELECT length(payload) as size FROM test_data WHERE id = ${id}`,
+			)) as Array<{ size: number }>;
+			return results[0]?.size ?? 0;
+		},
+		repeatUpdate: async (c, id: number, count: number) => {
+			let value = "";
+			if (count <= 0) {
+				return { value };
+			}
+			const statements: string[] = ["BEGIN"];
+			for (let i = 0; i < count; i++) {
+				value = `Updated ${i}`;
+				statements.push(
+					`UPDATE test_data SET value = '${value}' WHERE id = ${id}`,
+				);
+			}
+			statements.push("COMMIT");
+			await c.db.execute(statements.join("; "));
+			return { value };
+		},
+		multiStatementInsert: async (c, value: string) => {
+			await c.db.execute(
+				`BEGIN; INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()}); UPDATE test_data SET value = '${value}-updated' WHERE id = last_insert_rowid(); COMMIT;`,
+			);
+			const results = (await c.db.execute(
+				`SELECT value FROM test_data ORDER BY id DESC LIMIT 1`,
+			)) as Array<{ value: string }>;
+			return results[0]?.value ?? null;
+		},
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+	},
+	options: {
+		sleepTimeout: 100,
+	},
+});

@@ -1,0 +1,11 @@
+[package]
+name = "rivetkit-sqlite-vfs-wasm"
+version = "0.0.1"
+description = "Wasm sqlite-vfs for RivetKit"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]

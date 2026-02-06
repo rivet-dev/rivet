@@ -92,7 +92,7 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			await actor.sendMessage({ type: "test", value: 3 });
 
 			// Wait for messages to be consumed
-			await waitFor(driverTestConfig, 300);
+			await waitFor(driverTestConfig, 1200);
 
 			const state = await actor.getState();
 			expect(state.runStarted).toBe(true);

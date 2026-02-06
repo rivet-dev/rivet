@@ -1,0 +1,11 @@
+{
+	"name": "@rivetkit/sqlite-vfs-darwin-x64",
+	"version": "0.0.1",
+	"description": "Native sqlite-vfs binary for macOS x64",
+	"license": "Apache-2.0",
+	"main": "index.js",
+	"type": "commonjs",
+	"os": ["darwin"],
+	"cpu": ["x64"],
+	"files": ["index.js", "bin"]
+}

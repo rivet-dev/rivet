@@ -15,7 +15,7 @@ import { runActionFeaturesTests } from "./tests/action-features";
 import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
-import { runActorDbRawTests } from "./tests/actor-db-raw";
+import { runActorDbTests } from "./tests/actor-db";
 import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
@@ -110,7 +110,7 @@ export function runDriverTests(
 
 						runActorConnHibernationTests(driverTestConfig);
 
-						runActorDbRawTests(driverTestConfig);
+						runActorDbTests(driverTestConfig);
 
 						runActorDestroyTests(driverTestConfig);
 

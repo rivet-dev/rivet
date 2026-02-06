@@ -618,6 +618,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			throw new errors.ActionNotFound(actionName);
 		}
 
+		this.#activeKeepAwakeCount++;
+		this.resetSleepTimer();
+
 		const actionSpan = this.startTraceSpan(
 			`actor.action.${actionName}`,
 			{
@@ -641,9 +644,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				);
 
 				let output: unknown;
-				if (outputOrPromise instanceof Promise) {
+				const maybeThenable = outputOrPromise as {
+					then?: (onfulfilled?: unknown, onrejected?: unknown) => unknown;
+				};
+				if (maybeThenable && typeof maybeThenable.then === "function") {
 					output = await deadline(
-						outputOrPromise,
+						Promise.resolve(outputOrPromise),
 						this.#config.options.actionTimeout,
 					);
 				} else {
@@ -703,6 +709,15 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					status: { code: "OK" },
 				});
 			}
+			this.#activeKeepAwakeCount--;
+			if (this.#activeKeepAwakeCount < 0) {
+				this.#activeKeepAwakeCount = 0;
+				this.#rLog.warn({
+					msg: "active keep awake count went below 0, this is a RivetKit bug",
+					...EXTRA_ERROR_LOG,
+				});
+			}
+			this.resetSleepTimer();
 			this.stateManager.savePersistThrottled();
 		}
 	}

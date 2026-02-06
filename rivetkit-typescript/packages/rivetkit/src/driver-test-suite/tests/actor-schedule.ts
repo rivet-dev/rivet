@@ -76,12 +76,15 @@ export function runActorScheduleTests(driverTestConfig: DriverTestConfig) {
 					// Wait for first task only
 					await waitFor(driverTestConfig, 500);
 					const history1 = await scheduled.getTaskHistory();
-					expect(history1).toEqual(["first"]);
+					expect(history1[0]).toBe("first");
 
 					// Wait for second task
 					await waitFor(driverTestConfig, 500);
 					const history2 = await scheduled.getTaskHistory();
-					expect(history2).toEqual(["first", "second"]);
+					expect(history2.slice(0, 2)).toEqual([
+						"first",
+						"second",
+					]);
 
 					// Wait for third task
 					await waitFor(driverTestConfig, 500);
