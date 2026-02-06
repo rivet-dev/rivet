@@ -4,6 +4,7 @@ use base64::prelude::BASE64_STANDARD;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
+use rand::prelude::SliceRandom;
 use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
@@ -261,6 +262,10 @@ async fn allocate_actor_v2(
 		.unwrap_or_default();
 
 	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
+	let actor_allocation_candidate_sample_size = ctx
+		.config()
+		.pegboard()
+		.actor_allocation_candidate_sample_size();
 
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
@@ -335,7 +340,9 @@ async fn allocate_actor_v2(
 				);
 
 				let mut highest_version = None;
+				let mut candidates = Vec::with_capacity(actor_allocation_candidate_sample_size);
 
+				// Select valid runner candidates for allocation
 				loop {
 					let Some(entry) = stream.try_next().await? else {
 						break;
@@ -359,10 +366,25 @@ async fn allocate_actor_v2(
 						break;
 					}
 
-					// Scan by last ping
+					// Ignore runners without valid ping
 					if old_runner_alloc_key.last_ping_ts < ping_threshold_ts {
 						continue;
 					}
+
+					candidates.push((old_runner_alloc_key, old_runner_alloc_key_data));
+
+					// Max candidate size reached
+					if candidates.len() >= actor_allocation_candidate_sample_size {
+						break;
+					}
+				}
+
+				if !candidates.is_empty() {
+					// Select a candidate at random, weighted by remaining slots
+					let (old_runner_alloc_key, old_runner_alloc_key_data) = candidates
+						.choose_weighted(&mut rand::thread_rng(), |(key, _)| {
+							key.remaining_millislots
+						})?;
 
 					// Add read conflict only for this key
 					tx.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;

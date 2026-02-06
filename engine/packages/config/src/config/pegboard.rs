@@ -104,6 +104,10 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub runner_pool_consecutive_successes_to_clear_error: Option<u32>,
+	/// Amount of runners to query from the allocation queue and choose at random when allocating an actor.
+	///
+	/// **Experimental**
+	pub actor_allocation_candidate_sample_size: Option<usize>,
 }
 
 impl Pegboard {
@@ -164,5 +168,9 @@ impl Pegboard {
 
 	pub fn min_metadata_poll_interval(&self) -> u64 {
 		self.min_metadata_poll_interval.unwrap_or(5_000)
+	}
+
+	pub fn actor_allocation_candidate_sample_size(&self) -> usize {
+		self.actor_allocation_candidate_sample_size.unwrap_or(100)
 	}
 }

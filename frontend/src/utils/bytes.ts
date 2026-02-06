@@ -34,9 +34,9 @@ export const bigBytes = {
 };
 
 export function formatBytes(value: number): string {
-	if (value >= TiB) return `${(value / TiB).toFixed(2)} TB`;
-	if (value >= GiB) return `${(value / GiB).toFixed(2)} GB`;
-	if (value >= MiB) return `${(value / MiB).toFixed(2)} MB`;
-	if (value >= KiB) return `${(value / KiB).toFixed(2)} KB`;
+	if (value >= TiB) return `${(value / TiB).toFixed(2)} TiB`;
+	if (value >= GiB) return `${(value / GiB).toFixed(2)} GiB`;
+	if (value >= MiB) return `${(value / MiB).toFixed(2)} MiB`;
+	if (value >= KiB) return `${(value / KiB).toFixed(2)} KiB`;
 	return `${value} B`;
 }

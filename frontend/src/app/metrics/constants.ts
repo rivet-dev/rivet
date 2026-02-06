@@ -60,13 +60,13 @@ export const METRICS_CONFIG: MetricConfig[] = [
 	{
 		name: "kv_read",
 		title: "KV Reads",
-		description: "Data read from actor state (4KB units)",
+		description: "Data read from actor state (4KiB units)",
 		formatValue: formatOperations,
 	},
 	{
 		name: "kv_write",
 		title: "KV Writes",
-		description: "Data written to actor state (4KB units)",
+		description: "Data written to actor state (4KiB units)",
 		formatValue: formatOperations,
 	},
 	{
@@ -119,19 +119,19 @@ export const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
 		label: "24h",
 		value: "24h",
 		milliseconds: 24 * 60 * 60 * 1000,
-		resolution: 900,
+		resolution: 800,
 	},
 	{
 		label: "7d",
 		value: "7d",
 		milliseconds: 7 * 24 * 60 * 60 * 1000,
-		resolution: 3600,
+		resolution: 800,
 	},
 	{
 		label: "30d",
 		value: "30d",
 		milliseconds: 30 * 24 * 60 * 60 * 1000,
-		resolution: 14400,
+		resolution: 800,
 	},
 ];
 
