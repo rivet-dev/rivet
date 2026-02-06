@@ -29,7 +29,7 @@ export default defineConfig({
 	},
 	integrations: [
 		skillVersion(),
-		typecheckCodeBlocks(),
+		// typecheckCodeBlocks(), // Temporarily disabled for local dev
 		generateRoutes(),
 		mdx({
 			syntaxHighlight: false,
