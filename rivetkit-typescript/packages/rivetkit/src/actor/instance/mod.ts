@@ -163,6 +163,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	// MARK: - Constructor
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB>) {
 		this.#config = config;
+		this.#inspector = new ActorInspector(this);
 		this.actorContext = new ActorContext(this);
 		this.#inspector = new ActorInspector(this);
 	}
