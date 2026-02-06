@@ -1,3 +1,5 @@
+import type { ReadRangeOptions, ReadRangeWire } from "@rivetkit/traces";
+import { decodeReadRangeWire } from "@rivetkit/traces/encoding";
 import {
 	mutationOptions,
 	type QueryClient,
@@ -10,19 +12,20 @@ import { createContext, useContext, useMemo, useRef } from "react";
 import type ReconnectingWebSocket from "reconnectingwebsocket";
 import {
 	type Connection,
+	decodeWorkflowHistoryTransport,
+	type QueueStatus,
 	type ToServer,
 	TO_CLIENT_VERSIONED as toClient,
 	TO_SERVER_VERSIONED as toServer,
-	type QueueStatus,
 } from "rivetkit/inspector";
-import type { ReadRangeOptions, ReadRangeWire } from "@rivetkit/traces";
-import { decodeReadRangeWire } from "@rivetkit/traces/encoding";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
 import { type ConnectionStatus, useWebSocket } from "../hooks/use-websocket";
 import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId } from "./queries";
+import { transformWorkflowHistory } from "./workflow/transform-workflow-history";
+import type { WorkflowHistory } from "./workflow/workflow-types";
 
 export const actorInspectorQueriesKeys = {
 	actorState: (actorId: ActorId) => ["actor", actorId, "state"] as const,
@@ -39,6 +42,10 @@ export const actorInspectorQueriesKeys = {
 	actorQueueSize: (actorId: ActorId) =>
 		["actor", actorId, "queue", "size"] as const,
 	actorWakeUp: (actorId: ActorId) => ["actor", actorId, "wake-up"] as const,
+	actorWorkflowHistory: (actorId: ActorId) =>
+		["actor", actorId, "workflow-history"] as const,
+	actorIsWorkflowEnabled: (actorId: ActorId) =>
+		["actor", actorId, "is-workflow-enabled"] as const,
 };
 
 type QueueStatusSummary = {
@@ -61,6 +68,10 @@ interface ActorInspectorApi {
 	getRpcs: () => Promise<string[]>;
 	getTraces: (options: ReadRangeOptions) => Promise<ReadRangeWire>;
 	getQueueStatus: (limit: number) => Promise<QueueStatusSummary>;
+	getWorkflowHistory: () => Promise<{
+		history: WorkflowHistory | null;
+		isEnabled: boolean;
+	}>;
 	getMetadata: () => Promise<{ version: string }>;
 }
 
@@ -283,7 +294,10 @@ export const createDefaultActorInspectorContext = ({
 	actorQueueStatusQueryOptions(actorId: ActorId, limit: number) {
 		return queryOptions({
 			staleTime: 0,
-			queryKey: actorInspectorQueriesKeys.actorQueueStatus(actorId, limit),
+			queryKey: actorInspectorQueriesKeys.actorQueueStatus(
+				actorId,
+				limit,
+			),
 			queryFn: () => {
 				return api.getQueueStatus(limit);
 			},
@@ -294,6 +308,24 @@ export const createDefaultActorInspectorContext = ({
 			staleTime: Infinity,
 			queryKey: actorInspectorQueriesKeys.actorQueueSize(actorId),
 			queryFn: () => 0,
+		});
+	},
+
+	actorWorkflowHistoryQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			staleTime: Infinity,
+			queryKey: actorInspectorQueriesKeys.actorWorkflowHistory(actorId),
+			queryFn: () => {
+				return api.getWorkflowHistory();
+			},
+		});
+	},
+
+	actorIsWorkflowEnabledQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			staleTime: Infinity,
+			queryKey: actorInspectorQueriesKeys.actorIsWorkflowEnabled(actorId),
+			queryFn: () => false,
 		});
 	},
 
@@ -470,9 +502,11 @@ export const ActorInspectorProvider = ({
 
 	const actionsManager = useRef(new ActionsManager());
 
-	const { data: actorMetadata, isSuccess: isActorMetadataSuccess } = useQuery({
-		...actorMetadataQueryOptions({ actorId, credentials }),
-	});
+	const { data: actorMetadata, isSuccess: isActorMetadataSuccess } = useQuery(
+		{
+			...actorMetadataQueryOptions({ actorId, credentials }),
+		},
+	);
 
 	const { isSuccess: isActorDataSuccess } = useActorInspectorData(actorId);
 
@@ -519,19 +553,25 @@ export const ActorInspectorProvider = ({
 			},
 			executeAction: async (name, args) => {
 				const { id, promise } =
-					actionsManager.current.createResolver<unknown>();
+					actionsManager.current.createResolver<unknown>({
+						name: "executeAction",
+					});
 
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "ActionRequest",
-							val: {
-								id: BigInt(id),
-								name,
-								args: new Uint8Array(cbor.encode(args)).buffer,
+					serverMessage(
+						{
+							body: {
+								tag: "ActionRequest",
+								val: {
+									id: BigInt(id),
+									name,
+									args: new Uint8Array(cbor.encode(args))
+										.buffer,
+								},
 							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
 				);
 
 				return promise;
@@ -539,29 +579,36 @@ export const ActorInspectorProvider = ({
 
 			patchState: async (state) => {
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "PatchStateRequest",
-							val: {
-								state: new Uint8Array(cbor.encode(state))
-									.buffer,
+					serverMessage(
+						{
+							body: {
+								tag: "PatchStateRequest",
+								val: {
+									state: new Uint8Array(cbor.encode(state))
+										.buffer,
+								},
 							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
 				);
 			},
 
 			getConnections: async () => {
-				const { id, promise } =
-					actionsManager.current.createResolver<Connection[]>();
+				const { id, promise } = actionsManager.current.createResolver<
+					Connection[]
+				>({ name: "getConnections" });
 
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "ConnectionsRequest",
-							val: { id: BigInt(id) },
+					serverMessage(
+						{
+							body: {
+								tag: "ConnectionsRequest",
+								val: { id: BigInt(id) },
+							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
 				);
 
 				return promise;
@@ -571,31 +618,38 @@ export const ActorInspectorProvider = ({
 				const { id, promise } = actionsManager.current.createResolver<{
 					isEnabled: boolean;
 					state: unknown;
-				}>();
+				}>({ name: "getState" });
 
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "StateRequest",
-							val: { id: BigInt(id) },
+					serverMessage(
+						{
+							body: {
+								tag: "StateRequest",
+								val: { id: BigInt(id) },
+							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
 				);
 
 				return promise;
 			},
 
 			getRpcs() {
-				const { id, promise } =
-					actionsManager.current.createResolver<string[]>();
+				const { id, promise } = actionsManager.current.createResolver<
+					string[]
+				>({ name: "getRpcs" });
 
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "RpcsListRequest",
-							val: { id: BigInt(id) },
+					serverMessage(
+						{
+							body: {
+								tag: "RpcsListRequest",
+								val: { id: BigInt(id) },
+							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
 				);
 
 				return promise;
@@ -603,21 +657,25 @@ export const ActorInspectorProvider = ({
 			getTraces: async ({ startMs, endMs, limit }) => {
 				const { id, promise } =
 					actionsManager.current.createResolver<ReadRangeWire>({
+						name: "getTraces",
 						timeoutMs: 10_000,
 					});
 
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "TraceQueryRequest",
-							val: {
-								id: BigInt(id),
-								startMs: BigInt(Math.floor(startMs)),
-								endMs: BigInt(Math.floor(endMs)),
-								limit: BigInt(limit),
+					serverMessage(
+						{
+							body: {
+								tag: "TraceQueryRequest",
+								val: {
+									id: BigInt(id),
+									startMs: BigInt(Math.floor(startMs)),
+									endMs: BigInt(Math.floor(endMs)),
+									limit: BigInt(limit),
+								},
 							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
 				);
 
 				return promise;
@@ -626,19 +684,47 @@ export const ActorInspectorProvider = ({
 				const safeLimit = Math.max(0, Math.floor(limit));
 				const { id, promise } =
 					actionsManager.current.createResolver<QueueStatusSummary>({
+						name: "getQueueStatus",
 						timeoutMs: 10_000,
 					});
 
 				sendMessage(
-					serverMessage({
-						body: {
-							tag: "QueueRequest",
-							val: {
-								id: BigInt(id),
-								limit: BigInt(safeLimit),
+					serverMessage(
+						{
+							body: {
+								tag: "QueueRequest",
+								val: {
+									id: BigInt(id),
+									limit: BigInt(safeLimit),
+								},
 							},
 						},
-					}, inspectorProtocolVersion),
+						inspectorProtocolVersion,
+					),
+				);
+
+				return promise;
+			},
+
+			getWorkflowHistory: async () => {
+				const { id, promise } = actionsManager.current.createResolver<{
+					history: WorkflowHistory | null;
+					isEnabled: boolean;
+				}>({
+					name: "getWorkflowHistory",
+					timeoutMs: 10_000,
+				});
+
+				sendMessage(
+					serverMessage(
+						{
+							body: {
+								tag: "WorkflowHistoryRequest",
+								val: { id: BigInt(id) },
+							},
+						},
+						inspectorProtocolVersion,
+					),
 				);
 
 				return promise;
@@ -688,9 +774,7 @@ const createMessageHandler =
 		actionsManager: React.RefObject<ActionsManager>;
 	}) =>
 	async (e: ReconnectingWebSocket.MessageEvent) => {
-		let message: ReturnType<
-			typeof toClient.deserializeWithEmbeddedVersion
-		>;
+		let message: ReturnType<typeof toClient.deserializeWithEmbeddedVersion>;
 		try {
 			message = toClient.deserializeWithEmbeddedVersion(
 				new Uint8Array(await e.data.arrayBuffer()),
@@ -721,6 +805,20 @@ const createMessageHandler =
 					actorInspectorQueriesKeys.actorIsStateEnabled(actorId),
 					body.val.isStateEnabled,
 				);
+
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorIsWorkflowEnabled(actorId),
+					body.val.isWorkflowEnabled,
+				);
+
+				if (body.val.workflowHistory) {
+					queryClient.setQueryData(
+						actorInspectorQueriesKeys.actorWorkflowHistory(actorId),
+						transformWorkflowHistoryFromInspector(
+							body.val.workflowHistory,
+						),
+					);
+				}
 			})
 			.with({ tag: "ConnectionsResponse" }, (body) => {
 				const { rid } = body.val;
@@ -789,6 +887,23 @@ const createMessageHandler =
 					queryKey: ["actor", actorId, "queue"],
 				});
 			})
+			.with({ tag: "WorkflowHistoryUpdated" }, (body) => {
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorWorkflowHistory(actorId),
+					transformWorkflowHistoryFromInspector(body.val.history),
+				);
+			})
+			.with({ tag: "WorkflowHistoryResponse" }, (body) => {
+				const { rid } = body.val;
+				actionsManager.current.resolve(Number(rid), {
+					history: body.val.history
+						? transformWorkflowHistoryFromInspector(
+								body.val.history,
+							)
+						: null,
+					isEnabled: body.val.isWorkflowEnabled,
+				});
+			})
 			.with({ tag: "Error" }, (body) => {
 				if (body.val.message === INSPECTOR_ERROR_EVENTS_DROPPED) {
 					return;
@@ -809,6 +924,22 @@ function transformState(state: ArrayBuffer) {
 	return cbor.decode(new Uint8Array(state));
 }
 
+function transformWorkflowHistoryFromInspector(raw: ArrayBuffer): {
+	history: WorkflowHistory | null;
+	isEnabled: boolean;
+} {
+	try {
+		const decoded = decodeWorkflowHistoryTransport(raw);
+		return {
+			history: transformWorkflowHistory(decoded),
+			isEnabled: true,
+		};
+	} catch (error) {
+		console.warn("Failed to decode workflow history", error);
+		return { history: null, isEnabled: true };
+	}
+}
+
 function serverMessage(data: ToServer, version: number) {
 	return toServer.serializeWithEmbeddedVersion(data, version);
 }
@@ -820,6 +951,7 @@ class ActionsManager {
 
 	createResolver<T = void>(options?: {
 		timeoutMs?: number;
+		name?: string;
 	}): { id: number; promise: Promise<T> } {
 		const id = this.nextId++;
 		const { promise, resolve, reject } = Promise.withResolvers<T>();
@@ -829,7 +961,11 @@ class ActionsManager {
 		// set a timeout to reject the promise if not resolved in time
 		setTimeout(() => {
 			if (this.suspensions.has(id)) {
-				reject(new Error("Action timed out"));
+				reject(
+					new Error(
+						`Action timed out: ${options?.name ?? "unknown"}`,
+					),
+				);
 				this.suspensions.delete(id);
 			}
 		}, timeoutMs);
