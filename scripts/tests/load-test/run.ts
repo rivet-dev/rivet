@@ -24,6 +24,7 @@ interface LoadTestConfig {
 	summaryTrendStats: string;
 	quiet: boolean;
 	skipHealthCheck: boolean;
+	cleanup: boolean;
 }
 
 // Parse command line arguments
@@ -87,6 +88,10 @@ function parseArguments(): LoadTestConfig {
 				type: "boolean",
 				default: false,
 			},
+			cleanup: {
+				type: "boolean",
+				default: false,
+			},
 		},
 		strict: true,
 		allowPositionals: false,
@@ -97,7 +102,7 @@ function parseArguments(): LoadTestConfig {
 		process.exit(0);
 	}
 
-	const config = {
+	return {
 		executor: values.executor as string,
 		startVUs: parseInt(values["start-vus"] as string),
 		stages: values.stages as string,
@@ -112,46 +117,8 @@ function parseArguments(): LoadTestConfig {
 		summaryTrendStats: values["summary-trend-stats"] as string,
 		quiet: values.quiet as boolean,
 		skipHealthCheck: values["skip-health-check"] as boolean,
+		cleanup: values.cleanup as boolean,
 	};
-
-	// Validate variation duration against test duration
-	if (
-		config.variation !== "sporadic" &&
-		config.variationDuration > 0
-	) {
-		const testDuration = calculateTestDuration(config.stages);
-		const variationDurationMs = config.variationDuration * 1000;
-
-		if (variationDurationMs > testDuration) {
-			console.error(`
-❌ Error: Variation duration (${config.variationDuration}s) exceeds total test duration (${Math.floor(testDuration / 1000)}s)
-
-The ${config.variation} variation requires actors to remain active for ${config.variationDuration} seconds,
-but your test stages only run for ${Math.floor(testDuration / 1000)} seconds.
-
-Solutions:
-1. Reduce --variation-duration to ${Math.floor(testDuration / 1000)} or less
-2. Extend your test stages to accommodate the variation duration
-
-Example with extended stages:
-  tsx run.ts --variation ${config.variation} --variation-duration ${config.variationDuration} --stages "${Math.ceil(config.variationDuration / 60) + 1}m:5"
-`);
-			process.exit(1);
-		}
-
-		// Warn if variation duration is close to test duration (less than 30s buffer)
-		const buffer = testDuration - variationDurationMs;
-		if (buffer < 30000) {
-			console.warn(`
-⚠️  Warning: Variation duration (${config.variationDuration}s) is very close to test duration (${Math.floor(testDuration / 1000)}s)
-
-This leaves only ${Math.floor(buffer / 1000)}s for actor creation and cleanup.
-Consider extending your test stages for better results.
-`);
-		}
-	}
-
-	return config;
 }
 
 // Calculate total test duration from stages string
@@ -248,6 +215,7 @@ OPTIONS:
     --summary-trend-stats <stats> Summary statistics to show (default: avg,min,med,max,p(90),p(95),p(99))
     -q, --quiet                 Suppress progress output during test
     --skip-health-check         Skip health checks before running test
+    --cleanup                   Clean up remaining test actors after test completes (default: false)
 
 EXAMPLES:
   # Quick sporadic test with 5 users for 1 minute
@@ -414,6 +382,87 @@ The test runner will:
 `);
 }
 
+// Clean up remaining test actors
+async function cleanupTestActors(
+	endpoint: string,
+	namespace: string,
+	token: string,
+): Promise<void> {
+	console.log("\n🧹 Cleaning up remaining test actors...");
+
+	try {
+		// List all actors in the namespace
+		const listResponse = await fetch(
+			`${endpoint}/actors?namespace=${namespace}&name=load-test-actor`,
+			{
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			},
+		);
+
+		if (!listResponse.ok) {
+			console.error(
+				`Failed to list actors: ${listResponse.status} ${listResponse.statusText}`,
+			);
+			return;
+		}
+
+		const data = (await listResponse.json()) as {
+			actors: Array<{ actor_id: string; key: string }>;
+		};
+
+		// Filter for actors created by this load test
+		const testActors = data.actors.filter((actor) =>
+			actor.key.startsWith("load-test-"),
+		);
+
+		if (testActors.length === 0) {
+			console.log("✓ No test actors to clean up\n");
+			return;
+		}
+
+		console.log(`Found ${testActors.length} test actor(s) to clean up`);
+
+		// Destroy each test actor
+		let cleaned = 0;
+		let failed = 0;
+
+		for (const actor of testActors) {
+			try {
+				const deleteResponse = await fetch(
+					`${endpoint}/actors/${actor.actor_id}?namespace=${namespace}`,
+					{
+						method: "DELETE",
+						headers: {
+							Authorization: `Bearer ${token}`,
+						},
+					},
+				);
+
+				if (deleteResponse.ok) {
+					cleaned++;
+					console.log(`  ✓ Destroyed actor ${actor.key} (${actor.actor_id})`);
+				} else {
+					failed++;
+					console.error(
+						`  ✗ Failed to destroy ${actor.key}: ${deleteResponse.status}`,
+					);
+				}
+			} catch (error) {
+				failed++;
+				console.error(`  ✗ Error destroying ${actor.key}: ${error}`);
+			}
+		}
+
+		console.log(
+			`\n✓ Cleanup complete: ${cleaned} destroyed, ${failed} failed\n`,
+		);
+	} catch (error) {
+		console.error(`Failed to clean up test actors: ${error}`);
+	}
+}
+
 // Run the k6 load test
 function runK6Test(config: LoadTestConfig): Promise<number> {
 	return new Promise((resolve, reject) => {
@@ -544,13 +593,24 @@ Quick install options:
 	}
 
 	// Run the k6 test
+	let exitCode = 0;
 	try {
-		const exitCode = await runK6Test(config);
-		process.exit(exitCode);
+		exitCode = await runK6Test(config);
 	} catch (error) {
 		console.error("❌ Error running k6 test:", error);
-		process.exit(1);
+		exitCode = 1;
 	}
+
+	// Clean up any remaining test actors if requested
+	if (config.cleanup) {
+		await cleanupTestActors(
+			config.rivetEndpoint,
+			config.rivetNamespace,
+			config.rivetToken,
+		);
+	}
+
+	process.exit(exitCode);
 }
 
 main().catch((error) => {
