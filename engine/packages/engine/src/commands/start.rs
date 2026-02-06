@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use indoc::formatdoc;
-use rivet_service_manager::{CronConfig, RunConfig};
+use rivet_service_manager::RunConfig;
 use universaldb::utils::IsolationLevel::*;
 
 use crate::keys;
@@ -13,36 +13,12 @@ const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[derive(Parser)]
 pub struct Opts {
-	#[arg(long, value_enum)]
-	services: Vec<ServiceKind>,
+	#[arg(short = 's', long, conflicts_with = "except_services")]
+	services: Vec<String>,
 
 	/// Exclude the specified services instead of including them
 	#[arg(long)]
-	except_services: Vec<ServiceKind>,
-}
-
-#[derive(clap::ValueEnum, Clone, PartialEq)]
-enum ServiceKind {
-	ApiPublic,
-	ApiPeer,
-	Standalone,
-	Singleton,
-	Oneshot,
-	Cron,
-}
-
-impl From<ServiceKind> for rivet_service_manager::ServiceKind {
-	fn from(val: ServiceKind) -> Self {
-		use ServiceKind::*;
-		match val {
-			ApiPublic => rivet_service_manager::ServiceKind::ApiPublic,
-			ApiPeer => rivet_service_manager::ServiceKind::ApiPeer,
-			Standalone => rivet_service_manager::ServiceKind::Standalone,
-			Singleton => rivet_service_manager::ServiceKind::Singleton,
-			Oneshot => rivet_service_manager::ServiceKind::Oneshot,
-			Cron => rivet_service_manager::ServiceKind::Cron(CronConfig::default()),
-		}
-	}
+	except_services: Vec<String>,
 }
 
 impl Opts {
@@ -63,33 +39,37 @@ impl Opts {
 			// Run all services
 			run_config.services.clone()
 		} else if !self.except_services.is_empty() {
-			// Exclude specified services
-			let except_service_kinds = self
-				.except_services
-				.iter()
-				.map(|x| x.clone().into())
-				.collect::<Vec<rivet_service_manager::ServiceKind>>();
+			let mut services = run_config.services.clone();
 
-			run_config
-				.services
-				.iter()
-				.filter(|x| !except_service_kinds.iter().any(|y| y.eq(&x.kind)))
-				.cloned()
-				.collect::<Vec<_>>()
+			for exclude_name in &self.except_services {
+				if !run_config
+					.services
+					.iter()
+					.any(|service| service.name == exclude_name)
+				{
+					bail!("service {exclude_name:?} not found");
+				}
+
+				services.retain(|service| service.name != exclude_name);
+			}
+
+			services
 		} else {
-			// Include only specified services
-			let service_kinds = self
-				.services
-				.iter()
-				.map(|x| x.clone().into())
-				.collect::<Vec<rivet_service_manager::ServiceKind>>();
+			let mut services = Vec::new();
 
-			run_config
-				.services
-				.iter()
-				.filter(|x| service_kinds.iter().any(|y| y.eq(&x.kind)))
-				.cloned()
-				.collect::<Vec<_>>()
+			for name in &self.services {
+				let Some(service) = run_config
+					.services
+					.iter()
+					.find(|service| service.name == name)
+				else {
+					bail!("service {name:?} not found");
+				};
+
+				services.push(service.clone());
+			}
+
+			services
 		};
 
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
