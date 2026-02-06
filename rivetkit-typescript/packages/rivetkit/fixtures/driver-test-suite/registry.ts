@@ -13,6 +13,7 @@ import {
 	syncActionActor,
 } from "./action-types";
 import { dbActorRaw } from "./actor-db-raw";
+import { dbActorDrizzle } from "./actor-db-drizzle";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { counterWithParams } from "./conn-params";
 import { connStateActor } from "./conn-state";
@@ -153,6 +154,8 @@ export const registry = setup({
 		workflowSleepActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
+		// From actor-db-drizzle.ts
+		dbActorDrizzle,
 		// From stateless.ts
 		statelessActor,
 	},

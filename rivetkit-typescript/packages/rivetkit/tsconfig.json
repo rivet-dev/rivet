@@ -10,6 +10,8 @@
 			"@rivetkit/traces/encoding": ["../traces/src/encoding.ts"],
 			"@rivetkit/traces/otlp": ["../traces/src/otlp-entry.ts"],
 			"@rivetkit/sqlite-vfs": ["../sqlite-vfs/src/index.ts"],
+			"@rivetkit/sqlite-vfs/native": ["../sqlite-vfs/src/native.ts"],
+			"@rivetkit/sqlite-vfs/wasm": ["../sqlite-vfs/src/wasm.ts"],
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"],

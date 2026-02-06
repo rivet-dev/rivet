@@ -109,8 +109,17 @@ export class FileSystemActorDriver implements ActorDriver {
 		if (existingDb) {
 			return {
 				exec: (query: string) => {
-					const trimmed = query.trim().toUpperCase();
-					if (trimmed.startsWith("SELECT") || trimmed.startsWith("PRAGMA")) {
+					const trimmed = query.trim();
+					const upper = trimmed.toUpperCase();
+					const withoutTrailing =
+						trimmed.replace(/;+\s*$/g, "");
+					const hasMultipleStatements =
+						withoutTrailing.includes(";");
+					if (hasMultipleStatements) {
+						existingDb.exec(query);
+						return [];
+					}
+					if (upper.startsWith("SELECT") || upper.startsWith("PRAGMA")) {
 						// SELECT/PRAGMA queries return data
 						return existingDb.prepare(query).all();
 					}
@@ -134,8 +143,20 @@ export class FileSystemActorDriver implements ActorDriver {
 			return {
 				exec: (query: string) => {
 					// HACK: sqlite3 throws error if not using a SELECT statement
-					const trimmed = query.trim().toUpperCase();
-					if (trimmed.startsWith("SELECT") || trimmed.startsWith("PRAGMA")) {
+					const trimmed = query.trim();
+					const upper = trimmed.toUpperCase();
+					const withoutTrailing =
+						trimmed.replace(/;+\s*$/g, "");
+					const hasMultipleStatements =
+						withoutTrailing.includes(";");
+					if (hasMultipleStatements) {
+						db.exec(query);
+						return [];
+					}
+					if (
+						upper.startsWith("SELECT") ||
+						upper.startsWith("PRAGMA")
+					) {
 						// SELECT/PRAGMA queries return data
 						return db.prepare(query).all();
 					} else {

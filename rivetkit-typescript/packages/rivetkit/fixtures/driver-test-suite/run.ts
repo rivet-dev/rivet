@@ -1,7 +1,7 @@
 import { actor } from "rivetkit";
 import type { registry } from "./registry";
 
-export const RUN_SLEEP_TIMEOUT = 500;
+export const RUN_SLEEP_TIMEOUT = 1000;
 
 // Actor that tracks tick counts and respects abort signal
 export const runWithTicks = actor({
@@ -129,7 +129,7 @@ export const runWithError = actor({
 	run: async (c) => {
 		c.state.runStarted = true;
 		c.log.info("run handler started, will throw error");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await new Promise((resolve) => setTimeout(resolve, 200));
 		throw new Error("intentional error in run handler");
 	},
 	onDestroy: (c) => {
