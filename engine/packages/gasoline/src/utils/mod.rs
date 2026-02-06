@@ -1,5 +1,6 @@
 pub mod tags;
 pub mod time;
+pub mod topic;
 
 /// Returns true if `subset` is a subset of `superset`.
 pub fn is_value_subset(subset: &serde_json::Value, superset: &serde_json::Value) -> bool {

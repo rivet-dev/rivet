@@ -96,7 +96,7 @@ where
 pub(crate) struct PubsubMessageWrapper<'a> {
 	pub(crate) ray_id: Id,
 	pub(crate) req_id: Id,
-	pub(crate) tags: serde_json::Value,
+	pub(crate) topic: String,
 	pub(crate) ts: i64,
 	#[serde(borrow)]
 	pub(crate) body: &'a serde_json::value::RawValue,

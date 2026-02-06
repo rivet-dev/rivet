@@ -15,7 +15,7 @@ pub async fn eviction_test_workflow(
 	ctx.msg(RunningMessage {
 		value: "foo".to_string(),
 	})
-	.tag("test", input.test_id)
+	.topic(("test", input.test_id))
 	.send()
 	.await?;
 
@@ -24,7 +24,7 @@ pub async fn eviction_test_workflow(
 	ctx.msg(RunningMessage {
 		value: "bar".to_string(),
 	})
-	.tag("test", input.test_id)
+	.topic(("test", input.test_id))
 	.send()
 	.await?;
 

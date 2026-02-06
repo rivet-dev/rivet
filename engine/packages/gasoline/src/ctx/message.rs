@@ -13,7 +13,6 @@ use universalpubsub::{NextOutput, Subscriber};
 use crate::{
 	error::{WorkflowError, WorkflowResult},
 	message::{Message, PubsubMessage, PubsubMessageWrapper},
-	utils::{self, tags::AsTags},
 };
 
 #[derive(Clone)]
@@ -54,21 +53,19 @@ impl MessageCtx {
 	/// finish publishing. This is done since there are very few cases where a
 	/// service should need to wait or fail if a message does not publish
 	/// successfully.
-	#[tracing::instrument(skip_all, fields(message=M::NAME))]
-	pub async fn message<M>(
-		&self,
-		tags: impl AsTags + 'static,
-		message_body: M,
-	) -> WorkflowResult<()>
+	#[tracing::instrument(skip_all, fields(message=M::NAME, %topic))]
+	pub async fn message<M>(&self, topic: &str, message_body: M) -> WorkflowResult<()>
 	where
 		M: Message,
 	{
 		let client = self.clone();
+		let topic = topic.to_string();
+
 		let spawn_res = tokio::task::Builder::new()
 			.name("gasoline::message_async")
 			.spawn(
 				async move {
-					match client.message_wait::<M>(tags, message_body).await {
+					match client.message_wait::<M>(&topic, message_body).await {
 						Ok(_) => {}
 						Err(err) => {
 							tracing::error!(?err, "failed to publish message");
@@ -77,6 +74,7 @@ impl MessageCtx {
 				}
 				.instrument(tracing::info_span!("message_bg")),
 			);
+
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn message_async task");
 		}
@@ -89,12 +87,12 @@ impl MessageCtx {
 	/// This is useful in scenarios where we need to publish a large amount of
 	/// messages at once so we put the messages in a queue instead of submitting
 	/// a large number of tasks to Tokio at once.
-	#[tracing::instrument(skip_all, fields(message = M::NAME))]
-	pub async fn message_wait<M>(&self, tags: impl AsTags, message_body: M) -> WorkflowResult<()>
+	#[tracing::instrument(skip_all, fields(message = M::NAME, %topic))]
+	pub async fn message_wait<M>(&self, topic: &str, message_body: M) -> WorkflowResult<()>
 	where
 		M: Message,
 	{
-		let subject = M::subject();
+		let subject = format!("{}:{topic}", M::subject());
 		let duration_since_epoch = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
 			.unwrap_or_else(|err| unreachable!("time is broken: {}", err));
@@ -112,7 +110,7 @@ impl MessageCtx {
 		let message = PubsubMessageWrapper {
 			req_id,
 			ray_id: self.ray_id,
-			tags: tags.as_tags()?,
+			topic: topic.to_string(),
 			ts,
 			body: &body_buf,
 		};
@@ -181,13 +179,13 @@ impl MessageCtx {
 // MARK: Subscriptions
 impl MessageCtx {
 	/// Listens for gasoline messages globally on pubsub.
-	#[tracing::instrument(skip_all, fields(message = M::NAME))]
-	pub async fn subscribe<M>(&self, tags: impl AsTags) -> WorkflowResult<SubscriptionHandle<M>>
+	#[tracing::instrument(skip_all, fields(message = M::NAME, %topic))]
+	pub async fn subscribe<M>(&self, topic: &str) -> WorkflowResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.subscribe_opt::<M>(SubscribeOpts {
-			tags: tags.as_tags()?,
+			topic: topic.to_string(),
 			flush: true,
 		})
 		.in_current_span()
@@ -203,10 +201,10 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let subject = M::subject();
+		let subject = format!("{}:{}", M::subject(), opts.topic);
 
 		// Create subscription and flush immediately.
-		tracing::debug!(%subject, tags = ?opts.tags, "creating subscription");
+		tracing::debug!(%subject, "creating subscription");
 		let subscription = self
 			.pubsub
 			.subscribe(&subject)
@@ -220,14 +218,14 @@ impl MessageCtx {
 		}
 
 		// Return handle
-		let subscription = SubscriptionHandle::new(subject, subscription, opts.tags.clone());
+		let subscription = SubscriptionHandle::new(subject, subscription);
 		Ok(subscription)
 	}
 }
 
 #[derive(Debug)]
 pub struct SubscribeOpts {
-	pub tags: serde_json::Value,
+	pub topic: String,
 	pub flush: bool,
 }
 
@@ -242,7 +240,6 @@ where
 	_guard: DropGuard,
 	subject: String,
 	subscription: Subscriber,
-	tags: serde_json::Value,
 }
 
 impl<M> Debug for SubscriptionHandle<M>
@@ -252,7 +249,6 @@ where
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("SubscriptionHandle")
 			.field("subject", &self.subject)
-			.field("tags", &self.tags)
 			.finish()
 	}
 }
@@ -262,7 +258,7 @@ where
 	M: Message,
 {
 	#[tracing::instrument(level = "debug", skip_all)]
-	fn new(subject: String, subscription: Subscriber, tags: serde_json::Value) -> Self {
+	fn new(subject: String, subscription: Subscriber) -> Self {
 		let token = CancellationToken::new();
 
 		{
@@ -291,7 +287,6 @@ where
 			_guard: token.drop_guard(),
 			subject,
 			subscription,
-			tags,
 		}
 	}
 
@@ -302,35 +297,28 @@ where
 	pub async fn next(&mut self) -> WorkflowResult<PubsubMessage<M>> {
 		tracing::debug!("waiting for message");
 
-		loop {
-			// Poll the subscription.
-			//
-			// Use blocking threads instead of `try_next`, since I'm not sure
-			// try_next works as intended.
-			let message = match self.subscription.next().await {
-				Ok(NextOutput::Message(msg)) => msg,
-				Ok(NextOutput::Unsubscribed) => {
-					tracing::debug!("unsubscribed");
-					return Err(WorkflowError::SubscriptionUnsubscribed);
-				}
-				Err(err) => {
-					tracing::warn!(?err, "subscription error");
-					return Err(WorkflowError::CreateSubscription(err.into()));
-				}
-			};
-
-			let message_wrapper = PubsubMessage::<M>::deserialize_wrapper(&message.payload)?;
-
-			// Check if the subscription tags match a subset of the message tags
-			if utils::is_value_subset(&self.tags, &message_wrapper.tags) {
-				let message = PubsubMessage::<M>::deserialize_from_wrapper(message_wrapper)?;
-				tracing::debug!(?message, "received message");
-
-				return Ok(message);
+		// Poll the subscription.
+		//
+		// Use blocking threads instead of `try_next`, since I'm not sure
+		// try_next works as intended.
+		let message = match self.subscription.next().await {
+			Ok(NextOutput::Message(msg)) => msg,
+			Ok(NextOutput::Unsubscribed) => {
+				tracing::debug!("unsubscribed");
+				return Err(WorkflowError::SubscriptionUnsubscribed);
 			}
+			Err(err) => {
+				tracing::warn!(?err, "subscription error");
+				return Err(WorkflowError::CreateSubscription(err.into()));
+			}
+		};
 
-			// Message tags don't match, continue with loop
-		}
+		let message_wrapper = PubsubMessage::<M>::deserialize_wrapper(&message.payload)?;
+
+		let message = PubsubMessage::<M>::deserialize_from_wrapper(message_wrapper)?;
+		tracing::debug!(?message, "received message");
+
+		Ok(message)
 	}
 
 	/// Converts the subscription in to a stream.

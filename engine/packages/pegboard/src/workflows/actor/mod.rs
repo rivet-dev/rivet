@@ -190,7 +190,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 	if let Err(error) = validation_res {
 		ctx.msg(Failed { error })
-			.tag("actor_id", input.actor_id)
+			.topic(("actor_id", input.actor_id))
 			.send()
 			.await?;
 
@@ -239,7 +239,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						datacenter_label: dc_label,
 					},
 				})
-				.tag("actor_id", input.actor_id)
+				.topic(("actor_id", input.actor_id))
 				.send()
 				.await?;
 
@@ -263,7 +263,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						existing_actor_id,
 					},
 				})
-				.tag("actor_id", input.actor_id)
+				.topic(("actor_id", input.actor_id))
 				.send()
 				.await?;
 
@@ -301,7 +301,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 	.await?;
 
 	ctx.msg(CreateComplete {})
-		.tag("actor_id", input.actor_id)
+		.topic(("actor_id", input.actor_id))
 		.send()
 		.await?;
 
@@ -485,7 +485,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										.await?;
 
 										ctx.msg(Ready { runner_id })
-											.tag("actor_id", input.actor_id)
+											.topic(("actor_id", input.actor_id))
 											.send()
 											.await?;
 									}
@@ -628,7 +628,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											.await?;
 
 											ctx.msg(Ready { runner_id })
-												.tag("actor_id", input.actor_id)
+												.topic(("actor_id", input.actor_id))
 												.send()
 												.await?;
 										}
@@ -1193,7 +1193,7 @@ async fn handle_stopped(
 	state.going_away = false;
 
 	ctx.msg(Stopped {})
-		.tag("actor_id", input.actor_id)
+		.topic(("actor_id", input.actor_id))
 		.send()
 		.await?;
 
