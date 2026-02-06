@@ -289,7 +289,7 @@ impl Worker {
 
 	#[tracing::instrument(skip_all)]
 	async fn shutdown(mut self, mut term_signal: TermSignal) {
-		let shutdown_duration = self.config.runtime.worker_shutdown_duration();
+		let shutdown_duration = self.config.runtime.worker.shutdown_duration();
 
 		tracing::info!(
 			duration=?shutdown_duration,

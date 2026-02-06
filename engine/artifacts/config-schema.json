@@ -133,8 +133,11 @@
         "allow_version_rollback": null,
         "force_shutdown_duration": null,
         "guard_shutdown_duration": null,
-        "worker_cpu_max": null,
-        "worker_shutdown_duration": null
+        "worker": {
+          "cpu_max": null,
+          "load_shedding_curve": null,
+          "shutdown_duration": null
+        }
       },
       "allOf": [
         {
@@ -737,23 +740,17 @@
           "format": "uint32",
           "minimum": 0.0
         },
-        "worker_cpu_max": {
-          "description": "Adjusts worker curve around this value (in millicores, i.e. 1000 = 1 core). Is not a hard limit. When unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "worker_shutdown_duration": {
-          "description": "Time (in seconds) to allow for the gasoline worker engine to stop gracefully after receiving SIGTERM. Defaults to 30 seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0.0
+        "worker": {
+          "default": {
+            "cpu_max": null,
+            "load_shedding_curve": null,
+            "shutdown_duration": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Worker"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -816,6 +813,56 @@
           "items": {
             "$ref": "#/definitions/Datacenter"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Worker": {
+      "type": "object",
+      "properties": {
+        "cpu_max": {
+          "description": "Adjusts worker curve around this value (in millicores, i.e. 1000 = 1 core). Is not a hard limit. When unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "load_shedding_curve": {
+          "description": "Determine load shedding ratio based on linear mapping on cpu usage. We will gradually pull less workflows as the cpu usage increases. Units are in (permilli overall cpu usage, permilli) Default: |     .   . 100% | _____   . |     .\\  . % wfs |     . \\ . |     .  \\. 5% |     .   \\_____ |_____.___.______ 0    60% 80% avg cpu usage",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "shutdown_duration": {
+          "description": "Time (in seconds) to allow for the gasoline worker engine to stop gracefully after receiving SIGTERM. Defaults to 30 seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false

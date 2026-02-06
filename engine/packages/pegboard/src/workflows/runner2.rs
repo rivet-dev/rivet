@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
+use rand::prelude::SliceRandom;
 use rivet_data::converted::RunnerByKeyKeyData;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use universaldb::{
@@ -648,15 +649,12 @@ pub(crate) async fn allocate_pending_actors(
 	ctx: &ActivityCtx,
 	input: &AllocatePendingActorsInput,
 ) -> Result<AllocatePendingActorsOutput> {
-	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
-
-	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
-	let allocations = ctx
+	// First, fetch all of the pending actors with a snapshot read
+	let mut pending_actors = ctx
 		.udb()?
 		.run(|tx| async move {
 			let start = Instant::now();
 			let tx = tx.with_subspace(keys::subspace());
-			let mut allocations = Vec::new();
 
 			let pending_actor_subspace = keys::subspace().subspace(
 				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
@@ -666,18 +664,19 @@ pub(crate) async fn allocate_pending_actors(
 			);
 			let mut queue_stream = tx.get_ranges_keyvalues(
 				universaldb::RangeOption {
-					mode: StreamingMode::Iterator,
+					mode: StreamingMode::WantAll,
 					..(&pending_actor_subspace).into()
 				},
 				// NOTE: This is not Serializable because we don't want to conflict with all of the keys, just
 				// the one we choose
 				Snapshot,
 			);
-			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
-			'queue_loop: loop {
+			let mut pending_actors = Vec::new();
+
+			loop {
 				if start.elapsed() > EARLY_TXN_TIMEOUT {
-					tracing::warn!("timed out processing pending actors queue");
+					tracing::warn!("timed out reading pending actors queue");
 					break;
 				}
 
@@ -685,57 +684,114 @@ pub(crate) async fn allocate_pending_actors(
 					break;
 				};
 
-				let (queue_key, generation) =
-					tx.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?;
-
-				let runner_alloc_subspace = keys::subspace().subspace(
-					&keys::ns::RunnerAllocIdxKey::subspace(input.namespace_id, input.name.clone()),
+				pending_actors.push(
+					tx.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?,
 				);
+			}
 
-				let mut stream = tx.get_ranges_keyvalues(
-					universaldb::RangeOption {
-						mode: StreamingMode::Iterator,
-						..(&runner_alloc_subspace).into()
-					},
-					// NOTE: This is not Serializable because we don't want to conflict with all of the
-					// keys, just the one we choose
-					Snapshot,
-				);
+			Ok(pending_actors)
+		})
+		.custom_instrument(tracing::info_span!("runner_fetch_pending_actors_tx"))
+		.await?;
 
-				let mut highest_version = None;
+	// Shuffle for good measure
+	pending_actors.shuffle(&mut rand::thread_rng());
 
-				loop {
-					if start.elapsed() > EARLY_TXN_TIMEOUT {
-						tracing::warn!("timed out processing pending actors queue");
-						break 'queue_loop;
+	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
+	let actor_allocation_candidate_sample_size = ctx
+		.config()
+		.pegboard()
+		.actor_allocation_candidate_sample_size();
+
+	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
+	// Split the allocation of each actor into a separate txn. this reduces the scope of each individual txn
+	// which reduces conflict rate
+	let allocations = futures_util::stream::iter(pending_actors)
+		.map(|(queue_key, generation)| async move {
+			let queue_key = &queue_key;
+
+			ctx.udb()?
+				.run(|tx| async move {
+					let start = Instant::now();
+					let tx = tx.with_subspace(keys::subspace());
+					let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
+
+					// Re-check that the queue key still exists in this txn
+					if !tx.exists(&queue_key, Snapshot).await? {
+						return Ok(None);
 					}
 
-					let Some(entry) = stream.try_next().await? else {
-						break 'queue_loop;
-					};
+					let runner_alloc_subspace =
+						keys::subspace().subspace(&keys::ns::RunnerAllocIdxKey::subspace(
+							input.namespace_id,
+							input.name.clone(),
+						));
 
-					let (old_runner_alloc_key, old_runner_alloc_key_data) =
-						tx.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
+					let mut stream = tx.get_ranges_keyvalues(
+						universaldb::RangeOption {
+							mode: StreamingMode::Iterator,
+							..(&runner_alloc_subspace).into()
+						},
+						// NOTE: This is not Serializable because we don't want to conflict with all of the
+						// keys, just the one we choose
+						Snapshot,
+					);
 
-					if let Some(highest_version) = highest_version {
-						// We have passed all of the runners with the highest version. This is reachable if
-						// the ping of the highest version workers makes them ineligible
-						if old_runner_alloc_key.version < highest_version {
-							break 'queue_loop;
+					let mut highest_version = None;
+					let mut candidates = Vec::with_capacity(actor_allocation_candidate_sample_size);
+
+					// Select valid runner candidates for allocation
+					loop {
+						if start.elapsed() > EARLY_TXN_TIMEOUT {
+							tracing::warn!("timed out allocating pending actors");
+							break;
 						}
-					} else {
-						highest_version = Some(old_runner_alloc_key.version);
+
+						let Some(entry) = stream.try_next().await? else {
+							break;
+						};
+
+						let (old_runner_alloc_key, old_runner_alloc_key_data) =
+							tx.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
+
+						if let Some(highest_version) = highest_version {
+							// We have passed all of the runners with the highest version. This is reachable if
+							// the ping of the highest version runners makes them ineligible
+							if old_runner_alloc_key.version < highest_version {
+								break;
+							}
+						} else {
+							highest_version = Some(old_runner_alloc_key.version);
+						}
+
+						// An empty runner means we have reached the end of the runners with the highest version
+						if old_runner_alloc_key.remaining_millislots == 0 {
+							break;
+						}
+
+						// Ignore runners without valid ping
+						if old_runner_alloc_key.last_ping_ts < ping_threshold_ts {
+							continue;
+						}
+
+						candidates.push((old_runner_alloc_key, old_runner_alloc_key_data));
+
+						// Max candidate size reached
+						if candidates.len() >= actor_allocation_candidate_sample_size {
+							break;
+						}
 					}
 
-					// An empty runner means we have reached the end of the runners with the highest version
-					if old_runner_alloc_key.remaining_millislots == 0 {
-						break 'queue_loop;
+					// No candidates, allocation cannot be made
+					if candidates.is_empty() {
+						return Ok(None);
 					}
 
-					// Scan by last ping
-					if old_runner_alloc_key.last_ping_ts < ping_threshold_ts {
-						continue;
-					}
+					// Select a candidate at random, weighted by remaining slots
+					let (old_runner_alloc_key, old_runner_alloc_key_data) = candidates
+						.choose_weighted(&mut rand::thread_rng(), |(key, _)| {
+							key.remaining_millislots
+						})?;
 
 					// Add read conflict only for this runner key
 					tx.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;
@@ -789,7 +845,7 @@ pub(crate) async fn allocate_pending_actors(
 						generation,
 					)?;
 
-					allocations.push(ActorAllocation {
+					return Ok(Some(ActorAllocation {
 						actor_id: queue_key.actor_id,
 						signal: Allocate {
 							runner_id: old_runner_alloc_key.runner_id,
@@ -798,16 +854,26 @@ pub(crate) async fn allocate_pending_actors(
 								old_runner_alloc_key_data.protocol_version,
 							),
 						},
-					});
+					}));
+				})
+				.custom_instrument(tracing::info_span!("runner_allocate_pending_actors_tx"))
+				.await
+		})
+		.buffer_unordered(1024)
+		.filter_map(|res| {
+			// Gracefully handle failures because we do not want to fail the entire activity if some
+			// allocations were successful
+			match res {
+				Ok(alloc) => std::future::ready(alloc),
+				Err(err) => {
+					tracing::error!(?err, "failure during pending actor allocation");
 
-					continue 'queue_loop;
+					std::future::ready(None)
 				}
 			}
-
-			Ok(allocations)
 		})
-		.custom_instrument(tracing::info_span!("runner_allocate_pending_actors_tx"))
-		.await?;
+		.collect()
+		.await;
 
 	Ok(AllocatePendingActorsOutput { allocations })
 }

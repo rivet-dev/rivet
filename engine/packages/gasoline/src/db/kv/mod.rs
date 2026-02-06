@@ -1063,25 +1063,20 @@ impl Database for DatabaseKv {
 					// Only consider workers that have pinged within 2 ping intervals ago
 					let active_workers_after = now - i64::try_from(PING_INTERVAL.as_millis() * 2)?;
 
-					// Determine load shedding ratio based on linear mapping on cpu usage. We will gradually
-					// pull less workflows as the cpu usage increases
-					//       |     .   .
-					//  100% | _____   .
-					//       |     .\  .
-					// % wfs |     . \ .
-					//       |     .  \.
-					//    5% |     .   \_____
-					//       |_____.___.______
-					//       0    50% 80%
-					//         avg cpu usage
 					let cpu_usage_ratio = {
 						self.system
 							.lock()
 							.await
-							.cpu_usage_ratio(self.config.runtime.worker_cpu_max)
+							.cpu_usage_ratio(self.config.runtime.worker.cpu_max)
 					};
-					let load_shed_ratio_x1000 =
-						calc_pull_ratio((cpu_usage_ratio * 1000.0) as u64, 500, 1000, 800, 50);
+					let load_shed_curve = self.config.runtime.worker.load_shedding_curve();
+					let load_shed_ratio_x1000 = calc_pull_ratio(
+						(cpu_usage_ratio * 1000.0) as u64,
+						load_shed_curve[0].0,
+						load_shed_curve[0].1,
+						load_shed_curve[1].0,
+						load_shed_curve[1].1,
+					);
 
 					// Record load shedding ratio metric
 					metrics::LOAD_SHEDDING_RATIO.observe(load_shed_ratio_x1000 as f64 / 1000.0);
@@ -1386,10 +1381,18 @@ impl Database for DatabaseKv {
 
 		let start_instant2 = Instant::now();
 
+		// Collect metrics on lease counts
+		let mut leased_metrics = HashMap::<&str, usize>::new();
 		for leased_workflow in &leased_workflows {
+			*leased_metrics
+				.entry(leased_workflow.workflow_name.as_str())
+				.or_default() += 1;
+		}
+
+		for (workflow_name, count) in &leased_metrics {
 			metrics::WORKFLOW_LEASED
-				.with_label_values(&[leased_workflow.workflow_name.as_str()])
-				.observe(1.0);
+				.with_label_values(&[*workflow_name])
+				.observe(*count as f64);
 		}
 
 		let pulled_workflows = self

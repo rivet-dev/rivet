@@ -123,7 +123,7 @@ export async function ensureEngineProcess(
 			// Allow faster metadata polling for hot-reload in development (in milliseconds)
 			RIVET__PEGBOARD__MIN_METADATA_POLL_INTERVAL: "1000",
 			// Reduce shutdown durations for faster development iteration (in seconds)
-			RIVET__RUNTIME__WORKER_SHUTDOWN_DURATION: "1",
+			RIVET__RUNTIME__WORKER__SHUTDOWN_DURATION: "1",
 			RIVET__RUNTIME__GUARD_SHUTDOWN_DURATION: "1",
 			// Force exit after this duration (must be > worker and guard shutdown durations)
 			RIVET__RUNTIME__FORCE_SHUTDOWN_DURATION: "2",
