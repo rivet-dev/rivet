@@ -48,7 +48,7 @@ pub async fn pegboard_serverless_receiver(ctx: &mut WorkflowCtx, input: &Input) 
 
 	// if the connection is currently running an outbound req, this will be received
 	ctx.msg(conn::Drain {})
-		.tag("workflow_id", conn_wf_id)
+		.topic(("workflow_id", conn_wf_id))
 		.send()
 		.await?;
 
