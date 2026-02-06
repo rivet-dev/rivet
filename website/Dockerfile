@@ -60,8 +60,8 @@ ENV PUBLIC_TYPESENSE_API_KEY=${PUBLIC_TYPESENSE_API_KEY}
 
 WORKDIR /app/website
 
-# Re-install Playwright browsers for the correct version (pnpm may install a different version)
-RUN pnpm exec playwright install chromium
+# Install Playwright browsers and system dependencies for mermaid rendering
+RUN pnpm exec playwright install --with-deps chromium
 
 # Build the website (static export to 'dist' directory)
 RUN pnpm run build
