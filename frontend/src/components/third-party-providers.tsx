@@ -38,6 +38,7 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			dsn: commonEnv().VITE_APP_SENTRY_DSN,
 			tracesSampleRate: 1.0,
 			integrations,
+			tunnel: getConfig().sentry?.tunnel,
 			tracePropagationTargets: [
 				"api.rivet.dev",
 				"cloud-api.rivet.dev",
