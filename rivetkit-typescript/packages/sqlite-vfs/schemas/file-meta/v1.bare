@@ -1,0 +1,7 @@
+# File Meta BARE Schema v1
+
+# File metadata for KV-backed SQLite storage
+
+type FileMeta struct {
+	size: u64
+}

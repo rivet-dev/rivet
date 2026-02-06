@@ -36,6 +36,7 @@
 		"@rivetkit/cloudflare-workers": "workspace:*",
 		"@rivetkit/next-js": "workspace:*",
 		"@rivetkit/db": "workspace:*",
+		"@rivetkit/sqlite-vfs": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",

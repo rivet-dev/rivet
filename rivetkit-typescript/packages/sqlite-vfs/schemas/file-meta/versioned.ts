@@ -1,5 +1,5 @@
 import { createVersionedDataHandler } from "vbare";
-import * as v1 from "./v1";
+import * as v1 from "../../dist/schemas/file-meta/v1";
 
 export const CURRENT_VERSION = 1;
 
