@@ -49,12 +49,17 @@ const tableOfContents = headings
 		}
 		return acc;
 	}, [] as Array<{ title: string; id: string; children: Array<{ title: string; id: string }> }>);
+
+// Build OG image URL
+const ogSlug = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');
+const ogImage = `https://rivet.gg/og/learn/${ogSlug}.png`;
 ---
 
 <LearnLayout
 	title={`${title} - Rivet`}
 	description={description}
 	canonicalUrl={canonicalUrl}
+	ogImage={ogImage}
 	act={entry.data.act}
 	subtitle={entry.data.subtitle}
 	tableOfContents={tableOfContents}

@@ -63,6 +63,9 @@ const tableOfContents = headings
 		return acc;
 	}, [] as any[]);
 
+// Use custom image if available, otherwise fall back to generated OG image
+const ogImage = image?.src || `https://rivet.gg/og/changelog/${slug}.png`;
+
 // Load other articles
 const allPosts = await getCollection('posts');
 const filteredOtherPosts = allPosts
@@ -86,7 +89,7 @@ const otherArticles = filteredOtherPosts.map((post) => {
 	title={title}
 	description={description}
 	canonicalUrl={`https://rivet.gg/changelog/${slug}/`}
-	ogImage={image?.src}
+	ogImage={ogImage}
 	publishedTime={entry.data.published.toISOString()}
 	keywords={entry.data.keywords}
 >
