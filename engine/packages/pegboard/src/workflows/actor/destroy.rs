@@ -20,7 +20,7 @@ pub(crate) struct Input {
 #[workflow]
 pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.msg(DestroyStarted {})
-		.tag("actor_id", input.actor_id)
+		.topic(("actor_id", input.actor_id))
 		.send()
 		.await?;
 
@@ -67,7 +67,7 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 	.await?;
 
 	ctx.msg(DestroyComplete {})
-		.tag("actor_id", input.actor_id)
+		.topic(("actor_id", input.actor_id))
 		.send()
 		.await?;
 

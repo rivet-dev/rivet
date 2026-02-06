@@ -30,7 +30,7 @@ pub async fn replica_status_change(
 	ctx.msg(super::ConfigChangeMessage {
 		config: notify_out.config,
 	})
-	.tag("replica", replica_id)
+	.topic(("replica", replica_id))
 	.send()
 	.await?;
 
@@ -47,7 +47,7 @@ pub async fn replica_reconfigure(ctx: &mut WorkflowCtx) -> Result<()> {
 	ctx.msg(super::ConfigChangeMessage {
 		config: notify_out.config,
 	})
-	.tag("replica", replica_id)
+	.topic(("replica", replica_id))
 	.send()
 	.await?;
 

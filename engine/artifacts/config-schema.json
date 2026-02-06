@@ -489,6 +489,15 @@
     "Pegboard": {
       "type": "object",
       "properties": {
+        "actor_allocation_candidate_sample_size": {
+          "description": "Amount of runners to query from the allocation queue and choose at random when allocating an actor.\n\n**Experimental**",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
         "actor_start_threshold": {
           "description": "How long to wait after creating and not receiving a starting state before setting actor as lost.\n\nUnit is in milliseconds.\n\n**Experimental**",
           "type": [

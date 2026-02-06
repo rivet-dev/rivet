@@ -1,14 +1,15 @@
-use std::{fmt::Display, time::Instant};
+use std::time::Instant;
 
 use anyhow::Result;
-use serde::Serialize;
 
-use crate::{builder::BuilderError, ctx::MessageCtx, message::Message, metrics};
+use crate::{
+	builder::BuilderError, ctx::MessageCtx, message::Message, metrics, utils::topic::AsTopic,
+};
 
 pub struct MessageBuilder<M: Message> {
 	msg_ctx: MessageCtx,
 	body: M,
-	tags: serde_json::Map<String, serde_json::Value>,
+	topic: Option<String>,
 	wait: bool,
 	error: Option<BuilderError>,
 }
@@ -18,38 +19,18 @@ impl<M: Message> MessageBuilder<M> {
 		MessageBuilder {
 			msg_ctx,
 			body,
-			tags: serde_json::Map::new(),
+			topic: None,
 			wait: false,
 			error: None,
 		}
 	}
 
-	pub fn tags(mut self, tags: serde_json::Value) -> Self {
+	pub fn topic(mut self, topic: impl AsTopic) -> Self {
 		if self.error.is_some() {
 			return self;
 		}
 
-		match tags {
-			serde_json::Value::Object(map) => {
-				self.tags.extend(map);
-			}
-			_ => self.error = Some(BuilderError::TagsNotMap),
-		}
-
-		self
-	}
-
-	pub fn tag(mut self, k: impl Display, v: impl Serialize) -> Self {
-		if self.error.is_some() {
-			return self;
-		}
-
-		match serde_json::to_value(&v) {
-			Ok(v) => {
-				self.tags.insert(k.to_string(), v);
-			}
-			Err(err) => self.error = Some(err.into()),
-		}
+		self.topic = Some(topic.as_topic());
 
 		self
 	}
@@ -70,16 +51,16 @@ impl<M: Message> MessageBuilder<M> {
 			return Err(err.into());
 		}
 
-		tracing::debug!(tags=?self.tags, "dispatching message");
+		tracing::debug!(topic=?self.topic, "dispatching message");
+
+		let topic = self.topic.unwrap_or_else(|| "*".to_string());
 
 		let start_instant = Instant::now();
 
-		let tags = serde_json::Value::Object(self.tags);
-
 		if self.wait {
-			self.msg_ctx.message_wait(tags, self.body).await?;
+			self.msg_ctx.message_wait(&topic, self.body).await?;
 		} else {
-			self.msg_ctx.message(tags, self.body).await?;
+			self.msg_ctx.message(&topic, self.body).await?;
 		}
 
 		let dt = start_instant.elapsed().as_secs_f64();

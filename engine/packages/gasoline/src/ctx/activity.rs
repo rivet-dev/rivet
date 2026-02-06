@@ -17,7 +17,7 @@ use crate::{
 	message::Message,
 	operation::{Operation, OperationInput},
 	signal::Signal,
-	utils::tags::AsTags,
+	utils::{tags::AsTags, topic::AsTopic},
 	workflow::{StateGuard, Workflow},
 };
 
@@ -164,13 +164,13 @@ impl ActivityCtx {
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
-	#[tracing::instrument(skip_all, fields(message=M::NAME))]
-	pub async fn subscribe<M>(&self, tags: impl AsTags) -> Result<SubscriptionHandle<M>>
+	#[tracing::instrument(skip_all, fields(message=M::NAME, topic=%topic.as_topic()))]
+	pub async fn subscribe<M>(&self, topic: impl AsTopic) -> Result<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
-			.subscribe::<M>(tags)
+			.subscribe::<M>(&topic.as_topic())
 			.in_current_span()
 			.await
 			.map_err(Into::into)

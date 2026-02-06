@@ -23,7 +23,7 @@ pub async fn namespace(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 
 	if let Err(error) = validation_res {
 		ctx.msg(Failed { error })
-			.tag("namespace_id", input.namespace_id)
+			.topic(("namespace_id", input.namespace_id))
 			.send()
 			.await?;
 
@@ -42,7 +42,7 @@ pub async fn namespace(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 
 	if let Err(error) = insert_res {
 		ctx.msg(Failed { error })
-			.tag("namespace_id", input.namespace_id)
+			.topic(("namespace_id", input.namespace_id))
 			.send()
 			.await?;
 
@@ -51,7 +51,7 @@ pub async fn namespace(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	}
 
 	ctx.msg(CreateComplete {})
-		.tag("namespace_id", input.namespace_id)
+		.topic(("namespace_id", input.namespace_id))
 		.send()
 		.await?;
 
