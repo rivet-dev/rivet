@@ -326,6 +326,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 				runtime::LifecycleState::new_sleeping()
 			}
 			runtime::SpawnActorOutput::Destroy => {
+				ctx.v(2)
+					.signal(metrics::Destroy {
+						ts: util::timestamp::now(),
+					})
+					.to_workflow_id(metrics_workflow_id)
+					.send()
+					.await?;
+
 				// Destroyed early
 				ctx.workflow(destroy::Input {
 					namespace_id: input.namespace_id,

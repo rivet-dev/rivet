@@ -8,7 +8,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use futures_util::{StreamExt, TryStreamExt, future::try_join_all, stream::BoxStream};
 use rivet_util::Id;
 use rivet_util::future::CustomInstrumentExt;
@@ -1632,10 +1632,13 @@ impl Database for DatabaseKv {
 												.unpack::<keys::history::IndexedNameKey>(
 												entry.key(),
 											) {
-												ensure!(
-													current_event.indexed_names.len() == key.index,
-													"corrupt history, index doesn't exist yet or is out of order"
-												);
+												if current_event.indexed_names.len() != key.index {
+													tracing::error!(
+														?wf,
+														"corrupt history, indexed name doesn't exist yet or is out of order"
+													);
+													return Ok(None);
+												}
 
 												let name = key.deserialize(entry.value())?;
 												current_event.indexed_names.insert(key.index, name);
@@ -1644,11 +1647,16 @@ impl Database for DatabaseKv {
 													.unpack::<keys::history::IndexedInputChunkKey>(
 														entry.key(),
 													) {
-												ensure!(
-													current_event.indexed_input_chunks.len()
-														== key.index,
-													"corrupt history, index doesn't exist yet or is out of order"
-												);
+												if current_event.indexed_input_chunks.len()
+													!= key.index
+												{
+													tracing::error!(
+														?wf,
+														?current_event,
+														"corrupt history, indexed chunk doesn't exist yet or is out of order"
+													);
+													return Ok(None);
+												}
 
 												if let Some(input_chunks) = current_event
 													.indexed_input_chunks
@@ -1682,7 +1690,7 @@ impl Database for DatabaseKv {
 												)?);
 										}
 
-										Ok(events_by_location)
+										Ok(Some(events_by_location))
 									}
 								)?;
 
@@ -1698,6 +1706,10 @@ impl Database for DatabaseKv {
 
 									return Ok(None);
 								}
+
+								let Some(events) = events else {
+									return Ok(None);
+								};
 
 								let create_ts = create_ts_key
 									.deserialize(&create_ts_entry.context("key should exist")?)?;
