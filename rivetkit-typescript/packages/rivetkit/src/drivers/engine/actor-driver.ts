@@ -33,6 +33,7 @@ import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
+import { SqliteVfs } from "@/db/vfs/mod";
 import {
 	type ActorDriver,
 	type AnyActorInstance,
@@ -81,6 +82,9 @@ export class EngineActorDriver implements ActorDriver {
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
+
+	/** SQLite VFS instance for creating KV-backed databases */
+	readonly sqliteVfs = new SqliteVfs();
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
 	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
@@ -232,9 +236,7 @@ export class EngineActorDriver implements ActorDriver {
 		this.#runner.setAlarm(actor.id, timestamp);
 	}
 
-	async getDatabase(_actorId: string): Promise<unknown | undefined> {
-		return undefined;
-	}
+	// No database overrides - will use KV-backed implementation from rivetkit/db
 
 	// MARK: - Batch KV operations
 	async kvBatchPut(
