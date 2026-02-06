@@ -920,7 +920,7 @@ impl DatabaseDebug for DatabaseKv {
 								{
 									ensure!(
 										current_event.indexed_signal_ids.len() == key.index,
-										"corrupt history, index doesn't exist yet or is out of order"
+										"corrupt history, indexed signal doesn't exist yet or is out of order"
 									);
 
 									let signal_id = key.deserialize(entry.value())?;
@@ -933,7 +933,7 @@ impl DatabaseDebug for DatabaseKv {
 								{
 									ensure!(
 										current_event.indexed_names.len() == key.index,
-										"corrupt history, index doesn't exist yet or is out of order"
+										"corrupt history, indexed name doesn't exist yet or is out of order"
 									);
 
 									let name = key.deserialize(entry.value())?;
@@ -944,7 +944,7 @@ impl DatabaseDebug for DatabaseKv {
 								{
 									ensure!(
 										current_event.indexed_input_chunks.len() == key.index,
-										"corrupt history, index doesn't exist yet or is out of order"
+										"corrupt history, indexed chunk doesn't exist yet or is out of order"
 									);
 
 									if let Some(input_chunks) =
