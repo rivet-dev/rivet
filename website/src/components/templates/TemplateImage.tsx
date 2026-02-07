@@ -16,9 +16,14 @@ export function TemplateImage({
 	}
 
 	return (
-		<img src={`/examples/${template.name}/image.png`}
+		<img
+			src={`/examples/${template.name}/image.png`}
 			alt={template.displayName}
+			width={640}
+			height={360}
 			className="object-cover absolute inset-0 w-full h-full"
+			loading="lazy"
+			decoding="async"
 		/>
 	);
 }

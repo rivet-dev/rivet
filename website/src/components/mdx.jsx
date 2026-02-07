@@ -6,13 +6,42 @@ export const a = (props) => <a {...props} />;
 
 // Handle both string URLs and Astro image objects (which have { src, width, height })
 export const img = ({ src, ...props }) => {
-  // If src is an object (Astro image import), extract the src property
-  const imgSrc = typeof src === 'object' && src !== null ? src.src : src;
-  return <img src={imgSrc} {...props} />;
+  // If src is an object (Astro image import), extract the src property and dimensions
+  const isAstroImage = typeof src === 'object' && src !== null;
+  const imgSrc = isAstroImage ? src.src : src;
+  const width = isAstroImage ? src.width : props.width;
+  const height = isAstroImage ? src.height : props.height;
+
+  return (
+    <img
+      src={imgSrc}
+      width={width}
+      height={height}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
 };
 
-// Regular img tag for images (Astro handles optimization differently)
-export const Image = (props) => <img {...props} />;
+// Regular img tag for images with optimization attributes
+export const Image = ({ src, ...props }) => {
+  const isAstroImage = typeof src === 'object' && src !== null;
+  const imgSrc = isAstroImage ? src.src : src;
+  const width = isAstroImage ? src.width : props.width;
+  const height = isAstroImage ? src.height : props.height;
+
+  return (
+    <img
+      src={imgSrc}
+      width={width}
+      height={height}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+};
 
 export const h2 = function H2(props) {
   return <Heading level={2} {...props} />;

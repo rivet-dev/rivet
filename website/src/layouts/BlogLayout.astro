@@ -8,10 +8,40 @@ interface Props {
 	canonicalUrl?: string;
 	ogImage?: string;
 	publishedTime?: string;
+	modifiedTime?: string;
 	keywords?: string[];
+	authorName?: string;
 }
 
-const { title, description, canonicalUrl, ogImage, publishedTime, keywords } = Astro.props;
+const { title, description, canonicalUrl, ogImage, publishedTime, modifiedTime, keywords, authorName } = Astro.props;
+
+const articleSchema = {
+	"@context": "https://schema.org",
+	"@type": "Article",
+	"headline": title,
+	"description": description,
+	"url": canonicalUrl,
+	"datePublished": publishedTime,
+	"dateModified": modifiedTime || publishedTime,
+	"author": {
+		"@type": "Person",
+		"name": authorName || "Rivet Team"
+	},
+	"publisher": {
+		"@type": "Organization",
+		"name": "Rivet",
+		"url": "https://rivet.dev",
+		"logo": {
+			"@type": "ImageObject",
+			"url": "https://rivet.dev/icons/android-chrome-512x512.png"
+		}
+	},
+	"mainEntityOfPage": {
+		"@type": "WebPage",
+		"@id": canonicalUrl
+	},
+	...(ogImage && { "image": ogImage })
+};
 ---
 
 <BaseLayout
@@ -23,6 +53,7 @@ const { title, description, canonicalUrl, ogImage, publishedTime, keywords } = A
 	publishedTime={publishedTime}
 	keywords={keywords}
 >
+	<script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
 	<Header active="blog" variant="floating" client:load />
 	<slot />
 </BaseLayout>

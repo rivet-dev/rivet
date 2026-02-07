@@ -167,9 +167,16 @@ function rehypeTableOfContents() {
 	};
 }
 
+// Use 'pre-mermaid' strategy for client-side rendering
+// This avoids needing Playwright/Chromium in Docker/CI environments
+const mermaidConfig = {
+	strategy: "pre-mermaid" as const,
+	mermaidConfig: { theme: "dark" },
+};
+
 export const rehypePlugins = [
 	mdxAnnotations.rehype,
-	[rehypeMermaid, { colorScheme: "dark", mermaidConfig: { theme: "dark" } }],
+	[rehypeMermaid, mermaidConfig],
 	rehypeParseCodeBlocks,
 	rehypeShiki,
 	rehypeSlugify,

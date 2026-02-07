@@ -58,7 +58,11 @@ export function TemplateCard({ template }: TemplateCardProps) {
 								<img
 									src={`/examples/${template.name}/image.png`}
 									alt={template.displayName}
+									width={640}
+									height={360}
 									className="object-cover absolute inset-0 w-full h-full"
+									loading="lazy"
+									decoding="async"
 								/>
 							) : (
 								<div className="absolute inset-0 flex items-center justify-center">

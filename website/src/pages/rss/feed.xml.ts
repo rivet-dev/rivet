@@ -7,7 +7,7 @@ import { AUTHORS } from '@/lib/article';
 export const prerender = true;
 
 export const GET: APIRoute = async ({ site }) => {
-	const siteUrl = site?.toString() || 'https://rivet.gg';
+	const siteUrl = site?.toString() || 'https://rivet.dev';
 	const posts = await getCollection('posts');
 
 	const feed = new Feed({

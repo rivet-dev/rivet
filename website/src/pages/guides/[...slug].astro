@@ -39,7 +39,7 @@ const { title, description } = entry.data as { title: string; description: strin
 const fullPath = `/guides/${entry.id}/`;
 const foundTab = findActiveTab(fullPath, sitemap);
 const parentPage = foundTab?.page?.parent;
-const canonicalUrl = `https://rivet.gg${fullPath}`;
+const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Create markdown path for the dropdown
 const markdownPath = `guides/${entry.id}`;

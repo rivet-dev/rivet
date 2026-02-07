@@ -4,7 +4,7 @@ import { getCollection, render } from 'astro:content';
 export const prerender = true;
 
 export const GET: APIRoute = async ({ site }) => {
-	const siteUrl = site?.toString().replace(/\/$/, '') || 'https://rivet.gg';
+	const siteUrl = site?.toString().replace(/\/$/, '') || 'https://rivet.dev';
 
 	// Get all content collections
 	const [docs, guides, posts] = await Promise.all([

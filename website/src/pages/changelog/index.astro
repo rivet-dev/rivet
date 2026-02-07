@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
 import BlogLayout from '@/layouts/BlogLayout.astro';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
@@ -82,10 +83,14 @@ const changelogPosts = filteredPosts.map((post) => {
 						<div>
 							{article.image && (
 								<div class="relative w-full">
-									<img
-										src={article.image.src}
-										alt="hero"
+									<Image
+										src={article.image}
+										alt={article.title}
+										width={600}
+										height={300}
 										class="aspect-[2/1] w-full rounded-md border object-cover"
+										loading="lazy"
+										decoding="async"
 									/>
 								</div>
 							)}
