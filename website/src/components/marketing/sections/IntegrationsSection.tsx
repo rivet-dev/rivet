@@ -26,10 +26,9 @@ export const IntegrationsSection = () => (
           transition={{ duration: 0.5 }}
           className='max-w-xl'
         >
-          <h2 className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'>Stack Agnostic.</h2>
+          <h2 className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'>Runs where you do.</h2>
           <p className='text-lg leading-relaxed text-zinc-400'>
-            Rivet actors are just standard TypeScript. They run in Docker, connect via WebSockets, and
-            integrate effortlessly with your existing stack.
+            Rivet Actors integrate with your existing infrastructure, frameworks, runtimes, and tools.
           </p>
         </motion.div>
       </div>

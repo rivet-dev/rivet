@@ -55,14 +55,38 @@ const slugPath = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');
 const fullPath = slugPath ? `/docs/${slugPath}/` : '/docs/';
 const foundTab = findActiveTab(fullPath, sitemap);
 const parentPage = foundTab?.page?.parent;
-const canonicalUrl = `https://rivet.gg${fullPath}`;
+const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Create markdown path for the dropdown
 const markdownPath = `docs/${entry.id}`;
 const componentSourcePath = `docs/${entry.id}.mdx`;
+
+// Build BreadcrumbList schema
+const breadcrumbItems = [
+	{ name: "Home", url: "https://rivet.dev/" },
+	{ name: "Docs", url: "https://rivet.dev/docs/" },
+];
+if (parentPage) {
+	breadcrumbItems.push({ name: parentPage.title, url: `https://rivet.dev${parentPage.href || '/docs/'}` });
+}
+if (slugPath) {
+	breadcrumbItems.push({ name: title, url: canonicalUrl });
+}
+
+const breadcrumbSchema = {
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	"itemListElement": breadcrumbItems.map((item, index) => ({
+		"@type": "ListItem",
+		"position": index + 1,
+		"name": item.name,
+		"item": item.url
+	}))
+};
 ---
 
 <DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl}>
+	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 	<aside class="hidden lg:block border-r">
 		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} client:load />}
 	</aside>

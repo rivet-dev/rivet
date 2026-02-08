@@ -4622,6 +4622,9 @@ importers:
       mdx-annotations:
         specifier: ^0.1.4
         version: 0.1.4
+      mermaid:
+        specifier: ^11.12.2
+        version: 11.12.2
       postcss:
         specifier: ^8.5.6
         version: 8.5.6

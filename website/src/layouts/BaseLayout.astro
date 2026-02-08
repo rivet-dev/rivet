@@ -8,6 +8,7 @@ import { Providers } from '@/components/Providers';
 import { TooltipProvider } from '@rivet-gg/components';
 import CopyCodeScript from '@/components/CopyCodeScript.astro';
 import TabsScript from '@/components/TabsScript.astro';
+import MermaidScript from '@/components/MermaidScript.astro';
 
 interface Props {
 	title: string;
@@ -21,15 +22,19 @@ interface Props {
 
 const {
 	title,
-	description = "Rivet is a library for long-lived processes with durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
+	description = "Rivet Actors are long-lived stateful processes with built-in state, storage, workflows, scheduling, WebSockets, and more. Open source and self-hostable.",
 	canonicalUrl,
-	ogImage = "https://rivet.gg/promo/og.png",
+	ogImage = "https://rivet.dev/promo/og.png",
 	ogType = "website",
 	publishedTime,
 	keywords,
 } = Astro.props;
 
-const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
+const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.dev';
+
+// Auto-generate canonical URL from current page path if not explicitly provided
+const currentPath = Astro.url.pathname;
+const effectiveCanonicalUrl = canonicalUrl || `https://rivet.dev${currentPath}`;
 ---
 
 <!DOCTYPE html>
@@ -40,7 +45,7 @@ const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
 		<title>{title}</title>
 		<meta name="description" content={description} />
 
-		{canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+		<link rel="canonical" href={effectiveCanonicalUrl} />
 
 		<!-- Twitter -->
 		<meta name="twitter:site" content="@rivet_dev" />
@@ -52,7 +57,7 @@ const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
 		<!-- Open Graph -->
 		<meta property="og:type" content={ogType} />
 		<meta property="og:locale" content="en_US" />
-		<meta property="og:url" content={canonicalUrl || siteUrl} />
+		<meta property="og:url" content={effectiveCanonicalUrl} />
 		<meta property="og:site_name" content="Rivet" />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
@@ -63,9 +68,68 @@ const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
 
 		{keywords && <meta name="keywords" content={keywords.join(', ')} />}
 
-		<!-- Fonts -->
+		<!-- JSON-LD Structured Data -->
+		<script type="application/ld+json" set:html={JSON.stringify({
+			"@context": "https://schema.org",
+			"@graph": [
+				{
+					"@type": "Organization",
+					"@id": "https://rivet.dev/#organization",
+					"name": "Rivet",
+					"url": "https://rivet.dev",
+					"logo": {
+						"@type": "ImageObject",
+						"url": "https://rivet.dev/icons/android-chrome-512x512.png",
+						"width": 512,
+						"height": 512
+					},
+					"sameAs": [
+						"https://twitter.com/rivet_dev",
+						"https://github.com/rivet-gg",
+						"https://discord.gg/rivet"
+					],
+					"contactPoint": {
+						"@type": "ContactPoint",
+						"contactType": "customer support",
+						"email": "support@rivet.dev"
+					}
+				},
+				{
+					"@type": "WebSite",
+					"@id": "https://rivet.dev/#website",
+					"url": "https://rivet.dev",
+					"name": "Rivet",
+					"publisher": { "@id": "https://rivet.dev/#organization" },
+					"potentialAction": {
+						"@type": "SearchAction",
+						"target": "https://rivet.dev/docs/?q={search_term_string}",
+						"query-input": "required name=search_term_string"
+					}
+				},
+				{
+					"@type": "SoftwareApplication",
+					"name": "Rivet",
+					"applicationCategory": "DeveloperApplication",
+					"operatingSystem": "Cross-platform",
+					"description": "Rivet Actors are long-lived stateful processes with built-in state, storage, workflows, scheduling, WebSockets, and more. Open source infrastructure for software that thinks.",
+					"url": "https://rivet.dev",
+					"author": { "@id": "https://rivet.dev/#organization" },
+					"license": "https://opensource.org/licenses/Apache-2.0",
+					"offers": {
+						"@type": "Offer",
+						"price": "0",
+						"priceCurrency": "USD"
+					}
+				}
+			]
+		})} />
+
+		<!-- Fonts - Preconnect and preload for performance -->
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+		<link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" as="style" />
+		<link rel="preload" href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" as="style" />
 		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 		<link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
 		<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
@@ -95,6 +159,9 @@ const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
 		<ViewTransitions />
 	</head>
 	<body class="dark">
+		<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white">
+			Skip to main content
+		</a>
 		<TooltipProvider client:load>
 			<Providers client:load>
 				<slot />
@@ -104,5 +171,6 @@ const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.gg';
 		<Footer client:load />
 		<CopyCodeScript />
 		<TabsScript />
+		<MermaidScript />
 	</body>
 </html>

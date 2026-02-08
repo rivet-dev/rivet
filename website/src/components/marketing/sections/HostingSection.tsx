@@ -14,7 +14,7 @@ export const HostingSection = () => (
           transition={{ duration: 0.5 }}
           className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'
         >
-          Deploy your way.
+          Start local. Scale to millions.
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -23,8 +23,7 @@ export const HostingSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='mx-auto max-w-2xl text-lg leading-relaxed text-zinc-400'
         >
-          Start with the open-source binary on your laptop. Scale with Rivet Cloud. Go hybrid when you need
-          total control over data residency.
+          Three options, same API. Pick what works for you.
         </motion.p>
       </div>
 
@@ -46,7 +45,7 @@ export const HostingSection = () => (
           </div>
           <h3 className='mb-3 text-xl font-medium text-white'>Self-Host</h3>
           <p className='mb-6 flex-grow text-sm leading-relaxed text-zinc-400'>
-            Deploy as a single Rust binary or Docker container. Works with your existing Postgres, file system, or FoundationDB. Easy-to-use dashboard included.
+            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB. Full dashboard included.
           </p>
           <div className='mb-4 rounded-lg border border-white/10 bg-black p-4 font-mono text-[10px] text-zinc-300'>
             <div className='flex gap-2'>
@@ -73,8 +72,7 @@ export const HostingSection = () => (
           </div>
           <h3 className='relative z-10 mb-3 text-xl font-medium text-white'>Rivet Cloud</h3>
           <p className='relative z-10 mb-6 flex-grow text-sm leading-relaxed text-zinc-400'>
-            The fully managed actor platform. We handle the orchestration, monitoring, and edge routing. You
-            just connect your compute and go.
+            Fully managed. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
           </p>
           <ul className='relative z-10 mb-4 space-y-2'>
             {['Global Edge Network', 'Scales Seamlessly', 'Connects To Your Cloud'].map(item => (
@@ -104,7 +102,7 @@ export const HostingSection = () => (
           </div>
           <h3 className='mb-3 text-xl font-medium text-white'>Open Source</h3>
           <p className='mb-6 flex-grow text-sm leading-relaxed text-zinc-400'>
-            Built in Rust for performance and safety. Fully open source under Apache 2.0. Audit the code, contribute features, and hack it as you'd like.
+            Apache 2.0. Audit the code, contribute features, run it however you want.
           </p>
           <div className='mb-4 rounded-lg border border-white/10 bg-black p-4 font-mono text-[10px] text-zinc-300'>
             <div className='flex gap-2'>

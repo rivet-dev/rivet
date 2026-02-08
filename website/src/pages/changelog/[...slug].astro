@@ -1,5 +1,6 @@
 ---
 import { getCollection, render } from 'astro:content';
+import { Image } from 'astro:assets';
 import BlogLayout from '@/layouts/BlogLayout.astro';
 import { ArticleSocials } from '@/components/ArticleSocials';
 import { Comments } from '@/components/Comments';
@@ -85,10 +86,11 @@ const otherArticles = filteredOtherPosts.map((post) => {
 <BlogLayout
 	title={title}
 	description={description}
-	canonicalUrl={`https://rivet.gg/changelog/${slug}/`}
+	canonicalUrl={`https://rivet.dev/changelog/${slug}/`}
 	ogImage={image?.src}
 	publishedTime={entry.data.published.toISOString()}
 	keywords={entry.data.keywords}
+	authorName={author.name}
 >
 	<div class="mx-auto mt-20 w-full max-w-6xl px-4 md:mt-32" style="--header-height: 5rem;">
 		<ul class="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
@@ -145,7 +147,7 @@ const otherArticles = filteredOtherPosts.map((post) => {
 				className="order-3 mt-4 w-full flex-shrink-0 lg:order-2 max-w-prose"
 			>
 				{image && (
-					<img src={image.src} alt="Promo Image" class="rounded-xl border border-white/10" />
+					<Image src={image} alt={title} class="rounded-xl border border-white/10" loading="eager" decoding="async" />
 				)}
 				<Content components={mdxComponents} />
 				<ArticleSocials title={title} client:load />

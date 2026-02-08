@@ -22,8 +22,7 @@ export const RedesignedCTA = () => (
         transition={{ duration: 0.5, delay: 0.1 }}
         className='mb-10 text-lg leading-relaxed text-zinc-400'
       >
-        Stateful backends, zero infrastructure. <br className='hidden md:block' />
-        Deploy globally. Scale on demand.
+        The next generation of software needs a new kind of backend. This is it.
       </motion.p>
       <motion.div
         initial={{ opacity: 0, y: 20 }}

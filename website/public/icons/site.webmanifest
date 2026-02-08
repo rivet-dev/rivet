@@ -1,6 +1,6 @@
 {
-	"name": "",
-	"short_name": "",
+	"name": "Rivet - Infrastructure for software that thinks",
+	"short_name": "Rivet",
 	"icons": [
 		{
 			"src": "/icons/android-chrome-192x192.png",
@@ -13,7 +13,7 @@
 			"type": "image/png"
 		}
 	],
-	"theme_color": "#ffffff",
-	"background_color": "#ffffff",
+	"theme_color": "#000000",
+	"background_color": "#000000",
 	"display": "standalone"
 }

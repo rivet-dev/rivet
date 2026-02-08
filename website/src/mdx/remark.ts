@@ -9,7 +9,11 @@ function remarkModifiedTime() {
 		if (!filepath) return;
 
 		try {
-			const result = execSync(`git log -1 --pretty="format:%cI" "${filepath}"`);
+			// Use stdio: 'pipe' to suppress stderr output in CI/Docker environments
+			const result = execSync(`git log -1 --pretty="format:%cI" "${filepath}"`, {
+				stdio: ['pipe', 'pipe', 'pipe'],
+				timeout: 5000,
+			});
 			const lastModified = result.toString().trim();
 			if (lastModified) {
 				file.data.astro = file.data.astro || {};
@@ -17,7 +21,7 @@ function remarkModifiedTime() {
 				file.data.astro.frontmatter.lastModified = lastModified;
 			}
 		} catch {
-			// Git command may fail for new files not yet committed
+			// Git command may fail for new files not yet committed or in Docker builds without git history
 		}
 	};
 }

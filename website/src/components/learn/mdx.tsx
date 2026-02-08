@@ -11,9 +11,25 @@ export {
 // Basic HTML element overrides with theatrical styling
 export const a = (props: any) => <a {...props} />;
 
-export const Image = ({ className, ...props }: any) => (
-	<img {...props} className={`w-auto h-auto mx-auto ${className || ""}`} />
-);
+export const Image = ({ className, src, ...props }: any) => {
+	// Handle Astro image objects
+	const isAstroImage = typeof src === 'object' && src !== null;
+	const imgSrc = isAstroImage ? src.src : src;
+	const width = isAstroImage ? src.width : props.width;
+	const height = isAstroImage ? src.height : props.height;
+
+	return (
+		<img
+			src={imgSrc}
+			width={width}
+			height={height}
+			loading="lazy"
+			decoding="async"
+			className={`w-auto h-auto mx-auto ${className || ""}`}
+			{...props}
+		/>
+	);
+};
 
 export const h2 = function H2(props: any) {
 	return (

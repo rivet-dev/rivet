@@ -1,0 +1,65 @@
+---
+// This script initializes Mermaid diagrams on the client
+// Used with rehype-mermaid's 'pre-mermaid' strategy
+---
+
+<script>
+  // Only initialize if there are mermaid diagrams on the page
+  async function initMermaid() {
+    const mermaidElements = document.querySelectorAll('pre.mermaid');
+    if (mermaidElements.length === 0) return;
+
+    // Dynamically import mermaid only when needed
+    const { default: mermaid } = await import('mermaid');
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'loose',
+      fontFamily: 'inherit',
+    });
+
+    // Render each mermaid diagram
+    mermaidElements.forEach(async (element, index) => {
+      const code = element.textContent || '';
+      const id = `mermaid-${index}`;
+
+      try {
+        const { svg } = await mermaid.render(id, code);
+        element.innerHTML = svg;
+        element.classList.add('mermaid-rendered');
+      } catch (error) {
+        console.error('[Mermaid] Failed to render diagram:', error);
+        element.classList.add('mermaid-error');
+      }
+    });
+  }
+
+  // Run on initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMermaid);
+  } else {
+    initMermaid();
+  }
+
+  // Re-run on Astro page transitions
+  document.addEventListener('astro:page-load', initMermaid);
+</script>
+
+<style is:global>
+  pre.mermaid {
+    background: transparent !important;
+    border: none !important;
+    text-align: center;
+  }
+
+  pre.mermaid-rendered {
+    padding: 1rem;
+  }
+
+  pre.mermaid-error {
+    color: #ef4444;
+    font-family: monospace;
+    white-space: pre-wrap;
+  }
+</style>
