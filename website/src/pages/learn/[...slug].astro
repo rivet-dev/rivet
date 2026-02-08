@@ -23,7 +23,7 @@ const { title, description } = entry.data as { title: string; description: strin
 // Handle index paths correctly
 const slugPath = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');
 const fullPath = slugPath ? `/learn/${slugPath}/` : '/learn/';
-const canonicalUrl = `https://rivet.gg${fullPath}`;
+const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Determine if this is the index page
 const isIndex = entry.id === 'index' || entry.id === 'index.mdx';

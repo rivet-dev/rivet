@@ -203,7 +203,7 @@ export function FeaturesBentoBox() {
     },
     {
       title: 'Built-in Realtime',
-      description: 'WebSockets & SSE support out of the box. Update state and broadcast changes instantly.',
+      description: 'WebSockets support out of the box. Update state and broadcast changes instantly.',
       href: '/docs/actors/events',
       icon: faBolt,
       variant: 'medium' as const

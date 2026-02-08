@@ -153,7 +153,7 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 								rel={product.external ? "noopener noreferrer" : undefined}
 								className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
 							>
-								<img src={product.logo.src} alt={product.label} className="h-6 w-6" />
+								<img src={product.logo.src} alt={product.label} width={24} height={24} className="h-6 w-6" loading="lazy" decoding="async" />
 								<div className="flex flex-col">
 									<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
 										{product.label}
@@ -493,6 +493,8 @@ export function Header({
 								height={24}
 								className="ml-1 w-20 shrink-0"
 								alt="Rivet logo"
+								loading="eager"
+								decoding="async"
 							/>
 						</a>
 					</LogoContextMenu>
@@ -623,7 +625,7 @@ function DocsMobileNavigation({ tree }) {
 							className="flex items-center gap-2"
 						>
 							<a href={product.href} target={product.external ? "_blank" : undefined} rel={product.external ? "noopener noreferrer" : undefined}>
-								<img src={product.logo.src} alt={product.label} className="h-4 w-4" />
+								<img src={product.logo.src} alt={product.label} width={16} height={16} className="h-4 w-4" loading="lazy" decoding="async" />
 								{product.label}
 							</a>
 						</DropdownMenuItem>

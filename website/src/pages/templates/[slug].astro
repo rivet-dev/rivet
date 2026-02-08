@@ -70,7 +70,7 @@ const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 <MarketingLayout
 	title={`${template.displayName} - Rivet Templates`}
 	description={description}
-	canonicalUrl={`https://rivet.gg/templates/${template.name}/`}
+	canonicalUrl={`https://rivet.dev/templates/${template.name}/`}
 >
 	<main class="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-white/20 selection:text-white">
 		<div class={`relative w-full pb-12 ${template.noFrontend ? 'pt-48' : 'pt-24'}`}>
@@ -99,7 +99,11 @@ const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 									<img
 										src={`/examples/${template.name}/image.png`}
 										alt={template.displayName}
+										width={1280}
+										height={720}
 										class="h-full w-full object-cover"
+										loading="eager"
+										decoding="async"
 									/>
 								</div>
 							</div>

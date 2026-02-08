@@ -11,7 +11,7 @@ import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
 import { skillVersion } from './src/integrations/skill-version';
 
 export default defineConfig({
-	site: 'https://rivet.gg',
+	site: 'https://rivet.dev',
 	output: 'static',
 	trailingSlash: 'ignore',
 	prefetch: {
@@ -29,7 +29,7 @@ export default defineConfig({
 	},
 	integrations: [
 		skillVersion(),
-		typecheckCodeBlocks(),
+		// typecheckCodeBlocks(), // Temporarily disabled due to rivetkit build issues
 		generateRoutes(),
 		mdx({
 			syntaxHighlight: false,

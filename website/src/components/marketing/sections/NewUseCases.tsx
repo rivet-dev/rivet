@@ -12,7 +12,7 @@ const useCases = [
     description: 'Power real-time docs, whiteboards, and Figma-like tools with live sync.'
   },
   {
-    title: 'Durable Workflows',
+    title: 'Workflows',
     description: 'Create multi-step background jobs and workflows that can run for days.'
   },
   {

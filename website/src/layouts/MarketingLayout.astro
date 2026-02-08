@@ -7,12 +7,13 @@ interface Props {
 	description?: string;
 	canonicalUrl?: string;
 	ogImage?: string;
+	keywords?: string[];
 }
 
-const { title, description, canonicalUrl, ogImage } = Astro.props;
+const { title, description, canonicalUrl, ogImage, keywords } = Astro.props;
 ---
 
-<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage}>
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage} keywords={keywords}>
 	<Header variant="floating" client:load />
 	<slot />
 </BaseLayout>

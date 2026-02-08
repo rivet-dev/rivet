@@ -11,51 +11,42 @@ export const CodeWalkthrough = () => {
     {
       title: 'Define the Actor',
       description:
-        'Start by writing an actor template. This will be used to create actors with their own isolated state.',
-      lines: [0, 2, 14]
+        'An Actor is an independent process with its own isolated state. Create one per user, per agent, or per session.',
+      lines: [0, 11]
     },
     {
       title: 'Declare State',
       description:
-        'Define the shape of your data. This state object is automatically persisted to disk and loaded into memory when the actor wakes up. No database queries needed.',
-      lines: [3]
+        'State is automatically persisted and loaded into memory when the Actor wakes. No database queries. No ORM. Just an object.',
+      lines: [1]
     },
     {
-      title: 'Write Actions',
+      title: 'Process Messages',
       description:
-        "Actions are logic that runs on your actor. They run directly in the actor's memory space with zero network latency to access the state.",
-      lines: [5, 6, 12, 13]
+        'The run loop executes continuously. Wait for messages from a queue, process them with your logic. The Actor stays alive as long as it needs to.',
+      lines: [3, 4, 5, 6, 7]
     },
     {
-      title: 'Mutate State Directly',
+      title: 'Broadcast in Real-time',
       description:
-        'Just modify the state variable. Rivet detects the changes and handles the persistence and replication for you.',
-      lines: [7, 8]
-    },
-    {
-      title: 'Broadcast Realtime Events',
-      description:
-        "Push updates to all connected clients instantly using WebSockets. It's built right into the context object.",
-      lines: [10]
+        'Push updates to all connected clients instantly. WebSockets and SSE are built in — no Socket.io, no pub/sub layer, just one line.',
+      lines: [8, 9, 10]
     }
   ];
 
   const codeLines = [
-    `import { actor } from "rivetkit";`,
+    `actor({`,
+    `  state: { messages: [], history: [] },`,
     ``,
-    `export const chatRoom = actor({`,
-    `  state: { messages: [] },`,
-    ``,
-    `  actions: {`,
-    `    postMessage: (c, text) => {`,
-    `      const msg = { text, at: Date.now() };`,
-    `      c.state.messages.push(msg);`,
-    ``,
-    `      c.broadcast("newMessage", msg);`,
-    `      return "sent";`,
+    `  run: async (c) => {`,
+    `    while (true) {`,
+    `      const message = await c.queue.next("message");`,
+    `      const response = await ai(message);`,
+    `      c.state.history.push({ message, response });`,
+    `      c.broadcast("response", response);`,
     `    }`,
-    `  }`,
-    `});`
+    `  },`,
+    `});`,
   ];
 
   useEffect(() => {
@@ -91,10 +82,11 @@ export const CodeWalkthrough = () => {
           transition={{ duration: 0.5 }}
           className='mb-16'
         >
-          <h2 className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'>How it works</h2>
+          <h2 className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'>
+            How Actors work.
+          </h2>
           <p className='max-w-2xl text-lg leading-relaxed text-zinc-400'>
-            Rivet makes backend development feel like frontend development. Define your state, write your
-            logic, and let Rivet handle the rest.
+            Define state, write a run loop, broadcast events. That's it.
           </p>
         </motion.div>
 
@@ -111,7 +103,7 @@ export const CodeWalkthrough = () => {
                     <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
                     <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
                   </div>
-                  <span className='ml-2 font-mono text-xs text-zinc-500'>chat-room.ts</span>
+                  <span className='ml-2 font-mono text-xs text-zinc-500'>actor.ts</span>
                 </div>
                 <div className='overflow-x-auto p-6 font-mono text-sm leading-7'>
                   {codeLines.map((line, idx) => {
@@ -147,7 +139,7 @@ export const CodeWalkthrough = () => {
                                     const trimmed = part.trim();
 
                                     // Keywords
-                                    if (['import', 'export', 'const', 'return'].includes(trimmed))
+                                    if (['import', 'export', 'const', 'return', 'async', 'await'].includes(trimmed))
                                       return (
                                         <span key={i} className='text-purple-400'>
                                           {part}
@@ -155,17 +147,17 @@ export const CodeWalkthrough = () => {
                                       );
 
                                     // Special Rivet/JS functions
-                                    if (['actor'].includes(trimmed))
+                                    if (['actor', 'ai'].includes(trimmed))
                                       return (
                                         <span key={i} className='text-blue-400'>
                                           {part}
                                         </span>
                                       );
 
-                                    // Property/method names (broadcast, state, messages, push, now)
+                                    // Property/method names
                                     if (
                                       /^[a-zA-Z_]\w*$/.test(trimmed) &&
-                                      ['broadcast', 'state', 'messages', 'push', 'now', 'Date'].includes(
+                                      ['broadcast', 'state', 'messages', 'history', 'queue', 'next', 'push', 'run', 'message', 'response', 'c'].includes(
                                         trimmed
                                       )
                                     )
