@@ -1,6 +1,6 @@
 # Hono Integration
 
-Example project demonstrating Hono web framework integration.
+Build type-safe HTTP APIs with Hono web framework and RivetKit Actors. Features lightweight routing, middleware support, and seamless actor integration.
 
 ## Getting Started
 
