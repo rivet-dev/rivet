@@ -3,9 +3,77 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 
+const highlightCode = (line: string) => {
+  const leadingWhitespaceMatch = line.match(/^(\s*)/);
+  const leadingWhitespace = leadingWhitespaceMatch ? leadingWhitespaceMatch[1] : '';
+  const codeContent = line.substring(leadingWhitespace.length);
+  const indentationWidth = `${leadingWhitespace.length * 1}em`;
+
+  return (
+    <>
+      {leadingWhitespace && (
+        <span style={{ display: 'inline-block', width: indentationWidth }} />
+      )}
+      {codeContent
+        .split(/(\s+|[{}[\](),.;:])/)
+        .filter(Boolean)
+        .map((part, i) => {
+          const trimmed = part.trim();
+
+          // Keywords
+          if (['import', 'export', 'const', 'return', 'async', 'await', 'while', 'true'].includes(trimmed))
+            return (
+              <span key={i} className='text-purple-400'>
+                {part}
+              </span>
+            );
+
+          // Special Rivet/JS functions
+          if (['actor', 'ai'].includes(trimmed))
+            return (
+              <span key={i} className='text-blue-400'>
+                {part}
+              </span>
+            );
+
+          // Property/method names
+          if (
+            /^[a-zA-Z_]\w*$/.test(trimmed) &&
+            ['broadcast', 'state', 'messages', 'history', 'queue', 'next', 'push', 'run', 'message', 'response', 'c'].includes(
+              trimmed
+            )
+          )
+            return (
+              <span key={i} className='text-blue-300'>
+                {part}
+              </span>
+            );
+
+          // Strings
+          if (part.includes('"'))
+            return (
+              <span key={i} className='text-[#FF4500]'>
+                {part}
+              </span>
+            );
+
+          // Comments
+          if (part.includes('//'))
+            return (
+              <span key={i} className='text-zinc-500'>
+                {part}
+              </span>
+            );
+
+          return part;
+        })}
+    </>
+  );
+};
+
 export const CodeWalkthrough = () => {
   const [activeStep, setActiveStep] = useState(0);
-  const observerRefs = useRef([]);
+  const observerRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const steps = [
     {
@@ -73,20 +141,21 @@ export const CodeWalkthrough = () => {
   }, []);
 
   return (
-    <section className='relative border-t border-white/10 bg-black py-32'>
+    <section className='relative border-t border-white/10 bg-black pb-24 pt-48'>
       <div className='mx-auto max-w-7xl px-6'>
+        {/* Mobile-only header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className='mb-16'
+          className='mb-12 lg:hidden'
         >
-          <h2 className='mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl'>
+          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
             How Actors work.
           </h2>
-          <p className='max-w-2xl text-lg leading-relaxed text-zinc-400'>
-            Define state, write a run loop, broadcast events. That's it.
+          <p className='max-w-xl text-base leading-relaxed text-zinc-500'>
+            Define state, write a run loop, broadcast events.
           </p>
         </motion.div>
 
@@ -94,18 +163,23 @@ export const CodeWalkthrough = () => {
           {/* Sticky Code Block */}
           <div className='relative hidden lg:block'>
             <div className='sticky top-32'>
-              <div className='relative overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50 shadow-2xl backdrop-blur-xl transition-all duration-500'>
-                {/* Top Shine Highlight */}
-                <div className='absolute left-0 right-0 top-0 z-10 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent' />
-                <div className='flex items-center gap-2 border-b border-white/5 bg-white/5 px-4 py-3'>
-                  <div className='flex gap-1.5'>
-                    <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
-                    <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
-                    <div className='h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20' />
-                  </div>
-                  <span className='ml-2 font-mono text-xs text-zinc-500'>actor.ts</span>
-                </div>
-                <div className='overflow-x-auto p-6 font-mono text-sm leading-7'>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5 }}
+                className='mb-8'
+              >
+                <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+                  How Actors work.
+                </h2>
+                <p className='max-w-xl text-base leading-relaxed text-zinc-500'>
+                  Define state, write a run loop, broadcast events.
+                </p>
+              </motion.div>
+              <div className='border-t border-white/10 pt-4'>
+                <div className='mb-4 font-mono text-xs text-zinc-500'>actor.ts</div>
+                <div className='overflow-x-auto font-mono text-sm leading-7'>
                   {codeLines.map((line, idx) => {
                     const isHighlighted = steps[activeStep].lines.includes(idx);
                     const isDimmed = !isHighlighted;
@@ -114,80 +188,14 @@ export const CodeWalkthrough = () => {
                       <div
                         key={idx}
                         className={`flex transition-all duration-500 ${
-                          isDimmed ? 'opacity-50' : 'scale-[1.01] opacity-100'
+                          isDimmed ? 'opacity-50' : 'opacity-100'
                         }`}
                       >
                         <span className='inline-block w-8 select-none pr-4 text-right text-zinc-700'>
                           {idx + 1}
                         </span>
                         <span className={`${isHighlighted ? 'font-medium text-white' : 'text-zinc-400'}`}>
-                          {(() => {
-                            const leadingWhitespaceMatch = line.match(/^(\s*)/);
-                            const leadingWhitespace = leadingWhitespaceMatch ? leadingWhitespaceMatch[1] : '';
-                            const codeContent = line.substring(leadingWhitespace.length);
-                            const indentationWidth = `${leadingWhitespace.length * 1}em`;
-
-                            return (
-                              <>
-                                {leadingWhitespace && (
-                                  <span style={{ display: 'inline-block', width: indentationWidth }} />
-                                )}
-                                {codeContent
-                                  .split(/(\s+|[{}[\](),.;:])/)
-                                  .filter(Boolean)
-                                  .map((part, i) => {
-                                    const trimmed = part.trim();
-
-                                    // Keywords
-                                    if (['import', 'export', 'const', 'return', 'async', 'await'].includes(trimmed))
-                                      return (
-                                        <span key={i} className='text-purple-400'>
-                                          {part}
-                                        </span>
-                                      );
-
-                                    // Special Rivet/JS functions
-                                    if (['actor', 'ai'].includes(trimmed))
-                                      return (
-                                        <span key={i} className='text-blue-400'>
-                                          {part}
-                                        </span>
-                                      );
-
-                                    // Property/method names
-                                    if (
-                                      /^[a-zA-Z_]\w*$/.test(trimmed) &&
-                                      ['broadcast', 'state', 'messages', 'history', 'queue', 'next', 'push', 'run', 'message', 'response', 'c'].includes(
-                                        trimmed
-                                      )
-                                    )
-                                      return (
-                                        <span key={i} className='text-blue-300'>
-                                          {part}
-                                        </span>
-                                      );
-
-                                    // Strings
-                                    if (part.includes('"'))
-                                      return (
-                                        <span key={i} className='text-[#FF4500]'>
-                                          {part}
-                                        </span>
-                                      );
-
-                                    // Comments
-                                    if (part.includes('//'))
-                                      return (
-                                        <span key={i} className='text-zinc-500'>
-                                          {part}
-                                        </span>
-                                      );
-
-                                    return part;
-                                  })}
-                              </>
-                            );
-                          })()}
+                          {highlightCode(line)}
                         </span>
                       </div>
                     );
@@ -198,47 +206,44 @@ export const CodeWalkthrough = () => {
           </div>
 
           {/* Scrolling Steps */}
-          <div className='space-y-32 py-12'>
+          <div className='space-y-64 py-24'>
             {steps.map((step, idx) => (
               <div
                 key={idx}
                 data-index={idx}
                 ref={el => (observerRefs.current[idx] = el)}
-                className={`p-6 transition-all duration-500 ${
-                  idx === activeStep ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+                className={`border-t border-white/10 pt-6 transition-all duration-500 ${
+                  idx === activeStep ? 'opacity-100' : 'opacity-50'
                 }`}
               >
-                <div className='mb-4 flex items-center gap-3'>
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold transition-colors ${
-                      idx === activeStep
-                        ? 'border border-white/20 bg-white/10 text-white'
-                        : 'bg-zinc-800 text-zinc-500'
+                <div className='mb-3'>
+                  <span
+                    className={`font-mono text-xs transition-colors ${
+                      idx === activeStep ? 'text-zinc-500' : 'text-zinc-600'
                     }`}
                   >
-                    {idx + 1}
-                  </div>
+                    {String(idx + 1).padStart(2, '0')}/{String(steps.length).padStart(2, '0')}
+                  </span>
                   <h3
-                    className={`text-xl font-medium transition-colors ${
+                    className={`mt-1 text-lg font-normal transition-colors ${
                       idx === activeStep ? 'text-white' : 'text-zinc-500'
                     }`}
                   >
                     {step.title}
                   </h3>
                 </div>
-                <p className='text-lg leading-relaxed text-zinc-400'>{step.description}</p>
+                <p className='text-base leading-relaxed text-zinc-500'>{step.description}</p>
 
                 {/* Mobile Only Code Snippet */}
-                <div className='mt-6 overflow-x-auto rounded-lg border border-white/10 bg-background p-4 font-mono text-xs text-zinc-300 lg:hidden'>
+                <div className='mt-6 overflow-x-auto rounded-lg border border-white/10 bg-black p-4 font-mono text-xs leading-6 lg:hidden'>
                   {step.lines.map(lineIdx => (
-                    <div key={lineIdx} className='whitespace-pre'>
-                      {codeLines[lineIdx]}
+                    <div key={lineIdx} className='whitespace-pre text-zinc-300'>
+                      {highlightCode(codeLines[lineIdx])}
                     </div>
                   ))}
                 </div>
               </div>
             ))}
-            <div className='h-[20vh]' />
           </div>
         </div>
       </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import imgHub from "@/images/screenshots/rivet-hub.png";
 import {
 	Icon,
 	faArrowRight,
@@ -11,8 +10,8 @@ import {
 	faRivet,
 	faXmark,
 } from "@rivet-gg/icons";
+import { motion } from "framer-motion";
 import React from "react";
-import { CTASection } from "../sections/CTASection";
 
 // Feature Status Component
 interface FeatureStatusProps {
@@ -65,45 +64,44 @@ const FeatureStatus: React.FC<FeatureStatusProps> = ({ status, text }) => {
 // Hero Section
 const HeroSection = () => {
 	return (
-		<div className="mx-auto max-w-7xl pt-20 pb-40 px-6 lg:px-8">
-			<div className="text-center">
-				<h1 className="text-5xl font-bold tracking-tight text-white mb-6">
-					Rivet Actors vs Cloudflare Durable Objects
-				</h1>
-				<p className="text-xl text-white/70 max-w-3xl mx-auto">
-					Cloudflare Durable Objects provide stateful serverless computing with
-					vendor lock-in.
-					<br />
-					Rivet Actors gives you the same capabilities as an
-					open-source library that works with your existing
-					infrastructure and technology stack.
-				</p>
-			</div>
-
-			<div className="h-28" />
-
-			<div className="mx-auto relative">
-				<div className="max-w-[1200px] w-full mx-auto relative">
-					<div className="relative rounded-t-lg border border-b-0 border-white/10 overflow-hidden">
-						<div className="w-full max-w-full aspect-[16/9] md:aspect-[2/1] relative">
-							<img
-								src={typeof imgHub === 'object' && imgHub !== null ? (imgHub as { src: string }).src : imgHub}
-								alt="Rivet Hub dashboard"
-								style={{
-									objectFit: "cover",
-									objectPosition: "top",
-								}}
-								className="absolute inset-0 w-full h-full"
-							/>
-						</div>
-					</div>
-					<div
-						className="relative h-[1px] bg-white/20 z-20 w-[120%] -left-[10%]"
-						style={{ marginTop: "-1px", position: "relative" }}
-					/>
+		<section className="relative flex min-h-[60vh] flex-col justify-center px-6 pt-32 pb-24">
+			<div className="mx-auto w-full max-w-7xl">
+				<div className="max-w-3xl">
+					<motion.h1
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.5 }}
+						className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl"
+					>
+						Rivet Actors vs <br />
+						Cloudflare Durable Objects
+					</motion.h1>
+					<motion.p
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.5, delay: 0.1 }}
+						className="text-base leading-relaxed text-zinc-500 md:text-lg"
+					>
+						Cloudflare Durable Objects provide stateful serverless computing with vendor lock-in.
+						Rivet Actors gives you the same capabilities as an open-source library that works with your existing infrastructure and technology stack.
+					</motion.p>
+					<motion.div
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.5, delay: 0.2 }}
+						className="mt-8 flex flex-col gap-3 sm:flex-row"
+					>
+						<a
+							href="/docs/actors/quickstart/backend"
+							className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+						>
+							Get Started with Rivet Actors
+							<Icon icon={faArrowRight} />
+						</a>
+					</motion.div>
 				</div>
 			</div>
-		</div>
+		</section>
 	);
 };
 
@@ -140,12 +138,6 @@ const CombinedOverviewSection = () => {
 			description:
 				"When you want a comprehensive ecosystem with ready-to-use integrations for popular frameworks and tools",
 		},
-		//{
-		//	icon: faCheck,
-		//	title: "Full local development experience",
-		//	description:
-		//		"When you value a seamless local development workflow with 1:1 production parity",
-		//},
 	];
 
 	const cloudflareChoices = [
@@ -176,99 +168,108 @@ const CombinedOverviewSection = () => {
 	];
 
 	return (
-		<div className="w-full px-2 py-12 bg-white/2 border border-white/15 rounded-lg">
-			<h2 className="text-3xl font-medium text-center tracking-tight text-white mb-12">
-				Overview
-			</h2>
-			<div className="grid grid-cols-1 lg:grid-cols-2 lg:divide-x lg:divide-white/10 gap-y-12 lg:gap-y-0 h-full">
-				<div className="px-8 h-full flex flex-col">
-					<div className="flex items-center mb-4">
-						<div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white mr-4">
-							<Icon icon={faRivet} className="text-2xl" />
-						</div>
-						<h3 className="text-2xl font-medium text-white">Rivet Actors</h3>
-					</div>
-					<p className="text-white/70 mb-8">
-						Rivet Actors is an open-source library that brings the actor model
-						to your existing infrastructure. Build stateful, distributed
-						applications with your preferred technology stack, deployed on your
-						own infrastructure.
-					</p>
-
-					<h4 className="text-xl font-medium text-white mb-6">
-						When to choose Rivet Actors
-					</h4>
-					<div className="space-y-6 flex-grow">
-						{rivetChoices.map((choice, index) => (
-							<div key={index} className="flex gap-4">
-								<div className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-green-500">
-									<Icon
-										icon={choice.icon}
-										className="text-xl"
-									/>
-								</div>
-								<div>
-									<h3 className="text-lg font-medium text-white mb-1">
-										{choice.title}
-									</h3>
-									<p className="text-white/70">
-										{choice.description}
-									</p>
-								</div>
-							</div>
-						))}
-					</div>
-					<div className="mt-10 text-center">
-						<a href="/docs/actors/quickstart/backend"
-							className="inline-flex items-center px-4 py-2 bg-white text-black rounded-md hover:bg-white/90 transition-colors"
-						>
-							Get started with Rivet Actors{" "}
-							<Icon icon={faArrowRight} className="ml-2" />
-						</a>
-					</div>
+		<section className="border-t border-white/10 py-24">
+			<div className="mx-auto max-w-7xl px-6">
+				<div className="mb-12">
+					<motion.h2
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5 }}
+						className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl"
+					>
+						Overview
+					</motion.h2>
+					<motion.p
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5, delay: 0.1 }}
+						className="max-w-xl text-base leading-relaxed text-zinc-500"
+					>
+						Compare the two approaches and decide which is right for your project.
+					</motion.p>
 				</div>
-				<div className="px-8 h-full flex flex-col pt-6 lg:pt-0 border-t border-white/10 lg:border-t-0">
-					<div className="flex items-center mb-4">
-						<div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white/70 mr-4">
-							<Icon icon={faCloudflare} className="text-2xl" />
-						</div>
-						<h3 className="text-2xl font-medium text-white">
-							Cloudflare Durable Objects
-						</h3>
-					</div>
-					<p className="text-white/70 mb-8">
-						Cloudflare Durable Objects provide stateful serverless computing
-						that runs on Cloudflare's global edge network. Built on Cloudflare's
-						proprietary platform, Durable Objects offer strong consistency and
-						state persistence for JavaScript/TypeScript applications.
-					</p>
 
-					<h4 className="text-xl font-medium text-white mb-6">
-						When to choose Cloudflare Durable Objects
-					</h4>
-					<div className="space-y-6 flex-grow">
-						{cloudflareChoices.map((choice, index) => (
-							<div key={index} className="flex gap-4">
-								<div className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-green-500">
-									<Icon
-										icon={choice.icon}
-										className="text-xl"
-									/>
+				<div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+					<motion.div
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5 }}
+						className="flex flex-col border-t border-white/10 pt-6"
+					>
+						<div className="mb-3 text-zinc-500">
+							<Icon icon={faRivet} className="h-4 w-4" />
+						</div>
+						<h3 className="mb-2 text-base font-normal text-white">Rivet Actors</h3>
+						<p className="mb-6 text-sm leading-relaxed text-zinc-500">
+							Rivet Actors is an open-source library that brings the actor model
+							to your existing infrastructure. Build stateful, distributed
+							applications with your preferred technology stack, deployed on your
+							own infrastructure.
+						</p>
+
+						<h4 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">
+							When to choose Rivet Actors
+						</h4>
+						<div className="space-y-4 mb-6">
+							{rivetChoices.map((choice, index) => (
+								<div key={index} className="flex items-start gap-2">
+									<Icon icon={choice.icon} className="h-3 w-3 text-zinc-500 mt-1" />
+									<div>
+										<span className="text-sm text-white">{choice.title}</span>
+										<span className="text-sm text-zinc-500"> — {choice.description}</span>
+									</div>
 								</div>
-								<div>
-									<h3 className="text-lg font-medium text-white mb-1">
-										{choice.title}
-									</h3>
-									<p className="text-white/70">
-										{choice.description}
-									</p>
+							))}
+						</div>
+						<div className="mt-auto">
+							<a href="/docs/actors/quickstart/backend"
+								className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+							>
+								Get started with Rivet Actors
+								<Icon icon={faArrowRight} />
+							</a>
+						</div>
+					</motion.div>
+
+					<motion.div
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5, delay: 0.1 }}
+						className="flex flex-col border-t border-white/10 pt-6"
+					>
+						<div className="mb-3 text-zinc-500">
+							<Icon icon={faCloudflare} className="h-4 w-4" />
+						</div>
+						<h3 className="mb-2 text-base font-normal text-white">Cloudflare Durable Objects</h3>
+						<p className="mb-6 text-sm leading-relaxed text-zinc-500">
+							Cloudflare Durable Objects provide stateful serverless computing
+							that runs on Cloudflare's global edge network. Built on Cloudflare's
+							proprietary platform, Durable Objects offer strong consistency and
+							state persistence for JavaScript/TypeScript applications.
+						</p>
+
+						<h4 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">
+							When to choose Cloudflare Durable Objects
+						</h4>
+						<div className="space-y-4">
+							{cloudflareChoices.map((choice, index) => (
+								<div key={index} className="flex items-start gap-2">
+									<Icon icon={choice.icon} className="h-3 w-3 text-zinc-500 mt-1" />
+									<div>
+										<span className="text-sm text-white">{choice.title}</span>
+										<span className="text-sm text-zinc-500"> — {choice.description}</span>
+									</div>
 								</div>
-							</div>
-						))}
-					</div>
+							))}
+						</div>
+					</motion.div>
 				</div>
 			</div>
-		</div>
+		</section>
 	);
 };
 
@@ -788,167 +789,251 @@ const ComparisonTable = () => {
 	];
 
 	return (
-		<div className="mt-16 mb-20">
-			<div className="overflow-x-auto">
-				<table className="w-full border-collapse [&_a]:underline">
-					<thead>
-						<tr className="bg-zinc-900 border-b border-zinc-800">
-							<th className="py-4 px-6 text-left text-sm font-medium text-white/70">
-								Feature
-							</th>
-							<th className="py-4 px-6 text-left text-sm font-medium">
-								<div className="flex items-center">
-									<div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-white mr-2">
-										<Icon
-											icon={faRivet}
-											className="text-xs"
+		<div className="overflow-x-auto border-t border-white/10">
+			<table className="w-full border-collapse [&_a]:underline [&_a]:text-white [&_a]:hover:text-zinc-300">
+				<thead>
+					<tr className="border-b border-white/10">
+						<th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
+							Feature
+						</th>
+						<th className="py-3 px-4 text-left text-xs font-medium">
+							<div className="flex items-center gap-2">
+								<Icon icon={faRivet} className="text-zinc-500" />
+								<span className="text-white">Rivet Actors</span>
+							</div>
+						</th>
+						<th className="py-3 px-4 text-left text-xs font-medium">
+							<div className="flex items-center gap-2">
+								<Icon icon={faCloudflare} className="text-zinc-500" />
+								<span className="text-zinc-500">Cloudflare Durable Objects</span>
+							</div>
+						</th>
+						<th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
+							Why it matters
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					{featureGroups.map((group, groupIndex) => (
+						<React.Fragment key={groupIndex}>
+							{/* Group header row */}
+							<tr className="bg-zinc-900/50 border-b border-white/10">
+								<td
+									colSpan={4}
+									className="py-2 px-4 text-sm font-medium text-white"
+								>
+									{group.groupTitle}
+								</td>
+							</tr>
+							{/* Feature rows for this group */}
+							{group.features.map((feature, featureIndex) => (
+								<tr
+									key={`${groupIndex}-${featureIndex}`}
+									className="border-b border-white/5 hover:bg-white/5 transition-colors"
+								>
+									<td className="py-3 px-4 text-sm text-white">
+										{feature.feature}
+									</td>
+									<td className="py-3 px-4 text-sm text-zinc-400">
+										<FeatureStatus
+											status={feature.rivet.status}
+											text={feature.rivet.text}
 										/>
-									</div>
-									<span className="text-white">
-										Rivet Actors
-									</span>
-								</div>
-							</th>
-							<th className="py-4 px-6 text-left text-sm font-medium">
-								<div className="flex items-center">
-									<div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-white/70 mr-2">
-										<Icon
-											icon={faCloudflare}
-											className="text-xs"
+									</td>
+									<td className="py-3 px-4 text-sm text-zinc-500">
+										<FeatureStatus
+											status={
+												feature.cloudflare.status
+											}
+											text={feature.cloudflare.text}
 										/>
-									</div>
-									<span className="text-white/70">
-										Cloudflare Durable Objects
-									</span>
-								</div>
-							</th>
-							<th className="py-4 px-6 text-left text-sm font-medium text-white/70">
-								Why it matters
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{featureGroups.map((group, groupIndex) => (
-							<React.Fragment key={groupIndex}>
-								{/* Group header row */}
-								<tr className="bg-zinc-800">
-									<td
-										colSpan={4}
-										className="py-3 px-6 text-md font-semibold text-white"
-									>
-										{group.groupTitle}
+									</td>
+									<td className="py-3 px-4 text-sm text-zinc-500">
+										{feature.importance}
 									</td>
 								</tr>
-								{/* Feature rows for this group */}
-								{group.features.map((feature, featureIndex) => (
-									<tr
-										key={`${groupIndex}-${featureIndex}`}
-										className={`border-b border-zinc-800 ${featureIndex % 2 === 0 ? "bg-zinc-900/30" : "bg-background"}`}
-									>
-										<td className="py-4 px-6 text-sm font-medium text-white">
-											{feature.feature}
-										</td>
-										<td className="py-4 px-6 text-sm text-white">
-											<FeatureStatus
-												status={feature.rivet.status}
-												text={feature.rivet.text}
-											/>
-										</td>
-										<td className="py-4 px-6 text-sm text-white/70">
-											<FeatureStatus
-												status={
-													feature.cloudflare.status
-												}
-												text={feature.cloudflare.text}
-											/>
-										</td>
-										<td className="py-4 px-6 text-sm text-white/60">
-											{feature.importance}
-										</td>
-									</tr>
-								))}
-							</React.Fragment>
-						))}
-					</tbody>
-				</table>
-			</div>
+							))}
+						</React.Fragment>
+					))}
+				</tbody>
+			</table>
 		</div>
+	);
+};
+
+// Feature Comparison Section Wrapper
+const ComparisonSection = () => {
+	return (
+		<section className="border-t border-white/10 py-24">
+			<div className="mx-auto max-w-7xl px-6">
+				<div className="mb-12">
+					<motion.h2
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5 }}
+						className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl"
+					>
+						Feature Comparison
+					</motion.h2>
+					<motion.p
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5, delay: 0.1 }}
+						className="max-w-xl text-base leading-relaxed text-zinc-500"
+					>
+						A detailed breakdown of capabilities across both platforms.
+					</motion.p>
+				</div>
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.2 }}
+				>
+					<ComparisonTable />
+				</motion.div>
+			</div>
+		</section>
 	);
 };
 
 // Migration Section
 const MigrationSection = () => {
 	return (
-		<div className="mx-auto max-w-4xl py-12 px-6 lg:px-8 bg-zinc-900/50 rounded-lg border border-white/10">
-			<h2 className="text-2xl font-medium text-white mb-6">
-				Migrating from Cloudflare Durable Objects or have questions?
-			</h2>
-			<div className="prose prose-invert max-w-none">
-				<p>
-					Looking to migrate your existing Cloudflare Durable Objects to Rivet
-					Actors or have more questions about how Rivet Actors can meet your
-					needs? Our team can help make the transition smooth and seamless. We
+		<section className="border-t border-white/10 py-24 text-center">
+			<div className="mx-auto max-w-3xl px-6">
+				<motion.h2
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+					className="mb-3 text-2xl font-normal tracking-tight text-white md:text-4xl"
+				>
+					Migrating from Cloudflare Durable Objects?
+				</motion.h2>
+				<motion.p
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.1 }}
+					className="mb-6 text-base leading-relaxed text-zinc-500"
+				>
+					Our team can help make the transition smooth and seamless. We
 					provide migration assistance, technical guidance, and dedicated
-					support to ensure your experience with Rivet Actors is successful.
-				</p>
-				<div className="mt-6">
+					support.
+				</motion.p>
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.2 }}
+				>
 					<a href="/talk-to-an-engineer"
-						className="inline-flex items-center px-5 py-2.5 bg-white text-black rounded-md hover:bg-white/90 transition-colors no-underline"
+						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
 					>
 						Talk to an engineer
 					</a>
-				</div>
+				</motion.div>
 			</div>
-		</div>
+		</section>
 	);
 };
 
-// Conclusion
-const Conclusion = () => {
+// Conclusion Section
+const ConclusionSection = () => {
 	return (
-		<div className="mx-auto max-w-4xl py-28 px-6 lg:px-8">
-			<h2 className="text-3xl font-medium text-white mb-6">Conclusion</h2>
-			<div className="prose prose-invert max-w-none">
-				<p>
+		<section className="border-t border-white/10 py-24 text-center">
+			<div className="mx-auto max-w-3xl px-6">
+				<motion.h2
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+					className="mb-3 text-2xl font-normal tracking-tight text-white md:text-4xl"
+				>
+					Conclusion
+				</motion.h2>
+				<motion.p
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.1 }}
+					className="text-base leading-relaxed text-zinc-500"
+				>
 					While Cloudflare Durable Objects provides stateful serverless
 					computing with vendor lock-in, Rivet Actors offers the same actor
 					model capabilities as an open-source library that works with your
 					existing infrastructure. Choose Rivet Actors when you want the power
 					of actors without changing your deployment process, technology stack,
-					or being locked into a specific platform. Choose Cloudflare Durable
-					Objects when you're already committed to the Cloudflare ecosystem and
-					don't mind the platform constraints.
-				</p>
+					or being locked into a specific platform.
+				</motion.p>
 			</div>
-		</div>
+		</section>
+	);
+};
+
+// CTA Section
+const CTASection = () => {
+	return (
+		<section className="border-t border-white/10 px-6 py-48 text-center">
+			<div className="mx-auto max-w-3xl">
+				<motion.h2
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+					className="mb-6 text-2xl font-normal tracking-tight text-white md:text-4xl"
+				>
+					Infrastructure for software that thinks.
+				</motion.h2>
+				<motion.p
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.1 }}
+					className="mb-8 text-base leading-relaxed text-zinc-500"
+				>
+					The next generation of software needs a new kind of backend. This is it.
+				</motion.p>
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.2 }}
+					className="flex flex-col items-center justify-center gap-3 sm:flex-row"
+				>
+					<a
+						href="/docs"
+						className="selection-dark inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+					>
+						Start Building
+					</a>
+					<a
+						href="/talk-to-an-engineer"
+						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+					>
+						Talk to an Engineer
+					</a>
+				</motion.div>
+			</div>
+		</section>
 	);
 };
 
 // Main Page Component
 export default function RivetVsCloudflareWorkersPage() {
 	return (
-		<div className="min-h-screen w-full max-w-[1500px] mx-auto px-4 md:px-8 pt-36 pb-24">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+		<div className="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+			<main>
 				<HeroSection />
 				<CombinedOverviewSection />
-
-				{/* Feature Comparison Section */}
-				<div className="mt-36">
-					<h2 className="text-4xl font-medium text-center text-white mb-16">
-						Feature Comparison
-					</h2>
-					<ComparisonTable />
-				</div>
-
-				<Conclusion />
+				<ComparisonSection />
+				<ConclusionSection />
 				<MigrationSection />
-				
-				<div className="h-[1px] bg-white/20 mt-20" />
-				
-				<div className="py-52 sm:py-60">
-					<CTASection />
-				</div>
-			</div>
+				<CTASection />
+			</main>
 		</div>
 	);
 }

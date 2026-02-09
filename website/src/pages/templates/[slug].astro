@@ -72,168 +72,148 @@ const description = template.description.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 	description={description}
 	canonicalUrl={`https://rivet.dev/templates/${template.name}/`}
 >
-	<main class="min-h-screen w-full max-w-[1500px] mx-auto md:px-8 font-sans selection:bg-white/20 selection:text-white">
-		<div class={`relative w-full pb-12 ${template.noFrontend ? 'pt-48' : 'pt-24'}`}>
+	<main class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div class="relative overflow-hidden pb-12 pt-32 md:pt-48">
 			<div class="mx-auto max-w-7xl px-6">
-				{!template.noFrontend ? (
-					<div class="relative">
-						<div class="relative">
-							<div
-								class="hidden md:block absolute inset-0 pointer-events-none rounded-xl"
-								style="background: linear-gradient(to bottom, transparent 0%, transparent 30%, rgba(0, 0, 0, 0.3) 60%, rgb(0, 0, 0) 100%); z-index: 10;"
-							></div>
+				<div class="max-w-2xl mb-12">
+					<a href="/templates" class="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors mb-6">
+						← Back to Templates
+					</a>
+					<h1 class="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+						{template.displayName}
+					</h1>
+					<p class="text-base leading-relaxed text-zinc-500">
+						{description}
+					</p>
+				</div>
 
-							<div
-								class="relative overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50 backdrop-blur-xl"
-								style="mask-image: radial-gradient(ellipse 300% 100% at 50% 90%, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 15%, rgba(0,0,0,0.9) 25%, black 35%, black 50%); -webkit-mask-image: radial-gradient(ellipse 300% 100% at 50% 90%, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 15%, rgba(0,0,0,0.9) 25%, black 35%, black 50%);"
-							>
-								<div class="absolute left-0 right-0 top-0 z-10 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-								<div class="flex items-center gap-2 border-b border-white/5 bg-white/5 px-4 py-3">
-									<div class="flex gap-1.5">
-										<div class="h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20"></div>
-										<div class="h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20"></div>
-										<div class="h-3 w-3 rounded-full border border-zinc-500/50 bg-zinc-500/20"></div>
-									</div>
-								</div>
-								<div class="relative w-full bg-zinc-900/50 aspect-video">
-									<img
-										src={`/examples/${template.name}/image.png`}
-										alt={template.displayName}
-										width={1280}
-										height={720}
-										class="h-full w-full object-cover"
-										loading="eager"
-										decoding="async"
-									/>
-								</div>
+				{!template.noFrontend && (
+					<div class="relative overflow-hidden rounded-lg border border-white/10 bg-zinc-900">
+						<div class="flex items-center gap-2 border-b border-white/5 bg-white/5 px-4 py-3">
+							<div class="flex gap-1.5">
+								<div class="h-2.5 w-2.5 rounded-full bg-zinc-700"></div>
+								<div class="h-2.5 w-2.5 rounded-full bg-zinc-700"></div>
+								<div class="h-2.5 w-2.5 rounded-full bg-zinc-700"></div>
 							</div>
 						</div>
-
-						<div class="relative mt-8 px-6 md:-mt-24 z-20">
-							<div class="mx-auto max-w-4xl text-center">
-								<h1 class="mb-6 text-3xl font-medium tracking-tight text-white md:text-5xl">
-									{template.displayName}
-								</h1>
-								<p class="mb-8 mx-auto max-w-2xl text-lg leading-relaxed text-zinc-400">
-									{description}
-								</p>
-							</div>
+						<div class="relative w-full aspect-video">
+							<img
+								src={`/examples/${template.name}/image.png`}
+								alt={template.displayName}
+								width={1280}
+								height={720}
+								class="h-full w-full object-cover"
+								loading="eager"
+								decoding="async"
+							/>
 						</div>
-					</div>
-				) : (
-					<div class="text-center">
-						<h1 class="text-5xl font-medium text-white mb-4">
-							{template.displayName}
-						</h1>
-						<p class="text-xl text-zinc-400 max-w-2xl mx-auto">
-							{description}
-						</p>
 					</div>
 				)}
 			</div>
 		</div>
 
-		<div class="relative mx-auto max-w-2xl px-6 lg:max-w-[1400px] lg:px-8 py-16">
-			<div class="flex flex-col lg:flex-row gap-12">
-				<div class="flex-1 lg:w-2/3">
-					<article class="prose prose-invert prose-zinc max-w-none">
-						<VanillaMarkdown content={cleanedReadmeContent} client:load />
-					</article>
-				</div>
+		<div class="border-t border-white/10 py-16">
+			<div class="mx-auto max-w-7xl px-6">
+				<div class="flex flex-col lg:flex-row gap-12">
+					<div class="flex-1 lg:w-2/3">
+						<article class="prose prose-invert prose-zinc max-w-none prose-headings:font-normal prose-headings:tracking-tight prose-p:text-zinc-400 prose-a:text-white prose-code:text-zinc-300">
+							<VanillaMarkdown content={cleanedReadmeContent} client:load />
+						</article>
+					</div>
 
-				<aside class="lg:w-1/3 lg:max-w-sm">
-					<div class="space-y-6">
-						<div class="rounded-xl bg-neutral-950 border border-white/20 p-6 pt-5">
-							<h3 class="text-sm font-medium text-white mb-4">Get Started</h3>
-							<div class="space-y-2">
-								<a
-									href={dashboardUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
-								>
-									<Icon icon={faCloud} className="text-sm" />
-									Deploy 
-								</a>
-								{template.providers.vercel && (
+					<aside class="lg:w-72 flex-shrink-0">
+						<div class="space-y-6">
+							<div>
+								<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Get Started</h3>
+								<div class="space-y-2">
 									<a
-										href={template.providers.vercel.deployUrl}
+										href={dashboardUrl}
 										target="_blank"
 										rel="noopener noreferrer"
-										class="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
+										class="flex items-center gap-2 w-full rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:border-white/20 hover:text-white transition-colors"
 									>
-										
-										<Icon icon={faVercel} className="text-sm" />
-										Deploy with Vercel
+										<Icon icon={faCloud} className="text-sm" />
+										Deploy
 									</a>
-								)}
-								<a
-									href={githubUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex items-center gap-2 w-full rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:border-white/20 transition-colors"
-								>
-									<Icon icon={faGithub} className="text-sm" />
-									View on GitHub
-								</a>
-							</div>
-						</div>
-
-						<div class="rounded-xl bg-neutral-950 border border-white/20 overflow-hidden">
-							<h3 class="text-sm font-medium text-white px-6 py-4 border-b border-white/10">
-								Run Locally
-							</h3>
-							<div class="[&>*]:mb-0">
-								<Code
-									language="bash"
-									flush
-									code={`git clone https://github.com/rivet-dev/rivet.git\ncd rivet/examples/${template.name}\nnpm install\nnpm run dev`}
-									client:load
-								/>
-							</div>
-						</div>
-
-						<div class="rounded-xl bg-neutral-950 border border-white/20 p-6 pt-5">
-							<h3 class="text-sm font-medium text-white mb-4">Technologies</h3>
-							<div class="flex flex-wrap gap-2">
-								{template.technologies.map((tech) => {
-									const techInfo = TECHNOLOGIES.find((t) => t.name === tech);
-									return (
-										<span
-											key={tech}
-											class="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-white/5 text-zinc-300 border border-white/10"
+									{template.providers.vercel && (
+										<a
+											href={template.providers.vercel.deployUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="flex items-center gap-2 w-full rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:border-white/20 hover:text-white transition-colors"
 										>
-											{techInfo?.displayName || tech}
-										</span>
-									);
-								})}
+											<Icon icon={faVercel} className="text-sm" />
+											Deploy with Vercel
+										</a>
+									)}
+									<a
+										href={githubUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="flex items-center gap-2 w-full rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:border-white/20 hover:text-white transition-colors"
+									>
+										<Icon icon={faGithub} className="text-sm" />
+										View on GitHub
+									</a>
+								</div>
 							</div>
-						</div>
 
-						{template.tags.length > 0 && (
-							<div class="rounded-xl bg-neutral-950 border border-white/20 p-6 pt-5">
-								<h3 class="text-sm font-medium text-white mb-4">Tags</h3>
+							<div class="border-t border-white/10 pt-6">
+								<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Run Locally</h3>
+								<div class="rounded-lg border border-white/10 overflow-hidden">
+									<Code
+										language="bash"
+										flush
+										code={`git clone https://github.com/rivet-dev/rivet.git\ncd rivet/examples/${template.name}\nnpm install\nnpm run dev`}
+										client:load
+									/>
+								</div>
+							</div>
+
+							<div class="border-t border-white/10 pt-6">
+								<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Technologies</h3>
 								<div class="flex flex-wrap gap-2">
-									{template.tags.map((tag) => {
-										const tagInfo = TAGS.find((t) => t.name === tag);
+									{template.technologies.map((tech) => {
+										const techInfo = TECHNOLOGIES.find((t) => t.name === tech);
 										return (
 											<span
-												key={tag}
-												class="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-white/5 text-zinc-300 border border-white/10"
+												key={tech}
+												class="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400"
 											>
-												{tagInfo?.displayName || tag}
+												{techInfo?.displayName || tech}
 											</span>
 										);
 									})}
 								</div>
 							</div>
-						)}
-					</div>
-				</aside>
-			</div>
 
-			<div class="mt-24 border-t border-white/10 pt-16">
-				<h2 class="text-3xl font-medium text-white mb-8">Related Templates</h2>
+							{template.tags.length > 0 && (
+								<div class="border-t border-white/10 pt-6">
+									<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Tags</h3>
+									<div class="flex flex-wrap gap-2">
+										{template.tags.map((tag) => {
+											const tagInfo = TAGS.find((t) => t.name === tag);
+											return (
+												<span
+													key={tag}
+													class="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400"
+												>
+													{tagInfo?.displayName || tag}
+												</span>
+											);
+										})}
+									</div>
+								</div>
+							)}
+						</div>
+					</aside>
+				</div>
+			</div>
+		</div>
+
+		<div class="border-t border-white/10 py-16">
+			<div class="mx-auto max-w-7xl px-6">
+				<h2 class="text-2xl font-normal tracking-tight text-white mb-8">Related Templates</h2>
 				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 					{displayedRelated.map((relatedTemplate) => (
 						<TemplateCard template={relatedTemplate} />

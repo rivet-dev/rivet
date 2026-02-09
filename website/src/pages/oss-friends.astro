@@ -17,37 +17,39 @@ try {
 	description="Other companies whose code & culture mirrors that at Rivet."
 	canonicalUrl="https://rivet.dev/oss-friends/"
 >
-	<div class="bg-black">
-		<div class="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
-			<div class="mx-auto max-w-2xl text-center">
-				<h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
-					Rivet's{" "}
-					<span class="text-white">
-						Open Source
-					</span>{" "}
-					Friends
-				</h1>
-				<p class="mt-6 text-lg leading-8 text-gray-300">
-					Other companies whose code & culture mirrors that at Rivet.
-				</p>
+	<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div class="relative overflow-hidden pb-12 pt-32 md:pt-48">
+			<div class="mx-auto max-w-7xl px-6">
+				<div class="max-w-2xl">
+					<h1 class="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+						Open Source Friends
+					</h1>
+					<p class="text-base leading-relaxed text-zinc-500">
+						Other companies whose code & culture mirrors that at Rivet.
+					</p>
+				</div>
 			</div>
+		</div>
 
-			<div class="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-2">
-				{items.map((friend: any, index: number) => (
-					<a
-						href={friend.href}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="flex flex-col overflow-hidden bg-[#080808] p-6 border-2 border-[#2B2B2B] hover:border-white/30 transition-colors"
-					>
-						<div class="mb-2 font-display text-xl font-bold">
-							{friend.name}
-						</div>
-						<p class="text-gray-300 mt-0 text-sm">
-							{friend.description}
-						</p>
-					</a>
-				))}
+		<div class="border-t border-white/10 py-16">
+			<div class="mx-auto max-w-7xl px-6">
+				<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+					{items.map((friend: any) => (
+						<a
+							href={friend.href}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="group flex flex-col rounded-lg border border-white/10 p-6 transition-colors hover:border-white/20"
+						>
+							<h3 class="mb-2 text-base font-normal text-white">
+								{friend.name}
+							</h3>
+							<p class="text-sm leading-relaxed text-zinc-500">
+								{friend.description}
+							</p>
+						</a>
+					))}
+				</div>
 			</div>
 		</div>
 	</div>

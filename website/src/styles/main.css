@@ -42,6 +42,17 @@
   color: black;
 }
 
+/* Selection style for white/light backgrounds */
+.selection-dark::selection {
+  background-color: #18181b;
+  color: white;
+}
+
+.selection-dark::-moz-selection {
+  background-color: #18181b;
+  color: white;
+}
+
 .shiki .line {
   @apply break-all;
 }
@@ -55,6 +66,94 @@
 }
 
 @layer utilities {
+  /* CRT thinking dots animation */
+  .thinking-actor {
+    vertical-align: baseline;
+  }
+
+  .thinking-actor svg {
+    filter: brightness(1.5) saturate(1.6);
+    --animation-delay: 0s;
+  }
+
+  .trace-head {
+    animation: trace-around 1s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+
+  .trace-tail-2 {
+    animation: trace-around-tail2 1s cubic-bezier(0.3, 0, 0.7, 1) infinite;
+  }
+
+  .trace-tail-1 {
+    animation: trace-around-tail1 1s cubic-bezier(0.2, 0, 0.8, 1) infinite;
+  }
+
+  .trace-dark {
+    animation: trace-around 1s linear infinite, dark-grow 1s ease-in-out infinite;
+  }
+
+  .trace-dark-mid {
+    animation: trace-around 1s linear infinite, dark-grow-mid 1s ease-in-out infinite;
+  }
+
+  .trace-dark-outer {
+    animation: trace-around 1s linear infinite, dark-grow-outer 1s ease-in-out infinite;
+  }
+
+  @keyframes trace-around {
+    0% {
+      stroke-dashoffset: 0;
+    }
+    100% {
+      stroke-dashoffset: -628;
+    }
+  }
+
+  @keyframes trace-around-tail2 {
+    0% {
+      stroke-dashoffset: 15;
+    }
+    100% {
+      stroke-dashoffset: -613;
+    }
+  }
+
+  @keyframes trace-around-tail1 {
+    0% {
+      stroke-dashoffset: 35;
+    }
+    100% {
+      stroke-dashoffset: -593;
+    }
+  }
+
+  @keyframes dark-grow {
+    0%, 100% {
+      stroke-dasharray: 280 348;
+    }
+    50% {
+      stroke-dasharray: 100 528;
+    }
+  }
+
+  @keyframes dark-grow-mid {
+    0%, 100% {
+      stroke-dasharray: 380 248;
+    }
+    50% {
+      stroke-dasharray: 160 468;
+    }
+  }
+
+  @keyframes dark-grow-outer {
+    0%, 100% {
+      stroke-dasharray: 480 148;
+    }
+    50% {
+      stroke-dasharray: 220 408;
+    }
+  }
+
   .step {
     counter-increment: step;
   }
