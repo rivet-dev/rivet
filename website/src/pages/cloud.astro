@@ -1,6 +1,60 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import PricingPageClient from '@/components/marketing/pricing/PricingPageClient';
+
+// Product schema with pricing tiers
+const productSchema = {
+	"@context": "https://schema.org",
+	"@type": "Product",
+	"name": "Rivet Cloud",
+	"description": "Managed cloud solution for stateful backends. Global infrastructure, persistent state, and seamless orchestration for your actors.",
+	"brand": {
+		"@type": "Brand",
+		"name": "Rivet"
+	},
+	"url": "https://rivet.dev/cloud/",
+	"image": "https://rivet.dev/promo/og.png",
+	"category": "Cloud Computing Platform",
+	"offers": [
+		{
+			"@type": "Offer",
+			"name": "Free",
+			"description": "For prototyping and small projects. 100,000 Awake Actor Hours, 5GB storage, community support.",
+			"price": "0",
+			"priceCurrency": "USD",
+			"priceValidUntil": "2027-12-31",
+			"availability": "https://schema.org/InStock",
+			"url": "https://dashboard.rivet.dev"
+		},
+		{
+			"@type": "Offer",
+			"name": "Hobby",
+			"description": "For scaling applications. 400,000 Awake Actor Hours included, 25 Billion reads/month, email support.",
+			"price": "20",
+			"priceCurrency": "USD",
+			"priceValidUntil": "2027-12-31",
+			"availability": "https://schema.org/InStock",
+			"url": "https://dashboard.rivet.dev"
+		},
+		{
+			"@type": "Offer",
+			"name": "Team",
+			"description": "For growing teams and businesses. 400,000 Awake Actor Hours included, MFA, Slack support.",
+			"price": "200",
+			"priceCurrency": "USD",
+			"priceValidUntil": "2027-12-31",
+			"availability": "https://schema.org/InStock",
+			"url": "https://dashboard.rivet.dev"
+		},
+		{
+			"@type": "Offer",
+			"name": "Enterprise",
+			"description": "For high-volume, mission-critical workloads. Priority support, SLA, OIDC SSO, audit logs, custom roles.",
+			"availability": "https://schema.org/InStock",
+			"url": "https://rivet.dev/sales/"
+		}
+	]
+};
 ---
 
 <MarketingLayout
@@ -8,5 +62,6 @@ import PricingPageClient from '@/components/marketing/pricing/PricingPageClient'
 	description="Rivet Cloud—managed cloud solution for stateful backends. Transparent pricing, global infrastructure, and seamless orchestration."
 	canonicalUrl="https://rivet.dev/cloud/"
 >
+	<script type="application/ld+json" set:html={JSON.stringify(productSchema)} />
 	<PricingPageClient client:load />
 </MarketingLayout>

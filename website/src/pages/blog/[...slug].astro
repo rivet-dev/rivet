@@ -105,6 +105,8 @@ const breadcrumbSchema = {
 	publishedTime={entry.data.published.toISOString()}
 	keywords={entry.data.keywords}
 	authorName={author.name}
+	authorSocials={author.socials}
+	category={category.name}
 >
 	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 	<div

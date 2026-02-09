@@ -14,6 +14,32 @@ export default defineConfig({
 	site: 'https://rivet.dev',
 	output: 'static',
 	trailingSlash: 'ignore',
+	// SEO Redirects - Astro generates HTML redirect files for static builds
+	// These work in dev server and all deployment platforms (Vercel, Netlify, Cloudflare, etc.)
+	redirects: {
+		// Documentation restructure
+		'/docs/setup': '/docs/actors/quickstart/',
+		'/docs/actors/queues': '/docs/actors/queue/',
+		'/docs/actors/websockets': '/docs/actors/websocket-handler/',
+		'/docs/actors/http': '/docs/actors/http-api/',
+		'/docs/actors/run': '/docs/actors/lifecycle/',
+		'/docs/actors/scheduling': '/docs/actors/schedule/',
+		// Platform docs moved to clients/connect
+		'/docs/platforms/react': '/docs/clients/react/',
+		'/docs/platforms/next-js': '/docs/clients/javascript/',
+		'/docs/platforms/cloudflare-workers': '/docs/connect/cloudflare-workers/',
+		// Registry configuration moved
+		'/docs/connect/registry-configuration': '/docs/general/registry-configuration/',
+		// Cloud docs removed - redirect to relevant sections
+		'/docs/cloud': '/docs/self-hosting/',
+		'/docs/cloud/api/actors/create': '/docs/actors/',
+		'/docs/cloud/api/routes/update': '/docs/actors/',
+		'/docs/cloud/self-hosting/single-container': '/docs/self-hosting/docker-container/',
+		// Next.js client redirect (linked from homepage)
+		'/docs/clients/next-js': '/docs/clients/javascript/',
+		// Self-hosting redirect
+		'/docs/general/self-hosting': '/docs/self-hosting/',
+	},
 	prefetch: {
 		prefetchAll: true,
 		defaultStrategy: 'hover',

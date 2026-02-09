@@ -18,7 +18,12 @@ interface Props {
 	ogType?: string;
 	publishedTime?: string;
 	keywords?: string[];
+	articleAuthor?: string;
+	articleSection?: string;
+	robots?: string;
 }
+
+const DEFAULT_KEYWORDS = ["rivet", "actors", "serverless", "backend", "real-time", "stateful", "websockets"];
 
 const {
 	title,
@@ -28,13 +33,31 @@ const {
 	ogType = "website",
 	publishedTime,
 	keywords,
+	articleAuthor,
+	articleSection,
+	robots,
 } = Astro.props;
+
+// Normalize keywords to lowercase for consistency
+const effectiveKeywords = Array.isArray(keywords)
+	? keywords.map(k => k.toLowerCase())
+	: DEFAULT_KEYWORDS;
+
+// Only add " - Rivet" suffix if not already present (handles Rivet, Rivet Actors, Rivet Templates)
+const formattedTitle = !title
+	? 'Rivet'
+	: / - Rivet( Actors| Templates)?$/.test(title)
+		? title
+		: `${title} - Rivet`;
 
 const siteUrl = import.meta.env.PUBLIC_SITE_URL || 'https://rivet.dev';
 
 // Auto-generate canonical URL from current page path if not explicitly provided
 const currentPath = Astro.url.pathname;
 const effectiveCanonicalUrl = canonicalUrl || `https://rivet.dev${currentPath}`;
+
+// RSS feed is only relevant for blog and changelog pages
+const showRssFeed = currentPath.startsWith('/blog') || currentPath.startsWith('/changelog');
 ---
 
 <!DOCTYPE html>
@@ -42,15 +65,19 @@ const effectiveCanonicalUrl = canonicalUrl || `https://rivet.dev${currentPath}`;
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>{title}</title>
+		<title>{formattedTitle}</title>
 		<meta name="description" content={description} />
+		<meta http-equiv="content-language" content="en" />
+		{robots && <meta name="robots" content={robots} />}
+		<meta name="keywords" content={effectiveKeywords.join(', ')} />
 
 		<link rel="canonical" href={effectiveCanonicalUrl} />
+		{showRssFeed && <link rel="alternate" type="application/rss+xml" title="Rivet Blog" href="/rss/feed.xml" />}
 
 		<!-- Twitter -->
 		<meta name="twitter:site" content="@rivet_dev" />
 		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:title" content={title} />
+		<meta name="twitter:title" content={formattedTitle} />
 		<meta name="twitter:description" content={description} />
 		<meta name="twitter:image" content={ogImage} />
 
@@ -59,14 +86,16 @@ const effectiveCanonicalUrl = canonicalUrl || `https://rivet.dev${currentPath}`;
 		<meta property="og:locale" content="en_US" />
 		<meta property="og:url" content={effectiveCanonicalUrl} />
 		<meta property="og:site_name" content="Rivet" />
-		<meta property="og:title" content={title} />
+		<meta property="og:title" content={formattedTitle} />
 		<meta property="og:description" content={description} />
 		<meta property="og:image" content={ogImage} />
+		<meta property="og:image:alt" content={title ? `${title} - Rivet Actors` : 'Rivet Actors'} />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
 		{publishedTime && <meta property="article:published_time" content={publishedTime} />}
-
-		{keywords && <meta name="keywords" content={keywords.join(', ')} />}
+		{articleAuthor && <meta property="article:author" content={articleAuthor} />}
+		{articleSection && <meta property="article:section" content={articleSection} />}
+		{Array.isArray(keywords) && keywords.map((keyword) => <meta property="article:tag" content={keyword.toLowerCase()} />)}
 
 		<!-- JSON-LD Structured Data -->
 		<script type="application/ld+json" set:html={JSON.stringify({
