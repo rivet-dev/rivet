@@ -2,9 +2,10 @@
 User-agent: *
 Allow: /
 
-# Sitemap
-Sitemap: https://rivet.dev/sitemap.xml
-
-# Disallow API and internal routes
+# Disallow API, internal routes, and TypeDoc (generic meta descriptions)
 Disallow: /api/
 Disallow: /internal/
+Disallow: /typedoc/
+
+# Sitemap
+Sitemap: https://rivet.dev/sitemap-index.xml

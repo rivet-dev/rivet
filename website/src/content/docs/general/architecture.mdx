@@ -368,8 +368,8 @@ TODO: copy the rest of this from low-level webosckets document and rephrase
 ### networking
 
 - actors may live in different regions than inbound requests
-- rive tuses the Epoxy (link again) system to handle global routing to route traffic to the correct region with high performance
-- this is completely transparent to you. your app sends traffic to https://api.rivet.dev/gatewa/* and it automatically routes to the correct actor in the appropirate region
+- Rivet uses the Epoxy (link again) system to handle global routing to route traffic to the correct region with high performance
+- this is completely transparent to you. your app sends traffic to https://api.rivet.dev/gateway/* and it automatically routes to the correct actor in the appropriate region
 
 ### globally unique actor keys
 
