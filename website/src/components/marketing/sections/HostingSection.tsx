@@ -50,7 +50,7 @@ export const HostingSection = () => (
           <div className='mb-4 rounded-lg border border-white/10 bg-black p-4 font-mono text-[10px] text-zinc-300'>
             <div className='flex gap-2'>
               <span className='select-none text-[#FF4500]'>$</span>
-              <span>docker run -p 6420:6420 rivetkit/engine</span>
+              <span>docker run -p 6420:6420 rivetdev/engine</span>
             </div>
           </div>
           <a

@@ -126,7 +126,7 @@ Deploy your backend anywhere, then connect to [Rivet Cloud](https://dashboard.ri
 
 ```bash
 # Docker
-docker run -p 6420:6420 rivetkit/engine
+docker run -p 6420:6420 rivetdev/engine
 
 # macOS (Apple Silicon)
 curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-aarch64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
