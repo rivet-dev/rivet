@@ -1,8 +1,7 @@
 import type { RegistryConfig } from "@/registry/config";
-import { getRequireFn } from "@/utils/node";
 import type { Actions, ActorConfig } from "./config";
 import type { AnyDatabaseProvider } from "./database";
-import type { ActorInstance } from "./instance/mod";
+import { ActorInstance } from "./instance/mod";
 
 export type AnyActorDefinition = ActorDefinition<
 	any,
@@ -33,46 +32,9 @@ export class ActorDefinition<
 		return this.#config;
 	}
 
-	async instantiate(): Promise<ActorInstance<S, CP, CS, V, I, DB>> {
-		// Lazy import to avoid pulling server-only dependencies (traces, fdb-tuple, etc.)
-		// into browser bundles. This method is only called on the server.
-		// const requireFn = getRequireFn();
-		// if (!requireFn) {
-		// 	throw new Error(
-		// 		"ActorDefinition.instantiate requires a Node.js environment",
-		// 	);
-		// }
-
-		try {
-			const { ActorInstance: ActorInstanceClass } = await import(
-				"./instance/mod"
-			);
-			return new ActorInstanceClass(this.#config);
-		} catch (error) {
-			if (!isInstanceModuleNotFound(error)) {
-				throw error;
-			}
-
-			try {
-				// In tests, register tsx so require() can resolve .ts files.
-				await getRequireFn()("tsx/cjs");
-			} catch {
-				throw error;
-			}
-
-			const { ActorInstance: ActorInstanceClass } = await import(
-				"./instance/mod"
-			);
-			return new ActorInstanceClass(this.#config);
-		}
+	instantiate(): ActorInstance<S, CP, CS, V, I, DB> {
+		return new ActorInstance(this.#config);
 	}
-}
-
-function isInstanceModuleNotFound(error: unknown): boolean {
-	if (!error || typeof error !== "object") return false;
-	const err = error as { code?: string; message?: string };
-	if (err.code !== "MODULE_NOT_FOUND") return false;
-	return (err.message ?? "").includes("./instance/mod");
 }
 
 export function lookupInRegistry(
