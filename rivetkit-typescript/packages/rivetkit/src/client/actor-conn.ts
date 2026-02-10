@@ -228,7 +228,7 @@ export class ActorConnRaw {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			id: bigint;
 			output: unknown;
-		}>();
+		}>((reason) => logger().warn({ msg: "unhandled action promise rejection", reason }));
 		this.#actionsInFlight.set(actionId, {
 			name: opts.name,
 			resolve,
@@ -359,7 +359,7 @@ export class ActorConnRaw {
 			// Create promise for open
 			if (this.#onOpenPromise)
 				throw new Error("#onOpenPromise already defined");
-			this.#onOpenPromise = promiseWithResolvers();
+			this.#onOpenPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled open promise rejection", reason }));
 
 			await this.#connectWebSocket();
 
@@ -1189,7 +1189,7 @@ export class ActorConnRaw {
 				ws.readyState !== 2 /* CLOSING */ &&
 				ws.readyState !== 3 /* CLOSED */
 			) {
-				const { promise, resolve } = promiseWithResolvers();
+				const { promise, resolve } = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled websocket close promise rejection", reason }));
 				ws.addEventListener("close", () => resolve(undefined));
 				ws.close(1000, "Disposed");
 				await promise;

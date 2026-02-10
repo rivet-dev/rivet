@@ -7,6 +7,7 @@ import {
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { promiseWithResolvers, SinglePromiseQueue } from "@/utils";
+import { loggerWithoutContext } from "@/actor/log";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";
 import { convertConnToBarePersistedConn } from "../conn/persisted";
 import type { ActorDriver } from "../driver";
@@ -210,7 +211,7 @@ export class StateManager<S, CP, CS, I> {
 			} else {
 				// Create promise for waiting
 				if (!this.#onPersistSavedPromise) {
-					this.#onPersistSavedPromise = promiseWithResolvers();
+					this.#onPersistSavedPromise = promiseWithResolvers((reason) => loggerWithoutContext().warn({ msg: "unhandled persist saved promise rejection", reason }));
 				}
 
 				// Save throttled
