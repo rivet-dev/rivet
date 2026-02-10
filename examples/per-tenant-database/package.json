@@ -38,8 +38,7 @@
 			"typescript"
 		],
 		"tags": [
-			"state",
-			"multi-tenant"
+			"database"
 		],
 		"priority": 200,
 		"frontendPort": 5173

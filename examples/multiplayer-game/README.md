@@ -7,9 +7,10 @@ A real-time Agar.io style arena showing a matchmaker coordinator and GameRoom da
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/multiplayer-game
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
+
 
 ## Features
 

@@ -19,27 +19,6 @@ export interface Template {
 
 export const templates: Template[] = [
   {
-    "name": "ai-agent",
-    "displayName": "AI Agent Chat",
-    "description": "Example project demonstrating AI agent integration.",
-    "technologies": [
-      "rivet",
-      "typescript"
-    ],
-    "tags": [
-      "ai",
-      "real-time"
-    ],
-    "noFrontend": false,
-    "priority": 100,
-    "providers": {
-      "vercel": {
-        "name": "ai-agent-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fai-agent-vercel&project-name=ai-agent-vercel"
-      }
-    }
-  },
-  {
     "name": "hello-world",
     "displayName": "Hello World",
     "description": "A minimal example demonstrating RivetKit with a real-time counter shared across multiple clients.",
@@ -61,23 +40,67 @@ export const templates: Template[] = [
     }
   },
   {
-    "name": "queue-sandbox",
-    "displayName": "Queue Sandbox",
-    "description": "Interactive demo showcasing all the ways to use queues in RivetKit. Each tab demonstrates a different queue pattern with real-time feedback.",
+    "name": "sandbox",
+    "displayName": "Sandbox",
+    "description": "Unified sandbox showcasing Rivet Actor features with a single registry, grouped navigation, and interactive demos.",
     "technologies": [
       "rivet",
-      "typescript",
-      "react"
+      "react",
+      "typescript"
     ],
     "tags": [
-      "queues"
+      "starter"
     ],
     "noFrontend": false,
     "priority": 100,
     "providers": {
       "vercel": {
-        "name": "queue-sandbox-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fqueue-sandbox-vercel&project-name=queue-sandbox-vercel"
+        "name": "sandbox-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fsandbox-vercel&project-name=sandbox-vercel"
+      }
+    }
+  },
+  {
+    "name": "ai-agent",
+    "displayName": "AI Agent",
+    "description": "Example project demonstrating queue-driven Rivet Actor AI agents with streaming Vercel AI SDK responses.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "ai",
+      "real-time"
+    ],
+    "noFrontend": false,
+    "priority": 120,
+    "providers": {
+      "vercel": {
+        "name": "ai-agent-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fai-agent-vercel&project-name=ai-agent-vercel"
+      }
+    }
+  },
+  {
+    "name": "sandbox-coding-agent",
+    "displayName": "Sandbox Coding Agent",
+    "description": "Example project demonstrating queue-driven Rivet Actor sessions that control a Sandbox Agent coding runtime.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "ai",
+      "real-time"
+    ],
+    "noFrontend": false,
+    "priority": 120,
+    "providers": {
+      "vercel": {
+        "name": "sandbox-coding-agent-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fsandbox-coding-agent-vercel&project-name=sandbox-coding-agent-vercel"
       }
     }
   },
@@ -101,6 +124,43 @@ export const templates: Template[] = [
         "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fchat-room-vercel&project-name=chat-room-vercel"
       }
     }
+  },
+  {
+    "name": "collaborative-document",
+    "displayName": "Collaborative Document",
+    "description": "A shared text editor that uses Rivet Actors with Yjs for real-time CRDT sync and presence.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "real-time"
+    ],
+    "noFrontend": false,
+    "priority": 200,
+    "providers": {
+      "vercel": {
+        "name": "collaborative-document-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fcollaborative-document-vercel&project-name=collaborative-document-vercel"
+      }
+    }
+  },
+  {
+    "name": "per-tenant-database",
+    "displayName": "Per-Tenant Database",
+    "description": "Example project demonstrating per-company database isolation with Rivet Actor state.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "database"
+    ],
+    "noFrontend": false,
+    "priority": 200,
+    "providers": {}
   },
   {
     "name": "cursors",
@@ -141,6 +201,27 @@ export const templates: Template[] = [
     "providers": {}
   },
   {
+    "name": "multiplayer-game",
+    "displayName": "Multiplayer Game",
+    "description": "A real-time Agar.io style arena showing a matchmaker coordinator and GameRoom data actors.",
+    "technologies": [
+      "rivet",
+      "react",
+      "typescript"
+    ],
+    "tags": [
+      "real-time"
+    ],
+    "noFrontend": false,
+    "priority": 500,
+    "providers": {
+      "vercel": {
+        "name": "multiplayer-game-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fmultiplayer-game-vercel&project-name=multiplayer-game-vercel"
+      }
+    }
+  },
+  {
     "name": "actor-actions",
     "displayName": "Actor Actions",
     "description": "Demonstrates how to define and call actions on Rivet Actors for RPC-style communication between actors and clients.",
@@ -177,20 +258,23 @@ export const templates: Template[] = [
     }
   },
   {
-    "name": "multi-region",
-    "displayName": "Multi-Region",
-    "description": "Demonstrates deploying Rivet Actors across multiple geographic regions for low-latency global access.",
+    "name": "geo-distributed-database",
+    "displayName": "Geo-Distributed Database",
+    "description": "Store user session state in edge-local Rivet Actors so preferences and activity stay close to users.",
     "technologies": [
       "rivet",
+      "react",
       "typescript"
     ],
-    "tags": [],
+    "tags": [
+      "database"
+    ],
     "noFrontend": false,
     "priority": 1000,
     "providers": {
       "vercel": {
-        "name": "multi-region-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fmulti-region-vercel&project-name=multi-region-vercel"
+        "name": "geo-distributed-database-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fgeo-distributed-database-vercel&project-name=geo-distributed-database-vercel"
       }
     }
   },
@@ -336,26 +420,6 @@ export const templates: Template[] = [
     }
   },
   {
-    "name": "drizzle",
-    "displayName": "Drizzle Integration",
-    "description": "Demonstrates Drizzle ORM integration with Rivet Actors for type-safe database operations.",
-    "technologies": [
-      "rivet",
-      "drizzle",
-      "typescript"
-    ],
-    "tags": [
-      "database"
-    ],
-    "noFrontend": true,
-    "providers": {
-      "vercel": {
-        "name": "drizzle-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fdrizzle-vercel&project-name=drizzle-vercel"
-      }
-    }
-  },
-  {
     "name": "elysia",
     "displayName": "Elysia Integration",
     "description": "Example project demonstrating Elysia web framework integration.",
@@ -398,7 +462,7 @@ export const templates: Template[] = [
   {
     "name": "hono",
     "displayName": "Hono Integration",
-    "description": "Example project demonstrating Hono web framework integration.",
+    "description": "Build type-safe HTTP APIs with Hono web framework and RivetKit Actors. Features lightweight routing, middleware support, and seamless actor integration.",
     "technologies": [
       "rivet",
       "hono",
@@ -524,6 +588,35 @@ export const templates: Template[] = [
     }
   },
   {
+    "name": "sqlite-drizzle",
+    "displayName": "Drizzle Integration",
+    "description": "Demonstrates Drizzle ORM integration with Rivet Actors for type-safe database operations.",
+    "technologies": [
+      "rivet",
+      "drizzle",
+      "typescript"
+    ],
+    "tags": [
+      "database"
+    ],
+    "noFrontend": true,
+    "providers": {}
+  },
+  {
+    "name": "sqlite-raw",
+    "displayName": "SQLite Raw Example",
+    "description": "This example demonstrates using the raw SQLite driver with RivetKit actors.",
+    "technologies": [
+      "rivet",
+      "typescript"
+    ],
+    "tags": [
+      "database"
+    ],
+    "noFrontend": true,
+    "providers": {}
+  },
+  {
     "name": "stream",
     "displayName": "Stream Processor",
     "description": "Example project demonstrating real-time top-K stream processing.",
@@ -557,26 +650,6 @@ export const templates: Template[] = [
       "vercel": {
         "name": "trpc-vercel",
         "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Ftrpc-vercel&project-name=trpc-vercel"
-      }
-    }
-  },
-  {
-    "name": "workflow-sandbox",
-    "displayName": "Workflow Sandbox",
-    "description": "Interactive sandbox for testing all RivetKit workflow patterns.",
-    "technologies": [
-      "rivet",
-      "react",
-      "typescript"
-    ],
-    "tags": [
-      "experimental"
-    ],
-    "noFrontend": false,
-    "providers": {
-      "vercel": {
-        "name": "workflow-sandbox-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fworkflow-sandbox-vercel&project-name=workflow-sandbox-vercel"
       }
     }
   }

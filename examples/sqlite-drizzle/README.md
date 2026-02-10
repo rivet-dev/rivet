@@ -6,7 +6,7 @@ Demonstrates Drizzle ORM integration with Rivet Actors for type-safe database op
 
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
-cd rivet/examples/drizzle
+cd rivet/examples/sqlite-drizzle
 npm install
 npm run dev
 ```
