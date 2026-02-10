@@ -22,7 +22,7 @@ let hasImportedDependencies = false;
 // Helper to get a require function that works in both CommonJS and ESM.
 // We use require() instead of await import() because registry.start() cannot
 // be async and needs immediate access to Node.js modules during setup.
-function getRequireFn() {
+export function getRequireFn() {
 	// TODO: This causes issues in tsup
 	// CommonJS context - use global require
 	// if (typeof require !== "undefined") {

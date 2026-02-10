@@ -8,10 +8,7 @@ import {
 } from "./client";
 import { ClientConfigSchema } from "./config";
 
-export {
-	ActorDefinition,
-	type AnyActorDefinition,
-} from "@/actor/definition";
+export type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 export type { Encoding } from "@/actor/protocol/serde";
 export {
 	ActorClientError,

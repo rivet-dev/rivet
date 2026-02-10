@@ -312,53 +312,6 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return promise;
 	}
 
-	/** Waits until any message for the provided queue names is available. */
-	async waitForNames(
-		names: string[],
-		abortSignal: AbortSignal,
-	): Promise<void> {
-		this.#actor.assertReady();
-
-		const nameSet = new Set(names);
-		const now = Date.now();
-		const existing = await this.#loadQueueMessages();
-		if (
-			existing.some(
-				(message) =>
-					nameSet.has(message.name) &&
-					!message.inFlight &&
-					message.availableAt <= now,
-			)
-		) {
-			return;
-		}
-
-		const { promise, resolve, reject } = promiseWithResolvers<void>();
-		const waiterId = crypto.randomUUID();
-		const waiter: QueueNameWaiter = {
-			id: waiterId,
-			nameSet,
-			resolve,
-			reject,
-			signal: abortSignal,
-		};
-
-		const onAbort = () => {
-			this.#nameWaiters.delete(waiterId);
-			waiter.reject(new errors.ActorAborted());
-		};
-
-		if (abortSignal.aborted) {
-			onAbort();
-			return promise;
-		}
-		abortSignal.addEventListener("abort", onAbort, { once: true });
-		waiter.abortHandler = onAbort;
-
-		this.#nameWaiters.set(waiterId, waiter);
-		return promise;
-	}
-
 	/** Waits for a specific queue message to complete. */
 	async waitForCompletion(
 		messageId: bigint,
@@ -610,7 +563,10 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		const keys = messages.map((message) => makeQueueMessageKey(message.id));
 
 		// Update metadata
-		this.#metadata.size = Math.max(0, this.#metadata.size - messages.length);
+		this.#metadata.size = Math.max(
+			0,
+			this.#metadata.size - messages.length,
+		);
 
 		// Delete messages and update metadata
 		// Note: kvBatchDelete doesn't support mixed operations, so we do two calls
@@ -813,18 +769,19 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						: 0) + 1;
 				const availableAt = now + this.#computeBackoffMs(failureCount);
 
-				const updatedMessage = QUEUE_MESSAGE_VERSIONED.serializeWithEmbeddedVersion(
-					{
-						name: decodedPayload.name,
-						body: decodedPayload.body,
-						createdAt: decodedPayload.createdAt,
-						failureCount,
-						availableAt: BigInt(availableAt),
-						inFlight: false,
-						inFlightAt: null,
-					},
-					ACTOR_PERSIST_CURRENT_VERSION,
-				);
+				const updatedMessage =
+					QUEUE_MESSAGE_VERSIONED.serializeWithEmbeddedVersion(
+						{
+							name: decodedPayload.name,
+							body: decodedPayload.body,
+							createdAt: decodedPayload.createdAt,
+							failureCount,
+							availableAt: BigInt(availableAt),
+							inFlight: false,
+							inFlightAt: null,
+						},
+						ACTOR_PERSIST_CURRENT_VERSION,
+					);
 
 				updates.push([key, updatedMessage]);
 
@@ -892,10 +849,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	#computeBackoffMs(failureCount: number): number {
 		const exp = Math.max(0, failureCount - 1);
-		const delay = Math.min(
-			BACKOFF_MAX_MS,
-			BACKOFF_INITIAL_MS * 2 ** exp,
-		);
+		const delay = Math.min(BACKOFF_MAX_MS, BACKOFF_INITIAL_MS * 2 ** exp);
 		return delay;
 	}
 
