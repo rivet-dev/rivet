@@ -86,7 +86,7 @@ export async function routeWebSocket(
 		});
 
 		// Promise used to wait for the websocket close in `disconnect`
-		const closePromiseResolvers = promiseWithResolvers<void>();
+		const closePromiseResolvers = promiseWithResolvers<void>((reason) => loggerWithoutContext().warn({ msg: "unhandled websocket close promise rejection", reason }));
 
 		// Strip query parameters from requestPath for routing purposes.
 		// This handles paths like "/websocket?query=value" which should route

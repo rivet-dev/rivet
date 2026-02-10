@@ -425,7 +425,7 @@ export async function createTestWebSocketProxy(
 		promise: clientToProxyWsPromise,
 		resolve: clientToProxyWsResolve,
 		reject: clientToProxyWsReject,
-	} = promiseWithResolvers<WSContext>();
+	} = promiseWithResolvers<WSContext>((reason) => logger().warn({ msg: "unhandled client websocket promise rejection", reason }));
 	try {
 		// Resolve the client WebSocket promise
 		logger().debug({ msg: "awaiting client websocket promise" });

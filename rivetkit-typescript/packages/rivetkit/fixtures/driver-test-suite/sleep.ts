@@ -52,7 +52,7 @@ export const sleepWithLongRpc = actor({
 		},
 		longRunningRpc: async (c) => {
 			c.log.info("starting long running rpc");
-			c.vars.longRunningResolve = promiseWithResolvers();
+			c.vars.longRunningResolve = promiseWithResolvers((reason) => c.log.warn({ msg: "unhandled long running rpc rejection", reason }));
 			c.broadcast("waiting");
 			await c.vars.longRunningResolve.promise;
 			c.log.info("finished long running rpc");

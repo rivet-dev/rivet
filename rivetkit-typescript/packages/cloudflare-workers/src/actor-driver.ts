@@ -13,6 +13,7 @@ import type {
 	ManagerDriver,
 } from "rivetkit/driver-helpers";
 import { promiseWithResolvers } from "rivetkit/utils";
+import { logger } from "./log";
 import { kvDelete, kvGet, kvListPrefix, kvPut } from "./actor-kv";
 import { GLOBAL_KV_KEYS } from "./global-kv";
 import { getCloudflareAmbientEnv } from "./handler";
@@ -142,7 +143,7 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		// Create new actor state if it doesn't exist
 		if (!actorState) {
 			actorState = new ActorGlobalState();
-			actorState.actorPromise = promiseWithResolvers();
+			actorState.actorPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor promise rejection", reason }));
 			this.#globalState.setActorState(doState.ctx, actorState);
 		} else if (actorState.actorPromise) {
 			// Another request is already loading this actor, wait for it

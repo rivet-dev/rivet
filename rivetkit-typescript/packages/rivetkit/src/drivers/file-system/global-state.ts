@@ -434,7 +434,7 @@ export class FileSystemGlobalState {
 			return;
 		}
 		actor.lifecycleState = ActorLifecycleState.STARTING_SLEEP;
-		actor.stopPromise = promiseWithResolvers();
+		actor.stopPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor sleep stop promise rejection", reason }));
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -486,7 +486,7 @@ export class FileSystemGlobalState {
 			return;
 		}
 		actor.lifecycleState = ActorLifecycleState.STARTING_DESTROY;
-		actor.stopPromise = promiseWithResolvers();
+		actor.stopPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor destroy stop promise rejection", reason }));
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -658,7 +658,7 @@ export class FileSystemGlobalState {
 		invariant(entry, "actor entry does not exist");
 
 		const previousWrite = entry.pendingWriteResolver;
-		const currentWrite = promiseWithResolvers<void>();
+		const currentWrite = promiseWithResolvers<void>((reason) => logger().warn({ msg: "unhandled kv write promise rejection", reason }));
 		entry.pendingWriteResolver = currentWrite;
 
 		if (previousWrite) {
@@ -895,7 +895,7 @@ export class FileSystemGlobalState {
 		}
 
 		// Create start promise
-		entry.startPromise = promiseWithResolvers();
+		entry.startPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor start promise rejection", reason }));
 
 		try {
 			// Create actor

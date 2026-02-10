@@ -6,6 +6,7 @@ import {
 	QUEUE_METADATA_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { promiseWithResolvers } from "@/utils";
+import { loggerWithoutContext } from "@/actor/log";
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
@@ -260,7 +261,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		const { promise, resolve, reject } =
-			promiseWithResolvers<QueueMessage[]>();
+			promiseWithResolvers<QueueMessage[]>((reason) => loggerWithoutContext().warn({ msg: "unhandled queue message waiter rejection", reason }));
 		const waiterId = crypto.randomUUID();
 		const waiter: QueueWaiter = {
 			id: waiterId,
@@ -318,7 +319,7 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		timeout?: number,
 	): Promise<QueueCompletionResult> {
 		const { promise, resolve, reject } =
-			promiseWithResolvers<QueueCompletionResult>();
+			promiseWithResolvers<QueueCompletionResult>((reason) => loggerWithoutContext().warn({ msg: "unhandled queue completion waiter rejection", reason }));
 		const waiterId = crypto.randomUUID();
 
 		const waiter: QueueCompletionWaiter = {
