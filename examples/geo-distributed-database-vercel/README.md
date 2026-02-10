@@ -9,10 +9,13 @@ Store user session state in edge-local Rivet Actors so preferences and activity 
 
 ## Getting Started
 
-```bash
-pnpm install
-pnpm dev
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/geo-distributed-database
+npm install
+npm run dev
 ```
+
 
 ## Features
 

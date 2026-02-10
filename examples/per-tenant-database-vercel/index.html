@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Per-Tenant Database Example</title>
+    <style>
+        @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+        :root {
+            color-scheme: light;
+            --ink: #132238;
+            --ink-soft: #2d3b4d;
+            --paper: #f6f1e9;
+            --paper-strong: #ffffff;
+            --accent: #ff7a59;
+            --accent-strong: #ef5a3c;
+            --accent-cool: #3aa7b0;
+            --accent-warm: #f5c86c;
+            --border: rgba(19, 34, 56, 0.12);
+            --shadow: 0 24px 80px rgba(19, 34, 56, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+            color: var(--ink);
+            background: radial-gradient(circle at top left, rgba(245, 200, 108, 0.4), transparent 55%),
+                radial-gradient(circle at 20% 80%, rgba(58, 167, 176, 0.35), transparent 45%),
+                linear-gradient(140deg, #f8efe6 0%, #e9f1f4 55%, #fef6ed 100%);
+            min-height: 100vh;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at 80% 20%, rgba(255, 122, 89, 0.12), transparent 40%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        #root {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 48px 24px 80px;
+        }
+
+        .hero {
+            display: grid;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .hero-badge {
+            width: fit-content;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(255, 122, 89, 0.15);
+            color: var(--accent-strong);
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .hero h1 {
+            font-family: "Fraunces", "Georgia", serif;
+            font-size: clamp(2.4rem, 2.8vw, 3.3rem);
+            margin: 0;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--ink-soft);
+            font-size: 1.05rem;
+            max-width: 560px;
+        }
+
+        .card {
+            background: var(--paper-strong);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            animation: rise 0.8s ease both;
+        }
+
+        .signin-card {
+            display: grid;
+            gap: 16px;
+        }
+
+        .signin-title {
+            font-family: "Fraunces", "Georgia", serif;
+            font-size: 1.6rem;
+            margin: 0;
+        }
+
+        .signin-description {
+            margin: 0;
+            color: var(--ink-soft);
+        }
+
+        .switcher {
+            display: grid;
+            gap: 12px;
+        }
+
+        .switcher label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .switcher input,
+        .switcher select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            font-size: 1rem;
+            background: #fff;
+        }
+
+        .switcher button {
+            padding: 12px 16px;
+            border-radius: 999px;
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .switcher button:hover {
+            background: var(--accent-strong);
+            transform: translateY(-1px);
+        }
+
+        .dashboard {
+            display: grid;
+            gap: 24px;
+        }
+
+        .company-banner {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .company-id {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .company-badge {
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(58, 167, 176, 0.25), rgba(255, 122, 89, 0.3));
+            display: grid;
+            place-items: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--ink);
+        }
+
+        .company-name {
+            font-family: "Fraunces", "Georgia", serif;
+            font-size: 1.8rem;
+            margin: 0;
+        }
+
+        .company-subtitle {
+            margin: 4px 0 0;
+            color: var(--ink-soft);
+        }
+
+        .company-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            background: rgba(19, 34, 56, 0.04);
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .panel {
+            display: grid;
+            gap: 16px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-header h3 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .count-chip {
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(58, 167, 176, 0.15);
+            color: #1c6c73;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .list-item {
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.8);
+            display: grid;
+            gap: 4px;
+        }
+
+        .list-item strong {
+            font-weight: 600;
+        }
+
+        .empty {
+            padding: 16px;
+            border-radius: 12px;
+            background: rgba(19, 34, 56, 0.04);
+            color: var(--ink-soft);
+            font-style: italic;
+        }
+
+        .form {
+            display: grid;
+            gap: 10px;
+        }
+
+        .form input,
+        .form select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            font-size: 0.95rem;
+            background: #fff;
+        }
+
+        .form button {
+            justify-self: start;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: none;
+            background: var(--accent-cool);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .form button:hover {
+            background: #2f8f97;
+        }
+
+        .stats-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .stat-card {
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(245, 200, 108, 0.2);
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .status-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--ink-soft);
+            font-size: 0.9rem;
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 720px) {
+            .company-banner {
+                align-items: flex-start;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/frontend/main.tsx"></script>
+</body>
+</html>
