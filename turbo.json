@@ -15,6 +15,35 @@
 			"outputs": ["dist/**"],
 			"env": ["FAST_BUILD"]
 		},
+		"build:cloud": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"vite.cloud.config.ts",
+				"package.json"
+			],
+			"outputs": ["dist/**"]
+		},
+		"build:inspector": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"vite.inspector.config.ts",
+				"package.json"
+			],
+			"outputs": ["dist/**"]
+		},
+		"build:ladle": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"package.json"
+			],
+			"outputs": ["build/**"]
+		},
 		"check-types": {
 			"inputs": [
 				"src/**",
