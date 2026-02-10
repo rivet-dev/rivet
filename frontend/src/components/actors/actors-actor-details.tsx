@@ -19,6 +19,7 @@ import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
 import { ActorTracesTab } from "./actor-traces-tab";
+import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
 import {
@@ -148,6 +149,14 @@ export function ActorTabs({
 							Traces
 						</TabsTrigger>
 
+						<TabsTrigger
+							disabled={disabled}
+							value="workflow"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Workflow
+						</TabsTrigger>
+
 						{/* <TabsTrigger
 							disabled={disabled}
 							value="database"
@@ -225,6 +234,12 @@ export function ActorTabs({
 
 					<TabsContent value="traces" className="min-h-0 flex-1 mt-0">
 						{guardContent || <ActorTracesTab actorId={actorId} />}
+					</TabsContent>
+					<TabsContent
+						value="workflow"
+						className="min-h-0 flex-1 mt-0 h-full"
+					>
+						{guardContent || <ActorWorkflowTab actorId={actorId} />}
 					</TabsContent>
 					<TabsContent
 						value="database"
