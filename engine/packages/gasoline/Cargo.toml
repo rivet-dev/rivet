@@ -11,6 +11,7 @@ async-stream.workspace = true
 async-trait.workspace = true
 gasoline-macros.workspace = true
 cjson.workspace = true
+clickhouse.workspace = true
 dirs.workspace = true
 futures-util.workspace = true
 hex.workspace = true

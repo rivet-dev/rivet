@@ -11,13 +11,14 @@ pub fn setup(config: &Config) -> Result<Option<ClickHousePool>> {
 		tracing::debug!("clickhouse connecting");
 
 		// Build HTTP client
-		let mut http_connector = hyper::client::connect::HttpConnector::new();
+		let mut http_connector = hyper_util::client::legacy::connect::HttpConnector::new();
 		http_connector.enforce_http(false);
 		http_connector.set_keepalive(Some(Duration::from_secs(15)));
 		let https_connector = hyper_tls::HttpsConnector::new_with_connector(http_connector);
-		let http_client = hyper::Client::builder()
-			.pool_idle_timeout(Duration::from_secs(2))
-			.build(https_connector);
+		let http_client =
+			hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+				.pool_idle_timeout(Duration::from_secs(2))
+				.build(https_connector);
 
 		// Build ClickHouse client
 		let mut client = clickhouse::Client::with_http_client(http_client)

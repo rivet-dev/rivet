@@ -332,11 +332,19 @@ impl<'de> TupleUnpack<'de> for WorkflowIdKey {
 	}
 }
 
-pub struct DataSubspaceKey {}
+pub struct DataSubspaceKey {
+	signal_id: Option<Id>,
+}
 
 impl DataSubspaceKey {
 	pub fn new() -> Self {
-		DataSubspaceKey {}
+		DataSubspaceKey { signal_id: None }
+	}
+
+	pub fn new_with_signal_id(signal_id: Id) -> Self {
+		DataSubspaceKey {
+			signal_id: Some(signal_id),
+		}
 	}
 }
 
@@ -346,8 +354,16 @@ impl TuplePack for DataSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
 		let t = (SIGNAL, DATA);
-		t.pack(w, tuple_depth)
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(signal_id) = &self.signal_id {
+			offset += signal_id.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
 	}
 }
 

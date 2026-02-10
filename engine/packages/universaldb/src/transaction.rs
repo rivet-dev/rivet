@@ -113,7 +113,7 @@ impl Transaction {
 
 	pub fn delete_key_subspace<T: TuplePack>(&self, key: &T) {
 		self.informal()
-			.clear_subspace_range(&self.subspace.subspace(&self.subspace.pack(key)));
+			.clear_subspace_range(&self.subspace.subspace(&key));
 	}
 
 	pub fn read_entry<T: FormalKey + for<'de> TupleUnpack<'de>>(
