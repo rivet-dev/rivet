@@ -1,4 +1,4 @@
-# Frontend (Inspector) Dockerfile
+# Frontend (Ladle) Dockerfile
 FROM node:22-alpine AS builder
 
 RUN apk add --no-cache git git-lfs coreutils
@@ -12,6 +12,9 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json turbo.js
 
 # Copy frontend package
 COPY frontend/ frontend/
+
+# Copy public examples (required by Vite during ladle build)
+COPY frontend/public/examples/ frontend/public/examples/
 
 # Copy engine SDK dependencies
 COPY engine/sdks/typescript/api-full/ engine/sdks/typescript/api-full/
@@ -29,9 +32,8 @@ COPY rivetkit-typescript/packages/sqlite-vfs-linux-x64/ rivetkit-typescript/pack
 # Copy shared libraries
 COPY shared/typescript/virtual-websocket/ shared/typescript/virtual-websocket/
 
-# Copy examples and public assets
+# Copy examples (needed for ladle stories)
 COPY examples/ examples/
-COPY frontend/public/examples/ frontend/public/examples/
 
 # Copy generated API docs
 COPY rivetkit-asyncapi/ rivetkit-asyncapi/
@@ -44,39 +46,16 @@ RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
 ARG FONTAWESOME_PACKAGE_TOKEN=""
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 
-RUN --mount=type=cache,id=s/11ac71ef-9b68-4d4c-bc8a-bc8b45000c14-pnpm-store,target=/pnpm/store \
+RUN --mount=type=cache,id=s/465998c9-9dc0-4af4-ac91-b772d7596d6e-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-ARG VITE_APP_API_URL="https://VITE_APP_API_URL.placeholder.rivet.dev"
-ARG VITE_APP_ASSETS_URL="https://VITE_APP_ASSETS_URL.placeholder.rivet.dev"
-ARG VITE_APP_SENTRY_DSN="https://VITE_APP_SENTRY_DSN.placeholder.rivet.dev/0"
-ARG VITE_APP_SENTRY_PROJECT_ID="0"
-ARG VITE_APP_POSTHOG_API_KEY=""
-ARG VITE_APP_POSTHOG_HOST=""
-ARG DEPLOYMENT_TYPE="staging"
-
-ENV VITE_APP_API_URL=${VITE_APP_API_URL}
-ENV VITE_APP_ASSETS_URL=${VITE_APP_ASSETS_URL}
-ENV VITE_APP_SENTRY_DSN=${VITE_APP_SENTRY_DSN}
-ENV VITE_APP_SENTRY_PROJECT_ID=${VITE_APP_SENTRY_PROJECT_ID}
-ENV VITE_APP_POSTHOG_API_KEY=${VITE_APP_POSTHOG_API_KEY}
-ENV VITE_APP_POSTHOG_HOST=${VITE_APP_POSTHOG_HOST}
-ENV VITE_APP_SENTRY_ENV=${RAILWAY_ENVIRONMENT_NAME:-staging}
-ENV DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
-ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
-ENV VITE_APP_SENTRY_TUNNEL="/tunnel"
-
-RUN --mount=type=cache,id=s/11ac71ef-9b68-4d4c-bc8a-bc8b45000c14-turbo,target=/app/.turbo \
-    npx turbo run build:inspector --filter=@rivetkit/engine-frontend
+RUN --mount=type=cache,id=s/465998c9-9dc0-4af4-ac91-b772d7596d6e-turbo,target=/app/.turbo \
+    npx turbo run build:ladle --filter=@rivetkit/engine-frontend
 
 FROM caddy:alpine
 
-RUN apk add --no-cache bash
-
-COPY frontend/Caddyfile /etc/caddy/Caddyfile
-COPY --from=builder /app/frontend/dist /srv
-COPY frontend/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY frontend/Caddyfile.ladle /etc/caddy/Caddyfile
+COPY --from=builder /app/frontend/build /srv
 
 ENV PORT=80
-ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
