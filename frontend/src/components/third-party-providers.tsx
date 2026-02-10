@@ -39,7 +39,7 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			tracesSampleRate: 1.0,
 			integrations,
 			environment: commonEnv().VITE_APP_SENTRY_ENV,
-			tunnel: getConfig().sentry?.tunnel,
+			tunnel: getConfig().sentry?.tunnel || undefined,
 			tracePropagationTargets: [
 				"api.rivet.dev",
 				"cloud-api.rivet.dev",
