@@ -19,9 +19,9 @@
     "tsx": "^3.12.7",
     "typescript": "^5.5.2",
     "vite": "^5.0.0",
+    "vite-plugin-srvx": "^1.0.2",
     "vitest": "^3.1.1",
-    "ws": "^8.16.0",
-    "vite-plugin-srvx": "^1.0.0"
+    "ws": "^8.16.0"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.7",
