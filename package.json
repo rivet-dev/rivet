@@ -47,7 +47,11 @@
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
 			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@edc6ad0",
-			"@codemirror/state": "^6.5.2"
+			"@codemirror/state": "6.5.2",
+			"@codemirror/view": "6.38.2",
+			"@codemirror/autocomplete": "6.18.7",
+			"@codemirror/commands": "6.8.1",
+			"@codemirror/lint": "6.8.5"
 		}
 	}
 }
