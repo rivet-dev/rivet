@@ -41,9 +41,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
 					datacenter:
-						__APP_TYPE__ === "inspector"
-							? undefined
-							: values.datacenter,
+						__APP_TYPE__ === "inspector" ? "" : values.datacenter,
 					crashPolicy: values.crashPolicy || Rivet.CrashPolicy.Sleep,
 					runnerNameSelector: values.runnerNameSelector || "default",
 				});
