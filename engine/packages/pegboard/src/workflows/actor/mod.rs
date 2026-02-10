@@ -737,6 +737,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										runtime::SpawnActorOutput::Allocated { .. } => {}
 										runtime::SpawnActorOutput::Sleep => {
 											state.sleeping = true;
+
+											// We do not have to run set_sleeping here because the actor went
+											// from sleeping -> attempt allocation -> sleeping. It was never
+											// allocated
 										}
 										runtime::SpawnActorOutput::Destroy => {
 											// Destroyed early
@@ -1149,7 +1153,17 @@ async fn handle_stopped(
 				.await?
 				{
 					runtime::SpawnActorOutput::Allocated { .. } => {}
-					runtime::SpawnActorOutput::Sleep => {}
+					runtime::SpawnActorOutput::Sleep => {
+						tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to failure to allocate");
+
+						state.sleeping = true;
+
+						ctx.v(2)
+							.activity(runtime::SetSleepingInput {
+								actor_id: input.actor_id,
+							})
+							.await?;
+					}
 					runtime::SpawnActorOutput::Destroy => {
 						// Destroyed early
 						return Ok(StoppedResult::Destroy);
@@ -1157,7 +1171,7 @@ async fn handle_stopped(
 				}
 			}
 			(CrashPolicy::Sleep, false) => {
-				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
+				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due ungraceful exit");
 
 				state.sleeping = true;
 
