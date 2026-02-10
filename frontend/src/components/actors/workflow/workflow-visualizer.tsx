@@ -1,48 +1,50 @@
 "use client";
 
 import {
-	faPlay,
-	faRefresh,
-	faClock,
-	faEnvelope,
-	faFlag,
-	faCodeMerge,
-	faBolt,
-	faTrash,
-	faMagnifyingGlassPlus,
-	faMagnifyingGlassMinus,
-	faMaximize,
-	faRotateLeft,
-	faCircleCheck,
-	faCircleExclamation,
-	faSpinnerThird,
 	faArrowDown,
 	faArrowUp,
+	faBolt,
+	faCircleCheck,
+	faCircleExclamation,
+	faClock,
+	faCodeMerge,
+	faEnvelope,
+	faFlag,
+	faMagnifyingGlassMinus,
+	faMagnifyingGlassPlus,
+	faMaximize,
+	faPlay,
+	faRefresh,
+	faRotateLeft,
+	faSpinnerThird,
+	faTrash,
 	faXmark,
 	Icon,
 } from "@rivet-gg/icons";
-import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { cn } from "@/components";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cn, DiscreteCopyButton } from "@/components";
+import { ActorObjectInspector } from "../console/actor-inspector";
 import type {
-	WorkflowHistory,
 	EntryKindType,
-	ExtendedEntryType,
 	EntryStatus,
+	ExtendedEntryType,
 	HistoryItem,
-	LoopEntry,
 	JoinEntry,
-	RaceEntry,
-	MessageEntry,
-	RemovedEntry,
-	StepEntry,
-	SleepEntry,
+	LoopEntry,
 	LoopIterationMarker,
+	MessageEntry,
+	RaceEntry,
+	RemovedEntry,
+	SleepEntry,
+	StepEntry,
+	WorkflowHistory,
 } from "./workflow-types";
 
 // Layout constants
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 52;
-const NODE_HEIGHT_DETAILED = 100;
+const DETAILS_HEIGHT = 80;
+const NODE_HEIGHT_DETAILED = NODE_HEIGHT + DETAILS_HEIGHT + 4;
 const NODE_GAP_Y = 32;
 const BRANCH_GAP_X = 48;
 const BRANCH_GAP_Y = 48;
@@ -142,17 +144,23 @@ function TypeIcon({
 		case "rollback_checkpoint":
 			return <Icon icon={faFlag} style={{ color, fontSize: size }} />;
 		case "join":
-			return <Icon icon={faCodeMerge} style={{ color, fontSize: size }} />;
+			return (
+				<Icon icon={faCodeMerge} style={{ color, fontSize: size }} />
+			);
 		case "race":
 			return <Icon icon={faBolt} style={{ color, fontSize: size }} />;
 		case "removed":
 			return <Icon icon={faTrash} style={{ color, fontSize: size }} />;
 		case "input":
-			return <Icon icon={faArrowDown} style={{ color, fontSize: size }} />;
+			return (
+				<Icon icon={faArrowDown} style={{ color, fontSize: size }} />
+			);
 		case "output":
 			return <Icon icon={faArrowUp} style={{ color, fontSize: size }} />;
 		default:
-			return <Icon icon={faCircleCheck} style={{ color, fontSize: size }} />;
+			return (
+				<Icon icon={faCircleCheck} style={{ color, fontSize: size }} />
+			);
 	}
 }
 
@@ -313,7 +321,8 @@ function parseAndLayout(
 
 	// Sort by location
 	topLevel.sort(
-		(a, b) => (a.entry.location[0] as number) - (b.entry.location[0] as number),
+		(a, b) =>
+			(a.entry.location[0] as number) - (b.entry.location[0] as number),
 	);
 
 	const layoutNodes: LayoutNode[] = [];
@@ -493,7 +502,11 @@ function parseAndLayout(
 			let iterY = loopY + LOOP_PADDING_Y;
 			let prevIterLastNode: LayoutNode | null = null;
 
-			for (const { iteration, nodes: iterNodes, height } of iterationLayouts) {
+			for (const {
+				iteration,
+				nodes: iterNodes,
+				height,
+			} of iterationLayouts) {
 				iterY += ITERATION_HEADER;
 				for (let i = 0; i < iterNodes.length; i++) {
 					const ln = iterNodes[i];
@@ -521,7 +534,8 @@ function parseAndLayout(
 						});
 					} else if (prevIterLastNode) {
 						// Connect first node of this iteration to last node of previous iteration
-						const prevCompletedAtTs = prevIterLastNode.node.completedAt;
+						const prevCompletedAtTs =
+							prevIterLastNode.node.completedAt;
 						const currStartedAtTs = ln.node.startedAt;
 						const deltaMs =
 							prevCompletedAtTs && currStartedAtTs
@@ -667,7 +681,9 @@ function parseAndLayout(
 					name: branchName,
 					isWinner: branchName === winner,
 					isCancelled:
-						entryType === "race" && winner !== null && branchName !== winner,
+						entryType === "race" &&
+						winner !== null &&
+						branchName !== winner,
 					x: 0,
 					y: 0,
 					width: NODE_WIDTH,
@@ -756,14 +772,19 @@ function parseAndLayout(
 			});
 
 			// Merge connections
-			const mergeY = currentY + maxBranchHeight + containerPadding + BRANCH_GAP_Y;
+			const mergeY =
+				currentY + maxBranchHeight + containerPadding + BRANCH_GAP_Y;
 			for (const branch of branchLayouts) {
 				if (!branch.isCancelled) {
-					const lastBranchNode = branch.nodes[branch.nodes.length - 1];
-					const lastNodeCompletedAt = lastBranchNode?.node.completedAt;
+					const lastBranchNode =
+						branch.nodes[branch.nodes.length - 1];
+					const lastNodeCompletedAt =
+						lastBranchNode?.node.completedAt;
 					const branchPaddingX = 20;
-					const branchCenterX = branch.x + branchPaddingX + NODE_WIDTH / 2;
-					const containerBottom = branch.y + branch.height + containerPadding;
+					const branchCenterX =
+						branch.x + branchPaddingX + NODE_WIDTH / 2;
+					const containerBottom =
+						branch.y + branch.height + containerPadding;
 					connections.push({
 						id: `conn-merge-${branch.name}`,
 						x1: branchCenterX,
@@ -908,11 +929,6 @@ function SVGNode({
 	const isFailed = node.status === "failed";
 	const isRetrying = node.status === "retrying";
 
-	// Get data preview for detailed mode
-	const dataPreview = detailedMode
-		? JSON.stringify(node.data, null, 2).slice(0, 120)
-		: "";
-
 	return (
 		<g transform={`translate(${x}, ${y})`}>
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: SVG node for workflow visualization */}
@@ -933,7 +949,13 @@ function SVGNode({
 					height={height}
 					rx={10}
 					fill={colors.bg}
-					stroke={selected ? "#52525b" : isFailed ? "#ef4444" : colors.border}
+					stroke={
+						selected
+							? "#52525b"
+							: isFailed
+								? "#ef4444"
+								: colors.border
+					}
 					strokeWidth={isFailed ? 2 : 1}
 					className="transition-all duration-150"
 				/>
@@ -982,21 +1004,51 @@ function SVGNode({
 					)}
 				{/* Status indicator - right side for running/retrying */}
 				{(isRunning || isRetrying) && (
-					<foreignObject x={NODE_WIDTH - 36} y={14} width={24} height={24}>
-						<Icon
-							icon={faSpinnerThird}
-							className="animate-spin text-muted-foreground"
-							style={{ fontSize: 20 }}
-						/>
+					<foreignObject
+						x={NODE_WIDTH - 36}
+						y={14}
+						width={24}
+						height={24}
+					>
+						<div
+							style={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								width: 24,
+								height: 24,
+							}}
+						>
+							<Icon
+								icon={faSpinnerThird}
+								className="animate-spin text-muted-foreground"
+								style={{ fontSize: 20 }}
+							/>
+						</div>
 					</foreignObject>
 				)}
 				{isFailed && (
-					<foreignObject x={NODE_WIDTH - 36} y={14} width={24} height={24}>
-						<Icon
-							icon={faCircleExclamation}
-							className="text-destructive"
-							style={{ fontSize: 20 }}
-						/>
+					<foreignObject
+						x={NODE_WIDTH - 36}
+						y={14}
+						width={24}
+						height={24}
+					>
+						<div
+							style={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								width: 24,
+								height: 24,
+							}}
+						>
+							<Icon
+								icon={faCircleExclamation}
+								className="text-destructive"
+								style={{ fontSize: 20 }}
+							/>
+						</div>
 					</foreignObject>
 				)}
 				{/* Icon box with color */}
@@ -1011,8 +1063,21 @@ function SVGNode({
 					strokeWidth={1}
 					strokeOpacity={0.3}
 				/>
-				<foreignObject x={19} y={19} width={14} height={14}>
-					<TypeIcon type={node.type as MetaExtendedEntryType} size={14} />
+				<foreignObject x={10} y={10} width={32} height={32}>
+					<div
+						style={{
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "center",
+							width: 32,
+							height: 32,
+						}}
+					>
+						<TypeIcon
+							type={node.type as MetaExtendedEntryType}
+							size={14}
+						/>
+					</div>
 				</foreignObject>
 				{/* Text */}
 				<text
@@ -1023,7 +1088,9 @@ function SVGNode({
 					fontWeight={500}
 					fontFamily="system-ui"
 				>
-					{node.name.length > 18 ? `${node.name.slice(0, 18)}...` : node.name}
+					{node.name.length > 18
+						? `${node.name.slice(0, 18)}...`
+						: node.name}
 				</text>
 				<text
 					x={52}
@@ -1036,20 +1103,14 @@ function SVGNode({
 				</text>
 				{/* Detailed mode: show data preview */}
 				{detailedMode && (
-					<foreignObject x={10} y={50} width={NODE_WIDTH - 20} height={44}>
-						<div
-							style={{
-								fontFamily: "ui-monospace, monospace",
-								fontSize: 9,
-								color: "#52525b",
-								overflow: "hidden",
-								lineHeight: 1.3,
-								whiteSpace: "pre-wrap",
-								wordBreak: "break-all",
-							}}
-						>
-							{dataPreview}
-							{dataPreview.length >= 120 ? "..." : ""}
+					<foreignObject
+						x={10}
+						y={50}
+						width={NODE_WIDTH - 20}
+						height={DETAILS_HEIGHT}
+					>
+						<div className="border p-1.5 rounded size-full overflow-auto">
+							<ActorObjectInspector data={node.data} />
 						</div>
 					</foreignObject>
 				)}
@@ -1079,7 +1140,8 @@ function Connection({
 	// Show delta: always if >= 500ms, on hover for smaller, or always if showAllDeltas
 	const isSignificantDelta = deltaMs !== undefined && deltaMs >= 500;
 	const shouldShowDelta =
-		deltaMs !== undefined && (isSignificantDelta || isHovered || showAllDeltas);
+		deltaMs !== undefined &&
+		(isSignificantDelta || isHovered || showAllDeltas);
 
 	// Build path based on connection type
 	let path: string;
@@ -1157,7 +1219,8 @@ function Connection({
 							fontFamily="system-ui"
 							dominantBaseline="middle"
 						>
-							{deltaMs !== undefined && formatDuration(deltaMs)} later
+							{deltaMs !== undefined && formatDuration(deltaMs)}{" "}
+							later
 						</text>
 					);
 				})()}
@@ -1236,7 +1299,10 @@ export function WorkflowVisualizer({
 			if (e.button === 0 || e.button === 1) {
 				e.preventDefault();
 				setIsPanning(true);
-				setPanStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+				setPanStart({
+					x: e.clientX - transform.x,
+					y: e.clientY - transform.y,
+				});
 			}
 		},
 		[transform],
@@ -1257,7 +1323,7 @@ export function WorkflowVisualizer({
 
 	const handleMouseUp = useCallback(() => setIsPanning(false), []);
 
-	const handleWheel = useCallback((e: React.WheelEvent) => {
+	const handleWheel = useCallback((e: WheelEvent) => {
 		e.preventDefault();
 
 		if (e.ctrlKey || e.metaKey) {
@@ -1287,6 +1353,14 @@ export function WorkflowVisualizer({
 		}
 	}, []);
 
+	// Attach wheel listener as non-passive so preventDefault() works on touchpad gestures.
+	useEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+		el.addEventListener("wheel", handleWheel, { passive: false });
+		return () => el.removeEventListener("wheel", handleWheel);
+	}, [handleWheel]);
+
 	const zoomIn = () =>
 		setTransform((t) => ({ ...t, scale: Math.min(t.scale * 1.2, 2) }));
 	const zoomOut = () =>
@@ -1294,8 +1368,10 @@ export function WorkflowVisualizer({
 	const resetView = () => setTransform({ x: 60, y: 60, scale: 1 });
 	const fitView = () => {
 		if (containerRef.current) {
-			const { width, height } = containerRef.current.getBoundingClientRect();
-			const scale = Math.min(width / 800, height / layout.totalHeight, 1) * 0.85;
+			const { width, height } =
+				containerRef.current.getBoundingClientRect();
+			const scale =
+				Math.min(width / 800, height / layout.totalHeight, 1) * 0.85;
 			setTransform({ x: 60, y: 60, scale });
 		}
 	};
@@ -1311,7 +1387,6 @@ export function WorkflowVisualizer({
 					onMouseMove={handleMouseMove}
 					onMouseUp={handleMouseUp}
 					onMouseLeave={handleMouseUp}
-					onWheel={handleWheel}
 					style={{ cursor: isPanning ? "grabbing" : "grab" }}
 				>
 					{/* Dot grid */}
@@ -1410,15 +1485,28 @@ export function WorkflowVisualizer({
 										strokeWidth={1}
 									/>
 									<foreignObject
-										x={loop.x + 32}
-										y={loop.y + 19}
-										width={14}
-										height={14}
+										x={loop.x + 28}
+										y={loop.y + 12}
+										width={20}
+										height={28}
 									>
-										<Icon
-											icon={faRefresh}
-											style={{ color: "#a855f7", fontSize: 14 }}
-										/>
+										<div
+											style={{
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												width: 20,
+												height: 28,
+											}}
+										>
+											<Icon
+												icon={faRefresh}
+												style={{
+													color: "#a855f7",
+													fontSize: 14,
+												}}
+											/>
+										</div>
 									</foreignObject>
 									<text
 										x={loop.x + 52}
@@ -1440,8 +1528,13 @@ export function WorkflowVisualizer({
 							{/* Branch containers */}
 							{layout.branchGroups.map((group) => {
 								const baseColor =
-									group.type === "join" ? "#06b6d4" : "#ec4899";
-								const iconDef = group.type === "join" ? faCodeMerge : faBolt;
+									group.type === "join"
+										? "#06b6d4"
+										: "#ec4899";
+								const iconDef =
+									group.type === "join"
+										? faCodeMerge
+										: faBolt;
 								return (
 									<g key={group.id}>
 										{group.branches.map((branch) => {
@@ -1452,9 +1545,12 @@ export function WorkflowVisualizer({
 													: baseColor;
 											const containerX = branch.x;
 											const containerY = branch.y;
-											const containerWidth = branch.width + 40;
-											const containerHeight = branch.height + 48 + 20;
-											const containerCenterX = containerX + containerWidth / 2;
+											const containerWidth =
+												branch.width + 40;
+											const containerHeight =
+												branch.height + 48 + 20;
+											const containerCenterX =
+												containerX + containerWidth / 2;
 											return (
 												<g key={branch.name}>
 													<rect
@@ -1479,15 +1575,30 @@ export function WorkflowVisualizer({
 														strokeWidth={1}
 													/>
 													<foreignObject
-														x={containerX + 28}
-														y={containerY + 19}
-														width={14}
-														height={14}
+														x={containerX + 24}
+														y={containerY + 12}
+														width={20}
+														height={28}
 													>
-														<Icon
-															icon={iconDef}
-															style={{ color: branchColor, fontSize: 14 }}
-														/>
+														<div
+															style={{
+																display: "flex",
+																alignItems:
+																	"center",
+																justifyContent:
+																	"center",
+																width: 20,
+																height: 28,
+															}}
+														>
+															<Icon
+																icon={iconDef}
+																style={{
+																	color: branchColor,
+																	fontSize: 14,
+																}}
+															/>
+														</div>
 													</foreignObject>
 													<text
 														x={containerX + 48}
@@ -1510,7 +1621,9 @@ export function WorkflowVisualizer({
 																x2={0}
 																y2={20}
 																stroke="hsl(var(--border))"
-																strokeWidth={1.5}
+																strokeWidth={
+																	1.5
+																}
 															/>
 															<circle
 																cx={0}
@@ -1526,7 +1639,9 @@ export function WorkflowVisualizer({
 																x2={4}
 																y2={36}
 																stroke="#ef4444"
-																strokeWidth={1.5}
+																strokeWidth={
+																	1.5
+																}
 																strokeLinecap="round"
 															/>
 															<line
@@ -1535,7 +1650,9 @@ export function WorkflowVisualizer({
 																x2={-4}
 																y2={36}
 																stroke="#ef4444"
-																strokeWidth={1.5}
+																strokeWidth={
+																	1.5
+																}
 																strokeLinecap="round"
 															/>
 														</g>
@@ -1571,14 +1688,20 @@ export function WorkflowVisualizer({
 							onClick={zoomIn}
 							className="flex h-7 w-7 items-center justify-center rounded hover:bg-secondary"
 						>
-							<Icon icon={faMagnifyingGlassPlus} className="text-foreground" />
+							<Icon
+								icon={faMagnifyingGlassPlus}
+								className="text-foreground"
+							/>
 						</button>
 						<button
 							type="button"
 							onClick={zoomOut}
 							className="flex h-7 w-7 items-center justify-center rounded hover:bg-secondary"
 						>
-							<Icon icon={faMagnifyingGlassMinus} className="text-foreground" />
+							<Icon
+								icon={faMagnifyingGlassMinus}
+								className="text-foreground"
+							/>
 						</button>
 						<div className="h-px bg-border" />
 						<button
@@ -1586,14 +1709,20 @@ export function WorkflowVisualizer({
 							onClick={fitView}
 							className="flex h-7 w-7 items-center justify-center rounded hover:bg-secondary"
 						>
-							<Icon icon={faMaximize} className="text-foreground" />
+							<Icon
+								icon={faMaximize}
+								className="text-foreground"
+							/>
 						</button>
 						<button
 							type="button"
 							onClick={resetView}
 							className="flex h-7 w-7 items-center justify-center rounded hover:bg-secondary"
 						>
-							<Icon icon={faRotateLeft} className="text-foreground" />
+							<Icon
+								icon={faRotateLeft}
+								className="text-foreground"
+							/>
 						</button>
 						<div className="mt-1 text-center text-xs text-muted-foreground">
 							{Math.round(transform.scale * 100)}%
@@ -1610,7 +1739,8 @@ export function WorkflowVisualizer({
 								Workflow
 							</div>
 							<div className="text-xs text-muted-foreground">
-								{workflow.workflowId.slice(0, 8)}... | {workflow.state}
+								{workflow.workflowId.slice(0, 8)}... |{" "}
+								{workflow.state}
 							</div>
 						</div>
 						<div className="ml-4 h-6 w-px bg-border" />
@@ -1618,16 +1748,22 @@ export function WorkflowVisualizer({
 							<input
 								type="checkbox"
 								checked={detailedMode}
-								onChange={(e) => setDetailedMode(e.target.checked)}
+								onChange={(e) =>
+									setDetailedMode(e.target.checked)
+								}
 								className="h-3.5 w-3.5 rounded border-border bg-secondary accent-primary"
 							/>
-							<span className="text-xs text-muted-foreground">Detailed</span>
+							<span className="text-xs text-muted-foreground">
+								Detailed
+							</span>
 						</label>
 						<label className="flex cursor-pointer items-center gap-2">
 							<input
 								type="checkbox"
 								checked={showAllDeltas}
-								onChange={(e) => setShowAllDeltas(e.target.checked)}
+								onChange={(e) =>
+									setShowAllDeltas(e.target.checked)
+								}
 								className="h-3.5 w-3.5 rounded border-border bg-secondary accent-primary"
 							/>
 							<span className="text-xs text-muted-foreground">
@@ -1643,8 +1779,11 @@ export function WorkflowVisualizer({
 							style={{
 								left:
 									transform.x +
-									(hoveredNode.x + NODE_WIDTH + 12) * transform.scale,
-								top: transform.y + (hoveredNode.y - 10) * transform.scale,
+									(hoveredNode.x + NODE_WIDTH + 12) *
+										transform.scale,
+								top:
+									transform.y +
+									(hoveredNode.y - 10) * transform.scale,
 							}}
 						>
 							<div
@@ -1669,10 +1808,10 @@ export function WorkflowVisualizer({
 												hoveredNode.node.startedAt,
 											).toLocaleString()}
 											.
-											{String(hoveredNode.node.startedAt % 1000).padStart(
-												3,
-												"0",
-											)}
+											{String(
+												hoveredNode.node.startedAt %
+													1000,
+											).padStart(3, "0")}
 										</div>
 									</div>
 								)}
@@ -1686,10 +1825,10 @@ export function WorkflowVisualizer({
 												hoveredNode.node.completedAt,
 											).toLocaleString()}
 											.
-											{String(hoveredNode.node.completedAt % 1000).padStart(
-												3,
-												"0",
-											)}
+											{String(
+												hoveredNode.node.completedAt %
+													1000,
+											).padStart(3, "0")}
 										</div>
 									</div>
 								)}
@@ -1710,7 +1849,8 @@ export function WorkflowVisualizer({
 												Retries
 											</div>
 											<div className="text-xs text-amber-500">
-												{hoveredNode.node.retryCount} attempt(s)
+												{hoveredNode.node.retryCount}{" "}
+												attempt(s)
 											</div>
 										</div>
 									)}
@@ -1719,12 +1859,16 @@ export function WorkflowVisualizer({
 										Data
 									</div>
 									<pre className="max-h-20 overflow-hidden font-mono text-[9px] text-muted-foreground">
-										{JSON.stringify(hoveredNode.node.data, null, 2).slice(
-											0,
-											200,
-										)}
-										{JSON.stringify(hoveredNode.node.data, null, 2).length >
-										200
+										{JSON.stringify(
+											hoveredNode.node.data,
+											null,
+											2,
+										).slice(0, 200)}
+										{JSON.stringify(
+											hoveredNode.node.data,
+											null,
+											2,
+										).length > 200
 											? "..."
 											: ""}
 									</pre>
@@ -1737,19 +1881,23 @@ export function WorkflowVisualizer({
 
 			{/* Bottom details panel */}
 			{selectedNode && (
-				<div className="border-t border-border bg-card">
-					<div className="flex items-start gap-6 px-6 py-4">
+				<div className="border-t border-border bg-card px-6 py-4">
+					{/* Top row: identity + close */}
+					<div className="flex items-center justify-between mb-3">
 						<div className="flex items-center gap-3">
 							<div
 								className="flex h-10 w-10 items-center justify-center rounded-lg"
 								style={{
 									backgroundColor:
-										TYPE_COLORS[selectedNode.type as MetaExtendedEntryType]
-											.iconBg,
+										TYPE_COLORS[
+											selectedNode.type as MetaExtendedEntryType
+										].iconBg,
 								}}
 							>
 								<TypeIcon
-									type={selectedNode.type as MetaExtendedEntryType}
+									type={
+										selectedNode.type as MetaExtendedEntryType
+									}
 									size={18}
 								/>
 							</div>
@@ -1761,68 +1909,9 @@ export function WorkflowVisualizer({
 									{selectedNode.type}
 								</div>
 							</div>
-						</div>
-
-						<div className="h-10 w-px bg-border" />
-
-						<div className="min-w-0 flex-1">
-							<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-								Key
-							</div>
-							<div className="truncate rounded bg-secondary px-2 py-1 font-mono text-xs text-foreground">
-								{selectedNode.key}
-							</div>
-						</div>
-
-						<div className="min-w-0 flex-1">
-							<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-								Data
-							</div>
-							<pre className="max-h-20 overflow-auto rounded bg-secondary px-2 py-1 font-mono text-xs text-foreground">
-								{JSON.stringify(selectedNode.data, null, 2)}
-							</pre>
-						</div>
-
-						{selectedNode.startedAt && (
-							<div>
-								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-									Started
-								</div>
-								<div className="rounded bg-secondary px-2 py-1 font-mono text-xs text-foreground">
-									{new Date(selectedNode.startedAt).toLocaleString()}
-								</div>
-							</div>
-						)}
-
-						{selectedNode.completedAt && (
-							<div>
-								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-									Completed
-								</div>
-								<div className="rounded bg-secondary px-2 py-1 font-mono text-xs text-foreground">
-									{new Date(selectedNode.completedAt).toLocaleString()}
-								</div>
-							</div>
-						)}
-
-						{selectedNode.duration !== undefined && (
-							<div>
-								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-									Duration
-								</div>
-								<div className="rounded bg-secondary px-2 py-1 font-mono text-xs text-foreground">
-									{formatDuration(selectedNode.duration)}
-								</div>
-							</div>
-						)}
-
-						<div>
-							<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-								Status
-							</div>
 							<div
 								className={cn(
-									"rounded px-2 py-1 font-mono text-xs",
+									"ml-2 rounded px-2 py-0.5 font-mono-console text-xs",
 									selectedNode.status === "completed" &&
 										"bg-emerald-500/10 text-emerald-500",
 									selectedNode.status === "running" &&
@@ -1837,38 +1926,116 @@ export function WorkflowVisualizer({
 							>
 								{selectedNode.status}
 							</div>
+							{selectedNode.retryCount &&
+								selectedNode.retryCount > 0 && (
+									<div className="rounded bg-amber-500/10 px-2 py-0.5 font-mono-console text-xs text-amber-500">
+										{selectedNode.retryCount} retry(s)
+									</div>
+								)}
 						</div>
-
-						{selectedNode.retryCount && selectedNode.retryCount > 0 && (
-							<div>
-								<div className="mb-1 text-xs font-medium uppercase text-amber-500">
-									Retries
-								</div>
-								<div className="rounded bg-amber-500/10 px-2 py-1 font-mono text-xs text-amber-500">
-									{selectedNode.retryCount}
-								</div>
-							</div>
-						)}
-
-						{selectedNode.error && (
-							<div className="min-w-0 flex-1">
-								<div className="mb-1 text-xs font-medium uppercase text-destructive">
-									Error
-								</div>
-								<div className="truncate rounded bg-red-500/10 px-2 py-1 font-mono text-xs text-destructive">
-									{selectedNode.error}
-								</div>
-							</div>
-						)}
-
 						<button
 							type="button"
 							onClick={() => setSelectedNode(null)}
 							className="flex h-8 w-8 items-center justify-center rounded hover:bg-secondary"
 						>
-							<Icon icon={faXmark} className="text-muted-foreground" />
+							<Icon
+								icon={faXmark}
+								className="text-muted-foreground"
+							/>
 						</button>
 					</div>
+
+					{/* Bottom row: metadata grid */}
+					<div className="grid grid-cols-[1fr_auto_auto_auto] gap-4">
+						<div
+							className={cn(
+								"min-w-0",
+								!selectedNode.startedAt &&
+									!selectedNode.completedAt &&
+									selectedNode.duration === undefined &&
+									"col-span-4",
+							)}
+						>
+							<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+								Key
+							</div>
+							<DiscreteCopyButton
+								value={selectedNode.key}
+								size="sm"
+								className="w-full text-sm text-left justify-between -mx-2"
+							>
+								<span className="truncate font-mono-console">
+									{selectedNode.key}
+								</span>
+							</DiscreteCopyButton>
+						</div>
+
+						{selectedNode.startedAt && (
+							<div className="border-l pl-4">
+								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+									Started
+								</div>
+								<div className="whitespace-nowrap rounded py-1 font-mono text-xs text-foreground">
+									{new Date(
+										selectedNode.startedAt,
+									).toLocaleString()}
+								</div>
+							</div>
+						)}
+
+						{selectedNode.completedAt && (
+							<div className="border-l pl-4">
+								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+									Completed
+								</div>
+								<div className="whitespace-nowrap rounded py-1 font-mono text-xs text-foreground">
+									{new Date(
+										selectedNode.completedAt,
+									).toLocaleString()}
+								</div>
+							</div>
+						)}
+
+						{selectedNode.duration !== undefined && (
+							<div className="border-l pl-4">
+								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+									Duration
+								</div>
+								<div className="rounded py-1 font-mono text-xs text-foreground">
+									{formatDuration(selectedNode.duration)}
+								</div>
+							</div>
+						)}
+					</div>
+
+					{/* Data + Error row */}
+					{(selectedNode.data || selectedNode.error) && (
+						<div className="mt-3 grid grid-cols-1 gap-4">
+							<div className="min-w-0">
+								<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+									Data
+								</div>
+								<pre className="max-h-36 overflow-auto rounded px-2 py-1 font-mono text-xs text-foreground">
+									<ActorObjectInspector
+										data={selectedNode.data}
+									/>
+								</pre>
+							</div>
+
+							{selectedNode.error && (
+								<div className="min-w-0">
+									<div className="mb-1 text-xs font-medium uppercase text-destructive">
+										Error
+									</div>
+									<div className="rounded bg-red-500/10 px-2 py-1 font-mono text-xs text-destructive">
+										<ActorObjectInspector
+											data={selectedNode.error}
+										/>
+									</div>
+								</div>
+							)}
+						</div>
+					)}
 				</div>
 			)}
 		</div>
