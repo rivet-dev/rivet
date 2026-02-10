@@ -40,172 +40,76 @@ import {
 import { motion } from "framer-motion";
 
 // --- Shared Design Components ---
-const Badge = ({ text, color = "red" }) => {
-	const colorClasses = {
-		orange: "text-orange-400 border-orange-500/20 bg-orange-500/10",
-		blue: "text-blue-400 border-blue-500/20 bg-blue-500/10",
-		purple: "text-purple-400 border-purple-500/20 bg-purple-500/10",
-		emerald: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10",
-		red: "text-red-400 border-red-500/20 bg-red-500/10",
+const Badge = ({ text }: { text: string }) => (
+	<div className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400 mb-6">
+		<span className="h-1.5 w-1.5 rounded-full bg-[#FF4500]" />
+		{text}
+	</div>
+);
+
+const CodeBlock = ({ code, fileName = "match.ts" }: { code: string; fileName?: string }) => {
+	const highlightLine = (line: string) => {
+		const tokens: JSX.Element[] = [];
+		let current = line;
+
+		const commentIndex = current.indexOf("//");
+		let comment = "";
+		if (commentIndex !== -1) {
+			comment = current.slice(commentIndex);
+			current = current.slice(0, commentIndex);
+		}
+
+		const parts = current.split(/([a-zA-Z0-9_$]+|"[^"]*"|'[^']*'|\s+|[(){},.;:[\]])/g).filter(Boolean);
+
+		parts.forEach((part, j) => {
+			const trimmed = part.trim();
+
+			if (["import", "from", "export", "const", "return", "async", "await", "function", "let", "var", "if", "else", "while", "true", "false", "null"].includes(trimmed)) {
+				tokens.push(<span key={j} className="text-purple-400">{part}</span>);
+			}
+			else if (["actor", "spawn", "rpc", "ai"].includes(trimmed)) {
+				tokens.push(<span key={j} className="text-blue-400">{part}</span>);
+			}
+			else if (["state", "actions", "broadcast", "c", "match", "players", "gameState", "join", "leave", "update"].includes(trimmed)) {
+				tokens.push(<span key={j} className="text-blue-300">{part}</span>);
+			}
+			else if (part.startsWith('"') || part.startsWith("'")) {
+				tokens.push(<span key={j} className="text-[#FF4500]">{part}</span>);
+			}
+			else if (!isNaN(Number(trimmed)) && trimmed !== "") {
+				tokens.push(<span key={j} className="text-purple-400">{part}</span>);
+			}
+			else {
+				tokens.push(<span key={j} className="text-zinc-300">{part}</span>);
+			}
+		});
+
+		if (comment) {
+			tokens.push(<span key="comment" className="text-zinc-500">{comment}</span>);
+		}
+
+		return tokens;
 	};
 
 	return (
-		<div
-			className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium mb-8 transition-colors cursor-default ${colorClasses[color]}`}
-		>
-			<span
-				className={`w-1.5 h-1.5 rounded-full ${
-					color === "orange"
-						? "bg-orange-400"
-						: color === "blue"
-							? "bg-blue-400"
-							: color === "purple"
-								? "bg-purple-400"
-								: color === "emerald"
-									? "bg-emerald-400"
-									: "bg-red-400"
-				} animate-pulse`}
-			/>
-			{text}
-		</div>
-	);
-};
-
-const CodeBlock = ({ code, fileName = "match.ts" }) => {
-	return (
-		<div className="relative group rounded-xl overflow-hidden border border-white/10 bg-background shadow-2xl">
-			<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent z-10" />
-			<div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5">
-				<div className="flex items-center gap-2">
-					<div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50" />
-					<div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
-					<div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50" />
+		<div className="relative rounded-lg overflow-hidden border border-white/10 bg-black">
+			<div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-white/5">
+				<div className="flex items-center gap-1.5">
+					<div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+					<div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+					<div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
 				</div>
 				<div className="text-xs text-zinc-500 font-mono">{fileName}</div>
 			</div>
-			<div className="p-4 overflow-x-auto scrollbar-hide">
+			<div className="p-4 overflow-x-auto">
 				<pre className="text-sm font-mono leading-relaxed text-zinc-300">
 					<code>
 						{code.split("\n").map((line, i) => (
 							<div key={i} className="table-row">
-								<span className="table-cell select-none text-right pr-4 text-zinc-700 w-8">
+								<span className="table-cell select-none text-right pr-4 text-zinc-600 w-8">
 									{i + 1}
 								</span>
-								<span className="table-cell">
-									{(() => {
-										// Simple custom tokenizer for this snippet
-										const tokens = [];
-										let current = line;
-
-										// Handle comments first (consume rest of line)
-										const commentIndex = current.indexOf("//");
-										let comment = "";
-										if (commentIndex !== -1) {
-											comment = current.slice(commentIndex);
-											current = current.slice(0, commentIndex);
-										}
-
-										// Split remaining code by delimiters but keep them
-										const parts = current
-											.split(/([a-zA-Z0-9_$]+|"[^"]*"|'[^']*'|\s+|[(){},.;:[\]])/g)
-											.filter(Boolean);
-
-										parts.forEach((part, j) => {
-											const trimmed = part.trim();
-
-											// Keywords
-											if (
-												[
-													"import",
-													"from",
-													"export",
-													"const",
-													"return",
-													"async",
-													"await",
-													"function",
-													"if",
-													"else",
-												].includes(trimmed)
-											) {
-												tokens.push(
-													<span key={j} className="text-purple-400">
-														{part}
-													</span>,
-												);
-											}
-											// Functions & Special Rivet Terms
-											else if (
-												["actor", "broadcast", "deathmatch", "isValidMove"].includes(trimmed)
-											) {
-												tokens.push(
-													<span key={j} className="text-blue-400">
-														{part}
-													</span>,
-												);
-											}
-											// Object Keys / Properties / Methods
-											else if (
-												[
-													"state",
-													"actions",
-													"players",
-													"scores",
-													"map",
-													"join",
-													"move",
-													"connectionId",
-													"name",
-													"hp",
-													"pos",
-													"x",
-													"y",
-													"id",
-												].includes(trimmed)
-											) {
-												tokens.push(
-													<span key={j} className="text-blue-300">
-														{part}
-													</span>,
-												);
-											}
-											// Strings
-											else if (part.startsWith('"') || part.startsWith("'")) {
-												tokens.push(
-													<span key={j} className="text-[#FF4500]">
-														{part}
-													</span>,
-												);
-											}
-											// Numbers
-											else if (!isNaN(Number(trimmed)) && trimmed !== "") {
-												tokens.push(
-													<span key={j} className="text-emerald-400">
-														{part}
-													</span>,
-												);
-											}
-											// Default (punctuation, variables like 'c', etc)
-											else {
-												tokens.push(
-													<span key={j} className="text-zinc-300">
-														{part}
-													</span>,
-												);
-											}
-										});
-
-										if (comment) {
-											tokens.push(
-												<span key="comment" className="text-zinc-500">
-													{comment}
-												</span>,
-											);
-										}
-
-										return tokens;
-									})()}
-								</span>
+								<span className="table-cell">{highlightLine(line)}</span>
 							</div>
 						))}
 					</code>
@@ -215,119 +119,39 @@ const CodeBlock = ({ code, fileName = "match.ts" }) => {
 	);
 };
 
-const SolutionCard = ({ title, description, icon: Icon, color = "red" }) => {
-	const getColorClasses = (col) => {
-		switch (col) {
-			case "orange":
-				return {
-					bg: "bg-orange-500/10",
-					text: "text-orange-400",
-					hoverBg: "group-hover:bg-orange-500/20",
-					border: "border-orange-500/80",
-					glow: "rgba(249,115,22,0.1)",
-				};
-			case "blue":
-				return {
-					bg: "bg-blue-500/10",
-					text: "text-blue-400",
-					hoverBg: "group-hover:bg-blue-500/20",
-					border: "border-blue-500/80",
-					glow: "rgba(59,130,246,0.1)",
-				};
-			case "purple":
-				return {
-					bg: "bg-purple-500/10",
-					text: "text-purple-400",
-					hoverBg: "group-hover:bg-purple-500/20",
-					border: "border-purple-500/80",
-					glow: "rgba(168,85,247,0.1)",
-				};
-			case "emerald":
-				return {
-					bg: "bg-emerald-500/10",
-					text: "text-emerald-400",
-					hoverBg: "group-hover:bg-emerald-500/20",
-					border: "border-emerald-500/80",
-					glow: "rgba(16,185,129,0.1)",
-				};
-			case "red":
-				return {
-					bg: "bg-red-500/10",
-					text: "text-red-400",
-					hoverBg: "group-hover:bg-red-500/20",
-					border: "border-red-500/80",
-					glow: "rgba(239,68,68,0.1)",
-				};
-			default:
-				return {
-					bg: "bg-red-500/10",
-					text: "text-red-400",
-					hoverBg: "group-hover:bg-red-500/20",
-					border: "border-red-500/80",
-					glow: "rgba(239,68,68,0.1)",
-				};
-		}
-	};
-	const c = getColorClasses(color);
-
-	return (
-		<div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-black/50 backdrop-blur-sm flex flex-col h-full p-6">
-			{/* Top Shine Highlight */}
-			<div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
-			{/* Soft Glow */}
-			<div
-				className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-				style={{
-					background: `radial-gradient(circle at top left, ${c.glow} 0%, transparent 50%)`,
-				}}
-			/>
-
-			{/* Sharp Edge Highlight (Masked & Shortened) */}
-			<div
-				className={`absolute top-0 left-0 w-12 h-12 rounded-tl-2xl border-t border-l ${c.border} opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20 [mask-image:linear-gradient(135deg,black_0%,transparent_100%)]`}
-			/>
-
-			<div className="flex items-center gap-3 mb-4 relative z-10">
-				<div
-					className={`p-2 rounded ${c.bg} ${c.text} ${c.hoverBg} transition-colors duration-500`}
-				>
-					<Icon className="w-5 h-5" />
-				</div>
-				<h3 className="text-lg font-medium text-white tracking-tight">{title}</h3>
-			</div>
-			<p className="text-sm text-zinc-400 leading-relaxed relative z-10 flex-grow">
-				{description}
-			</p>
+// --- Simple Feature Card ---
+const FeatureItem = ({ title, description, icon: Icon }: { title: string; description: string; icon: typeof Database }) => (
+	<div className="border-t border-white/10 pt-6">
+		<div className="mb-3 text-zinc-500">
+			<Icon className="h-4 w-4" />
 		</div>
-	);
-};
+		<h3 className="text-sm font-normal text-white mb-1">{title}</h3>
+		<p className="text-sm leading-relaxed text-zinc-500">{description}</p>
+	</div>
+);
 
 // --- Page Sections ---
 const Hero = () => (
-	<section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
-		<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-red-500/[0.03] blur-[100px] rounded-full pointer-events-none" />
-
-		<div className="max-w-7xl mx-auto px-6 relative z-10">
+	<section className="relative overflow-hidden pb-20 pt-32 md:pb-32 md:pt-48">
+		<div className="mx-auto max-w-7xl px-6">
 			<div className="flex flex-col lg:flex-row gap-16 items-center">
 				<div className="flex-1 max-w-2xl">
-					<Badge text="Multiplayer Backend" color="red" />
+					<Badge text="Multiplayer Backend" />
 
 					<motion.h1
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5 }}
-						className="text-5xl md:text-7xl font-medium text-white tracking-tight leading-[1.1] mb-6"
+						className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl"
 					>
-						Game Servers. <br />
-						<span className="text-red-400">Serverless.</span>
+						Serverless Game Servers
 					</motion.h1>
 
 					<motion.p
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-lg md:text-xl text-zinc-400 leading-relaxed mb-8 max-w-lg"
+						className="mb-8 max-w-lg text-base leading-relaxed text-zinc-500"
 					>
 						Launch an authoritative game server for every match instantly. Scale to millions of
 						concurrent players without managing fleets or Kubernetes.
@@ -337,23 +161,21 @@ const Hero = () => (
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5, delay: 0.2 }}
-						className="flex flex-col sm:flex-row items-center gap-4"
+						className="flex flex-col sm:flex-row items-center gap-3"
 					>
-						<a href="https://dashboard.rivet.dev/" className="w-full sm:w-auto h-12 px-8 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
-							Get Started
-							<ArrowRight className="w-4 h-4" />
+						<a href="/docs" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
+							Start Building
+							<ArrowRight className="h-4 w-4" />
 						</a>
-						<a href="/templates/chat-room" className="w-full sm:w-auto h-12 px-8 rounded-full border border-zinc-800 text-zinc-300 font-medium hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center gap-2 bg-black">
-							<Play className="w-4 h-4" />
+						<a href="/templates/chat-room" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white">
+							<Play className="h-4 w-4" />
 							See Examples
 						</a>
 					</motion.div>
 				</div>
 
 				<div className="flex-1 w-full max-w-xl">
-					<div className="relative">
-						<div className="absolute -inset-1 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-xl blur opacity-40" />
-						<CodeBlock
+					<CodeBlock
 							fileName="match_handler.ts"
 							code={`import { actor } from "rivetkit";
 
@@ -376,7 +198,6 @@ export const deathmatch = actor({
   }
 });`}
 						/>
-					</div>
 				</div>
 			</div>
 		</div>
@@ -394,34 +215,22 @@ const GameLoopArchitecture = () => {
 	}, []);
 
 	return (
-		<section className="py-24 bg-black border-y border-white/5 relative">
-			<div className="max-w-7xl mx-auto px-6">
-				<div className="mb-16">
-					<motion.h2
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5 }}
-						className="text-3xl md:text-4xl font-medium text-white mb-6"
-					>
+		<section className="border-t border-white/10 py-48">
+			<div className="mx-auto max-w-7xl px-6">
+				<div className="mb-12">
+					<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
 						The Game Loop
-					</motion.h2>
-					<motion.p
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-zinc-400 max-w-2xl text-lg leading-relaxed"
-					>
+					</h2>
+					<p className="max-w-2xl text-base leading-relaxed text-zinc-500">
 						Traditional serverless functions die after a request. Rivet Actors stay alive,
 						maintaining the game state in memory and ticking the simulation as long as players are
 						connected.
-					</motion.p>
+					</p>
 				</div>
 
 				<div className="grid lg:grid-cols-2 gap-12 items-center">
 					{/* Visualization */}
-					<div className="relative h-80 rounded-2xl border border-white/10 bg-zinc-900/20 flex items-center justify-center overflow-hidden p-8">
+					<div className="relative h-80 rounded-lg border border-white/10 bg-black flex items-center justify-center overflow-hidden p-8">
 						{/* Central Actor (Server) */}
 						<div className="relative z-10 flex flex-col items-center">
 							<div className="w-32 h-32 rounded-full border-2 border-red-500 bg-black flex flex-col items-center justify-center relative shadow-[0_0_40px_rgba(239,68,68,0.3)]">
@@ -555,84 +364,50 @@ const GameFeatures = () => {
 	const features = [
 		{
 			title: "Lobby Management",
-			description:
-				"Create persistent lobby actors that hold players before a match starts. Handle chat, loadouts, and ready states.",
+			description: "Create persistent lobby actors that hold players before a match starts. Handle chat, loadouts, and ready states.",
 			icon: Users,
-			color: "red",
 		},
 		{
 			title: "Matchmaking",
-			description:
-				"Use a singleton 'Matchmaker' actor to queue players and spawn new Match actors when groups are formed.",
+			description: "Use a singleton 'Matchmaker' actor to queue players and spawn new Match actors when groups are formed.",
 			icon: Target,
-			color: "blue",
 		},
 		{
 			title: "Turn-Based Games",
-			description:
-				"Perfect for card games or board games. Actors can sleep for days between turns without incurring compute costs.",
+			description: "Perfect for card games or board games. Actors can sleep for days between turns without incurring compute costs.",
 			icon: Clock,
-			color: "orange",
 		},
 		{
 			title: "Leaderboards",
-			description:
-				"High-throughput counters and sorting in memory. Update scores instantly without hammering a database.",
+			description: "High-throughput counters and sorting in memory. Update scores instantly without hammering a database.",
 			icon: Trophy,
-			color: "purple",
 		},
 		{
 			title: "Economy & Inventory",
-			description:
-				"Transactional state for trading items or currency. Ensure no item duplication glitches with serialized execution.",
+			description: "Transactional state for trading items or currency. Ensure no item duplication glitches with serialized execution.",
 			icon: CreditCard,
-			color: "emerald",
 		},
 		{
 			title: "Spectator Mode",
-			description:
-				"Allow thousands of users to subscribe to a match actor to watch real-time updates without affecting player latency.",
+			description: "Allow thousands of users to subscribe to a match actor to watch real-time updates without affecting player latency.",
 			icon: Eye,
-			color: "red",
 		},
 	];
 
 	return (
-		<section className="py-32 bg-zinc-900/20 relative">
-			<div className="max-w-7xl mx-auto px-6">
-				<div className="mb-20 text-center">
-					<motion.h2
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5 }}
-						className="text-3xl md:text-5xl font-medium text-white mb-6"
-					>
-						Built for Multiplayer
-					</motion.h2>
-					<motion.p
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-zinc-400 text-lg"
-					>
-						Infrastructure primitives that understand the needs of modern games.
-					</motion.p>
-				</div>
+		<section className="border-t border-white/10 py-48">
+			<div className="mx-auto max-w-7xl px-6">
+				<div className="flex flex-col gap-12">
+					<div className="max-w-xl">
+						<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">Built for Multiplayer</h2>
+						<p className="text-base leading-relaxed text-zinc-500">Infrastructure primitives that understand the needs of modern games.</p>
+					</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-					{features.map((feat, idx) => (
-						<motion.div
-							key={idx}
-							initial={{ opacity: 0, y: 20 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.5, delay: idx * 0.05 }}
-						>
-							<SolutionCard {...feat} />
-						</motion.div>
-					))}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+						{features.map((feat, idx) => (
+							<FeatureItem key={idx} {...feat} />
+						))}
+					</div>
 				</div>
 			</div>
 		</section>
@@ -640,123 +415,81 @@ const GameFeatures = () => {
 };
 
 const UseCases = () => (
-	<section className="py-24 bg-black border-t border-white/5">
-		<div className="max-w-7xl mx-auto px-6">
+	<section className="border-t border-white/10 py-48">
+		<div className="mx-auto max-w-7xl px-6">
 			<div className="grid md:grid-cols-2 gap-16 items-center">
 				<div>
-					<Badge text="Case Study" color="red" />
-					<motion.h2
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5 }}
-						className="text-3xl md:text-5xl font-medium text-white mb-6"
-					>
+					<Badge text="Case Study" />
+					<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
 						Real-Time Strategy (RTS)
-					</motion.h2>
-					<motion.p
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5, delay: 0.1 }}
-						className="text-lg text-zinc-400 mb-8 leading-relaxed"
-					>
+					</h2>
+					<p className="mb-8 text-base leading-relaxed text-zinc-500">
 						A persistent world 4X strategy game where thousands of players move armies on a shared
 						map.
-					</motion.p>
-					<motion.ul
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5, delay: 0.2 }}
-						className="space-y-4"
-					>
+					</p>
+					<ul className="space-y-4">
 						{[
 							"Sharding: Map divided into hex grids, each controlled by an Actor",
 							"Fog of War: Calculated on server, only visible units sent to client",
 							"Persistence: Game state survives server updates seamlessly",
 						].map((item, i) => (
-							<li key={i} className="flex items-center gap-3 text-zinc-300">
-								<div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
-									<Check className="w-3 h-3 text-red-400" />
+							<li key={i} className="flex items-center gap-3 text-sm text-zinc-300">
+								<div className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/5">
+									<Check className="h-3 w-3 text-[#FF4500]" />
 								</div>
 								{item}
 							</li>
 						))}
-					</motion.ul>
+					</ul>
 				</div>
-				<motion.div
-					initial={{ opacity: 0, x: 20 }}
-					whileInView={{ opacity: 1, x: 0 }}
-					viewport={{ once: true }}
-					transition={{ duration: 0.5 }}
-					className="relative"
-				>
-					<div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-transparent rounded-2xl blur-2xl" />
-					<div className="relative rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-						<div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-							<div className="flex items-center gap-3">
-								<div className="w-8 h-8 rounded bg-red-500/20 flex items-center justify-center">
-									<Sword className="w-5 h-5 text-red-400" />
-								</div>
-								<div>
-									<div className="text-sm font-medium text-white">Sector: Alpha-9</div>
-									<div className="text-xs text-zinc-500">Units: 4,291 Active</div>
-								</div>
+				<div className="relative rounded-lg border border-white/10 bg-black p-6">
+					<div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
+						<div className="flex items-center gap-3">
+							<div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+								<Sword className="h-4 w-4 text-white" />
 							</div>
-							<div className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-xs border border-red-500/20">
-								Live
+							<div>
+								<div className="text-sm font-medium text-white">Sector: Alpha-9</div>
+								<div className="text-xs text-zinc-500">Units: 4,291 Active</div>
 							</div>
 						</div>
-						<div className="space-y-4 text-sm font-mono">
-							<div className="flex justify-between items-center text-zinc-500 text-xs">
-								<span>Tick Rate</span>
-								<span>20Hz</span>
-							</div>
-							<div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-								<div
-									className="bg-red-500 h-1.5 rounded-full animate-[pulse_2s_infinite]"
-									style={{ width: "92%" }}
-								/>
-							</div>
-							<div className="p-3 rounded bg-zinc-950 border border-white/5 text-zinc-400">
-								Combat resolved in Grid[44,12]. 12 units lost. Updating clients...
-							</div>
+						<div className="rounded border border-[#FF4500]/20 bg-[#FF4500]/10 px-2 py-1 text-xs text-[#FF4500]">
+							Live
 						</div>
 					</div>
-				</motion.div>
+					<div className="space-y-4 font-mono text-sm">
+						<div className="flex items-center justify-between text-xs text-zinc-500">
+							<span>Tick Rate</span>
+							<span>20Hz</span>
+						</div>
+						<div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+							<div className="h-1.5 w-[92%] animate-pulse rounded-full bg-[#FF4500]" />
+						</div>
+						<div className="rounded border border-white/5 bg-zinc-900 p-3 text-zinc-400">
+							Combat resolved in Grid[44,12]. 12 units lost. Updating clients...
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 	</section>
 );
 
 const Ecosystem = () => (
-	<section className="py-24 bg-zinc-900/20 border-t border-white/5 relative overflow-hidden">
-		<div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
-			<motion.h2
-				initial={{ opacity: 0, y: 20 }}
-				whileInView={{ opacity: 1, y: 0 }}
-				viewport={{ once: true }}
-				transition={{ duration: 0.5 }}
-				className="text-3xl md:text-5xl font-medium text-white mb-12"
-			>
+	<section className="border-t border-white/10 py-48">
+		<div className="mx-auto max-w-7xl px-6 text-center">
+			<h2 className="mb-12 text-2xl font-normal tracking-tight text-white md:text-4xl">
 				Integrates with your engine
-			</motion.h2>
-			<div className="flex flex-wrap justify-center gap-4">
-				{["Unity", "Unreal Engine", "Godot", "Phaser", "Three.js", "PlayCanvas"].map(
-					(tech, i) => (
-						<motion.div
-							key={tech}
-							initial={{ opacity: 0, y: 20 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.5, delay: i * 0.05 }}
-							className="px-6 py-3 rounded-xl border border-white/10 bg-black/50 text-zinc-400 text-sm font-mono hover:text-white hover:border-white/30 transition-colors cursor-default backdrop-blur-sm"
-						>
-							{tech}
-						</motion.div>
-					),
-				)}
+			</h2>
+			<div className="flex flex-wrap justify-center gap-3">
+				{["Unity", "Unreal Engine", "Godot", "Phaser", "Three.js", "PlayCanvas"].map((tech) => (
+					<div
+						key={tech}
+						className="rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white"
+					>
+						{tech}
+					</div>
+				))}
 			</div>
 		</div>
 	</section>
@@ -764,7 +497,7 @@ const Ecosystem = () => (
 
 export default function GameServersPage() {
 	return (
-		<div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-red-500/30 selection:text-red-200">
+		<div className="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<main>
 				<Hero />
 				<GameLoopArchitecture />
@@ -773,40 +506,23 @@ export default function GameServersPage() {
 				<Ecosystem />
 
 				{/* CTA Section */}
-				<section className="py-32 text-center px-6 border-t border-white/10 bg-gradient-to-b from-black to-zinc-900/50">
-					<div className="max-w-3xl mx-auto">
-						<motion.h2
-							initial={{ opacity: 0, y: 20 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.5 }}
-							className="text-4xl md:text-5xl font-medium text-white mb-6 tracking-tight"
-						>
+				<section className="border-t border-white/10 py-48">
+					<div className="mx-auto max-w-3xl px-6 text-center">
+						<h2 className="mb-4 text-2xl font-normal tracking-tight text-white md:text-4xl">
 							Launch day ready.
-						</motion.h2>
-						<motion.p
-							initial={{ opacity: 0, y: 20 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.5, delay: 0.1 }}
-							className="text-lg text-zinc-400 mb-10 leading-relaxed"
-						>
+						</h2>
+						<p className="mb-8 text-base leading-relaxed text-zinc-500">
 							Focus on the gameplay. Let Rivet handle the state, scaling, and persistence.
-						</motion.p>
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.5, delay: 0.2 }}
-							className="flex flex-col sm:flex-row items-center justify-center gap-4"
-						>
-							<a href="https://dashboard.rivet.dev/" className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-black font-semibold hover:bg-zinc-200 transition-all transform hover:-translate-y-1">
+						</p>
+						<div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+							<a href="/docs" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
 								Start Building
+								<ArrowRight className="h-4 w-4" />
 							</a>
-							<a href="/docs/actors" className="w-full sm:w-auto px-8 py-4 rounded-full bg-zinc-900 text-white border border-zinc-800 font-medium hover:bg-zinc-800 transition-all">
+							<a href="/docs/actors" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white">
 								Read the Docs
 							</a>
-						</motion.div>
+						</div>
 					</div>
 				</section>
 			</main>

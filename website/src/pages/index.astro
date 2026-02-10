@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { RedesignedHero } from '@/components/marketing/sections/RedesignedHero';
 import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
@@ -9,6 +10,61 @@ import { IntegrationsSection } from '@/components/marketing/sections/Integration
 import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
 import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
 import { ScrollObserver } from '@/components/ScrollObserver';
+
+// Import thinking images
+import imgThinker from '@/images/thinking/thinker.jpg';
+import imgLadyWriting from '@/images/thinking/a_lady_writing_1962.10.1.jpg';
+import imgPortrait from '@/images/thinking/portrait_of_a_man_possibly_jan_snoeck_1967.4.1.jpg';
+import imgSaintMark from '@/images/thinking/saint_mark_2012.79.1.jpg';
+import imgVirginReading from '@/images/thinking/the_virgin_reading_1939.1.354.jpg';
+import imgThinkingOver from '@/images/thinking/thinking_it_over_2008.115.5135.jpg';
+import imgWomanBalance from '@/images/thinking/woman_holding_a_balance_1942.9.97.jpg';
+import imgThinking2 from '@/images/thinking/thinking2.jpg';
+import imgThinking3 from '@/images/thinking/thinking3.jpg';
+import imgThinking6 from '@/images/thinking/thinking6.jpg';
+import img0000405625 from '@/images/thinking/0000405625_OG.JPG';
+import imgCHSDM from '@/images/thinking/CHSDM-1946-9-1MattFlynn.jpg';
+import imgNPG from '@/images/thinking/NPG-NPG_POB105.jpg';
+import imgSAAM from '@/images/thinking/SAAM-1912.2.1_1.jpg';
+import imgThink from '@/images/thinking/think.jpg';
+import imgThink11 from '@/images/thinking/think11.jpg';
+import imgThink12 from '@/images/thinking/think12.png';
+import imgThinker6 from '@/images/thinking/thinker6.jpg';
+
+// Optimize all thinking images
+const thinkingImageSources = [
+	imgThinker,
+	imgLadyWriting,
+	imgPortrait,
+	imgSaintMark,
+	imgVirginReading,
+	imgThinkingOver,
+	imgWomanBalance,
+	imgThinking2,
+	imgThinking3,
+	imgThinking6,
+	img0000405625,
+	imgCHSDM,
+	imgNPG,
+	imgSAAM,
+	imgThink,
+	imgThink11,
+	imgThink12,
+	imgThinker6,
+];
+
+const optimizedThinkingImages = await Promise.all(
+	thinkingImageSources.map(img =>
+		getImage({
+			src: img,
+			width: 800,
+			format: 'webp',
+			quality: 80
+		})
+	)
+);
+
+const thinkingImages = optimizedThinkingImages.map(img => img.src);
 
 // Get latest changelog title
 const posts = await getCollection('posts');
@@ -29,7 +85,7 @@ const latestChangelogTitle = latest?.data.title ?? '';
 	<ScrollObserver client:load>
 		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<main>
-				<RedesignedHero latestChangelogTitle={latestChangelogTitle} client:load />
+				<RedesignedHero latestChangelogTitle={latestChangelogTitle} thinkingImages={thinkingImages} client:load />
 				<ProblemSection client:visible />
 				<CodeWalkthrough client:visible />
 				<IntegrationsSection client:visible />

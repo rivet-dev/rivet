@@ -12,7 +12,6 @@ type AuthorInfo = {
 	socials?: { twitter?: string; github?: string; bluesky?: string };
 	url?: string;
 };
-import { Badge, Button } from '@rivet-gg/components';
 import { AuthorAvatar } from '@/components/AuthorAvatar';
 import { Icon, faRss } from '@rivet-gg/icons';
 
@@ -50,36 +49,37 @@ const changelogPosts = filteredPosts.map((post) => {
 ---
 
 <BlogLayout title="Changelog - Rivet">
-	<div class="mx-auto mt-20 w-full max-w-6xl px-8 md:mt-32" style="--header-height: 5rem;">
+	<div class="mx-auto mt-20 w-full max-w-7xl px-6 md:mt-32" style="--header-height: 5rem;">
 		<div class="mt-8 flex w-full items-center justify-between">
-			<h1 class="text-6xl font-bold">Changelog</h1>
-			<Button asChild>
-				<a href="/rss/feed.xml">
-					<Icon icon={faRss} className="mr-2" />
-					RSS Feed
-				</a>
-			</Button>
+			<h1 class="text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">Changelog</h1>
+			<a
+				href="/rss/feed.xml"
+				class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+			>
+				<Icon icon={faRss} />
+				RSS Feed
+			</a>
 		</div>
-		<div class="mb-8 mt-4 flex items-center justify-start">
-			<div class="bg-card rounded-md border">
+		<div class="mb-8 mt-6 flex items-center justify-start">
+			<div class="flex gap-2">
 				<a
 					href="/blog/"
-					class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+					class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-400 transition-colors hover:border-white/20 hover:text-white"
 				>
 					All Posts
 				</a>
 				<a
 					href="/changelog/"
-					class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+					class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200 selection-dark"
 				>
 					Changelog
 				</a>
 			</div>
 		</div>
-		<div class="mb-8 mt-8 grid grid-cols-1 gap-8 md:grid-cols-3">
+		<div class="mb-8 mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
 			{changelogPosts.map((article) => (
 				<a href={`/changelog/${article.slug}/`} class="size-full">
-					<article class="bg-card hover:border-primary flex size-full flex-col items-start justify-between rounded-md border p-4 transition-colors">
+					<article class="flex size-full flex-col items-start justify-between rounded-md border border-white/10 p-4 transition-colors hover:border-white/20">
 						<div>
 							{article.image && (
 								<div class="relative w-full">
@@ -88,32 +88,32 @@ const changelogPosts = filteredPosts.map((post) => {
 										alt={article.title}
 										width={600}
 										height={300}
-										class="aspect-[2/1] w-full rounded-md border object-cover"
+										class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
 										loading="lazy"
 										decoding="async"
 									/>
 								</div>
 							)}
 							<div class="mt-3 flex items-center gap-x-3 text-xs">
-								<time datetime={article.data.published.toISOString()} class="text-muted-foreground">
+								<time datetime={article.data.published.toISOString()} class="text-zinc-500">
 									{formatTimestamp(article.data.published)}
 								</time>
-								<Badge variant="outline">{article.category.name}</Badge>
+								<span class="rounded-full border border-white/10 px-2 py-0.5 text-xs text-zinc-400">{article.category.name}</span>
 							</div>
 							<div class="group relative">
-								<h3 class="mt-2 text-lg font-bold leading-6">
+								<h3 class="mt-2 text-base font-normal leading-6 text-white">
 									{article.title}
 								</h3>
-								<p class="text-muted-foreground mt-3 line-clamp-3 text-sm leading-6">
+								<p class="mt-2 line-clamp-3 text-sm leading-relaxed text-zinc-500">
 									{article.description}
 								</p>
 							</div>
 						</div>
 						<div class="max-w-xl">
-							<div class="relative mt-4 flex items-center gap-x-4">
+							<div class="relative mt-4 flex items-center gap-x-3">
 								<AuthorAvatar name={article.author.name} avatarSrc={article.author.avatar.src} client:load />
-								<div class="text-sm">
-									<div class="font-semibold">{article.author.name}</div>
+								<div class="text-sm text-zinc-400">
+									{article.author.name}
 								</div>
 							</div>
 						</div>

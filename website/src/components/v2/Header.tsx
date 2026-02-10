@@ -2,6 +2,7 @@
 import { usePathname } from "@/hooks/usePathname";
 import { ActiveLink } from "@/components/ActiveLink";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
+import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
@@ -305,8 +306,8 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 									href={solution.href}
 									className="group flex items-start gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer -m-3"
 								>
-									<div className="flex-shrink-0 w-10 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center group-hover:border-white/20 group-hover:bg-white/10 transition-colors">
-										<IconComponent className="w-5 h-5 text-white" />
+									<div className="flex-shrink-0 pt-0.5 text-zinc-500 group-hover:text-zinc-400 transition-colors">
+										<IconComponent className="w-4 h-4" />
 									</div>
 									<div className="flex-1 min-w-0 pt-0.5">
 										<div className="font-medium text-white mb-1.5 text-sm group-hover:text-white transition-colors">
@@ -370,19 +371,11 @@ export function Header({
 				<div
 					className={cn(
 						"hero-bg-exclude",
-						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
-						isScrolled
-							? "before:border-white/10"
-							: "before:border-transparent",
+						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
 					)}
 				>
 					<div
-						className={cn(
-							"absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl transition-all duration-300 ease-in-out md:block",
-							isScrolled
-								? "bg-background/80 backdrop-blur-lg"
-								: "bg-background backdrop-blur-none",
-						)}
+						className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl bg-background/80 backdrop-blur-lg md:block"
 					/>
 					<RivetHeader
 						className={headerStyles}
@@ -432,7 +425,6 @@ export function Header({
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<ProductsDropdown active={active === "product"} />
-								<SolutionsDropdown active={active === "solutions"} />
 								<TextNavItem
 									href="/docs"
 									ariaCurrent={
@@ -477,7 +469,7 @@ export function Header({
 	return (
 		<RivetHeader
 			className={cn(
-				"sticky top-0 z-50 bg-neutral-950",
+				"sticky top-0 z-50 bg-neutral-950/80 backdrop-blur-lg",
 				"[&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
 				// 0 padding on bottom for larger screens when subnav is showing
 				effectiveSubnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
@@ -526,7 +518,6 @@ export function Header({
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
 					<ProductsDropdown active={active === "product"} />
-					<SolutionsDropdown active={active === "solutions"} />
 					<TextNavItem
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}
@@ -579,12 +570,10 @@ function DocsMobileNavigation({ tree }) {
 	];
 
 	const mainLinks = [
-		{ href: "/", label: "Home" },
 		{ href: "/docs", label: "Docs" },
+		{ href: "/cloud", label: "Cloud" },
 		{ href: "/templates", label: "Templates" },
 		{ href: "/changelog", label: "Changelog" },
-		{ href: "/cloud", label: "Cloud" },
-		{ href: "https://dashboard.rivet.dev/", label: "Dashboard" },
 	];
 
 	const solutions = [
@@ -604,69 +593,31 @@ function DocsMobileNavigation({ tree }) {
 	const currentSection = sections.find(s => s.id === getCurrentSection());
 
 	return (
-		<div className="flex flex-col gap-1 font-v2 subpixel-antialiased text-sm">
-			{/* Products dropdown */}
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<button className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors flex items-center justify-between w-full text-left">
-						Products
-						<Icon icon={faChevronDown} className="h-3 w-3" />
-					</button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					className="w-[calc(100%-2rem)] max-w-[292px]"
-					align="start"
-					sideOffset={4}
-				>
-					{products.map((product) => (
-						<DropdownMenuItem
-							key={product.href}
-							asChild
-							className="flex items-center gap-2"
-						>
-							<a href={product.href} target={product.external ? "_blank" : undefined} rel={product.external ? "noopener noreferrer" : undefined}>
-								<img src={product.logo.src} alt={product.label} width={16} height={16} className="h-4 w-4" loading="lazy" decoding="async" />
-								{product.label}
-							</a>
-						</DropdownMenuItem>
-					))}
-				</DropdownMenuContent>
-			</DropdownMenu>
+		<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
+			{/* Home logo - full logo on small screens, icon only on tablet */}
+			<a href="/" className="py-3 px-2">
+				<img src={logoUrl.src} alt="Rivet" width={80} height={24} className="w-20 sm:hidden" />
+				<img src={logoIconUrl.src} alt="Rivet" width={32} height={32} className="w-8 h-8 hidden sm:block" />
+			</a>
 
-			{/* Solutions dropdown */}
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<button className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors flex items-center justify-between w-full text-left">
-						Solutions
-						<Icon icon={faChevronDown} className="h-3 w-3" />
-					</button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent 
-					className="w-[calc(100%-2rem)] max-w-[292px]"
-					align="start"
-					sideOffset={4}
+			{/* Products section */}
+			<div className="text-zinc-500 py-2 px-2 text-xs uppercase tracking-wide">Products</div>
+			{products.map((product) => (
+				<a
+					key={product.href}
+					href={product.href}
+					target={product.external ? "_blank" : undefined}
+					rel={product.external ? "noopener noreferrer" : undefined}
+					className="text-white py-2 px-2 pl-4 hover:bg-white/5 rounded-sm transition-colors flex items-center gap-2"
 				>
-					{solutions.map((solution) => {
-						const IconComponent = solution.icon;
-						return (
-							<DropdownMenuItem
-								key={solution.href}
-								asChild
-								className="flex items-center gap-2"
-							>
-								<a href={solution.href}>
-									<IconComponent className="h-4 w-4" />
-									{solution.label}
-								</a>
-							</DropdownMenuItem>
-						);
-					})}
-				</DropdownMenuContent>
-			</DropdownMenu>
+					<img src={product.logo.src} alt={product.label} width={16} height={16} className="h-4 w-4" loading="lazy" decoding="async" />
+					{product.label}
+				</a>
+			))}
 
 			{/* Main navigation links */}
 			{mainLinks.map(({ href, label }) => (
-				<a key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
+				<a key={href} href={href} className="text-white py-2 px-2 hover:bg-white/5 rounded-sm transition-colors">
 					{label}
 				</a>
 			))}
@@ -674,21 +625,22 @@ function DocsMobileNavigation({ tree }) {
 			{/* Separator and docs content */}
 			{isDocsPage && (
 				<>
-					<div className="border-t-2 border-border/50 my-2" />
+					<div className="border-t-2 border-white/10 my-2" />
 
 					{/* Section dropdown */}
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="outline" className="w-full justify-between h-9 text-sm">
+							<Button variant="outline" className="w-full justify-between h-9 text-sm border-white/10 bg-white/5 text-white hover:bg-white/10 hover:border-white/20">
 								{currentSection?.label || "Select Section"}
 								<Icon icon={faChevronDown} className="h-3.5 w-3.5 ml-2" />
 							</Button>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent className="w-[calc(100vw-3rem)]">
+						<DropdownMenuContent className="w-[calc(100vw-3rem)] bg-black/95 backdrop-blur-lg border-white/10">
 							{sections.map(({ id, label, href }) => (
 								<DropdownMenuItem
 									key={id}
 									asChild
+									className="text-white hover:bg-white/5 focus:bg-white/5"
 								>
 									<a href={href}>{label}</a>
 								</DropdownMenuItem>
@@ -700,6 +652,16 @@ function DocsMobileNavigation({ tree }) {
 					{tree && <div className="mt-1">{tree}</div>}
 				</>
 			)}
+
+			{/* Dashboard button */}
+			<div className="mt-4 pt-4 border-t border-white/10">
+				<a
+					href="https://dashboard.rivet.dev/"
+					className="flex items-center justify-center w-full rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+				>
+					Dashboard
+				</a>
+			</div>
 		</div>
 	);
 }

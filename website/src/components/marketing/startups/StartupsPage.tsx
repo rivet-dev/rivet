@@ -1,42 +1,111 @@
-import { Check, ArrowRight } from 'lucide-react';
+'use client';
 
+import { useState, useEffect } from 'react';
+import { Check, ArrowRight, ChevronDown } from 'lucide-react';
 import imgYC from '@/images/logos/yc.svg';
 import imgA16z from '@/images/logos/a16z.svg';
-import { FadeIn, FadeInStagger, FadeInItem } from '@/components/FadeIn';
-import { BackgroundPulse } from './BackgroundPulse';
 
-const FeatureCard = ({ title, description }: { title: string; description: string }) => (
-	<FadeInItem className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-sm transition-all duration-500 hover:border-white/20 hover:bg-white/[0.04]">
-		{/* Top Shine */}
-		<div className="absolute left-0 right-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+// Demo day dates - update these when new dates are announced
+const YC_DEMO_DAY = new Date('2026-03-24T00:00:00-07:00');
+const A16Z_DEMO_DAY = new Date('2026-04-14T00:00:00-07:00');
 
-		<h3 className="mb-3 text-lg font-medium tracking-tight text-white">{title}</h3>
-		<p className="text-sm leading-relaxed text-zinc-400">{description}</p>
-	</FadeInItem>
-);
+function getTimeRemaining(targetDate: Date) {
+	const now = new Date();
+	const diff = targetDate.getTime() - now.getTime();
 
-const EligibilityCard = ({ children }: { children: React.ReactNode }) => (
-	<FadeInItem className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-sm transition-all duration-500 hover:border-white/20 hover:bg-white/[0.04]">
-		<div className="absolute left-0 right-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-		<div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#FF4500]/10">
-			<Check className="h-3 w-3 text-[#FF4500]" />
+	if (diff <= 0) return null;
+
+	const totalHours = Math.floor(diff / (1000 * 60 * 60));
+	const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+	const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+	return { totalHours, minutes, seconds };
+}
+
+function DemoCountdown() {
+	const [ycCountdown, setYcCountdown] = useState(getTimeRemaining(YC_DEMO_DAY));
+	const [a16zCountdown, setA16zCountdown] = useState(getTimeRemaining(A16Z_DEMO_DAY));
+
+	useEffect(() => {
+		const interval = setInterval(() => {
+			setYcCountdown(getTimeRemaining(YC_DEMO_DAY));
+			setA16zCountdown(getTimeRemaining(A16Z_DEMO_DAY));
+		}, 1000);
+
+		return () => clearInterval(interval);
+	}, []);
+
+	const formatCountdown = (countdown: { totalHours: number; minutes: number; seconds: number } | null) => {
+		if (!countdown) return 'Passed';
+		const h = String(countdown.totalHours).padStart(2, '0');
+		const m = String(countdown.minutes).padStart(2, '0');
+		const s = String(countdown.seconds).padStart(2, '0');
+		return `${h}:${m}:${s}`;
+	};
+
+	return (
+		<div className="flex flex-wrap gap-6 font-mono text-xs">
+			{ycCountdown && (
+				<div className="flex items-center gap-2">
+					<span className="text-zinc-500">YC Demo Day</span>
+					<span className="text-zinc-300">{formatCountdown(ycCountdown)}</span>
+				</div>
+			)}
+			{a16zCountdown && (
+				<div className="flex items-center gap-2">
+					<span className="text-zinc-500">a16z Demo Day</span>
+					<span className="text-zinc-300">{formatCountdown(a16zCountdown)}</span>
+				</div>
+			)}
 		</div>
-		<span className="text-sm text-zinc-300">{children}</span>
-	</FadeInItem>
-);
+	);
+}
 
-const StepCard = ({ number, title, description }: { number: number; title: string; description: string }) => (
-	<FadeInItem className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-sm transition-all duration-500 hover:border-white/20 hover:bg-white/[0.04]">
-		<div className="absolute left-0 right-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-		<div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#FF4500]/10 text-sm font-medium text-[#FF4500]">
-			{number}
+interface CollapsibleSectionProps {
+	title: string;
+	children: React.ReactNode;
+	defaultOpen?: boolean;
+}
+
+function CollapsibleSection({ title, children, defaultOpen = false }: CollapsibleSectionProps) {
+	const [isOpen, setIsOpen] = useState(defaultOpen);
+
+	return (
+		<div className="border-t border-white/10 px-6">
+			<div className="mx-auto w-full max-w-7xl">
+				<button
+					onClick={() => setIsOpen(!isOpen)}
+					className="flex h-28 w-full items-center justify-between text-left"
+				>
+					<h2 className="text-2xl font-normal tracking-tight text-white md:text-4xl">
+						{title}
+					</h2>
+					<ChevronDown
+						className={`h-6 w-6 text-zinc-500 transition-transform duration-200 ${
+							isOpen ? 'rotate-180' : ''
+						}`}
+					/>
+				</button>
+				<div
+					className={`grid transition-all duration-300 ease-in-out ${
+						isOpen ? 'grid-rows-[1fr] opacity-100 pb-16' : 'grid-rows-[0fr] opacity-0'
+					}`}
+				>
+					<div className="overflow-hidden">
+						{children}
+					</div>
+				</div>
+			</div>
 		</div>
-		<h3 className="mb-2 font-medium text-white">{title}</h3>
-		<p className="text-sm leading-relaxed text-zinc-400">{description}</p>
-	</FadeInItem>
-);
+	);
+}
 
-export default function StartupsPage() {
+interface StartupsPageProps {
+	foundersImage: string;
+	speedrunImage: string;
+}
+
+export default function StartupsPage({ foundersImage, speedrunImage }: StartupsPageProps) {
 	const benefits = [
 		{ title: '50% off for 12 months', description: '50% off the Team plan' },
 		{ title: 'Priority Slack support', description: 'Direct access to our engineering team for fast answers and guidance' },
@@ -57,151 +126,179 @@ export default function StartupsPage() {
 
 	return (
 		<div className="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
-			<main className="mx-auto w-full max-w-[1500px] px-4 md:px-8">
-				{/* Hero Section */}
-				<section className="relative overflow-hidden pb-8 pt-32 sm:pb-10 md:pt-48">
-					<div className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[1000px] -translate-x-1/2 rounded-full bg-[#FF4500]/[0.03] blur-[100px]" />
-
-					<div className="relative z-10 mx-auto max-w-[1200px] px-6 lg:px-8">
-						<div className="text-center">
-							<FadeIn>
-								<h1 className="mb-6 text-4xl font-medium leading-[1.1] tracking-tighter text-white md:text-5xl lg:text-6xl">
-									Built for Demo Day
-									<br className="hidden sm:block" />
-									<span className="bg-gradient-to-b from-zinc-200 to-zinc-500 bg-clip-text text-transparent">
-										and Beyond
-									</span>
+			{/* Hero Section */}
+			<section className="relative flex min-h-screen flex-col overflow-hidden">
+				{/* Centered content */}
+				<div className="flex flex-1 flex-col justify-center px-6">
+					<div className="mx-auto w-full max-w-7xl">
+						<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-12 lg:gap-20">
+							<div className="max-w-xl">
+								<h1 className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+									Built for Demo Day and Beyond
 								</h1>
-							</FadeIn>
-						</div>
-					</div>
-				</section>
-
-				{/* Deal Banner */}
-				<section className="py-12 sm:py-16">
-					<FadeIn className="mx-auto max-w-4xl px-6 lg:px-8">
-						<div className="relative overflow-hidden rounded-2xl border border-[#FF4500]/30 bg-gradient-to-b from-[#FF4500]/10 to-transparent p-8 shadow-[0_0_50px_-12px_rgba(255,69,0,0.15)]">
-							{/* Top Shine */}
-							<div className="absolute left-0 right-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#FF4500]/50 to-transparent" />
-
-							<div className="text-center">
-								<FadeIn delay={0.1}>
-									<h2 className="mb-4 text-2xl font-medium tracking-tight text-white md:text-3xl">
-										50% off Rivet Cloud for 12 months
-									</h2>
-								</FadeIn>
-
-								<FadeIn delay={0.2}>
-									<p className="mx-auto mb-6 max-w-2xl text-lg leading-relaxed text-zinc-400">
-										As{' '}
-										<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-sm text-zinc-300 align-middle">
-											<img src={imgYC} alt="Y Combinator" className="h-4 w-auto" />
-											<span>YC W23</span>
-										</span>
-										{' '}and{' '}
-										<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-sm text-zinc-300 align-middle">
-											<img src={imgA16z} alt="a16z" className="h-3 w-auto" />
-											<span>a16z SR002</span>
-										</span>
-										{' '}alumni, we're offering fellow YC and Speedrun companies exclusive pricing to help you ship faster.
-									</p>
-								</FadeIn>
-
-								<FadeIn delay={0.3}>
-									<a href="https://forms.gle/J8USsTND8NAKJ18W9"
-										target="_blank"
-										rel="noopener noreferrer"
-										className="font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black subpixel-antialiased shadow-sm transition-colors hover:bg-zinc-200"
-									>
-										Claim the deal
-										<ArrowRight className="h-4 w-4" />
-									</a>
-								</FadeIn>
+								<p className="text-base leading-relaxed text-zinc-500">
+									As{' '}
+									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-sm text-zinc-300 align-middle">
+										<img src={imgYC.src} alt="Y Combinator logo" width={16} height={16} className="h-4 w-auto" loading="eager" decoding="async" />
+										<span>YC W23</span>
+									</span>
+									{' '}and{' '}
+									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-sm text-zinc-300 align-middle">
+										<img src={imgA16z.src} alt="Andreessen Horowitz (a16z) logo" width={16} height={12} className="h-3 w-auto" loading="eager" decoding="async" />
+										<span>a16z SR002</span>
+									</span>
+									{' '}alumni, we're offering fellow YC and Speedrun companies pricing and support to ship faster.
+								</p>
+							</div>
+							{/* Desktop: Overlapping photos */}
+							<div className="hidden lg:block flex-shrink-0 relative w-[500px] h-[400px]">
+								<div className="absolute top-0 left-0 w-[320px] h-[240px] overflow-hidden rounded-lg border border-white/10">
+									<img
+										src={foundersImage}
+										alt="Rivet founders Nathan Flurry and Nicholas Kissel at Y Combinator W23 Demo Day"
+										width={320}
+										height={240}
+										loading="eager"
+										decoding="async"
+										className="w-full h-full object-cover"
+									/>
+								</div>
+								<div className="absolute bottom-0 right-0 w-[320px] h-[240px] overflow-hidden rounded-lg border border-white/10">
+									<img
+										src={speedrunImage}
+										alt="Andreessen Horowitz a16z Speedrun SR002 cohort presentation"
+										width={320}
+										height={240}
+										loading="lazy"
+										decoding="async"
+										className="w-full h-full object-cover"
+									/>
+								</div>
+							</div>
+							{/* Mobile: Stacked photos */}
+							<div className="flex flex-col gap-4 lg:hidden">
+								<div className="w-full h-[200px] overflow-hidden rounded-lg border border-white/10">
+									<img
+										src={foundersImage}
+										alt="Rivet founders Nathan Flurry and Nicholas Kissel at Y Combinator W23 Demo Day"
+										loading="eager"
+										decoding="async"
+										className="w-full h-full object-cover"
+									/>
+								</div>
+								<div className="w-full h-[200px] overflow-hidden rounded-lg border border-white/10">
+									<img
+										src={speedrunImage}
+										alt="Andreessen Horowitz a16z Speedrun SR002 cohort presentation"
+										loading="lazy"
+										decoding="async"
+										className="w-full h-full object-cover"
+									/>
+								</div>
 							</div>
 						</div>
-					</FadeIn>
-				</section>
-
-				<div className="mx-auto max-w-4xl px-6 lg:px-8">
-					{/* What You Get */}
-					<section className="py-16 sm:py-20">
-						<FadeIn className="mb-12">
-							<h2 className="mb-4 text-2xl font-medium tracking-tight text-white md:text-3xl">What you get</h2>
-							<p className="text-lg leading-relaxed text-zinc-400">
-								Everything you need to build and scale stateful workloads at startup speed.
-							</p>
-						</FadeIn>
-
-						<FadeInStagger className="grid gap-4 md:grid-cols-3">
-							{benefits.map((benefit, idx) => (
-								<FeatureCard key={idx} title={benefit.title} description={benefit.description} />
-							))}
-						</FadeInStagger>
-					</section>
-
-					{/* Eligibility */}
-					<section className="py-16 sm:py-20">
-						<FadeIn>
-							<h2 className="mb-8 text-2xl font-medium tracking-tight text-white md:text-3xl">
-								Eligibility
-							</h2>
-						</FadeIn>
-
-						<FadeInStagger className="grid gap-4 md:grid-cols-3">
-							{eligibility.map((item, idx) => (
-								<EligibilityCard key={idx}>{item}</EligibilityCard>
-							))}
-						</FadeInStagger>
-					</section>
-
-					{/* How to Claim */}
-					<section className="py-16 sm:py-20">
-						<FadeIn>
-							<h2 className="mb-8 text-2xl font-medium tracking-tight text-white md:text-3xl">
-								How to claim
-							</h2>
-						</FadeIn>
-
-						<FadeInStagger className="grid gap-4 md:grid-cols-3">
-							{steps.map((step, idx) => (
-								<StepCard key={idx} number={step.number} title={step.title} description={step.description} />
-							))}
-						</FadeInStagger>
-					</section>
-
-					{/* CTA */}
-					<section className="relative overflow-hidden border-t border-white/10 px-6 py-32 text-center">
-						<BackgroundPulse />
-						<div className="relative z-10 mx-auto max-w-3xl">
-							<FadeIn>
-								<h2 className="mb-8 text-4xl font-medium tracking-tight text-white md:text-5xl">
-									Ready to build?
-								</h2>
-							</FadeIn>
-
-							<FadeIn delay={0.2} className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-								<a href="https://forms.gle/J8USsTND8NAKJ18W9"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black subpixel-antialiased shadow-sm transition-colors hover:bg-zinc-200"
-								>
-									Claim the deal
-									<ArrowRight className="h-4 w-4" />
-								</a>
-							</FadeIn>
-
-							<FadeIn delay={0.3}>
-								<p className="mt-10 text-zinc-500">
-									Questions?{' '}
-									<a href="/support" className="text-zinc-300 transition-colors hover:text-white hover:underline">
-										Contact us
-									</a>
-								</p>
-							</FadeIn>
-						</div>
-					</section>
+					</div>
 				</div>
-			</main>
+
+				{/* Bottom section */}
+				<div className="absolute bottom-0 left-0 right-0 px-6 pb-24">
+					<div className="mx-auto w-full max-w-7xl">
+						<div className="mb-6">
+							<DemoCountdown />
+						</div>
+						<div className="mb-8 h-px w-full bg-white/10" />
+						<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+							<div>
+								<h2 className="text-base font-normal text-white">
+									50% off Rivet Cloud for 12 months
+								</h2>
+								<p className="mt-1 text-sm text-zinc-500">
+									Everything you need to build and scale stateful workloads at startup speed.
+								</p>
+							</div>
+							<a
+								href="https://forms.gle/J8USsTND8NAKJ18W9"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+							>
+								Claim the deal
+								<ArrowRight className="h-4 w-4" />
+							</a>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* What You Get */}
+			<CollapsibleSection title="What you get" defaultOpen>
+				<p className="mb-12 max-w-xl text-base leading-relaxed text-zinc-500">
+					Everything you need to build and scale stateful workloads at startup speed.
+				</p>
+				<div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+					{benefits.map((benefit, idx) => (
+						<div key={idx} className="flex flex-col border-t border-white/10 pt-6">
+							<h3 className="mb-2 text-base font-normal text-white">{benefit.title}</h3>
+							<p className="text-sm leading-relaxed text-zinc-500">{benefit.description}</p>
+						</div>
+					))}
+				</div>
+			</CollapsibleSection>
+
+			{/* Eligibility */}
+			<CollapsibleSection title="Eligibility">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+					{eligibility.map((item, idx) => (
+						<div key={idx} className="flex items-center gap-3 rounded-md border border-white/10 p-4">
+							<div className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+								<Check className="h-4 w-4 text-zinc-500" />
+							</div>
+							<span className="text-sm text-zinc-300">{item}</span>
+						</div>
+					))}
+				</div>
+			</CollapsibleSection>
+
+			{/* How to Claim */}
+			<CollapsibleSection title="How to claim">
+				<div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+					{steps.map((step, idx) => (
+						<div key={idx} className="flex flex-col border-t border-white/10 pt-6">
+							<div className="mb-3 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-xs text-zinc-500">
+								{step.number}
+							</div>
+							<h3 className="mb-2 text-base font-normal text-white">{step.title}</h3>
+							<p className="text-sm leading-relaxed text-zinc-500">{step.description}</p>
+						</div>
+					))}
+				</div>
+			</CollapsibleSection>
+
+			{/* CTA */}
+			<div className="border-t border-white/10 py-24 px-6">
+				<div className="mx-auto w-full max-w-7xl text-center">
+					<h2 className="mb-6 text-2xl font-normal tracking-tight text-white md:text-4xl">
+						Ready to build?
+					</h2>
+					<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+						<a
+							href="https://forms.gle/J8USsTND8NAKJ18W9"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+						>
+							Claim the deal
+							<ArrowRight className="h-4 w-4" />
+						</a>
+					</div>
+					<p className="mt-8 text-sm text-zinc-500">
+						Questions?{' '}
+						<a href="/support" className="text-zinc-300 transition-colors hover:text-white">
+							Contact us
+						</a>
+					</p>
+				</div>
+			</div>
 		</div>
 	);
 }

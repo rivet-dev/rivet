@@ -1,8 +1,100 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Terminal, ArrowRight, Check, Database, HardDrive, GitBranch, Clock, Wifi, Infinity, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const ThinkingImageCycler = ({ images }: { images: string[] }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showFan, setShowFan] = useState(false);
+
+  const handleClick = () => {
+    setShowFan(false);
+    setCurrentIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const handleMouseEnter = () => {
+    setShowFan(true);
+    setTimeout(() => {
+      setShowFan(false);
+    }, 1000);
+  };
+
+  const handleMouseLeave = () => {
+    setShowFan(false);
+  };
+
+  // Get indices for the fanned cards behind the main one
+  const getNextIndices = (count: number) => {
+    const indices = [];
+    for (let i = 1; i <= count; i++) {
+      indices.push((currentIndex + i) % images.length);
+    }
+    return indices;
+  };
+
+  const fanCards = getNextIndices(3);
+
+  return (
+    <div
+      className="relative w-[280px] h-[350px] sm:w-[400px] sm:h-[500px] cursor-pointer"
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Fanned cards behind */}
+      {fanCards.map((imageIndex, i) => {
+        const rotation = showFan ? (i + 1) * 6 : 0;
+        const translateX = showFan ? (i + 1) * 15 : 0;
+        const translateY = showFan ? (i + 1) * -5 : 0;
+        const scale = 1 - (i + 1) * 0.02;
+
+        return (
+          <div
+            key={`fan-${i}`}
+            className="absolute inset-0 rounded-lg overflow-hidden shadow-xl transition-all duration-300 ease-out"
+            style={{
+              transform: `rotate(${rotation}deg) translateX(${translateX}px) translateY(${translateY}px) scale(${scale})`,
+              zIndex: 3 - i,
+              opacity: showFan ? 0.8 - i * 0.2 : 0,
+            }}
+          >
+            <img
+              src={images[imageIndex]}
+              alt="Classical artwork depicting contemplation"
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover select-none pointer-events-none"
+            />
+          </div>
+        );
+      })}
+
+      {/* Main card */}
+      <div
+        className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-transform duration-300 ease-out"
+        style={{
+          zIndex: 10,
+          transform: showFan ? 'rotate(-3deg) translateX(-10px)' : 'rotate(0deg) translateX(0px)',
+        }}
+      >
+        {images.map((src, index) => (
+          <img
+            key={src}
+            src={src}
+            alt="Classical artwork depicting contemplation and deep thought"
+            loading={index === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 select-none pointer-events-none ${
+              index === currentIndex ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        ))}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+      </div>
+    </div>
+  );
+};
 
 const ActorsLogoWithIcon = ({ hoveredFeature }: { hoveredFeature: string | null }) => {
   const iconMap: Record<string, typeof Database> = {
@@ -98,75 +190,269 @@ const CopyInstallButton = () => {
   };
 
   return (
-    <button
-      onClick={handleCopy}
-      className='font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white subpixel-antialiased shadow-sm transition-colors hover:border-white/20'
-    >
-      {copied ? <Check className='h-4 w-4' /> : <Terminal className='h-4 w-4' />}
-      npx skills add rivet-dev/skills
-    </button>
+    <div className='relative group w-full sm:w-auto'>
+      <button
+        onClick={handleCopy}
+        className='w-full sm:w-auto inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
+      >
+        {copied ? <Check className='h-4 w-4' /> : <Terminal className='h-4 w-4' />}
+        npx skills add rivet-dev/skills
+      </button>
+      <div className='absolute left-1/2 -translate-x-1/2 top-full mt-4 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out text-xs text-zinc-500 whitespace-nowrap pointer-events-none font-mono'>
+        Give this to your coding agent
+      </div>
+    </div>
   );
 };
 
 interface RedesignedHeroProps {
   latestChangelogTitle: string;
+  thinkingImages: string[];
 }
 
-export const RedesignedHero = ({ latestChangelogTitle }: RedesignedHeroProps) => {
+const useCases = ['AI Agent', 'Agent Memory', 'Game Server', 'Collaboration Backend', 'Workflow Engine', 'Session Store', 'Realtime Sync'];
+
+const featureToUseCases: Record<string, string[]> = {
+  'In-memory state': ['AI Agent', 'Agent Memory', 'Game Server', 'Session Store', 'Realtime Sync'],
+  'Persistent storage': ['Agent Memory', 'Session Store', 'Workflow Engine'],
+  'Workflows': ['Workflow Engine', 'AI Agent'],
+  'Scheduling': ['Workflow Engine', 'AI Agent'],
+  'WebSockets': ['Game Server', 'Collaboration Backend', 'Realtime Sync'],
+  'Runs indefinitely': ['Game Server', 'AI Agent', 'Collaboration Backend', 'Realtime Sync'],
+  'Sleeps when idle': ['Workflow Engine', 'Agent Memory', 'Session Store'],
+};
+
+export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
   const [hoveredFeature, setHoveredFeature] = useState<string | null>(null);
+  const [hoveredUseCase, setHoveredUseCase] = useState<string | null>(null);
+  const [scrollOpacity, setScrollOpacity] = useState(1);
+  const [actorSectionsOpacity, setActorSectionsOpacity] = useState(1);
   const features = ['In-memory state', 'Persistent storage', 'Workflows', 'Scheduling', 'WebSockets', 'Runs indefinitely', 'Sleeps when idle'];
 
+  const highlightedUseCases = hoveredFeature ? featureToUseCases[hoveredFeature] || [] : [];
+
+  const highlightedFeatures = hoveredUseCase
+    ? features.filter(feature => featureToUseCases[feature]?.includes(hoveredUseCase))
+    : [];
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const isMobile = window.innerWidth < 1024;
+
+      // Mobile: fade starts later (40%, done at 80%), Desktop: (20%, done at 60%)
+      const mainFadeStart = windowHeight * (isMobile ? 0.4 : 0.2);
+      const mainFadeEnd = windowHeight * (isMobile ? 0.8 : 0.6);
+      const mainOpacity = 1 - Math.min(1, Math.max(0, (scrollY - mainFadeStart) / (mainFadeEnd - mainFadeStart)));
+      setScrollOpacity(mainOpacity);
+
+      // Actor sections on mobile fade even later (100%, done at 140%)
+      if (isMobile) {
+        const actorFadeStart = windowHeight * 1.0;
+        const actorFadeEnd = windowHeight * 1.4;
+        const actorOpacity = 1 - Math.min(1, Math.max(0, (scrollY - actorFadeStart) / (actorFadeEnd - actorFadeStart)));
+        setActorSectionsOpacity(actorOpacity);
+      } else {
+        setActorSectionsOpacity(mainOpacity);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <section className='relative overflow-hidden pb-20 pt-32 md:pb-32 md:pt-48'>
-      <div className='pointer-events-none absolute left-1/2 top-0 h-[500px] w-[1000px] -translate-x-1/2 rounded-full bg-white/[0.02] blur-[100px]' />
-
-      <div className='relative z-10 mx-auto max-w-7xl px-6'>
-        <div className='flex flex-col items-center'>
-          <div className='max-w-3xl flex-1 text-center'>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className='mb-6'
-            >
-              <a href='/changelog'
-                className='inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-400 transition-colors hover:border-white/20'
+    <section className='relative flex min-h-screen flex-col overflow-hidden'>
+      {/* Centered content */}
+      <div className='flex flex-1 flex-col justify-start pt-32 lg:justify-center lg:pt-0 lg:pb-20 px-6' style={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}>
+        <div className='mx-auto w-full max-w-7xl'>
+          <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-32 xl:gap-48 2xl:gap-64'>
+            <div className='max-w-xl'>
+              {/* Mobile changelog link - above title */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.15 }}
+                className='mb-6 lg:hidden'
               >
-                <span className='h-2 w-2 animate-pulse rounded-full bg-[#FF4500]' />
-                {latestChangelogTitle}
-                <ArrowRight className='ml-1 h-3 w-3' />
-              </a>
-            </motion.div>
+                <a
+                  href='/changelog'
+                  className='inline-flex items-center gap-2 rounded-full bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
+                >
+                  <span className='h-[4px] w-[4px] rounded-full bg-[#ff6030]' style={{ boxShadow: '0 0 2px #ffaa60, 0 0 4px #ff8040, 0 0 10px #ff6020, 0 0 20px rgba(255, 69, 0, 0.8)' }} />
+                  {latestChangelogTitle}
+                  <ArrowRight className='h-3 w-3' />
+                </a>
+              </motion.div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className='mb-8 text-5xl font-medium leading-[1.1] tracking-tighter text-white md:text-7xl'
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className='mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
+              >
+                Infrastructure for <br />
+                software that thinks.
+              </motion.h1>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className='flex flex-col gap-3 sm:flex-row'
+              >
+                <a href='/docs'
+                  className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200'
+                >
+                  Start Building
+                  <ArrowRight className='h-4 w-4' />
+                </a>
+                <CopyInstallButton />
+              </motion.div>
+            </div>
+
+            {/* Right side - Cycling thinking images */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className='flex-shrink-0 hidden lg:block'
             >
-              Infrastructure for <br />
-              software that thinks.
-            </motion.h1>
+              <ThinkingImageCycler images={thinkingImages} />
+            </motion.div>
+          </div>
 
+          {/* Mobile: Image only */}
+          <div className='lg:hidden mt-12'>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className='flex justify-center'
+            >
+              <ThinkingImageCycler images={thinkingImages} />
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile: Actor sections - separate container with independent fade */}
+      <div className='lg:hidden px-6 mt-8' style={{ opacity: actorSectionsOpacity, filter: `blur(${(1 - actorSectionsOpacity) * 8}px)` }}>
+        <div className='mx-auto w-full max-w-7xl'>
+          <div className='flex flex-col gap-8'>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className='mx-auto mb-10'
             >
-              <p className='mb-4 flex items-center justify-center gap-2 text-lg text-zinc-400'>
-                Each <ActorsLogoWithIcon hoveredFeature={hoveredFeature} /> <span className='text-white'>Rivet Actor</span> has built in:
+              <p className='mb-3 flex items-center gap-2 text-base text-zinc-500'>
+                Each <ActorsLogoWithIcon hoveredFeature={hoveredFeature} /> <span className='text-white'>Rivet Actor</span> has built-in:
               </p>
-              <div className='flex flex-wrap justify-center gap-2'>
+              <div className='flex flex-wrap gap-2'>
+                {features.map((feature) => (
+                  <button
+                    key={feature}
+                    type="button"
+                    onClick={() => setHoveredFeature(hoveredFeature === feature ? null : feature)}
+                    onMouseEnter={() => setHoveredFeature(feature)}
+                    onMouseLeave={() => setHoveredFeature(null)}
+                    className={`cursor-pointer rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
+                      hoveredFeature === feature || highlightedFeatures.includes(feature)
+                        ? 'border-white/30 text-white'
+                        : hoveredFeature !== null || hoveredUseCase !== null
+                          ? 'border-white/5 text-zinc-600'
+                          : 'border-white/10 text-zinc-400'
+                    }`}
+                  >
+                    {feature}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+            >
+              <p className='mb-3 text-base text-zinc-500'>
+                And could be a:
+              </p>
+              <div className='flex flex-wrap gap-2'>
+                {useCases.map((useCase) => (
+                  <button
+                    key={useCase}
+                    type="button"
+                    onClick={() => setHoveredUseCase(hoveredUseCase === useCase ? null : useCase)}
+                    onMouseEnter={() => setHoveredUseCase(useCase)}
+                    onMouseLeave={() => setHoveredUseCase(null)}
+                    className={`cursor-pointer rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
+                      hoveredUseCase === useCase || highlightedUseCases.includes(useCase)
+                        ? 'border-white/30 text-white'
+                        : hoveredFeature !== null || hoveredUseCase !== null
+                          ? 'border-white/5 text-zinc-600'
+                          : 'border-white/10 text-zinc-400'
+                    }`}
+                  >
+                    {useCase}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom section - Changelog + Divider + Each Actor (desktop only) */}
+      <div className='absolute bottom-0 left-0 right-0 px-6 pb-24 hidden lg:block' style={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}>
+        <div className='mx-auto w-full max-w-7xl'>
+          {/* Changelog link */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className='mb-6'
+          >
+            <a
+              href='/changelog'
+              className='inline-flex items-center gap-2 rounded-full border border-white/10 px-2 py-0.5 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-300'
+            >
+              <span className='h-[4px] w-[4px] bg-[#ff6030]' style={{ boxShadow: '0 0 2px #ffaa60, 0 0 4px #ff8040, 0 0 10px #ff6020, 0 0 20px rgba(255, 69, 0, 0.8)' }} />
+              {latestChangelogTitle}
+              <ArrowRight className='h-3 w-3' />
+            </a>
+          </motion.div>
+
+          {/* Divider */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className='mb-8 h-px w-full bg-white/10'
+          />
+
+          <div className='grid gap-12 md:grid-cols-2'>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <p className='mb-3 flex items-center gap-2 text-base text-zinc-500'>
+                Each <ActorsLogoWithIcon hoveredFeature={hoveredFeature} /> <span className='text-white'>Rivet Actor</span> has built-in:
+              </p>
+              <div className='flex flex-wrap gap-2'>
                 {features.map((feature) => (
                   <span
                     key={feature}
                     onMouseEnter={() => setHoveredFeature(feature)}
                     onMouseLeave={() => setHoveredFeature(null)}
-                    className={`cursor-default rounded-full border px-3 py-1 text-sm transition-all ${
-                      hoveredFeature === feature
-                        ? 'border-[#FF4500]/40 bg-[#FF4500]/20 text-[#FF4500]'
-                        : 'border-[#FF4500]/20 bg-[#FF4500]/10 text-[#FF4500]'
+                    className={`cursor-default rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
+                      hoveredFeature === feature || highlightedFeatures.includes(feature)
+                        ? 'border-white/30 text-white'
+                        : hoveredFeature !== null || hoveredUseCase !== null
+                          ? 'border-white/5 text-zinc-600'
+                          : 'border-white/10 text-zinc-400'
                     }`}
                   >
                     {feature}
@@ -179,24 +465,27 @@ export const RedesignedHero = ({ latestChangelogTitle }: RedesignedHeroProps) =>
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className='flex flex-col items-center justify-center gap-4 sm:flex-row'
             >
-              <div className='group flex flex-col items-center'>
-                <a href='/docs'
-                  className='font-v2 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 bg-white px-4 py-2 text-sm text-black subpixel-antialiased shadow-sm transition-colors hover:bg-zinc-200'
-                >
-                  Start Building
-                  <ArrowRight className='h-4 w-4' />
-                </a>
-                <span className='mt-2 h-4 font-mono text-xs text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100'>
-                  for humans
-                </span>
-              </div>
-              <div className='group flex flex-col items-center'>
-                <CopyInstallButton />
-                <span className='mt-2 h-4 font-mono text-xs text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100'>
-                  for coding agents
-                </span>
+              <p className='mb-3 text-base text-zinc-500'>
+                And could be a:
+              </p>
+              <div className='flex flex-wrap gap-2'>
+                {useCases.map((useCase) => (
+                  <span
+                    key={useCase}
+                    onMouseEnter={() => setHoveredUseCase(useCase)}
+                    onMouseLeave={() => setHoveredUseCase(null)}
+                    className={`cursor-default rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
+                      hoveredUseCase === useCase || highlightedUseCases.includes(useCase)
+                        ? 'border-white/30 text-white'
+                        : hoveredFeature !== null || hoveredUseCase !== null
+                          ? 'border-white/5 text-zinc-600'
+                          : 'border-white/10 text-zinc-400'
+                    }`}
+                  >
+                    {useCase}
+                  </span>
+                ))}
               </div>
             </motion.div>
           </div>
