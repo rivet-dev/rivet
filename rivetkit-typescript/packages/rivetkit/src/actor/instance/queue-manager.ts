@@ -419,7 +419,10 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	/** Deletes messages matching the provided IDs. Returns the IDs that were removed. */
-	async deleteMessagesById(ids: bigint[]): Promise<bigint[]> {
+	async deleteMessagesById(
+		ids: bigint[],
+		options: { resolveWaiters?: boolean } = {},
+	): Promise<bigint[]> {
 		if (ids.length === 0) {
 			return [];
 		}
@@ -431,8 +434,18 @@ export class QueueManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (toRemove.length === 0) {
 			return [];
 		}
-		await this.#removeMessages(toRemove, { resolveWaiters: true });
+		await this.#removeMessages(toRemove, {
+			resolveWaiters: options.resolveWaiters ?? true,
+		});
 		return toRemove.map((entry) => entry.id);
+	}
+
+	/** Completes a previously removed message by resolving its waiter, if one exists. */
+	async completeById(messageId: bigint, response?: unknown): Promise<void> {
+		this.#resolveCompletionWaiter(messageId, {
+			status: "completed",
+			response,
+		});
 	}
 
 	async #drainMessages(

@@ -1,7 +1,9 @@
 import { Loop } from "@rivetkit/workflow-engine";
 import { actor } from "@/actor/mod";
+import { db } from "@/db/mod";
 import { WORKFLOW_GUARD_KV_KEY } from "@/workflow/constants";
 import { workflow, workflowQueueName } from "@/workflow/mod";
+import type { registry } from "./registry";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
 
@@ -55,12 +57,13 @@ export const workflowQueueActor = actor({
 			name: "queue",
 			run: async (loopCtx) => {
 				const actorLoopCtx = loopCtx as any;
-				const payload = await loopCtx.listen(
+				const message = await loopCtx.listen(
 					"queue-wait",
 					WORKFLOW_QUEUE_NAME,
 				);
 				await loopCtx.step("store-message", async () => {
-					actorLoopCtx.state.received.push(payload);
+					actorLoopCtx.state.received.push(message.body);
+					await message.complete({ echo: message.body });
 				});
 				return Loop.continue(undefined);
 			},
@@ -68,6 +71,81 @@ export const workflowQueueActor = actor({
 	}),
 	actions: {
 		getMessages: (c) => c.state.received,
+		sendAndWait: async (c, payload: unknown) => {
+			const client = c.client<typeof registry>();
+			const handle = client.workflowQueueActor.getForId(c.actorId);
+			return await handle.queue[workflowQueueName(WORKFLOW_QUEUE_NAME)].send(
+				payload,
+				{ wait: true, timeout: 1_000 },
+			);
+		},
+	},
+});
+
+export const workflowAccessActor = actor({
+	db: db({
+		onMigrate: async (rawDb) => {
+			await rawDb.execute(`
+				CREATE TABLE IF NOT EXISTS workflow_access_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					created_at INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
+	state: {
+		outsideDbError: null as string | null,
+		outsideClientError: null as string | null,
+		insideDbCount: 0,
+		insideClientAvailable: false,
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop({
+			name: "access",
+			run: async (loopCtx) => {
+				const actorLoopCtx = loopCtx as any;
+				let outsideDbError: string | null = null;
+				let outsideClientError: string | null = null;
+
+				try {
+					// Accessing db outside a step should throw.
+					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
+					actorLoopCtx.db;
+				} catch (error) {
+					outsideDbError =
+						error instanceof Error ? error.message : String(error);
+				}
+
+				try {
+					actorLoopCtx.client<typeof registry>();
+				} catch (error) {
+					outsideClientError =
+						error instanceof Error ? error.message : String(error);
+				}
+
+				await loopCtx.step("access-step", async () => {
+					await actorLoopCtx.db.execute(
+						`INSERT INTO workflow_access_log (created_at) VALUES (${Date.now()})`,
+					);
+					const counts = (await actorLoopCtx.db.execute(
+						`SELECT COUNT(*) as count FROM workflow_access_log`,
+					)) as Array<{ count: number }>;
+					const client = actorLoopCtx.client<typeof registry>();
+
+					actorLoopCtx.state.outsideDbError = outsideDbError;
+					actorLoopCtx.state.outsideClientError = outsideClientError;
+					actorLoopCtx.state.insideDbCount = counts[0]?.count ?? 0;
+					actorLoopCtx.state.insideClientAvailable =
+						typeof client.workflowQueueActor.getForId === "function";
+				});
+
+				await loopCtx.sleep("idle", 25);
+				return Loop.continue(undefined);
+			},
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
 	},
 });
 

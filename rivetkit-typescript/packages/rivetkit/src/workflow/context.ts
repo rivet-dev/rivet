@@ -1,5 +1,7 @@
 import type { RunContext } from "@/actor/contexts/run";
-import type { AnyDatabaseProvider } from "@/actor/database";
+import type { Client } from "@/client/client";
+import type { Registry } from "@/registry";
+import type { AnyDatabaseProvider, InferDatabaseClient } from "@/actor/database";
 import type { WorkflowContextInterface } from "@rivetkit/workflow-engine";
 import type {
 	BranchConfig,
@@ -8,6 +10,7 @@ import type {
 	LoopConfig,
 	LoopResult,
 	StepConfig,
+	WorkflowListenMessage,
 } from "@rivetkit/workflow-engine";
 import { WORKFLOW_GUARD_KV_KEY } from "./constants";
 
@@ -42,27 +45,27 @@ export class ActorWorkflowContext<
 		return this.#inner.abortSignal;
 	}
 
-	async step<T>(
-		nameOrConfig: string | Parameters<WorkflowContextInterface["step"]>[0],
-		run?: () => Promise<T>,
-	): Promise<T> {
+		async step<T>(
+			nameOrConfig: string | Parameters<WorkflowContextInterface["step"]>[0],
+			run?: () => Promise<T>,
+		): Promise<T> {
 		if (typeof nameOrConfig === "string") {
 			if (!run) {
 				throw new Error("Step run function missing");
 			}
-			return await this.#wrapActive(() =>
-				this.#inner.step(nameOrConfig, () =>
-					this.#withActorAccess(run),
-				),
-			);
-		}
+				return await this.#wrapActive(() =>
+					this.#inner.step(nameOrConfig, () =>
+						this.#withActorAccess(run),
+					),
+				);
+			}
 			const stepConfig = nameOrConfig as StepConfig<T>;
 			const config: StepConfig<T> = {
 				...stepConfig,
 				run: () => this.#withActorAccess(stepConfig.run),
 			};
 			return await this.#wrapActive(() => this.#inner.step(config));
-	}
+		}
 
 	async loop<T>(
 		name: string,
@@ -103,7 +106,10 @@ export class ActorWorkflowContext<
 		return this.#inner.sleepUntil(name, timestampMs);
 	}
 
-	listen<T>(name: string, messageName: string): Promise<T> {
+	listen<T>(
+		name: string,
+		messageName: string | string[],
+	): Promise<WorkflowListenMessage<T>> {
 		return this.#inner.listen(name, messageName);
 	}
 
@@ -210,6 +216,18 @@ export class ActorWorkflowContext<
 	get vars(): TVars extends never ? never : TVars {
 		this.#ensureActorAccess("vars");
 		return this.#runCtx.vars as TVars extends never ? never : TVars;
+	}
+
+	client<R extends Registry<any>>(): Client<R> {
+		this.#ensureActorAccess("client");
+		return this.#runCtx.client<R>();
+	}
+
+	get db(): TDatabase extends never ? never : InferDatabaseClient<TDatabase> {
+		this.#ensureActorAccess("db");
+		return this.#runCtx.db as TDatabase extends never
+			? never
+			: InferDatabaseClient<TDatabase>;
 	}
 
 	get log() {
