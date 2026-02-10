@@ -7,9 +7,10 @@ Example project demonstrating per-company database isolation with Rivet Actor st
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/per-tenant-database
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
+
 
 ## Features
 

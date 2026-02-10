@@ -43,8 +43,7 @@
       "typescript"
     ],
     "tags": [
-      "actors",
-      "sandbox"
+      "starter"
     ],
     "priority": 100,
     "frontendPort": 5173

@@ -2,6 +2,16 @@
 
 This example demonstrates using the raw SQLite driver with RivetKit actors.
 
+## Getting Started
+
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/sqlite-raw
+npm install
+npm run dev
+```
+
+
 ## Features
 
 - **Raw SQLite API**: Direct SQL access using `@rivetkit/db/raw`
@@ -47,3 +57,7 @@ db: db({
   },
 })
 ```
+
+## License
+
+MIT
