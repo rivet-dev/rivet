@@ -18,7 +18,8 @@ for (const mode of modes) {
 
 		it("should send messages via handle", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.listen<string>("wait", "message-name");
+				const message = await ctx.listen<string>("wait", "message-name");
+				return message.body;
 			};
 
 			const handle = runWorkflow("wf-1", workflow, undefined, driver, {

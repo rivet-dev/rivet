@@ -29,6 +29,7 @@ function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
 class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 	#actor: AnyActorInstance;
 	#runCtx: RunContext<any, any, any, any, any, any>;
+	#completionHandles = new Map<string, (response?: unknown) => Promise<void>>();
 
 	constructor(
 		actor: AnyActorInstance,
@@ -42,16 +43,30 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		const queueMessages = await this.#runCtx.keepAwake(
 			this.#actor.queueManager.getMessages(),
 		);
+		const now = Date.now();
 
 		const workflowMessages: Message[] = [];
 		for (const queueMessage of queueMessages) {
+			if (queueMessage.inFlight || queueMessage.availableAt > now) {
+				continue;
+			}
+
 			const workflowName = stripWorkflowQueueName(queueMessage.name);
 			if (!workflowName) continue;
+			const id = queueMessage.id.toString();
+			this.#completionHandles.set(id, async (response?: unknown) => {
+				await this.#runCtx.keepAwake(
+					this.#actor.queueManager.completeById(queueMessage.id, response),
+				);
+			});
 			workflowMessages.push({
-				id: queueMessage.id.toString(),
+				id,
 				name: workflowName,
 				data: queueMessage.body,
 				sentAt: queueMessage.createdAt,
+				complete: async (response?: unknown) => {
+					await this.completeMessage(id, response);
+				},
 			});
 		}
 
@@ -88,9 +103,44 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		}
 
 		const deleted = await this.#runCtx.keepAwake(
-			this.#actor.queueManager.deleteMessagesById(validIds),
+			this.#actor.queueManager.deleteMessagesById(validIds, {
+				resolveWaiters: false,
+			}),
 		);
+
+		for (const id of deleted) {
+			const idString = id.toString();
+			if (this.#completionHandles.has(idString)) {
+				continue;
+			}
+			this.#completionHandles.set(idString, async (response?: unknown) => {
+				await this.#runCtx.keepAwake(
+					this.#actor.queueManager.completeById(id, response),
+				);
+			});
+		}
+
 		return deleted.map((id) => id.toString());
+	}
+
+	async completeMessage(messageId: string, response?: unknown): Promise<void> {
+		const complete = this.#completionHandles.get(messageId);
+		if (complete) {
+			await complete(response);
+			this.#completionHandles.delete(messageId);
+			return;
+		}
+
+		let parsedId: bigint;
+		try {
+			parsedId = BigInt(messageId);
+		} catch {
+			return;
+		}
+
+		await this.#runCtx.keepAwake(
+			this.#actor.queueManager.completeById(parsedId, response),
+		);
 	}
 }
 

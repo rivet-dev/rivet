@@ -387,7 +387,7 @@ export async function addMessage(
 export async function consumeMessage(
 	storage: Storage,
 	messageDriver: WorkflowMessageDriver,
-	messageName: string,
+	messageName: string | string[],
 ): Promise<Message | null> {
 	const messages = await consumeMessages(
 		storage,
@@ -409,15 +409,19 @@ export async function consumeMessage(
 export async function consumeMessages(
 	storage: Storage,
 	messageDriver: WorkflowMessageDriver,
-	messageName: string,
+	messageName: string | string[],
 	limit: number,
 ): Promise<Message[]> {
+	const messageNameSet = new Set(
+		Array.isArray(messageName) ? messageName : [messageName],
+	);
+
 	// Find all matching messages up to limit (don't modify memory yet)
 	const toConsume: { message: Message; index: number }[] = [];
 	let count = 0;
 
 	for (let i = 0; i < storage.messages.length && count < limit; i++) {
-		if (storage.messages[i].name === messageName) {
+		if (messageNameSet.has(storage.messages[i].name)) {
 			toConsume.push({ message: storage.messages[i], index: i });
 			count++;
 		}

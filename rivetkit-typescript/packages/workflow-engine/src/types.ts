@@ -195,6 +195,22 @@ export interface Message {
 	name: string;
 	data: unknown;
 	sentAt: number;
+	/**
+	 * Optional completion callback for queue-backed drivers.
+	 *
+	 * This is runtime-only and is not persisted.
+	 */
+	complete?: (response?: unknown) => Promise<void>;
+}
+
+/**
+ * Message handle returned by listen().
+ */
+export interface WorkflowListenMessage<T = unknown> {
+	id: string;
+	name: string;
+	body: T;
+	complete(response?: unknown): Promise<void>;
 }
 
 /**
@@ -264,6 +280,10 @@ export interface WorkflowMessageDriver {
 	 * Delete the specified messages and return the IDs that were successfully removed.
 	 */
 	deleteMessages(messageIds: string[]): Promise<string[]>;
+	/**
+	 * Optionally complete a previously consumed message with a response payload.
+	 */
+	completeMessage?(messageId: string, response?: unknown): Promise<void>;
 }
 
 /**
@@ -348,7 +368,10 @@ export interface WorkflowContextInterface {
 	sleep(name: string, durationMs: number): Promise<void>;
 	sleepUntil(name: string, timestampMs: number): Promise<void>;
 
-	listen<T>(name: string, messageName: string): Promise<T>;
+	listen<T>(
+		name: string,
+		messageName: string | string[],
+	): Promise<WorkflowListenMessage<T>>;
 	listenN<T>(name: string, messageName: string, limit: number): Promise<T[]>;
 	listenWithTimeout<T>(
 		name: string,
