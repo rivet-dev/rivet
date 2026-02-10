@@ -12,9 +12,10 @@ Example project demonstrating queue-driven Rivet Actor AI agents with streaming 
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/ai-agent
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
+
 
 ## Features
 

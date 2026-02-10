@@ -4,11 +4,13 @@ Unified sandbox showcasing Rivet Actor features with a single registry, grouped 
 
 ## Getting Started
 
-```bash
-cd examples/sandbox
-pnpm install
-pnpm dev
+```sh
+git clone https://github.com/rivet-dev/rivet.git
+cd rivet/examples/sandbox
+npm install
+npm run dev
 ```
+
 
 ## Features
 

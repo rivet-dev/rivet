@@ -38,9 +38,7 @@
       "typescript"
     ],
     "tags": [
-      "state",
-      "edge",
-      "multi-region"
+      "database"
     ],
     "priority": 1000,
     "frontendPort": 5173

@@ -7,9 +7,10 @@ Example project demonstrating queue-driven Rivet Actor sessions that control a S
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/sandbox-coding-agent
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
+
 
 ## Features
 

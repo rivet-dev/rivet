@@ -11,7 +11,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
-		"rivetkit": "workspace:*",
+		"rivetkit": "*",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
 	},
@@ -19,7 +19,6 @@
 	"stableVersion": "0.8.0",
 	"template": {
 		"technologies": [
-			"sqlite",
 			"typescript"
 		],
 		"tags": [

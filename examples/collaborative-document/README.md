@@ -7,9 +7,10 @@ A shared text editor that uses Rivet Actors with Yjs for real-time CRDT sync and
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
 cd rivet/examples/collaborative-document
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
+
 
 ## Features
 
