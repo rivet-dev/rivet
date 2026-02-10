@@ -94,7 +94,7 @@ export type LongTimeoutHandle = { abort: () => void };
  *
  * This is specifically for Cloudflare Workers. Their implementation of Promise.withResolvers does not work correctly.
  */
-export function promiseWithResolvers<T>(): {
+export function promiseWithResolvers<T>(onReject: (reason?: any) => void): {
 	promise: Promise<T>;
 	resolve: (value: T | PromiseLike<T>) => void;
 	reject: (reason?: any) => void;
@@ -105,6 +105,7 @@ export function promiseWithResolvers<T>(): {
 		resolve = res;
 		reject = rej;
 	});
+	promise.catch(onReject);
 	return { promise, resolve, reject };
 }
 
@@ -155,7 +156,7 @@ export class SinglePromiseQueue {
 
 		// Ensure a shared resolver exists for all callers in this cycle
 		if (!this.#pending) {
-			this.#pending = promiseWithResolvers<void>();
+			this.#pending = promiseWithResolvers<void>((reason) => logger().warn({ msg: "unhandled single promise queue rejection", reason }));
 		}
 
 		const waitForThisCycle = this.#pending.promise;

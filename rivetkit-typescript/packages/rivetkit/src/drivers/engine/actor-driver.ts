@@ -82,8 +82,8 @@ export class EngineActorDriver implements ActorDriver {
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
 
-	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
-	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
+	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled runner started promise rejection", reason }));
+	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled runner stopped promise rejection", reason }));
 	#isRunnerStopped: boolean = false;
 
 	// HACK: Track actor stop intent locally since the runner protocol doesn't
@@ -426,7 +426,7 @@ export class EngineActorDriver implements ActorDriver {
 			// async operations to avoid race conditions where multiple calls might try to
 			// create the same handler simultaneously.
 			handler = {
-				actorStartPromise: promiseWithResolvers(),
+				actorStartPromise: promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor start promise rejection", reason })),
 			};
 			this.#actors.set(actorId, handler);
 		}
@@ -435,40 +435,50 @@ export class EngineActorDriver implements ActorDriver {
 		invariant(actorConfig.key, "actor should have a key");
 		const key = deserializeActorKey(actorConfig.key);
 
-		// Initialize storage
-		const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
-			KEYS.PERSIST_DATA,
-		]);
-		if (persistDataBuffer === null) {
-			const initialKvState = getInitialActorKvState(input);
-			await this.#runner.kvPut(actorId, initialKvState);
-			logger().debug({
-				msg: "initialized persist data for new actor",
+		try {
+			// Initialize storage
+			const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
+				KEYS.PERSIST_DATA,
+			]);
+			if (persistDataBuffer === null) {
+				const initialKvState = getInitialActorKvState(input);
+				await this.#runner.kvPut(actorId, initialKvState);
+				logger().debug({
+					msg: "initialized persist data for new actor",
+					actorId,
+				});
+			} else {
+				logger().debug({
+					msg: "found existing persist data for actor",
+					actorId,
+					dataSize: persistDataBuffer.byteLength,
+				});
+			}
+
+			// Create actor instance
+			const definition = lookupInRegistry(this.#config, actorConfig.name);
+			handler.actor = await definition.instantiate();
+
+			// Start actor
+			await handler.actor.start(
+				this,
+				this.#inlineClient,
 				actorId,
-			});
-		} else {
-			logger().debug({
-				msg: "found existing persist data for actor",
-				actorId,
-				dataSize: persistDataBuffer.byteLength,
-			});
+				name,
+				key,
+				"unknown", // TODO: Add regions
+			);
+
+			logger().debug({ msg: "runner actor started", actorId, name, key });
+		} catch (innerError) {
+			const error = new Error(
+				`Failed to start actor ${actorId}: ${innerError}`,
+				{ cause: innerError },
+			);
+			handler.actorStartPromise?.reject(error);
+			handler.actorStartPromise = undefined;
+			throw error;
 		}
-
-		// Create actor instance
-		const definition = lookupInRegistry(this.#config, actorConfig.name);
-		handler.actor = await definition.instantiate();
-
-		// Start actor
-		await handler.actor.start(
-			this,
-			this.#inlineClient,
-			actorId,
-			name,
-			key,
-			"unknown", // TODO: Add regions
-		);
-
-		logger().debug({ msg: "runner actor started", actorId, name, key });
 	}
 
 	async #runnerOnActorStop(
