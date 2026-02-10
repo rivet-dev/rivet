@@ -1,6 +1,23 @@
 ---
+import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import StartupsPage from '@/components/marketing/startups/StartupsPage';
+import imgFounders from '@/images/yc-founders.jpg';
+import imgSpeedrun from '@/images/a16z-speedrun.jpg';
+
+const optimizedFounders = await getImage({
+	src: imgFounders,
+	width: 640,
+	format: 'webp',
+	quality: 80
+});
+
+const optimizedSpeedrun = await getImage({
+	src: imgSpeedrun,
+	width: 640,
+	format: 'webp',
+	quality: 80
+});
 ---
 
 <MarketingLayout
@@ -8,5 +25,9 @@ import StartupsPage from '@/components/marketing/startups/StartupsPage';
 	description="50% off Rivet Cloud for YC and a16z Speedrun companies. Build stateful serverless applications at startup speed."
 	canonicalUrl="https://rivet.dev/startups/"
 >
-	<StartupsPage client:load />
+	<StartupsPage
+		client:load
+		foundersImage={optimizedFounders.src}
+		speedrunImage={optimizedSpeedrun.src}
+	/>
 </MarketingLayout>

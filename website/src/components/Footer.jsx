@@ -25,14 +25,6 @@ const footer = {
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 	],
-	solutions: [
-		{ name: "Agent Orchestration", href: "/solutions/agents" },
-		{ name: "Multiplayer Documents", href: "/solutions/collaborative-state" },
-		{ name: "Workflows", href: "/solutions/workflows" },
-		{ name: "Vibe-Coded Backends", href: "/solutions/app-generators" },
-		{ name: "Geo-Distributed Databases", href: "/solutions/geo-distributed-db" },
-		{ name: "Per-Tenant Databases", href: "/solutions/per-tenant-db" },
-	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
@@ -142,160 +134,147 @@ export function PageNextPrevious({ navigation }) {
 
 function SmallPrint() {
 	return (
-		<div className="mx-auto max-w-screen-2xl w-full pb-8 pt-16 sm:pt-20">
-			<div className="xl:grid xl:grid-cols-12 xl:gap-24">
-				{/* Brands & links */}
-				<div className="space-y-8 xl:col-span-3">
-					{/* Logo */}
-					<img className="size-12" src={imgLogo.src} alt="Rivet" />
-					<p className="text-sm leading-6 text-gray-300">
-						Build and scale stateful workloads
+		<div className="mx-auto max-w-7xl w-full py-16 selection:bg-[#FF4500]/30 selection:text-orange-200">
+			<div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
+				{/* Brand column */}
+				<div className="col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
+					<img className="h-8 w-8" src={imgLogo.src} alt="Rivet" />
+					<p className="text-sm text-zinc-500">
+						Infrastructure for software that thinks
 					</p>
-
-					{/* Social */}
-					<div className="flex space-x-6">
+					<div className="flex gap-4">
 						{footer.social.map((item) => (
 							<a
 								key={item.name}
 								href={item.href}
-								className="text-xl text-gray-500 hover:text-gray-400"
+								className="text-zinc-600 hover:text-white transition-colors"
 							>
 								<span className="sr-only">{item.name}</span>
 								<Icon icon={item.icon} aria-hidden="true" />
 							</a>
 						))}
 					</div>
-
-					{/* Investor badges */}
-					<div>
-						<p className="mb-2 text-xs text-white">Backed by</p>
-						<div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
-							<div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
-								<img src={imgYC.src} alt="Y Combinator" className="h-4 w-auto" />
-								<span>Y Combinator</span>
-							</div>
-							<div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70">
-								<img src={imgA16z.src} alt="a16z" className="h-3 w-auto" />
-								<span>a16z Speedrun</span>
-							</div>
-						</div>
-					</div>
 				</div>
 
-				{/* Links */}
-				<div className="mt-16 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2 lg:grid-cols-5 xl:col-span-9 xl:mt-0">
-					<div>
-						<div className="text-sm font-semibold leading-6 text-white">
-							Product
-						</div>
-						<ul role="list" className="mt-3 space-y-2">
-							{footer.product.map((item) => (
-								<li key={item.name}>
-									<a href={item.href}
-										target={item.target}
-										className="text-sm leading-4 text-gray-300 hover:text-white"
-									>
-										{item.name}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
-					<div>
-						<div className="text-sm font-semibold leading-6 text-white">
-							Solutions
-						</div>
-						<ul role="list" className="mt-3 space-y-2">
-							{footer.solutions.map((item) => (
-								<li key={item.name}>
-									<a
-										href={item.href}
-										target={item.target}
-										className="text-sm leading-4 text-gray-300 hover:text-white"
-									>
-										{item.name}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
-					<div>
-						<div className="text-sm font-semibold leading-6 text-white">
-							Developers
-						</div>
-						<ul role="list" className="mt-3 space-y-2">
-							{footer.devs.map((item) => (
-								<li key={item.name}>
-									<a href={item.href}
-										target={item.target}
-										className="text-sm leading-4 text-gray-300 hover:text-white"
-									>
-										{item.name}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
-					<div>
-						<div className="text-sm font-semibold leading-6 text-white">
-							Resources
-						</div>
-						<ul role="list" className="mt-3 space-y-2">
-							{footer.resources.map((item) => (
-								<li key={item.name}>
-									<a href={item.href}
-										target={item.newTab ? "_blank" : null}
-										className={clsx(
-											"text-sm leading-4 text-gray-300 hover:text-white",
-										)}
-									>
-										<span
-											className={clsx(
-												item.highlight &&
-													"text-violet-200 drop-shadow-[0_0_10px_rgba(221,214,254,0.5)]",
-											)}
-										>
-											{item.name}
-										</span>
-										{item.badge && (
-											<span className="ml-2 rounded-full bg-violet-500 px-2">
-												{item.badge}
-											</span>
-										)}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
-					<div>
-						<div className="text-sm font-semibold leading-6 text-white">
-							Legal
-						</div>
-						<ul role="list" className="mt-3 space-y-2">
-							{footer.legal.map((item) => (
-								<li key={item.name}>
-									<a href={item.href}
-										className="text-sm leading-4 text-gray-300 hover:text-white"
-									>
-										{item.name}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
+				{/* Product */}
+				<div>
+					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Product</h3>
+					<ul className="space-y-3">
+						{footer.product.map((item) => (
+							<li key={item.name}>
+								<a
+									href={item.href}
+									target={item.target}
+									className="text-sm text-zinc-400 hover:text-white transition-colors"
+								>
+									{item.name}
+								</a>
+							</li>
+						))}
+					</ul>
+				</div>
+
+				{/* Developers */}
+				<div>
+					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Developers</h3>
+					<ul className="space-y-3">
+						{footer.devs.map((item) => (
+							<li key={item.name}>
+								<a
+									href={item.href}
+									target={item.target}
+									className="text-sm text-zinc-400 hover:text-white transition-colors"
+								>
+									{item.name}
+								</a>
+							</li>
+						))}
+					</ul>
+				</div>
+
+				{/* Resources */}
+				<div>
+					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Resources</h3>
+					<ul className="space-y-3">
+						{footer.resources.map((item) => (
+							<li key={item.name}>
+								<a
+									href={item.href}
+									target={item.newTab ? "_blank" : null}
+									className="text-sm text-zinc-400 hover:text-white transition-colors"
+								>
+									{item.name}
+								</a>
+							</li>
+						))}
+					</ul>
+				</div>
+
+				{/* Legal */}
+				<div>
+					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Legal</h3>
+					<ul className="space-y-3">
+						{footer.legal.map((item) => (
+							<li key={item.name}>
+								<a
+									href={item.href}
+									className="text-sm text-zinc-400 hover:text-white transition-colors"
+								>
+									{item.name}
+								</a>
+							</li>
+						))}
+					</ul>
 				</div>
 			</div>
 
-			{/* Footer */}
-			<div className="mt-4 border-t border-white/10 pt-4 text-center md:mt-8">
-				<p className="text-xs leading-5 text-white">
-					&copy; {new Date().getFullYear()} Rivet Gaming, Inc. All
-					rights reserved.
+			{/* Investor badges */}
+			<div className="mt-12 flex flex-wrap items-center gap-4">
+				<span className="text-xs text-zinc-600">Backed by</span>
+				<div className="flex flex-wrap items-center gap-2">
+					<div className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">
+						<img src={imgYC.src} alt="Y Combinator" className="h-4 w-auto" />
+						<span>Y Combinator</span>
+					</div>
+					<div className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">
+						<img src={imgA16z.src} alt="a16z" className="h-3 w-auto" />
+						<span>a16z Speedrun</span>
+					</div>
+				</div>
+				<a
+					href="/startups"
+					className="text-xs text-zinc-500 hover:text-white transition-colors"
+					style={{
+						backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+						backgroundSize: '6px 1px',
+						backgroundPosition: '0 100%',
+						backgroundRepeat: 'repeat-x',
+						paddingBottom: '4px'
+					}}
+				>
+					Are you as well?
+				</a>
+				<span className="ml-auto flex items-center gap-1.5 text-xs text-zinc-600">
+					<svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+						<rect width="14" height="10" fill="white" />
+						<rect y="0" width="14" height="1.2" fill="black" />
+						<rect y="2.2" width="14" height="1.2" fill="black" />
+						<rect y="4.4" width="14" height="1.2" fill="black" />
+						<rect y="6.6" width="14" height="1.2" fill="black" />
+						<rect y="8.8" width="14" height="1.2" fill="black" />
+						<rect width="5" height="5" fill="black" />
+					</svg>
+					Built in San Francisco, United States
+				</span>
+			</div>
+
+			{/* Copyright */}
+			<div className="mt-12 border-t border-white/10 pt-8">
+				<p className="text-xs text-zinc-600">
+					&copy; {new Date().getFullYear()} Rivet Gaming, Inc. All rights reserved.
 				</p>
-				<p className="text-xs leading-5 text-white/30">
-					Cloudflare® and Durable Objects™ are trademarks of
-					Cloudflare, Inc. No affiliation or endorsement implied.
-					References used for comparison purposes only.
+				<p className="mt-2 text-xs text-zinc-700">
+					Cloudflare® and Durable Objects™ are trademarks of Cloudflare, Inc. No affiliation or endorsement implied.
 				</p>
 			</div>
 		</div>
