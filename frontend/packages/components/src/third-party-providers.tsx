@@ -36,6 +36,7 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			dsn: config.sentry.dsn,
 			integrations,
 			tunnel: getConfig().sentry?.tunnel,
+			environment: commonEnv().VITE_APP_SENTRY_ENV,
 			tracePropagationTargets: [
 				"api.rivet.dev",
 				"cloud-api.rivet.dev",
@@ -43,8 +44,6 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 				"cloud-api.staging.rivet.dev",
 				/localhost/,
 			],
-			tunnel: __APP_TYPE__ === "cloud" ? cloudEnv().VITE_APP_SENTRY_TUNNEL_URL : undefined,
-
 		});
 	}
 }
