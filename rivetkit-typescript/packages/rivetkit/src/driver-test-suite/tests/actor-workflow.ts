@@ -23,12 +23,9 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 		test("consumes queue messages via workflow listen", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const actor = client.workflowQueueActor.getOrCreate([
-				"workflow-queue",
-			]);
+			const actor = client.workflowQueueActor.getOrCreate(["workflow-queue"]);
 
-			const queueHandle =
-				actor.queue[workflowQueueName(WORKFLOW_QUEUE_NAME)];
+			const queueHandle = actor.queue[workflowQueueName(WORKFLOW_QUEUE_NAME)];
 			await queueHandle.send({ hello: "world" });
 
 			await waitFor(driverTestConfig, 200);
@@ -36,11 +33,44 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(messages).toEqual([{ hello: "world" }]);
 		});
 
+		test("workflow listen supports completing wait sends", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowQueueActor.getOrCreate([
+				"workflow-queue-wait",
+			]);
+
+			const result = await actor.sendAndWait({ value: 123 });
+			expect(result).toEqual({
+				status: "completed",
+				response: { echo: { value: 123 } },
+			});
+		});
+
+		test("db and client are step-only in workflow context", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowAccessActor.getOrCreate([
+				"workflow-access",
+			]);
+
+			let state = await actor.getState();
+			for (let i = 0; i < 20 && state.insideDbCount === 0; i++) {
+				await waitFor(driverTestConfig, 50);
+				state = await actor.getState();
+			}
+
+			expect(state.outsideDbError).toBe(
+				"db is only available inside workflow steps",
+			);
+			expect(state.outsideClientError).toBe(
+				"client is only available inside workflow steps",
+			);
+			expect(state.insideDbCount).toBeGreaterThan(0);
+			expect(state.insideClientAvailable).toBe(true);
+		});
+
 		test("sleeps and resumes between ticks", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const actor = client.workflowSleepActor.getOrCreate([
-				"workflow-sleep",
-			]);
+			const actor = client.workflowSleepActor.getOrCreate(["workflow-sleep"]);
 
 			const initial = await actor.getState();
 			await waitFor(driverTestConfig, 200);

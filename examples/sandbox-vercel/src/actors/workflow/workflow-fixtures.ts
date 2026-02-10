@@ -55,12 +55,13 @@ export const workflowQueueActor = actor({
 			name: "queue",
 			run: async (loopCtx) => {
 				const actorLoopCtx = loopCtx as any;
-				const payload = await loopCtx.listen(
+				const message = await loopCtx.listen(
 					"queue-wait",
 					WORKFLOW_QUEUE_NAME,
 				);
 				await loopCtx.step("store-message", async () => {
-					actorLoopCtx.state.received.push(payload);
+					actorLoopCtx.state.received.push(message.body);
+					await message.complete({ echo: message.body });
 				});
 				return Loop.continue(undefined);
 			},

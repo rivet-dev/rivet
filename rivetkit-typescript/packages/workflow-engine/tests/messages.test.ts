@@ -6,6 +6,7 @@ import {
 	runWorkflow,
 	serializeMessage,
 	type WorkflowContextInterface,
+	type WorkflowMessageDriver,
 } from "../src/testing.js";
 
 function buildMessagePayload(name: string, data: string, id = generateId()) {
@@ -34,7 +35,7 @@ for (const mode of modes) {
 					"wait-message",
 					"my-message",
 				);
-				return message;
+				return message.body;
 			};
 
 			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
@@ -54,7 +55,50 @@ for (const mode of modes) {
 			expect(result.output).toBe("payload");
 		});
 
-		it("should consume pending messages", async () => {
+		it("should listen for any message in a name set", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const message = await ctx.listen<string>("wait-many", [
+					"first",
+					"second",
+				]);
+				return { name: message.name, body: message.body };
+			};
+
+			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
+				mode,
+			});
+
+			if (mode === "yield") {
+				const result1 = await handle.result;
+				expect(result1.state).toBe("sleeping");
+				expect(result1.waitingForMessages).toEqual(["first", "second"]);
+
+				await handle.message("second", "payload");
+				const result2 = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(result2.state).toBe("completed");
+				expect(result2.output).toEqual({
+					name: "second",
+					body: "payload",
+				});
+				return;
+			}
+
+			await handle.message("second", "payload");
+			const result = await handle.result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual({
+				name: "second",
+				body: "payload",
+			});
+		});
+
+			it("should consume pending messages", async () => {
 			const messageId = generateId();
 			await driver.set(
 				buildMessageKey(messageId),
@@ -68,7 +112,7 @@ for (const mode of modes) {
 					"wait-message",
 					"my-message",
 				);
-				return message;
+				return message.body;
 			};
 
 			const result = await runWorkflow(
@@ -83,6 +127,63 @@ for (const mode of modes) {
 
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("hello");
+		});
+
+		it("listen should return a completable message handle", async () => {
+			const completions: Array<{ id: string; response?: unknown }> = [];
+			const pending = [
+				buildMessagePayload("my-message", "hello", "msg-1") as {
+					id: string;
+					name: string;
+					data: unknown;
+					sentAt: number;
+					complete?: (response?: unknown) => Promise<void>;
+				},
+			];
+
+			const messageDriver: WorkflowMessageDriver = {
+				async loadMessages() {
+					return pending.map((message) => ({
+						...message,
+						complete: async (response?: unknown) => {
+							completions.push({ id: message.id, response });
+						},
+					}));
+				},
+				async addMessage(message) {
+					pending.push(message);
+				},
+				async deleteMessages(messageIds) {
+					const deleted = new Set(messageIds);
+					const remaining = pending.filter(
+						(message) => !deleted.has(message.id),
+					);
+					pending.length = 0;
+					pending.push(...remaining);
+					return messageIds;
+				},
+			};
+			driver.messageDriver = messageDriver;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const message = await ctx.listen<string>("wait-message", "my-message");
+				await message.complete({ ok: true });
+				return message.body;
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe("hello");
+			expect(completions).toEqual([{ id: "msg-1", response: { ok: true } }]);
 		});
 
 		it("should collect multiple messages with listenN", async () => {
@@ -280,7 +381,8 @@ for (const mode of modes) {
 					return "ready";
 				});
 
-				return await ctx.listen<string>("wait", "mid");
+				const message = await ctx.listen<string>("wait", "mid");
+				return message.body;
 			};
 
 			const handle = runWorkflow("wf-1", workflow, undefined, driver, {

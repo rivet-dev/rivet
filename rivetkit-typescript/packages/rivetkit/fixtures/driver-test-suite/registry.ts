@@ -63,6 +63,7 @@ import {
 	uniqueVarActor,
 } from "./vars";
 import {
+	workflowAccessActor,
 	workflowCounterActor,
 	workflowQueueActor,
 	workflowSleepActor,
@@ -151,6 +152,7 @@ export const registry = setup({
 		// From workflow.ts
 		workflowCounterActor,
 		workflowQueueActor,
+		workflowAccessActor,
 		workflowSleepActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
