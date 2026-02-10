@@ -28,7 +28,7 @@
     "tsx": "^4.7.1",
     "typescript": "^5.2.2",
     "vite": "^5.2.0",
-    "vite-plugin-srvx": "^1.0.0"
+    "vite-plugin-srvx": "^1.0.2"
   },
   "template": {
     "technologies": [
