@@ -11,6 +11,7 @@ export const commonEnvSchema = z.object({
 	VITE_APP_POSTHOG_API_HOST: z.string().url().optional(),
 	VITE_APP_SENTRY_DSN: z.string().url().optional(),
 	VITE_APP_SENTRY_PROJECT_ID: z.coerce.number().optional(),
+	VITE_APP_SENTRY_ENV: z.string().optional(),
 	// AVAILABLE ONLY IN CI
 	SENTRY_AUTH_TOKEN: z.string().optional(),
 	SENTRY_PROJECT: z.string().optional(),
