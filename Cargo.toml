@@ -20,11 +20,11 @@ members = [
   "engine/packages/error-macros",
   "engine/packages/gasoline",
   "engine/packages/gasoline-macros",
+  "engine/packages/gasoline-runtime",
   "engine/packages/guard",
   "engine/packages/guard-core",
   "engine/packages/logs",
   "engine/packages/metrics",
-  "engine/packages/metrics-aggregator",
   "engine/packages/namespace",
   "engine/packages/pegboard",
   "engine/packages/pegboard-gateway",
@@ -395,6 +395,9 @@ members = [
     [workspace.dependencies.gasoline-macros]
     path = "engine/packages/gasoline-macros"
 
+    [workspace.dependencies.gasoline-runtime]
+    path = "engine/packages/gasoline-runtime"
+
     [workspace.dependencies.rivet-guard]
     path = "engine/packages/guard"
 
@@ -406,9 +409,6 @@ members = [
 
     [workspace.dependencies.rivet-metrics]
     path = "engine/packages/metrics"
-
-    [workspace.dependencies.rivet-metrics-aggregator]
-    path = "engine/packages/metrics-aggregator"
 
     [workspace.dependencies.namespace]
     path = "engine/packages/namespace"

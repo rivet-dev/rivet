@@ -24,6 +24,7 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<serverless::receiver::Workflow>()?;
 	registry.register_workflow::<serverless::conn::Workflow>()?;
 	registry.register_workflow::<serverless::backfill::Workflow>()?;
+	registry.register_workflow::<metrics_aggregator::Workflow>()?;
 
 	Ok(registry)
 }

@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod actor_runner_name_selector_backfill;
+pub mod metrics_aggregator;
 pub mod runner;
 pub mod runner2;
 pub mod runner_pool;

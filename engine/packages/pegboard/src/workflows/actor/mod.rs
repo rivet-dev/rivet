@@ -32,139 +32,8 @@ pub struct Input {
 	pub input: Option<String>,
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct State {
-	pub name: String,
-	pub key: Option<String>,
-
-	pub namespace_id: Id,
-	pub runner_name_selector: String,
-	pub crash_policy: CrashPolicy,
-
-	pub create_ts: i64,
-	pub create_complete_ts: Option<i64>,
-
-	// As opposed to allocated_serverless_slot, this is only set when allocating if the chosen runner has a
-	// serverless config
-	#[serde(default)]
-	pub for_serverless: bool,
-	// This is used for state management for incrementing/decrementing the serverless desired slots key
-	#[serde(default)]
-	pub allocated_serverless_slot: bool,
-
-	pub start_ts: Option<i64>,
-	// NOTE: This is not the alarm ts, this is when the actor started sleeping. See `LifecycleState` for alarm
-	pub sleep_ts: Option<i64>,
-	pub complete_ts: Option<i64>,
-	pub connectable_ts: Option<i64>,
-	pub pending_allocation_ts: Option<i64>,
-	#[serde(default)]
-	pub reschedule_ts: Option<i64>,
-	pub destroy_ts: Option<i64>,
-
-	// Null if not allocated
-	pub runner_id: Option<Id>,
-	pub runner_workflow_id: Option<Id>,
-	pub runner_state: Option<RunnerState>,
-
-	/// Explains why the actor is NOT healthy, either due to failure to allocate or a failed
-	/// runner.
-	///
-	/// # When failure_reason is cleared
-	///
-	/// - When actor is allocated (gets a runner assigned)
-	/// - When actor becomes connectable
-	#[serde(default)]
-	pub failure_reason: Option<FailureReason>,
-}
-
-impl State {
-	pub fn new(
-		name: String,
-		key: Option<String>,
-		namespace_id: Id,
-		runner_name_selector: String,
-		crash_policy: CrashPolicy,
-		create_ts: i64,
-	) -> Self {
-		State {
-			name,
-			key,
-
-			namespace_id,
-			runner_name_selector,
-			crash_policy,
-
-			create_ts,
-			create_complete_ts: None,
-
-			for_serverless: false,
-			allocated_serverless_slot: false,
-
-			start_ts: None,
-			pending_allocation_ts: None,
-			sleep_ts: None,
-			connectable_ts: None,
-			complete_ts: None,
-			reschedule_ts: None,
-			destroy_ts: None,
-
-			runner_id: None,
-			runner_workflow_id: None,
-			runner_state: None,
-
-			failure_reason: None,
-		}
-	}
-}
-
-/// Reason why an actor failed to allocate or run.
-///
-/// Distinct from `errors::Actor` which represents user-facing API errors.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum FailureReason {
-	/// Actor cannot allocate due to no available runner capacity. Only set if `failure_reason`
-	/// is currently `None` (runner failures take precedence as root causes).
-	NoCapacity,
-	/// Runner did not respond with expected events (GC timeout).
-	RunnerNoResponse { runner_id: Id },
-	/// Runner connection was lost (no recent ping, network issue, or crash).
-	RunnerConnectionLost { runner_id: Id },
-	/// Runner was draining but actor didn't stop in time.
-	RunnerDrainingTimeout { runner_id: Id },
-	/// Actor crashed during execution.
-	Crashed { message: Option<String> },
-}
-
-impl FailureReason {
-	/// Used to determine the category of this error.
-	///
-	/// Actor errors will not override runner errors.
-	pub fn is_runner_failure(&self) -> bool {
-		match self {
-			FailureReason::NoCapacity | FailureReason::Crashed { .. } => false,
-			FailureReason::RunnerNoResponse { .. }
-			| FailureReason::RunnerConnectionLost { .. }
-			| FailureReason::RunnerDrainingTimeout { .. } => true,
-		}
-	}
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct RunnerState {
-	pub last_command_idx: i64,
-}
-
-impl Default for RunnerState {
-	fn default() -> Self {
-		RunnerState {
-			last_command_idx: -1,
-		}
-	}
-}
-
 #[workflow]
+#[prune = history] // Don't prune state, required for actor::list_for_ns
 pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Actor creation follows a careful sequence to prevent race conditions:
 	//
@@ -926,6 +795,138 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 	.await?;
 
 	Ok(())
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct State {
+	pub name: String,
+	pub key: Option<String>,
+
+	pub namespace_id: Id,
+	pub runner_name_selector: String,
+	pub crash_policy: CrashPolicy,
+
+	pub create_ts: i64,
+	pub create_complete_ts: Option<i64>,
+
+	// As opposed to allocated_serverless_slot, this is only set when allocating if the chosen runner has a
+	// serverless config
+	#[serde(default)]
+	pub for_serverless: bool,
+	// This is used for state management for incrementing/decrementing the serverless desired slots key
+	#[serde(default)]
+	pub allocated_serverless_slot: bool,
+
+	pub start_ts: Option<i64>,
+	// NOTE: This is not the alarm ts, this is when the actor started sleeping. See `LifecycleState` for alarm
+	pub sleep_ts: Option<i64>,
+	pub complete_ts: Option<i64>,
+	pub connectable_ts: Option<i64>,
+	pub pending_allocation_ts: Option<i64>,
+	#[serde(default)]
+	pub reschedule_ts: Option<i64>,
+	pub destroy_ts: Option<i64>,
+
+	// Null if not allocated
+	pub runner_id: Option<Id>,
+	pub runner_workflow_id: Option<Id>,
+	pub runner_state: Option<RunnerState>,
+
+	/// Explains why the actor is NOT healthy, either due to failure to allocate or a failed
+	/// runner.
+	///
+	/// # When failure_reason is cleared
+	///
+	/// - When actor is allocated (gets a runner assigned)
+	/// - When actor becomes connectable
+	#[serde(default)]
+	pub failure_reason: Option<FailureReason>,
+}
+
+impl State {
+	pub fn new(
+		name: String,
+		key: Option<String>,
+		namespace_id: Id,
+		runner_name_selector: String,
+		crash_policy: CrashPolicy,
+		create_ts: i64,
+	) -> Self {
+		State {
+			name,
+			key,
+
+			namespace_id,
+			runner_name_selector,
+			crash_policy,
+
+			create_ts,
+			create_complete_ts: None,
+
+			for_serverless: false,
+			allocated_serverless_slot: false,
+
+			start_ts: None,
+			pending_allocation_ts: None,
+			sleep_ts: None,
+			connectable_ts: None,
+			complete_ts: None,
+			reschedule_ts: None,
+			destroy_ts: None,
+
+			runner_id: None,
+			runner_workflow_id: None,
+			runner_state: None,
+
+			failure_reason: None,
+		}
+	}
+}
+
+/// Reason why an actor failed to allocate or run.
+///
+/// Distinct from `errors::Actor` which represents user-facing API errors.
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureReason {
+	/// Actor cannot allocate due to no available runner capacity. Only set if `failure_reason`
+	/// is currently `None` (runner failures take precedence as root causes).
+	NoCapacity,
+	/// Runner did not respond with expected events (GC timeout).
+	RunnerNoResponse { runner_id: Id },
+	/// Runner connection was lost (no recent ping, network issue, or crash).
+	RunnerConnectionLost { runner_id: Id },
+	/// Runner was draining but actor didn't stop in time.
+	RunnerDrainingTimeout { runner_id: Id },
+	/// Actor crashed during execution.
+	Crashed { message: Option<String> },
+}
+
+impl FailureReason {
+	/// Used to determine the category of this error.
+	///
+	/// Actor errors will not override runner errors.
+	pub fn is_runner_failure(&self) -> bool {
+		match self {
+			FailureReason::NoCapacity | FailureReason::Crashed { .. } => false,
+			FailureReason::RunnerNoResponse { .. }
+			| FailureReason::RunnerConnectionLost { .. }
+			| FailureReason::RunnerDrainingTimeout { .. } => true,
+		}
+	}
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct RunnerState {
+	pub last_command_idx: i64,
+}
+
+impl Default for RunnerState {
+	fn default() -> Self {
+		RunnerState {
+			last_command_idx: -1,
+		}
+	}
 }
 
 #[derive(Debug)]

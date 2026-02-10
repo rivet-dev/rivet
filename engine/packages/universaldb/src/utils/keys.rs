@@ -137,4 +137,7 @@ define_keys! {
 	(109, RUNNER_NAME_SELECTOR, "runner_name_selector"),
 	(110, BACKFILL, "backfill"),
 	(111, COMPLETE, "complete"),
+	(112, COMPLETE_TS, "complete_ts"),
+	(113, PRUNE_TS, "prune_ts"),
+	(114, PRUNE_IDX, "prune_idx"),
 }

@@ -132,6 +132,10 @@
       "default": {
         "allow_version_rollback": null,
         "force_shutdown_duration": null,
+        "gasoline": {
+          "prune_eligibility_duration": null,
+          "prune_interval_duration": null
+        },
         "guard_shutdown_duration": null,
         "worker": {
           "cpu_max": null,
@@ -344,6 +348,30 @@
       "properties": {
         "path": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Gasoline": {
+      "type": "object",
+      "properties": {
+        "prune_eligibility_duration": {
+          "description": "Time (in seconds) after completion before considering a workflow eligible for pruning. Defaults to 7 days. Set to 0 to never prune workflow data.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "prune_interval_duration": {
+          "description": "Time (in seconds) to periodically check for workflows to prune. Defaults to 12 hours.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -739,6 +767,17 @@
           ],
           "format": "uint32",
           "minimum": 0.0
+        },
+        "gasoline": {
+          "default": {
+            "prune_eligibility_duration": null,
+            "prune_interval_duration": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Gasoline"
+            }
+          ]
         },
         "guard_shutdown_duration": {
           "description": "Time (in seconds) to allow for guard to wait for pending requests after receiving SIGTERM. Defaults to 1 hour.",

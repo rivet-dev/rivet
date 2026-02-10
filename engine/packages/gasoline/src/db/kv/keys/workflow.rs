@@ -4,6 +4,8 @@ use anyhow::*;
 use rivet_util::Id;
 use universaldb::prelude::*;
 
+use crate::workflow::PruneVariant;
+
 #[derive(Debug)]
 pub struct LeaseKey {
 	pub workflow_id: Id,
@@ -1312,5 +1314,208 @@ impl TuplePack for MetricSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (WORKFLOW, METRIC, self.workflow_id);
 		t.pack(w, tuple_depth)
+	}
+}
+
+#[derive(Debug)]
+pub struct CompleteTsKey {
+	workflow_id: Id,
+}
+
+impl CompleteTsKey {
+	pub fn new(workflow_id: Id) -> Self {
+		CompleteTsKey { workflow_id }
+	}
+}
+
+impl FormalKey for CompleteTsKey {
+	// Timestamp.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for CompleteTsKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (WORKFLOW, DATA, self.workflow_id, COMPLETE_TS);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for CompleteTsKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, data)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		if data != COMPLETE_TS {
+			return Err(PackError::Message("expected COMPLETE_TS data".into()));
+		}
+
+		let v = CompleteTsKey { workflow_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct PruneTsKey {
+	workflow_id: Id,
+}
+
+impl PruneTsKey {
+	pub fn new(workflow_id: Id) -> Self {
+		PruneTsKey { workflow_id }
+	}
+}
+
+impl FormalKey for PruneTsKey {
+	// Timestamp.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for PruneTsKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (WORKFLOW, DATA, self.workflow_id, PRUNE_TS);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for PruneTsKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, data)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		if data != PRUNE_TS {
+			return Err(PackError::Message("expected PRUNE_TS data".into()));
+		}
+
+		let v = PruneTsKey { workflow_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct PruneIdxKey {
+	pub ts: i64,
+	pub workflow_id: Id,
+	pub variant: PruneVariant,
+}
+
+impl PruneIdxKey {
+	pub fn new(workflow_id: Id, variant: PruneVariant) -> Self {
+		PruneIdxKey {
+			ts: rivet_util::timestamp::now(),
+			workflow_id,
+			variant,
+		}
+	}
+
+	pub fn subspace(ts: i64) -> PruneIdxSubspaceKey {
+		PruneIdxSubspaceKey::new(ts)
+	}
+
+	pub fn entire_subspace() -> PruneIdxSubspaceKey {
+		PruneIdxSubspaceKey::entire()
+	}
+}
+
+impl FormalKey for PruneIdxKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for PruneIdxKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			WORKFLOW,
+			PRUNE_IDX,
+			self.ts,
+			self.workflow_id,
+			self.variant as usize,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for PruneIdxKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, ts, workflow_id, prune_variant)) =
+			<(usize, usize, i64, Id, usize)>::unpack(input, tuple_depth)?;
+		let prune_variant = PruneVariant::from_repr(prune_variant).ok_or_else(|| {
+			PackError::Message(format!("invalid prune variant `{prune_variant}` in key").into())
+		})?;
+
+		let v = PruneIdxKey {
+			ts,
+			workflow_id,
+			variant: prune_variant,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct PruneIdxSubspaceKey {
+	ts: Option<i64>,
+}
+
+impl PruneIdxSubspaceKey {
+	pub fn new(ts: i64) -> Self {
+		PruneIdxSubspaceKey { ts: Some(ts) }
+	}
+
+	pub fn entire() -> Self {
+		PruneIdxSubspaceKey { ts: None }
+	}
+}
+
+impl TuplePack for PruneIdxSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (WORKFLOW, PRUNE_IDX);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(ts) = &self.ts {
+			offset += ts.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
 	}
 }
