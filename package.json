@@ -47,7 +47,8 @@
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
 			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@edc6ad0",
-			"@codemirror/state": "^6.5.2"
+			"@codemirror/state": "^6.5.2",
+			"vite-plugin-srvx": "https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10"
 		}
 	}
 }

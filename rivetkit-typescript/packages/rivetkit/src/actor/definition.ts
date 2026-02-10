@@ -1,9 +1,8 @@
 import type { RegistryConfig } from "@/registry/config";
+import { getRequireFn } from "@/utils/node";
 import type { Actions, ActorConfig } from "./config";
-import type { ActionContextOf, ActorContext } from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
 import type { ActorInstance } from "./instance/mod";
-import { DeepMutable } from "@/utils";
 
 export type AnyActorDefinition = ActorDefinition<
 	any,
@@ -34,19 +33,20 @@ export class ActorDefinition<
 		return this.#config;
 	}
 
-	instantiate(): ActorInstance<S, CP, CS, V, I, DB> {
+	async instantiate(): Promise<ActorInstance<S, CP, CS, V, I, DB>> {
 		// Lazy import to avoid pulling server-only dependencies (traces, fdb-tuple, etc.)
 		// into browser bundles. This method is only called on the server.
-		const requireFn = typeof require === "undefined" ? undefined : require;
-		if (!requireFn) {
-			throw new Error(
-				"ActorDefinition.instantiate requires a Node.js environment",
-			);
-		}
+		// const requireFn = getRequireFn();
+		// if (!requireFn) {
+		// 	throw new Error(
+		// 		"ActorDefinition.instantiate requires a Node.js environment",
+		// 	);
+		// }
 
 		try {
-			const { ActorInstance: ActorInstanceClass } =
-				requireFn("./instance/mod");
+			const { ActorInstance: ActorInstanceClass } = await import(
+				"./instance/mod"
+			);
 			return new ActorInstanceClass(this.#config);
 		} catch (error) {
 			if (!isInstanceModuleNotFound(error)) {
@@ -55,13 +55,14 @@ export class ActorDefinition<
 
 			try {
 				// In tests, register tsx so require() can resolve .ts files.
-				requireFn("tsx/cjs");
+				await getRequireFn()("tsx/cjs");
 			} catch {
 				throw error;
 			}
 
-			const { ActorInstance: ActorInstanceClass } =
-				requireFn("./instance/mod");
+			const { ActorInstance: ActorInstanceClass } = await import(
+				"./instance/mod"
+			);
 			return new ActorInstanceClass(this.#config);
 		}
 	}

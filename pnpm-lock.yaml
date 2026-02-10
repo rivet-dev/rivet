@@ -19,6 +19,7 @@ overrides:
   react-dom: 19.1.0
   '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@edc6ad0
   '@codemirror/state': ^6.5.2
+  vite-plugin-srvx: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
 
 importers:
 
@@ -277,8 +278,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -387,8 +388,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -506,8 +507,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -561,8 +562,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -724,8 +725,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -834,8 +835,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -938,8 +939,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -993,8 +994,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -1282,8 +1283,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -1404,8 +1405,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -1508,8 +1509,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -1640,8 +1641,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -1769,8 +1770,8 @@ importers:
         specifier: ^5.2.0
         version: 5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
 
   examples/kitchen-sink-vercel:
     dependencies:
@@ -1916,8 +1917,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2023,8 +2024,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2176,8 +2177,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2231,8 +2232,8 @@ importers:
         specifier: ^5.4.19
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2335,8 +2336,8 @@ importers:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2396,8 +2397,8 @@ importers:
         specifier: ^6.0.5
         version: 6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2555,8 +2556,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2633,6 +2634,15 @@ importers:
       hono:
         specifier: ^4.11.3
         version: 4.11.3
+      lucide-react:
+        specifier: ^0.439.0
+        version: 0.439.0(react@19.1.0)
+      mermaid:
+        specifier: ^11.12.2
+        version: 11.12.2
+      prism-react-renderer:
+        specifier: ^2.4.1
+        version: 2.4.1(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -2671,8 +2681,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
 
   examples/sandbox-coding-agent:
     dependencies:
@@ -2726,8 +2736,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2784,6 +2794,73 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
+  examples/sandbox-vercel:
+    dependencies:
+      '@ai-sdk/openai':
+        specifier: ^0.0.66
+        version: 0.0.66(zod@3.25.76)
+      '@hono/node-server':
+        specifier: ^1.19.7
+        version: 1.19.9(hono@4.11.3)
+      '@hono/node-ws':
+        specifier: ^1.3.0
+        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.3))(hono@4.11.3)
+      '@rivetkit/react':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/react
+      ai:
+        specifier: ^4.0.38
+        version: 4.3.19(react@19.1.0)(zod@3.25.76)
+      fdb-tuple:
+        specifier: ^1.0.0
+        version: 1.0.0
+      hono:
+        specifier: ^4.11.3
+        version: 4.11.3
+      lucide-react:
+        specifier: ^0.439.0
+        version: 0.439.0(react@19.1.0)
+      mermaid:
+        specifier: ^11.12.2
+        version: 11.12.2
+      prism-react-renderer:
+        specifier: ^2.4.1
+        version: 2.4.1(react@19.1.0)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+      zod:
+        specifier: ^3.25.69
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.5
+      '@types/react':
+        specifier: ^19
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.2(@types/react@19.2.2)
+      '@vitejs/plugin-react':
+        specifier: ^4.2.0
+        version: 4.7.0(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
+
   examples/scheduling:
     dependencies:
       '@hono/node-server':
@@ -2833,8 +2910,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -2980,8 +3057,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -3084,8 +3161,8 @@ importers:
         specifier: ^5.0.0
         version: 5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
       vite-plugin-srvx:
-        specifier: ^1.0.0
-        version: 1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
+        specifier: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10
+        version: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
@@ -9791,6 +9868,9 @@ packages:
   '@types/postcss-modules-scope@3.0.4':
     resolution: {integrity: sha512-//ygSisVq9kVI0sqx3UPLzWIMCmtSVrzdljtuaAEJtGoGnpjBikZ2sXO5MpH9SnWX9HRfXxHifDAXcQjupWnIQ==}
 
+  '@types/prismjs@1.26.5':
+    resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
+
   '@types/qs@6.9.8':
     resolution: {integrity: sha512-u95svzDlTysU5xecFNTgfFG5RUWu1A9P0VzgpcIiGZA9iraHOdSzcxMxQ55DyeRaGCSxQi7LxXDI4rzq/MYfdg==}
 
@@ -14868,6 +14948,11 @@ packages:
     resolution: {integrity: sha512-gjVS5hOP+M3wMm5nmNOucbIrqudzs9v/57bWRHQWLYklXqoXKrVfYW2W9+glfGsqtPgpiz5WwyEEB+ksXIx3gQ==}
     engines: {node: '>=18'}
 
+  prism-react-renderer@2.4.1:
+    resolution: {integrity: sha512-ey8Ls/+Di31eqzUxC46h8MksNuGx/n0AAC8uKpwFau4RPDYLuE3EXTp8N8G2vX2N7UC/+IXeNUnlWBGGcAG+Ig==}
+    peerDependencies:
+      react: 19.1.0
+
   prismjs@1.30.0:
     resolution: {integrity: sha512-DEvV2ZF2r2/63V+tK8hQvrR2ZGn10srHbXviTlcv7Kpzw8jWiNTqbVgjO3IY8RxrrOUF8VPMQQFysYYYv0YZxw==}
     engines: {node: '>=6'}
@@ -16717,8 +16802,9 @@ packages:
   vite-plugin-favicons-inject@2.2.0:
     resolution: {integrity: sha512-MaqZE3IjwFffIED38yKcI5BKGkV039N6ilhPeOfW4TILzSKMBNd8Q0ehu0mwbl1emWH2tGcuwV3ZIzDKfb0vIQ==}
 
-  vite-plugin-srvx@1.0.0:
-    resolution: {integrity: sha512-TOwJ90alt4Zbjsnye1hHACPl06xvUq4p62/huF3G2jLeJkm3kC83jDzDi/TOl4QMx84uS5IE67m8VTCMOCWJPQ==}
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10:
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10}
+    version: 1.0.1
     peerDependencies:
       srvx: '>=0.9.0'
       vite: ^5.0.0 || ^6.0.0
@@ -23112,6 +23198,8 @@ snapshots:
     dependencies:
       postcss: 8.5.6
 
+  '@types/prismjs@1.26.5': {}
+
   '@types/qs@6.9.8': {}
 
   '@types/react-dom@19.2.2(@types/react@19.2.2)':
@@ -29325,6 +29413,12 @@ snapshots:
     dependencies:
       parse-ms: 4.0.0
 
+  prism-react-renderer@2.4.1(react@19.1.0):
+    dependencies:
+      '@types/prismjs': 1.26.5
+      clsx: 2.1.1
+      react: 19.1.0
+
   prismjs@1.30.0: {}
 
   proc-log@4.2.0: {}
@@ -32081,32 +32175,32 @@ snapshots:
     dependencies:
       favicons: 7.2.0
 
-  vite-plugin-srvx@1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
-  vite-plugin-srvx@1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
-  vite-plugin-srvx@1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@22.19.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
-  vite-plugin-srvx@1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@22.19.3)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
-  vite-plugin-srvx@1.0.0(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)):
     dependencies:
       srvx: 0.10.0
       vite: 5.4.20(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)
 
-  vite-plugin-srvx@1.0.0(srvx@0.10.0)(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2)):
+  vite-plugin-srvx@https://pkg.pr.new/rivet-dev/vite-plugin-srvx@10(srvx@0.10.0)(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2)):
     dependencies:
       srvx: 0.10.0
       vite: 6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.1)(tsx@4.20.5)(yaml@2.8.2)

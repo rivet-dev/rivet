@@ -8,7 +8,7 @@ import type { DatabaseProvider, RawAccess } from "../config";
 import { getSqliteVfs } from "../sqlite-vfs";
 import type { KvVfsOptions } from "../sqlite-vfs";
 
-export * from "drizzle-orm/sqlite-core";
+export * from "./sqlite-core";
 
 import { type Config, defineConfig as originalDefineConfig } from "drizzle-kit";
 
