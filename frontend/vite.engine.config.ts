@@ -33,6 +33,12 @@ const getVariantForMode = (mode: string) => {
 export default defineConfig(({ mode }) => {
 	const env = commonEnvSchema.parse(loadEnv(mode, process.cwd(), ""));
 
+	console.log(
+		env.SENTRY_AUTH_TOKEN
+			? "Sentry plugin enabled"
+			: "Sentry plugin disabled (missing auth token)",
+	);
+
 	return {
 		base: "/ui",
 		plugins: [

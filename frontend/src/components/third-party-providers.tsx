@@ -3,7 +3,7 @@ import posthog, { type PostHog } from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import type { PropsWithChildren } from "react";
 import { getConfig, useConfig } from "@/components";
-import { cloudEnv, commonEnv } from "@/lib/env";
+import { commonEnv } from "@/lib/env";
 
 export function initThirdPartyProviders(router: unknown, debug: boolean) {
 	const config = getConfig();
@@ -38,6 +38,7 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			dsn: commonEnv().VITE_APP_SENTRY_DSN,
 			tracesSampleRate: 1.0,
 			integrations,
+			environment: commonEnv().VITE_APP_SENTRY_ENV,
 			tunnel: getConfig().sentry?.tunnel,
 			tracePropagationTargets: [
 				"api.rivet.dev",
