@@ -100,6 +100,7 @@ export type {
 	WorkflowContextInterface,
 	WorkflowFunction,
 	WorkflowHandle,
+	WorkflowListenMessage,
 	WorkflowMessageDriver,
 	WorkflowResult,
 	WorkflowRunMode,
