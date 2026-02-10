@@ -1,13 +1,12 @@
 import { z } from "zod";
-import type { DriverConfig } from "@/registry/run-config";
+import type { DriverConfig } from "@/registry/config";
 import { importNodeDependencies } from "@/utils/node";
 import { FileSystemActorDriver } from "./actor";
 import {
-	FileSystemGlobalState,
 	type FileSystemDriverOptions,
+	FileSystemGlobalState,
 } from "./global-state";
 import { FileSystemManagerDriver } from "./manager";
-import { DriverConfig } from "@/registry/config";
 
 export { FileSystemActorDriver } from "./actor";
 export { FileSystemGlobalState } from "./global-state";
@@ -45,11 +44,7 @@ export function createFileSystemOrMemoryDriver(
 		name: persist ? "file-system" : "memory",
 		displayName: persist ? "File System" : "Memory",
 		manager: (config) =>
-			new FileSystemManagerDriver(
-				config,
-				state,
-				driverConfig,
-			),
+			new FileSystemManagerDriver(config, state, driverConfig),
 		actor: (config, managerDriver, inlineClient) => {
 			const actorDriver = new FileSystemActorDriver(
 				config,
@@ -58,11 +53,7 @@ export function createFileSystemOrMemoryDriver(
 				state,
 			);
 
-			state.onRunnerStart(
-				config,
-				inlineClient,
-				actorDriver,
-			);
+			state.onRunnerStart(config, inlineClient, actorDriver);
 
 			return actorDriver;
 		},

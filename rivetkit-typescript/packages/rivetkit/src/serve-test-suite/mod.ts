@@ -1,11 +1,11 @@
-import { serve as honoServe } from "@hono/node-server";
-import { createNodeWebSocket } from "@hono/node-ws";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
+import { serve as honoServe } from "@hono/node-server";
+import { createNodeWebSocket } from "@hono/node-ws";
 import invariant from "invariant";
-import { buildManagerRouter } from "@/manager/router";
-import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import { logger } from "@/driver-test-suite/log";
+import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
+import { buildManagerRouter } from "@/manager/router";
 import { registry } from "../../fixtures/driver-test-suite/registry";
 
 export interface ServeTestSuiteResult {
@@ -74,10 +74,9 @@ export async function serveTestSuite(): Promise<ServeTestSuiteResult> {
 		publicEndpoint: `http://127.0.0.1:${port}`,
 	};
 
-	const driver = await createFileSystemOrMemoryDriver(
-		true,
-		`/tmp/rivetkit-test-suite-${crypto.randomUUID()}`,
-	);
+	const driver = await createFileSystemOrMemoryDriver(true, {
+		path: `/tmp/rivetkit-test-suite-${crypto.randomUUID()}`,
+	});
 	registry.config.driver = driver;
 
 	let upgradeWebSocket: any;
@@ -114,7 +113,9 @@ export async function serveTestSuite(): Promise<ServeTestSuiteResult> {
 		namespace: "default",
 		runnerName: "default",
 		close: async () => {
-			await new Promise((resolve) => server.close(() => resolve(undefined)));
+			await new Promise((resolve) =>
+				server.close(() => resolve(undefined)),
+			);
 		},
 	};
 }
