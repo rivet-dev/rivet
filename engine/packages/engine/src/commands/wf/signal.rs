@@ -27,6 +27,17 @@ pub enum SubCommand {
 	},
 	/// Silences a signal from showing up as dead or running again.
 	Silence { signal_ids: Vec<Id> },
+	/// Deletes acked signals that match the name and before filter.
+	Prune {
+		#[clap(short = 'n', long)]
+		name: Vec<String>,
+		#[clap(short = 'b', long)]
+		before: chrono::DateTime<chrono::Utc>,
+		#[clap(short = 'd', long)]
+		dry_run: bool,
+		#[clap(short = 'p', long)]
+		parallelization: Option<u128>,
+	},
 }
 
 impl SubCommand {
@@ -57,6 +68,29 @@ impl SubCommand {
 				util::wf::signal::print_signals(signals, pretty).await
 			}
 			Self::Silence { signal_ids } => db.silence_signals(signal_ids).await,
+			Self::Prune {
+				name,
+				before,
+				dry_run,
+				parallelization,
+			} => {
+				let total = db
+					.prune_acked_signals(
+						&name.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+						before.timestamp_millis(),
+						dry_run,
+						parallelization.unwrap_or(1),
+					)
+					.await?;
+
+				if dry_run {
+					rivet_term::status::success("Signals Matched", total);
+				} else {
+					rivet_term::status::success("Signals Pruned", total);
+				}
+
+				Ok(())
+			}
 		}
 	}
 }

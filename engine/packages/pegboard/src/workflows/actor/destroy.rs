@@ -53,7 +53,7 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 			tracing::warn!(
 				namespace_id=%input.namespace_id,
 				runner_name=%res.runner_name_selector,
-				"serverless pool workflow not found, respective runner config likely deleted"
+				"serverless pool workflow not found, runner config likely deleted"
 			);
 		} else {
 			bump_res?;

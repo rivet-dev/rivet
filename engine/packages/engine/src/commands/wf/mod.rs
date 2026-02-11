@@ -44,6 +44,17 @@ pub enum SubCommand {
 		#[clap(short = 'p', long)]
 		parallelization: Option<u128>,
 	},
+	/// Deletes the history for completed workflows that match the name and before filter.
+	PruneHistory {
+		#[clap(short = 'n', long)]
+		name: Vec<String>,
+		#[clap(short = 'b', long)]
+		before: chrono::DateTime<chrono::Utc>,
+		#[clap(short = 'd', long)]
+		dry_run: bool,
+		#[clap(short = 'p', long)]
+		parallelization: Option<u128>,
+	},
 	/// Lists the entire event history of a workflow.
 	History {
 		#[clap(index = 1)]
@@ -118,6 +129,29 @@ impl SubCommand {
 					rivet_term::status::success("Workflows Matched", total);
 				} else {
 					rivet_term::status::success("Workflows Revived", total);
+				}
+
+				Ok(())
+			}
+			Self::PruneHistory {
+				name,
+				before,
+				dry_run,
+				parallelization,
+			} => {
+				let total = db
+					.prune_complete_workflow_history(
+						&name.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+						before.timestamp_millis(),
+						dry_run,
+						parallelization.unwrap_or(1),
+					)
+					.await?;
+
+				if dry_run {
+					rivet_term::status::success("Workflows Matched", total);
+				} else {
+					rivet_term::status::success("Workflows Pruned", total);
 				}
 
 				Ok(())

@@ -1247,6 +1247,76 @@ impl DatabaseDebug for DatabaseKv {
 
 		Ok(total)
 	}
+
+	#[tracing::instrument(skip_all)]
+	async fn prune_complete_workflow_history(
+		&self,
+		names: &[&str],
+		before_ts: i64,
+		dry_run: bool,
+		parallelization: u128,
+	) -> Result<usize> {
+		ensure!(parallelization > 0);
+		ensure!(parallelization < 1024);
+
+		let chunk_size = u128::MAX / parallelization;
+		let mut futs = FuturesUnordered::new();
+
+		for i in 0..parallelization {
+			let start = i * chunk_size;
+			futs.push(self.prune_workflow_history_inner(
+				names,
+				before_ts,
+				dry_run,
+				start,
+				start + chunk_size,
+			));
+		}
+
+		let mut total = 0;
+		while let Some(res) = futs.next().await {
+			total += res?;
+		}
+
+		tracing::info!(?total, "workflows deleted");
+
+		Ok(total)
+	}
+
+	#[tracing::instrument(skip_all)]
+	async fn prune_acked_signals(
+		&self,
+		names: &[&str],
+		before_ts: i64,
+		dry_run: bool,
+		parallelization: u128,
+	) -> Result<usize> {
+		ensure!(parallelization > 0);
+		ensure!(parallelization < 1024);
+
+		let chunk_size = u128::MAX / parallelization;
+		let mut futs = FuturesUnordered::new();
+
+		for i in 0..parallelization {
+			let start = i * chunk_size;
+			futs.push(self.prune_signals_inner(
+				names,
+				before_ts,
+				dry_run,
+				start,
+				start + chunk_size,
+			));
+		}
+
+		let mut total = 0;
+		while let Some(res) = futs.next().await {
+			total += res?;
+		}
+
+		tracing::info!(?total, "signals deleted");
+
+		Ok(total)
+	}
 }
 
 impl DatabaseKv {
@@ -1396,6 +1466,331 @@ impl DatabaseKv {
 
 			if current_workflow_id.is_none() {
 				tracing::info!("reached end of workflows");
+				break;
+			}
+		}
+
+		Ok(total)
+	}
+
+	pub async fn prune_workflow_history_inner(
+		&self,
+		names: &[&str],
+		before_ts: i64,
+		dry_run: bool,
+		start: u128,
+		end: u128,
+	) -> Result<usize> {
+		let mut total = 0;
+		let mut current_workflow_id = Some(Id::v1(Uuid::from_u128(start), self.config.dc_label()));
+		let end_workflow_id = Id::v1(Uuid::from_u128(end), self.config.dc_label());
+
+		loop {
+			let (new_current_workflow_id, workflow_ids) = self.pools
+				.udb()?
+				.run(|tx| {
+					async move {
+						let mut workflow_ids = Vec::new();
+
+						let key_end = keys::workflow::DataSubspaceKey::new_with_workflow_id(end_workflow_id);
+						let end = self.subspace.subspace(&key_end).range().1;
+
+						let start = if let Some(current_workflow_id) = current_workflow_id {
+							let key_start = keys::workflow::DataSubspaceKey::new_with_workflow_id(current_workflow_id);
+							let mut bytes = self.subspace.subspace(&key_start).range().0;
+
+							if let Some(b) = bytes.last_mut() {
+								*b = 255;
+							}
+
+							bytes
+						} else {
+							let entire_subspace_key = keys::workflow::DataSubspaceKey::new();
+
+							self.subspace.subspace(&entire_subspace_key).range().0
+						};
+
+						let mut stream = tx.get_ranges_keyvalues(
+							RangeOption {
+								mode: StreamingMode::WantAll,
+								..(start, end).into()
+							},
+							Snapshot,
+						);
+
+						let mut workflows_processed = 0;
+						let mut current_workflow_id = None;
+						let mut name_matches = names.is_empty();
+						let mut state_matches = false;
+						let mut ts_matches = false;
+						let mut history_matches = false;
+
+						let fut = async {
+							while let Some(entry) = stream.try_next().await? {
+								let workflow_id = *self.subspace.unpack::<JustId>(entry.key())?;
+
+								if let Some(curr) = current_workflow_id {
+									if workflow_id != curr {
+										// Save if matches query
+										if name_matches && state_matches && ts_matches && history_matches {
+											workflow_ids.push(curr);
+										}
+
+										workflows_processed += 1;
+
+										// Reset state
+										name_matches = names.is_empty();
+										state_matches = false;
+										ts_matches = false;
+										history_matches = false;
+									}
+								}
+
+								current_workflow_id = Some(workflow_id);
+
+								if let Ok(name_key) =
+									self.subspace.unpack::<keys::workflow::NameKey>(entry.key())
+								{
+									let workflow_name = name_key.deserialize(entry.value())?;
+
+									name_matches = names.is_empty() || names.iter().any(|name| &workflow_name == name);
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::OutputChunkKey>(entry.key())
+								{
+									state_matches = true;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::WorkerIdKey>(entry.key())
+								{
+									state_matches = false;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::HasWakeConditionKey>(entry.key())
+								{
+									state_matches = false;
+								} else if let Ok(create_ts_key) = self
+									.subspace
+									.unpack::<keys::workflow::CreateTsKey>(entry.key())
+								{
+									let create_ts = create_ts_key.deserialize(entry.value())?;
+
+									ts_matches = create_ts < before_ts;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::history::PartialEventKey>(entry.key())
+								{
+									history_matches = true;
+								}
+							}
+
+							if let (Some(workflow_id), true) = (
+								current_workflow_id,
+								name_matches && state_matches && ts_matches && history_matches
+							) {
+								workflow_ids.push(workflow_id);
+								current_workflow_id = None;
+							}
+
+							if current_workflow_id.is_some() {
+								workflows_processed += 1;
+							}
+
+							anyhow::Ok(())
+						};
+
+						match tokio::time::timeout(EARLY_TXN_TIMEOUT, fut).await {
+							Ok(res) => res?,
+							Err(_) => tracing::debug!("timed out reading workflows"),
+						}
+
+						tracing::info!(?workflows_processed, matching_workflows=?workflow_ids.len(), "batch processed workflows");
+
+						Ok((current_workflow_id, workflow_ids))
+					}
+				})
+				.instrument(tracing::info_span!("find_complete_workflows_tx"))
+				.await?;
+
+			current_workflow_id = new_current_workflow_id;
+			total += workflow_ids.len();
+
+			if !dry_run {
+				let workflow_ids = &workflow_ids;
+				self.pools
+					.udb()?
+					.run(|tx| async move {
+						let tx = tx.with_subspace(self.subspace.clone());
+
+						for workflow_id in workflow_ids {
+							let subspace = keys::history::HistorySubspaceKey::new(
+								*workflow_id,
+								keys::history::HistorySubspaceVariant::All,
+							);
+
+							tx.delete_key_subspace(&subspace);
+						}
+
+						Ok(())
+					})
+					.await?;
+			}
+
+			if current_workflow_id.is_none() {
+				tracing::info!("reached end of workflows");
+				break;
+			}
+		}
+
+		Ok(total)
+	}
+
+	pub async fn prune_signals_inner(
+		&self,
+		names: &[&str],
+		before_ts: i64,
+		dry_run: bool,
+		start: u128,
+		end: u128,
+	) -> Result<usize> {
+		let mut total = 0;
+		let mut current_signal_id = Some(Id::v1(Uuid::from_u128(start), self.config.dc_label()));
+		let end_signal_id = Id::v1(Uuid::from_u128(end), self.config.dc_label());
+
+		loop {
+			let (new_current_signal_id, signal_ids) = self.pools
+				.udb()?
+				.run(|tx| {
+					async move {
+						let mut signal_ids = Vec::new();
+
+						let key_end = keys::signal::DataSubspaceKey::new_with_signal_id(end_signal_id);
+						let end = self.subspace.subspace(&key_end).range().1;
+
+						let start = if let Some(current_signal_id) = current_signal_id {
+							let key_start = keys::signal::DataSubspaceKey::new_with_signal_id(current_signal_id);
+							let mut bytes = self.subspace.subspace(&key_start).range().0;
+
+							if let Some(b) = bytes.last_mut() {
+								*b = 255;
+							}
+
+							bytes
+						} else {
+							let entire_subspace_key = keys::signal::DataSubspaceKey::new();
+
+							self.subspace.subspace(&entire_subspace_key).range().0
+						};
+
+						let mut stream = tx.get_ranges_keyvalues(
+							RangeOption {
+								mode: StreamingMode::WantAll,
+								..(start, end).into()
+							},
+							Snapshot,
+						);
+
+						let mut signals_processed = 0;
+						let mut current_signal_id = None;
+						let mut name_matches = names.is_empty();
+						let mut state_matches = false;
+						let mut ts_matches = false;
+
+						let fut = async {
+							while let Some(entry) = stream.try_next().await? {
+								let signal_id = *self.subspace.unpack::<JustId>(entry.key())?;
+
+								if let Some(curr) = current_signal_id {
+									if signal_id != curr {
+										// Save if matches query
+										if name_matches && state_matches && ts_matches {
+											signal_ids.push(curr);
+										}
+
+										signals_processed += 1;
+
+										// Reset state
+										name_matches = names.is_empty();
+										state_matches = false;
+										ts_matches = false;
+									}
+								}
+
+								current_signal_id = Some(signal_id);
+
+								if let Ok(name_key) =
+									self.subspace.unpack::<keys::signal::NameKey>(entry.key())
+								{
+									let signal_name = name_key.deserialize(entry.value())?;
+
+									name_matches = names.is_empty() || names.iter().any(|name| &signal_name == name);
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::signal::AckTsKey>(entry.key())
+								{
+									state_matches = true;
+								} else if let Ok(create_ts_key) = self
+									.subspace
+									.unpack::<keys::signal::CreateTsKey>(entry.key())
+								{
+									let create_ts = create_ts_key.deserialize(entry.value())?;
+
+									ts_matches = create_ts < before_ts;
+								}
+							}
+
+							if let (Some(signal_id), true) = (
+								current_signal_id,
+								name_matches && state_matches && ts_matches
+							) {
+								signal_ids.push(signal_id);
+								current_signal_id = None;
+							}
+
+							if current_signal_id.is_some() {
+								signals_processed += 1;
+							}
+
+							anyhow::Ok(())
+						};
+
+						match tokio::time::timeout(EARLY_TXN_TIMEOUT, fut).await {
+							Ok(res) => res?,
+							Err(_) => tracing::debug!("timed out reading signals"),
+						}
+
+						tracing::info!(?signals_processed, matching_signals=?signal_ids.len(), "batch processed signals");
+
+						Ok((current_signal_id, signal_ids))
+					}
+				})
+				.instrument(tracing::info_span!("find_acked_signals_tx"))
+				.await?;
+
+			current_signal_id = new_current_signal_id;
+			total += signal_ids.len();
+
+			if !dry_run {
+				let signal_ids = &signal_ids;
+				self.pools
+					.udb()?
+					.run(|tx| async move {
+						let tx = tx.with_subspace(self.subspace.clone());
+
+						for signal_id in signal_ids {
+							let subspace =
+								keys::signal::DataSubspaceKey::new_with_signal_id(*signal_id);
+
+							tx.delete_key_subspace(&subspace);
+						}
+
+						Ok(())
+					})
+					.await?;
+			}
+
+			if current_signal_id.is_none() {
+				tracing::info!("reached end of signals");
 				break;
 			}
 		}

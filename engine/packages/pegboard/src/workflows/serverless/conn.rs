@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::time::Instant;
 
 use anyhow::{Context, bail};
@@ -381,6 +382,23 @@ async fn outbound_req_inner(
 					.await;
 
 					bail!("invalid status code ({code}):\n{}", body_slice);
+				}
+				Err(sse::Error::Transport(err)) => {
+					report_error(
+						ctx,
+						input.namespace_id,
+						&input.runner_name,
+						RunnerPoolError::ServerlessConnectionError {
+							message: if let Some(source) = err.source() {
+								format!("{err}\n{source}")
+							} else {
+								err.to_string()
+							},
+						},
+					)
+					.await;
+
+					return Err(err.into());
 				}
 				Err(err) => {
 					report_error(
