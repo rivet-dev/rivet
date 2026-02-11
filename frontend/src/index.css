@@ -64,6 +64,38 @@
 	}
 }
 
+/* Dark theme overrides for xyflow (React Flow). */
+.react-flow__controls {
+	background: hsl(var(--card));
+	border: 1px solid hsl(var(--border));
+	border-radius: 6px;
+	box-shadow: none;
+}
+
+.react-flow__controls-button {
+	background: transparent;
+	border-bottom: 1px solid hsl(var(--border));
+	fill: hsl(var(--foreground));
+}
+
+.react-flow__controls-button:hover {
+	background: hsl(var(--accent));
+}
+
+.react-flow__controls-button:last-child {
+	border-bottom: none;
+}
+
+.react-flow__minimap {
+	background: hsl(var(--card)) !important;
+	border: 1px solid hsl(var(--border));
+	border-radius: 6px;
+}
+
+.react-flow__edge-path {
+	stroke: hsl(var(--muted-foreground));
+}
+
 :root {
 	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
 	--shiki-color-text: theme("colors.white");
