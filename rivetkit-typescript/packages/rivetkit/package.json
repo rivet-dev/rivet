@@ -226,6 +226,7 @@
 		"pino": "^9.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
+		"wa-sqlite": "^1.0.0",
 		"zod": "^4.1.0"
 	},
 	"devDependencies": {
@@ -233,7 +234,6 @@
 		"@biomejs/biome": "^2.3",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
-		"@types/better-sqlite3": "^7.6.13",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",
 		"@types/ws": "^8",
@@ -253,7 +253,6 @@
 	"peerDependencies": {
 		"@hono/node-server": "^1.14.0",
 		"@hono/node-ws": "^1.1.1",
-		"better-sqlite3": "^11.0.0",
 		"drizzle-kit": "^0.31.2",
 		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
@@ -264,9 +263,6 @@
 			"optional": true
 		},
 		"@hono/node-ws": {
-			"optional": true
-		},
-		"better-sqlite3": {
 			"optional": true
 		},
 		"drizzle-kit": {

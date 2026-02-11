@@ -89,6 +89,7 @@ export async function setupTest<A extends Registry<any>>(
 		endpoint,
 		namespace: "default",
 		runnerName: "default",
+		disableMetadataLookup: true,
 	});
 	c.onTestFinished(async () => await client.dispose());
 

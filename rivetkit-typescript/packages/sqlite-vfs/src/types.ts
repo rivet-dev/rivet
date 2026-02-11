@@ -10,10 +10,3 @@ export interface KvVfsOptions {
 	/** Delete multiple keys */
 	deleteBatch: (keys: Uint8Array[]) => Promise<void>;
 }
-
-export interface SqliteVfsConfig {
-	/** Prefix byte for SQLite VFS keys. Must match the actor KV keyspace prefix. */
-	kvPrefix: number;
-	/** Chunk size in bytes for KV storage. Defaults to 4096. */
-	chunkSize?: number;
-}

@@ -2,9 +2,6 @@
 resolver = "2"
 members = [
 	"packages/client",
-	"packages/sqlite-vfs-core",
-	"packages/sqlite-vfs-native",
-	"packages/sqlite-vfs-wasm"
 ]
 
 [workspace.package]
