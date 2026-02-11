@@ -1174,7 +1174,7 @@ impl Database for DatabaseKv {
 
 						0
 					};
-					let active_worker_count = active_worker_ids.len() as u64;
+					let active_worker_count = active_worker_ids.len().max(1) as u64;
 
 					// Collect name and deadline ts for each wf id
 					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();

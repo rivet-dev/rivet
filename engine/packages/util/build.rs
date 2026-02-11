@@ -9,6 +9,8 @@ fn main() -> Result<()> {
 		.add_instructions(&vergen_gitcl::GitclBuilder::all_git()?)?
 		.emit()?;
 
+	println!("cargo:rerun-if-env-changed=OVERRIDE_GIT_SHA");
+
 	if let Ok(git_sha) = std::env::var("OVERRIDE_GIT_SHA") {
 		println!("cargo:rustc-env=VERGEN_GIT_SHA={git_sha}");
 	}
