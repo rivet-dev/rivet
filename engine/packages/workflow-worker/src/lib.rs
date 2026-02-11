@@ -5,7 +5,8 @@ use gas::prelude::*;
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
 	let reg = pegboard::registry()?
 		.merge(namespace::registry()?)?
-		.merge(epoxy::registry()?)?;
+		.merge(epoxy::registry()?)?
+		.merge(gasoline_runtime::registry()?)?;
 
 	let db = db::DatabaseKv::new(config.clone(), pools.clone()).await?;
 	let worker = Worker::new(reg.handle(), db, config, pools);

@@ -63,8 +63,8 @@ impl Pools {
 	}
 
 	// MARK: Getters
-	pub fn ups_option(&self) -> &Option<UpsPool> {
-		&self.0.ups
+	pub fn ups_option(&self) -> Option<&UpsPool> {
+		self.0.ups.as_ref()
 	}
 
 	// MARK: Pool lookups
@@ -74,6 +74,10 @@ impl Pools {
 
 	pub fn clickhouse(&self) -> Result<ClickHousePool> {
 		self.0.clickhouse.clone().context("missing clickhouse pool")
+	}
+
+	pub fn clickhouse_option(&self) -> Option<&ClickHousePool> {
+		self.0.clickhouse.as_ref()
 	}
 
 	pub fn udb(&self) -> Result<UdbPool> {

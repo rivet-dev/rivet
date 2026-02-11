@@ -48,6 +48,10 @@ pub trait DatabaseDebug: Database {
 		parallelization: u128,
 	) -> Result<usize>;
 
+	/// Used by pruner workflow for automatic pruning.
+	async fn prune_workflows(&self, before_ts: i64) -> Result<usize>;
+
+	/// Used for manual pruning.
 	async fn prune_complete_workflow_history(
 		&self,
 		names: &[&str],
@@ -56,6 +60,7 @@ pub trait DatabaseDebug: Database {
 		parallelization: u128,
 	) -> Result<usize>;
 
+	/// Used for manual pruning.
 	async fn prune_acked_signals(
 		&self,
 		names: &[&str],

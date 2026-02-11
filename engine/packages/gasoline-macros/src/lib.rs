@@ -8,12 +8,25 @@ use syn::{
 };
 
 #[derive(Default)]
-struct Config {
+enum PruneVariant {
+	#[default]
+	All,
+	History,
+	None,
+}
+
+#[derive(Default)]
+struct WorkflowConfig {
+	prune: PruneVariant,
+}
+
+#[derive(Default)]
+struct OperationConfig {
 	max_retries: Option<syn::Expr>,
 	timeout: Option<syn::Expr>,
 }
 
-impl Config {
+impl OperationConfig {
 	fn max_retries(&self) -> proc_macro2::TokenStream {
 		self.max_retries
 			.as_ref()
@@ -47,9 +60,10 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 		.unwrap_or_else(|| "Workflow".to_string());
 	let item_fn = parse_macro_input!(item as ItemFn);
 
-	if let Err(err) = parse_empty_config(&item_fn.attrs) {
-		return err.into_compile_error().into();
-	}
+	let config = match parse_wf_config(&item_fn.attrs) {
+		Ok(x) => x,
+		Err(err) => return err.into_compile_error().into(),
+	};
 
 	let ctx_ty = syn::parse_str("&mut WorkflowCtx").unwrap();
 	let TraitFnOutput {
@@ -74,6 +88,12 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 		);
 	}
 
+	let prune_variant = match config.prune {
+		PruneVariant::All => quote! { gas::workflow::PruneVariant::All },
+		PruneVariant::History => quote! { gas::workflow::PruneVariant::History },
+		PruneVariant::None => quote! { gas::workflow::PruneVariant::None },
+	};
+
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
 
@@ -90,6 +110,7 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 			type Output = #output_type;
 
 			const NAME: &'static str = #fn_name;
+			const PRUNE_VARIANT: gas::workflow::PruneVariant = #prune_variant;
 
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> Result<Self::Output> {
 				#fn_body
@@ -107,7 +128,7 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let name = parse_macro_input!(attr as Ident).to_string();
 	let item_fn = parse_macro_input!(item as ItemFn);
 
-	let config = match parse_config(&item_fn.attrs) {
+	let config = match parse_op_config(&item_fn.attrs) {
 		Ok(x) => x,
 		Err(err) => return err.into_compile_error().into(),
 	};
@@ -177,7 +198,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let item_fn = parse_macro_input!(item as ItemFn);
 
-	let config = match parse_config(&item_fn.attrs) {
+	let config = match parse_op_config(&item_fn.attrs) {
 		Ok(x) => x,
 		Err(err) => return err.into_compile_error().into(),
 	};
@@ -441,8 +462,44 @@ fn error(span: proc_macro2::Span, msg: &str) -> TokenStream {
 	syn::Error::new(span, msg).to_compile_error().into()
 }
 
-fn parse_config(attrs: &[syn::Attribute]) -> syn::Result<Config> {
-	let mut config = Config::default();
+fn parse_wf_config(attrs: &[syn::Attribute]) -> syn::Result<WorkflowConfig> {
+	let mut config = WorkflowConfig::default();
+
+	for attr in attrs {
+		let syn::Meta::NameValue(name_value) = &attr.meta else {
+			continue;
+		};
+
+		let ident = name_value.path.require_ident()?;
+
+		// Verify config property
+		if ident == "prune" {
+			let variant = syn::parse::<syn::Ident>(name_value.value.to_token_stream().into())?;
+
+			config.prune = match variant.to_string().as_str() {
+				"all" => PruneVariant::All,
+				"history" => PruneVariant::History,
+				"none" => PruneVariant::None,
+				_ => {
+					return Err(syn::Error::new(
+						name_value.value.span(),
+						format!("Invalid prune variant. Expected: all, history, none"),
+					));
+				}
+			};
+		} else if ident != "doc" {
+			return Err(syn::Error::new(
+				name_value.span(),
+				format!("Unknown config property `{ident}`"),
+			));
+		}
+	}
+
+	Ok(config)
+}
+
+fn parse_op_config(attrs: &[syn::Attribute]) -> syn::Result<OperationConfig> {
+	let mut config = OperationConfig::default();
 
 	for attr in attrs {
 		let syn::Meta::NameValue(name_value) = &attr.meta else {
@@ -496,6 +553,7 @@ fn parse_msg_config(attrs: &[syn::Attribute]) -> syn::Result<MessageConfig> {
 	Ok(config)
 }
 
+#[allow(dead_code)]
 fn parse_empty_config(attrs: &[syn::Attribute]) -> syn::Result<()> {
 	for attr in attrs {
 		let syn::Meta::NameValue(name_value) = &attr.meta else {

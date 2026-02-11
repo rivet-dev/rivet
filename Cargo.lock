@@ -1762,6 +1762,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gasoline-runtime"
+version = "2.0.38"
+dependencies = [
+ "anyhow",
+ "epoxy",
+ "gasoline",
+ "namespace",
+ "pegboard",
+ "rivet-config",
+ "rivet-types",
+ "serde",
+ "tracing",
+ "universaldb",
+]
+
+[[package]]
 name = "generator"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4233,6 +4249,7 @@ version = "2.0.38"
 dependencies = [
  "epoxy",
  "gasoline",
+ "gasoline-runtime",
  "namespace",
  "pegboard",
  "rivet-config",
@@ -4370,7 +4387,6 @@ dependencies = [
  "rivet-config",
  "rivet-guard",
  "rivet-logs",
- "rivet-metrics-aggregator",
  "rivet-pools",
  "rivet-runner-protocol",
  "rivet-runtime",
@@ -4556,21 +4572,6 @@ dependencies = [
  "rivet-env",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "rivet-metrics-aggregator"
-version = "2.0.38"
-dependencies = [
- "anyhow",
- "epoxy",
- "gasoline",
- "namespace",
- "pegboard",
- "rivet-config",
- "rivet-types",
- "tracing",
- "universaldb",
 ]
 
 [[package]]
@@ -4840,6 +4841,7 @@ dependencies = [
  "anyhow",
  "epoxy",
  "gasoline",
+ "gasoline-runtime",
  "namespace",
  "pegboard",
  "rivet-config",

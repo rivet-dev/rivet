@@ -11,7 +11,7 @@ use crate::{
 		event::{Event, EventType, SleepState},
 		location::Location,
 	},
-	workflow::Workflow,
+	workflow::{PruneVariant, Workflow},
 };
 
 pub mod debug;
@@ -121,6 +121,7 @@ pub trait Database: Send {
 		workflow_id: Id,
 		workflow_name: &str,
 		output: &serde_json::value::RawValue,
+		prune_variant: PruneVariant,
 	) -> WorkflowResult<()>;
 
 	/// Write a workflow sleep/failure to the database.

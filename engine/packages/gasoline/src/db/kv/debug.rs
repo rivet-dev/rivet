@@ -2,12 +2,13 @@ use std::{
 	collections::HashMap,
 	ops::Deref,
 	result::Result::{Err, Ok},
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, ensure};
 use futures_util::{StreamExt, TryStreamExt, stream::FuturesUnordered};
 use rivet_util::Id;
+use serde::Serialize;
 use tracing::Instrument;
 use universaldb::utils::{FormalChunkedKey, FormalKey, IsolationLevel::*, end_of_key_range};
 use universaldb::{
@@ -33,6 +34,7 @@ use crate::{
 		event::{EventType, RemovedEvent, SleepEvent, SleepState, VersionCheckEvent},
 		location::Location,
 	},
+	workflow::PruneVariant,
 };
 
 const EARLY_TXN_TIMEOUT: Duration = Duration::from_secs(3);
@@ -1249,6 +1251,157 @@ impl DatabaseDebug for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
+	async fn prune_workflows(&self, before_ts: i64) -> Result<usize> {
+		let mut total = 0;
+		let mut last_key = Vec::new();
+		let dc_name = &self.config.dc_name()?;
+
+		#[derive(clickhouse::Row, Serialize)]
+		struct WorkflowTombstone<'a> {
+			datacenter: &'a str,
+			workflow_id: Id,
+			created_at: i64,
+			deleted_at: i64,
+		}
+
+		loop {
+			let (prune_count, inserter, new_last_key) = self
+				.pools
+				.udb()?
+				.run(|tx| {
+					let last_key = &last_key;
+					async move {
+						let start = Instant::now();
+						let tx = tx.with_subspace(self.subspace.clone());
+						let now = rivet_util::timestamp::now();
+						let mut prune_count = 0;
+						let mut new_last_key = Vec::new();
+						let mut inserter = if let Some(ch) = self.pools.clickhouse_option() {
+							Some(
+								ch.clone()
+									.with_database("db_gasoline")
+									.inserter::<WorkflowTombstone>("workflow_tombstones"),
+							)
+						} else {
+							None
+						};
+
+						let subspace_start = self
+							.subspace
+							.subspace(&keys::workflow::PruneIdxKey::entire_subspace())
+							.range()
+							.0;
+						let subspace_end = self
+							.subspace
+							.subspace(&keys::workflow::PruneIdxKey::subspace(before_ts))
+							.range()
+							.1;
+
+						let range_start = if last_key.is_empty() {
+							&subspace_start
+						} else {
+							last_key
+						};
+						let range_end = &subspace_end;
+
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(range_start.as_slice(), range_end.as_slice()).into()
+							},
+							Serializable,
+						);
+
+						loop {
+							if start.elapsed() > EARLY_TXN_TIMEOUT {
+								tracing::warn!("timed out pruning workflows");
+								break;
+							}
+
+							let Some(entry) = stream.try_next().await? else {
+								new_last_key = Vec::new();
+								break;
+							};
+
+							let prune_key =
+								tx.unpack::<keys::workflow::PruneIdxKey>(entry.key())?;
+
+							// Remove prune idx entry
+							tx.delete(&prune_key);
+
+							match prune_key.variant {
+								PruneVariant::All => {
+									let data_subspace =
+										keys::workflow::DataSubspaceKey::new_with_workflow_id(
+											prune_key.workflow_id,
+										);
+
+									tx.delete_key_subspace(&data_subspace);
+
+									if let (Some(inserter), Some(create_ts)) = (
+										&mut inserter,
+										tx.read_opt(
+											&keys::workflow::CreateTsKey::new(
+												prune_key.workflow_id,
+											),
+											Snapshot,
+										)
+										.await?,
+									) {
+										inserter
+											.write(&WorkflowTombstone {
+												datacenter: dc_name,
+												workflow_id: prune_key.workflow_id,
+												created_at: create_ts,
+												deleted_at: now,
+											})
+											.await?;
+									}
+								}
+								PruneVariant::History => {
+									let history_subspace = keys::history::HistorySubspaceKey::new(
+										prune_key.workflow_id,
+										keys::history::HistorySubspaceVariant::All,
+									);
+
+									tx.delete_key_subspace(&history_subspace);
+									tx.write(
+										&keys::workflow::PruneTsKey::new(prune_key.workflow_id),
+										now,
+									)?;
+								}
+								// Should be unreachable, we don't insert into the idx if prune variant
+								// is `none`
+								PruneVariant::None => continue,
+							}
+
+							prune_count += 1;
+							new_last_key = [entry.key(), &[0xff]].concat();
+						}
+
+						Ok((prune_count, inserter, new_last_key))
+					}
+				})
+				.instrument(tracing::info_span!("prune_workflows_tx"))
+				.await?;
+
+			if let Some(mut inserter) = inserter {
+				inserter.force_commit().await?;
+				inserter.end().await?;
+			}
+
+			last_key = new_last_key;
+			total += prune_count;
+
+			if last_key.is_empty() {
+				break;
+			}
+		}
+
+		Ok(total)
+	}
+
+	#[tracing::instrument(skip_all)]
 	async fn prune_complete_workflow_history(
 		&self,
 		names: &[&str],
@@ -1569,6 +1722,11 @@ impl DatabaseKv {
 									.unpack::<keys::workflow::HasWakeConditionKey>(entry.key())
 								{
 									state_matches = false;
+								} else if let Ok(_) = self
+									.subspace
+									.unpack::<keys::workflow::PruneTsKey>(entry.key())
+								{
+									state_matches = false;
 								} else if let Ok(create_ts_key) = self
 									.subspace
 									.unpack::<keys::workflow::CreateTsKey>(entry.key())
@@ -1621,14 +1779,17 @@ impl DatabaseKv {
 					.udb()?
 					.run(|tx| async move {
 						let tx = tx.with_subspace(self.subspace.clone());
+						let now = rivet_util::timestamp::now();
 
 						for workflow_id in workflow_ids {
-							let subspace = keys::history::HistorySubspaceKey::new(
+							let history_subspace = keys::history::HistorySubspaceKey::new(
 								*workflow_id,
 								keys::history::HistorySubspaceVariant::All,
 							);
 
-							tx.delete_key_subspace(&subspace);
+							tx.delete_key_subspace(&history_subspace);
+
+							tx.write(&keys::workflow::PruneTsKey::new(*workflow_id), now)?;
 						}
 
 						Ok(())
@@ -1778,10 +1939,10 @@ impl DatabaseKv {
 						let tx = tx.with_subspace(self.subspace.clone());
 
 						for signal_id in signal_ids {
-							let subspace =
+							let data_subspace =
 								keys::signal::DataSubspaceKey::new_with_signal_id(*signal_id);
 
-							tx.delete_key_subspace(&subspace);
+							tx.delete_key_subspace(&data_subspace);
 						}
 
 						Ok(())

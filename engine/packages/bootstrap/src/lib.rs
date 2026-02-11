@@ -22,6 +22,8 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		},
 		create_default_namespace(&ctx),
 		backfill::run(&ctx),
+		setup_pegboard_metrics_aggregator(&ctx),
+		setup_gas_pruner(&ctx),
 	)?;
 
 	Ok(())
@@ -100,6 +102,30 @@ async fn create_default_namespace(ctx: &StandaloneCtx) -> Result<()> {
 	} else {
 		tracing::info!("default namespace already exists");
 	}
+
+	Ok(())
+}
+
+async fn setup_pegboard_metrics_aggregator(ctx: &StandaloneCtx) -> Result<()> {
+	// Create metrics aggregator if does not exist
+	let workflow_id = ctx
+		.workflow(pegboard::workflows::metrics_aggregator::Input {})
+		.unique()
+		.dispatch()
+		.await?;
+	tracing::info!(%workflow_id, "created pegboard metrics aggregator");
+
+	Ok(())
+}
+
+async fn setup_gas_pruner(ctx: &StandaloneCtx) -> Result<()> {
+	// Create gas pruner if does not exist
+	let workflow_id = ctx
+		.workflow(gasoline_runtime::workflows::pruner::Input {})
+		.unique()
+		.dispatch()
+		.await?;
+	tracing::info!(%workflow_id, "created gasoline pruner");
 
 	Ok(())
 }
