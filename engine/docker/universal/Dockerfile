@@ -72,6 +72,7 @@ RUN \
     fi && \
     # cargo install --locked tokio-console && \
     mkdir /app/dist/ && \
+    echo "Copying binary" && \
     cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
