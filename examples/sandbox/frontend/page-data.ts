@@ -85,6 +85,40 @@ socket.send(JSON.stringify({ type: "ping" }));`,
 const actor = client.counter.getOrCreate(["demo"]);`,
 	ai: `const reply = await actor.sendMessage("Hello AI");
 actor.useEvent("messageReceived", console.log);`,
+	sqliteRaw: `import { db } from "rivetkit/db";
+
+export const todoList = actor({
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(\`CREATE TABLE IF NOT EXISTS todos (...)\`);
+		},
+	}),
+	actions: {
+		addTodo: async (c, title: string) => {
+			await c.db.execute("INSERT INTO todos ...", title);
+		},
+		getTodos: async (c) => {
+			return await c.db.execute("SELECT * FROM todos");
+		},
+	},
+});`,
+	sqliteVanilla: `import { db } from "rivetkit/db";
+
+export const notes = actor({
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(\`CREATE TABLE IF NOT EXISTS notes (...)\`);
+		},
+	}),
+	actions: {
+		set: async (c, key: string, value: string) => {
+			await c.db.execute("INSERT OR REPLACE ...", key, value);
+		},
+		get: async (c, key: string) => {
+			return await c.db.execute("SELECT * FROM notes WHERE key = ?", key);
+		},
+	},
+});`,
 };
 
 export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
@@ -261,6 +295,18 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 	aiAgent: [
 		{ label: "Get Messages", action: "getMessages", args: [] },
 		{ label: "Send Message", action: "sendMessage", args: ["Hello AI"] },
+	],
+	sqliteRawActor: [
+		{ label: "Add Todo", action: "addTodo", args: ["Buy groceries"] },
+		{ label: "Get Todos", action: "getTodos", args: [] },
+		{ label: "Toggle Todo", action: "toggleTodo", args: [1] },
+		{ label: "Delete Todo", action: "deleteTodo", args: [1] },
+	],
+	sqliteVanillaActor: [
+		{ label: "Set", action: "set", args: ["greeting", "hello world"] },
+		{ label: "Get", action: "get", args: ["greeting"] },
+		{ label: "Get All", action: "getAll", args: [] },
+		{ label: "Remove", action: "remove", args: ["greeting"] },
 	],
 };
 
@@ -464,6 +510,34 @@ export const PAGE_GROUPS: PageGroup[] = [
 				docs: [],
 				actors: ["largePayloadActor", "largePayloadConnActor"],
 				snippet: SNIPPETS.actions,
+			},
+			{
+				id: "sqlite-raw",
+				title: "SQLite Raw",
+				description:
+					"Run raw SQL queries against a per-actor SQLite database backed by KV storage.",
+				docs: [
+					{
+						label: "SQLite",
+						href: "https://rivet.dev/docs/actors/sqlite",
+					},
+				],
+				actors: ["sqliteRawActor"],
+				snippet: SNIPPETS.sqliteRaw,
+			},
+			{
+				id: "sqlite-vanilla",
+				title: "SQLite Vanilla",
+				description:
+					"Use a vanilla SQLite key-value pattern with upserts and queries on a per-actor database.",
+				docs: [
+					{
+						label: "SQLite",
+						href: "https://rivet.dev/docs/actors/sqlite",
+					},
+				],
+				actors: ["sqliteVanillaActor"],
+				snippet: SNIPPETS.sqliteVanilla,
 			},
 		],
 	},

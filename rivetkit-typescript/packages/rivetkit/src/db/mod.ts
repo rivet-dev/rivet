@@ -1,6 +1,5 @@
-import type { DatabaseProvider, RawAccess } from "./config";
 import type { KvVfsOptions } from "./sqlite-vfs";
-import { getSqliteVfs } from "./sqlite-vfs";
+import type { DatabaseProvider, RawAccess } from "./config";
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
@@ -57,29 +56,29 @@ export function db({
 			}
 
 			// Construct KV-backed client using actor driver's KV operations
+			if (!ctx.sqliteVfs) {
+				throw new Error("SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.");
+			}
+
 			const kvStore = createActorKvStore(ctx.kv);
-			const sqliteVfs = await getSqliteVfs();
-			const db = await sqliteVfs.open(ctx.actorId, kvStore);
+			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 
 			return {
 				execute: async (query, ...args) => {
 					const results: Record<string, unknown>[] = [];
 					let columnNames: string[] | null = null;
-					await db.exec(
-						query,
-						(row: unknown[], columns: string[]) => {
-							// Capture column names on first row
-							if (!columnNames) {
-								columnNames = columns;
-							}
-							// Convert array row to object
-							const rowObj: Record<string, unknown> = {};
-							for (let i = 0; i < row.length; i++) {
-								rowObj[columnNames[i]] = row[i];
-							}
-							results.push(rowObj);
-						},
-					);
+					await db.exec(query, (row: unknown[], columns: string[]) => {
+						// Capture column names on first row
+						if (!columnNames) {
+							columnNames = columns;
+						}
+						// Convert array row to object
+						const rowObj: Record<string, unknown> = {};
+						for (let i = 0; i < row.length; i++) {
+							rowObj[columnNames[i]] = row[i];
+						}
+						results.push(rowObj);
+					});
 					return results;
 				},
 				close: async () => {

@@ -3865,7 +3865,7 @@ importers:
         version: 3.13.12(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.10.2)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)
@@ -4313,9 +4313,6 @@ importers:
       '@rivetkit/workflow-engine':
         specifier: workspace:*
         version: link:../workflow-engine
-      better-sqlite3:
-        specifier: ^11.0.0
-        version: 11.10.0
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
@@ -4365,9 +4362,6 @@ importers:
       '@hono/node-ws':
         specifier: ^1.1.1
         version: 1.2.0(@hono/node-server@1.19.1(hono@4.9.8))(hono@4.9.8)
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
       '@types/invariant':
         specifier: ^2
         version: 2.2.37
@@ -4428,12 +4422,12 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
-      sql.js:
-        specifier: ^1.10.2
-        version: 1.13.0
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
+      wa-sqlite:
+        specifier: ^1.0.0
+        version: 1.0.0
     devDependencies:
       '@bare-ts/tools':
         specifier: ^0.13.0
@@ -4441,9 +4435,6 @@ importers:
       '@types/node':
         specifier: ^22.13.1
         version: 22.19.5
-      '@types/sql.js':
-        specifier: ^1.4.9
-        version: 1.4.9
       commander:
         specifier: ^12.0.0
         version: 12.1.0
@@ -4459,22 +4450,6 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.31.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-    optionalDependencies:
-      '@rivetkit/sqlite-vfs-darwin-arm64':
-        specifier: workspace:*
-        version: link:../sqlite-vfs-darwin-arm64
-      '@rivetkit/sqlite-vfs-darwin-x64':
-        specifier: workspace:*
-        version: link:../sqlite-vfs-darwin-x64
-      '@rivetkit/sqlite-vfs-linux-arm64':
-        specifier: workspace:*
-        version: link:../sqlite-vfs-linux-arm64
-      '@rivetkit/sqlite-vfs-linux-x64':
-        specifier: workspace:*
-        version: link:../sqlite-vfs-linux-x64
-      '@rivetkit/sqlite-vfs-win32-x64':
-        specifier: workspace:*
-        version: link:../sqlite-vfs-win32-x64
 
   rivetkit-typescript/packages/sqlite-vfs-darwin-arm64: {}
 
@@ -17486,6 +17461,9 @@ packages:
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
 
+  wa-sqlite@1.0.0:
+    resolution: {integrity: sha512-Kyybo5/BaJp76z7gDWGk2J6Hthl4NIPsE+swgraEjy3IY6r5zIR02wAs1OJH4XtJp1y3puj3Onp5eMGS0z7nUA==}
+
   walker@1.0.8:
     resolution: {integrity: sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==}
 
@@ -21326,7 +21304,7 @@ snapshots:
       react-simple-code-editor: 0.14.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       serve-handler: 6.1.6
       tailwind-merge: 2.6.0
-      tailwindcss-animate: 1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@20.19.13)(typescript@5.9.3)))
+      tailwindcss-animate: 1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@20.19.13)(typescript@5.9.2)))
       zod: 3.25.76
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -24040,7 +24018,8 @@ snapshots:
 
   '@types/diff-match-patch@1.0.36': {}
 
-  '@types/emscripten@1.41.5': {}
+  '@types/emscripten@1.41.5':
+    optional: true
 
   '@types/escape-html@1.0.4': {}
 
@@ -24218,7 +24197,8 @@ snapshots:
   '@types/sql.js@1.4.9':
     dependencies:
       '@types/emscripten': 1.41.5
-      '@types/node': 22.19.5
+      '@types/node': 22.19.10
+    optional: true
 
   '@types/stack-utils@2.0.3': {}
 
@@ -24257,16 +24237,6 @@ snapshots:
       '@codemirror/lint': 6.8.5
       '@codemirror/search': 6.5.11
       '@codemirror/state': 6.5.2
-      '@codemirror/view': 6.38.2
-
-  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.10.2)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)':
-    dependencies:
-      '@codemirror/autocomplete': 6.20.0
-      '@codemirror/commands': 6.10.2
-      '@codemirror/language': 6.11.3
-      '@codemirror/lint': 6.9.3
-      '@codemirror/search': 6.5.11
-      '@codemirror/state': 6.5.4
       '@codemirror/view': 6.38.2
 
   '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)':
@@ -31763,7 +31733,8 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sql.js@1.13.0: {}
+  sql.js@1.13.0:
+    optional: true
 
   srvx@0.10.0: {}
 
@@ -34060,6 +34031,8 @@ snapshots:
       typescript: 5.9.3
 
   w3c-keyname@2.2.8: {}
+
+  wa-sqlite@1.0.0: {}
 
   walker@1.0.8:
     dependencies:

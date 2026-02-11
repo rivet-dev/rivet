@@ -16,12 +16,6 @@ export { getStoragePath } from "./utils";
 const CreateFileSystemDriverOptionsSchema = z.object({
 	/** Custom path for storage. */
 	path: z.string().optional(),
-	/**
-	 * Use native SQLite (better-sqlite3) instead of KV-backed SQLite.
-	 * Requires better-sqlite3 to be installed.
-	 * @default false
-	 */
-	useNativeSqlite: z.boolean().optional().default(false),
 });
 
 type CreateFileSystemDriverOptionsInput = z.input<
@@ -37,7 +31,6 @@ export function createFileSystemOrMemoryDriver(
 	const stateOptions: FileSystemDriverOptions = {
 		persist,
 		customPath: options?.path,
-		useNativeSqlite: options?.useNativeSqlite ?? false,
 	};
 	const state = new FileSystemGlobalState(stateOptions);
 	const driverConfig: DriverConfig = {
