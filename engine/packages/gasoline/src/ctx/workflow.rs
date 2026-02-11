@@ -156,6 +156,7 @@ impl WorkflowCtx {
 
 		// Lookup workflow
 		let workflow = self.registry.get_workflow(&self.name)?;
+		let prune_variant = workflow.prune_variant;
 
 		// Run workflow
 		let mut res = (workflow.run)(&mut self).await;
@@ -182,7 +183,7 @@ impl WorkflowCtx {
 					// Write output
 					if let Err(err) = self
 						.db
-						.complete_workflow(self.workflow_id, &self.name, &output)
+						.complete_workflow(self.workflow_id, &self.name, &output, prune_variant)
 						.await
 					{
 						if retries > MAX_DB_ACTION_RETRIES {

@@ -36,6 +36,7 @@ use crate::{
 	},
 	metrics,
 	worker::PING_INTERVAL,
+	workflow::PruneVariant,
 };
 
 mod debug;
@@ -1774,6 +1775,7 @@ impl Database for DatabaseKv {
 		workflow_id: Id,
 		workflow_name: &str,
 		output: &serde_json::value::RawValue,
+		prune_variant: PruneVariant,
 	) -> WorkflowResult<()> {
 		let start_instant = Instant::now();
 
@@ -1930,6 +1932,22 @@ impl Database for DatabaseKv {
 							}
 						}
 					}
+
+					// Insert into prune idx if applicable
+					match prune_variant {
+						PruneVariant::All | PruneVariant::History => {
+							tx.write(
+								&keys::workflow::PruneIdxKey::new(workflow_id, prune_variant),
+								(),
+							)?;
+						}
+						PruneVariant::None => {}
+					}
+
+					tx.write(
+						&keys::workflow::CompleteTsKey::new(workflow_id),
+						rivet_util::timestamp::now(),
+					)?;
 
 					update_metric(
 						&tx,

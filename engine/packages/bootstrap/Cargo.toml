@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 epoxy.workspace = true
 gas.workspace = true
+gasoline-runtime.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
 rivet-config.workspace = true

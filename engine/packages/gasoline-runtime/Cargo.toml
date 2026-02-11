@@ -1,5 +1,5 @@
 [package]
-name = "rivet-metrics-aggregator"
+name = "gasoline-runtime"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -12,6 +12,7 @@ gas.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
 rivet-config.workspace = true
+rivet-types.workspace = true
+serde.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
-rivet-types.workspace = true

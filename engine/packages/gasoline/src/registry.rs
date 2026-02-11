@@ -6,7 +6,7 @@ use tracing::Instrument;
 use crate::{
 	ctx::WorkflowCtx,
 	error::{WorkflowError, WorkflowResult},
-	workflow::Workflow,
+	workflow::{PruneVariant, Workflow},
 };
 
 pub type RegistryHandle = Arc<Registry>;
@@ -87,6 +87,7 @@ impl Registry {
 					.in_current_span()
 					.boxed()
 				},
+				prune_variant: W::PRUNE_VARIANT,
 			}),
 		);
 
@@ -110,4 +111,5 @@ pub struct RegistryWorkflow {
 	) -> Pin<
 		Box<dyn Future<Output = WorkflowResult<Box<serde_json::value::RawValue>>> + Send + 'a>,
 	>,
+	pub prune_variant: PruneVariant,
 }

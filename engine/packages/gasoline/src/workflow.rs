@@ -13,6 +13,7 @@ pub trait Workflow {
 	type Output: Serialize + DeserializeOwned + Debug + Send;
 
 	const NAME: &'static str;
+	const PRUNE_VARIANT: PruneVariant;
 
 	async fn run(ctx: &mut WorkflowCtx, input: &Self::Input) -> Result<Self::Output>;
 }
@@ -61,4 +62,16 @@ impl<'a, T: DeserializeOwned + Serialize> Drop for StateGuard<'a, T> {
 		// TODO: Somehow don't panic when committing state back into mutex
 		self.guard.0 = serde_json::value::to_raw_value(&self.inner).expect("bad state");
 	}
+}
+
+/// Determines how the data related to a workflow is handled after the workflow completes.
+#[derive(Debug, Default, Clone, Copy, strum::FromRepr)]
+pub enum PruneVariant {
+	/// Delete all of the workflow's data after it completes and is pruned (state + history).
+	#[default]
+	All = 0,
+	/// Delete just the workflow's history after it completes and is pruned (state persists).
+	History = 1,
+	/// Don't delete any workflow data after it completes.
+	None = 2,
 }
