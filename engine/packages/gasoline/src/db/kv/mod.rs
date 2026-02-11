@@ -1652,7 +1652,6 @@ impl Database for DatabaseKv {
 												{
 													tracing::error!(
 														?wf,
-														?current_event,
 														"corrupt history, indexed chunk doesn't exist yet or is out of order"
 													);
 													return Ok(None);
