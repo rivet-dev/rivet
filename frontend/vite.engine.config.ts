@@ -1,13 +1,11 @@
-import * as crypto from "node:crypto";
-import path from "node:path";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import favigo from "favigo/vite";
 import Macros from "unplugin-macros/vite";
-import { defineConfig, loadEnv, type Plugin } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
+import { defineConfig, loadEnv, mergeConfig, type Plugin } from "vite";
 import { commonEnvSchema } from "./src/lib/env";
+import { baseViteConfig } from "./vite.base.config";
 
 // These are only needed in CI. They'll be undefined in dev.
 const GIT_BRANCH = process.env.CF_PAGES_BRANCH;
@@ -39,11 +37,10 @@ export default defineConfig(({ mode }) => {
 			: "Sentry plugin disabled (missing auth token)",
 	);
 
-	return {
+	return mergeConfig(baseViteConfig(), {
 		base: "/ui",
 		plugins: [
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
-			tsconfigPaths(),
 			react(),
 			liveChatPlugin(),
 			env.SENTRY_AUTH_TOKEN
@@ -73,7 +70,7 @@ export default defineConfig(({ mode }) => {
 				"/api": {
 					target: "http://localhost:6420",
 					changeOrigin: true,
-					rewrite: (path) => path.replace(/^\/api/, ""),
+					rewrite: (path: string) => path.replace(/^\/api/, ""),
 				},
 			},
 		},
@@ -81,16 +78,7 @@ export default defineConfig(({ mode }) => {
 			port: 43708,
 		},
 		define: {
-			// Provide a unique build ID for cache busting
 			__APP_TYPE__: JSON.stringify(env.APP_TYPE || "engine"),
-			__APP_BUILD_ID__: JSON.stringify(
-				`${new Date().toISOString()}@${crypto.randomUUID()}`,
-			),
-		},
-		resolve: {
-			alias: {
-				"@": path.resolve(__dirname, "./src"),
-			},
 		},
 		build: {
 			sourcemap: true,
@@ -98,13 +86,7 @@ export default defineConfig(({ mode }) => {
 				include: [/@rivet-gg\/components/, /node_modules/],
 			},
 		},
-		optimizeDeps: {
-			include: ["@fortawesome/*", "@rivet-gg/icons", "@rivet-gg/cloud"],
-		},
-		worker: {
-			format: "es",
-		},
-	};
+	});
 });
 
 export function liveChatPlugin(source: string = ""): Plugin {

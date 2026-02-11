@@ -1,0 +1,42 @@
+{
+	admin off
+}
+
+:{$PORT:80} {
+	# Health check endpoint (must come before file_server)
+	handle /health {
+		respond "healthy" 200
+	}
+
+	# Main site handler
+	handle {
+		root * /srv
+
+		# Gzip compression
+		encode gzip
+
+		# Security headers
+		header {
+			X-Frame-Options "SAMEORIGIN"
+			X-Content-Type-Options "nosniff"
+			X-XSS-Protection "1; mode=block"
+		}
+
+		# Cache static assets aggressively
+		@static {
+			path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+		}
+		header @static Cache-Control "public, max-age=31536000, immutable"
+
+		# Don't cache HTML files (for SPA updates)
+		@html {
+			path *.html
+		}
+		header @html Cache-Control "no-store, no-cache, must-revalidate"
+
+		# SPA catch-all routing - try file first, then fall back to index.html
+		try_files {path} /index.html
+
+		file_server
+	}
+}

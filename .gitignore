@@ -26,6 +26,7 @@ pnpm-debug.log*
 # TypeScript
 *.tsbuildinfo
 dist/
+frontend/build/
 !frontend/packages/icons/dist/
 
 # IDE
