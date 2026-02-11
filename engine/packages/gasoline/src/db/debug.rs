@@ -47,6 +47,22 @@ pub trait DatabaseDebug: Database {
 		dry_run: bool,
 		parallelization: u128,
 	) -> Result<usize>;
+
+	async fn prune_complete_workflow_history(
+		&self,
+		names: &[&str],
+		before_ts: i64,
+		dry_run: bool,
+		parallelization: u128,
+	) -> Result<usize>;
+
+	async fn prune_acked_signals(
+		&self,
+		names: &[&str],
+		before_ts: i64,
+		dry_run: bool,
+		parallelization: u128,
+	) -> Result<usize>;
 }
 
 #[derive(Debug)]

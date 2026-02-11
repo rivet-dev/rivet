@@ -96,7 +96,8 @@ app.get("/api/rivet/start", async (c) => {
 
 app.get("/api/rivet/metadata", async (c) => {
 	return c.json({
-		runtime: "test-runner",
+		// Not actually rivetkit
+		runtime: "rivetkit",
 		version: "1",
 	});
 });
