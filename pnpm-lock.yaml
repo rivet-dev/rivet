@@ -9,7 +9,6 @@ overrides:
   '@rivetkit/react': workspace:*
   '@rivetkit/cloudflare-workers': workspace:*
   '@rivetkit/next-js': workspace:*
-  '@rivetkit/db': workspace:*
   '@rivetkit/sqlite-vfs': workspace:*
   '@rivetkit/engine-api-full': workspace:*
   '@types/react': ^19
@@ -3865,7 +3864,7 @@ importers:
         version: 3.13.12(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.10.2)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)
@@ -4346,6 +4345,9 @@ importers:
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
+      wa-sqlite:
+        specifier: ^1.0.0
+        version: 1.0.0
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -4451,14 +4453,6 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.31.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
-  rivetkit-typescript/packages/sqlite-vfs-darwin-arm64: {}
-
-  rivetkit-typescript/packages/sqlite-vfs-darwin-x64: {}
-
-  rivetkit-typescript/packages/sqlite-vfs-linux-arm64: {}
-
-  rivetkit-typescript/packages/sqlite-vfs-linux-x64: {}
-
   rivetkit-typescript/packages/sqlite-vfs-test:
     dependencies:
       '@rivetkit/sqlite-vfs':
@@ -4477,8 +4471,6 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.5)(less@4.4.1)(lightningcss@1.31.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  rivetkit-typescript/packages/sqlite-vfs-win32-x64: {}
 
   rivetkit-typescript/packages/traces:
     dependencies:
@@ -21304,7 +21296,7 @@ snapshots:
       react-simple-code-editor: 0.14.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       serve-handler: 6.1.6
       tailwind-merge: 2.6.0
-      tailwindcss-animate: 1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@20.19.13)(typescript@5.9.2)))
+      tailwindcss-animate: 1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@20.19.13)(typescript@5.9.3)))
       zod: 3.25.76
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -24237,6 +24229,16 @@ snapshots:
       '@codemirror/lint': 6.8.5
       '@codemirror/search': 6.5.11
       '@codemirror/state': 6.5.2
+      '@codemirror/view': 6.38.2
+
+  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.10.2)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.0
+      '@codemirror/commands': 6.10.2
+      '@codemirror/language': 6.11.3
+      '@codemirror/lint': 6.9.3
+      '@codemirror/search': 6.5.11
+      '@codemirror/state': 6.5.4
       '@codemirror/view': 6.38.2
 
   '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.20.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.3)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.2)':

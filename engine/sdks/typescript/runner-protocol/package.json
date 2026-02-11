@@ -16,8 +16,7 @@
 		}
 	},
 	"files": [
-		"dist/**/*.js",
-		"dist/**/*.d.ts"
+		"dist"
 	],
 	"scripts": {
 		"build": "tsup src/index.ts",
