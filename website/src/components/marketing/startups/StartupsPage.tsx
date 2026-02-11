@@ -1,9 +1,122 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Check, ArrowRight, ChevronDown } from 'lucide-react';
 import imgYC from '@/images/logos/yc.svg';
 import imgA16z from '@/images/logos/a16z.svg';
+
+const StartupImageCycler = ({ images }: { images: { src: string; alt: string; mobileObjectPosition?: string }[] }) => {
+	const [currentIndex, setCurrentIndex] = useState(0);
+	const [showFan, setShowFan] = useState(false);
+	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (timeoutRef.current) {
+				clearTimeout(timeoutRef.current);
+			}
+		};
+	}, []);
+
+	const handleClick = () => {
+		if (timeoutRef.current) {
+			clearTimeout(timeoutRef.current);
+			timeoutRef.current = null;
+		}
+		setShowFan(false);
+		setCurrentIndex((prev) => (prev + 1) % images.length);
+	};
+
+	const handleMouseEnter = () => {
+		if (timeoutRef.current) {
+			clearTimeout(timeoutRef.current);
+		}
+		setShowFan(true);
+		timeoutRef.current = setTimeout(() => {
+			setShowFan(false);
+			timeoutRef.current = null;
+		}, 1000);
+	};
+
+	const handleMouseLeave = () => {
+		if (timeoutRef.current) {
+			clearTimeout(timeoutRef.current);
+			timeoutRef.current = null;
+		}
+		setShowFan(false);
+	};
+
+	const getNextIndices = (count: number) => {
+		const indices = [];
+		for (let i = 1; i <= count; i++) {
+			indices.push((currentIndex + i) % images.length);
+		}
+		return indices;
+	};
+
+	const fanCards = getNextIndices(1);
+
+	return (
+		<div
+			className="relative w-[280px] sm:w-[320px] md:w-[400px] aspect-[3/4] sm:aspect-[4/3] cursor-pointer mx-auto"
+			onClick={handleClick}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
+		>
+			{/* Fanned card behind */}
+			{fanCards.map((imageIndex, i) => {
+				const rotation = showFan ? (i + 1) * 6 : 0;
+				const translateX = showFan ? (i + 1) * 15 : 0;
+				const translateY = showFan ? (i + 1) * -5 : 0;
+				const scale = 1 - (i + 1) * 0.02;
+
+				return (
+					<div
+						key={`fan-${i}`}
+						className="absolute inset-0 rounded-lg overflow-hidden border border-white/10 transition-all duration-300 ease-out"
+						style={{
+							transform: `rotate(${rotation}deg) translateX(${translateX}px) translateY(${translateY}px) scale(${scale})`,
+							zIndex: 3 - i,
+							opacity: showFan ? 0.6 : 0,
+						}}
+					>
+						<img
+							src={images[imageIndex].src}
+							alt={images[imageIndex].alt}
+							loading="lazy"
+							decoding="async"
+							className="w-full h-full object-cover select-none pointer-events-none"
+							style={images[imageIndex].mobileObjectPosition ? { objectPosition: images[imageIndex].mobileObjectPosition } : undefined}
+						/>
+					</div>
+				);
+			})}
+
+			{/* Main card */}
+			<div
+				className="absolute inset-0 rounded-lg overflow-hidden border border-white/10 transition-transform duration-300 ease-out"
+				style={{
+					zIndex: 10,
+					transform: showFan ? 'rotate(-3deg) translateX(-10px)' : 'rotate(0deg) translateX(0px)',
+				}}
+			>
+				{images.map((image, index) => (
+					<img
+						key={image.src}
+						src={image.src}
+						alt={image.alt}
+						loading={index === 0 ? 'eager' : 'lazy'}
+						decoding="async"
+						className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 select-none pointer-events-none ${
+							index === currentIndex ? 'opacity-100' : 'opacity-0'
+						}`}
+						style={image.mobileObjectPosition ? { objectPosition: image.mobileObjectPosition } : undefined}
+					/>
+				))}
+			</div>
+		</div>
+	);
+};
 
 // Demo day dates - update these when new dates are announced
 const YC_DEMO_DAY = new Date('2026-03-24T00:00:00-07:00');
@@ -127,9 +240,9 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 	return (
 		<div className="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 			{/* Hero Section */}
-			<section className="relative flex min-h-screen flex-col overflow-hidden">
+			<section className="relative flex flex-col overflow-hidden lg:min-h-screen">
 				{/* Centered content */}
-				<div className="flex flex-1 flex-col justify-center px-6">
+				<div className="flex flex-1 flex-col justify-start pt-32 lg:justify-center lg:pt-0 px-6">
 					<div className="mx-auto w-full max-w-7xl">
 						<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-12 lg:gap-20">
 							<div className="max-w-xl">
@@ -175,33 +288,21 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 									/>
 								</div>
 							</div>
-							{/* Mobile: Stacked photos */}
-							<div className="flex flex-col gap-4 lg:hidden">
-								<div className="w-full h-[200px] overflow-hidden rounded-lg border border-white/10">
-									<img
-										src={foundersImage}
-										alt="Rivet founders Nathan Flurry and Nicholas Kissel at Y Combinator W23 Demo Day"
-										loading="eager"
-										decoding="async"
-										className="w-full h-full object-cover"
-									/>
-								</div>
-								<div className="w-full h-[200px] overflow-hidden rounded-lg border border-white/10">
-									<img
-										src={speedrunImage}
-										alt="Andreessen Horowitz a16z Speedrun SR002 cohort presentation"
-										loading="lazy"
-										decoding="async"
-										className="w-full h-full object-cover"
-									/>
-								</div>
+							{/* Mobile: Click to switch photos */}
+							<div className="lg:hidden">
+								<StartupImageCycler
+									images={[
+										{ src: foundersImage, alt: 'Rivet founders Nathan Flurry and Nicholas Kissel at Y Combinator W23 Demo Day' },
+										{ src: speedrunImage, alt: 'Andreessen Horowitz a16z Speedrun SR002 cohort presentation', mobileObjectPosition: 'right center' },
+									]}
+								/>
 							</div>
 						</div>
 					</div>
 				</div>
 
 				{/* Bottom section */}
-				<div className="absolute bottom-0 left-0 right-0 px-6 pb-24">
+				<div className="px-6 py-12 lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:py-0 lg:pb-24">
 					<div className="mx-auto w-full max-w-7xl">
 						<div className="mb-6">
 							<DemoCountdown />
@@ -231,7 +332,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 			</section>
 
 			{/* What You Get */}
-			<CollapsibleSection title="What you get" defaultOpen>
+			<CollapsibleSection title="What you get">
 				<p className="mb-12 max-w-xl text-base leading-relaxed text-zinc-500">
 					Everything you need to build and scale stateful workloads at startup speed.
 				</p>
