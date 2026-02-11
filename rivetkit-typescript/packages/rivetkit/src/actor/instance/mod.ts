@@ -1297,6 +1297,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						batchDelete: (keys) =>
 							this.driver.kvBatchDelete(this.#actorId, keys),
 					},
+					sqliteVfs: this.driver.sqliteVfs,
 				});
 				this.#rLog.info({ msg: "database migration starting" });
 				await this.#config.db.onMigrate?.(client);

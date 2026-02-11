@@ -1,2 +1,2 @@
-export { SqliteVfs, Database } from "./wasm";
-export type { KvVfsOptions, SqliteVfsConfig } from "./types";
+export { SqliteVfs, Database } from "./vfs";
+export type { KvVfsOptions } from "./types";

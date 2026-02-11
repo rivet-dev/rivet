@@ -20,53 +20,24 @@
 				"types": "./dist/tsup/index.d.cts",
 				"default": "./dist/tsup/index.cjs"
 			}
-		},
-		"./native": {
-			"import": {
-				"types": "./dist/tsup/native.d.ts",
-				"default": "./dist/tsup/native.js"
-			},
-			"require": {
-				"types": "./dist/tsup/native.d.cts",
-				"default": "./dist/tsup/native.cjs"
-			}
-		},
-		"./wasm": {
-			"import": {
-				"types": "./dist/tsup/wasm.d.ts",
-				"default": "./dist/tsup/wasm.js"
-			},
-			"require": {
-				"types": "./dist/tsup/wasm.d.cts",
-				"default": "./dist/tsup/wasm.cjs"
-			}
 		}
 	},
 	"engines": {
 		"node": ">=20.0.0"
 	},
 	"scripts": {
-		"build": "pnpm run compile:bare && tsup src/index.ts src/native.ts src/wasm.ts",
-		"build:native": "node scripts/build-native.js",
+		"build": "pnpm run compile:bare && tsup src/index.ts",
 		"compile:bare": "tsx scripts/compile-bare.ts compile schemas/file-meta/v1.bare -o dist/schemas/file-meta/v1.ts",
 		"check-types": "pnpm run compile:bare && tsc --noEmit",
 		"test": "pnpm --filter @rivetkit/sqlite-vfs-test test"
 	},
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
-		"sql.js": "^1.10.2",
+		"wa-sqlite": "^1.0.0",
 		"vbare": "^0.0.4"
-	},
-	"optionalDependencies": {
-		"@rivetkit/sqlite-vfs-darwin-arm64": "workspace:*",
-		"@rivetkit/sqlite-vfs-darwin-x64": "workspace:*",
-		"@rivetkit/sqlite-vfs-linux-arm64": "workspace:*",
-		"@rivetkit/sqlite-vfs-linux-x64": "workspace:*",
-		"@rivetkit/sqlite-vfs-win32-x64": "workspace:*"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "^0.13.0",
-		"@types/sql.js": "^1.4.9",
 		"@types/node": "^22.13.1",
 		"commander": "^12.0.0",
 		"tsx": "^4.7.0",

@@ -5,6 +5,7 @@ import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
+import { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
@@ -77,8 +78,6 @@ export interface FileSystemDriverOptions {
 	persist?: boolean;
 	/** Custom path for storage */
 	customPath?: string;
-	/** Use native SQLite instead of KV-backed SQLite */
-	useNativeSqlite?: boolean;
 }
 
 /**
@@ -91,7 +90,9 @@ export class FileSystemGlobalState {
 	#alarmsDir: string;
 
 	#persist: boolean;
-	#useNativeSqlite: boolean;
+
+	/** SQLite VFS instance for this driver. */
+	readonly sqliteVfs = new SqliteVfs();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
 	// conditions since the actor generation will cease to be tracked
@@ -118,14 +119,9 @@ export class FileSystemGlobalState {
 		return this.#actorCountOnStartup;
 	}
 
-	get useNativeSqlite(): boolean {
-		return this.#useNativeSqlite;
-	}
-
 	constructor(options: FileSystemDriverOptions = {}) {
-		const { persist = true, customPath, useNativeSqlite = false } = options;
+		const { persist = true, customPath } = options;
 		this.#persist = persist;
-		this.#useNativeSqlite = useNativeSqlite;
 		this.#storagePath = persist ? (customPath ?? getStoragePath()) : "/tmp";
 		const path = getNodePath();
 		this.#stateDir = path.join(this.#storagePath, "state");

@@ -1,8 +1,0 @@
-[package]
-name = "rivetkit-sqlite-vfs-core"
-version = "0.0.1"
-description = "Core types and key encoding for RivetKit SQLite VFS"
-edition = "2021"
-license = "Apache-2.0"
-
-[dependencies]
