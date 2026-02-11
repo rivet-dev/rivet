@@ -1171,7 +1171,7 @@ async fn handle_stopped(
 				}
 			}
 			(CrashPolicy::Sleep, false) => {
-				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due ungraceful exit");
+				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to ungraceful exit");
 
 				state.sleeping = true;
 

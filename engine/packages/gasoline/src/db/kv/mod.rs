@@ -1493,7 +1493,7 @@ impl Database for DatabaseKv {
 												if current_event.location.is_empty() {
 													current_event =
 														WorkflowHistoryEventBuilder::new(
-															partial_key.location,
+															partial_key.location.clone(),
 														);
 												} else {
 													// Insert current event builder to into wf events and
@@ -1501,7 +1501,7 @@ impl Database for DatabaseKv {
 													let previous_event = std::mem::replace(
 														&mut current_event,
 														WorkflowHistoryEventBuilder::new(
-															partial_key.location,
+															partial_key.location.clone(),
 														),
 													);
 
@@ -1635,37 +1635,41 @@ impl Database for DatabaseKv {
 												if current_event.indexed_names.len() != key.index {
 													tracing::error!(
 														?wf,
+														location=?partial_key.location,
+														expected=%current_event.indexed_names.len(),
+														got=%key.index,
 														"corrupt history, indexed name doesn't exist yet or is out of order"
 													);
 													return Ok(None);
 												}
 
 												let name = key.deserialize(entry.value())?;
-												current_event.indexed_names.insert(key.index, name);
+												current_event.indexed_names.push(name);
 											} else if let Ok(key) =
 												self.subspace
 													.unpack::<keys::history::IndexedInputChunkKey>(
 														entry.key(),
 													) {
-												if current_event.indexed_input_chunks.len()
-													!= key.index
-												{
-													tracing::error!(
-														?wf,
-														"corrupt history, indexed chunk doesn't exist yet or is out of order"
-													);
-													return Ok(None);
-												}
-
 												if let Some(input_chunks) = current_event
 													.indexed_input_chunks
 													.get_mut(key.index)
 												{
 													input_chunks.push(entry);
-												} else {
+												} else if current_event.indexed_input_chunks.len()
+													== key.index
+												{
 													current_event
 														.indexed_input_chunks
-														.insert(key.index, vec![entry]);
+														.push(vec![entry]);
+												} else {
+													tracing::error!(
+														?wf,
+														location=?partial_key.location,
+														expected=%current_event.indexed_input_chunks.len(),
+														got=%key.index,
+														"corrupt history, indexed chunk doesn't exist yet or is out of order"
+													);
+													return Ok(None);
 												}
 											}
 
