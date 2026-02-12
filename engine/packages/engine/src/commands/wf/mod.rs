@@ -42,7 +42,7 @@ pub enum SubCommand {
 		#[clap(short = 'd', long)]
 		dry_run: bool,
 		#[clap(short = 'p', long)]
-		parallelization: Option<u128>,
+		parallelization: Option<u16>,
 	},
 	/// Deletes the history for completed workflows that match the name and before filter.
 	PruneHistory {
@@ -53,7 +53,7 @@ pub enum SubCommand {
 		#[clap(short = 'd', long)]
 		dry_run: bool,
 		#[clap(short = 'p', long)]
-		parallelization: Option<u128>,
+		parallelization: Option<u16>,
 	},
 	/// Lists the entire event history of a workflow.
 	History {
