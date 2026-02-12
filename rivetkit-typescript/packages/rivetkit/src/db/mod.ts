@@ -65,14 +65,25 @@ export function db({
 
 			return {
 				execute: async (query, ...args) => {
+					if (args.length > 0) {
+						// Use parameterized query when args are provided
+						const { rows, columns } = await db.query(query, args);
+						return rows.map((row: unknown[]) => {
+							const rowObj: Record<string, unknown> = {};
+							for (let i = 0; i < row.length; i++) {
+								rowObj[columns[i]] = row[i];
+							}
+							return rowObj;
+						});
+					}
+
+					// Use exec for non-parameterized queries
 					const results: Record<string, unknown>[] = [];
 					let columnNames: string[] | null = null;
 					await db.exec(query, (row: unknown[], columns: string[]) => {
-						// Capture column names on first row
 						if (!columnNames) {
 							columnNames = columns;
 						}
-						// Convert array row to object
 						const rowObj: Record<string, unknown> = {};
 						for (let i = 0; i < row.length; i++) {
 							rowObj[columnNames[i]] = row[i];
