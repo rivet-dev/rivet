@@ -36,7 +36,9 @@ pub enum SubCommand {
 		#[clap(short = 'd', long)]
 		dry_run: bool,
 		#[clap(short = 'p', long)]
-		parallelization: Option<u128>,
+		parallelization: Option<u16>,
+		#[clap(short = 'm', long)]
+		max_per_txn: Option<usize>,
 	},
 }
 
@@ -73,6 +75,7 @@ impl SubCommand {
 				before,
 				dry_run,
 				parallelization,
+				max_per_txn,
 			} => {
 				let total = db
 					.prune_acked_signals(
@@ -80,6 +83,7 @@ impl SubCommand {
 						before.timestamp_millis(),
 						dry_run,
 						parallelization.unwrap_or(1),
+						max_per_txn,
 					)
 					.await?;
 
