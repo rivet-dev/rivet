@@ -41,6 +41,7 @@ impl PegboardRunnerWsCustomServe {
 
 #[async_trait]
 impl CustomServeTrait for PegboardRunnerWsCustomServe {
+	#[tracing::instrument(skip_all)]
 	async fn handle_request(
 		&self,
 		_req: hyper::Request<http_body_util::Full<hyper::body::Bytes>>,
@@ -58,6 +59,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		Ok(response)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn handle_websocket(
 		&self,
 		req_ctx: &mut RequestContext,
