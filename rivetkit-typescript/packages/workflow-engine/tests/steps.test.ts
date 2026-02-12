@@ -72,6 +72,40 @@ for (const mode of modes) {
 			expect(callCount).toBe(1);
 		});
 
+		it("should treat void step outputs as completed on restart", async () => {
+			let callCount = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				await ctx.step("void-step", async () => {
+					callCount += 1;
+					// return undefined (void)
+				});
+				return "done";
+			};
+
+			const first = await runWorkflow(
+				"wf-void",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+			expect(first.state).toBe("completed");
+			expect(first.output).toBe("done");
+			expect(callCount).toBe(1);
+
+			const second = await runWorkflow(
+				"wf-void",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+			expect(second.state).toBe("completed");
+			expect(second.output).toBe("done");
+			expect(callCount).toBe(1);
+		});
+
 		it("should execute multiple steps in sequence", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
 				const a = await ctx.step("step-a", async () => 1);
