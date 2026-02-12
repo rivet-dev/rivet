@@ -380,12 +380,27 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				return stepData.output as T;
 			}
 
-			// Check if we should retry
+			// Check if we should retry.
+			//
+			// Important: steps that *return undefined* (i.e. "void" steps) are valid and
+			// must still be treated as completed on restart. Since JSON omits properties
+			// with value `undefined`, we cannot rely on `stepData.output !== undefined`
+			// to determine completion. Prefer metadata.status for completion tracking.
 			const metadata = await loadMetadata(
 				this.storage,
 				this.driver,
 				existing.id,
 			);
+
+			if (metadata.status === "completed") {
+				this.log("debug", {
+					msg: "replaying completed step from metadata",
+					step: config.name,
+					key,
+				});
+				return stepData.output as T;
+			}
+
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
 			if (metadata.attempts >= maxRetries) {
