@@ -116,11 +116,14 @@ async fn aggregate_pending_actors(
 }
 
 // #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-// struct AggregateActiveActorsInput { }
+// struct AggregateActiveActorsInput {}
 
 // /// Scans runner alloc idx and aggregates metrics.
 // #[activity(AggregateActiveActors)]
-// async fn aggregate_active_actors(ctx: &ActivityCtx, _input: &AggregateActiveActorsInput) -> Result<()> {
+// async fn aggregate_active_actors(
+// 	ctx: &ActivityCtx,
+// 	_input: &AggregateActiveActorsInput,
+// ) -> Result<()> {
 // 	metrics::ACTOR_ACTIVE.reset();
 
 // 	let mut last_key = Vec::new();
@@ -134,8 +137,8 @@ async fn aggregate_pending_actors(
 // 					let tx = tx.with_subspace(keys::subspace());
 // 					let mut new_last_key = Vec::new();
 
-// 					let runner_alloc_subspace = keys::subspace()
-// 						.subspace(&keys::ns::RunnerAllocIdxKey::entire_subspace());
+// 					let runner_alloc_subspace =
+// 						keys::subspace().subspace(&keys::ns::RunnerAllocIdxKey::entire_subspace());
 // 					let range = runner_alloc_subspace.range();
 
 // 					let range_start = if last_key.is_empty() {
@@ -167,16 +170,19 @@ async fn aggregate_pending_actors(
 // 						let (runner_alloc_key, alloc_data) =
 // 							tx.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
 
-// 						metrics::ACTOR_ACTIVE
-// 							.with_label_values(&[
-// 								&runner_alloc_key.namespace_id.to_string(),
-// 								&runner_alloc_key.name,
-// 							])
-// 							.add(
-// 								alloc_data
-// 									.total_slots
-// 									.saturating_sub(alloc_data.remaining_slots) as i64,
-// 							);
+// 						let active_actors = alloc_data
+// 							.total_slots
+// 							.saturating_sub(alloc_data.remaining_slots)
+// 							as i64;
+
+// 						if active_actors != 0 {
+// 							metrics::ACTOR_ACTIVE
+// 								.with_label_values(&[
+// 									&runner_alloc_key.namespace_id.to_string(),
+// 									&runner_alloc_key.name,
+// 								])
+// 								.add(active_actors);
+// 						}
 
 // 						new_last_key = [entry.key(), &[0xff]].concat();
 // 					}
@@ -250,12 +256,14 @@ async fn aggregate_serverless_desired_slots(
 						let (serverless_desired_slots_key, desired_slots) =
 							tx.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
 
-						metrics::SERVERLESS_DESIRED_SLOTS
-							.with_label_values(&[
-								&serverless_desired_slots_key.namespace_id.to_string(),
-								&serverless_desired_slots_key.runner_name,
-							])
-							.add(desired_slots);
+						if desired_slots != 0 {
+							metrics::SERVERLESS_DESIRED_SLOTS
+								.with_label_values(&[
+									&serverless_desired_slots_key.namespace_id.to_string(),
+									&serverless_desired_slots_key.runner_name,
+								])
+								.add(desired_slots);
+						}
 
 						new_last_key = [entry.key(), &[0xff]].concat();
 					}
