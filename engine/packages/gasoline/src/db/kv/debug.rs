@@ -1221,15 +1221,15 @@ impl DatabaseDebug for DatabaseKv {
 		names: &[&str],
 		error_like: &[&str],
 		dry_run: bool,
-		parallelization: u128,
+		parallelization: u16,
 	) -> Result<usize> {
 		ensure!(parallelization > 0);
 		ensure!(parallelization < 1024);
 
-		let chunk_size = u128::MAX / parallelization;
+		let chunk_size = u128::MAX / parallelization as u128;
 		let mut futs = FuturesUnordered::new();
 
-		for i in 0..parallelization {
+		for i in 0..parallelization as u128 {
 			let start = i * chunk_size;
 			futs.push(self.revive_workflows_inner(
 				names,
@@ -1407,15 +1407,15 @@ impl DatabaseDebug for DatabaseKv {
 		names: &[&str],
 		before_ts: i64,
 		dry_run: bool,
-		parallelization: u128,
+		parallelization: u16,
 	) -> Result<usize> {
 		ensure!(parallelization > 0);
 		ensure!(parallelization < 1024);
 
-		let chunk_size = u128::MAX / parallelization;
+		let chunk_size = u128::MAX / parallelization as u128;
 		let mut futs = FuturesUnordered::new();
 
-		for i in 0..parallelization {
+		for i in 0..parallelization as u128 {
 			let start = i * chunk_size;
 			futs.push(self.prune_workflow_history_inner(
 				names,
@@ -1442,15 +1442,16 @@ impl DatabaseDebug for DatabaseKv {
 		names: &[&str],
 		before_ts: i64,
 		dry_run: bool,
-		parallelization: u128,
+		parallelization: u16,
+		max_per_txn: Option<usize>,
 	) -> Result<usize> {
 		ensure!(parallelization > 0);
 		ensure!(parallelization < 1024);
 
-		let chunk_size = u128::MAX / parallelization;
+		let chunk_size = u128::MAX / parallelization as u128;
 		let mut futs = FuturesUnordered::new();
 
-		for i in 0..parallelization {
+		for i in 0..parallelization as u128 {
 			let start = i * chunk_size;
 			futs.push(self.prune_signals_inner(
 				names,
@@ -1458,6 +1459,7 @@ impl DatabaseDebug for DatabaseKv {
 				dry_run,
 				start,
 				start + chunk_size,
+				max_per_txn,
 			));
 		}
 
@@ -1813,6 +1815,7 @@ impl DatabaseKv {
 		dry_run: bool,
 		start: u128,
 		end: u128,
+		max_per_txn: Option<usize>,
 	) -> Result<usize> {
 		let mut total = 0;
 		let mut current_signal_id = Some(Id::v1(Uuid::from_u128(start), self.config.dc_label()));
@@ -1858,7 +1861,11 @@ impl DatabaseKv {
 						let mut ts_matches = false;
 
 						let fut = async {
-							while let Some(entry) = stream.try_next().await? {
+							loop {
+								let Some(entry) = stream.try_next().await? else {
+									break;
+								};
+
 								let signal_id = *self.subspace.unpack::<JustId>(entry.key())?;
 
 								if let Some(curr) = current_signal_id {
@@ -1866,6 +1873,12 @@ impl DatabaseKv {
 										// Save if matches query
 										if name_matches && state_matches && ts_matches {
 											signal_ids.push(curr);
+
+											if let Some(max_per_txn) = max_per_txn {
+												if signal_ids.len() >= max_per_txn {
+													return anyhow::Ok(());
+												}
+											}
 										}
 
 										signals_processed += 1;
