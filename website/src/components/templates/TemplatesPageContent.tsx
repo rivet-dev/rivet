@@ -160,7 +160,7 @@ function CopySkillsButton() {
 				onClick={handleCopy}
 				className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
 			>
-				{copied ? <Check className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
+				{copied ? <Check className="h-4 w-4 text-green-500" /> : <Terminal className="h-4 w-4" />}
 				npx skills add rivet-dev/skills
 			</button>
 			<div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out text-xs text-zinc-500 whitespace-nowrap pointer-events-none font-mono">
