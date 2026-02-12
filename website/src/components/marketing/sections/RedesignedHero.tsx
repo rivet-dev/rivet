@@ -195,7 +195,7 @@ const CopyInstallButton = () => {
         onClick={handleCopy}
         className='w-full sm:w-auto inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
       >
-        {copied ? <Check className='h-4 w-4' /> : <Terminal className='h-4 w-4' />}
+        {copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
         npx skills add rivet-dev/skills
       </button>
       <div className='absolute left-1/2 -translate-x-1/2 top-full mt-4 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out text-xs text-zinc-500 whitespace-nowrap pointer-events-none font-mono'>
@@ -241,21 +241,19 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
       const windowHeight = window.innerHeight;
       const isMobile = window.innerWidth < 1024;
 
-      // Mobile: fade starts later (40%, done at 80%), Desktop: (20%, done at 60%)
-      const mainFadeStart = windowHeight * (isMobile ? 0.4 : 0.2);
-      const mainFadeEnd = windowHeight * (isMobile ? 0.8 : 0.6);
+      // Mobile: no fade/blur effect
+      if (isMobile) {
+        setScrollOpacity(1);
+        setActorSectionsOpacity(1);
+        return;
+      }
+
+      // Desktop: fade starts at 20%, done at 60%
+      const mainFadeStart = windowHeight * 0.2;
+      const mainFadeEnd = windowHeight * 0.6;
       const mainOpacity = 1 - Math.min(1, Math.max(0, (scrollY - mainFadeStart) / (mainFadeEnd - mainFadeStart)));
       setScrollOpacity(mainOpacity);
-
-      // Actor sections on mobile fade even later (100%, done at 140%)
-      if (isMobile) {
-        const actorFadeStart = windowHeight * 1.0;
-        const actorFadeEnd = windowHeight * 1.4;
-        const actorOpacity = 1 - Math.min(1, Math.max(0, (scrollY - actorFadeStart) / (actorFadeEnd - actorFadeStart)));
-        setActorSectionsOpacity(actorOpacity);
-      } else {
-        setActorSectionsOpacity(mainOpacity);
-      }
+      setActorSectionsOpacity(mainOpacity);
     };
 
     window.addEventListener('scroll', handleScroll);
