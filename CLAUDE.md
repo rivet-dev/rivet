@@ -244,6 +244,10 @@ Data structures often include:
 ### Docker Development Configuration
 - Do not make changes to docker/dev* configs. Instead, edit the template in docker/template/ and rerun (cd docker/template && pnpm start). This will regenerate the docker compose config for you.
 
+## Notes
+
+When asked to track or save notes, always store them as markdown files in `.agents/notes/{category}/`. Use kebab-case filenames and organize by topic category (e.g., `.agents/notes/architecture/`, `.agents/notes/decisions/`, `.agents/notes/bugs/`). Create the directories as needed.
+
 ## Development Warnings
 
 - Do not run ./scripts/cargo/fix.sh. Do not format the code yourself.
