@@ -102,20 +102,22 @@ export const todoList = actor({
 		},
 	},
 });`,
-	sqliteVanilla: `import { db } from "rivetkit/db";
+	sqliteDrizzle: `import { db, sqliteTable, text, integer } from "rivetkit/db/drizzle";
+import { eq } from "drizzle-orm";
 
-export const notes = actor({
-	db: db({
-		onMigrate: async (db) => {
-			await db.execute(\`CREATE TABLE IF NOT EXISTS notes (...)\`);
-		},
-	}),
+const todos = sqliteTable("todos", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	title: text("title").notNull(),
+});
+
+export const myActor = actor({
+	db: db({ schema: { todos }, migrations }),
 	actions: {
-		set: async (c, key: string, value: string) => {
-			await c.db.execute("INSERT OR REPLACE ...", key, value);
+		addTodo: async (c, title: string) => {
+			return c.db.insert(todos).values({ title }).returning();
 		},
-		get: async (c, key: string) => {
-			return await c.db.execute("SELECT * FROM notes WHERE key = ?", key);
+		getTodos: async (c) => {
+			return c.db.select().from(todos);
 		},
 	},
 });`,
@@ -302,11 +304,11 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Toggle Todo", action: "toggleTodo", args: [1] },
 		{ label: "Delete Todo", action: "deleteTodo", args: [1] },
 	],
-	sqliteVanillaActor: [
-		{ label: "Set", action: "set", args: ["greeting", "hello world"] },
-		{ label: "Get", action: "get", args: ["greeting"] },
-		{ label: "Get All", action: "getAll", args: [] },
-		{ label: "Remove", action: "remove", args: ["greeting"] },
+	sqliteDrizzleActor: [
+		{ label: "Add Todo", action: "addTodo", args: ["Buy groceries"] },
+		{ label: "Get Todos", action: "getTodos", args: [] },
+		{ label: "Toggle Todo", action: "toggleTodo", args: [1] },
+		{ label: "Delete Todo", action: "deleteTodo", args: [1] },
 	],
 };
 
@@ -526,18 +528,18 @@ export const PAGE_GROUPS: PageGroup[] = [
 				snippet: SNIPPETS.sqliteRaw,
 			},
 			{
-				id: "sqlite-vanilla",
-				title: "SQLite Vanilla",
+				id: "sqlite-drizzle",
+				title: "SQLite Drizzle",
 				description:
-					"Use a vanilla SQLite key-value pattern with upserts and queries on a per-actor database.",
+					"Use Drizzle ORM with a typed schema for per-actor SQLite queries, inserts, updates, and deletes.",
 				docs: [
 					{
 						label: "SQLite",
 						href: "https://rivet.dev/docs/actors/sqlite",
 					},
 				],
-				actors: ["sqliteVanillaActor"],
-				snippet: SNIPPETS.sqliteVanilla,
+				actors: ["sqliteDrizzleActor"],
+				snippet: SNIPPETS.sqliteDrizzle,
 			},
 		],
 	},
