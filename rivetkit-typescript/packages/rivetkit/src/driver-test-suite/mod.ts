@@ -16,6 +16,7 @@ import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
 import { runActorDbTests } from "./tests/actor-db";
+import { runConnErrorSerializationTests } from "./tests/conn-error-serialization";
 import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
@@ -109,6 +110,8 @@ export function runDriverTests(
 						runActorConnStateTests(driverTestConfig);
 
 						runActorConnHibernationTests(driverTestConfig);
+
+						runConnErrorSerializationTests(driverTestConfig);
 
 						runActorDbTests(driverTestConfig);
 
