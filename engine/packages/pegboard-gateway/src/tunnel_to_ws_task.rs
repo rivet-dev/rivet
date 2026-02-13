@@ -87,7 +87,7 @@ pub async fn task(
 				}
 			}
 			_ = drop_rx.changed() => {
-				tracing::warn!(reason=?drop_rx.borrow(), "garbage collected");
+				tracing::warn!(reason=?drop_rx.borrow().as_ref(), "garbage collected");
 				return Err(WebSocketServiceTimeout.build());
 			}
 			_ = tunnel_to_ws_abort_rx.changed() => {

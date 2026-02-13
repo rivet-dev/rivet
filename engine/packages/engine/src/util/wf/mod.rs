@@ -486,7 +486,7 @@ pub async fn print_history(
 							"body {}",
 							indent_string(
 								&colored_json(body)?,
-								format!("{}{c}   ", "  ".repeat(indent)),
+								format!("{}{c}     ", "  ".repeat(indent)),
 								true
 							)
 						);
