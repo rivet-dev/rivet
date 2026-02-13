@@ -19,6 +19,10 @@ interface FrontmatterData {
 	description: string;
 }
 
+// These UI-only components render card grids from JSX expressions.
+// Skip their full blocks so generated markdown does not include partial JSX artifacts.
+const MARKDOWN_COMPONENT_BLOCKLIST = new Set(['Card', 'CardGroup']);
+
 function filePathToHref(filePath: string): string {
 	return '/' + filePath
 		.replace(/src\/content\//, '')
@@ -51,7 +55,6 @@ function cleanMdxForMarkdown(content: string): string {
 	let expressionDepth = 0;
 	let scriptDepth = 0;
 	let skippedComponentDepth = 0;
-	const skippedComponentTags = new Set(['Card', 'CardGroup']);
 
 	const countChar = (input: string, char: string) =>
 		input.split(char).length - 1;
@@ -68,7 +71,7 @@ function cleanMdxForMarkdown(content: string): string {
 			return null;
 		}
 		const tagName = tagMatch[1];
-		if (!skippedComponentTags.has(tagName)) {
+		if (!MARKDOWN_COMPONENT_BLOCKLIST.has(tagName)) {
 			return null;
 		}
 		if (trimmed.startsWith('</')) {
