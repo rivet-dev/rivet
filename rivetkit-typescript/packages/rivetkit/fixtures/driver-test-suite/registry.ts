@@ -51,6 +51,8 @@ import {
 	staticVarActor,
 	uniqueVarActor,
 } from "./vars";
+import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
+import { connErrorSerializationActor } from "./conn-error-serialization";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -123,5 +125,10 @@ export const registry = setup({
 		// From large-payloads.ts
 		largePayloadActor,
 		largePayloadConnActor,
+		// From start-stop-race.ts
+		startStopRaceActor,
+		lifecycleObserver,
+		// From conn-error-serialization.ts
+		connErrorSerializationActor,
 	},
 });
