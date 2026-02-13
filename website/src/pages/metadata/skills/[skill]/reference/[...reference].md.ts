@@ -4,7 +4,6 @@ import {
 	getReferenceByFileId,
 	listSkillIds,
 	listSkillReferences,
-	type SkillId,
 } from "../../../../../metadata/skills";
 
 export const prerender = true;
@@ -18,7 +17,7 @@ export const GET: APIRoute = async ({ params }) => {
 
 	let reference;
 	try {
-		reference = await getReferenceByFileId(skill as SkillId, referenceId);
+		reference = await getReferenceByFileId(skill, referenceId);
 	} catch (error) {
 		console.error(`/metadata/skills/${skill}/reference/${referenceId} failed`, error);
 		return new Response("reference not found", { status: 404 });
@@ -47,7 +46,7 @@ export const GET: APIRoute = async ({ params }) => {
 
 export async function getStaticPaths() {
 	const paths = [];
-	for (const skill of listSkillIds()) {
+	for (const skill of await listSkillIds()) {
 		const references = await listSkillReferences(skill);
 		for (const reference of references) {
 			paths.push({
