@@ -10,13 +10,13 @@ import { Icon, faPencil } from '@rivet-gg/icons';
 import { Comments } from '@/components/Comments';
 import { sitemap } from '@/sitemap/mod';
 import { findActiveTab } from '@/lib/sitemap';
+import { getContentParamSlug, getContentSlugPath } from '@/lib/content-path';
 import * as mdxComponents from '@/components/mdx';
 
 export async function getStaticPaths() {
 	const docs = await getCollection('docs');
 	return docs.map((entry) => {
-		// Handle index files - they should render at the parent path
-		const slug = entry.id === 'index' ? undefined : entry.id.replace(/\/index$/, '') || undefined;
+		const slug = getContentParamSlug(entry.id);
 		return {
 			params: { slug },
 			props: { entry },
@@ -50,15 +50,14 @@ const tableOfContents = headings
 	}, [] as Array<{ title: string; id: string; children: Array<{ title: string; id: string; children: never[] }> }>);
 
 const { title, description } = entry.data as { title: string; description: string };
-// Handle index paths correctly
-const slugPath = entry.id === 'index' ? '' : entry.id.replace(/\/index$/, '');
+const slugPath = getContentSlugPath(entry.id);
 const fullPath = slugPath ? `/docs/${slugPath}/` : '/docs/';
 const foundTab = findActiveTab(fullPath, sitemap);
 const parentPage = foundTab?.page?.parent;
 const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Create markdown path for the dropdown
-const markdownPath = `docs/${entry.id}`;
+const markdownPath = slugPath ? `docs/${slugPath}` : 'docs';
 const componentSourcePath = `docs/${entry.id}.mdx`;
 
 // Build BreadcrumbList schema

@@ -10,14 +10,18 @@ import { Icon, faPencil } from '@rivet-gg/icons';
 import { Comments } from '@/components/Comments';
 import { sitemap } from '@/sitemap/mod';
 import { findActiveTab } from '@/lib/sitemap';
+import { getContentParamSlug, getContentSlugPath } from '@/lib/content-path';
 import * as mdxComponents from '@/components/mdx';
 
 export async function getStaticPaths() {
 	const guides = await getCollection('guides');
-	return guides.map((entry) => ({
-		params: { slug: entry.id || undefined },
-		props: { entry },
-	}));
+	return guides.map((entry) => {
+		const slug = getContentParamSlug(entry.id);
+		return {
+			params: { slug },
+			props: { entry },
+		};
+	});
 }
 
 const { entry } = Astro.props;
@@ -36,13 +40,14 @@ const tableOfContents = headings
 	}, [] as Array<{ title: string; id: string; children: Array<{ title: string; id: string; children: never[] }> }>);
 
 const { title, description } = entry.data as { title: string; description: string };
-const fullPath = `/guides/${entry.id}/`;
+const slugPath = getContentSlugPath(entry.id);
+const fullPath = slugPath ? `/guides/${slugPath}/` : '/guides/';
 const foundTab = findActiveTab(fullPath, sitemap);
 const parentPage = foundTab?.page?.parent;
 const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Create markdown path for the dropdown
-const markdownPath = `guides/${entry.id}`;
+const markdownPath = slugPath ? `guides/${slugPath}` : 'guides';
 const componentSourcePath = `guides/${entry.id}.mdx`;
 ---
 
