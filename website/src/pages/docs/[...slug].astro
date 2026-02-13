@@ -58,7 +58,7 @@ const parentPage = foundTab?.page?.parent;
 const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Create markdown path for the dropdown
-const markdownPath = `docs/${entry.id}`;
+const markdownPath = slugPath ? `docs/${slugPath}` : 'docs';
 const componentSourcePath = `docs/${entry.id}.mdx`;
 
 // Build BreadcrumbList schema
