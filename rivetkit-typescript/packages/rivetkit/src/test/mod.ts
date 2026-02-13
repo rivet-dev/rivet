@@ -41,6 +41,8 @@ export async function setupTest<A extends Registry<any>>(
 	const parsedConfig = registry.parseConfig();
 	const managerDriver = driver.manager?.(parsedConfig);
 	invariant(managerDriver, "missing manager driver");
+	const getUpgradeWebSocket = () => upgradeWebSocket;
+	managerDriver.setGetUpgradeWebSocket(getUpgradeWebSocket);
 	// const internalClient = createClientWithDriver(
 	// 	managerDriver,
 	// 	ClientConfigSchema.parse({}),
@@ -48,7 +50,7 @@ export async function setupTest<A extends Registry<any>>(
 	const { router } = buildManagerRouter(
 		parsedConfig,
 		managerDriver,
-		() => upgradeWebSocket!,
+		getUpgradeWebSocket,
 	);
 
 	// Inject WebSocket

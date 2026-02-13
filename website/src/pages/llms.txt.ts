@@ -7,8 +7,9 @@ export const GET: APIRoute = async ({ site }) => {
 	const siteUrl = site?.toString().replace(/\/$/, '') || 'https://rivet.dev';
 
 	// Get all content collections
-	const [docs, guides, posts] = await Promise.all([
+	const [docs, cookbook, guides, posts] = await Promise.all([
 		getCollection('docs'),
+		getCollection('cookbook'),
 		getCollection('guides'),
 		getCollection('posts'),
 	]);
@@ -25,6 +26,14 @@ export const GET: APIRoute = async ({ site }) => {
 	// Build guides URLs
 	const guidesUrls = guides
 		.map(guide => `${siteUrl}/guides/${guide.id}/`)
+		.sort();
+
+	// Build cookbook URLs
+	const cookbookUrls = cookbook
+		.map(entry => {
+			const cleanPath = entry.id.replace(/\/index$/, '').replace(/^index$/, '');
+			return cleanPath ? `${siteUrl}/cookbook/${cleanPath}/` : `${siteUrl}/cookbook/`;
+		})
 		.sort();
 
 	// Build blog URLs (filter out unpublished)
@@ -49,6 +58,7 @@ export const GET: APIRoute = async ({ site }) => {
 	const staticUrls = [
 		`${siteUrl}/`,
 		`${siteUrl}/docs/`,
+		`${siteUrl}/cookbook/`,
 		`${siteUrl}/cloud/`,
 		`${siteUrl}/pricing/`,
 		`${siteUrl}/changelog/`,
@@ -68,6 +78,7 @@ export const GET: APIRoute = async ({ site }) => {
 	const allUrls = [...new Set([
 		...staticUrls,
 		...docsUrls,
+		...cookbookUrls,
 		...guidesUrls,
 		...blogUrls,
 		...changelogUrls,

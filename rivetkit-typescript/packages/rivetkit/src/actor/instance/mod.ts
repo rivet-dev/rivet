@@ -1373,7 +1373,7 @@ export class ActorInstance<
 
 		if (timedOut) {
 			this.#rLog.warn({
-				msg: "run handler did not complete in time, it may have leaked - ensure you use the abort signal (c.abortSignal) to exit gracefully",
+				msg: "run handler did not complete in time, it may have leaked - ensure you use c.aborted (or the abort signal c.abortSignal) to exit gracefully",
 				timeoutMs,
 			});
 		} else {

@@ -55,7 +55,7 @@ export default defineConfig({
 	},
 	integrations: [
 		skillVersion(),
-		// typecheckCodeBlocks(), // Temporarily disabled due to rivetkit build issues
+		typecheckCodeBlocks(),
 		generateRoutes(),
 		mdx({
 			syntaxHighlight: false,

@@ -6,6 +6,8 @@
     "rivetkit": "workspace:*",
     "@rivetkit/react": "workspace:*",
     "@rivetkit/cloudflare-workers": "workspace:*",
+    "@ai-sdk/openai": "^3.0.30",
+    "ai": "^6.0.92",
     "hono": "^4.7.0",
     "zod": "^4.1.0",
     "elysia": "^1.2.25",

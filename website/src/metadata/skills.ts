@@ -5,19 +5,23 @@ import path from "node:path";
 
 import { DOCS_BASE_URL, normalizeSlug } from "./shared";
 import skillBaseRivetkit from "./skill-base-rivetkit.md?raw";
+import skillBaseRivetkitCookbook from "./skill-base-rivetkit-cookbook.md?raw";
 import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.md?raw";
 import skillBaseClientReact from "./skill-base-rivetkit-client-react.md?raw";
 import skillBaseClientSwift from "./skill-base-rivetkit-client-swift.md?raw";
 import skillBaseClientSwiftUI from "./skill-base-rivetkit-client-swiftui.md?raw";
 
-export type SkillId =
+export type BaseSkillId =
 	| "rivetkit"
 	| "rivetkit-client-javascript"
 	| "rivetkit-client-react"
 	| "rivetkit-client-swift"
 	| "rivetkit-client-swiftui";
 
+export type SkillId = string;
+
 type SkillContentSource = {
+	collection: "docs" | "cookbook";
 	docId: string;
 	fallbackDocIds?: string[];
 	startMarker?: string;
@@ -35,7 +39,7 @@ type SkillConfig = {
 	includeOpenApi: boolean;
 };
 
-const SKILL_CONFIGS = {
+const BASE_SKILL_CONFIGS = {
 	rivetkit: {
 		id: "rivetkit",
 		name: "rivetkit",
@@ -44,6 +48,7 @@ const SKILL_CONFIGS = {
 			"RivetKit backend and Rivet Actor runtime guidance. Use for building, modifying, debugging, or testing Rivet Actors, registries, serverless/runner modes, deployment, or actor-based workflows.",
 		baseTemplate: skillBaseRivetkit,
 		content: {
+			collection: "docs",
 			docId: "actors/index",
 			fallbackDocIds: ["actors"],
 			startMarker: "{/* SKILL_OVERVIEW_START */}",
@@ -60,6 +65,7 @@ const SKILL_CONFIGS = {
 			"RivetKit JavaScript client guidance. Use for browser, Node.js, or Bun clients that connect to Rivet Actors with rivetkit/client, create clients, call actions, or manage connections.",
 		baseTemplate: skillBaseClientJavascript,
 		content: {
+			collection: "docs",
 			docId: "clients/javascript",
 		},
 		includeReferences: false,
@@ -73,6 +79,7 @@ const SKILL_CONFIGS = {
 			"RivetKit React client guidance. Use for React apps that connect to Rivet Actors with @rivetkit/react, create hooks with createRivetKit, or manage realtime state with useActor.",
 		baseTemplate: skillBaseClientReact,
 		content: {
+			collection: "docs",
 			docId: "clients/react",
 		},
 		includeReferences: false,
@@ -86,6 +93,7 @@ const SKILL_CONFIGS = {
 			"RivetKit Swift client guidance. Use for Swift clients that connect to Rivet Actors with RivetKitClient, create actor handles, call actions, or manage connections.",
 		baseTemplate: skillBaseClientSwift,
 		content: {
+			collection: "docs",
 			docId: "clients/swift",
 		},
 		includeReferences: false,
@@ -99,14 +107,15 @@ const SKILL_CONFIGS = {
 			"RivetKit SwiftUI client guidance. Use for SwiftUI apps that connect to Rivet Actors with RivetKitSwiftUI, @Actor, rivetKit view modifiers, and SwiftUI bindings.",
 		baseTemplate: skillBaseClientSwiftUI,
 		content: {
+			collection: "docs",
 			docId: "clients/swiftui",
 		},
 		includeReferences: false,
 		includeOpenApi: false,
 	},
-} as const satisfies Record<SkillId, SkillConfig>;
+} as const satisfies Record<BaseSkillId, SkillConfig>;
 
-for (const config of Object.values(SKILL_CONFIGS)) {
+for (const config of Object.values(BASE_SKILL_CONFIGS)) {
 	if (config.description.length > 500) {
 		throw new Error(
 			`SKILL_DESCRIPTION must be <= 500 chars for ${config.id}, got ${config.description.length}`,
@@ -129,17 +138,81 @@ export type SkillReference = {
 const cachedReferences = new Map<SkillId, SkillReference[]>();
 const cachedSkillFiles = new Map<SkillId, string>();
 let cachedDocs: Awaited<ReturnType<typeof getCollection>> | null = null;
+let cachedCookbook: Awaited<ReturnType<typeof getCollection>> | null = null;
+let cachedCookbookSkillConfigs: Map<string, SkillConfig> | null = null;
 
-export function listSkillIds(): SkillId[] {
-	return Object.keys(SKILL_CONFIGS) as SkillId[];
+async function getDocs() {
+	if (!cachedDocs) {
+		cachedDocs = await getCollection("docs");
+	}
+	return cachedDocs;
 }
 
-export function getSkillConfig(skillId: string): SkillConfig {
-	const config = SKILL_CONFIGS[skillId as SkillId];
-	if (!config) {
-		throw new Error(`Unknown skill id: ${skillId}`);
+async function getCookbook() {
+	if (!cachedCookbook) {
+		cachedCookbook = await getCollection("cookbook");
 	}
-	return config;
+	return cachedCookbook;
+}
+
+function cookbookSkillIdFromEntryId(entryId: string) {
+	const slug = normalizeSlug(entryId);
+	const flattened = slug.replaceAll("/", "-");
+	if (!flattened) {
+		throw new Error(`cookbook entry id resolved to empty slug: ${entryId}`);
+	}
+	return `rivetkit-${flattened}`;
+}
+
+async function getCookbookSkillConfigs(): Promise<Map<string, SkillConfig>> {
+	if (cachedCookbookSkillConfigs) return cachedCookbookSkillConfigs;
+
+	const entries = await getCookbook();
+	const map = new Map<string, SkillConfig>();
+
+	for (const entry of entries) {
+		const id = cookbookSkillIdFromEntryId(entry.id);
+		const description = entry.data.description;
+		if (description.length > 500) {
+			throw new Error(
+				`SKILL_DESCRIPTION must be <= 500 chars for ${id} (from cookbook/${entry.id}), got ${description.length}`,
+			);
+		}
+
+		map.set(id, {
+			id,
+			name: id,
+			directory: id,
+			description,
+			baseTemplate: skillBaseRivetkitCookbook,
+			content: {
+				collection: "cookbook",
+				docId: entry.id,
+			},
+			includeReferences: false,
+			includeOpenApi: false,
+		});
+	}
+
+	cachedCookbookSkillConfigs = map;
+	return map;
+}
+
+export async function listSkillIds(): Promise<SkillId[]> {
+	const base = Object.keys(BASE_SKILL_CONFIGS) as BaseSkillId[];
+	const cookbook = [...(await getCookbookSkillConfigs()).keys()];
+	return [...base, ...cookbook];
+}
+
+export async function getSkillConfig(skillId: string): Promise<SkillConfig> {
+	const base = BASE_SKILL_CONFIGS[skillId as BaseSkillId];
+	if (base) return base;
+
+	const cookbook = await getCookbookSkillConfigs();
+	const config = cookbook.get(skillId);
+	if (config) return config;
+
+	throw new Error(`Unknown skill id: ${skillId}`);
 }
 
 async function getRivetkitVersion(): Promise<string> {
@@ -157,19 +230,12 @@ async function getRivetkitVersion(): Promise<string> {
 	return data.rivetkit;
 }
 
-async function getDocs() {
-	if (!cachedDocs) {
-		cachedDocs = await getCollection("docs");
-	}
-	return cachedDocs;
-}
-
 export async function listSkillReferences(skillId: SkillId): Promise<SkillReference[]> {
 	if (cachedReferences.has(skillId)) {
 		return cachedReferences.get(skillId)!;
 	}
 
-	const config = getSkillConfig(skillId);
+	const config = await getSkillConfig(skillId);
 	if (!config.includeReferences) {
 		cachedReferences.set(skillId, []);
 		return [];
@@ -193,7 +259,7 @@ export async function renderSkillFile(skillId: SkillId): Promise<string> {
 		return cachedSkillFiles.get(skillId)!;
 	}
 
-	const config = getSkillConfig(skillId);
+	const config = await getSkillConfig(skillId);
 	const base = config.baseTemplate;
 	const content = await buildSkillContent(config);
 
@@ -229,7 +295,7 @@ export async function renderSkillFile(skillId: SkillId): Promise<string> {
 
 export async function listReferenceSummaries(skillId: SkillId) {
 	const references = await listSkillReferences(skillId);
-	const config = getSkillConfig(skillId);
+	const config = await getSkillConfig(skillId);
 	return references.map((ref) => ({
 		name: ref.fileId,
 		title: ref.title,
@@ -239,8 +305,8 @@ export async function listReferenceSummaries(skillId: SkillId) {
 	}));
 }
 
-export function skillSupportsOpenApi(skillId: SkillId) {
-	const config = getSkillConfig(skillId);
+export async function skillSupportsOpenApi(skillId: SkillId) {
+	const config = await getSkillConfig(skillId);
 	return config.includeOpenApi;
 }
 
@@ -265,9 +331,10 @@ function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]
 }
 
 async function buildSkillContent(config: SkillConfig) {
-	const docs = await getDocs();
+	const collection = config.content.collection;
+	const entries = collection === "docs" ? await getDocs() : await getCookbook();
 	const docIds = [config.content.docId, ...(config.content.fallbackDocIds ?? [])];
-	const doc = docs.find((entry) =>
+	const doc = entries.find((entry) =>
 		docIds.some((docId) => {
 			if (entry.id === docId) return true;
 			if (docId.includes("/") && entry.id.startsWith(`${docId}/`)) {
@@ -282,6 +349,22 @@ async function buildSkillContent(config: SkillConfig) {
 	}
 	if (!doc.body) {
 		throw new Error(`${doc.id} has no body content`);
+	}
+
+	let prefix = "";
+	if (collection === "cookbook") {
+		const templates = (doc.data as { templates?: string[] } | undefined)?.templates;
+		if (Array.isArray(templates) && templates.length > 0) {
+			const lines = [
+				"## Working Examples",
+				"",
+				"If you need a reference implementation, read the raw working example code in these templates:",
+				"",
+				...templates.map((name) => `- [${name}](https://github.com/rivet-dev/rivet/tree/main/examples/${name})`),
+				"",
+			];
+			prefix = lines.join("\n");
+		}
 	}
 
 	let rawBody = doc.body;
@@ -302,7 +385,9 @@ async function buildSkillContent(config: SkillConfig) {
 		}
 	}
 
-	return convertDocToReference(rawBody);
+	const rendered = convertDocToReference(rawBody);
+	const sep = prefix ? "\n\n" : "";
+	return `${prefix}${sep}${rendered}`.trim();
 }
 
 function createFileId(slug: string) {

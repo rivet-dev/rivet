@@ -40,7 +40,7 @@ If using the actions & events API, upgrade to Rivet v2.0.24 and it will work out
 The following code will automatically use WebSocket hibernation. When users are sitting idle connected to the chat room, the actor can go to sleep while still keeping the WebSocket open, ready to send actions or receive events:
 
 <CodeGroup>
-```typescript {{"title":"Actor"}}
+```typescript Actor
 import { actor } from "rivetkit";
 
 interface Message {
@@ -85,7 +85,7 @@ const chatRoom = actor({
 });
 ```
 
-```typescript {{"title":"Client"}}
+```typescript Client
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
@@ -119,7 +119,7 @@ The `open`, `message`, and `close` events fire as they normally would on a WebSo
 For example:
 
 <CodeGroup>
-```typescript {{"title":"Actor"}}
+```typescript Actor
 import { actor } from "rivetkit";
 
 interface State {
@@ -163,7 +163,7 @@ const chatRoom = actor({
 });
 ```
 
-```typescript {{"title":"Client"}}
+```typescript Client
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 

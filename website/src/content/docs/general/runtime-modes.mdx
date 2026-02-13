@@ -28,7 +28,7 @@ Serverless is the default and recommended mode. Rivet sends HTTP requests to you
 
 <CodeGroup>
 
-```typescript {{"title":"Direct"}}
+```typescript Direct
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
@@ -37,7 +37,7 @@ const registry = setup({ use: { myActor } });
 export default registry.serve();
 ```
 
-```typescript {{"title":"With Router"}}
+```typescript With-Router
 import { Hono } from "hono";
 import { actor, setup } from "rivetkit";
 
@@ -89,7 +89,7 @@ Runners run actors as long-running background processes without exposing an HTTP
 
 ### Example
 
-```typescript {{"title":"runner.ts"}}
+```typescript runner.ts
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
