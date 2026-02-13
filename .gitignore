@@ -10,6 +10,9 @@ lib/**/Cargo.lock
 # Turborepo
 **/.turbo
 
+# OpenSpec
+/openspec/
+
 # Cloudflare
 .wrangler/
 
@@ -64,4 +67,3 @@ website/.playwright-mcp/
 website/scripts/typecheck-staging/snippets/
 website/scripts/typecheck-staging/node_modules/
 .vercel
-
