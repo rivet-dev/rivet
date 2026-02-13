@@ -36,6 +36,8 @@ The `icon` property accepts two formats:
 Use any emoji character directly:
 
 ```typescript
+import { actor } from "rivetkit";
+
 const notificationService = actor({
   options: {
     name: "Notifications",
@@ -50,6 +52,8 @@ const notificationService = actor({
 Use [FontAwesome](https://fontawesome.com/search) icon names without the "fa" prefix:
 
 ```typescript
+import { actor } from "rivetkit";
+
 const gameServer = actor({
   options: {
     name: "Game Server",
@@ -117,10 +121,14 @@ Instead of returning a function from your run handler factory, return an object 
 ```typescript
 import type { RunConfig } from "rivetkit";
 
-function myCustomRunHandler(options: MyOptions): RunConfig {
-  async function run(c) {
+type MyOptions = {
+  mode?: "safe" | "fast";
+};
+
+function myCustomRunHandler(_options: MyOptions): RunConfig {
+  const run: RunConfig["run"] = async (_c) => {
     // Your run handler logic...
-  }
+  };
 
   return {
     name: "My Custom Handler",
@@ -133,6 +141,14 @@ function myCustomRunHandler(options: MyOptions): RunConfig {
 Users can then use this directly:
 
 ```typescript
+import { actor } from "rivetkit";
+
+const myCustomRunHandler = (_options: Record<string, unknown>) => ({
+  name: "My Custom Handler",
+  icon: "bolt",
+  run: async () => {},
+});
+
 const myActor = actor({
   run: myCustomRunHandler({ /* options */ }),
   // Automatically gets "My Custom Handler" name and "bolt" icon
@@ -142,6 +158,14 @@ const myActor = actor({
 Actor-level `options.name` and `options.icon` always take precedence, allowing users to override library defaults:
 
 ```typescript
+import { actor } from "rivetkit";
+
+const myCustomRunHandler = (_options: Record<string, unknown>) => ({
+  name: "My Custom Handler",
+  icon: "bolt",
+  run: async () => {},
+});
+
 const myActor = actor({
   options: {
     name: "Custom Name",  // Overrides "My Custom Handler"

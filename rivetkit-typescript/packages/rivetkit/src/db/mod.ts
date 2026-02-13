@@ -1,33 +1,10 @@
 import type { KvVfsOptions } from "./sqlite-vfs";
 import type { DatabaseProvider, RawAccess } from "./config";
 
+export type { RawAccess } from "./config";
+
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
-}
-
-/**
- * Mutex to serialize async operations on a wa-sqlite database handle.
- * wa-sqlite is not safe for concurrent operations on the same handle.
- */
-class DbMutex {
-	#locked = false;
-	#waiting: (() => void)[] = [];
-
-	async run<T>(fn: () => Promise<T>): Promise<T> {
-		while (this.#locked) {
-			await new Promise<void>((resolve) => this.#waiting.push(resolve));
-		}
-		this.#locked = true;
-		try {
-			return await fn();
-		} finally {
-			this.#locked = false;
-			const next = this.#waiting.shift();
-			if (next) {
-				next();
-			}
-		}
-	}
 }
 
 /**
@@ -61,8 +38,6 @@ function createActorKvStore(kv: {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
-	const mutex = new DbMutex();
-
 	return {
 		createClient: async (ctx) => {
 			// Check if override is provided
@@ -100,47 +75,73 @@ export function db({
 					throw new Error("database is closed");
 				}
 			};
+			let op: Promise<void> = Promise.resolve();
+
+			const serialize = async <T>(fn: () => Promise<T>): Promise<T> => {
+				// Ensure wa-sqlite calls are not concurrent. Actors can process multiple
+				// actions concurrently, and wa-sqlite is not re-entrant.
+				const next = op.then(fn, fn);
+				op = next.then(
+					() => undefined,
+					() => undefined,
+				);
+				return await next;
+			};
 
 			return {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<string, unknown>,
-					>(
-						query: string,
-						...args: unknown[]
-					): Promise<TRow[]> => {
-						return mutex.run(async () => {
-							ensureOpen();
+				>(
+					query: string,
+					...args: unknown[]
+				): Promise<TRow[]> => {
+					return await serialize(async () => {
+						ensureOpen();
 
-							if (args.length > 0) {
-								// Use parameterized query when args are provided
+						// `db.exec` does not support binding `?` placeholders.
+						// Use `db.query` for statements that return rows and `db.run` for
+						// statements that mutate data when parameters are provided.
+						// Keep using `db.exec` for non-parameterized SQL because it
+						// supports multi-statement migrations.
+						if (args.length > 0) {
+							const token = query.trimStart().slice(0, 16).toUpperCase();
+							const returnsRows =
+								token.startsWith("SELECT") ||
+								token.startsWith("PRAGMA") ||
+								token.startsWith("WITH");
+
+							if (returnsRows) {
 								const { rows, columns } = await db.query(query, args);
 								return rows.map((row: unknown[]) => {
 									const rowObj: Record<string, unknown> = {};
-									for (let i = 0; i < row.length; i++) {
+									for (let i = 0; i < columns.length; i++) {
 										rowObj[columns[i]] = row[i];
 									}
 									return rowObj;
 								}) as TRow[];
 							}
 
-							// Use exec for non-parameterized queries
-							const results: Record<string, unknown>[] = [];
-							let columnNames: string[] | null = null;
-							await db.exec(query, (row: unknown[], columns: string[]) => {
-								if (!columnNames) {
-									columnNames = columns;
-								}
-								const rowObj: Record<string, unknown> = {};
-								for (let i = 0; i < row.length; i++) {
-									rowObj[columnNames[i]] = row[i];
-								}
-								results.push(rowObj);
-							});
-							return results as TRow[];
+							await db.run(query, args);
+							return [] as TRow[];
+						}
+
+						const results: Record<string, unknown>[] = [];
+						let columnNames: string[] | null = null;
+						await db.exec(query, (row: unknown[], columns: string[]) => {
+							if (!columnNames) {
+								columnNames = columns;
+							}
+							const rowObj: Record<string, unknown> = {};
+							for (let i = 0; i < row.length; i++) {
+								rowObj[columnNames[i]] = row[i];
+							}
+							results.push(rowObj);
 						});
-					},
+						return results as TRow[];
+					});
+				},
 				close: async () => {
-					await mutex.run(async () => {
+					await serialize(async () => {
 						if (closed) {
 							return;
 						}

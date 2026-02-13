@@ -31,7 +31,7 @@ npm install rivetkit @rivetkit/cloudflare-workers
 
 Create a simple counter actor:
 
-```ts {{"title":"registry.ts"}}
+```ts registry.ts
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -61,7 +61,7 @@ Choose your preferred web framework:
 <Tab title="Default">
 
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -80,7 +80,7 @@ export const registry = setup({
 });
 ```
 
-```ts {{"title":"index.ts"}}
+```ts index.ts
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -95,7 +95,7 @@ export { handler as default, ActorHandler };
 <Tab title="Hono">
 
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -114,7 +114,7 @@ export const registry = setup({
 });
 ```
 
-```ts {{"title":"index.ts"}}
+```ts index.ts
 import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
 import { registry } from "./registry";
@@ -143,7 +143,7 @@ export { handler as default, ActorHandler };
 <Tab title="Manual Routing">
 
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -162,7 +162,7 @@ export const registry = setup({
 });
 ```
 
-```ts {{"title":"index.ts"}} @nocheck
+```ts index.ts @nocheck
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -196,7 +196,7 @@ export { handler as default, ActorHandler };
 <Tab title="Advanced">
 
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -215,7 +215,7 @@ export const registry = setup({
 });
 ```
 
-```ts {{"title":"index.ts"}} @nocheck
+```ts index.ts @nocheck
 import { createInlineClient } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -268,7 +268,7 @@ export default {
 
 Configure your `wrangler.json` for Cloudflare Workers:
 
-```json {{"title":"wrangler.json"}}
+```json wrangler.json
 {
   "name": "my-rivetkit-app",
   "main": "src/index.ts",
@@ -313,7 +313,7 @@ Test your counter actor using HTTP requests:
 
 <CodeGroup>
 
-```ts {{"title":"JavaScript"}}
+```ts JavaScript
 // Increment counter
 const response = await fetch("http://localhost:8787/increment/my-counter", {
 	method: "POST"
@@ -359,7 +359,7 @@ Create a type-safe client to connect from your frontend or another service:
 <Tab title="JavaScript">
 
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -378,7 +378,7 @@ export const registry = setup({
 });
 ```
 
-```ts {{"title":"client.ts"}}
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
@@ -410,7 +410,7 @@ See the [JavaScript client documentation](/docs/clients/javascript) for more inf
 <Tab title="React">
 
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -429,7 +429,7 @@ export const registry = setup({
 });
 ```
 
-```tsx {{"title":"Counter.tsx"}}
+```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
 import type { registry } from "./registry";

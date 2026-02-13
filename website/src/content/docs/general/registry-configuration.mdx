@@ -27,7 +27,7 @@ const registry = setup({
 
 <CodeGroup>
 
-```typescript {{"title":"Environment Variables"}}
+```typescript Environment-Variables
 import { setup, actor } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
@@ -38,7 +38,7 @@ const registry = setup({
 });
 ```
 
-```typescript {{"title":"Config"}}
+```typescript Config
 import { setup, actor } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
@@ -59,7 +59,7 @@ After configuring your registry, start it using one of two runtime modes:
 
 <CodeGroup>
 
-```typescript {{"title":"Serverless"}}
+```typescript Serverless
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
@@ -68,7 +68,7 @@ const registry = setup({ use: { myActor } });
 export default registry.serve();
 ```
 
-```typescript {{"title":"Serverless with Router"}}
+```typescript Serverless-with-Router
 import { Hono } from "hono";
 import { actor, setup } from "rivetkit";
 
@@ -81,7 +81,7 @@ app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 export default app;
 ```
 
-```typescript {{"title":"Runner"}}
+```typescript Runner
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });

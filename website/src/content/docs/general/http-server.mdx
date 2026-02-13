@@ -12,7 +12,7 @@ A [fetch handler](https://wintercg.org/) is a function that takes a `Request` an
 
 The simplest setup uses `registry.serve()`:
 
-```ts {{"title":"server.ts"}}
+```ts server.ts
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
@@ -27,7 +27,7 @@ To integrate with a router like [Hono](https://hono.dev/) or [Elysia](https://el
 
 <Tab title="Hono">
 
-```ts {{"title":"server.ts"}}
+```ts server.ts
 import { Hono } from "hono";
 import { actor, setup } from "rivetkit";
 
@@ -45,7 +45,7 @@ export default app;
 
 <Tab title="Elysia">
 
-```ts {{"title":"server.ts"}}
+```ts server.ts
 import { Elysia } from "elysia";
 import { actor, setup } from "rivetkit";
 
@@ -67,15 +67,15 @@ Then run your server:
 
 <CodeGroup>
 
-```bash {{"title":"Node.js"}}
+```bash Node.js
 npx srvx server.ts
 ```
 
-```bash {{"title":"Bun"}}
+```bash Bun
 bun server.ts
 ```
 
-```bash {{"title":"Deno"}}
+```bash Deno
 deno run --allow-net --allow-read --allow-env server.ts
 ```
 
@@ -95,7 +95,7 @@ If you need to explicitly start the HTTP server instead of using the fetch handl
 
 Using Hono with `@hono/node-server`:
 
-```ts {{"title":"server.ts"}}
+```ts server.ts
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { actor, setup } from "rivetkit";
@@ -116,7 +116,7 @@ serve({ fetch: app.fetch, port: 3000 });
 
 Using `@whatwg-node/server` to adapt the fetch handler to Node's HTTP server:
 
-```ts {{"title":"server.ts"}} @nocheck
+```ts server.ts @nocheck
 import { actor, setup } from "rivetkit";
 import { createServer } from "node:http";
 import { createServerAdapter } from "@whatwg-node/server";
@@ -135,7 +135,7 @@ server.listen(3000);
 
 Using Bun's native server:
 
-```ts {{"title":"server.ts"}} @nocheck
+```ts server.ts @nocheck
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
@@ -153,7 +153,7 @@ Bun.serve({
 
 Using Deno's native server:
 
-```ts {{"title":"server.ts"}} @nocheck
+```ts server.ts @nocheck
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });

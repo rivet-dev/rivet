@@ -4,7 +4,6 @@ import {
 	getSkillConfig,
 	listReferenceSummaries,
 	listSkillIds,
-	type SkillId,
 } from "../../../../metadata/skills";
 
 export const prerender = true;
@@ -16,10 +15,11 @@ export const GET: APIRoute = async ({ params }) => {
 	}
 
 	try {
-		if (!listSkillIds().includes(skill as SkillId)) {
+		const skills = await listSkillIds();
+		if (!skills.includes(skill)) {
 			return new Response("skill not found", { status: 404 });
 		}
-		const config = getSkillConfig(skill);
+		const config = await getSkillConfig(skill);
 		const references = await listReferenceSummaries(config.id);
 		const payload = {
 			name: config.name,
@@ -42,7 +42,8 @@ export const GET: APIRoute = async ({ params }) => {
 };
 
 export async function getStaticPaths() {
-	return listSkillIds().map((skill) => ({
+	const skills = await listSkillIds();
+	return skills.map((skill) => ({
 		params: { skill },
 	}));
 }

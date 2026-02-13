@@ -1,5 +1,5 @@
 #!/bin/sh
-# See contrib-docs/RELEASING.md
+# See docs-internal/engine/RELEASING.md
 set -e
 
 if [ "$1" != "--force" ]; then

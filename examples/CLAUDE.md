@@ -281,6 +281,30 @@ node_modules
 
 ## Source Code Patterns
 
+### Actor File Structure
+
+Actor definitions (`export const myActor = actor({...})`) must appear at the top of the file, before any helper functions. Helper functions, type definitions used only by helpers, and utilities go after the actor definition. This keeps the actor's public API front-and-center.
+
+```typescript
+// Good
+export const myActor = actor({
+  actions: {
+    doThing: (c) => helperFunction(c),
+  },
+});
+
+function helperFunction(c: ActorContextOf<typeof myActor>) {
+  // ...
+}
+
+// Bad - don't put helpers above the actor
+function helperFunction(...) { ... }
+
+export const myActor = actor({...});
+```
+
+Shared types/interfaces used by both the actor definition and helpers (e.g. `State`, `PlayerEntry`) should go above the actor since the actor definition depends on them.
+
 ### Actor Definitions (src/actors.ts)
 
 ```typescript

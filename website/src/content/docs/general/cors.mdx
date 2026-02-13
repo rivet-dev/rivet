@@ -10,7 +10,7 @@ Unlike stateless HTTP APIs that use CORS headers, Rivet Actors are stateful and 
 
 To implement origin restrictions on Rivet Actors, use the `onBeforeConnect` hook to verify the request.
 
-```typescript {{"title":"server.ts"}}
+```typescript server.ts
 import { actor, UserError } from "rivetkit";
 
 const ALLOWED_ORIGINS = [
@@ -43,7 +43,7 @@ const myActor = actor({
 
 To catch the error on the client, use the following code:
 
-```typescript {{"title":"client.ts"}}
+```typescript client.ts
 import { createClient, ActorError } from "rivetkit/client";
 import { actor, setup } from "rivetkit";
 

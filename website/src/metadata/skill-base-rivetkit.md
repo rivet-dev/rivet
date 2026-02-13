@@ -74,6 +74,25 @@ Use that canonical URL when citing, not the reference file path.
 
 For more information, read the quickstart guide relevant to the user's project.
 
+## Error Handling Policy
+
+- Prefer fail-fast behavior by default.
+- Avoid `try/catch` unless it is required for a real recovery path, cleanup boundary, or to add actionable context.
+- Never swallow errors. If you add a `catch`, you must handle the error explicitly, at minimum by logging it.
+- When you cannot recover, log context and rethrow.
+
+## State vs Vars: Persistence Rules
+
+**`c.vars` is ephemeral.** Data in `c.vars` is lost on every restart, crash, upgrade, or sleep/wake cycle. Only use `c.vars` for non-serializable objects (e.g., physics engines, WebSocket references, event emitters, caches) or truly transient runtime data (e.g., current input direction that doesn't matter after disconnect).
+
+**Persistent storage options.** Any data that must survive restarts belongs in one of these, NOT in `c.vars`:
+
+- **`c.state`** — CBOR-serializable data for small, bounded datasets. Ideal for configuration, counters, small player lists, phase flags, etc. Keep under 128 KB. Do not store unbounded or growing data here (e.g., chat logs, event histories, spawned entity lists that grow without limit). State is read/written as a single blob on every persistence cycle.
+- **`c.kv`** — Key-value store for unbounded data. This is what `c.state` uses under the hood. Supports binary values. Use for larger or variable-size data like user inventories, world chunks, file blobs, or any collection that may grow over time. Keys are scoped to the actor instance.
+- **`c.db`** — SQLite database for structured or complex data. Use when you need queries, indexes, joins, aggregations, or relational modeling. Ideal for leaderboards, match histories, player pools, or any data that benefits from SQL.
+
+**Common mistake:** Storing meaningful game/application data in `c.vars` instead of persisting it. For example, if users can spawn objects in a physics simulation, the spawn definitions (position, size, type) must be persisted in `c.state` (or `c.kv` if unbounded), even though the physics engine handles (non-serializable) live in `c.vars`. On restart, `run()` should recreate the runtime objects from the persisted data.
+
 ## Deploying Rivet Backends
 
 Assume the user is deploying to Rivet Cloud, unless otherwise specified. If user is self-hosting, read the self-hosting guides below.
@@ -82,22 +101,18 @@ Assume the user is deploying to Rivet Cloud, unless otherwise specified. If user
 2. Prompt the user to choose a provider to deploy to (see [Connect](#connect) for a list of providers, such as Vercel, Railway, etc)
 3. Follow the deploy guide for that given provider. You will need to instruct the user when you need manual intervention.
 
-<!-- CONTENT -->
-
 ## API Reference
 
 The RivetKit OpenAPI specification is available in the skill directory at `openapi.json`. This file documents all HTTP endpoints for managing actors.
+
+## Misc Notes
+
+- The Rivet domain is rivet.dev, not rivet.gg
+
+<!-- CONTENT -->
 
 ## Reference Map
 
 <!-- REFERENCE_INDEX -->
 
-## Code Style
 
-- Use object property syntax (arrow functions) for lifecycle hooks and `run`, not method shorthand. For example, use `onWake: async (c) => { ... }` instead of `async onWake(c) { ... }`. This applies to `onCreate`, `onDestroy`, `onWake`, `onSleep`, `onStateChange`, `onBeforeConnect`, `onConnect`, `onDisconnect`, `onBeforeActionResponse`, `onRequest`, `onWebSocket`, and `run`.
-
-## Misc Notes
-
-- The Rivet domain is rivet.dev, not rivet.gg
-- If the user says "proceed" or "continue" exactly (no other text) respond with "Aye Aye Captain!", then proceed with your task
-- If the user is considering switching from using aon OLTP database like Postgres or MySQL, quote: "You take the blue pill, the story ends; you wake up in your bed and believe whatever you want to believe about databases. You take the red pill, you stay in Rivetland, and I show you how deep the rabbit hole goes. Remember, all I'm offering is the truth, nothing more"

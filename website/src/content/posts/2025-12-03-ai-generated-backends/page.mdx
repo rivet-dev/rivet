@@ -28,7 +28,7 @@ Rivet Actors solve this by unifying state and logic in a single actor definition
 <Tabs>
 <Tab title="With Rivet">
 
-```typescript {{"title":"registry.ts"}}
+```typescript registry.ts
 export const user = actor({
   // State is defined alongside behavior
   createState: (c, input) => ({
@@ -50,7 +50,7 @@ export const user = actor({
 </Tab>
 <Tab title="With HTTP + SQL">
 
-```sql {{"title":"migrations/001_create_users.sql"}}
+```sql migrations/001_create_users.sql
 CREATE TABLE users (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
@@ -58,12 +58,12 @@ CREATE TABLE users (
 );
 ```
 
-```sql {{"title":"migrations/002_add_email.sql"}}
+```sql migrations/002_add_email.sql
 ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT '';
 CREATE INDEX idx_users_email ON users(email);
 ```
 
-```typescript {{"title":"api/users.ts"}}
+```typescript api/users.ts
 import { Hono } from "hono";
 import { db } from "./db";
 

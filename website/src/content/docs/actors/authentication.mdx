@@ -156,7 +156,7 @@ It's recommended to use `params` instead of `c.request.headers` whenever possibl
 Pass authentication data when connecting:
 
 <CodeGroup>
-```typescript {{"title":"Connection"}}
+```typescript Connection
 import { createClient } from "rivetkit/client";
 
 const client = createClient();
@@ -168,7 +168,7 @@ const chat = client.chatRoom.getOrCreate(["general"], {
 const connection = chat.connect();
 ```
 
-```typescript {{"title":"Stateless Action"}}
+```typescript Stateless-Action
 import { createClient } from "rivetkit/client";
 
 const client = createClient();
@@ -181,7 +181,7 @@ const chat = client.chatRoom.getOrCreate(["general"], {
 await chat.sendMessage("Hello, world!");
 ```
 
-```typescript {{"title":"HTTP Headers"}}
+```typescript HTTP-Headers
 import { createClient } from "rivetkit/client";
 
 // This only works for stateless actions, not WebSockets

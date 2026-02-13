@@ -35,7 +35,7 @@ Actors scale naturally through isolated state and message-passing. Structure you
 Create one actor per user, document, or room. Use compound keys to scope entities:
 
 <CodeGroup workspace>
-```ts {{"title":"client.ts"}}
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import type { registry } from "./actors";
 
@@ -48,7 +48,7 @@ client.user.getOrCreate(["user-123"]);
 client.document.getOrCreate(["org-acme", "doc-456"]);
 ```
 
-```ts {{"title":"actors.ts"}}
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 
 export const user = actor({
@@ -70,7 +70,7 @@ export const registry = setup({ use: { user, document } });
 **Data actors** handle core logic (chat rooms, game sessions, user data). **Coordinator actors** track and manage collections of data actors—think of them as an index.
 
 <CodeGroup workspace>
-```ts {{"title":"actors.ts"}}
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 
 // Coordinator: tracks chat rooms within an organization
@@ -98,7 +98,7 @@ export const chatRoom = actor({
 export const registry = setup({ use: { chatRoomList, chatRoom } });
 ```
 
-```ts {{"title":"client.ts"}}
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import type { registry } from "./actors";
 
@@ -119,7 +119,7 @@ client.chatRoom.get(["org-acme", "general"]);
 Split high-load actors by time, user ID, or random key:
 
 <CodeGroup workspace>
-```ts {{"title":"client.ts"}}
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import type { registry } from "./actors";
 
@@ -133,7 +133,7 @@ client.analytics.getOrCreate(["org-acme", hour]);
 client.rateLimiter.getOrCreate([`shard-${Math.floor(Math.random() * 3)}`]);
 ```
 
-```ts {{"title":"actors.ts"}}
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 
 export const analytics = actor({
@@ -676,9 +676,9 @@ const chatRoom = actor({
 
 [Documentation](/docs/actors/lifecycle)
 
-### Helper Types
+### Context Types
 
-Use `ActionContextOf` to extract the context type for writing standalone helper functions:
+When writing helper functions outside the actor definition, use `*ContextOf<typeof myActor>` to extract the correct context type. Do not manually define your own context interface — always derive it from the actor definition.
 
 ```ts
 import { actor, ActionContextOf } from "rivetkit";
@@ -693,13 +693,33 @@ const gameRoom = actor({
   },
 });
 
-// Extract context type for use in helper functions
+// Good: derive context type from actor definition
 function validatePlayer(c: ActionContextOf<typeof gameRoom>, playerId: string) {
   if (c.state.players.includes(playerId)) {
     throw new Error("Player already in room");
   }
 }
+
+// Bad: don't manually define context types like this
+// type MyContext = { state: { players: string[] }; ... };
 ```
+
+- `createState` → `CreateContextOf`
+- `createVars` → `CreateVarsContextOf`
+- `createConnState` → `CreateConnStateContextOf`
+- `onBeforeConnect` → `BeforeConnectContextOf`
+- `onConnect` → `ConnectContextOf`
+- `onDisconnect` → `DisconnectContextOf`
+- `onDestroy` → `DestroyContextOf`
+- `onWake` → `WakeContextOf`
+- `onSleep` → `SleepContextOf`
+- `onStateChange` → `StateChangeContextOf`
+- `onBeforeActionResponse` → `BeforeActionResponseContextOf`
+- `actions.*` → `ActionContextOf`
+- `run` → `RunContextOf`
+- `onRequest` → `RequestContextOf`
+- `onWebSocket` → `WebSocketContextOf`
+- General-purpose → `ActorContextOf`, `ConnContextOf`, `ConnInitContextOf`
 
 [Documentation](/docs/actors/types)
 
@@ -762,7 +782,7 @@ For custom protocols or integrating libraries that need direct access to HTTP `R
 <Tabs>
 <Tab title="HTTP Handler">
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}}
+```ts registry.ts
 import { actor, setup } from "rivetkit";
 
 export const api = actor({
@@ -777,7 +797,7 @@ export const api = actor({
 export const registry = setup({ use: { api } });
 ```
 
-```ts {{"title":"client.ts"}}
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
@@ -795,7 +815,7 @@ const nativeResponse = await fetch(`${url}/request/count`);
 </Tab>
 <Tab title="WebSocket Handler">
 <CodeGroup workspace>
-```ts {{"title":"registry.ts"}}
+```ts registry.ts
 import { actor, setup } from "rivetkit";
 
 export const chat = actor({
@@ -816,7 +836,7 @@ export const chat = actor({
 export const registry = setup({ use: { chat } });
 ```
 
-```ts {{"title":"client.ts"}}
+```ts client.ts
 import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
@@ -875,6 +895,8 @@ Find the full client guides here:
 Customize how actors appear in the UI with display names and icons:
 
 ```typescript
+import { actor } from "rivetkit";
+
 const chatRoom = actor({
   options: {
     name: "Chat Room",
