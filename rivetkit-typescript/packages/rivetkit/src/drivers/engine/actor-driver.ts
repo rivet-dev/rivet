@@ -156,7 +156,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => {},
+			onDisconnected: (_code, _reason) => { },
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -395,7 +395,7 @@ export class EngineActorDriver implements ActorDriver {
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
+			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
@@ -514,9 +514,9 @@ export class EngineActorDriver implements ActorDriver {
 			const error =
 				innerError instanceof Error
 					? new Error(
-							`Failed to start actor ${actorId}: ${innerError.message}`,
-							{ cause: innerError },
-						)
+						`Failed to start actor ${actorId}: ${innerError.message}`,
+						{ cause: innerError },
+					)
 					: new Error(`Failed to start actor ${actorId}: ${String(innerError)}`);
 			handler.actor = undefined;
 			handler.actorStartError = error;
@@ -559,15 +559,26 @@ export class EngineActorDriver implements ActorDriver {
 		this.#actorStopIntent.delete(actorId);
 
 		const handler = this.#actors.get(actorId);
-		if (handler?.actorStartPromise) {
-			const startError =
-				handler.actorStartError ??
-				new Error(`Actor ${actorId} stopped before start completed`);
-			handler.actorStartError = startError;
-			handler.actorStartPromise.reject(startError);
-			handler.actorStartPromise = undefined;
+		if (!handler) {
+			logger().debug({ msg: "no runner actor handler to stop", actorId, reason });
+			return;
 		}
-		if (handler?.actor) {
+
+		if (handler.actorStartPromise) {
+			try {
+				logger().debug({ msg: "runner actor stopping before it started, waiting", actorId, generation });
+				await handler.actorStartPromise.promise;
+			} catch (err) {
+				// Start failed, but we still want to clean up the handler
+				logger().debug({
+					msg: "actor start failed during stop, cleaning up handler",
+					actorId,
+					err: stringifyError(err),
+				});
+			}
+		}
+
+		if (handler.actor) {
 			try {
 				await handler.actor.onStop(reason);
 			} catch (err) {
@@ -577,7 +588,8 @@ export class EngineActorDriver implements ActorDriver {
 				});
 			}
 		}
-		if (handler) this.#actors.delete(actorId);
+
+		this.#actors.delete(actorId);
 
 		logger().debug({ msg: "runner actor stopped", actorId, reason });
 	}
