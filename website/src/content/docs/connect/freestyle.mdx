@@ -30,7 +30,7 @@ npm install rivetkit hono
 Update your server code to run the registry serverless with Deno.
 
 <CodeGroup workspace>
-```typescript {{"title":"registry.ts"}} @hide
+```typescript registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -48,7 +48,7 @@ export const registry = setup({
 });
 ```
 
-```typescript {{"title":"server.ts"}} @nocheck
+```typescript server.ts @nocheck
 import { registry } from "./registry";
 
 // Freestyle uses Deno under the hood for web deployments

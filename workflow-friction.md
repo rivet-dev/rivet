@@ -211,12 +211,57 @@ actor.connection.approve(requestId, "Admin");
 />
 ```
 
+## Matchmaking Example Type Safety
+
+### 11. `c.client<any>()` and `client: <T>() => any` in multiplayer examples remove actor-to-actor type safety
+
+**Problem:** The `examples/multiplayer-game-patterns` actors use `any` for internal actor clients. This bypasses compile-time checks for action names and payload shapes in the most security-sensitive paths (lobby validation, join authorization, and lifecycle updates).
+
+**Problematic locations:**
+- `examples/multiplayer-game-patterns/src/actors/turn-based/match.ts:95`
+- `examples/multiplayer-game-patterns/src/actors/turn-based/match.ts:112`
+- `examples/multiplayer-game-patterns/src/actors/turn-based/match.ts:192`
+- `examples/multiplayer-game-patterns/src/actors/ranked/match.ts:86`
+- `examples/multiplayer-game-patterns/src/actors/ranked/match.ts:150`
+- `examples/multiplayer-game-patterns/src/actors/competitive/match.ts:101`
+- `examples/multiplayer-game-patterns/src/actors/competitive/match.ts:118`
+- `examples/multiplayer-game-patterns/src/actors/competitive/match.ts:196`
+- `examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts:73`
+- `examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts:75`
+- `examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts:89`
+- `examples/multiplayer-game-patterns/src/actors/battle-royale/match.ts:122`
+- `examples/multiplayer-game-patterns/src/actors/io-style/match.ts:41`
+- `examples/multiplayer-game-patterns/src/actors/io-style/match.ts:45`
+- `examples/multiplayer-game-patterns/src/actors/io-style/match.ts:73`
+- `examples/multiplayer-game-patterns/src/actors/io-style/match.ts:91`
+- `examples/multiplayer-game-patterns/src/actors/io-style/match.ts:140`
+- `examples/multiplayer-game-patterns/src/actors/party/match.ts:54`
+- `examples/multiplayer-game-patterns/src/actors/party/match.ts:56`
+- `examples/multiplayer-game-patterns/src/actors/party/match.ts:88`
+- `examples/multiplayer-game-patterns/src/actors/party/match.ts:121`
+- `examples/multiplayer-game-patterns/src/actors/party/match.ts:178`
+- `examples/multiplayer-game-patterns/src/actors/open-world/world-index.ts:99`
+- `examples/multiplayer-game-patterns/src/actors/open-world/world-index.ts:102`
+- `examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts:82`
+- `examples/multiplayer-game-patterns/src/actors/open-world/chunk.ts:85`
+
+**Impact:**
+- API drift between matchmaker and match actors is not caught by TypeScript.
+- Mistyped control/join/auth payload fields can compile and fail only at runtime.
+- Security controls become easier to accidentally bypass through incorrect method names or payload shapes.
+- Refactors are harder because IDE rename/type tooling cannot validate these call sites.
+
+**Workaround used:** Keep `any` casts local and manually guard critical responses (`validateLobby` and `authorizeJoin`) before mutating state.
+
+**Desired fix:** Expose a typed registry client for actor runtime contexts so examples can use `c.client<YourRegistryType>()` without `any`.
+
 ## Summary
 
 The biggest pain points are:
 1. **Type system gaps** - loop context doesn't have the right type, requiring manual type helpers
 2. **Missing methods** - `send()` and `broadcast()` weren't exposed on expected interfaces
 3. **Package structure** - internal packages not accessible, need re-exports through public API
+4. **Actor client typing gaps** - actor-to-actor calls in multiplayer examples require `any`, removing compile-time safety in auth-critical flows
 
 These issues could be addressed by:
 - Making `ActorWorkflowContext` the declared type for loop callbacks

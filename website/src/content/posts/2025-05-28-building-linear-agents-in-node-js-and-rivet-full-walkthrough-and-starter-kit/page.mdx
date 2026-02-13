@@ -68,7 +68,7 @@ The user is directed to `GET /connect-linear` ([src/server/index.ts](https://git
 - We store this state in an [`oauthSession`](https://github.com/rivet-dev/engine/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/oauth-session.ts#L10) Rivet Actor
 - We redirect to Linear's authorization page with our OAuth parameters
 
-```typescript {{"title":"src/server/index.ts"}}
+```typescript src/server/index.ts
 router.get("/connect-linear", async (c) => {
   // Setup session with a unique ID and nonce for security
   const sessionId = crypto.randomUUID();
@@ -122,7 +122,7 @@ When the user completes authentication, Linear redirects to our callback URL wit
 - We get the app user ID for the agent in this workspace (our unique identifier for this workspace)
 - We store the access token in the [`linearAppUser`](https://github.com/rivet-dev/engine/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/linear-app-user.ts#L6) Rivet Actor
 
-```typescript {{"title":"src/server/index.ts"}}
+```typescript src/server/index.ts
 router.get("/oauth/callback/linear", async (c) => {
   const stateRaw = c.req.query("state");
   const state = JSON.parse(atob(stateRaw!)) as OAuthExpectedState;
@@ -176,7 +176,7 @@ The server parses these events and routes them to the appropriate handlers in [`
 
 Here's how we handle webhooks in our server:
 
-```typescript {{"title":"src/server/index.ts"}}
+```typescript src/server/index.ts
 router.post("/webhook/linear", async (c) => {
   const rawBody = await c.req.text();
 
@@ -233,7 +233,7 @@ Now that we are handling webhook events correctly, we can implement the function
 
 The issue agent is the brain of our application. It handles Linear events and generates AI responses. Importantly, it maintains conversation state by storing message history, allowing it to have context-aware conversations with users.
 
-```typescript {{"title":"src/actors/issue-agent.ts"}}
+```typescript src/actors/issue-agent.ts
 import { actor } from "actor-core";
 import type { CoreMessage } from "ai";
 
@@ -275,7 +275,7 @@ export const issueAgent = actor({
 
 When generating responses, the agent calls the AI SDK with a history of all messages:
 
-```typescript {{"title":"src/actors/issue-agent.ts"}}
+```typescript src/actors/issue-agent.ts
 async function prompt(c: ActionContextOf<typeof issueAgent>, content: string) {
   // Add the user's message to the conversation history
   c.state.messages.push({ role: "user", content });
@@ -352,7 +352,7 @@ Before getting started with building your own Linear agent, make sure you have:
    <img className="mx-auto w-auto h-[800px]" src={imgAppSetup.src} alt="Linear App Setup" />
 
 5. Create a `.env.local` file with your credentials:
-   ```text {{"title":".env.local"}}
+   ```text .env.local
    LINEAR_OAUTH_CLIENT_ID=<client id>
    LINEAR_OAUTH_CLIENT_AUTHENTICATION=<client secret>
    LINEAR_OAUTH_REDIRECT_URI=https://YOUR-NGROK-URL/oauth/callback/linear
@@ -387,7 +387,7 @@ The core of the agent is in [`src/actors/issue-agent.ts`](https://github.com/riv
 
    For example, you could implement intelligent emoji reactions:
 
-   ```typescript {{"title":"src/actors/issue-agent.ts"}}
+   ```typescript src/actors/issue-agent.ts
    async issueEmojiReaction(c, appUserId, issue, emoji) {
      const linearClient = await buildLinearClient(appUserId);
      
@@ -408,7 +408,7 @@ The core of the agent is in [`src/actors/issue-agent.ts`](https://github.com/riv
    ```
 
 2. **AI Prompt**: Customize the system prompt to change the agent's behavior:
-   ```typescript {{"title":"src/actors/issue-agent.ts"}}
+   ```typescript src/actors/issue-agent.ts
    const SYSTEM_PROMPT = `
    You are a code generation assistant for Linear. Your job is to:
    
@@ -428,7 +428,7 @@ The core of the agent is in [`src/actors/issue-agent.ts`](https://github.com/riv
    ```
 
 3. **AI Model**: Change the model used for generating responses:
-   ```typescript {{"title":"src/actors/issue-agent.ts"}}
+   ```typescript src/actors/issue-agent.ts
    const { text, response } = await generateText({
      model: anthropic("claude-4-opus-20250514"), // Change to your preferred model
      system: SYSTEM_PROMPT,

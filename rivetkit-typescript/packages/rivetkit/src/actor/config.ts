@@ -559,8 +559,8 @@ interface BaseActorConfig<
 	 * handler. Use `c.keepAwake(promise)` to wrap async operations that should
 	 * not be interrupted by sleep.
 	 *
-	 * The handler receives an abort signal via `c.abortSignal` that fires
-	 * when the actor is stopping. You should use this to gracefully exit.
+	 * The handler receives an abort signal via `c.abortSignal` and a
+	 * `c.aborted` alias for loop checks. Use these to gracefully exit.
 	 *
 	 * If this handler exits or throws, the actor will crash and reschedule.
 	 * On shutdown, the actor waits for this handler to complete with a

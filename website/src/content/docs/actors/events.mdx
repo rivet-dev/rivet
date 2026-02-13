@@ -1,6 +1,6 @@
 ---
-title: "Events"
-description: "Events enable real-time communication from actors to clients. While clients use actions to send data to actors, events allow actors to push updates to connected clients instantly."
+title: "Realtime"
+description: "Events enable realtime communication from actors to clients. While clients use actions to send data to actors, events allow actors to push updates to connected clients instantly."
 skill: true
 ---
 
@@ -139,7 +139,7 @@ Use `connection.on(eventName, callback)` to listen for events:
 
 <CodeGroup>
 
-```typescript {{"title":"TypeScript"}}
+```typescript TypeScript
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
@@ -207,7 +207,7 @@ Use `connection.once(eventName, callback)` for events that should only trigger o
 
 <CodeGroup>
 
-```typescript {{"title":"TypeScript"}}
+```typescript TypeScript
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
@@ -278,7 +278,7 @@ Use the callback returned from `.on()` to remove event listeners:
 
 <CodeGroup>
 
-```typescript {{"title":"TypeScript"}}
+```typescript TypeScript
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
