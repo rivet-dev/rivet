@@ -74,3 +74,29 @@ When no `x-rivet-target` header is present:
 
 Returns `404 Not Found` if no routing rules match.
 
+## Gateway Proxying (Actors)
+
+The Gateway (a portion of Guard) acts as a proxy for HTTP requests and WebSocket connections to actors.
+
+### Actor Routing (Path-Based)
+
+In addition to header-based routing, Guard can route requests to actors when the request path matches:
+
+- `/gateway/{actor_id}/{...path}`
+- `/gateway/{actor_id}@{token}/{...path}`
+
+When connecting a WebSocket, Guard may also determine the actor target from `Sec-Websocket-Protocol` when it consists of comma delimited dot separated pairs like `rivet_target.actor,rivet_actor.{actor_id}`.
+
+### Request Flow
+
+- Internally, the client WebSocket connects to a WebSocket listener running on the Rivet Engine
+- Rivet Engine transmits HTTP requests and WebSocket messages via the runner protocol to the actor's corresponding runner's WebSocket
+	- The runner has a single WebSocket connection open to Guard which is independent from any client WebSocket connection
+	- This single connection multiplexes all actor requests and WebSocket connections
+- The runner delegates requests and WebSockets to actors
+- The runner sends HTTP responses and WebSocket messages back to Rivet through its WebSocket via the runner protocol
+- Rivet transforms the runner protocol messages into HTTP responses and WebSocket messages
+
+### WebSocket Hibernation
+
+The Gateway allows us to implement hibernatable WebSockets (see `HIBERNATING_WS.md`) for actors. We can keep a client's WebSocket connection open while simultaneously allowing for actors to sleep, resulting in 0 usage when there is no traffic over the WebSocket. The actor is automatically awoken when a WebSocket message is transmitted to the Gateway.
