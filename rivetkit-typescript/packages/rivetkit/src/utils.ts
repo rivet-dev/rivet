@@ -1,6 +1,88 @@
 export { stringifyError } from "@/common/utils";
 export { assertUnreachable } from "./common/utils";
 
+/**
+ * Joins multiple abort signals into one.
+ *
+ * The returned signal aborts when the first input signal aborts.
+ * Uses `AbortSignal.any(...)` when available, with a runtime fallback.
+ */
+export function joinSignals(
+	...signals: Array<AbortSignal | undefined | null>
+): AbortSignal {
+	const validSignals = signals.filter(
+		(signal): signal is AbortSignal => signal != null,
+	);
+
+	if (validSignals.length === 0) {
+		return new AbortController().signal;
+	}
+
+	if (validSignals.length === 1) {
+		return validSignals[0];
+	}
+
+	const signalAny = (
+		AbortSignal as typeof AbortSignal & {
+			any?: (signals: AbortSignal[]) => AbortSignal;
+		}
+	).any;
+	if (typeof signalAny === "function") {
+		return signalAny(validSignals);
+	}
+
+	const controller = new AbortController();
+	const cleanups: Array<() => void> = [];
+
+	const abortWithSignal = (signal: AbortSignal) => {
+		if (controller.signal.aborted) {
+			return;
+		}
+
+		for (const cleanup of cleanups) {
+			cleanup();
+		}
+
+		const reason = (signal as AbortSignal & { reason?: unknown }).reason;
+		controller.abort(reason);
+	};
+
+	for (const signal of validSignals) {
+		if (signal.aborted) {
+			abortWithSignal(signal);
+			break;
+		}
+
+		const onAbort = () => abortWithSignal(signal);
+		signal.addEventListener("abort", onAbort, { once: true });
+		cleanups.push(() => signal.removeEventListener("abort", onAbort));
+	}
+
+	return controller.signal;
+}
+
+/**
+ * Returns a promise that resolves after the given number of milliseconds.
+ */
+export function sleep(ms: number): Promise<void> {
+	return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Creates a fixed-rate interval tick function that can be awaited in a loop.
+ *
+ * @example
+ * const tick = interval(100);
+ * while (!c.aborted) {
+ *   await tick();
+ *   if (c.aborted) break;
+ *   // ... game logic
+ * }
+ */
+export function interval(ms: number): () => Promise<void> {
+	return () => sleep(ms);
+}
+
 import type { Context as HonoContext, Handler as HonoHandler } from "hono";
 import { stringify as uuidstringify } from "uuid";
 import { stringifyError } from "@/common/utils";

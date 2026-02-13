@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { listSkillIds, renderSkillFile, type SkillId } from "../../../../metadata/skills";
+import { listSkillIds, renderSkillFile } from "../../../../metadata/skills";
 
 export const prerender = true;
 
@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ params }) => {
 	}
 
 	try {
-		const file = await renderSkillFile(skill as SkillId);
+		const file = await renderSkillFile(skill);
 		return new Response(file, {
 			headers: { "content-type": "text/markdown; charset=utf-8" },
 		});
@@ -22,7 +22,8 @@ export const GET: APIRoute = async ({ params }) => {
 };
 
 export async function getStaticPaths() {
-	return listSkillIds().map((skill) => ({
+	const skills = await listSkillIds();
+	return skills.map((skill) => ({
 		params: { skill },
 	}));
 }

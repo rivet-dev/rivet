@@ -17,7 +17,7 @@ See the [React quickstart guide](/docs/actors/quickstart/react) for getting star
 ## Minimal Client
 
 <CodeGroup workspace>
-```tsx {{"title":"Counter.tsx"}}
+```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
@@ -33,7 +33,7 @@ function Counter() {
 }
 ```
 
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -215,7 +215,7 @@ function Profile() {
 Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchical addressing:
 
 <CodeGroup workspace>
-```tsx {{"title":"ChatRoom.tsx"}}
+```tsx ChatRoom.tsx
 import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
@@ -227,7 +227,7 @@ function ChatRoom() {
 }
 ```
 
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const chatRoom = actor({

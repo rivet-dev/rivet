@@ -140,12 +140,22 @@ export const sitemap = [
 						icon: faFloppyDisk,
 					},
 					{
+						title: "SQLite",
+						href: "/docs/actors/sqlite",
+						icon: faDatabase,
+					},
+					{
+						title: "Queues",
+						href: "/docs/actors/queue",
+						icon: faListUl,
+					},
+					{
 						title: "Actions",
 						href: "/docs/actors/actions",
 						icon: faBolt,
 					},
 					{
-						title: "Events",
+						title: "Realtime",
 						href: "/docs/actors/events",
 						icon: faTowerBroadcast,
 					},
@@ -177,11 +187,6 @@ export const sitemap = [
 								title: "Actor-Actor Communication",
 								href: "/docs/actors/communicating-between-actors",
 								//icon: faArrowsTurnToDots,
-							},
-							{
-								title: "Queue Messages",
-								href: "/docs/actors/queue",
-								icon: faListUl,
 							},
 							{
 								title: "Low-Level WebSocket Handler",
@@ -247,6 +252,10 @@ export const sitemap = [
 						{
 							title: "Low-Level KV Storage",
 							href: "/docs/actors/kv"
+						},
+						{
+							title: "SQLite + Drizzle",
+							href: "/docs/actors/sqlite-drizzle",
 						},
 						{
 							title: "External SQL",

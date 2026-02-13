@@ -10,6 +10,12 @@ Use this skill when building JavaScript clients (browser, Node.js, or Bun) that 
    ```
 2. Create a client with `createClient()` and call actor actions.
 
+## Error Handling Policy
+
+- Prefer fail-fast behavior by default.
+- Avoid `try/catch` unless absolutely needed.
+- If a `catch` is used, handle the error explicitly, at minimum by logging it.
+
 <!-- CONTENT -->
 
 ## Need More Than the Client?

@@ -66,7 +66,7 @@ A stateful AI chatbot with persistent memory and real-time updates:
 
 <CodeGroup>
 
-```typescript {{"title":"src/app/rivet/registry.ts"}}
+```typescript src/app/rivet/registry.ts
 import { actor, setup } from "rivetkit";
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
@@ -133,7 +133,7 @@ export const registry = setup({
 });
 ```
 
-```typescript {{"title":"src/app/components/AgentChat.tsx"}}
+```typescript src/app/components/AgentChat.tsx
 import { createRivetKit } from "@rivetkit/next-js/client";
 import { useEffect, useState } from "react";
 import { registry } from "../rivet/registry";

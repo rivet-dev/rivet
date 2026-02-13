@@ -10,6 +10,15 @@ const docs = defineCollection({
 	}),
 });
 
+const cookbook = defineCollection({
+	loader: glob({ pattern: '**/*.mdx', base: './src/content/cookbook' }),
+	schema: z.object({
+		title: z.string(),
+		description: z.string(),
+		templates: z.array(z.string()).optional(),
+	}),
+});
+
 const guides = defineCollection({
 	loader: glob({ pattern: '**/*.mdx', base: './src/content/guides' }),
 	schema: z.object({
@@ -43,6 +52,7 @@ const posts = defineCollection({
 
 export const collections = {
 	docs,
+	cookbook,
 	guides,
 	learn,
 	posts,

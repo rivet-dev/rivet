@@ -8,7 +8,7 @@ skill: true
 
 <CodeGroup>
 
-```json {{"title":"Configuration file"}}
+```json Configuration-file
 {
   "database": {
     "postgres": {
@@ -18,7 +18,7 @@ skill: true
 }
 ```
 
-```bash {{"title":"Environment variables"}}
+```bash Environment-variables
 RIVET__database__postgres__url="postgresql://user:password@host:5432/database"
 ```
 
@@ -35,7 +35,7 @@ Use direct connection (not connection pooler).
 
 <CodeGroup>
 
-```json {{"title":"Configuration file"}}
+```json Configuration-file
 {
   "database": {
     "postgres": {
@@ -46,7 +46,7 @@ Use direct connection (not connection pooler).
 }
 ```
 
-```bash {{"title":"Environment variables"}}
+```bash Environment-variables
 RIVET__database__postgres__url="postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
 RIVET__database__postgres__unstable_disable_lock_customization=true
 ```
@@ -66,7 +66,7 @@ Use direct connection on port `5432` (not connection pooler).
 
 <CodeGroup>
 
-```json {{"title":"Configuration file"}}
+```json Configuration-file
 {
   "database": {
     "postgres": {
@@ -77,7 +77,7 @@ Use direct connection on port `5432` (not connection pooler).
 }
 ```
 
-```bash {{"title":"Environment variables"}}
+```bash Environment-variables
 RIVET__database__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
 RIVET__database__postgres__unstable_disable_lock_customization=true
 ```
@@ -90,7 +90,7 @@ Download the root certificate from your Supabase dashboard and specify its path.
 
 <CodeGroup>
 
-```json {{"title":"Configuration file"}}
+```json Configuration-file
 {
   "database": {
     "postgres": {
@@ -104,7 +104,7 @@ Download the root certificate from your Supabase dashboard and specify its path.
 }
 ```
 
-```bash {{"title":"Environment variables"}}
+```bash Environment-variables
 RIVET__database__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require"
 RIVET__database__postgres__unstable_disable_lock_customization=true
 RIVET__database__postgres__ssl__root_cert_path="/path/to/supabase-ca.crt"
@@ -122,7 +122,7 @@ To enable SSL for Postgres, add `sslmode=require` to your PostgreSQL connection 
 
 <CodeGroup>
 
-```json {{"title":"Configuration file"}}
+```json Configuration-file
 {
   "database": {
     "postgres": {
@@ -132,7 +132,7 @@ To enable SSL for Postgres, add `sslmode=require` to your PostgreSQL connection 
 }
 ```
 
-```bash {{"title":"Environment variables"}}
+```bash Environment-variables
 RIVET__database__postgres__url="postgresql://user:password@host.example.com:5432/database?sslmode=require"
 ```
 
@@ -152,7 +152,7 @@ For databases using custom certificate authorities (e.g., Supabase) or requiring
 
 <CodeGroup>
 
-```json {{"title":"Configuration file"}}
+```json Configuration-file
 {
   "database": {
     "postgres": {
@@ -167,7 +167,7 @@ For databases using custom certificate authorities (e.g., Supabase) or requiring
 }
 ```
 
-```bash {{"title":"Environment variables"}}
+```bash Environment-variables
 RIVET__database__postgres__url="postgresql://user:password@host:5432/database?sslmode=require"
 RIVET__database__postgres__ssl__root_cert_path="/path/to/root-ca.crt"
 RIVET__database__postgres__ssl__client_cert_path="/path/to/client.crt"

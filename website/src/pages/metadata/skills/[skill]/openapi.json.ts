@@ -5,7 +5,6 @@ import path from "node:path";
 import {
 	listSkillIds,
 	skillSupportsOpenApi,
-	type SkillId,
 } from "../../../../metadata/skills";
 
 export const prerender = true;
@@ -17,7 +16,7 @@ export const GET: APIRoute = async ({ params }) => {
 	}
 
 	try {
-		if (!skillSupportsOpenApi(skill as SkillId)) {
+		if (!(await skillSupportsOpenApi(skill))) {
 			return new Response("openapi not found", { status: 404 });
 		}
 		const openapiPath = path.join(process.cwd(), "src/generated/rivetkit-openapi.json");
@@ -32,9 +31,12 @@ export const GET: APIRoute = async ({ params }) => {
 };
 
 export async function getStaticPaths() {
-	return listSkillIds()
-		.filter((skill) => skillSupportsOpenApi(skill))
-		.map((skill) => ({
-			params: { skill },
-		}));
+	const skills = await listSkillIds();
+	const paths = [];
+	for (const skill of skills) {
+		if (await skillSupportsOpenApi(skill)) {
+			paths.push({ params: { skill } });
+		}
+	}
+	return paths;
 }

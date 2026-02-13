@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Multiplayer Game Patterns</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				background: #000000;
+				color: #ffffff;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+				font-size: 14px;
+				line-height: 1.5;
+			}
+
+			.app {
+				max-width: 1000px;
+				margin: 0 auto;
+				padding: 24px;
+			}
+
+			.page-header {
+				margin-bottom: 32px;
+			}
+
+			.page-header h1 {
+				font-size: 24px;
+				font-weight: 700;
+			}
+
+			.page-header p {
+				color: #8e8e93;
+				font-size: 14px;
+				margin-top: 8px;
+			}
+
+			.back-link {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				color: #ff4f00;
+				font-size: 14px;
+				font-weight: 600;
+				cursor: pointer;
+				background: none;
+				border: none;
+				padding: 0;
+				margin-bottom: 24px;
+			}
+
+			.card-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+				gap: 16px;
+			}
+
+			.card {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 20px;
+				cursor: pointer;
+				transition: border-color 200ms ease;
+			}
+
+			.card:hover {
+				border-color: #ff4f00;
+			}
+
+			.card h3 {
+				font-size: 16px;
+				font-weight: 600;
+				margin-bottom: 8px;
+			}
+
+			.card p {
+				color: #8e8e93;
+				font-size: 13px;
+				line-height: 1.4;
+			}
+
+			.btn {
+				padding: 12px 20px;
+				border: none;
+				border-radius: 8px;
+				font-size: 14px;
+				font-weight: 600;
+				cursor: pointer;
+			}
+
+			.btn:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+
+			.btn-primary {
+				background: #ff4f00;
+				color: #ffffff;
+			}
+
+			.btn-secondary {
+				background: #2c2c2e;
+				color: #ffffff;
+			}
+
+			.btn-danger {
+				background: #ff3b30;
+				color: #ffffff;
+			}
+
+			.btn-success {
+				background: #30d158;
+				color: #ffffff;
+			}
+
+			.menu-container {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 24px;
+			}
+
+			.menu-container h2 {
+				font-size: 20px;
+				font-weight: 600;
+				margin-bottom: 8px;
+			}
+
+			.menu-description {
+				color: #8e8e93;
+				font-size: 14px;
+				margin-bottom: 24px;
+			}
+
+			.status-box {
+				background: #2c2c2e;
+				border-radius: 8px;
+				padding: 16px;
+				margin-top: 16px;
+			}
+
+			.status-label {
+				color: #8e8e93;
+				font-size: 12px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				margin-bottom: 4px;
+			}
+
+			.status-value {
+				font-size: 14px;
+			}
+
+			.status-pending {
+				color: #ff4f00;
+			}
+
+			.status-error {
+				color: #ff3b30;
+			}
+
+			.status-success {
+				color: #30d158;
+			}
+
+			.game-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin-bottom: 24px;
+			}
+
+			.game-header h2 {
+				font-size: 20px;
+				font-weight: 600;
+			}
+
+			.log-container {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 16px;
+				margin-top: 16px;
+				max-height: 300px;
+				overflow-y: auto;
+			}
+
+			.log-entry {
+				font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
+				font-size: 13px;
+				padding: 6px 0;
+				color: #8e8e93;
+				border-bottom: 1px solid #2c2c2e;
+			}
+
+			.log-entry:last-child {
+				border-bottom: none;
+			}
+
+			.log-timestamp {
+				color: #6e6e73;
+				margin-right: 8px;
+			}
+
+			.game-canvas {
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				display: block;
+				margin-top: 16px;
+				background: #000;
+			}
+
+			.btn-row {
+				display: flex;
+				gap: 12px;
+				flex-wrap: wrap;
+			}
+
+			.stat-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+				gap: 12px;
+				margin-top: 16px;
+			}
+
+			.stat-box {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 16px;
+			}
+
+			.stat-label {
+				color: #8e8e93;
+				font-size: 12px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+
+			.stat-value {
+				font-size: 24px;
+				font-weight: 700;
+				margin-top: 4px;
+			}
+
+			.badge {
+				display: inline-block;
+				padding: 4px 8px;
+				border-radius: 6px;
+				font-size: 12px;
+				font-weight: 500;
+				background: #2c2c2e;
+			}
+
+			.badge-live {
+				background: rgba(48, 209, 88, 0.15);
+				color: #30d158;
+			}
+
+			.badge-finished {
+				background: rgba(142, 142, 147, 0.15);
+				color: #8e8e93;
+			}
+
+			.badge-waiting {
+				background: rgba(255, 79, 0, 0.15);
+				color: #ff4f00;
+			}
+
+			.empty-state {
+				text-align: center;
+				padding: 32px;
+				color: #8e8e93;
+			}
+
+			.controls-hint {
+				color: #6e6e73;
+				font-size: 12px;
+				margin-top: 8px;
+			}
+			.mode-selector {
+				display: flex;
+				gap: 8px;
+				flex-wrap: wrap;
+			}
+
+			.queue-status {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				padding: 24px 0;
+			}
+
+			.queue-mode-badge {
+				display: inline-block;
+				padding: 4px 12px;
+				border-radius: 6px;
+				font-size: 12px;
+				font-weight: 600;
+				letter-spacing: 0.5px;
+				background: rgba(255, 79, 0, 0.15);
+				color: #ff4f00;
+				margin-bottom: 16px;
+			}
+
+			.queue-count {
+				font-size: 48px;
+				font-weight: 700;
+				line-height: 1;
+			}
+
+			.queue-count-sep {
+				color: #6e6e73;
+				margin: 0 2px;
+			}
+
+			.queue-label {
+				color: #8e8e93;
+				font-size: 14px;
+				margin-top: 4px;
+			}
+
+			.queue-bar {
+				width: 100%;
+				max-width: 280px;
+				height: 6px;
+				background: #2c2c2e;
+				border-radius: 3px;
+				margin-top: 16px;
+				overflow: hidden;
+			}
+
+			.queue-bar-fill {
+				height: 100%;
+				background: #ff4f00;
+				border-radius: 3px;
+				transition: width 300ms ease;
+			}
+
+			.match-found-text {
+				font-size: 28px;
+				font-weight: 700;
+				color: #30d158;
+				margin-bottom: 8px;
+			}
+
+			.text-input {
+				background: #2c2c2e;
+				border: 1px solid #3a3a3c;
+				border-radius: 8px;
+				padding: 12px 16px;
+				color: #ffffff;
+				font-size: 14px;
+				outline: none;
+			}
+
+			.text-input:focus {
+				border-color: #ff4f00;
+				box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.2);
+			}
+
+			.text-input::placeholder {
+				color: #6e6e73;
+			}
+
+			/* Party styles */
+			.party-code-display {
+				text-align: center;
+				margin-bottom: 16px;
+			}
+
+			.party-code-label {
+				color: #8e8e93;
+				font-size: 12px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+
+			.party-code {
+				font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
+				font-size: 36px;
+				font-weight: 700;
+				letter-spacing: 8px;
+				color: #ff4f00;
+				margin-top: 4px;
+			}
+
+			.party-phase-badge {
+				text-align: center;
+				margin-bottom: 16px;
+			}
+
+			.party-members {
+				background: #2c2c2e;
+				border-radius: 8px;
+				overflow: hidden;
+			}
+
+			.party-members-header {
+				padding: 12px 16px;
+				font-size: 14px;
+				font-weight: 600;
+				border-bottom: 1px solid #3a3a3c;
+			}
+
+			.party-member-row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 10px 16px;
+				border-bottom: 1px solid #3a3a3c;
+			}
+
+			.party-member-row:last-child {
+				border-bottom: none;
+			}
+
+			.party-member-name {
+				font-size: 14px;
+			}
+
+			.party-member-badges {
+				display: flex;
+				gap: 6px;
+			}
+
+			/* Tic-tac-toe board */
+			.ttt-board {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 4px;
+				max-width: 300px;
+				margin: 0 auto;
+			}
+
+			.ttt-cell {
+				aspect-ratio: 1;
+				background: #2c2c2e;
+				border: 1px solid #3a3a3c;
+				border-radius: 8px;
+				font-size: 36px;
+				font-weight: 700;
+				color: #ffffff;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+
+			.ttt-cell:disabled {
+				cursor: not-allowed;
+			}
+
+			.ttt-cell-x {
+				color: #ff4f00;
+			}
+
+			.ttt-cell-o {
+				color: #3b82f6;
+			}
+
+			/* Idle styles */
+			.idle-resources {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 24px;
+				text-align: center;
+				margin-bottom: 24px;
+			}
+
+			.idle-resources-label {
+				color: #8e8e93;
+				font-size: 12px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+
+			.idle-resources-value {
+				font-size: 48px;
+				font-weight: 700;
+				color: #ff4f00;
+				line-height: 1.2;
+			}
+
+			.idle-resources-total {
+				color: #6e6e73;
+				font-size: 13px;
+				margin-top: 4px;
+			}
+
+			.idle-buildings-header {
+				font-size: 16px;
+				font-weight: 600;
+				margin-bottom: 12px;
+			}
+
+			.idle-buildings-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+				gap: 12px;
+			}
+
+			.idle-building-card {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 16px;
+			}
+
+			.idle-building-name {
+				font-size: 14px;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+
+			.idle-building-rate {
+				color: #30d158;
+				font-size: 13px;
+				margin-bottom: 8px;
+			}
+
+			.idle-building-progress {
+				height: 4px;
+				background: #2c2c2e;
+				border-radius: 2px;
+				overflow: hidden;
+				margin-bottom: 4px;
+			}
+
+			.idle-building-progress-fill {
+				height: 100%;
+				background: #ff4f00;
+				border-radius: 2px;
+				transition: width 1s linear;
+			}
+
+			.idle-building-timer {
+				color: #8e8e93;
+				font-size: 12px;
+			}
+
+			.idle-shop-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+				gap: 8px;
+			}
+
+			.idle-shop-item {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				padding: 12px;
+				cursor: pointer;
+				text-align: left;
+				color: #ffffff;
+			}
+
+			.idle-shop-item:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+
+			.idle-shop-name {
+				font-size: 14px;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+
+			.idle-shop-cost {
+				color: #ff4f00;
+				font-size: 12px;
+			}
+
+			.idle-shop-rate {
+				color: #30d158;
+				font-size: 12px;
+			}
+
+			.idle-leaderboard {
+				background: #1c1c1e;
+				border: 1px solid #2c2c2e;
+				border-radius: 8px;
+				overflow: hidden;
+			}
+
+			.idle-leaderboard-header {
+				padding: 12px 16px;
+				font-size: 14px;
+				font-weight: 600;
+				border-bottom: 1px solid #2c2c2e;
+				background: #2c2c2e;
+			}
+
+			.idle-leaderboard-row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 8px 16px;
+				border-bottom: 1px solid #2c2c2e;
+				font-size: 13px;
+			}
+
+			.idle-leaderboard-row:last-child {
+				border-bottom: none;
+			}
+
+			.idle-leaderboard-me {
+				background: rgba(255, 79, 0, 0.1);
+			}
+
+			.idle-leaderboard-rank {
+				color: #8e8e93;
+				width: 28px;
+			}
+
+			.idle-leaderboard-name {
+				flex: 1;
+			}
+
+			.idle-leaderboard-score {
+				color: #ff4f00;
+				font-weight: 600;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="/frontend/main.tsx"></script>
+	</body>
+</html>

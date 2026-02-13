@@ -36,7 +36,7 @@ npm install rivetkit @rivetkit/react
 
 Create your actor registry on the backend:
 
-```ts {{"title":"backend/registry.ts"}}
+```ts backend/registry.ts
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -68,7 +68,7 @@ export const registry = setup({
 Set up your React application:
 
 <CodeGroup workspace>
-```tsx {{"title":"Counter.tsx"}}
+```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
 import type { registry } from "./registry";
@@ -101,7 +101,7 @@ function Counter() {
 }
 ```
 
-```ts {{"title":"registry.ts"}} @hide
+```ts registry.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -129,7 +129,7 @@ For detailed information about the React client API, see the [React Client API R
 
 Configure Vite for development:
 
-```ts {{"title":"vite.config.ts"}} @nocheck
+```ts vite.config.ts @nocheck
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

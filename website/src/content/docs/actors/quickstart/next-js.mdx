@@ -39,7 +39,7 @@ cd my-app
 
 Create a file at `src/rivet/registry.ts` with a simple counter actor:
 
-```ts {{"title":"src/rivet/registry.ts"}}
+```ts src/rivet/registry.ts
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -64,7 +64,7 @@ export const registry = setup({
 
 Create a file at `src/app/api/rivet/[...all]/route.ts` to setup the API routes:
 
-```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}} @nocheck
+```ts src/app/api/rivet/[...all]/route.ts @nocheck
 import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 

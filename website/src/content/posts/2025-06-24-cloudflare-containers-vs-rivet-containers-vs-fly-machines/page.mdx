@@ -63,7 +63,7 @@ In order to route a user's request to a container, the request takes the route o
 
 In practice, Cloudflare Containers are created via Cloudflare's JavaScript API that's tightly integrated with the Cloudflare Worker's runtime:
 
-```ts {{"title":"worker.ts"}}
+```ts worker.ts
 // Convenience API around the Durable Objects + Containers API
 import { Container, getRandom } from "@cloudflare/containers";
 
@@ -107,7 +107,7 @@ This provides similar benefits to Cloudflare Containers, but allows you to use a
 
 In practice, using Rivet Containers looks like this:
 
-```ts {{"title":"server.ts"}}
+```ts server.ts
 import { RivetClient } from "@rivet-gg/api";
 
 const client = new RivetClient();

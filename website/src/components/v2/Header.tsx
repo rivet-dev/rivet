@@ -7,9 +7,26 @@ import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
 import React, { type ReactNode, useEffect, useRef, useState } from "react";
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@rivet-gg/components";
+import {
+	Button,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
-import { Bot, Gamepad2, FileText, Workflow, ShoppingCart, Wand2, Network, Clock, Database, Globe } from "lucide-react";
+import {
+	Bot,
+	Gamepad2,
+	FileText,
+	Workflow,
+	ShoppingCart,
+	Wand2,
+	Network,
+	Clock,
+	Database,
+	Globe,
+} from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
 import { GitHubDropdown } from "./GitHubDropdown";
@@ -38,10 +55,7 @@ function TextNavItem({
 			)}
 		>
 			<RivetHeader.NavItem asChild>
-				<a href={href}
-					className="text-white"
-					aria-current={ariaCurrent}
-				>
+				<a href={href} className="text-white" aria-current={ariaCurrent}>
 					{children}
 				</a>
 			</RivetHeader.NavItem>
@@ -66,7 +80,7 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 			href: "https://sandboxagent.dev/",
 			logo: sandboxAgentLogoUrl,
 			description: "SDK for coding agents",
-			external: true
+			external: true,
 		},
 	];
 
@@ -154,7 +168,15 @@ function ProductsDropdown({ active }: { active?: boolean }) {
 								rel={product.external ? "noopener noreferrer" : undefined}
 								className="group flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
 							>
-								<img src={product.logo.src} alt={product.label} width={24} height={24} className="h-6 w-6" loading="lazy" decoding="async" />
+								<img
+									src={product.logo.src}
+									alt={product.label}
+									width={24}
+									height={24}
+									className="h-6 w-6"
+									loading="lazy"
+									decoding="async"
+								/>
 								<div className="flex flex-col">
 									<div className="font-medium text-white text-sm group-hover:text-white transition-colors">
 										{product.label}
@@ -178,41 +200,41 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 	const isHoveringRef = useRef(false);
 
 	const solutions = [
-		{ 
-			label: "Agent Orchestration", 
+		{
+			label: "Agent Orchestration",
 			href: "/solutions/agents",
 			icon: Bot,
-			description: "Build durable AI assistants"
+			description: "Build durable AI assistants",
 		},
-		{ 
-			label: "Multiplayer Documents", 
+		{
+			label: "Multiplayer Documents",
 			href: "/solutions/collaborative-state",
 			icon: FileText,
-			description: "Real-time collaboration"
+			description: "Real-time collaboration",
 		},
-		{ 
-			label: "Workflows", 
+		{
+			label: "Workflows",
 			href: "/solutions/workflows",
 			icon: Workflow,
-			description: "Durable multi-step processes"
+			description: "Durable multi-step processes",
 		},
-		{ 
-			label: "Vibe-Coded Backends", 
+		{
+			label: "Vibe-Coded Backends",
 			href: "/solutions/app-generators",
 			icon: Wand2,
-			description: "Backend for AI-generated apps"
+			description: "Backend for AI-generated apps",
 		},
-		{ 
-			label: "Geo-Distributed Databases", 
+		{
+			label: "Geo-Distributed Databases",
 			href: "/solutions/geo-distributed-db",
 			icon: Globe,
-			description: "Multi-region state replication"
+			description: "Multi-region state replication",
 		},
-		{ 
-			label: "Per-Tenant Databases", 
+		{
+			label: "Per-Tenant Databases",
 			href: "/solutions/per-tenant-db",
 			icon: Database,
-			description: "Isolated state per customer"
+			description: "Isolated state per customer",
 		},
 	];
 
@@ -264,7 +286,7 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 	}, []);
 
 	return (
-		<div 
+		<div
 			className="px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200"
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
@@ -288,8 +310,8 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 						</button>
 					</RivetHeader.NavItem>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent 
-					align="start" 
+				<DropdownMenuContent
+					align="start"
 					className="min-w-[600px] p-6 bg-black/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-xl"
 					onMouseEnter={handleMouseEnter}
 					onMouseLeave={handleMouseLeave}
@@ -328,7 +350,14 @@ function SolutionsDropdown({ active }: { active?: boolean }) {
 }
 
 interface HeaderProps {
-	active?: "product" | "docs" | "blog" | "cloud" | "solutions" | "learn";
+	active?:
+	| "product"
+	| "docs"
+	| "cookbook"
+	| "blog"
+	| "cloud"
+	| "solutions"
+	| "learn";
 	subnav?: ReactNode;
 	mobileSidebar?: ReactNode;
 	variant?: "floating" | "full-width";
@@ -374,16 +403,15 @@ export function Header({
 						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
 					)}
 				>
-					<div
-						className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl bg-background/80 backdrop-blur-lg md:block"
-					/>
+					<div className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl bg-background/80 backdrop-blur-lg md:block" />
 					<RivetHeader
 						className={headerStyles}
 						logo={
 							<div className="hidden md:block">
 								<LogoContextMenu>
 									<a href="/">
-										<img src={logoUrl.src}
+										<img
+											src={logoUrl.src}
 											width={80}
 											height={24}
 											className="ml-1 w-20 shrink-0"
@@ -398,54 +426,39 @@ export function Header({
 						links={
 							<div className="flex flex-row items-center">
 								{variant === "full-width" && <HeaderSearch />}
-								<RivetHeader.NavItem
-									asChild
-									className="p-2 mr-4"
-								>
-									<a href="https://rivet.dev/discord"
-										className="text-white/90"
-									>
-										<Icon
-											icon={faDiscord}
-											className="drop-shadow-md"
-										/>
+								<RivetHeader.NavItem asChild className="p-2 mr-4">
+									<a href="https://rivet.dev/discord" className="text-white/90">
+										<Icon icon={faDiscord} className="drop-shadow-md" />
 									</a>
 								</RivetHeader.NavItem>
 								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
-								<a href="https://dashboard.rivet.dev"
+								<a
+									href="https://dashboard.rivet.dev"
 									className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 								>
 									Sign In
 								</a>
 							</div>
 						}
-						mobileBreadcrumbs={
-							<DocsMobileNavigation tree={mobileSidebar} />
-						}
+						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<ProductsDropdown active={active === "product"} />
 								<TextNavItem
 									href="/docs"
-									ariaCurrent={
-										active === "docs" ? "page" : undefined
-									}
+									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
 									Docs
 								</TextNavItem>
 								<TextNavItem
-									href="/changelog"
-									ariaCurrent={
-										active === "blog" ? "page" : undefined
-									}
+									href="/cookbook"
+									ariaCurrent={active === "cookbook" ? "page" : undefined}
 								>
-									Changelog
+									Cookbook
 								</TextNavItem>
 								<TextNavItem
 									href="/cloud"
-									ariaCurrent={
-										active === "cloud" ? "page" : undefined
-									}
+									ariaCurrent={active === "cloud" ? "page" : undefined}
 								>
 									Cloud
 								</TextNavItem>
@@ -472,7 +485,8 @@ export function Header({
 				<div className="hidden md:block">
 					<LogoContextMenu>
 						<a href="/">
-							<img src={logoUrl.src}
+							<img
+								src={logoUrl.src}
 								width={80}
 								height={24}
 								className="ml-1 w-20 shrink-0"
@@ -499,7 +513,8 @@ export function Header({
 						</a>
 					</RivetHeader.NavItem>
 					<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
-					<a href="https://dashboard.rivet.dev"
+					<a
+						href="https://dashboard.rivet.dev"
 						className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 					>
 						Sign In
@@ -517,10 +532,10 @@ export function Header({
 						Docs
 					</TextNavItem>
 					<TextNavItem
-						href="/changelog"
-						ariaCurrent={active === "blog" ? "page" : undefined}
+						href="/cookbook"
+						ariaCurrent={active === "cookbook" ? "page" : undefined}
 					>
-						Changelog
+						Cookbook
 					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
@@ -557,36 +572,71 @@ function DocsMobileNavigation({ tree }) {
 
 	const mainLinks = [
 		{ href: "/docs", label: "Docs" },
-		{ href: "/changelog", label: "Changelog" },
 		{ href: "/cloud", label: "Cloud" },
+		{ href: "/cookbook", label: "Cookbook" },
 	];
 
 	const solutions = [
 		{ label: "Agent Orchestration", href: "/solutions/agents", icon: Bot },
-		{ label: "Multiplayer Documents", href: "/solutions/collaborative-state", icon: FileText },
+		{
+			label: "Multiplayer Documents",
+			href: "/solutions/collaborative-state",
+			icon: FileText,
+		},
 		{ label: "Workflows", href: "/solutions/workflows", icon: Workflow },
-		{ label: "Vibe-Coded Backends", href: "/solutions/app-generators", icon: Wand2 },
-		{ label: "Geo-Distributed Databases", href: "/solutions/geo-distributed-db", icon: Globe },
-		{ label: "Per-Tenant Databases", href: "/solutions/per-tenant-db", icon: Database },
+		{
+			label: "Vibe-Coded Backends",
+			href: "/solutions/app-generators",
+			icon: Wand2,
+		},
+		{
+			label: "Geo-Distributed Databases",
+			href: "/solutions/geo-distributed-db",
+			icon: Globe,
+		},
+		{
+			label: "Per-Tenant Databases",
+			href: "/solutions/per-tenant-db",
+			icon: Database,
+		},
 	];
 
 	const products = [
 		{ label: "Actors", href: "/docs/actors", logo: actorsLogoUrl },
-		{ label: "Sandbox Agent SDK", href: "https://sandboxagent.dev/", logo: sandboxAgentLogoUrl, external: true },
+		{
+			label: "Sandbox Agent SDK",
+			href: "https://sandboxagent.dev/",
+			logo: sandboxAgentLogoUrl,
+			external: true,
+		},
 	];
 
-	const currentSection = sections.find(s => s.id === getCurrentSection());
+	const currentSection = sections.find((s) => s.id === getCurrentSection());
 
 	return (
 		<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
 			{/* Home logo - full logo on small screens, icon only on tablet */}
 			<a href="/" className="py-3 px-2">
-				<img src={logoUrl.src} alt="Rivet" width={80} height={24} className="w-20 sm:hidden" />
-				<img src={logoIconUrl.src} alt="Rivet" width={32} height={32} className="w-8 h-8 hidden sm:block" />
+				<img
+					src={logoUrl.src}
+					alt="Rivet"
+					width={80}
+					height={24}
+					className="w-20 sm:hidden"
+				/>
+				<img
+					src={logoIconUrl.src}
+					alt="Rivet"
+					width={32}
+					height={32}
+					className="w-8 h-8 hidden sm:block"
+				/>
 			</a>
 
 			{/* Products section */}
-			<div className="text-zinc-500 py-2 px-2 text-xs uppercase tracking-wide">Products</div>
+			<div className="text-zinc-500 py-2 px-2 text-xs uppercase tracking-wide">
+				Products
+			</div>
 			{products.map((product) => (
 				<a
 					key={product.href}
@@ -595,14 +645,26 @@ function DocsMobileNavigation({ tree }) {
 					rel={product.external ? "noopener noreferrer" : undefined}
 					className="text-white py-2 px-2 pl-4 hover:bg-white/5 rounded-sm transition-colors flex items-center gap-2"
 				>
-					<img src={product.logo.src} alt={product.label} width={16} height={16} className="h-4 w-4" loading="lazy" decoding="async" />
+					<img
+						src={product.logo.src}
+						alt={product.label}
+						width={16}
+						height={16}
+						className="h-4 w-4"
+						loading="lazy"
+						decoding="async"
+					/>
 					{product.label}
 				</a>
 			))}
 
 			{/* Main navigation links */}
 			{mainLinks.map(({ href, label }) => (
-				<a key={href} href={href} className="text-white py-2 px-2 hover:bg-white/5 rounded-sm transition-colors">
+				<a
+					key={href}
+					href={href}
+					className="text-white py-2 px-2 hover:bg-white/5 rounded-sm transition-colors"
+				>
 					{label}
 				</a>
 			))}
@@ -615,7 +677,10 @@ function DocsMobileNavigation({ tree }) {
 					{/* Section dropdown */}
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="outline" className="w-full justify-between h-9 text-sm border-white/10 bg-white/5 text-white hover:bg-white/10 hover:border-white/20">
+							<Button
+								variant="outline"
+								className="w-full justify-between h-9 text-sm border-white/10 bg-white/5 text-white hover:bg-white/10 hover:border-white/20"
+							>
 								{currentSection?.label || "Select Section"}
 								<Icon icon={faChevronDown} className="h-3.5 w-3.5 ml-2" />
 							</Button>

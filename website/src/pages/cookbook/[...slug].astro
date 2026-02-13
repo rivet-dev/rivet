@@ -1,0 +1,136 @@
+---
+import MarketingLayout from "@/layouts/MarketingLayout.astro";
+import { getCollection, render } from "astro:content";
+import { templates as allTemplates, type Template } from "@/data/templates/shared";
+import * as mdxComponents from "@/components/mdx";
+
+export async function getStaticPaths() {
+	const cookbook = await getCollection("cookbook");
+
+	return cookbook
+		// Root index is rendered by `pages/cookbook/index.astro`.
+		.filter((entry) => entry.id !== "index")
+		.map((entry) => {
+			const cleanId = entry.id.replace(/\/index$/, "");
+			return {
+				// Astro expects a string for rest params (it may contain `/`).
+				params: { slug: cleanId },
+				props: { entry },
+			};
+		});
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+const { title, description, templates } = entry.data as {
+	title: string;
+	description: string;
+	templates?: string[];
+};
+
+const slugPath = entry.id.replace(/\/index$/, "");
+const canonicalUrl = `https://rivet.dev/cookbook/${slugPath}/`;
+
+function resolveTemplates(names?: string[]): Array<Template & { githubUrl: string }> {
+	if (!names?.length) return [];
+	const resolved = [];
+	for (const name of names) {
+		const tpl = allTemplates.find((t) => t.name === name);
+		if (!tpl) {
+			resolved.push({
+				name,
+				displayName: name,
+				description: "",
+				tags: [],
+				technologies: [],
+				providers: { vercel: null },
+				noFrontend: false,
+				githubUrl: `https://github.com/rivet-dev/rivet/tree/main/examples/${name}`,
+			} as Template & { githubUrl: string });
+			continue;
+		}
+		resolved.push({
+			...tpl,
+			githubUrl: `https://github.com/rivet-dev/rivet/tree/main/examples/${tpl.name}`,
+		});
+	}
+	return resolved;
+}
+
+const resolvedTemplates = resolveTemplates(templates);
+---
+
+<MarketingLayout
+	title={`${title} - Rivet`}
+	description={description}
+	canonicalUrl={canonicalUrl}
+>
+	<main class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div class="relative overflow-hidden pb-12 pt-32 md:pt-48">
+			<div class="mx-auto max-w-7xl px-6">
+				<div class="max-w-2xl mb-12">
+					<a href="/cookbook" class="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors mb-6">
+						← Back to Cookbook
+					</a>
+					<h1 class="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+						{title}
+					</h1>
+					{description && (
+						<p class="text-base leading-relaxed text-zinc-500">
+							{description}
+						</p>
+					)}
+				</div>
+
+				{resolvedTemplates.length > 0 && (
+					<div class="max-w-2xl">
+						<div class="rounded-lg border border-white/10 bg-white/5 p-5">
+							<div class="text-xs font-medium uppercase tracking-wider text-zinc-500">
+								Working examples
+							</div>
+							<ul class="mt-3 space-y-1">
+								{resolvedTemplates.map((tpl) => (
+									<li class="text-sm">
+										<a href={tpl.githubUrl} target="_blank" rel="noreferrer" class="text-white hover:text-zinc-200 transition-colors">
+											{tpl.displayName}
+										</a>
+										<span class="text-zinc-500"> ({tpl.name})</span>
+									</li>
+								))}
+							</ul>
+							<p class="mt-3 text-xs text-zinc-500">
+								If you need a reference implementation, read the raw working example code in these templates.
+							</p>
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+
+		<div class="border-t border-white/10 py-16">
+			<div class="mx-auto max-w-7xl px-6">
+				<div class="flex flex-col lg:flex-row gap-12">
+					<div class="flex-1 lg:w-2/3">
+						<article class="prose prose-invert prose-zinc max-w-none prose-headings:font-normal prose-headings:tracking-tight prose-p:text-zinc-400 prose-a:text-white prose-code:text-zinc-300">
+							<Content components={mdxComponents} />
+						</article>
+					</div>
+					<aside class="lg:w-72 flex-shrink-0">
+						<div class="space-y-6">
+							<div class="rounded-lg border border-white/10 bg-black p-5">
+								<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Use As A Skill</h3>
+								<p class="text-sm text-zinc-400">
+									This guide has a standalone skill generated for it.
+								</p>
+								<p class="mt-2 text-xs text-zinc-500">
+									Install the base <code class="font-mono">rivetkit</code> skill if needed, then follow the generated <code class="font-mono">rivetkit-*</code> skill for this page.
+								</p>
+							</div>
+						</div>
+					</aside>
+				</div>
+			</div>
+		</div>
+	</main>
+</MarketingLayout>

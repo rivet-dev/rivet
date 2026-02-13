@@ -254,7 +254,7 @@ The `run` hook is called after the actor starts and runs in the background witho
 - Custom workflow logic
 - Background processing
 
-The handler receives an abort signal via `c.abortSignal` that fires when the actor is stopping. You should always check or listen to this signal to exit gracefully.
+The handler exposes `c.aborted` for loop checks and `c.abortSignal` for canceling operations when the actor is stopping. You should always check or listen for shutdown to exit gracefully.
 
 **Important behavior:**
 - The actor may go to sleep at any time during the `run` handler. Use `c.keepAwake(promise)` to wrap async operations that should not be interrupted.
@@ -373,17 +373,21 @@ The `onBeforeConnect` hook does NOT return connection state - it's used solely f
 ```typescript
 import { actor } from "rivetkit";
 
+function validateToken(token: string): boolean {
+  return token.length > 0;
+}
+
+type ConnParams = {
+  userId?: string;
+  role?: string;
+  authToken?: string;
+};
+
 const chatRoom = actor({
   state: { messages: [] },
 
-  // Method 1: Use a static default connection state
-  connState: {
-    role: "guest",
-    joinTime: 0,
-  },
-
   // Method 2: Dynamically create connection state
-  createConnState: (c, params: { userId?: string, role?: string }) => {
+  createConnState: (_c, params: ConnParams) => {
     return {
       userId: params.userId || "anonymous",
       role: params.role || "guest",
@@ -392,7 +396,7 @@ const chatRoom = actor({
   },
 
   // Validate connections before accepting them
-  onBeforeConnect: (c, params: { authToken?: string }) => {
+  onBeforeConnect: (_c, params: ConnParams) => {
     // Validate authentication
     const authToken = params.authToken;
     if (!authToken || !validateToken(authToken)) {
@@ -419,7 +423,14 @@ Executed after the client has successfully connected. Can be async. Receives the
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: { users: {}, messages: [] },
+  state: {
+    users: {} as Record<string, { online: boolean; lastSeen: number }>,
+    messages: [] as string[],
+  },
+
+  createConnState: (_c, params: { userId?: string }) => ({
+    userId: params.userId ?? "anonymous",
+  }),
 
   onConnect: (c, conn) => {
     // Add user to the room's user list using connection state
@@ -492,7 +503,14 @@ Called when a client disconnects from the actor. Can be async. Receives the conn
 import { actor } from "rivetkit";
 
 const chatRoom = actor({
-  state: { users: {}, messages: [] },
+  state: {
+    users: {} as Record<string, { online: boolean; lastSeen: number }>,
+    messages: [] as string[],
+  },
+
+  createConnState: (_c, params: { userId?: string }) => ({
+    userId: params.userId ?? "anonymous",
+  }),
 
   onDisconnect: (c, conn) => {
     // Update user status when they disconnect
@@ -516,7 +534,7 @@ const chatRoom = actor({
 
 [API Reference](/typedoc/interfaces/rivetkit.mod.RequestContext.html)
 
-The `onRequest` hook handles HTTP requests sent to your actor at `/actors/{actorName}/http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
+The `onRequest` hook handles HTTP requests sent to your actor at `/actors/{actorName}/http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object.
 
 See [Request Handler](/docs/actors/request-handler) for more details.
 
@@ -539,8 +557,7 @@ const apiActor = actor({
       });
     }
 
-    // Return void to continue to default routing
-    return;
+    return new Response("Not found", { status: 404 });
   },
 
   actions: { /* ... */ }
@@ -609,23 +626,21 @@ const loggingActor = actor({
     console.log(`Action ${actionName} called with args:`, args);
     console.log(`Action ${actionName} returned:`, output);
 
-    // Add metadata to all responses
-    return {
-      data: output,
-      metadata: {
-        actionName,
-        timestamp: Date.now(),
-        requestId: crypto.randomUUID(),
-        userId: c.conn.state?.userId
-      }
-    };
+    c.state.requestCount++;
+    c.broadcast("actionResponseLogged", {
+      actionName,
+      timestamp: Date.now(),
+      requestCount: c.state.requestCount,
+    });
+
+    return output;
   },
   
   actions: {
     getUserData: (c, userId: string) => {
       c.state.requestCount++;
       
-      // This will be wrapped with metadata by onBeforeActionResponse
+      // This response is returned after onBeforeActionResponse runs
       return {
         userId,
         profile: { name: "John Doe", email: "john@example.com" },
@@ -634,7 +649,7 @@ const loggingActor = actor({
     },
     
     getStats: (c) => {
-      // This will also be wrapped with metadata
+      // This also passes through onBeforeActionResponse
       return {
         requestCount: c.state.requestCount,
         uptime: process.uptime()
@@ -773,7 +788,10 @@ Common use cases:
 import { actor } from "rivetkit";
 
 const gameRoom = actor({
-  state: { players: {}, scores: {} },
+  state: {
+    players: {} as Record<string, { joinedAt: number }>,
+    scores: {} as Record<string, number>,
+  },
 
   actions: {
     playerJoined: (c, playerId: string) => {
@@ -801,7 +819,7 @@ Note that errors thrown in `waitUntil` promises are logged but not propagated to
 
 ### Actor Shutdown Abort Signal
 
-The `c.abortSignal` provides an `AbortSignal` that fires when the actor is stopping. Use this to cancel ongoing operations when the actor sleeps or is destroyed.
+The `c.abortSignal` provides an `AbortSignal` that fires when the actor is stopping, and `c.aborted` is the shorthand boolean for loop checks. Use these to cancel ongoing operations when the actor sleeps or is destroyed.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -832,9 +850,7 @@ import { actor, ActorContextOf } from "rivetkit";
 
 const myActor = actor({
   state: { count: 0 },
-  
-  // Use external function in lifecycle hook
-  onWake: (c) => logActorStarted(c)
+  actions: {},
 });
 
 // Simple external function with typed context
@@ -848,7 +864,7 @@ See [Types](/docs/actors/types) for more details on using `ActorContextOf`.
 ## Full Example
 
 ```typescript
-import { actor, CreateContext } from "rivetkit";
+import { actor } from "rivetkit";
 
 interface CounterInput {
   initialCount?: number;
@@ -876,7 +892,7 @@ interface ConnState {
 
 const counter = actor({
   // Initialize state with input
-  createState: (c: CreateContext, input: CounterInput): CounterState => ({
+  createState: (_c, input: CounterInput): CounterState => ({
     count: input.initialCount ?? 0,
     stepSize: input.stepSize ?? 1,
     name: input.name ?? "Unnamed Counter",
@@ -941,18 +957,11 @@ const counter = actor({
     console.log(`User ${conn.state.userId} disconnected from "${c.state.name}"`);
   },
 
-  // Transform all action responses
+  // Observe action responses before they are sent
   onBeforeActionResponse: (c, actionName, args, output) => {
     c.state.requestCount++;
-
-    return {
-      data: output,
-      metadata: {
-        action: actionName,
-        timestamp: Date.now(),
-        requestNumber: c.state.requestCount
-      }
-    };
+    console.log(`Action ${actionName} called`, args);
+    return output;
   },
 
   // Define actions

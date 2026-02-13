@@ -6,17 +6,17 @@ skill: true
 
 ## Management API
 
-The management API runs on the root path and is used to list, create, and look up actors.
+The management API runs on the manager base path (default root path) and is used to list, create, and look up actors.
 
 ### Authentication
 
 | Environment | Authentication |
 |---|---|
 | **Local development** | No authentication required. All endpoints are accessible without tokens. |
-| **Self-hosted engine** | The Rivet Engine handles authentication. Set `RIVET_TOKEN` to enable authenticated access to restricted endpoints like KV. |
-| **Rivet Cloud** | Authentication is handled by the Rivet Cloud platform. Use your project token passed via the `x-rivet-token` header. |
+| **Self-hosted engine** | Set `RIVET_TOKEN` to enable authenticated access to restricted endpoints like KV. |
+| **Rivet Cloud** | Authentication is enforced by your deployment entrypoint. For manager KV access, use the manager token header below when enabled. |
 
-Restricted endpoints (like KV reads) require the `x-rivet-token` header:
+Restricted endpoints (like KV reads) require the `x-rivet-token` header when `RIVET_TOKEN` is configured:
 
 ```bash
 curl http://localhost:6420/actors/{actor_id}/kv/keys/{base64_key} \
@@ -29,12 +29,17 @@ curl http://localhost:6420/actors/{actor_id}/kv/keys/{base64_key} \
 # List all actors with a given name
 curl http://localhost:6420/actors?name=my-actor
 
-# List actors by key
-curl http://localhost:6420/actors?key=my-key
+# Look up one actor by key (name is required when key is provided)
+curl "http://localhost:6420/actors?name=my-actor&key=%5B%22my-key%22%5D"
 
 # List actors by IDs (comma-separated)
 curl http://localhost:6420/actors?actor_ids=id1,id2
 ```
+
+Rules:
+
+- `key` requires `name`.
+- `actor_ids` cannot be combined with `name` or `key`.
 
 Returns:
 
@@ -52,7 +57,23 @@ Returns:
 }
 ```
 
+### Create Actor
+
+`POST /actors` creates a new actor.
+
+```bash
+curl -X POST http://localhost:6420/actors \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "my-actor",
+    "runner_name_selector": "default",
+    "crash_policy": "restart"
+  }'
+```
+
 ### Create or Get Actor
+
+`PUT /actors` creates an actor if it does not exist, otherwise returns the existing one.
 
 ```bash
 curl -X PUT http://localhost:6420/actors \
@@ -131,14 +152,40 @@ These are the built-in actor endpoints available through the gateway:
 # Health check
 curl http://localhost:6420/gateway/{actor_id}/health
 
+# Metadata
+curl http://localhost:6420/gateway/{actor_id}/metadata
+
 # Call an action
 curl -X POST http://localhost:6420/gateway/{actor_id}/action/myAction \
   -H 'Content-Type: application/json' \
   -d '{"args": [1, 2, 3]}'
 
+# Send queue message (body includes queue name)
+curl -X POST http://localhost:6420/gateway/{actor_id}/queue \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"jobs","body":{"id":"job-1"}}'
+
+# Send queue message (queue name in path)
+curl -X POST http://localhost:6420/gateway/{actor_id}/queue/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"body":{"id":"job-1"}}'
+
+# Send queue message and wait for completion (optional timeout in ms)
+curl -X POST http://localhost:6420/gateway/{actor_id}/queue/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"body":{"id":"job-1"},"wait":true,"timeout":5000}'
+
 # Forward an HTTP request to the actor's onRequest handler
 curl http://localhost:6420/gateway/{actor_id}/request/my/custom/path
 ```
+
+Queue send responses include:
+
+```json
+{ "status": "completed", "response": null }
+```
+
+If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
 
 ### Inspector Endpoints
 
@@ -153,7 +200,10 @@ curl http://localhost:6420/gateway/{actor_id}/inspector/state
 Returns the actor's current persisted state:
 
 ```json
-{ "state": { "count": 42, "users": [] } }
+{
+  "state": { "count": 42, "users": [] },
+  "isStateEnabled": true
+}
 ```
 
 #### Set State
