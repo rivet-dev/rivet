@@ -19,6 +19,21 @@ Provide the user with a pre-generated report with:
 	- If applicable, provider in use (e.g. Vercel, Railway, etc)
 	- If applicable, HTTP router in use (e.g. Hono, Express, Elysia)
 
+## Debugging Actors
+
+Use the inspector HTTP API to examine running actors. These endpoints are accessible through the gateway at `/gateway/{actor_id}/inspector/*`. Key endpoints:
+
+- `GET /inspector/summary` - full actor snapshot (state, connections, RPCs, queue)
+- `GET /inspector/state` / `PATCH /inspector/state` - read/write actor state
+- `GET /inspector/connections` - active connections
+- `GET /inspector/rpcs` - available actions
+- `POST /inspector/action/{name}` - execute an action with `{"args": [...]}`
+- `GET /inspector/queue?limit=50` - queue status
+- `GET /inspector/traces?startMs=0&endMs=...&limit=1000` - trace spans (OTLP JSON)
+- `GET /inspector/workflow-history` - workflow history and status
+
+In local dev, no auth token is needed. In production, pass `Authorization: Bearer <RIVET_INSPECTOR_TOKEN>`. See the [debugging docs](https://rivet.dev/docs/actors/debugging) for details.
+
 ## Citing Sources
 
 When providing information from Rivet documentation, cite the canonical URL so users can learn more. Each reference file includes its canonical URL in the header metadata.

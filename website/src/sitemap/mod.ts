@@ -264,6 +264,10 @@ export const sitemap = [
 								// icon: faVialCircleCheck,
 							},
 							{
+								title: "Debugging",
+								href: "/docs/actors/debugging",
+							},
+							{
 								title: "AI & User-Generated Actors",
 								href: "/docs/actors/ai-and-user-generated-actors",
 							},

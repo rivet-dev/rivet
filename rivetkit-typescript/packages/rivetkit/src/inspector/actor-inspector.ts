@@ -177,4 +177,104 @@ export class ActorInspector {
 			conn.disconnect();
 		}
 	}
+
+	// JSON-native methods for the HTTP inspector API. These return raw JS
+	// objects suitable for JSON serialization instead of CBOR-encoded buffers.
+
+	getStateJson(): unknown {
+		if (!this.actor.stateEnabled) {
+			throw new actorErrors.StateNotEnabled();
+		}
+		return this.actor.stateManager.persistRaw.state;
+	}
+
+	async setStateJson(state: unknown): Promise<void> {
+		if (!this.actor.stateEnabled) {
+			throw new actorErrors.StateNotEnabled();
+		}
+		this.actor.stateManager.state = state;
+		await this.actor.stateManager.saveState({ immediate: true });
+	}
+
+	getConnectionsJson(): { id: string; details: unknown }[] {
+		return Array.from(
+			this.actor.connectionManager.connections.entries(),
+		).map(([id, conn]) => {
+			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+			return {
+				type: conn[CONN_DRIVER_SYMBOL]?.type,
+				id,
+				details: {
+					type: conn[CONN_DRIVER_SYMBOL]?.type,
+					params: conn.params as any,
+					stateEnabled: connStateManager.stateEnabled,
+					state: connStateManager.stateEnabled
+						? connStateManager.state
+						: undefined,
+					subscriptions: conn.subscriptions.size,
+					isHibernatable: conn.isHibernatable,
+				},
+			};
+		});
+	}
+
+	async executeActionJson(name: string, args: unknown[]): Promise<unknown> {
+		const conn = await this.actor.connectionManager.prepareAndConnectConn(
+			createHttpDriver(),
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+		);
+
+		try {
+			return await this.actor.executeAction(
+				new ActionContext(this.actor, conn),
+				name,
+				args,
+			);
+		} finally {
+			conn.disconnect();
+		}
+	}
+
+	async getTracesJson(options: {
+		startMs: number;
+		endMs: number;
+		limit: number;
+	}): Promise<{ otlp: unknown; clamped: boolean }> {
+		const result = await this.actor.traces.readRange(options);
+		return result;
+	}
+
+	getWorkflowHistoryJson(): { history: unknown | null; isWorkflowEnabled: boolean } {
+		const bigIntReplacer = (_key: string, value: unknown) =>
+			typeof value === "bigint" ? Number(value) : value;
+		const history = this.getWorkflowHistory();
+		const safeHistory = history
+			? JSON.parse(JSON.stringify(history, bigIntReplacer))
+			: null;
+		return {
+			history: safeHistory,
+			isWorkflowEnabled: this.isWorkflowEnabled(),
+		};
+	}
+
+	getQueueStatusJson(limit: number): Promise<{
+		size: number;
+		maxSize: number;
+		truncated: boolean;
+		messages: { id: number; name: string; createdAtMs: number }[];
+	}> {
+		return this.getQueueStatus(limit).then((status) => ({
+			size: Number(status.size),
+			maxSize: Number(status.maxSize),
+			truncated: status.truncated,
+			messages: status.messages.map((m) => ({
+				id: Number(m.id),
+				name: m.name,
+				createdAtMs: Number(m.createdAtMs),
+			})),
+		}));
+	}
 }
