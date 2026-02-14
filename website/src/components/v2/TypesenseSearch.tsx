@@ -12,7 +12,7 @@ const searchClient = new Typesense.Client({
 			protocol: import.meta.env.PUBLIC_TYPESENSE_PROTOCOL || "https",
 		},
 	],
-	apiKey: import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY || "xyz",
+	apiKey: import.meta.env.PUBLIC_TYPESENSE_API_KEY || "xyz",
 	connectionTimeoutSeconds: 2,
 });
 
@@ -38,7 +38,7 @@ export function TypesenseSearch() {
 
 	const hasRequiredKeys = !!(
 		import.meta.env.PUBLIC_TYPESENSE_HOST &&
-		import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY
+		import.meta.env.PUBLIC_TYPESENSE_API_KEY
 	);
 
 	if (!hasRequiredKeys) {
