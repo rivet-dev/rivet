@@ -389,7 +389,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
 			if (metadata.attempts >= maxRetries) {
-				throw new StepExhaustedError(config.name, stepData.error);
+				// Prefer step history error, but fall back to metadata since
+				// driver implementations may persist metadata without the history
+				// entry error (e.g. partial writes/crashes between attempts).
+				const lastError = stepData.error ?? metadata.error;
+				throw new StepExhaustedError(config.name, lastError);
 			}
 
 			// Calculate backoff and yield to scheduler
@@ -439,14 +443,15 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				config.name,
 			);
 
-			if (entry.kind.type === "step") {
-				entry.kind.data.output = output;
-			}
-			entry.dirty = true;
-			metadata.status = "completed";
-			metadata.completedAt = Date.now();
+				if (entry.kind.type === "step") {
+					entry.kind.data.output = output;
+				}
+				entry.dirty = true;
+				metadata.status = "completed";
+				metadata.error = undefined;
+				metadata.completedAt = Date.now();
 
-			// Ephemeral steps don't trigger an immediate flush. This avoids the
+				// Ephemeral steps don't trigger an immediate flush. This avoids the
 			// synchronous write overhead for transient operations. Note that the
 			// step's entry is still marked dirty and WILL be persisted on the
 			// next flush from a non-ephemeral operation. The purpose of ephemeral
@@ -459,39 +464,42 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.log("debug", { msg: "step completed", step: config.name, key });
 			return output;
 		} catch (error) {
-			// Timeout errors are treated as critical (no retry)
-			if (error instanceof StepTimeoutError) {
-				if (entry.kind.type === "step") {
-					entry.kind.data.error = String(error);
+				// Timeout errors are treated as critical (no retry)
+				if (error instanceof StepTimeoutError) {
+					if (entry.kind.type === "step") {
+						entry.kind.data.error = String(error);
+					}
+					entry.dirty = true;
+					metadata.status = "exhausted";
+					metadata.error = String(error);
+					await this.flushStorage();
+					throw new CriticalError(error.message);
 				}
-				entry.dirty = true;
-				metadata.status = "exhausted";
-				await this.flushStorage();
-				throw new CriticalError(error.message);
-			}
 
 			if (
 				error instanceof CriticalError ||
 				error instanceof RollbackError
-			) {
+				) {
+					if (entry.kind.type === "step") {
+						entry.kind.data.error = String(error);
+					}
+					entry.dirty = true;
+					metadata.status = "exhausted";
+					metadata.error = String(error);
+					await this.flushStorage();
+					throw error;
+				}
+
 				if (entry.kind.type === "step") {
 					entry.kind.data.error = String(error);
 				}
 				entry.dirty = true;
-				metadata.status = "exhausted";
+				metadata.status = "failed";
+				metadata.error = String(error);
+
 				await this.flushStorage();
-				throw error;
-			}
 
-			if (entry.kind.type === "step") {
-				entry.kind.data.error = String(error);
-			}
-			entry.dirty = true;
-			metadata.status = "failed";
-
-			await this.flushStorage();
-
-			throw new StepFailedError(config.name, error, metadata.attempts);
+				throw new StepFailedError(config.name, error, metadata.attempts);
 		}
 	}
 

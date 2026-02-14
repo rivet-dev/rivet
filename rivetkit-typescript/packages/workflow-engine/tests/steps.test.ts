@@ -9,6 +9,8 @@ import {
 	StepExhaustedError,
 	type WorkflowContextInterface,
 } from "../src/testing.js";
+import { buildHistoryPrefixAll, keyStartsWith } from "../src/keys.js";
+import { deserializeEntry, serializeEntry } from "../schemas/serde.js";
 
 const modes = ["yield", "live"] as const;
 
@@ -20,6 +22,31 @@ class CountingDriver extends InMemoryDriver {
 	): Promise<void> {
 		this.batchCalls += 1;
 		await super.batch(writes);
+	}
+}
+
+class StripStepHistoryErrorDriver extends InMemoryDriver {
+	override async batch(
+		writes: { key: Uint8Array; value: Uint8Array }[],
+	): Promise<void> {
+		const historyPrefix = buildHistoryPrefixAll();
+		const rewritten = writes.map((write) => {
+			if (!keyStartsWith(write.key, historyPrefix)) {
+				return write;
+			}
+
+			const entry = deserializeEntry(write.value);
+			if (entry.kind.type === "step") {
+				// Simulate a driver/crash scenario where the step error is not persisted
+				// to the history entry, even though retries/exhaustion metadata is.
+				entry.kind.data.error = undefined;
+				return { key: write.key, value: serializeEntry(entry) };
+			}
+
+			return write;
+		});
+
+		return await super.batch(rewritten);
 	}
 }
 
@@ -254,6 +281,51 @@ for (const mode of modes) {
 				runWorkflow("wf-1", workflow, undefined, driver, { mode })
 					.result,
 			).rejects.toThrow(StepExhaustedError);
+		});
+
+		it("should surface the last error even if step history is missing the error", async () => {
+			const driver = new StripStepHistoryErrorDriver();
+			driver.latency = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.step({
+					name: "always-fails",
+					maxRetries: 1,
+					retryBackoffBase: 0,
+					retryBackoffMax: 0,
+					run: async () => {
+						throw new Error("Always fails");
+					},
+				});
+			};
+
+			if (mode === "yield") {
+				const res1 = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(res1.state).toBe("sleeping");
+
+				await expect(
+					runWorkflow("wf-1", workflow, undefined, driver, { mode })
+						.result,
+				).rejects.toThrow(StepExhaustedError);
+				await expect(
+					runWorkflow("wf-1", workflow, undefined, driver, { mode })
+						.result,
+				).rejects.toThrow(/Always fails/);
+				return;
+			}
+
+			await expect(
+				runWorkflow("wf-1", workflow, undefined, driver, { mode }).result,
+			).rejects.toThrow(StepExhaustedError);
+			await expect(
+				runWorkflow("wf-1", workflow, undefined, driver, { mode }).result,
+			).rejects.toThrow(/Always fails/);
 		});
 
 		it("should recover exhausted retries", async () => {
