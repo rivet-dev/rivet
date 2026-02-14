@@ -163,7 +163,7 @@ export function DevButton({ children, onClick }: DevButtonProps) {
 				<div
 					ref={refs.setFloating}
 					className="tooltip-container"
-					style={floatingStyles}
+					style={floatingStyles as React.CSSProperties}
 					data-arrow-side={arrowSide}
 					{...getFloatingProps()}
 				>

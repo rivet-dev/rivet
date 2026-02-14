@@ -1,7 +1,7 @@
 {
 	"name": "@rivetkit/devtools",
 	"private": true,
-	"version": "2.0.42",
+	"version": "2.0.43-rc.1",
 	"description": "RivetKit DevTools - A set of development tools for RivetKit",
 	"license": "Apache-2.0",
 	"keywords": [
