@@ -59,6 +59,33 @@ type QueueStatusSummary = {
 	}>;
 };
 
+export type DatabaseColumn = {
+	cid: number;
+	name: string;
+	type: string;
+	notnull: boolean;
+	dflt_value: string | null;
+	pk: boolean | null;
+};
+
+export type DatabaseForeignKey = {
+	id: number;
+	table: string;
+	from: string;
+	to: string;
+};
+
+export type DatabaseTableInfo = {
+	table: { schema: string; name: string; type: string };
+	columns: DatabaseColumn[];
+	foreignKeys: DatabaseForeignKey[];
+	records: number;
+};
+
+export type DatabaseSchema = {
+	tables: DatabaseTableInfo[];
+};
+
 interface ActorInspectorApi {
 	ping: () => Promise<void>;
 	executeAction: (name: string, args: unknown[]) => Promise<unknown>;
@@ -72,6 +99,12 @@ interface ActorInspectorApi {
 		history: WorkflowHistory | null;
 		isEnabled: boolean;
 	}>;
+	getDatabaseSchema: () => Promise<DatabaseSchema>;
+	getDatabaseTableRows: (
+		table: string,
+		limit: number,
+		offset: number,
+	) => Promise<unknown[]>;
 	getMetadata: () => Promise<{ version: string }>;
 }
 
@@ -84,6 +117,7 @@ type FeatureSupport = {
 
 const MIN_RIVETKIT_VERSION_TRACES = "2.0.40";
 const MIN_RIVETKIT_VERSION_QUEUE = "2.0.40";
+const MIN_RIVETKIT_VERSION_DATABASE = "2.0.42";
 const INSPECTOR_ERROR_EVENTS_DROPPED = "inspector.events_dropped";
 
 function parseSemver(version?: string) {
@@ -152,10 +186,7 @@ function getInspectorProtocolVersion(version: string | undefined) {
 	if (!parsed) {
 		return 2;
 	}
-	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_QUEUE)) {
-		return 4;
-	}
-	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_TRACES)) {
+	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_DATABASE)) {
 		return 3;
 	}
 	if (parsed.major >= 2) {
@@ -214,37 +245,31 @@ export const createDefaultActorInspectorContext = ({
 	},
 
 	actorDatabaseQueryOptions(actorId: ActorId) {
-		// TODO: implement
 		return queryOptions({
-			staleTime: Infinity,
+			staleTime: 0,
 			queryKey: actorInspectorQueriesKeys.actorDatabase(actorId),
 			queryFn: () => {
-				return { enabled: false, db: [] } as unknown as {
-					enabled: boolean;
-					db: {
-						table: { name: string; type: string };
-						records: number;
-					}[];
-				};
+				return api.getDatabaseSchema();
 			},
 		});
 	},
 
 	actorDatabaseEnabledQueryOptions(actorId: ActorId) {
-		// TODO: implement
 		return queryOptions({
 			staleTime: Infinity,
-			...this.actorDatabaseQueryOptions(actorId),
-			select: (data) => data.enabled,
+			queryKey: [
+				...actorInspectorQueriesKeys.actorDatabase(actorId),
+				"enabled",
+			],
+			queryFn: () => new Promise<boolean>(() => {}),
 		});
 	},
 
 	actorDatabaseTablesQueryOptions(actorId: ActorId) {
-		// TODO: implement
 		return queryOptions({
 			...this.actorDatabaseQueryOptions(actorId),
 			select: (data) =>
-				data.db?.map((table) => ({
+				data.tables?.map((table) => ({
 					name: table.table.name,
 					type: table.table.type,
 					records: table.records,
@@ -253,16 +278,27 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
-	actorDatabaseRowsQueryOptions(actorId: ActorId, table: string) {
-		// TODO: implement
+	actorDatabaseRowsQueryOptions(
+		actorId: ActorId,
+		table: string,
+		page: number,
+		pageSize = 100,
+	) {
 		return queryOptions({
-			staleTime: Infinity,
+			staleTime: 0,
+			gcTime: 5000,
 			queryKey: [
 				...actorInspectorQueriesKeys.actorDatabase(actorId),
 				table,
+				page,
+				pageSize,
 			],
 			queryFn: () => {
-				return [] as unknown as Record<string, unknown>[];
+				return api.getDatabaseTableRows(
+					table,
+					pageSize,
+					page * pageSize,
+				);
 			},
 		});
 	},
@@ -730,6 +766,55 @@ export const ActorInspectorProvider = ({
 				return promise;
 			},
 
+			getDatabaseSchema: async () => {
+				const { id, promise } =
+					actionsManager.current.createResolver<DatabaseSchema>({
+						name: "getDatabaseSchema",
+						timeoutMs: 10_000,
+					});
+
+				sendMessage(
+					serverMessage(
+						{
+							body: {
+								tag: "DatabaseSchemaRequest",
+								val: { id: BigInt(id) },
+							},
+						},
+						inspectorProtocolVersion,
+					),
+				);
+
+				return promise;
+			},
+
+			getDatabaseTableRows: async (table, limit, offset) => {
+				const { id, promise } =
+					actionsManager.current.createResolver<unknown[]>({
+						name: "getDatabaseTableRows",
+						timeoutMs: 10_000,
+					});
+
+				sendMessage(
+					serverMessage(
+						{
+							body: {
+								tag: "DatabaseTableRowsRequest",
+								val: {
+									id: BigInt(id),
+									table,
+									limit: BigInt(limit),
+									offset: BigInt(offset),
+								},
+							},
+						},
+						inspectorProtocolVersion,
+					),
+				);
+
+				return promise;
+			},
+
 			getMetadata() {
 				return getActorMetadataProxy.current();
 			},
@@ -809,6 +894,14 @@ const createMessageHandler =
 				queryClient.setQueryData(
 					actorInspectorQueriesKeys.actorIsWorkflowEnabled(actorId),
 					body.val.isWorkflowEnabled,
+				);
+
+				queryClient.setQueryData(
+					[
+						...actorInspectorQueriesKeys.actorDatabase(actorId),
+						"enabled",
+					],
+					body.val.isDatabaseEnabled,
 				);
 
 				if (body.val.workflowHistory) {
@@ -903,6 +996,20 @@ const createMessageHandler =
 						: null,
 					isEnabled: body.val.isWorkflowEnabled,
 				});
+			})
+			.with({ tag: "DatabaseSchemaResponse" }, (body) => {
+				const { rid } = body.val;
+				actionsManager.current.resolve(
+					Number(rid),
+					cbor.decode(new Uint8Array(body.val.schema)),
+				);
+			})
+			.with({ tag: "DatabaseTableRowsResponse" }, (body) => {
+				const { rid } = body.val;
+				actionsManager.current.resolve(
+					Number(rid),
+					cbor.decode(new Uint8Array(body.val.result)),
+				);
 			})
 			.with({ tag: "Error" }, (body) => {
 				if (body.val.message === INSPECTOR_ERROR_EVENTS_DROPPED) {

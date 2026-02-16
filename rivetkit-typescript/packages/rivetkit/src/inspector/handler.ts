@@ -176,6 +176,58 @@ export async function handleWebSocketInspectorConnect({
 							},
 						},
 					});
+				} else if (message.body.tag === "DatabaseSchemaRequest") {
+					const { id } = message.body.val;
+					try {
+						const schema = await inspector.getDatabaseSchema();
+						sendMessage(ws, {
+							body: {
+								tag: "DatabaseSchemaResponse",
+								val: { rid: id, schema },
+							},
+						});
+					} catch (error) {
+						inspectorLogger().warn(
+							{ error },
+							"Failed to get database schema",
+						);
+						sendMessage(ws, {
+							body: {
+								tag: "Error",
+								val: {
+									message: `Failed to get database schema: ${error instanceof Error ? error.message : String(error)}`,
+								},
+							},
+						});
+					}
+				} else if (message.body.tag === "DatabaseTableRowsRequest") {
+					const { id, table, limit, offset } = message.body.val;
+					try {
+						const result = await inspector.getDatabaseTableRows(
+							table,
+							Number(limit),
+							Number(offset),
+						);
+						sendMessage(ws, {
+							body: {
+								tag: "DatabaseTableRowsResponse",
+								val: { rid: id, result },
+							},
+						});
+					} catch (error) {
+						inspectorLogger().warn(
+							{ error },
+							"Failed to get database table rows",
+						);
+						sendMessage(ws, {
+							body: {
+								tag: "Error",
+								val: {
+									message: `Failed to get database rows: ${error instanceof Error ? error.message : String(error)}`,
+								},
+							},
+						});
+					}
 				} else {
 					assertUnreachable(message.body);
 				}
