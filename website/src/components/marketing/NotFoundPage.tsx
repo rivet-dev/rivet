@@ -26,11 +26,14 @@ const BouncingPill = () => {
   const velocityRef = useRef({ x: 0.4, y: 0.25 });
 
   useEffect(() => {
-    let animationFrameId: number;
+    let animationFrameId: number = 0;
     let lastTime = 0;
+    let isMounted = true;
     const targetInterval = 30; // ms between updates
 
     const animate = (currentTime: number) => {
+      if (!isMounted) return;
+
       if (!containerRef.current || !pillRef.current) {
         animationFrameId = requestAnimationFrame(animate);
         return;
@@ -77,7 +80,10 @@ const BouncingPill = () => {
     };
 
     animationFrameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      isMounted = false;
+      cancelAnimationFrame(animationFrameId);
+    };
   }, []);
 
   return (
