@@ -157,13 +157,13 @@ export function ActorTabs({
 							Workflow
 						</TabsTrigger>
 
-						{/* <TabsTrigger
+						<TabsTrigger
 							disabled={disabled}
 							value="database"
 							className="text-xs px-3 py-1 pb-2"
 						>
 							Database
-						</TabsTrigger> */}
+						</TabsTrigger>
 
 						{/* <TabsTrigger
 								disabled={disabled}

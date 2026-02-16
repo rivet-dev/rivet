@@ -1,11 +1,11 @@
-import invariant from "invariant";
+import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import {
 	createTraces,
 	type SpanHandle,
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
+import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
@@ -18,15 +18,8 @@ import {
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
-import { getRunFunction, type ActorConfig } from "../config";
-import type { ConnDriver } from "../conn/driver";
-import { createHttpDriver } from "../conn/drivers/http";
-import {
-	CONN_DRIVER_SYMBOL,
-	CONN_STATE_MANAGER_SYMBOL,
-	type Conn,
-	type ConnId,
-} from "../conn/mod";
+import { type ActorConfig, getRunFunction } from "../config";
+import type { Conn, ConnId } from "../conn/mod";
 import {
 	convertConnFromBarePersistedConn,
 	type PersistedConn,
@@ -53,7 +46,6 @@ import {
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./keys";
-import { ActorTracesDriver } from "./traces-driver";
 import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
@@ -61,6 +53,7 @@ import {
 import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
+import { ActorTracesDriver } from "./traces-driver";
 
 export type { SaveStateOptions };
 
@@ -78,18 +71,18 @@ export type AnyActorInstance = ActorInstance<any, any, any, any, any, any>;
 
 export type ExtractActorState<A extends AnyActorInstance> =
 	A extends ActorInstance<infer State, any, any, any, any, any>
-		? State
-		: never;
+	? State
+	: never;
 
 export type ExtractActorConnParams<A extends AnyActorInstance> =
 	A extends ActorInstance<any, infer ConnParams, any, any, any, any>
-		? ConnParams
-		: never;
+	? ConnParams
+	: never;
 
 export type ExtractActorConnState<A extends AnyActorInstance> =
 	A extends ActorInstance<any, any, infer ConnState, any, any, any>
-		? ConnState
-		: never;
+	? ConnState
+	: never;
 
 // MARK: - Main ActorInstance Class
 export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
@@ -163,7 +156,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	// MARK: - Constructor
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB>) {
 		this.#config = config;
-		this.#inspector = new ActorInspector(this);
 		this.actorContext = new ActorContext(this);
 		this.#inspector = new ActorInspector(this);
 	}
@@ -230,14 +222,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		});
 	}
 
-	endTraceSpan(
-		handle: SpanHandle,
-		status?: SpanStatusInput,
-	): void {
-		this.#traces.endSpan(
-			handle,
-			status ? { status } : undefined,
-		);
+	endTraceSpan(handle: SpanHandle, status?: SpanStatusInput): void {
+		this.#traces.endSpan(handle, status ? { status } : undefined);
 	}
 
 	async runInTraceSpan<T>(
@@ -248,8 +234,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		const span = this.startTraceSpan(name, attributes);
 		try {
 			const result = this.#traces.withSpan(span, fn);
-			const resolved =
-				result instanceof Promise ? await result : result;
+			const resolved = result instanceof Promise ? await result : result;
 			this.#traces.endSpan(span, {
 				status: { code: "OK" },
 			});
@@ -454,7 +439,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Abort listeners
 		try {
 			this.#abortController.abort();
-		} catch {}
+		} catch { }
 
 		// Wait for run handler to complete
 		await this.#waitForRunHandler(this.#config.options.runStopTimeout);
@@ -571,14 +556,14 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	async processMessage(
 		message: {
 			body:
-				| {
-						tag: "ActionRequest";
-						val: { id: bigint; name: string; args: unknown };
-				  }
-				| {
-						tag: "SubscriptionRequest";
-						val: { eventName: string; subscribe: boolean };
-				  };
+			| {
+				tag: "ActionRequest";
+				val: { id: bigint; name: string; args: unknown };
+			}
+			| {
+				tag: "SubscriptionRequest";
+				val: { eventName: string; subscribe: boolean };
+			};
 		},
 		conn: Conn<S, CP, CS, V, I, DB>,
 	) {
@@ -622,12 +607,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#activeKeepAwakeCount++;
 		this.resetSleepTimer();
 
-		const actionSpan = this.startTraceSpan(
-			`actor.action.${actionName}`,
-			{
-				"rivet.action.name": actionName,
-			},
-		);
+		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
+			"rivet.action.name": actionName,
+		});
 		let spanEnded = false;
 
 		try {
@@ -646,7 +628,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 				let output: unknown;
 				const maybeThenable = outputOrPromise as {
-					then?: (onfulfilled?: unknown, onrejected?: unknown) => unknown;
+					then?: (
+						onfulfilled?: unknown,
+						onrejected?: unknown,
+					) => unknown;
 				};
 				if (maybeThenable && typeof maybeThenable.then === "function") {
 					output = await deadline(
@@ -742,10 +727,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				"http.url": request.url,
 				"rivet.conn.id": conn.id,
 			},
-				async () => {
-					try {
-						const ctx = new RequestContext(this, conn, request);
-						const response = await onRequest(ctx, request);
+			async () => {
+				try {
+					const ctx = new RequestContext(this, conn, request);
+					const response = await onRequest(ctx, request);
 					if (!response) {
 						throw new errors.InvalidRequestHandlerResponse();
 					}
@@ -946,7 +931,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const [value] = args;
 			if (typeof value === "string") {
 				message = value;
-			} else if (typeof value === "number" || typeof value === "boolean") {
+			} else if (
+				typeof value === "number" ||
+				typeof value === "boolean"
+			) {
 				message = String(value);
 			} else if (value && typeof value === "object") {
 				const maybeMsg = (value as { msg?: unknown }).msg;
@@ -1096,19 +1084,23 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		let vars: V | undefined;
 		if ("createVars" in this.#config) {
 			const createVars = this.#config.createVars;
-			vars = await this.runInTraceSpan("actor.createVars", undefined, () => {
-				const dataOrPromise = createVars!(
-					this.actorContext as any,
-					this.driver.getContext(this.#actorId),
-				);
-				if (dataOrPromise instanceof Promise) {
-					return deadline(
-						dataOrPromise,
-						this.#config.options.createVarsTimeout,
+			vars = await this.runInTraceSpan(
+				"actor.createVars",
+				undefined,
+				() => {
+					const dataOrPromise = createVars!(
+						this.actorContext as any,
+						this.driver.getContext(this.#actorId),
 					);
-				}
-				return dataOrPromise;
-			});
+					if (dataOrPromise instanceof Promise) {
+						return deadline(
+							dataOrPromise,
+							this.#config.options.createVarsTimeout,
+						);
+					}
+					return dataOrPromise;
+				},
+			);
 		} else if ("vars" in this.#config) {
 			vars = structuredClone(this.#config.vars);
 		} else {
@@ -1134,15 +1126,19 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const onSleep = this.#config.onSleep;
 			try {
 				this.#rLog.debug({ msg: "calling onSleep" });
-				await this.runInTraceSpan("actor.onSleep", undefined, async () => {
-					const result = onSleep(this.actorContext);
-					if (result instanceof Promise) {
-						await deadline(
-							result,
-							this.#config.options.onSleepTimeout,
-						);
-					}
-				});
+				await this.runInTraceSpan(
+					"actor.onSleep",
+					undefined,
+					async () => {
+						const result = onSleep(this.actorContext);
+						if (result instanceof Promise) {
+							await deadline(
+								result,
+								this.#config.options.onSleepTimeout,
+							);
+						}
+					},
+				);
 				this.#rLog.debug({ msg: "onSleep completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
@@ -1177,15 +1173,19 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const onDestroy = this.#config.onDestroy;
 			try {
 				this.#rLog.debug({ msg: "calling onDestroy" });
-				await this.runInTraceSpan("actor.onDestroy", undefined, async () => {
-					const result = onDestroy(this.actorContext);
-					if (result instanceof Promise) {
-						await deadline(
-							result,
-							this.#config.options.onDestroyTimeout,
-						);
-					}
-				});
+				await this.runInTraceSpan(
+					"actor.onDestroy",
+					undefined,
+					async () => {
+						const result = onDestroy(this.actorContext);
+						if (result instanceof Promise) {
+							await deadline(
+								result,
+								this.#config.options.onDestroyTimeout,
+							);
+						}
+					},
+				);
 				this.#rLog.debug({ msg: "onDestroy completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
@@ -1283,17 +1283,25 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			try {
 				const client = await this.#config.db.createClient({
 					actorId: this.#actorId,
-					overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
-						? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
+					overrideRawDatabaseClient: this.driver
+						.overrideRawDatabaseClient
+						? () =>
+							this.driver.overrideRawDatabaseClient!(
+								this.#actorId,
+							)
 						: undefined,
 					overrideDrizzleDatabaseClient: this.driver
 						.overrideDrizzleDatabaseClient
-						? () => this.driver.overrideDrizzleDatabaseClient!(this.#actorId)
+						? () =>
+							this.driver.overrideDrizzleDatabaseClient!(
+								this.#actorId,
+							)
 						: undefined,
 					kv: {
 						batchPut: (entries) =>
 							this.driver.kvBatchPut(this.#actorId, entries),
-						batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
+						batchGet: (keys) =>
+							this.driver.kvBatchGet(this.#actorId, keys),
 						batchDelete: (keys) =>
 							this.driver.kvBatchDelete(this.#actorId, keys),
 					},

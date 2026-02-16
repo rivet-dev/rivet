@@ -21,7 +21,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../ui/select";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { useActorInspector } from "./actor-inspector-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import type { ActorId } from "./queries";
@@ -212,7 +211,7 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 						: "Select a time range"}
 				</div>
 				<div className="flex-1" />
-				<ToggleGroup
+				{/* <ToggleGroup
 					type="single"
 					value={viewType}
 					onValueChange={(value) =>
@@ -229,7 +228,7 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 					>
 						<Icon icon={faTimeline} className="size-4" />
 					</ToggleGroupItem>
-				</ToggleGroup>
+				</ToggleGroup> */}
 			</div>
 
 			{viewType === "list" ? (
