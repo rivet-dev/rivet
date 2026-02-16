@@ -99,7 +99,7 @@ const ThinkingImageCycler = ({ images }: { images: string[] }) => {
 const ActorsLogoWithIcon = ({ hoveredFeature }: { hoveredFeature: string | null }) => {
   const iconMap: Record<string, typeof Database> = {
     'In-memory state': Database,
-    'Persistent storage': HardDrive,
+    'KV & SQLite': HardDrive,
     'Workflows': GitBranch,
     'Scheduling': Clock,
     'WebSockets': Wifi,
@@ -214,7 +214,7 @@ const useCases = ['AI Agent', 'Agent Memory', 'Game Server', 'Collaboration Back
 
 const featureToUseCases: Record<string, string[]> = {
   'In-memory state': ['AI Agent', 'Agent Memory', 'Game Server', 'Session Store', 'Realtime Sync'],
-  'Persistent storage': ['Agent Memory', 'Session Store', 'Workflow Engine'],
+  'KV & SQLite': ['Agent Memory', 'Session Store', 'Workflow Engine'],
   'Workflows': ['Workflow Engine', 'AI Agent'],
   'Scheduling': ['Workflow Engine', 'AI Agent'],
   'WebSockets': ['Game Server', 'Collaboration Backend', 'Realtime Sync'],
@@ -225,14 +225,17 @@ const featureToUseCases: Record<string, string[]> = {
 export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
   const [hoveredFeature, setHoveredFeature] = useState<string | null>(null);
   const [hoveredUseCase, setHoveredUseCase] = useState<string | null>(null);
+  const [carouselUseCase, setCarouselUseCase] = useState<string | null>(null);
   const [scrollOpacity, setScrollOpacity] = useState(1);
-  const [actorSectionsOpacity, setActorSectionsOpacity] = useState(1);
-  const features = ['In-memory state', 'Persistent storage', 'Workflows', 'Scheduling', 'WebSockets', 'Runs indefinitely', 'Sleeps when idle'];
+  const features = ['In-memory state', 'KV & SQLite', 'Workflows', 'Scheduling', 'WebSockets', 'Runs indefinitely', 'Sleeps when idle'];
+
+  // Use hovered use case if hovering, otherwise use carousel use case
+  const activeUseCase = hoveredUseCase || carouselUseCase;
 
   const highlightedUseCases = hoveredFeature ? featureToUseCases[hoveredFeature] || [] : [];
 
-  const highlightedFeatures = hoveredUseCase
-    ? features.filter(feature => featureToUseCases[feature]?.includes(hoveredUseCase))
+  const highlightedFeatures = activeUseCase
+    ? features.filter(feature => featureToUseCases[feature]?.includes(activeUseCase))
     : [];
 
   useEffect(() => {
@@ -244,26 +247,42 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
       // Mobile: no fade/blur effect
       if (isMobile) {
         setScrollOpacity(1);
-        setActorSectionsOpacity(1);
         return;
       }
 
-      // Desktop: fade starts at 20%, done at 60%
+      // Desktop: fade starts at 20%, done at 60% (for main content only, not actor sections)
       const mainFadeStart = windowHeight * 0.2;
       const mainFadeEnd = windowHeight * 0.6;
       const mainOpacity = 1 - Math.min(1, Math.max(0, (scrollY - mainFadeStart) / (mainFadeEnd - mainFadeStart)));
       setScrollOpacity(mainOpacity);
-      setActorSectionsOpacity(mainOpacity);
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Listen for carousel rotation events from ProblemSection
+  useEffect(() => {
+    const handleCarouselRotate = (event: CustomEvent<{ useCase: string | null }>) => {
+      setCarouselUseCase(event.detail.useCase);
+    };
+
+    window.addEventListener('carouselRotate', handleCarouselRotate as EventListener);
+    return () => window.removeEventListener('carouselRotate', handleCarouselRotate as EventListener);
+  }, []);
+
+  // Dispatch custom event when use case hover changes
+  useEffect(() => {
+    const event = new CustomEvent('useCaseHover', {
+      detail: { useCase: hoveredUseCase }
+    });
+    window.dispatchEvent(event);
+  }, [hoveredUseCase]);
+
   return (
-    <section className='relative flex min-h-screen flex-col overflow-hidden'>
+    <section className='relative flex min-h-screen flex-col justify-between'>
       {/* Centered content */}
-      <div className='flex flex-1 flex-col justify-start pt-32 lg:justify-center lg:pt-0 lg:pb-20 px-6' style={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}>
+      <div className='flex flex-col justify-start pt-32 lg:justify-center lg:pt-0 lg:pb-20 lg:flex-1 px-6' style={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}>
         <div className='mx-auto w-full max-w-7xl'>
           <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-32 xl:gap-48 2xl:gap-64'>
             <div className='max-w-xl'>
@@ -344,8 +363,8 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
         </div>
       </div>
 
-      {/* Mobile: Actor sections - separate container with independent fade */}
-      <div className='lg:hidden px-6 mt-8' style={{ opacity: actorSectionsOpacity, filter: `blur(${(1 - actorSectionsOpacity) * 8}px)` }}>
+      {/* Mobile: Actor sections */}
+      <div className='lg:hidden px-6 mt-8 pb-6'>
         <div className='mx-auto w-full max-w-7xl'>
           <div className='flex flex-col gap-8'>
             <motion.div
@@ -395,9 +414,9 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
                     onMouseEnter={() => setHoveredUseCase(useCase)}
                     onMouseLeave={() => setHoveredUseCase(null)}
                     className={`cursor-pointer rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
-                      hoveredUseCase === useCase || highlightedUseCases.includes(useCase)
+                      activeUseCase === useCase || highlightedUseCases.includes(useCase)
                         ? 'border-white/30 text-white'
-                        : hoveredFeature !== null || hoveredUseCase !== null
+                        : hoveredFeature !== null || activeUseCase !== null
                           ? 'border-white/5 text-zinc-600'
                           : 'border-white/10 text-zinc-400'
                     }`}
@@ -411,13 +430,15 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
         </div>
       </div>
 
-      {/* Bottom section - Changelog + Divider + Each Actor (desktop only) */}
-      <div className='absolute bottom-0 left-0 right-0 px-6 pb-24 hidden lg:block' style={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}>
+      {/* Bottom section - Each Actor (desktop only) */}
+      <div
+        className='left-0 right-0 px-6 pb-12 mt-auto hidden lg:block'
+      >
         <div className='mx-auto w-full max-w-7xl'>
-          {/* Changelog link */}
+          {/* Changelog link - fades with scroll */}
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}
             transition={{ duration: 0.5, delay: 0.15 }}
             className='mb-6'
           >
@@ -431,15 +452,15 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
             </a>
           </motion.div>
 
-          {/* Divider */}
+          {/* Divider - fades with scroll */}
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: scrollOpacity, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}
             transition={{ duration: 0.5, delay: 0.2 }}
             className='mb-8 h-px w-full bg-white/10'
           />
 
-          <div className='grid gap-12 md:grid-cols-2'>
+          <div className='grid gap-6 md:grid-cols-2'>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -483,9 +504,9 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
                     onMouseEnter={() => setHoveredUseCase(useCase)}
                     onMouseLeave={() => setHoveredUseCase(null)}
                     className={`cursor-default rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
-                      hoveredUseCase === useCase || highlightedUseCases.includes(useCase)
+                      activeUseCase === useCase || highlightedUseCases.includes(useCase)
                         ? 'border-white/30 text-white'
-                        : hoveredFeature !== null || hoveredUseCase !== null
+                        : hoveredFeature !== null || activeUseCase !== null
                           ? 'border-white/5 text-zinc-600'
                           : 'border-white/10 text-zinc-400'
                     }`}
