@@ -284,6 +284,13 @@ export class ActorContext<
 	}
 
 	/**
+	 * True when the actor is stopping.
+	 */
+	get aborted(): boolean {
+		return this.#actor.abortSignal.aborted;
+	}
+
+	/**
 	 * Forces the actor to sleep.
 	 *
 	 * Not supported on all drivers.

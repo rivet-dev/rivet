@@ -19,7 +19,7 @@ export const worker = actor({
 			processed: c.state.processed,
 		});
 
-		while (!c.abortSignal.aborted) {
+		while (!c.aborted) {
 			const job = await c.queue.next("jobs", { timeout: 1000 });
 			if (job) {
 				c.state.processed += 1;

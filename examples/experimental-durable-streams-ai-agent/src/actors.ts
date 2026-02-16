@@ -69,7 +69,7 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 				offset: chunk.offset,
 			});
 
-			if (c.abortSignal.aborted) break;
+			if (c.aborted) break;
 
 			c.state.promptStreamOffset = chunk.offset;
 
@@ -129,9 +129,9 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 		c.log.error({
 			msg: "error in consumeStream",
 			error,
-			aborted: c.abortSignal.aborted,
+			aborted: c.aborted,
 		});
-		if (!c.abortSignal.aborted) {
+		if (!c.aborted) {
 			c.log.error({ msg: "error consuming prompts", error });
 		}
 	}

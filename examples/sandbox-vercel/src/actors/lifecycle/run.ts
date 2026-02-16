@@ -15,7 +15,7 @@ export const runWithTicks = actor({
 		c.state.runStarted = true;
 		c.log.info("run handler started");
 
-		while (!c.abortSignal.aborted) {
+		while (!c.aborted) {
 			c.state.tickCount += 1;
 			c.state.lastTickAt = Date.now();
 			c.log.info({ msg: "tick", tickCount: c.state.tickCount });
@@ -61,7 +61,7 @@ export const runWithQueueConsumer = actor({
 		c.state.runStarted = true;
 		c.log.info("run handler started, waiting for messages");
 
-		while (!c.abortSignal.aborted) {
+		while (!c.aborted) {
 			const message = await c.queue.next("messages", { timeout: 100 });
 			if (message) {
 				c.log.info({ msg: "received message", body: message.body });

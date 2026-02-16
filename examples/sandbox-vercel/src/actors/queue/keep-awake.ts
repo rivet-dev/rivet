@@ -22,7 +22,7 @@ export const keepAwake = actor({
 		completedTasks: [] as CompletedTask[],
 	},
 	async run(c) {
-		while (!c.abortSignal.aborted) {
+		while (!c.aborted) {
 			const job = await c.queue.next("tasks", { timeout: 1000 });
 			if (job) {
 				const taskId = crypto.randomUUID();

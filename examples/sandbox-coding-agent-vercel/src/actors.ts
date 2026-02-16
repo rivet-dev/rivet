@@ -188,7 +188,7 @@ export const agent = actor({
 
 				for await (const rawEvent of eventStream) {
 					const event = rawEvent as StreamEvent;
-					if (c.abortSignal.aborted) {
+					if (c.aborted) {
 						break;
 					}
 

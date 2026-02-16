@@ -9,7 +9,7 @@ import { ActorContext } from "./base/actor";
  * This context is passed to the `run` handler which executes after the actor
  * starts. It does not block actor startup and is intended for background tasks.
  *
- * Use `c.abortSignal` to detect when the actor is stopping and gracefully exit.
+ * Use `c.aborted` (or `c.abortSignal`) to detect when the actor is stopping and gracefully exit.
  */
 export class RunContext<
 	TState,

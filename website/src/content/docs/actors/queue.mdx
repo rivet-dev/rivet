@@ -44,6 +44,20 @@ if (!msg) return;
 // Process the message...
 ```
 
+`c.queue.next()` throws `ActorAborted` when the actor is shutting down. Do not wrap `c.queue.next()` in `try/catch` inside `run` loops, or you may swallow shutdown and keep looping.
+
+```typescript @nocheck
+run: async (c) => {
+  while (!c.aborted) {
+    const msg = await c.queue.next("tasks", { timeout: 1000 });
+    if (!msg) continue;
+
+    // Catch processing errors separately if needed.
+    await processMessage(msg);
+  }
+}
+```
+
 Each message includes a stable `id` string you can log or correlate across systems.
 
 Use `wait: true` to hold the message until you explicitly complete it:
@@ -88,6 +102,7 @@ Messages are retried indefinitely. There is no forced timeout on the actor side.
 - `QueueCompleteNotAllowed`: `msg.complete()` called when `wait: false`.
 - `QueueMessagePending`: `c.queue.next()` called while a previous `wait: true` message is still pending.
 - `QueueAlreadyCompleted`: `msg.complete()` called more than once.
+- `ActorAborted`: `c.queue.next()` interrupted because the actor is stopping.
 
 If a message remains pending for more than 30 seconds, the actor logs a warning but does not time out automatically.
 

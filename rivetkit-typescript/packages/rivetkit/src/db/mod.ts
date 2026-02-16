@@ -1,6 +1,8 @@
 import type { KvVfsOptions } from "./sqlite-vfs";
 import type { DatabaseProvider, RawAccess } from "./config";
 
+export type { RawAccess } from "./config";
+
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
 }
@@ -62,38 +64,69 @@ export function db({
 
 			const kvStore = createActorKvStore(ctx.kv);
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
+			let op = Promise.resolve();
+
+			const serialize = async <T>(fn: () => Promise<T>): Promise<T> => {
+				// Ensure wa-sqlite calls are not concurrent. Actors can process multiple
+				// actions concurrently, and wa-sqlite is not re-entrant.
+				const next = op.then(fn, fn);
+				op = next.then(
+					() => undefined,
+					() => undefined,
+				);
+				return next;
+			};
 
 			return {
 				execute: async (query, ...args) => {
-					if (args.length > 0) {
-						// Use parameterized query when args are provided
-						const { rows, columns } = await db.query(query, args);
-						return rows.map((row: unknown[]) => {
+					return await serialize(async () => {
+						// `db.exec` does not support binding `?` placeholders.
+						//
+						// When parameters are provided:
+						// - Use `db.query` for statements that return rows (SELECT/PRAGMA/WITH).
+						// - Use `db.run` for DML statements (INSERT/UPDATE/DELETE, etc).
+						//
+						// When no parameters are provided, keep using `db.exec` because it supports
+						// multiple statements (useful for migrations).
+						if (args.length > 0) {
+							const token = query.trimStart().slice(0, 16).toUpperCase();
+							const returnsRows =
+								token.startsWith("SELECT") ||
+								token.startsWith("PRAGMA") ||
+								token.startsWith("WITH");
+
+							if (returnsRows) {
+								const { rows, columns } = await db.query(query, args);
+								return rows.map((row) => {
+									const rowObj: Record<string, unknown> = {};
+									for (let i = 0; i < columns.length; i++) {
+										rowObj[columns[i]] = row[i];
+									}
+									return rowObj;
+								});
+							}
+
+							await db.run(query, args);
+							return [];
+						}
+
+						const results: Record<string, unknown>[] = [];
+						let columnNames: string[] | null = null;
+						await db.exec(query, (row: unknown[], columns: string[]) => {
+							if (!columnNames) columnNames = columns;
 							const rowObj: Record<string, unknown> = {};
 							for (let i = 0; i < row.length; i++) {
-								rowObj[columns[i]] = row[i];
+								rowObj[columnNames[i]] = row[i];
 							}
-							return rowObj;
+							results.push(rowObj);
 						});
-					}
-
-					// Use exec for non-parameterized queries
-					const results: Record<string, unknown>[] = [];
-					let columnNames: string[] | null = null;
-					await db.exec(query, (row: unknown[], columns: string[]) => {
-						if (!columnNames) {
-							columnNames = columns;
-						}
-						const rowObj: Record<string, unknown> = {};
-						for (let i = 0; i < row.length; i++) {
-							rowObj[columnNames[i]] = row[i];
-						}
-						results.push(rowObj);
+						return results;
 					});
-					return results;
 				},
 				close: async () => {
-					await db.close();
+					await serialize(async () => {
+						await db.close();
+					});
 				},
 			} satisfies RawAccess;
 		},

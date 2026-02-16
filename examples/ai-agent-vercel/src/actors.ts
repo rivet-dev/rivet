@@ -102,7 +102,7 @@ export const agent = actor({
 
 				let content = "";
 				for await (const delta of result.textStream) {
-					if (c.abortSignal.aborted) {
+					if (c.aborted) {
 						break;
 					}
 
