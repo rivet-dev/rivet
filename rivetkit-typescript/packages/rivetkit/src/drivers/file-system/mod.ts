@@ -16,6 +16,8 @@ export { getStoragePath } from "./utils";
 const CreateFileSystemDriverOptionsSchema = z.object({
 	/** Custom path for storage. */
 	path: z.string().optional(),
+	/** Deprecated: file-system driver KV is now always SQLite-backed. */
+	useNativeSqlite: z.boolean().optional(),
 });
 
 type CreateFileSystemDriverOptionsInput = z.input<
@@ -28,9 +30,16 @@ export function createFileSystemOrMemoryDriver(
 ): DriverConfig {
 	importNodeDependencies();
 
+	if (options?.useNativeSqlite === false) {
+		throw new Error(
+			"File-system driver no longer supports non-SQLite KV storage. Remove useNativeSqlite: false.",
+		);
+	}
+
 	const stateOptions: FileSystemDriverOptions = {
 		persist,
 		customPath: options?.path,
+		useNativeSqlite: true,
 	};
 	const state = new FileSystemGlobalState(stateOptions);
 	const driverConfig: DriverConfig = {
