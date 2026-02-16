@@ -233,7 +233,7 @@ const ActorDiagram = ({ useCase = 'default' }: { useCase?: UseCaseKey }) => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className='flex flex-col border-t border-white/10 pt-6'
+      className='flex flex-col border-t border-white/10 pt-3 lg:pt-6'
     >
       <div className='mb-4 flex items-center gap-3'>
         <RivetIcon className='text-zinc-500' />
@@ -253,7 +253,7 @@ const ActorDiagram = ({ useCase = 'default' }: { useCase?: UseCaseKey }) => {
         </div>
       </div>
 
-      <div className='relative flex min-h-[200px] md:h-56 items-center justify-center py-6 md:py-0'>
+      <div className='relative flex min-h-[160px] lg:h-56 items-center justify-center py-2 lg:py-0'>
         <div className='flex flex-col md:flex-row items-center gap-4 md:gap-10'>
           {/* Left Clients */}
           <div className='flex flex-row md:flex-col gap-2 md:gap-3'>
@@ -434,7 +434,7 @@ const useCaseOrder: UseCaseKey[] = [
 ];
 
 export const ProblemSection = () => {
-  const [contentParallax, setContentParallax] = useState(0);
+  const [contentParallax, setContentParallax] = useState(400);
   const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('AI Agent');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -445,12 +445,6 @@ export const ProblemSection = () => {
     const handleScroll = () => {
       const scrollY = window.scrollY;
       const windowHeight = window.innerHeight;
-      const isMobile = window.innerWidth < 1024;
-
-      if (isMobile) {
-        setContentParallax(0);
-        return;
-      }
 
       // Content parallax - content slides up to meet the hero section when "Each Actor" is centered
       const contentStart = windowHeight * 0.2;
@@ -462,7 +456,9 @@ export const ProblemSection = () => {
 
     handleScroll();
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   // Detect when section is in view
@@ -531,24 +527,35 @@ export const ProblemSection = () => {
     return () => window.removeEventListener('useCaseHover', handleUseCaseHover as EventListener);
   }, []);
 
-  return (
-    <section ref={sectionRef} id='problem' className='relative border-b border-white/5 px-4 md:px-6 pt-8 md:pt-12 pb-24 md:pb-48'>
-      <div className='mx-auto w-full max-w-7xl' style={{ transform: `translateY(${400 - contentParallax}px)` }}>
-        <div className='flex flex-col gap-6 md:gap-12'>
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
-            <p className='text-sm md:text-base leading-relaxed text-zinc-500'>
-              An Actor is just a function. Import it like a library, write your logic, and these capabilities come built in — making Actors natively suited for agent memory, background jobs, game lobbies, and more.
-            </p>
-          </motion.div>
+  const content = (
+    <div className='flex flex-col gap-2 lg:gap-12'>
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+      >
+        <p className='text-sm md:text-base leading-relaxed text-zinc-500'>
+          An Actor is just a function. Import it like a library, write your logic, and these capabilities come built in — making Actors natively suited for agent memory, background jobs, game lobbies, and more.
+        </p>
+      </motion.div>
 
-          {/* Actor Diagram */}
-          <ActorDiagram useCase={activeUseCase} />
+      {/* Actor Diagram */}
+      <ActorDiagram useCase={activeUseCase} />
+    </div>
+  );
+
+  return (
+    <section ref={sectionRef} id='problem' className='relative border-b border-white/5 px-4 lg:px-6 pt-8 lg:pt-12 pb-12 lg:pb-48'>
+      <div className='mx-auto w-full max-w-7xl'>
+        {/* Mobile: no parallax */}
+        <div className='lg:hidden'>
+          {content}
+        </div>
+        {/* Desktop: with parallax */}
+        <div className='hidden lg:block' style={{ transform: `translateY(${400 - contentParallax}px)` }}>
+          {content}
         </div>
       </div>
     </section>

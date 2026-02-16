@@ -364,9 +364,9 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
       </div>
 
       {/* Mobile: Actor sections */}
-      <div className='lg:hidden px-6 mt-8 pb-6'>
+      <div className='lg:hidden px-6 mt-12 pb-6'>
         <div className='mx-auto w-full max-w-7xl'>
-          <div className='flex flex-col gap-8'>
+          <div className='flex flex-col gap-4'>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
