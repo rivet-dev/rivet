@@ -4,13 +4,12 @@ import { Content } from "@/app/layout";
 import { SidebarToggle } from "@/app/sidebar-toggle";
 import { H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { ChartSyncProvider } from "./chart-sync-context";
 import { METRICS_CONFIG, TIME_RANGE_OPTIONS } from "./constants";
 import { useNamespaceMetrics } from "./hooks";
 import { MetricsChart } from "./metrics-chart";
 import { MetricsTimeRangeSelect } from "./metrics-time-range-select";
 import { NamespaceFilterCombobox } from "./namespace-filter-combobox";
-
-const SYNC_ID = "project-metrics";
 
 export function MetricsPage() {
 	const dataProvider = useCloudProjectDataProvider();
@@ -73,19 +72,23 @@ export function MetricsPage() {
 
 			<hr className="mb-6" />
 
-			<div className="px-4 max-w-7xl mx-auto @6xl:px-0 pb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-				{METRICS_CONFIG.map((metric) => (
-					<MetricsChart
-						key={metric.name}
-						syncId={SYNC_ID}
-						metric={metric}
-						namespaces={selectedNamespaces}
-						metricsData={metricsData}
-						isLoading={isLoading}
-						isError={isError}
-					/>
-				))}
-			</div>
+			<ChartSyncProvider key={timeRange}>
+				<div className="px-4 max-w-7xl mx-auto @6xl:px-0 pb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+					{METRICS_CONFIG.map((metric) => (
+						<MetricsChart
+							key={metric.name}
+							metric={metric}
+							namespaces={selectedNamespaces}
+							metricsData={metricsData}
+							isLoading={isLoading}
+							isError={isError}
+							startAt={startAt}
+							endAt={endAt}
+							resolution={resolution}
+						/>
+					))}
+				</div>
+			</ChartSyncProvider>
 		</Content>
 	);
 }

@@ -1,68 +1,52 @@
-import { format } from "date-fns";
 import { useMemo } from "react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-	type ChartConfig,
-	ChartContainer,
-	ChartTooltip,
-	ChartTooltipContent,
-} from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NAMESPACE_COLORS } from "./constants";
 import type { MetricConfig, NamespaceMetricsData } from "./types";
+import { VisxAreaChart, type VisxAreaChartSeries } from "./visx-area-chart";
+import { VisxBrushChart } from "./visx-brush-chart";
+import { zeroFillDataPoints } from "./zero-fill";
 
 interface MetricsChartProps {
-	syncId: string;
 	metric: MetricConfig;
 	namespaces: string[];
 	metricsData: Map<string, NamespaceMetricsData>;
 	isLoading?: boolean;
 	isError?: boolean;
+	startAt: string;
+	endAt: string;
+	resolution: number;
 }
 
 export function MetricsChart({
-	syncId,
 	metric,
 	namespaces,
 	metricsData,
 	isLoading,
 	isError,
+	startAt,
+	endAt,
+	resolution,
 }: MetricsChartProps) {
-	const chartData = useMemo(() => {
-		const timeMap = new Map<string, Record<string, number | string>>();
-
-		namespaces.forEach((ns) => {
+	const series = useMemo<VisxAreaChartSeries[]>(() => {
+		return namespaces.map((ns, index) => {
 			const nsData = metricsData.get(ns);
-			if (!nsData) return;
-
-			const metricData = nsData[metric.name];
-			if (!metricData) return;
-
-			metricData.forEach(({ ts, value }) => {
-				const existing = timeMap.get(ts) || { ts };
-				existing[ns] = value;
-				timeMap.set(ts, existing);
+			const metricData = nsData?.[metric.name] ?? [];
+			const filled = zeroFillDataPoints(metricData, {
+				startAt,
+				endAt,
+				resolution,
 			});
-		});
-
-		return Array.from(timeMap.values()).sort(
-			(a, b) =>
-				new Date(a.ts as string).getTime() -
-				new Date(b.ts as string).getTime(),
-		);
-	}, [namespaces, metricsData, metric.name]);
-
-	const chartConfig = useMemo(() => {
-		const config: ChartConfig = {};
-		namespaces.forEach((ns, index) => {
-			config[ns] = {
-				label: ns,
+			return {
+				key: ns,
 				color: NAMESPACE_COLORS[index % NAMESPACE_COLORS.length],
+				data: filled.map((d) => ({
+					ts: new Date(d.ts),
+					value: d.value,
+				})),
 			};
 		});
-		return config;
-	}, [namespaces]);
+	}, [namespaces, metricsData, metric.name, startAt, endAt, resolution]);
 
 	if (isLoading) {
 		return (
@@ -96,7 +80,9 @@ export function MetricsChart({
 		);
 	}
 
-	if (chartData.length === 0) {
+	const hasData = series.some((s) => s.data.some((d) => d.value > 0));
+
+	if (!hasData) {
 		return (
 			<Card>
 				<CardHeader className="pb-2">
@@ -123,62 +109,11 @@ export function MetricsChart({
 				</p>
 			</CardHeader>
 			<CardContent>
-				<ChartContainer
-					config={chartConfig}
-					className="w-full h-[200px]"
-				>
-					<AreaChart data={chartData} syncId={syncId}>
-						<CartesianGrid vertical={false} />
-						<XAxis
-							dataKey="ts"
-							tickFormatter={(value) =>
-								format(new Date(value), "HH:mm")
-							}
-							axisLine={false}
-							tickLine={false}
-							tick={{ fontSize: 12 }}
-						/>
-						<YAxis
-							axisLine={false}
-							tickLine={false}
-							tick={{ fontSize: 12 }}
-							tickFormatter={(value) => metric.formatValue(value)}
-							width={70}
-						/>
-						<ChartTooltip
-							content={
-								<ChartTooltipContent
-									labelFormatter={(label) =>
-										format(new Date(label), "PPp")
-									}
-									valueFormatter={(value) =>
-										metric.formatValue(Number(value))
-									}
-								/>
-							}
-						/>
-						{namespaces.map((ns, index) => (
-							<Area
-								key={ns}
-								dataKey={ns}
-								type="monotone"
-								stroke={
-									NAMESPACE_COLORS[
-										index % NAMESPACE_COLORS.length
-									]
-								}
-								fill={
-									NAMESPACE_COLORS[
-										index % NAMESPACE_COLORS.length
-									]
-								}
-								fillOpacity={0.2}
-								strokeWidth={2}
-								isAnimationActive={false}
-							/>
-						))}
-					</AreaChart>
-				</ChartContainer>
+				<VisxAreaChart
+					series={series}
+					formatValue={metric.formatValue}
+				/>
+				<VisxBrushChart series={series} />
 				<div className="flex flex-wrap items-center justify-center gap-4 pt-3">
 					{namespaces.map((ns, index) => (
 						<div key={ns} className="flex items-center gap-1.5">
