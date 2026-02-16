@@ -30,8 +30,7 @@ const footer = {
 		// { name: "Integrations", href: "/integrations" },
 		// { name: "API Reference", href: "/docs/api" },
 		{ name: "Changelog", href: "/changelog" },
-		// NOTE: Disabled until v2
-		// { name: "Status Page", href: "https://rivet.betteruptime.com/" },
+		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
 	],
 	resources: [
 		{ name: "Blog", href: "/blog" },

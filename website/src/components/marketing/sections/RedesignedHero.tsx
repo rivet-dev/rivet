@@ -227,6 +227,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
   const [hoveredUseCase, setHoveredUseCase] = useState<string | null>(null);
   const [carouselUseCase, setCarouselUseCase] = useState<string | null>(null);
   const [scrollOpacity, setScrollOpacity] = useState(1);
+  const [diagramInView, setDiagramInView] = useState(false);
   const features = ['In-memory state', 'KV & SQLite', 'Workflows', 'Scheduling', 'WebSockets', 'Runs indefinitely', 'Sleeps when idle'];
 
   // Use hovered use case if hovering, otherwise use carousel use case
@@ -255,20 +256,26 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
       const mainFadeEnd = windowHeight * 0.6;
       const mainOpacity = 1 - Math.min(1, Math.max(0, (scrollY - mainFadeStart) / (mainFadeEnd - mainFadeStart)));
       setScrollOpacity(mainOpacity);
+
+      // Dispatch scroll opacity for ProblemSection pills to fade in
+      const event = new CustomEvent('heroScrollOpacity', {
+        detail: { opacity: mainOpacity }
+      });
+      window.dispatchEvent(event);
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Listen for carousel rotation events from ProblemSection
+  // Listen for use case selection from ProblemSection pills
   useEffect(() => {
-    const handleCarouselRotate = (event: CustomEvent<{ useCase: string | null }>) => {
+    const handleUseCaseSelected = (event: CustomEvent<{ useCase: string | null }>) => {
       setCarouselUseCase(event.detail.useCase);
     };
 
-    window.addEventListener('carouselRotate', handleCarouselRotate as EventListener);
-    return () => window.removeEventListener('carouselRotate', handleCarouselRotate as EventListener);
+    window.addEventListener('useCaseSelected', handleUseCaseSelected as EventListener);
+    return () => window.removeEventListener('useCaseSelected', handleUseCaseSelected as EventListener);
   }, []);
 
   // Dispatch custom event when use case hover changes
@@ -278,6 +285,16 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
     });
     window.dispatchEvent(event);
   }, [hoveredUseCase]);
+
+  // Listen for diagram in view events from ProblemSection (mobile)
+  useEffect(() => {
+    const handleDiagramInView = (event: CustomEvent<{ inView: boolean }>) => {
+      setDiagramInView(event.detail.inView);
+    };
+
+    window.addEventListener('diagramInView', handleDiagramInView as EventListener);
+    return () => window.removeEventListener('diagramInView', handleDiagramInView as EventListener);
+  }, []);
 
   return (
     <section className='relative flex min-h-screen flex-col justify-between'>
@@ -397,36 +414,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              <p className='mb-3 text-base text-zinc-500'>
-                And could be a:
-              </p>
-              <div className='flex flex-wrap gap-2'>
-                {useCases.map((useCase) => (
-                  <button
-                    key={useCase}
-                    type="button"
-                    onClick={() => setHoveredUseCase(hoveredUseCase === useCase ? null : useCase)}
-                    onMouseEnter={() => setHoveredUseCase(useCase)}
-                    onMouseLeave={() => setHoveredUseCase(null)}
-                    className={`cursor-pointer rounded-full border px-3 py-1 text-xs transition-all bg-black/40 backdrop-blur-md ${
-                      activeUseCase === useCase || highlightedUseCases.includes(useCase)
-                        ? 'border-white/30 text-white'
-                        : hoveredFeature !== null || activeUseCase !== null
-                          ? 'border-white/5 text-zinc-600'
-                          : 'border-white/10 text-zinc-400'
-                    }`}
-                  >
-                    {useCase}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </div>
+            </div>
         </div>
       </div>
 
@@ -491,7 +479,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={{ opacity: scrollOpacity, y: 0, filter: `blur(${(1 - scrollOpacity) * 8}px)` }}
               transition={{ duration: 0.5, delay: 0.3 }}
             >
               <p className='mb-3 text-base text-zinc-500'>
