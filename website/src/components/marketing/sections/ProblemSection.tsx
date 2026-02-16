@@ -434,11 +434,10 @@ const useCaseOrder: UseCaseKey[] = [
 ];
 
 export const ProblemSection = () => {
-  const [contentParallax, setContentParallax] = useState(400);
-  const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('AI Agent');
-  const [carouselIndex, setCarouselIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+  const [contentParallax, setContentParallax] = useState(0);
+  const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('default');
   const [isInView, setIsInView] = useState(false);
+  const [pillsOpacity, setPillsOpacity] = useState(0);
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -477,85 +476,87 @@ export const ProblemSection = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Auto-rotate carousel only when in view
+  // Listen for hero scroll opacity to fade in pills (inverse of hero fade out)
   useEffect(() => {
-    if (isPaused || !isInView) return;
-
-    const interval = setInterval(() => {
-      setCarouselIndex(prev => (prev + 1) % useCaseOrder.length);
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [isPaused, isInView]);
-
-  // Update active use case when carousel index changes
-  useEffect(() => {
-    if (!isPaused) {
-      setActiveUseCase(useCaseOrder[carouselIndex]);
-    }
-  }, [carouselIndex, isPaused]);
-
-  // Dispatch event to highlight pills in hero when carousel rotates
-  useEffect(() => {
-    if (isInView && !isPaused) {
-      const event = new CustomEvent('carouselRotate', {
-        detail: { useCase: activeUseCase }
-      });
-      window.dispatchEvent(event);
-    } else if (!isInView) {
-      // Clear highlight when not in view
-      const event = new CustomEvent('carouselRotate', {
-        detail: { useCase: null }
-      });
-      window.dispatchEvent(event);
-    }
-  }, [activeUseCase, isInView, isPaused]);
-
-  // Listen for use case hover events from the hero (pauses carousel)
-  useEffect(() => {
-    const handleUseCaseHover = (event: CustomEvent<{ useCase: string | null }>) => {
-      const useCase = event.detail.useCase;
-      if (useCase && useCase in useCaseDiagrams) {
-        setIsPaused(true);
-        setActiveUseCase(useCase as UseCaseKey);
-      } else {
-        setIsPaused(false);
-      }
+    const handleHeroScrollOpacity = (event: CustomEvent<{ opacity: number }>) => {
+      // Inverse: when hero fades out (opacity -> 0), pills fade in (opacity -> 1)
+      setPillsOpacity(1 - event.detail.opacity);
     };
 
-    window.addEventListener('useCaseHover', handleUseCaseHover as EventListener);
-    return () => window.removeEventListener('useCaseHover', handleUseCaseHover as EventListener);
+    window.addEventListener('heroScrollOpacity', handleHeroScrollOpacity as EventListener);
+    return () => window.removeEventListener('heroScrollOpacity', handleHeroScrollOpacity as EventListener);
   }, []);
 
-  const content = (
-    <div className='flex flex-col gap-2 lg:gap-12'>
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.5 }}
-      >
-        <p className='text-sm md:text-base leading-relaxed text-zinc-500'>
-          An Actor is just a function. Import it like a library, write your logic, and these capabilities come built in — making Actors natively suited for agent memory, background jobs, game lobbies, and more.
-        </p>
-      </motion.div>
+  // Dispatch selected use case to hero to highlight built-in features
+  useEffect(() => {
+    const event = new CustomEvent('useCaseSelected', {
+      detail: { useCase: activeUseCase === 'default' ? null : activeUseCase }
+    });
+    window.dispatchEvent(event);
+  }, [activeUseCase]);
 
-      {/* Actor Diagram */}
-      <ActorDiagram useCase={activeUseCase} />
+  const pills = (
+    <div className='flex flex-wrap justify-center gap-2'>
+      <button
+        type="button"
+        onClick={() => setActiveUseCase('default')}
+        className={`rounded-full border px-2 py-1 text-[10px] md:px-3 md:text-xs transition-all ${
+          activeUseCase === 'default'
+            ? 'border-[#FF4500]/50 bg-[#FF4500]/10 text-[#FF4500]'
+            : 'border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-400'
+        }`}
+      >
+        Actor
+      </button>
+      {useCaseOrder.map((useCase) => (
+        <button
+          key={useCase}
+          type="button"
+          onClick={() => setActiveUseCase(useCase)}
+          className={`rounded-full border px-2 py-1 text-[10px] md:px-3 md:text-xs transition-all ${
+            activeUseCase === useCase
+              ? 'border-[#FF4500]/50 bg-[#FF4500]/10 text-[#FF4500]'
+              : 'border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-400'
+          }`}
+        >
+          {useCase}
+        </button>
+      ))}
     </div>
   );
 
   return (
-    <section ref={sectionRef} id='problem' className='relative border-b border-white/5 px-4 lg:px-6 pt-8 lg:pt-12 pb-12 lg:pb-48'>
+    <section ref={sectionRef} id='problem' className='relative border-b border-white/5 px-4 lg:px-6 pt-4 lg:pt-12 pb-12 lg:pb-48'>
       <div className='mx-auto w-full max-w-7xl'>
-        {/* Mobile: no parallax */}
-        <div className='lg:hidden'>
-          {content}
+        {/* Mobile: simple layout */}
+        <div className='lg:hidden flex flex-col gap-4'>
+          <ActorDiagram useCase={activeUseCase} />
+          {pills}
         </div>
-        {/* Desktop: with parallax */}
+
+        {/* Desktop: with parallax and header */}
         <div className='hidden lg:block' style={{ transform: `translateY(${400 - contentParallax}px)` }}>
-          {content}
+          <div className='flex flex-col gap-12'>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
+              <p className='text-base leading-relaxed text-zinc-500'>
+                An Actor is just a function. Import it like a library, write your logic, and these capabilities come built in — making Actors natively suited for agent memory, background jobs, game lobbies, and more.
+              </p>
+            </motion.div>
+
+            <ActorDiagram useCase={activeUseCase} />
+
+            <div
+              className='flex justify-center mt-4 transition-opacity duration-300'
+              style={{ opacity: pillsOpacity > 0 ? pillsOpacity : 1 }}
+            >
+              {pills}
+            </div>
+          </div>
         </div>
       </div>
     </section>
