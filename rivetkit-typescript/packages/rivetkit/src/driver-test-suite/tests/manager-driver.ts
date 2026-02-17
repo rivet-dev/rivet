@@ -224,6 +224,17 @@ export function runManagerDriverTests(driverTestConfig: DriverTestConfig) {
 		});
 
 		describe("Key Matching", () => {
+			test("multi-part actor keys are passed through correctly", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				// Create an actor with a multi-part key
+				const multiPartKey = ["tenant/with/slash", "room"];
+				const counter = client.counter.getOrCreate(multiPartKey);
+
+				// Should be preserved as a multi-part key (["tenant/with/slash", "room"])
+				expect(await counter.getKey()).toEqual(multiPartKey);
+			});
+
 			test("matches actors only with exactly the same keys", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
