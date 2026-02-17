@@ -30,7 +30,7 @@
 		"@rivet-gg/cloud": "*",
 		"@rivet-gg/components": "workspace:*",
 		"@rivet-gg/icons": "workspace:^",
-		"@rivetkit/example-registry": "workspace:*",
+		"@rivetkit/shared-data": "workspace:*",
 		"@shikijs/transformers": "^3.15.0",
 		"@sindresorhus/slugify": "^3.0.0",
 		"@tailwindcss/forms": "^0.5.10",

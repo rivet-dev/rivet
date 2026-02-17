@@ -37,13 +37,9 @@ interface PackageJson {
 	scripts?: Record<string, string>;
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
-	template?: {
-		technologies?: string[];
-		tags?: string[];
-		noFrontend?: boolean;
-		frontendPort?: number;
-		skipVercel?: boolean;
-	};
+	noFrontend?: boolean;
+	frontendPort?: number;
+	skipVercel?: boolean;
 	[key: string]: unknown;
 }
 
@@ -94,9 +90,7 @@ function getExamples(): ExampleConfig[] {
 			const packageJson = JSON.parse(
 				fs.readFileSync(packageJsonPath, "utf-8")
 			) as PackageJson;
-			if (!packageJson.template) continue;
-
-			const hasFrontend = !(packageJson.template.noFrontend ?? false);
+			const hasFrontend = !(packageJson.noFrontend ?? false);
 
 			examples.push({
 				name: entry.name,
@@ -164,7 +158,7 @@ function getChangedExamples(): Set<string> {
 
 function shouldSkipExample(example: ExampleConfig): string | null {
 	// Skip if explicitly marked to skip Vercel generation
-	if (example.packageJson.template?.skipVercel) {
+	if (example.packageJson.skipVercel) {
 		return "Marked to skip Vercel generation";
 	}
 
@@ -231,7 +225,6 @@ function generatePackageJson(example: ExampleConfig): PackageJson {
 		scripts: {},
 		dependencies: { ...original.dependencies },
 		devDependencies: { ...original.devDependencies },
-		template: original.template,
 		stableVersion: original.stableVersion as string | undefined,
 		license: original.license as string | undefined,
 	};

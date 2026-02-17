@@ -35,17 +35,6 @@
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0"
 	},
-	"template": {
-		"technologies": [
-			"react",
-			"typescript"
-		],
-		"tags": [
-			"starter"
-		],
-		"priority": 100,
-		"frontendPort": 5173
-	},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
 }

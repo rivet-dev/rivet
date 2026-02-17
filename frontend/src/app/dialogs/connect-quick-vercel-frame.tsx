@@ -6,7 +6,6 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
-import { deployOptions } from "packages/example-registry/src";
 import { useMemo } from "react";
 import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
 import { type DialogContentProps, ExternalLinkCard, Frame } from "@/components";
@@ -156,13 +155,12 @@ export function StepInitialInfo({ template }: { template?: string }) {
 }
 
 export const DeployToVercelCard = ({ template }: { template?: string }) => {
-	const templateOptions = deployOptions.find((opt) => opt.name === template);
 	const vercelTemplateLink = useVercelTemplateLink({ template });
 	return (
 		<ExternalLinkCard
 			href={vercelTemplateLink}
 			icon={faVercel}
-			title={`Deploy ${templateOptions ? templateOptions.displayName : "Template"} to Vercel`}
+			title={`Deploy ${template ? `'${template}'` : "Template"} to Vercel`}
 		/>
 	);
 };

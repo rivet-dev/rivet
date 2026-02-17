@@ -55,8 +55,6 @@ function CloudModals() {
 		<>
 			<CreateProjectDialog
 				organization={search?.organization}
-				template={search?.template}
-				noTemplate={search?.noTemplate}
 				dialogProps={{
 					open: search?.modal === "create-project",
 					onOpenChange: (value) => {

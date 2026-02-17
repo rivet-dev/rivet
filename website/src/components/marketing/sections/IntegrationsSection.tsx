@@ -3,7 +3,7 @@
 import { Box, LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { deployOptions } from '@rivetkit/example-registry';
+import { deployOptions } from '@rivetkit/shared-data';
 
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },

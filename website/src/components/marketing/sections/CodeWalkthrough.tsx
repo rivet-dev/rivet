@@ -2,78 +2,54 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { codeToHtml } from 'shiki';
 
-const highlightCode = (line: string) => {
-  const leadingWhitespaceMatch = line.match(/^(\s*)/);
-  const leadingWhitespace = leadingWhitespaceMatch ? leadingWhitespaceMatch[1] : '';
-  const codeContent = line.substring(leadingWhitespace.length);
-  const indentationWidth = `${leadingWhitespace.length * 1}em`;
+const codeLines = [
+  `actor({`,
+  `  state: { messages: [], history: [] },`,
+  ``,
+  `  run: async (c) => {`,
+  `    while (true) {`,
+  `      const message = await c.queue.next("message");`,
+  `      const response = await ai(message);`,
+  `      c.state.history.push({ message, response });`,
+  `      c.broadcast("response", response);`,
+  `    }`,
+  `  },`,
+  `});`,
+];
 
-  return (
-    <>
-      {leadingWhitespace && (
-        <span style={{ display: 'inline-block', width: indentationWidth }} />
-      )}
-      {codeContent
-        .split(/(\s+|[{}[\](),.;:])/)
-        .filter(Boolean)
-        .map((part, i) => {
-          const trimmed = part.trim();
+const useHighlightedCodeLines = (lines: string[]) => {
+  const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
+  const cache = useRef<Record<string, string[]>>({});
 
-          // Keywords
-          if (['import', 'export', 'const', 'return', 'async', 'await', 'while', 'true'].includes(trimmed))
-            return (
-              <span key={i} className='text-purple-400'>
-                {part}
-              </span>
-            );
+  useEffect(() => {
+    const code = lines.join('\n');
+    if (cache.current[code]) {
+      setHighlightedLines(cache.current[code]);
+      return;
+    }
 
-          // Special Rivet/JS functions
-          if (['actor', 'ai'].includes(trimmed))
-            return (
-              <span key={i} className='text-blue-400'>
-                {part}
-              </span>
-            );
+    codeToHtml(code, {
+      lang: 'typescript',
+      theme: 'ayu-dark',
+    }).then((html) => {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const parsedLines = Array.from(doc.querySelectorAll('span.line')).map((line) => line.innerHTML);
 
-          // Property/method names
-          if (
-            /^[a-zA-Z_]\w*$/.test(trimmed) &&
-            ['broadcast', 'state', 'messages', 'history', 'queue', 'next', 'push', 'run', 'message', 'response', 'c'].includes(
-              trimmed
-            )
-          )
-            return (
-              <span key={i} className='text-blue-300'>
-                {part}
-              </span>
-            );
+      cache.current[code] = parsedLines;
+      setHighlightedLines(parsedLines);
+    });
+  }, [lines]);
 
-          // Strings
-          if (part.includes('"'))
-            return (
-              <span key={i} className='text-[#FF4500]'>
-                {part}
-              </span>
-            );
-
-          // Comments
-          if (part.includes('//'))
-            return (
-              <span key={i} className='text-zinc-500'>
-                {part}
-              </span>
-            );
-
-          return part;
-        })}
-    </>
-  );
+  return highlightedLines;
 };
 
 export const CodeWalkthrough = () => {
   const [activeStep, setActiveStep] = useState(0);
   const observerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const highlightedCodeLines = useHighlightedCodeLines(codeLines);
 
   const steps = [
     {
@@ -102,21 +78,6 @@ export const CodeWalkthrough = () => {
     }
   ];
 
-  const codeLines = [
-    `actor({`,
-    `  state: { messages: [], history: [] },`,
-    ``,
-    `  run: async (c) => {`,
-    `    while (true) {`,
-    `      const message = await c.queue.next("message");`,
-    `      const response = await ai(message);`,
-    `      c.state.history.push({ message, response });`,
-    `      c.broadcast("response", response);`,
-    `    }`,
-    `  },`,
-    `});`,
-  ];
-
   useEffect(() => {
     const options = {
       root: null,
@@ -141,7 +102,7 @@ export const CodeWalkthrough = () => {
   }, []);
 
   return (
-    <section className='relative border-t border-white/10 bg-white/[0.04] pb-24 pt-48'>
+    <section className='relative border-t border-white/10 bg-white/[0.03] pb-24 pt-48'>
       <div className='mx-auto max-w-7xl px-6'>
         {/* Mobile-only header */}
         <motion.div
@@ -194,9 +155,16 @@ export const CodeWalkthrough = () => {
                         <span className='inline-block w-8 select-none pr-4 text-right text-zinc-700'>
                           {idx + 1}
                         </span>
-                        <span className={`${isHighlighted ? 'font-medium text-white' : 'text-zinc-400'}`}>
-                          {highlightCode(line)}
-                        </span>
+                        {highlightedCodeLines[idx] ? (
+                          <span
+                            className={`whitespace-pre ${isHighlighted ? 'font-medium' : ''}`}
+                            dangerouslySetInnerHTML={{ __html: highlightedCodeLines[idx] }}
+                          />
+                        ) : (
+                          <span className={`whitespace-pre ${isHighlighted ? 'font-medium text-white' : 'text-zinc-400'}`}>
+                            {line}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -238,7 +206,11 @@ export const CodeWalkthrough = () => {
                 <div className='mt-6 overflow-x-auto rounded-lg border border-white/10 bg-black p-4 font-mono text-xs leading-6 lg:hidden'>
                   {step.lines.map(lineIdx => (
                     <div key={lineIdx} className='whitespace-pre text-zinc-300'>
-                      {highlightCode(codeLines[lineIdx])}
+                      {highlightedCodeLines[lineIdx] ? (
+                        <span dangerouslySetInnerHTML={{ __html: highlightedCodeLines[lineIdx] }} />
+                      ) : (
+                        codeLines[lineIdx]
+                      )}
                     </div>
                   ))}
                 </div>

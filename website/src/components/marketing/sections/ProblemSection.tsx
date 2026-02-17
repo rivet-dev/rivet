@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Cpu, Workflow, Clock, Wifi, Zap, Bot, BrainCircuit, Users, Timer, UserCircle, Radio } from 'lucide-react';
+import { Database, Cpu, Workflow, Clock, Wifi, Zap, Bot, Users, Timer, Boxes, Radio, MessageSquare, ArrowRight } from 'lucide-react';
 import { codeToHtml } from 'shiki';
 
 const RivetIcon = ({ className }: { className?: string }) => (
@@ -65,7 +65,7 @@ const useHighlightedCode = (code: string) => {
 interface UseCaseConfig {
   title: string;
   description: string;
-  features: { icon: typeof Cpu; label: string; detail: string }[];
+  features: { icon: typeof Cpu; label: string; detail: string; href: string }[];
   serverCode: string;
   clientCode: string;
 }
@@ -75,9 +75,9 @@ const useCases: Record<string, UseCaseConfig> = {
     title: 'AI Agent',
     description: 'Each agent runs as its own actor with persistent context, memory, and the ability to schedule tool calls.',
     features: [
-      { icon: Cpu, label: 'In-memory state', detail: 'Context' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'Memory' },
-      { icon: Clock, label: 'Scheduling', detail: 'Tool calls' },
+      { icon: Cpu, label: 'In-memory state', detail: 'Context', href: '/docs/actors/state' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'Memory', href: '/docs/actors/state' },
+      { icon: Clock, label: 'Scheduling', detail: 'Tool calls', href: '/docs/actors/schedule' },
     ],
     serverCode: `// One actor per agent
 const agent = actor({
@@ -95,40 +95,13 @@ const agent = actor({
     clientCode: `const agent = client.agent.get("agent-123");
 const reply = await agent.chat("Hello!");`,
   },
-  'Agent Memory': {
-    title: 'Agent Memory',
-    description: 'Persistent per-agent memory that sleeps when idle and wakes instantly when needed.',
-    features: [
-      { icon: Cpu, label: 'In-memory state', detail: 'Context' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'History' },
-      { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient' },
-    ],
-    serverCode: `// One actor per agent's memory
-const memory = actor({
-  // Persisted across restarts
-  state: { entries: [], summary: "" },
-  actions: {
-    store: (c, entry) => {
-      c.state.entries.push(entry);
-    },
-    recall: (c, query) => {
-      return c.state.entries.filter(
-        e => e.tags.includes(query)
-      );
-    },
-  },
-});`,
-    clientCode: `const mem = client.memory.get("user-456");
-await mem.store({ text: "likes coffee", tags: ["prefs"] });
-const results = await mem.recall("prefs");`,
-  },
   'Workflows': {
     title: 'Workflows',
     description: 'Multi-step operations with automatic retries, scheduling, and durable state across steps.',
     features: [
-      { icon: Workflow, label: 'Workflows', detail: 'Steps' },
-      { icon: Clock, label: 'Scheduling', detail: 'Retry' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'State' },
+      { icon: Workflow, label: 'Workflows', detail: 'Steps', href: '/docs/actors/communicating-between-actors' },
+      { icon: Clock, label: 'Scheduling', detail: 'Retry', href: '/docs/actors/schedule' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'State', href: '/docs/actors/state' },
     ],
     serverCode: `// One actor per workflow run
 const workflow = actor({
@@ -150,12 +123,12 @@ const workflow = actor({
 await job.run();`,
   },
   'Collab Docs': {
-    title: 'Collab Docs',
+    title: 'Collaborate Document',
     description: 'Real-time collaborative editing where each document is an actor broadcasting changes to all connected users.',
     features: [
-      { icon: Cpu, label: 'In-memory state', detail: 'Document' },
-      { icon: Wifi, label: 'WebSockets', detail: 'Sync' },
-      { icon: Zap, label: 'Runs indefinitely', detail: 'Always on' },
+      { icon: Cpu, label: 'In-memory state', detail: 'Document', href: '/docs/actors/state' },
+      { icon: Wifi, label: 'WebSockets', detail: 'Sync', href: '/docs/actors/connections' },
+      { icon: Zap, label: 'Runs indefinitely', detail: 'Always on', href: '/docs/actors/lifecycle' },
     ],
     serverCode: `// One actor per document
 const document = actor({
@@ -175,52 +148,80 @@ const document = actor({
 await doc.edit({ insert: "Hello", pos: 0 });
 doc.on("update", (state) => render(state));`,
   },
-  'Realtime Sync': {
-    title: 'Realtime Sync',
-    description: 'Live state synchronization across clients with WebSocket connections and indefinite uptime.',
+  'Per-Tenant Database': {
+    title: 'Per-Tenant Database',
+    description: 'One actor per tenant with low-latency in-memory reads and durable tenant data persistence.',
     features: [
-      { icon: Cpu, label: 'In-memory state', detail: 'State' },
-      { icon: Wifi, label: 'WebSockets', detail: 'Events' },
-      { icon: Zap, label: 'Runs indefinitely', detail: 'Always on' },
+      { icon: Cpu, label: 'In-memory state', detail: 'Hot reads', href: '/docs/actors/state' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'Tenant data', href: '/docs/actors/state' },
+      { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient', href: '/docs/actors/lifecycle' },
     ],
-    serverCode: `// One actor per shared resource
-const sync = actor({
-  state: { data: {}, clients: [] },
+    serverCode: `// One actor per tenant
+const tenantDb = actor({
+  state: { users: {}, settings: {} },
   actions: {
-    update: (c, key, value) => {
-      c.state.data[key] = value;
-      // Broadcast changes to all connections
-      c.broadcast("sync", { key, value });
+    upsertUser: (c, user) => {
+      c.state.users[user.id] = user;
+      return c.state.users[user.id];
+    },
+    getUser: (c, userId) => c.state.users[userId] ?? null,
+  },
+});`,
+    clientCode: `const tenant = client.tenantDb.get("tenant-123");
+await tenant.upsertUser({ id: "u1", name: "Avery" });
+const user = await tenant.getUser("u1");`,
+  },
+  'Sandbox Orchestration': {
+    title: 'Sandbox Orchestration',
+    description: 'Coordinate sandbox sessions, queue work, and schedule cleanup in one long-lived actor per workspace.',
+    features: [
+      { icon: Cpu, label: 'In-memory state', detail: 'Live sessions', href: '/docs/actors/state' },
+      { icon: Database, label: 'Queue messages', detail: 'Jobs', href: '/docs/actors/queue' },
+      { icon: Clock, label: 'Scheduling', detail: 'Timeouts', href: '/docs/actors/schedule' },
+    ],
+    serverCode: `// One actor per sandbox workspace
+const sandbox = actor({
+  state: { sessions: {}, pendingRuns: [] },
+  actions: {
+    enqueueRun: (c, run) => {
+      c.state.pendingRuns.push(run);
+      c.schedule.after(0, "processQueue");
+    },
+    processQueue: async (c) => {
+      const run = c.state.pendingRuns.shift();
+      if (!run) return;
+      const result = await executeInSandbox(run);
+      c.broadcast("runComplete", result);
     },
   },
 });`,
-    clientCode: `const room = client.sync.get("room-101");
-await room.update("cursor", { x: 10, y: 20 });
-room.on("sync", (data) => updateUI(data));`,
+    clientCode: `const sandbox = client.sandbox.get("workspace-123");
+await sandbox.enqueueRun({ sessionId: "abc", command: "pnpm test" });
+sandbox.on("runComplete", (result) => render(result));`,
   },
-  'Session Store': {
-    title: 'Session Store',
-    description: 'Per-user session actors that persist auth state and user data, sleeping when idle to save resources.',
+  'Chat': {
+    title: 'Chat',
+    description: 'One actor per room or conversation with in-memory state, persistent history, and realtime delivery.',
     features: [
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'User data' },
-      { icon: Cpu, label: 'In-memory state', detail: 'Auth state' },
-      { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient' },
+      { icon: Cpu, label: 'In-memory state', detail: 'Room state', href: '/docs/actors/state' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'History', href: '/docs/actors/state' },
+      { icon: Wifi, label: 'WebSockets', detail: 'Realtime', href: '/docs/actors/connections' },
     ],
-    serverCode: `// One actor per user session
-const session = actor({
-  // Sleeps when idle, wakes instantly
-  state: { user: null, prefs: {} },
+    serverCode: `// One actor per chat room
+const chatRoom = actor({
+  state: { messages: [] },
   actions: {
-    login: (c, credentials) => {
-      c.state.user = authenticate(credentials);
-      return { token: c.state.user.token };
+    send: (c, text) => {
+      const msg = { text, sentAt: Date.now() };
+      c.state.messages.push(msg);
+      c.broadcast("message", msg);
     },
-    getPrefs: (c) => c.state.prefs,
+    history: (c) => c.state.messages,
   },
 });`,
-    clientCode: `const session = client.session.get("user-123");
-const { token } = await session.login(credentials);
-const prefs = await session.getPrefs();`,
+    clientCode: `const room = client.chatRoom.get("room-123");
+await room.send("Hello everyone");
+room.on("message", (msg) => renderMessage(msg));`,
   },
 };
 
@@ -228,20 +229,29 @@ type UseCaseKey = keyof typeof useCases;
 
 const useCaseOrder: UseCaseKey[] = [
   'AI Agent',
-  'Agent Memory',
+  'Sandbox Orchestration',
   'Workflows',
   'Collab Docs',
-  'Realtime Sync',
-  'Session Store',
+  'Chat',
+  'Per-Tenant Database',
 ];
+
+const useCaseTabLabels: Record<UseCaseKey, string> = {
+  'AI Agent': 'AI Agent',
+  'Sandbox Orchestration': 'Sandboxes',
+  'Workflows': 'Workflows',
+  'Collab Docs': 'Multiplayer',
+  'Per-Tenant Database': 'Databases',
+  'Chat': 'Chat',
+};
 
 const useCaseIcons: Record<string, typeof Bot> = {
   'AI Agent': Bot,
-  'Agent Memory': BrainCircuit,
   'Workflows': Timer,
   'Collab Docs': Users,
-  'Realtime Sync': Radio,
-  'Session Store': UserCircle,
+  'Per-Tenant Database': Database,
+  'Sandbox Orchestration': Boxes,
+  'Chat': MessageSquare,
 };
 
 const HighlightedCode = ({ code, title }: { code: string; title: string }) => {
@@ -270,7 +280,7 @@ const UseCaseContent = ({ config }: { config: UseCaseConfig }) => {
   return (
     <div className='grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-start'>
       {/* Left: Stacked code snippets */}
-      <div className='flex flex-col gap-3'>
+      <div className='order-2 lg:order-1 flex flex-col gap-3'>
         <div className='rounded-lg border border-white/[0.12] bg-white/[0.03] overflow-hidden'>
           <HighlightedCode code={config.serverCode} title='backend.ts' />
         </div>
@@ -280,7 +290,7 @@ const UseCaseContent = ({ config }: { config: UseCaseConfig }) => {
       </div>
 
       {/* Right: Description + features */}
-      <div className='flex flex-col gap-6'>
+      <div className='order-1 lg:order-2 flex flex-col gap-6'>
         <div className='flex items-center gap-3'>
           <RivetIcon className='text-zinc-500' />
           <div className='flex items-center gap-2'>
@@ -297,11 +307,16 @@ const UseCaseContent = ({ config }: { config: UseCaseConfig }) => {
           {config.features.map((feature, idx) => {
             const Icon = feature.icon;
             return (
-              <div key={idx} className='flex items-center gap-3'>
-                <Icon className='h-4 w-4 text-zinc-500 flex-shrink-0' />
-                <span className='text-sm text-zinc-300'>{feature.label}</span>
-                <span className='text-sm text-zinc-600'>({feature.detail})</span>
-              </div>
+              <a
+                key={idx}
+                href={feature.href}
+                className='group w-fit flex items-center gap-3 text-zinc-300 transition-colors duration-200 hover:text-[#FF4500]'
+              >
+                <Icon className='h-4 w-4 flex-shrink-0 text-zinc-500 transition-colors duration-200 group-hover:text-[#FF4500]' />
+                <span className='text-sm'>{feature.label}</span>
+                <span className='text-sm text-zinc-600 transition-colors duration-200 group-hover:text-[#FF4500]/80'>({feature.detail})</span>
+                <ArrowRight className='h-3.5 w-3.5 text-[#FF4500] opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0' />
+              </a>
             );
           })}
         </div>
@@ -312,7 +327,30 @@ const UseCaseContent = ({ config }: { config: UseCaseConfig }) => {
 
 export const ProblemSection = () => {
   const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('AI Agent');
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
   const config = useCases[activeUseCase];
+
+  useEffect(() => {
+    const tabsEl = tabsScrollRef.current;
+    if (!tabsEl) return;
+
+    const updateScrollHint = () => {
+      const hasOverflow = tabsEl.scrollWidth > tabsEl.clientWidth + 1;
+      const atRightEdge = tabsEl.scrollLeft + tabsEl.clientWidth >= tabsEl.scrollWidth - 1;
+      setShowScrollHint(hasOverflow && !atRightEdge);
+    };
+
+    updateScrollHint();
+
+    tabsEl.addEventListener('scroll', updateScrollHint, { passive: true });
+    window.addEventListener('resize', updateScrollHint);
+
+    return () => {
+      tabsEl.removeEventListener('scroll', updateScrollHint);
+      window.removeEventListener('resize', updateScrollHint);
+    };
+  }, []);
 
   return (
     <section id='problem' className='relative border-b border-white/10 px-4 lg:px-6 py-20 lg:py-32'>
@@ -333,34 +371,55 @@ export const ProblemSection = () => {
         </motion.div>
 
         {/* Segmented control */}
-        <div className='mb-10'>
-          <div className='flex w-full overflow-x-auto scrollbar-hide rounded-lg border border-white/[0.12] bg-white/[0.03] p-1 cursor-pointer'>
-            {useCaseOrder.map((useCase, idx) => {
-              const Icon = useCaseIcons[useCase];
-              return (
-                <div key={useCase} className='flex flex-1 min-w-0 items-center'>
-                  {idx > 0 && (
-                    <div className='w-px self-stretch my-1.5 mx-1 bg-white/[0.12] flex-shrink-0' />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setActiveUseCase(useCase)}
-                    className={`whitespace-nowrap rounded-md px-4 py-2.5 text-xs md:text-sm transition-all flex items-center justify-center gap-2 flex-1 ${
-                      activeUseCase === useCase
-                        ? 'bg-[#FF4500]/15 text-[#FF4500] border border-[#FF4500]/20'
-                        : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
-                    }`}
-                  >
-                    {Icon && <Icon className='h-3.5 w-3.5' />}
-                    {useCase}
-                  </button>
-                </div>
-              );
-            })}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.05 }}
+          className='mb-10'
+        >
+          <div className='relative'>
+            <div
+              ref={tabsScrollRef}
+              className='flex w-full overflow-x-auto scrollbar-hide rounded-lg border border-white/[0.12] bg-white/[0.03] p-1 cursor-pointer'
+            >
+              {useCaseOrder.map((useCase, idx) => {
+                const Icon = useCaseIcons[useCase];
+                return (
+                  <div key={useCase} className='flex flex-none items-center sm:flex-1 sm:min-w-0'>
+                    {idx > 0 && (
+                      <div className='w-px self-stretch my-1.5 mx-1 bg-white/[0.12] flex-shrink-0' />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveUseCase(useCase)}
+                      className={`whitespace-nowrap rounded-md px-4 py-2.5 text-xs md:text-sm transition-all flex items-center justify-center gap-2 flex-none sm:flex-1 ${
+                        activeUseCase === useCase
+                          ? 'bg-[#FF4500]/15 text-[#FF4500] border border-[#FF4500]/20'
+                          : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+                      }`}
+                    >
+                      {Icon && <Icon className='h-3.5 w-3.5' />}
+                      {useCaseTabLabels[useCase]}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div
+              className={`pointer-events-none absolute right-0 top-0 bottom-0 flex items-center pr-2 transition-opacity duration-200 ${
+                showScrollHint ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <div className='absolute inset-y-1 right-0 w-14 rounded-r-lg bg-gradient-to-l from-black/45 to-transparent' />
+              <span className='relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/15 bg-black/50'>
+                <ArrowRight className='h-3.5 w-3.5 text-zinc-300' />
+              </span>
+            </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className='h-[600px] md:h-[520px] lg:h-[480px] overflow-hidden'>
+        <div>
           <AnimatePresence mode='wait'>
             <motion.div
               key={activeUseCase}
@@ -368,7 +427,6 @@ export const ProblemSection = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className='h-full'
             >
               <UseCaseContent config={config} />
             </motion.div>

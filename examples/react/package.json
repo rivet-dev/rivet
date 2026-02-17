@@ -32,13 +32,5 @@
 		"srvx": "^0.10.0"
 	},
 	"stableVersion": "0.8.0",
-	"template": {
-		"technologies": [
-			"react",
-			"typescript"
-		],
-		"tags": [],
-		"frontendPort": 5173
-	},
 	"license": "MIT"
 }

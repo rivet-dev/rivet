@@ -9,8 +9,8 @@ packages:
   - examples/*
   - frontend
   - frontend/packages/components/
-  - frontend/packages/example-registry/
   - frontend/packages/icons/
+  - frontend/packages/shared-data/
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
   - scripts/release

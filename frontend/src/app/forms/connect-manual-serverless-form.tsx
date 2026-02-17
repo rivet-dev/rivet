@@ -1,5 +1,5 @@
 import { faTrash, Icon } from "@rivet-gg/icons";
-import type { Provider } from "@rivetkit/example-registry";
+import type { Provider } from "@rivetkit/shared-data";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import z from "zod";

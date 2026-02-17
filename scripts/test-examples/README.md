@@ -17,7 +17,7 @@ pnpm start --skip ai-agent,drizzle
 
 ## What it tests
 
-For each example with a `template` config in package.json:
+For each example:
 
 1. Starts `pnpm dev`
 2. Checks index page at `http://localhost:5173`
@@ -26,9 +26,4 @@ For each example with a `template` config in package.json:
 
 ## Configuration validation
 
-For static validation of example configurations (README format, package.json structure, turbo.json, etc.), run the example-registry build script:
-
-```bash
-cd frontend/packages/example-registry
-pnpm build
-```
+Static validation of example configurations (README format, package.json structure, turbo.json, etc.) is handled by repository CI checks.

@@ -1,0 +1,14 @@
+{
+	"name": "@rivetkit/shared-data",
+	"private": true,
+	"version": "2.0.42",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./src/index.ts"
+		}
+	},
+	"dependencies": {
+		"@rivet-gg/icons": "workspace:*"
+	}
+}

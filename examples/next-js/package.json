@@ -27,16 +27,5 @@
 		"tsx": "^3.12.7"
 	},
 	"stableVersion": "0.8.0",
-	"template": {
-		"technologies": [
-			"next-js",
-			"react",
-			"typescript"
-		],
-		"tags": [
-			"starter"
-		],
-		"frontendPort": 3000
-	},
 	"license": "MIT"
 }

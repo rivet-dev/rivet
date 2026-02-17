@@ -18,14 +18,6 @@
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"
 	},
-	"template": {
-		"technologies": [
-			"elysia",
-			"typescript"
-		],
-		"tags": [],
-		"noFrontend": true
-	},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
 }

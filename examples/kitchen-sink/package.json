@@ -1,41 +1,34 @@
 {
-  "name": "example-kitchen-sink",
-  "private": true,
-  "version": "2.0.21",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "check-types": "tsc --noEmit",
-    "test": "vitest run",
-    "build": "vite build && vite build --mode server",
-    "start": "srvx --static=public/ dist/server.js"
-  },
-  "dependencies": {
-    "@hono/node-server": "^1.19.7",
-    "@hono/node-ws": "^1.3.0",
-    "@rivetkit/react": "^2.0.38",
-    "hono": "^4.7.4",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "rivetkit": "^2.0.38",
-    "srvx": "^0.10.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.9",
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
-    "tsx": "^4.7.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.2.0",
-    "vite-plugin-srvx": "^1.0.2"
-  },
-  "template": {
-    "technologies": [
-      "typescript"
-    ],
-    "tags": [],
-    "frontendPort": 5173
-  },
-  "license": "MIT"
+	"name": "example-kitchen-sink",
+	"private": true,
+	"version": "2.0.21",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"check-types": "tsc --noEmit",
+		"test": "vitest run",
+		"build": "vite build && vite build --mode server",
+		"start": "srvx --static=public/ dist/server.js"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.19.7",
+		"@hono/node-ws": "^1.3.0",
+		"@rivetkit/react": "^2.0.38",
+		"hono": "^4.7.4",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"rivetkit": "^2.0.38",
+		"srvx": "^0.10.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"@types/react": "^18.2.66",
+		"@types/react-dom": "^18.2.22",
+		"@vitejs/plugin-react": "^4.2.1",
+		"tsx": "^4.7.1",
+		"typescript": "^5.2.2",
+		"vite": "^5.2.0",
+		"vite-plugin-srvx": "^1.0.2"
+	},
+	"license": "MIT"
 }

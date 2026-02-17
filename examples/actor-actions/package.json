@@ -1,43 +1,35 @@
 {
-  "name": "actor-actions",
-  "version": "2.0.21",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "check-types": "tsc --noEmit",
-    "test": "vitest run",
-    "build": "vite build && vite build --mode server",
-    "start": "srvx --static=public/ dist/server.js"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.9",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "tsx": "^3.12.7",
-    "typescript": "^5.5.2",
-    "vite": "^5.0.0",
-    "vite-plugin-srvx": "^1.0.2",
-    "vitest": "^3.1.1"
-  },
-  "dependencies": {
-    "@hono/node-server": "^1.19.7",
-    "@hono/node-ws": "^1.2.0",
-    "@rivetkit/react": "^2.0.38",
-    "hono": "^4.11.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "rivetkit": "^2.0.38",
-    "srvx": "^0.10.0"
-  },
-  "template": {
-    "technologies": [
-      "typescript"
-    ],
-    "tags": [],
-    "priority": 1000,
-    "frontendPort": 5173
-  },
-  "license": "MIT"
+	"name": "actor-actions",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"check-types": "tsc --noEmit",
+		"test": "vitest run",
+		"build": "vite build && vite build --mode server",
+		"start": "srvx --static=public/ dist/server.js"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
+		"@vitejs/plugin-react": "^4.2.0",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2",
+		"vite": "^5.0.0",
+		"vite-plugin-srvx": "^1.0.2",
+		"vitest": "^3.1.1"
+	},
+	"dependencies": {
+		"@hono/node-server": "^1.19.7",
+		"@hono/node-ws": "^1.2.0",
+		"@rivetkit/react": "^2.0.38",
+		"hono": "^4.11.3",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"rivetkit": "^2.0.38",
+		"srvx": "^0.10.0"
+	},
+	"license": "MIT"
 }

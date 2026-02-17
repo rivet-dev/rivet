@@ -34,30 +34,30 @@ import imgThinker6 from '@/images/thinking/thinker6.jpg';
 
 // Optimize all thinking images
 const thinkingImageSources = [
-	imgThinker,
-	imgLadyWriting,
-	imgPortrait,
-	imgSaintMark,
-	imgVirginReading,
-	imgThinkingOver,
-	imgWomanBalance,
-	imgThinking2,
-	imgThinking3,
-	imgThinking6,
-	img0000405625,
-	imgCHSDM,
-	imgNPG,
-	imgSAAM,
-	imgThink,
-	imgThink11,
-	imgThink12,
-	imgThinker6,
+	{ src: imgThinker, title: 'The Thinker', artist: 'Auguste Rodin', date: 'modeled 1880' },
+	{ src: imgLadyWriting, title: 'A Lady Writing', artist: 'Johannes Vermeer', date: 'c. 1665' },
+	{ src: imgPortrait, title: 'Portrait of a Man (Possibly Jan Snoeck)', artist: 'Jan Gossaert', date: 'c. 1530' },
+	{ src: imgSaintMark, title: 'Saint Mark', artist: 'Giorgio Vasari', date: '1570/1571' },
+	{ src: imgVirginReading, title: 'The Virgin Reading', artist: 'Vittore Carpaccio', date: 'c. 1505' },
+	{ src: imgThinkingOver, title: 'Thinking It Over', artist: 'Thomas Waterman Wood', date: '1884' },
+	{ src: imgWomanBalance, title: 'Woman Holding a Balance', artist: 'Johannes Vermeer', date: 'c. 1664' },
+	{ src: imgThinking2, title: 'Thinking Woman', artist: 'Abraham Ajay', date: 'c. 1935' },
+	{ src: imgThinking3, title: 'The Writing Master', artist: 'Thomas Eakins', date: '1882' },
+	{ src: imgThinking6, title: 'The Chess Players', artist: 'Thomas Eakins', date: '1876' },
+	{ src: img0000405625, title: 'The Astronomer', artist: 'Johannes Vermeer', date: 'c. 1668' },
+	{ src: imgCHSDM, title: 'The Interior of a Textile Factory', artist: 'Unknown artist', date: '1720-1750' },
+	{ src: imgNPG, title: 'Patent Office, Model Room (Washington, D.C.)', artist: 'Unknown photographer', date: 'c. 1906' },
+	{ src: imgSAAM, title: 'The Woodworker', artist: 'Eastman Johnson', date: '1877' },
+	{ src: imgThink, title: 'Curiosity', artist: 'Gerard ter Borch the Younger', date: 'ca. 1660-62' },
+	{ src: imgThink11, title: 'Alchemist Interior', artist: 'Unknown artist', date: '17th century' },
+	{ src: imgThink12, title: 'Telephone Switchboard Operators', artist: 'Unknown photographer', date: 'c. 1940s' },
+	{ src: imgThinker6, title: "A Scholar in His Study ('Faust')", artist: 'Rembrandt', date: 'ca. 1652' },
 ];
 
 const optimizedThinkingImages = await Promise.all(
 	thinkingImageSources.map(img =>
 		getImage({
-			src: img,
+			src: img.src,
 			width: 800,
 			format: 'webp',
 			quality: 80
@@ -65,7 +65,12 @@ const optimizedThinkingImages = await Promise.all(
 	)
 );
 
-const thinkingImages = optimizedThinkingImages.map(img => img.src);
+const thinkingImages = optimizedThinkingImages.map((img, index) => ({
+	src: img.src,
+	title: thinkingImageSources[index].title,
+	artist: thinkingImageSources[index].artist,
+	date: thinkingImageSources[index].date,
+}));
 
 // Get latest changelog title
 const posts = await getCollection('posts');

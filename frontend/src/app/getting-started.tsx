@@ -10,8 +10,7 @@ import {
 import {
 	deployOptions,
 	type Provider,
-	templates,
-} from "@rivetkit/example-registry";
+} from "@rivetkit/shared-data";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -55,7 +54,6 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { PathSelection } from "@/components/onboarding/path-selection";
-import { TemplatesList } from "@/components/templates-list";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
@@ -97,22 +95,18 @@ const stepper = defineStepper(
 	},
 );
 
-type Flow = "template" | "agent" | "manual";
+type Flow = "agent" | "manual";
 
 export function GettingStarted({
 	displayOnboarding,
 	displayBackendOnboarding,
 	flow,
-	template,
 	provider,
-	noTemplate,
 }: {
 	flow?: Flow;
 	provider?: Provider;
 	displayOnboarding?: boolean;
 	displayBackendOnboarding?: boolean;
-	template?: string;
-	noTemplate?: boolean;
 }) {
 	const dataProvider = useEngineCompatDataProvider();
 	const { data: datacenters } = useSuspenseInfiniteQuery(
@@ -134,36 +128,6 @@ export function GettingStarted({
 		return <PathSelection />;
 	}
 
-	if (
-		flow === "template" &&
-		displayOnboarding &&
-		displayBackendOnboarding &&
-		!template
-	) {
-		return (
-			<Content className="flex flex-col">
-				<TemplatesList
-					back={
-						flow === "template" ? (
-							<Link
-								// @ts-expect-error
-								search={({ flow: _, ...old }: any) => ({
-									...old,
-								})}
-							>
-								Back
-							</Link>
-						) : undefined
-					}
-					getTemplateLink={(template) => ({
-						to: ".",
-						search: { template, flow },
-					})}
-				/>
-			</Content>
-		);
-	}
-
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
 			<motion.div
@@ -183,12 +147,10 @@ export function GettingStarted({
 						<Link
 							to="."
 							search={{
-								template: undefined,
-								noTemplate: undefined,
-								flow: flow === "template" ? flow : undefined,
+								flow: undefined,
 							}}
 						>
-							{flow === "template" ? "Back to Templates" : "Back"}
+							Back
 						</Link>
 					</Button>
 				) : null}
@@ -232,7 +194,7 @@ export function GettingStarted({
 							}}
 							content={{
 								provider: () => (
-									<ProviderSetup template={template} />
+									<ProviderSetup />
 								),
 								backend: () => (
 									<Suspense
@@ -245,7 +207,6 @@ export function GettingStarted({
 										}
 									>
 										<BackendSetup
-											template={template}
 											flow={flow}
 										/>
 									</Suspense>
@@ -305,11 +266,9 @@ function StepperFooter() {
 	);
 }
 
-function ProviderSetup({ template }: { template?: string }) {
+function ProviderSetup() {
 	const navigate = useNavigate();
 	const showAll = useSearch({ strict: false, select: (s) => s?.showAll });
-
-	const templateDetails = templates.find((t) => t.name === template);
 
 	const { control } = useFormContext();
 	const s = stepper.useStepper();
@@ -323,13 +282,6 @@ function ProviderSetup({ template }: { template?: string }) {
 					<>
 						{deployOptions
 							.filter((option) => !option.specializedPlatform)
-							.filter((option) => {
-								if (!templateDetails) return true;
-								if (option.name === "vercel") {
-									return !!templateDetails.providers?.vercel;
-								}
-								return true;
-							})
 							.slice(0, showAll ? deployOptions.length : 3)
 							.map((option) => (
 								<ButtonCard
@@ -450,9 +402,8 @@ function AgentInstructions({
 	);
 }
 
-function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
+function BackendSetup({ flow }: { flow?: Flow }) {
 	const provider = useWatch({ name: "provider" });
-	const templateDetails = templates.find((t) => t.name === template);
 	const providerDetails = deployOptions.find((p) => p.name === provider);
 
 	const endpoint = useEndpoint();
@@ -466,55 +417,42 @@ function BackendSetup({ template, flow }: { template?: string; flow?: Flow }) {
 		/>
 	);
 
+	let providerSetup: ReactNode = (
+		<>
+			<ExternalLinkCard
+				icon={faBookOpen}
+				title={"Integrate with Quickstart Guide"}
+				href={"https://www.rivet.dev/docs/actors/quickstart/"}
+			/>
+			<Connector />
+		</>
+	);
+
+	if (flow === "agent") {
+		providerSetup = null;
+	} else if (provider === "vercel") {
+		providerSetup = (
+			<>
+				<DeployToVercelCard />
+				<Connector />
+			</>
+		);
+	} else if (typeof provider === "string") {
+		providerSetup = (
+			<>
+				<TemplateSetup />
+				<Connector />
+			</>
+		);
+	}
+
 	return (
 		<div className="flex flex-col gap-10">
 			<SkillsSetup />
 			<Connector />
+			{providerSetup}
 
-			{match({ template, provider, flow })
-				.with(
-					{ provider: P.any, template: undefined, flow: "agent" },
-					() => null,
-				)
-				.with({ provider: "vercel", template: P.string }, () => (
-					<>
-						<DeployToVercelCard
-							template={
-								templateDetails?.providers?.vercel?.name ||
-								template ||
-								"chat-room"
-							}
-						/>
-						<Connector />
-					</>
-				))
-				// .with("railway", () => (
-				// 	<RailwayQuickSetupInfo template={template} />
-				// ))
-				.with(
-					{ provider: P.string, template: P.string },
-					({ template }) => (
-						<>
-							<TemplateSetup template={template} />
-							<Connector />
-						</>
-					),
-				)
-				.otherwise(() => (
-					<>
-						<ExternalLinkCard
-							icon={faBookOpen}
-							title={"Integrate with Quickstart Guide"}
-							href={
-								"https://www.rivet.dev/docs/actors/quickstart/"
-							}
-						/>
-						<Connector />
-					</>
-				))}
-
-			{((provider === "vercel" && !template) || provider !== "vercel") &&
-			flow !== "agent" ? (
+			{provider !== "vercel" && flow !== "agent" ? (
 				<>
 					<ExternalLinkCard
 						icon={providerDetails?.icon}

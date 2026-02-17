@@ -23,14 +23,5 @@
 		"hono": "^4.8.0"
 	},
 	"stableVersion": "0.8.0",
-	"template": {
-		"technologies": [
-			"cloudflare-workers",
-			"hono",
-			"typescript"
-		],
-		"tags": [],
-		"noFrontend": true
-	},
 	"license": "MIT"
 }

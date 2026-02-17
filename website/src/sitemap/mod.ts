@@ -66,7 +66,7 @@ import {
 	faVercel,
 	faVialCircleCheck,
 } from "@rivet-gg/icons";
-import { deployOptions, type DeployOption } from "@rivetkit/example-registry";
+import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
@@ -384,16 +384,6 @@ export const sitemap = [
 								href: "https://github.com/rivet-dev/rivet/tree/main/rivetkit-asyncapi",
 								external: true
 								// icon: faSquareBinary,
-							},
-						]
-					},
-					{
-						title: "More",
-						collapsible: true,
-						pages: [
-							{
-								title: "Submit Template",
-								href: "/docs/meta/submit-template",
 							},
 						]
 					},
