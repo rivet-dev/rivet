@@ -141,7 +141,7 @@ export const CodeWalkthrough = () => {
   }, []);
 
   return (
-    <section className='relative border-t border-white/10 bg-black pb-24 pt-48'>
+    <section className='relative border-t border-white/10 bg-white/[0.04] pb-24 pt-48'>
       <div className='mx-auto max-w-7xl px-6'>
         {/* Mobile-only header */}
         <motion.div

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Database, Cpu, Workflow, Clock, Wifi, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Database, Cpu, Workflow, Clock, Wifi, Zap, Bot, BrainCircuit, Users, Timer, UserCircle, Radio } from 'lucide-react';
+import { codeToHtml } from 'shiki';
 
-// Rivet logo icon matching the one in the hero
 const RivetIcon = ({ className }: { className?: string }) => (
   <svg width="16" height="16" viewBox="0 0 176 173" className={className}>
     <g transform="translate(-32928.8,-28118.2)">
@@ -39,524 +39,340 @@ const RivetIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-// Configuration for each use case diagram
-// Each feature shows: Actor capability (use case specific term)
-const useCaseDiagrams = {
-  default: {
-    title: 'Rivet Actor',
-    actorLabel: 'Actor',
-    actorFeatures: [
-      { icon: Cpu, label: 'In-memory state' },
-      { icon: Database, label: 'KV & SQLite' },
-    ],
-    clients: [{ label: 'Client', position: 'left' }],
-    externalServices: [],
-    animationSteps: 2,
-  },
+// Client-side shiki highlighting hook
+const useHighlightedCode = (code: string) => {
+  const [html, setHtml] = useState<string>('');
+  const cache = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    if (cache.current[code]) {
+      setHtml(cache.current[code]);
+      return;
+    }
+
+    codeToHtml(code, {
+      lang: 'typescript',
+      theme: 'ayu-dark',
+    }).then((result) => {
+      cache.current[code] = result;
+      setHtml(result);
+    });
+  }, [code]);
+
+  return html;
+};
+
+interface UseCaseConfig {
+  title: string;
+  description: string;
+  features: { icon: typeof Cpu; label: string; detail: string }[];
+  serverCode: string;
+  clientCode: string;
+}
+
+const useCases: Record<string, UseCaseConfig> = {
   'AI Agent': {
     title: 'AI Agent',
-    actorLabel: 'AI Agent',
-    actorFeatures: [
-      { icon: Cpu, label: 'In-memory state', subtext: 'Context' },
-      { icon: Database, label: 'KV & SQLite', subtext: 'Memory' },
-      { icon: Clock, label: 'Scheduling', subtext: 'Tool Calls' },
+    description: 'Each agent runs as its own actor with persistent context, memory, and the ability to schedule tool calls.',
+    features: [
+      { icon: Cpu, label: 'In-memory state', detail: 'Context' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'Memory' },
+      { icon: Clock, label: 'Scheduling', detail: 'Tool calls' },
     ],
-    clients: [{ label: 'User', position: 'left' }],
-    externalServices: [{ label: 'LLM', position: 'right' }],
-    animationSteps: 4,
+    serverCode: `// One actor per agent
+const agent = actor({
+  // State is persisted automatically
+  state: { messages: [], memory: {} },
+  actions: {
+    chat: (c, message) => {
+      c.state.messages.push(message);
+      const response = await c.llm.chat(c.state);
+      c.state.memory = response.memory;
+      return response.text;
+    },
+  },
+});`,
+    clientCode: `const agent = client.agent.get("agent-123");
+const reply = await agent.chat("Hello!");`,
   },
   'Agent Memory': {
     title: 'Agent Memory',
-    actorLabel: 'Agent Memory',
-    actorFeatures: [
-      { icon: Cpu, label: 'In-memory state', subtext: 'Context' },
-      { icon: Database, label: 'KV & SQLite', subtext: 'History' },
-      { icon: Clock, label: 'Sleeps when idle' },
+    description: 'Persistent per-agent memory that sleeps when idle and wakes instantly when needed.',
+    features: [
+      { icon: Cpu, label: 'In-memory state', detail: 'Context' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'History' },
+      { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient' },
     ],
-    clients: [{ label: 'Agent', position: 'left' }],
-    externalServices: [],
-    animationSteps: 2,
+    serverCode: `// One actor per agent's memory
+const memory = actor({
+  // Persisted across restarts
+  state: { entries: [], summary: "" },
+  actions: {
+    store: (c, entry) => {
+      c.state.entries.push(entry);
+    },
+    recall: (c, query) => {
+      return c.state.entries.filter(
+        e => e.tags.includes(query)
+      );
+    },
   },
-  'Game Server': {
-    title: 'Game Server',
-    actorLabel: 'Game Server',
-    actorFeatures: [
-      { icon: Cpu, label: 'In-memory state', subtext: 'Game State' },
-      { icon: Wifi, label: 'WebSockets', subtext: 'Events' },
-      { icon: Zap, label: 'Runs indefinitely' },
-    ],
-    clients: [
-      { label: 'Player 1', position: 'left' },
-      { label: 'Player 2', position: 'right' },
-    ],
-    externalServices: [],
-    animationSteps: 3,
+});`,
+    clientCode: `const mem = client.memory.get("user-456");
+await mem.store({ text: "likes coffee", tags: ["prefs"] });
+const results = await mem.recall("prefs");`,
   },
-  'Collaboration Backend': {
-    title: 'Collaboration Backend',
-    actorLabel: 'Collab Room',
-    actorFeatures: [
-      { icon: Cpu, label: 'In-memory state', subtext: 'Document' },
-      { icon: Wifi, label: 'WebSockets', subtext: 'Sync' },
-      { icon: Zap, label: 'Runs indefinitely' },
+  'Workflows': {
+    title: 'Workflows',
+    description: 'Multi-step operations with automatic retries, scheduling, and durable state across steps.',
+    features: [
+      { icon: Workflow, label: 'Workflows', detail: 'Steps' },
+      { icon: Clock, label: 'Scheduling', detail: 'Retry' },
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'State' },
     ],
-    clients: [
-      { label: 'User A', position: 'left' },
-      { label: 'User B', position: 'right' },
-    ],
-    externalServices: [],
-    animationSteps: 4,
+    serverCode: `// One actor per workflow run
+const workflow = actor({
+  // Progress survives crashes
+  state: { step: 0, results: {} },
+  actions: {
+    run: async (c) => {
+      c.state.results.data = await fetchData();
+      c.state.step = 1;
+      // Automatically retries on failure
+      c.state.results.processed = await transform(
+        c.state.results.data
+      );
+      c.state.step = 2;
+    },
   },
-  'Workflow Engine': {
-    title: 'Workflow Engine',
-    actorLabel: 'Workflow',
-    actorFeatures: [
-      { icon: Workflow, label: 'Workflows', subtext: 'Steps' },
-      { icon: Clock, label: 'Scheduling', subtext: 'Retry' },
-      { icon: Database, label: 'KV & SQLite', subtext: 'State' },
-    ],
-    clients: [{ label: 'Trigger', position: 'left' }],
-    externalServices: [{ label: 'External API', position: 'right' }],
-    animationSteps: 4,
+});`,
+    clientCode: `const job = client.workflow.create();
+await job.run();`,
   },
-  'Session Store': {
-    title: 'Session Store',
-    actorLabel: 'Session',
-    actorFeatures: [
-      { icon: Database, label: 'KV & SQLite', subtext: 'User Data' },
-      { icon: Cpu, label: 'In-memory state', subtext: 'Auth State' },
-      { icon: Clock, label: 'Sleeps when idle' },
+  'Collab Docs': {
+    title: 'Collab Docs',
+    description: 'Real-time collaborative editing where each document is an actor broadcasting changes to all connected users.',
+    features: [
+      { icon: Cpu, label: 'In-memory state', detail: 'Document' },
+      { icon: Wifi, label: 'WebSockets', detail: 'Sync' },
+      { icon: Zap, label: 'Runs indefinitely', detail: 'Always on' },
     ],
-    clients: [{ label: 'User', position: 'left' }],
-    externalServices: [],
-    animationSteps: 3,
+    serverCode: `// One actor per document
+const document = actor({
+  state: { content: "", version: 0 },
+  actions: {
+    edit: (c, patch) => {
+      c.state.content = applyPatch(
+        c.state.content, patch
+      );
+      c.state.version++;
+      // Send realtime update to all clients
+      c.broadcast("update", c.state);
+    },
+  },
+});`,
+    clientCode: `const doc = client.document.get("doc-789");
+await doc.edit({ insert: "Hello", pos: 0 });
+doc.on("update", (state) => render(state));`,
   },
   'Realtime Sync': {
     title: 'Realtime Sync',
-    actorLabel: 'Sync Engine',
-    actorFeatures: [
-      { icon: Cpu, label: 'In-memory state', subtext: 'State' },
-      { icon: Wifi, label: 'WebSockets', subtext: 'Events' },
-      { icon: Zap, label: 'Runs indefinitely' },
+    description: 'Live state synchronization across clients with WebSocket connections and indefinite uptime.',
+    features: [
+      { icon: Cpu, label: 'In-memory state', detail: 'State' },
+      { icon: Wifi, label: 'WebSockets', detail: 'Events' },
+      { icon: Zap, label: 'Runs indefinitely', detail: 'Always on' },
     ],
-    clients: [
-      { label: 'Client 1', position: 'left' },
-      { label: 'Client 2', position: 'right' },
+    serverCode: `// One actor per shared resource
+const sync = actor({
+  state: { data: {}, clients: [] },
+  actions: {
+    update: (c, key, value) => {
+      c.state.data[key] = value;
+      // Broadcast changes to all connections
+      c.broadcast("sync", { key, value });
+    },
+  },
+});`,
+    clientCode: `const room = client.sync.get("room-101");
+await room.update("cursor", { x: 10, y: 20 });
+room.on("sync", (data) => updateUI(data));`,
+  },
+  'Session Store': {
+    title: 'Session Store',
+    description: 'Per-user session actors that persist auth state and user data, sleeping when idle to save resources.',
+    features: [
+      { icon: Database, label: 'SQLite or JSON persistence', detail: 'User data' },
+      { icon: Cpu, label: 'In-memory state', detail: 'Auth state' },
+      { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient' },
     ],
-    externalServices: [],
-    animationSteps: 3,
+    serverCode: `// One actor per user session
+const session = actor({
+  // Sleeps when idle, wakes instantly
+  state: { user: null, prefs: {} },
+  actions: {
+    login: (c, credentials) => {
+      c.state.user = authenticate(credentials);
+      return { token: c.state.user.token };
+    },
+    getPrefs: (c) => c.state.prefs,
+  },
+});`,
+    clientCode: `const session = client.session.get("user-123");
+const { token } = await session.login(credentials);
+const prefs = await session.getPrefs();`,
   },
 };
 
-type UseCaseKey = keyof typeof useCaseDiagrams;
-
-const ActorDiagram = ({ useCase = 'default' }: { useCase?: UseCaseKey }) => {
-  const [activeStep, setActiveStep] = useState(0);
-  const [displayedUseCase, setDisplayedUseCase] = useState<UseCaseKey>(useCase);
-  const config = useCaseDiagrams[displayedUseCase] || useCaseDiagrams.default;
-
-  // Smoothly transition to new use case without flash
-  useEffect(() => {
-    setDisplayedUseCase(useCase);
-    setActiveStep(0);
-  }, [useCase]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveStep(prev => (prev + 1) % config.animationSteps);
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [config.animationSteps, displayedUseCase]);
-
-  const hasRightClients = config.clients.some(c => c.position === 'right');
-  const hasExternalServices = config.externalServices.length > 0;
-  const leftClients = config.clients.filter(c => c.position === 'left');
-  const rightClients = config.clients.filter(c => c.position === 'right');
-
-  // Animation logic based on use case
-  const getClientHighlight = (index: number, position: 'left' | 'right') => {
-    if (displayedUseCase === 'Game Server' || displayedUseCase === 'Collaboration Backend' || displayedUseCase === 'Realtime Sync') {
-      // Multi-client: alternate or broadcast
-      if (activeStep === 0) return position === 'left' && index === 0;
-      if (activeStep === 1) return true; // Actor processing
-      if (activeStep === 2) return true; // Broadcast to all
-      return false;
-    }
-    if (displayedUseCase === 'AI Agent' || displayedUseCase === 'Workflow Engine') {
-      // With external service
-      return activeStep === 0 && position === 'left';
-    }
-    // Default: simple back and forth
-    return activeStep === 0;
-  };
-
-  const getActorHighlight = () => {
-    if (displayedUseCase === 'AI Agent' || displayedUseCase === 'Workflow Engine') {
-      return activeStep === 1 || activeStep === 3;
-    }
-    if (displayedUseCase === 'Game Server' || displayedUseCase === 'Collaboration Backend' || displayedUseCase === 'Realtime Sync') {
-      return activeStep === 1;
-    }
-    return activeStep === 1;
-  };
-
-  const getExternalHighlight = () => {
-    if (displayedUseCase === 'AI Agent' || displayedUseCase === 'Workflow Engine') {
-      return activeStep === 2;
-    }
-    return false;
-  };
-
-  const getArrowHighlight = (direction: 'left' | 'right' | 'external') => {
-    if (displayedUseCase === 'AI Agent') {
-      if (direction === 'left') return activeStep === 0 || activeStep === 3;
-      if (direction === 'external') return activeStep === 1 || activeStep === 2;
-      return false;
-    }
-    if (displayedUseCase === 'Workflow Engine') {
-      if (direction === 'left') return activeStep === 0;
-      if (direction === 'external') return activeStep === 2;
-      return false;
-    }
-    if (displayedUseCase === 'Game Server' || displayedUseCase === 'Collaboration Backend' || displayedUseCase === 'Realtime Sync') {
-      if (direction === 'left') return activeStep === 0 || activeStep === 2;
-      if (direction === 'right') return activeStep === 2;
-      return false;
-    }
-    // Default
-    return activeStep === 0;
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.5 }}
-      className='flex flex-col border-t border-white/10 pt-3 lg:pt-6'
-    >
-      <div className='mb-4 flex items-center gap-3'>
-        <RivetIcon className='text-zinc-500' />
-        <div className='flex items-center gap-2'>
-          <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Rivet Actor</h4>
-          {displayedUseCase !== 'default' && (
-            <motion.span
-              key={`title-${displayedUseCase}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              className='text-sm font-medium uppercase tracking-wider text-zinc-500'
-            >
-              / {config.title}
-            </motion.span>
-          )}
-        </div>
-      </div>
-
-      <div className='relative flex min-h-[160px] lg:h-56 items-center justify-center py-2 lg:py-0'>
-        <div className='flex flex-col md:flex-row items-center gap-4 md:gap-10'>
-          {/* Left Clients */}
-          <div className='flex flex-row md:flex-col gap-2 md:gap-3'>
-            {leftClients.map((client, idx) => (
-              <motion.div
-                key={`left-${idx}`}
-                initial={false}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`rounded-lg border px-3 py-1.5 md:px-6 md:py-3 ${
-                  getClientHighlight(idx, 'left') ? 'border-white/20 bg-white/5 text-white' : 'border-white/5 text-zinc-500'
-                } font-mono text-[10px] md:text-sm transition-colors`}
-              >
-                <motion.span
-                  key={`${displayedUseCase}-left-${idx}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {client.label}
-                </motion.span>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Left Arrow (bidirectional) */}
-          <div className='flex items-center rotate-90 md:rotate-0'>
-            <div
-              className={`h-1.5 w-1.5 md:h-2 md:w-2 border-l-2 border-t-2 ${
-                getArrowHighlight('left') ? 'border-white/50' : 'border-white/20'
-              } -rotate-45 transition-colors`}
-            />
-            <div
-              className={`h-[2px] w-6 md:w-16 ${
-                getArrowHighlight('left') ? 'bg-white/50' : 'bg-white/20'
-              } transition-colors`}
-            />
-            <div
-              className={`h-1.5 w-1.5 md:h-2 md:w-2 border-r-2 border-t-2 ${
-                getArrowHighlight('left') ? 'border-white/50' : 'border-white/20'
-              } rotate-45 transition-colors`}
-            />
-          </div>
-
-          {/* The Actor */}
-          <div className='relative'>
-            <motion.div
-              initial={false}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.2 }}
-              className={`rounded-lg border px-4 py-3 md:px-8 md:py-5 ${
-                getActorHighlight()
-                  ? 'border-white/20 bg-white/5'
-                  : 'border-white/5'
-              } flex flex-col items-center gap-1.5 md:gap-2.5 transition-all`}
-            >
-              <div className='flex flex-col items-center'>
-                <div className='font-mono text-xs md:text-base font-medium text-white'>Actor</div>
-                {displayedUseCase !== 'default' && (
-                  <motion.div
-                    key={`subtext-${displayedUseCase}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className='font-mono text-[8px] md:text-xs text-zinc-500'
-                  >
-                    {config.actorLabel}
-                  </motion.div>
-                )}
-              </div>
-              <div className='h-[1px] w-full bg-white/10' />
-              {config.actorFeatures.map((feature, idx) => {
-                const FeatureIcon = feature.icon;
-                const subtext = 'subtext' in feature ? feature.subtext : null;
-                return (
-                  <motion.div
-                    key={`${displayedUseCase}-feature-${idx}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2, delay: idx * 0.05 }}
-                    className='flex items-center gap-1.5 md:gap-2'
-                  >
-                    <FeatureIcon className='h-2.5 w-2.5 md:h-4 md:w-4 text-zinc-500' />
-                    <span className='text-[10px] md:text-sm text-zinc-500'>
-                      {feature.label}
-                      {subtext && <span className='text-zinc-600 hidden md:inline'> ({subtext})</span>}
-                    </span>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
-          </div>
-
-          {/* Right Arrow (if needed) */}
-          {(hasRightClients || hasExternalServices) && (
-            <div className='flex items-center rotate-90 md:rotate-0'>
-              {!hasExternalServices && (
-                <div
-                  className={`h-1.5 w-1.5 md:h-2 md:w-2 border-l-2 border-t-2 ${
-                    getArrowHighlight('right') ? 'border-white/50' : 'border-white/20'
-                  } -rotate-45 transition-colors`}
-                />
-              )}
-              <div
-                className={`h-[2px] w-6 md:w-16 ${
-                  getArrowHighlight(hasExternalServices ? 'external' : 'right') ? 'bg-white/50' : 'bg-white/20'
-                } transition-colors`}
-              />
-              <div
-                className={`h-1.5 w-1.5 md:h-2 md:w-2 border-r-2 border-t-2 ${
-                  getArrowHighlight(hasExternalServices ? 'external' : 'right') ? 'border-white/50' : 'border-white/20'
-                } rotate-45 transition-colors`}
-              />
-            </div>
-          )}
-
-          {/* Right Clients */}
-          {rightClients.length > 0 && (
-            <div className='flex flex-row md:flex-col gap-2 md:gap-3'>
-              {rightClients.map((client, idx) => (
-                <motion.div
-                  key={`right-${idx}`}
-                  initial={false}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={`rounded-lg border px-3 py-1.5 md:px-6 md:py-3 ${
-                    getClientHighlight(idx, 'right') ? 'border-white/20 bg-white/5 text-white' : 'border-white/5 text-zinc-500'
-                  } font-mono text-[10px] md:text-sm transition-colors`}
-                >
-                  <motion.span
-                    key={`${displayedUseCase}-right-${idx}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {client.label}
-                  </motion.span>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* External Services */}
-          {config.externalServices.map((service, idx) => (
-            <motion.div
-              key={`ext-${idx}`}
-              initial={false}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.2 }}
-              className={`rounded-lg border px-3 py-1.5 md:px-6 md:py-3 ${
-                getExternalHighlight() ? 'border-white/20 bg-white/5 text-white' : 'border-white/5 text-zinc-500'
-              } font-mono text-[10px] md:text-sm transition-colors`}
-            >
-              <motion.span
-                key={`${displayedUseCase}-ext-${idx}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2 }}
-              >
-                {service.label}
-              </motion.span>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </motion.div>
-  );
-};
+type UseCaseKey = keyof typeof useCases;
 
 const useCaseOrder: UseCaseKey[] = [
   'AI Agent',
   'Agent Memory',
-  'Game Server',
-  'Collaboration Backend',
-  'Workflow Engine',
-  'Session Store',
+  'Workflows',
+  'Collab Docs',
   'Realtime Sync',
+  'Session Store',
 ];
 
-export const ProblemSection = () => {
-  const [contentParallax, setContentParallax] = useState(0);
-  const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('default');
-  const [isInView, setIsInView] = useState(false);
-  const [pillsOpacity, setPillsOpacity] = useState(0);
-  const sectionRef = useRef<HTMLElement>(null);
+const useCaseIcons: Record<string, typeof Bot> = {
+  'AI Agent': Bot,
+  'Agent Memory': BrainCircuit,
+  'Workflows': Timer,
+  'Collab Docs': Users,
+  'Realtime Sync': Radio,
+  'Session Store': UserCircle,
+};
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
-      const windowHeight = window.innerHeight;
-
-      // Content parallax - content slides up to meet the hero section when "Each Actor" is centered
-      const contentStart = windowHeight * 0.2;
-      const contentEnd = windowHeight * 0.6;
-      const maxContentOffset = 400;
-      const contentOffset = Math.min(maxContentOffset, Math.max(0, (scrollY - contentStart) / (contentEnd - contentStart) * maxContentOffset));
-      setContentParallax(contentOffset);
-    };
-
-    handleScroll();
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
-  // Detect when section is in view
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsInView(entry.isIntersecting);
-      },
-      { threshold: 0.3 }
-    );
-
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  // Listen for hero scroll opacity to fade in pills (inverse of hero fade out)
-  useEffect(() => {
-    const handleHeroScrollOpacity = (event: CustomEvent<{ opacity: number }>) => {
-      // Inverse: when hero fades out (opacity -> 0), pills fade in (opacity -> 1)
-      setPillsOpacity(1 - event.detail.opacity);
-    };
-
-    window.addEventListener('heroScrollOpacity', handleHeroScrollOpacity as EventListener);
-    return () => window.removeEventListener('heroScrollOpacity', handleHeroScrollOpacity as EventListener);
-  }, []);
-
-  // Dispatch selected use case to hero to highlight built-in features
-  useEffect(() => {
-    const event = new CustomEvent('useCaseSelected', {
-      detail: { useCase: activeUseCase === 'default' ? null : activeUseCase }
-    });
-    window.dispatchEvent(event);
-  }, [activeUseCase]);
-
-  const pills = (
-    <div className='flex flex-wrap justify-center gap-2'>
-      <button
-        type="button"
-        onClick={() => setActiveUseCase('default')}
-        className={`rounded-full border px-2 py-1 text-[10px] md:px-3 md:text-xs transition-all ${
-          activeUseCase === 'default'
-            ? 'border-[#FF4500]/50 bg-[#FF4500]/10 text-[#FF4500]'
-            : 'border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-400'
-        }`}
-      >
-        Actor
-      </button>
-      {useCaseOrder.map((useCase) => (
-        <button
-          key={useCase}
-          type="button"
-          onClick={() => setActiveUseCase(useCase)}
-          className={`rounded-full border px-2 py-1 text-[10px] md:px-3 md:text-xs transition-all ${
-            activeUseCase === useCase
-              ? 'border-[#FF4500]/50 bg-[#FF4500]/10 text-[#FF4500]'
-              : 'border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-400'
-          }`}
-        >
-          {useCase}
-        </button>
-      ))}
-    </div>
-  );
+const HighlightedCode = ({ code, title }: { code: string; title: string }) => {
+  const html = useHighlightedCode(code);
 
   return (
-    <section ref={sectionRef} id='problem' className='relative border-b border-white/5 px-4 lg:px-6 pt-4 lg:pt-12 pb-12 lg:pb-48'>
-      <div className='mx-auto w-full max-w-7xl'>
-        {/* Mobile: simple layout */}
-        <div className='lg:hidden flex flex-col gap-4'>
-          <ActorDiagram useCase={activeUseCase} />
-          {pills}
+    <div>
+      <div className='px-4 py-2 border-b border-white/[0.12] text-xs text-zinc-500 font-mono'>
+        {title}
+      </div>
+      {!html ? (
+        <pre className='p-4 font-mono text-xs md:text-sm leading-6 text-zinc-400 overflow-x-auto'>
+          <code>{code}</code>
+        </pre>
+      ) : (
+        <div
+          className='p-4 text-xs md:text-sm leading-6 overflow-x-auto [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0 [&_code]:!bg-transparent'
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
+    </div>
+  );
+};
+
+const UseCaseContent = ({ config }: { config: UseCaseConfig }) => {
+  return (
+    <div className='grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-start'>
+      {/* Left: Stacked code snippets */}
+      <div className='flex flex-col gap-3'>
+        <div className='rounded-lg border border-white/[0.12] bg-white/[0.03] overflow-hidden'>
+          <HighlightedCode code={config.serverCode} title='backend.ts' />
+        </div>
+        <div className='rounded-lg border border-white/[0.12] bg-white/[0.03] overflow-hidden'>
+          <HighlightedCode code={config.clientCode} title='client.ts' />
+        </div>
+      </div>
+
+      {/* Right: Description + features */}
+      <div className='flex flex-col gap-6'>
+        <div className='flex items-center gap-3'>
+          <RivetIcon className='text-zinc-500' />
+          <div className='flex items-center gap-2'>
+            <span className='text-sm font-medium uppercase tracking-wider text-white'>Rivet Actor</span>
+            <span className='text-sm font-medium uppercase tracking-wider text-zinc-500'>/ {config.title}</span>
+          </div>
         </div>
 
-        {/* Desktop: with parallax and header */}
-        <div className='hidden lg:block' style={{ transform: `translateY(${400 - contentParallax}px)` }}>
-          <div className='flex flex-col gap-12'>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-            >
-              <p className='text-base leading-relaxed text-zinc-500'>
-                An Actor is just a function. Import it like a library, write your logic, and these capabilities come built in — making Actors natively suited for agent memory, background jobs, game lobbies, and more.
-              </p>
-            </motion.div>
+        <p className='text-sm leading-relaxed text-zinc-400'>
+          {config.description}
+        </p>
 
-            <ActorDiagram useCase={activeUseCase} />
+        <div className='flex flex-col gap-3'>
+          {config.features.map((feature, idx) => {
+            const Icon = feature.icon;
+            return (
+              <div key={idx} className='flex items-center gap-3'>
+                <Icon className='h-4 w-4 text-zinc-500 flex-shrink-0' />
+                <span className='text-sm text-zinc-300'>{feature.label}</span>
+                <span className='text-sm text-zinc-600'>({feature.detail})</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
 
-            <div
-              className='flex justify-center mt-4 transition-opacity duration-300'
-              style={{ opacity: pillsOpacity > 0 ? pillsOpacity : 1 }}
-            >
-              {pills}
-            </div>
+export const ProblemSection = () => {
+  const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('AI Agent');
+  const config = useCases[activeUseCase];
+
+  return (
+    <section id='problem' className='relative border-b border-white/10 px-4 lg:px-6 py-20 lg:py-32'>
+      <div className='mx-auto w-full max-w-7xl'>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className='mb-12'
+        >
+          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+            See it in action.
+          </h2>
+          <p className='text-base leading-relaxed text-zinc-500'>
+            One primitive that adapts to agents, workflows, collaboration, and more.
+          </p>
+        </motion.div>
+
+        {/* Segmented control */}
+        <div className='mb-10'>
+          <div className='flex w-full overflow-x-auto scrollbar-hide rounded-lg border border-white/[0.12] bg-white/[0.03] p-1 cursor-pointer'>
+            {useCaseOrder.map((useCase, idx) => {
+              const Icon = useCaseIcons[useCase];
+              return (
+                <div key={useCase} className='flex flex-1 min-w-0 items-center'>
+                  {idx > 0 && (
+                    <div className='w-px self-stretch my-1.5 mx-1 bg-white/[0.12] flex-shrink-0' />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveUseCase(useCase)}
+                    className={`whitespace-nowrap rounded-md px-4 py-2.5 text-xs md:text-sm transition-all flex items-center justify-center gap-2 flex-1 ${
+                      activeUseCase === useCase
+                        ? 'bg-[#FF4500]/15 text-[#FF4500] border border-[#FF4500]/20'
+                        : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+                    }`}
+                  >
+                    {Icon && <Icon className='h-3.5 w-3.5' />}
+                    {useCase}
+                  </button>
+                </div>
+              );
+            })}
           </div>
+        </div>
+
+        <div className='h-[600px] md:h-[520px] lg:h-[480px] overflow-hidden'>
+          <AnimatePresence mode='wait'>
+            <motion.div
+              key={activeUseCase}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className='h-full'
+            >
+              <UseCaseContent config={config} />
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </section>

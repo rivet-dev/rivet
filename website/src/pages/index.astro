@@ -3,6 +3,7 @@ import { getCollection } from 'astro:content';
 import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { RedesignedHero } from '@/components/marketing/sections/RedesignedHero';
+import { BuiltInFeatures } from '@/components/marketing/sections/BuiltInFeatures';
 import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
 import { CodeWalkthrough } from '@/components/marketing/sections/CodeWalkthrough';
 import { HostingSection } from '@/components/marketing/sections/HostingSection';
@@ -86,6 +87,7 @@ const latestChangelogTitle = latest?.data.title ?? '';
 		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<main>
 				<RedesignedHero latestChangelogTitle={latestChangelogTitle} thinkingImages={thinkingImages} client:load />
+				<BuiltInFeatures client:visible />
 				<ProblemSection client:visible />
 				<CodeWalkthrough client:visible />
 				<IntegrationsSection client:visible />
