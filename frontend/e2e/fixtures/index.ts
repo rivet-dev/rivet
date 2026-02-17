@@ -27,7 +27,6 @@ export const test = base.extend<Fixtures>({
 		// should see all path options
 		for (const testId of [
 			TEST_IDS.Onboarding.PathSelectionAgent,
-			TEST_IDS.Onboarding.PathSelectionTemplate,
 			TEST_IDS.Onboarding.PathSelectionManual,
 		]) {
 			const path = authenticated.getByTestId(testId);

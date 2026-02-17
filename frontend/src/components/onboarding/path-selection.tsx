@@ -1,4 +1,4 @@
-import { faCode, faSparkles, faStamp } from "@rivet-gg/icons";
+import { faCode, faSparkles } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import { Content } from "@/app/layout";
 import { MotionLink } from "@/app/motion-link";
@@ -30,7 +30,7 @@ export function PathSelection() {
 				>
 					<MotionLink
 						to="."
-						search={{ flow: "agent", noTemplate: true }}
+						search={{ flow: "agent" }}
 						className="text-left"
 						data-testid={TEST_IDS.Onboarding.PathSelectionAgent}
 						variants={{
@@ -42,22 +42,6 @@ export function PathSelection() {
 							icon={faSparkles}
 							title="Use Coding Agent"
 							description="Let your Coding Agent create and configure your project for you"
-						/>
-					</MotionLink>
-					<MotionLink
-						to="."
-						search={{ flow: "template" }}
-						className="text-left"
-						data-testid={TEST_IDS.Onboarding.PathSelectionTemplate}
-						variants={{
-							initial: { opacity: 0, y: 10 },
-							show: { opacity: 1, y: 0 },
-						}}
-					>
-						<ExternalCard
-							icon={faStamp}
-							title="Start from template"
-							description="Quickly set up a project using a pre-built template"
 						/>
 					</MotionLink>
 					<MotionLink

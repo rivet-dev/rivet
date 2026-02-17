@@ -91,14 +91,14 @@ High-performance Rust orchestration layer for production scale. Handles actor li
 <tr>
 <td width="50%" valign="top">
 
-### One-Click Templates
+### Examples
 
-- [Chat Room](https://rivet.dev/templates/chat-room) - Realtime messaging
-- [AI Agent](https://rivet.dev/templates/ai-agent) - Stateful AI conversations
-- [Cursors](https://rivet.dev/templates/cursors) - Collaborative cursors
-- [Scheduling](https://rivet.dev/templates/scheduling) - Async processing
+- [Chat Room](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room) - Realtime messaging
+- [AI Agent](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent) - Stateful AI conversations
+- [Cursors](https://github.com/rivet-dev/rivet/tree/main/examples/cursors) - Collaborative cursors
+- [Scheduling](https://github.com/rivet-dev/rivet/tree/main/examples/scheduling) - Async processing
 
-[View all templates →](https://rivet.dev/templates)
+[View all examples →](https://github.com/rivet-dev/rivet/tree/main/examples)
 
 </td>
 <td width="50%" valign="top">
@@ -142,7 +142,7 @@ curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engin
 
 ## Integrations
 
-**Frameworks**: [Hono](https://rivet.dev/templates/hono) • [Elysia](https://rivet.dev/templates/elysia) • [tRPC](https://rivet.dev/templates/trpc)
+**Frameworks**: [Hono](https://github.com/rivet-dev/rivet/tree/main/examples/hono) • [Elysia](https://github.com/rivet-dev/rivet/tree/main/examples/elysia) • [tRPC](https://github.com/rivet-dev/rivet/tree/main/examples/trpc)
 
 **Clients**: [JavaScript](https://www.rivet.dev/docs/clients/javascript) • [React](https://www.rivet.dev/docs/clients/react) • [Next.js](https://www.rivet.dev/docs/clients/next-js)
 
@@ -176,4 +176,3 @@ curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engin
 ## License
 
 [Apache 2.0](LICENSE)
-

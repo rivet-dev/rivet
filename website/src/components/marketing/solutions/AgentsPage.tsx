@@ -143,7 +143,7 @@ const Hero = () => (
 							Start Building
 							<ArrowRight className="h-4 w-4" />
 						</a>
-						<a href="/templates/ai-agent" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white">
+						<a href="https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white">
 							View Example
 						</a>
 					</motion.div>

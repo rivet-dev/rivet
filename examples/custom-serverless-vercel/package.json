@@ -20,15 +20,6 @@
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1"
 	},
-	"template": {
-		"technologies": [
-			"typescript"
-		],
-		"tags": [
-			"starter"
-		],
-		"noFrontend": true
-	},
 	"stableVersion": "0.8.0",
 	"license": "MIT"
 }

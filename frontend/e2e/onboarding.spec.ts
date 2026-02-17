@@ -18,19 +18,6 @@ test.describe("new user onboarding", () => {
 		await expect(page).toHaveURL(/orgs\/[^/]+\/projects\/agentic-project/);
 	});
 
-	test("when selecting the template onboarding path, user can create a templated project successfully", async ({
-		onboardingPage,
-		page,
-	}) => {
-		await onboardingPage.selectTemplatePath();
-		await onboardingPage.selectTemplate("chat-room");
-		await onboardingPage.createTemplateProject("Templated Project");
-		// should be redirected to the new project page
-		await expect(page).toHaveURL(
-			/orgs\/[^/]+\/projects\/templated-project/,
-		);
-	});
-
 	test("when selecting the manual onboarding path, user can create a manual project successfully", async ({
 		onboardingPage,
 		page,

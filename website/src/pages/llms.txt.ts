@@ -49,7 +49,6 @@ export const GET: APIRoute = async ({ site }) => {
 	const staticUrls = [
 		`${siteUrl}/`,
 		`${siteUrl}/docs/`,
-		`${siteUrl}/templates/`,
 		`${siteUrl}/cloud/`,
 		`${siteUrl}/pricing/`,
 		`${siteUrl}/changelog/`,

@@ -5,7 +5,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
-import type { Provider } from "@rivetkit/example-registry";
+import type { Provider } from "@rivetkit/shared-data";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";

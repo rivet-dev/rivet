@@ -1,15 +1,14 @@
 import {
-    faAws,
-    faCloudflare,
-    faGoogleCloud,
-    faHetznerH,
-    faKubernetes,
-    faRailway,
-    faRocket,
-    faServer,
-    faVercel,
+	faAws,
+	faCloudflare,
+	faGoogleCloud,
+	faHetznerH,
+	faKubernetes,
+	faRailway,
+	faRocket,
+	faServer,
+	faVercel,
 } from "@rivet-gg/icons";
-
 
 export interface DeployOption {
 	displayName: string;
@@ -102,8 +101,7 @@ export const deployOptions = [
 		description:
 			"Integrate RivetKit with any other hosting platform of your choice",
 		icon: faRocket as any,
-	}
+	},
 ] satisfies DeployOption[];
-
 
 export type Provider = typeof deployOptions[number]["name"];

@@ -1,38 +1,89 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Terminal, ArrowRight, Check } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
-const ThinkingImageCycler = ({ images }: { images: string[] }) => {
+interface ThinkingImage {
+  src: string;
+  title: string;
+  artist: string;
+  date: string;
+}
+
+const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFan, setShowFan] = useState(false);
+  const [leavingCards, setLeavingCards] = useState<Array<{ id: string; image: ThinkingImage }>>([]);
+
+  useEffect(() => {
+    // Preload upcoming images to avoid decode flashes during cycling.
+    const preloadAhead = Math.min(4, images.length - 1);
+    for (let i = 1; i <= preloadAhead; i++) {
+      const next = images[(currentIndex + i) % images.length];
+      const img = new window.Image();
+      img.src = next.src;
+    }
+  }, [currentIndex, images]);
 
   const handleClick = () => {
-    setShowFan(false);
+    const leavingImage = images[currentIndex];
+    setLeavingCards((prev) => [...prev, { id: `${leavingImage.src}-${Date.now()}`, image: leavingImage }]);
     setCurrentIndex((prev) => (prev + 1) % images.length);
   };
 
   const handleMouseEnter = () => {
     setShowFan(true);
-    setTimeout(() => {
-      setShowFan(false);
-    }, 1000);
   };
 
   const handleMouseLeave = () => {
     setShowFan(false);
   };
 
-  const getNextIndices = (count: number) => {
+  const getStackIndices = (count: number) => {
     const indices = [];
-    for (let i = 1; i <= count; i++) {
+    for (let i = 0; i < count; i++) {
       indices.push((currentIndex + i) % images.length);
     }
     return indices;
   };
 
-  const fanCards = getNextIndices(3);
+  const getStackPose = (position: number, expanded: boolean) => {
+    const basePoses = [
+      { x: 0, y: 0, rotate: -0.7, scale: 1 },
+      { x: 5, y: 2, rotate: 1.2, scale: 0.985 },
+      { x: 10, y: 4, rotate: 2.4, scale: 0.97 },
+    ];
+
+    const expandedOffsets = [
+      { x: -6, y: 0, rotate: -0.8 },
+      { x: 8, y: -4, rotate: 1.1 },
+      { x: 16, y: -8, rotate: 1.7 },
+    ];
+
+    const idx = Math.min(position, basePoses.length - 1);
+    const base = basePoses[idx];
+    const expand = expanded ? expandedOffsets[idx] : { x: 0, y: 0, rotate: 0 };
+
+    if (!expanded) {
+      return {
+        x: 0,
+        y: 0,
+        rotate: 0,
+        scale: 1,
+      };
+    }
+
+    return {
+      x: base.x + expand.x,
+      y: base.y + expand.y,
+      rotate: base.rotate + expand.rotate,
+      scale: base.scale,
+    };
+  };
+
+  const stackCards = getStackIndices(Math.min(3, images.length));
+  const currentImage = images[currentIndex];
 
   return (
     <div
@@ -41,53 +92,85 @@ const ThinkingImageCycler = ({ images }: { images: string[] }) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {fanCards.map((imageIndex, i) => {
-        const rotation = showFan ? (i + 1) * 6 : 0;
-        const translateX = showFan ? (i + 1) * 15 : 0;
-        const translateY = showFan ? (i + 1) * -5 : 0;
-        const scale = 1 - (i + 1) * 0.02;
+      <div
+        className={`pointer-events-none absolute -inset-3 rounded-xl bg-black/70 blur-2xl transition-all duration-300 ease-out ${
+          showFan ? 'opacity-100 scale-105' : 'opacity-0 scale-100'
+        }`}
+        style={{ zIndex: 0 }}
+      />
+
+      {stackCards.map((imageIndex, stackPosition) => {
+        const pose = getStackPose(stackPosition, showFan);
+        const image = images[imageIndex];
+        const isTopCard = stackPosition === 0;
 
         return (
-          <div
-            key={`fan-${i}`}
-            className="absolute inset-0 rounded-lg overflow-hidden shadow-xl transition-all duration-300 ease-out"
+          <motion.div
+            key={image.src}
+            className={`absolute inset-0 rounded-lg overflow-hidden border ${
+              showFan ? 'border-white/20' : 'border-white/0'
+            } ${isTopCard ? 'shadow-2xl' : 'shadow-xl'}`}
             style={{
-              transform: `rotate(${rotation}deg) translateX(${translateX}px) translateY(${translateY}px) scale(${scale})`,
-              zIndex: 3 - i,
-              opacity: showFan ? 0.8 - i * 0.2 : 0,
+              zIndex: 20 - stackPosition,
+              boxShadow: isTopCard && showFan ? '0 28px 70px rgba(0, 0, 0, 0.65)' : undefined,
             }}
+            initial={false}
+            animate={{ ...pose, opacity: isTopCard || showFan ? 1 : 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
             <img
-              src={images[imageIndex]}
-              alt="Classical artwork depicting contemplation"
-              loading="lazy"
+              src={image.src}
+              alt={`${image.title} by ${image.artist}`}
+              loading={isTopCard && currentIndex === 0 ? 'eager' : 'lazy'}
               decoding="async"
               className="w-full h-full object-cover select-none pointer-events-none"
             />
-          </div>
+            {isTopCard ? <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" /> : null}
+          </motion.div>
         );
       })}
 
+      <AnimatePresence initial={false}>
+        {leavingCards.map((card) => {
+          const topPose = getStackPose(0, showFan);
+
+          return (
+            <motion.div
+              key={card.id}
+              className={`pointer-events-none absolute inset-0 rounded-lg overflow-hidden border ${
+                showFan ? 'border-white/20' : 'border-white/0'
+              } shadow-2xl`}
+              style={{ zIndex: 30 }}
+              initial={{ ...topPose, opacity: 1 }}
+              animate={{ x: topPose.x - 36, y: topPose.y - 2, rotate: topPose.rotate - 7, scale: 0.985, opacity: 0 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              onAnimationComplete={() =>
+                setLeavingCards((prev) => prev.filter((prevCard) => prevCard.id !== card.id))
+              }
+            >
+              <img
+                src={card.image.src}
+                alt={`${card.image.title} by ${card.image.artist}`}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover select-none pointer-events-none"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+
       <div
-        className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-transform duration-300 ease-out"
-        style={{
-          zIndex: 10,
-          transform: showFan ? 'rotate(-3deg) translateX(-10px)' : 'rotate(0deg) translateX(0px)',
-        }}
+        className={`pointer-events-none absolute left-0 right-0 top-full mt-3 text-center transition-all duration-200 ${
+          showFan ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'
+        }`}
+        style={{ zIndex: 20 }}
       >
-        {images.map((src, index) => (
-          <img
-            key={src}
-            src={src}
-            alt="Classical artwork depicting contemplation and deep thought"
-            loading={index === 0 ? 'eager' : 'lazy'}
-            decoding="async"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 select-none pointer-events-none ${
-              index === currentIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        ))}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <p className='text-sm font-medium text-white'>{currentImage.title}</p>
+        <p className='text-xs text-zinc-400'>
+          {currentImage.artist} · {currentImage.date}
+        </p>
       </div>
     </div>
   );
@@ -124,7 +207,7 @@ const CopyInstallButton = () => {
 
 interface RedesignedHeroProps {
   latestChangelogTitle: string;
-  thinkingImages: string[];
+  thinkingImages: ThinkingImage[];
 }
 
 export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
@@ -185,8 +268,8 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
           </div>
 
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
             className='flex-shrink-0 hidden lg:block'
           >
@@ -197,8 +280,8 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
         {/* Mobile: Image */}
         <div className='lg:hidden mt-12'>
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
             className='flex justify-center'
           >

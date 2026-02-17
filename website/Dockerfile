@@ -22,7 +22,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json tsconfig.base.js
 COPY website/ website/
 COPY frontend/packages/components/ frontend/packages/components/
 COPY frontend/packages/icons/ frontend/packages/icons/
-COPY frontend/packages/example-registry/ frontend/packages/example-registry/
+COPY frontend/packages/shared-data/ frontend/packages/shared-data/
 COPY examples/ examples/
 COPY engine/artifacts/ engine/artifacts/
 COPY engine/sdks/typescript/ engine/sdks/typescript/
@@ -45,7 +45,7 @@ RUN --mount=type=cache,id=s/3e31e381-166e-4a85-983a-a49830a88b96-/pnpm/store,tar
     pnpm install --frozen-lockfile
 
 # Build arguments for PUBLIC_* environment variables
-ARG PUBLIC_SITE_URL="https://rivet.gg"
+ARG PUBLIC_SITE_URL="https://rivet.dev"
 ARG PUBLIC_POSTHOG_KEY=""
 ARG PUBLIC_POSTHOG_HOST=""
 ARG PUBLIC_TYPESENSE_HOST=""
@@ -59,9 +59,6 @@ ENV PUBLIC_TYPESENSE_HOST=${PUBLIC_TYPESENSE_HOST}
 ENV PUBLIC_TYPESENSE_API_KEY=${PUBLIC_TYPESENSE_API_KEY}
 
 WORKDIR /app/website
-
-# Re-install Playwright browsers for the correct version (pnpm may install a different version)
-RUN pnpm exec playwright install chromium
 
 # Build the website (static export to 'dist' directory)
 RUN pnpm run build

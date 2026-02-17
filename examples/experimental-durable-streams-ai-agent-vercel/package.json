@@ -33,17 +33,5 @@
 		"vite": "^5.0.0",
 		"vitest": "^3.1.1"
 	},
-	"template": {
-		"technologies": [
-			"typescript",
-			"durable-streams"
-		],
-		"tags": [
-			"ai",
-			"real-time",
-			"experimental"
-		],
-		"frontendPort": 5173
-	},
 	"license": "MIT"
 }

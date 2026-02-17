@@ -21,13 +21,9 @@ export default function CreateProjectFrameContent({
 	organization,
 	onSuccess,
 	name,
-	template,
-	noTemplate,
 }: {
 	name?: string;
 	organization?: string;
-	template?: string;
-	noTemplate?: boolean;
 	// FIXME
 	onSuccess?: (
 		data: Rivet.ProjectsCreateResponse,
@@ -60,10 +56,6 @@ export default function CreateProjectFrameContent({
 						params: {
 							organization: params.organization,
 							project: data.project.name,
-						},
-						search: {
-							template: noTemplate ? undefined : template,
-							noTemplate: noTemplate ? true : undefined,
 						},
 					});
 		},

@@ -523,7 +523,7 @@ export default function CommercePage() {
 							<a href="/docs" className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
 								Start Building Now
 							</a>
-							<a href="/templates/state" className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white">
+							<a href="https://github.com/rivet-dev/rivet/tree/main/examples/state" className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white">
 								View Example
 							</a>
 						</motion.div>
@@ -533,4 +533,3 @@ export default function CommercePage() {
 		</div>
 	);
 }
-

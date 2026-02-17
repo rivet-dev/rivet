@@ -47,7 +47,6 @@ export const Route = createFileRoute(
 			backendOnboardingSuccess: opts.search.backendOnboardingSuccess,
 			onboardingSuccess: opts.search.onboardingSuccess,
 			flow: opts.search.flow,
-			noTemplate: opts.search.noTemplate,
 		};
 	},
 	async loader({ params, deps, context }) {
@@ -100,15 +99,13 @@ export const Route = createFileRoute(
 function RouteComponent() {
 	const { displayOnboarding, displayBackendOnboarding } =
 		Route.useLoaderData();
-	const { template, noTemplate, flow, provider } = Route.useSearch();
+	const { flow, provider } = Route.useSearch();
 
 	if (displayOnboarding || displayBackendOnboarding) {
 		return (
 			<>
 				<SidebarlessHeader />
 				<GettingStarted
-					template={template}
-					noTemplate={noTemplate}
 					displayOnboarding={displayOnboarding}
 					displayBackendOnboarding={displayBackendOnboarding}
 					flow={flow}

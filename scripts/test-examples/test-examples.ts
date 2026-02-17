@@ -4,7 +4,7 @@
  * Test script for validating RivetKit examples.
  *
  * This script:
- * 1. Iterates through all examples with a `template` config in package.json
+ * 1. Iterates through all examples with a package.json
  * 2. Spawns the dev command for each example
  * 3. Validates the index page is reachable
  * 4. Validates the RivetKit API endpoint is reachable
@@ -69,13 +69,12 @@ function getExamples(): ExampleConfig[] {
 
 		try {
 			const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-			if (!packageJson.template) continue;
 
 			examples.push({
 				name: entry.name,
 				dir: path.join(EXAMPLES_DIR, entry.name),
-				port: packageJson.template.frontendPort ?? DEFAULT_PORT,
-				noFrontend: packageJson.template.noFrontend ?? false,
+				port: packageJson.frontendPort ?? DEFAULT_PORT,
+				noFrontend: packageJson.noFrontend ?? false,
 			});
 		} catch {
 			// Skip invalid package.json files

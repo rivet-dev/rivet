@@ -1,10 +1,10 @@
 'use client';
 
-import { Database, HardDrive, GitBranch, Clock, Wifi, Infinity, Moon, Layers, ArrowRight } from 'lucide-react';
+import { Database, HardDrive, GitBranch, Clock, Wifi, ListOrdered, Infinity, Layers, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const RivetActorIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 176 173" className="inline-block align-middle">
+const RivetActorIcon = ({ className }: { className?: string }) => (
+  <svg width="32" height="32" viewBox="0 0 176 173" className={className}>
     <g transform="translate(-32928.8,-28118.2)">
       <g transform="matrix(0.941176,0,0,0.925134,2119.4,2323.67)">
         <g clipPath="url(#_clip1)">
@@ -51,16 +51,16 @@ const features = [
     href: '/docs/actors/state',
   },
   {
-    icon: GitBranch,
-    title: 'Workflows',
-    description: 'Multi-step operations with automatic retries.',
-    href: '/docs/actors/workflows',
+    icon: Infinity,
+    title: 'Runs indefinitely, sleeps when idle',
+    description: 'Long-lived when active, hibernates when idle.',
+    href: '/docs/actors/lifecycle',
   },
   {
-    icon: Clock,
-    title: 'Scheduling',
-    description: 'Timers and cron jobs within your actor.',
-    href: '/docs/actors/schedule',
+    icon: Layers,
+    title: 'Scales infinitely, scales to zero',
+    description: 'Supports bursty workloads and is cost-efficient.',
+    href: '/docs/actors/design-patterns',
   },
   {
     icon: Wifi,
@@ -69,28 +69,28 @@ const features = [
     href: '/docs/actors/connections',
   },
   {
-    icon: Infinity,
-    title: 'Runs indefinitely',
-    description: 'No Lambda timeouts or cron workarounds.',
-    href: '/docs/actors/lifecycle',
+    icon: GitBranch,
+    title: 'Workflows',
+    description: 'Multi-step operations with automatic retries.',
+    href: '/docs/actors/communicating-between-actors',
   },
   {
-    icon: Moon,
-    title: 'Sleeps when idle',
-    description: 'Wake instantly. Pay only for active use.',
-    href: '/docs/actors/lifecycle',
+    icon: ListOrdered,
+    title: 'Queues',
+    description: 'Durable message queues for reliable async processing.',
+    href: '/docs/actors/queue',
   },
   {
-    icon: Layers,
-    title: 'Scales to millions',
-    description: 'One actor per user, conversation, session, or match.',
-    href: '/docs/actors/design-patterns',
+    icon: Clock,
+    title: 'Scheduling',
+    description: 'Timers and cron jobs within your actor.',
+    href: '/docs/actors/schedule',
   },
 ];
 
 export const BuiltInFeatures = () => {
   return (
-    <section className='relative border-t border-b border-white/10 bg-white/[0.04] px-6 py-16 lg:py-24'>
+    <section className='relative border-t border-b border-white/10 bg-white/[0.03] px-6 py-16 lg:py-24'>
       <div className='mx-auto w-full max-w-7xl'>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -99,15 +99,20 @@ export const BuiltInFeatures = () => {
           transition={{ duration: 0.5 }}
           className='mb-10'
         >
-          <h2 className='mb-2 flex items-center gap-3 text-2xl font-normal tracking-tight md:text-4xl'>
-            <span className='text-zinc-400'>The</span> <RivetActorIcon /> <span className='text-white'>Rivet Actor</span> <span className='text-zinc-400'>is built for modern stateful workloads.</span>
+          <h2 className='mb-2 text-2xl font-normal tracking-tight text-zinc-400 md:text-4xl'>
+            <span>The </span>
+            <span className='ml-1 whitespace-nowrap text-white'>
+              <RivetActorIcon className='mr-2 inline-block h-6 w-6 align-[-0.15em] md:h-8 md:w-8' />
+              Rivet Actor
+            </span>
+            <span> is built for modern stateful workloads.</span>
           </h2>
           <p className='text-base leading-relaxed text-zinc-500'>
             One Actor per agent, per session, per user — each with everything it needs built in.
           </p>
         </motion.div>
 
-        <div className='grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3 lg:grid-cols-4'>
+        <div className='grid grid-cols-1 gap-x-8 gap-y-6 min-[440px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'>
           {features.map((feature, idx) => {
             const Icon = feature.icon;
             return (

@@ -27,14 +27,5 @@
 		"vite": "^5.0.0",
 		"vitest": "^3.1.1"
 	},
-	"template": {
-		"technologies": [
-			"typescript"
-		],
-		"tags": [
-			"real-time"
-		],
-		"frontendPort": 5173
-	},
 	"license": "MIT"
 }

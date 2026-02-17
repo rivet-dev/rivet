@@ -1,5 +1,5 @@
 import type { Rivet } from "@rivetkit/engine-api-full";
-import type { Provider } from "@rivetkit/example-registry";
+import type { Provider } from "@rivetkit/shared-data";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,

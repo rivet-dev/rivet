@@ -8,7 +8,6 @@ import { SidebarlessHeader } from "@/app/layout";
 import { Button, Card } from "@/components";
 import { OnboardingFooter } from "@/components/onboarding/footer";
 import { PathSelection } from "@/components/onboarding/path-selection";
-import { TemplatesList } from "@/components/templates-list";
 import { TEST_IDS } from "@/utils/test-ids";
 
 export const Route = createFileRoute(
@@ -17,9 +16,8 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 	validateSearch: zodValidator(
 		z.object({
-			flow: z.enum(["agent", "template", "manual"]).optional(),
+			flow: z.enum(["agent", "manual"]).optional(),
 			modal: z.string().optional(),
-			noTemplate: z.coerce.boolean().optional(),
 			showAll: z.coerce.boolean().optional(),
 		}),
 	),
@@ -35,25 +33,6 @@ function RouteComponent() {
 			<>
 				<SidebarlessHeader />
 				<PathSelection />
-			</>
-		);
-	}
-
-	if (search.flow === "template") {
-		return (
-			<>
-				<SidebarlessHeader />
-				<TemplatesList
-					back={
-						<Link to="." search={{ flow: undefined }}>
-							Back
-						</Link>
-					}
-					getTemplateLink={(template) => ({
-						to: "/orgs/$organization/new/$template",
-						params: { template },
-					})}
-				/>
 			</>
 		);
 	}
@@ -100,7 +79,6 @@ function RouteComponent() {
 												project: data.project.name,
 											},
 											search: {
-												noTemplate: true,
 												flow: search.flow,
 											},
 										});
