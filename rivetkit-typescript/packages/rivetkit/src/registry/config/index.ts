@@ -8,6 +8,7 @@ import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
 	getRivetEndpoint,
 	getRivetEngine,
+	getRivetkitStoragePath,
 	getRivetNamespace,
 	getRivetToken,
 	isDev,
@@ -45,6 +46,17 @@ export const RegistryConfigSchema = z
 
 		// MARK: Driver
 		driver: DriverConfigSchema.optional(),
+		/**
+		 * Storage path for RivetKit file-system state when using the default driver.
+		 *
+		 * If not set, RivetKit uses the platform default data location.
+		 *
+		 * Can also be set via RIVETKIT_STORAGE_PATH.
+		 */
+		storagePath: z
+			.string()
+			.optional()
+			.transform((val) => val ?? getRivetkitStoragePath()),
 
 		// MARK: Networking
 		/** @experimental */
@@ -331,6 +343,7 @@ export const DocRunnerConfigSchema = z.object({
 export const DocRegistryConfigSchema = z
 	.object({
 		use: z.record(z.string(), z.unknown()).describe("Actor definitions. Keys are actor names, values are actor definitions."),
+		storagePath: z.string().optional().describe("Storage path for RivetKit file-system state when using the default driver. Can also be set via RIVETKIT_STORAGE_PATH."),
 		maxIncomingMessageSize: z.number().optional().describe("Maximum size of incoming WebSocket messages in bytes. Default: 65536"),
 		maxOutgoingMessageSize: z.number().optional().describe("Maximum size of outgoing WebSocket messages in bytes. Default: 1048576"),
 		noWelcome: z.boolean().optional().describe("Disable the welcome message on startup. Default: false"),

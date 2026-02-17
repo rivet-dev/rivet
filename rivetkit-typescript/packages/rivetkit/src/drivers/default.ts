@@ -28,6 +28,11 @@ export function chooseDefaultDriver(
 		return createEngineDriver();
 	}
 
-	loggerWithoutContext().debug({ msg: "using default file system driver" });
-	return createFileSystemOrMemoryDriver(true);
+	loggerWithoutContext().debug({
+		msg: "using default file system driver",
+		storagePath: config.storagePath,
+	});
+	return createFileSystemOrMemoryDriver(true, {
+		path: config.storagePath,
+	});
 }
