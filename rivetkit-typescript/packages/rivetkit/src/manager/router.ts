@@ -6,7 +6,7 @@ import invariant from "invariant";
 import { z } from "zod/v4";
 import { Forbidden, RestrictedFeature } from "@/actor/errors";
 
-import { serializeActorKey } from "@/actor/keys";
+import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
 
 import type { Encoding } from "@/client/mod";
 import {
@@ -171,7 +171,7 @@ export function buildManagerRouter(
 					const actorOutput = await managerDriver.getWithKey({
 						c,
 						name,
-						key: [key], // Convert string to ActorKey array
+						key: deserializeActorKey(key),
 					});
 					if (actorOutput) {
 						actors.push(actorOutput);
@@ -245,7 +245,7 @@ export function buildManagerRouter(
 				const existingActor = await managerDriver.getWithKey({
 					c,
 					name: body.name,
-					key: [body.key], // Convert string to ActorKey array
+					key: deserializeActorKey(body.key),
 				});
 
 				if (existingActor) {
@@ -259,7 +259,7 @@ export function buildManagerRouter(
 				const newActor = await managerDriver.getOrCreateWithKey({
 					c,
 					name: body.name,
-					key: [body.key], // Convert string to ActorKey array
+					key: deserializeActorKey(body.key),
 					input: body.input
 						? cbor.decode(Buffer.from(body.input, "base64"))
 						: undefined,
@@ -291,7 +291,7 @@ export function buildManagerRouter(
 				const actorOutput = await managerDriver.createActor({
 					c,
 					name: body.name,
-					key: [body.key || crypto.randomUUID()], // Generate key if not provided, convert to ActorKey array
+					key: deserializeActorKey(body.key || crypto.randomUUID()),
 					input: body.input
 						? cbor.decode(Buffer.from(body.input, "base64"))
 						: undefined,
