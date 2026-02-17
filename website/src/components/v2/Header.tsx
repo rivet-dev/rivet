@@ -449,14 +449,6 @@ export function Header({
 								>
 									Cloud
 								</TextNavItem>
-								<TextNavItem
-									href="/changelog"
-									ariaCurrent={
-										active === "blog" ? "page" : undefined
-									}
-								>
-									Changelog
-								</TextNavItem>
 							</div>
 						}
 					/>
@@ -536,13 +528,6 @@ export function Header({
 					>
 						Cloud
 					</TextNavItem>
-					<TextNavItem
-						href="/changelog"
-						ariaCurrent={active === "blog" ? "page" : undefined}
-					>
-						Changelog
-					</TextNavItem>
-				</div>
 			}
 		/>
 	);
@@ -573,7 +558,6 @@ function DocsMobileNavigation({ tree }) {
 		{ href: "/docs", label: "Docs" },
 		{ href: "/cloud", label: "Cloud" },
 		{ href: "/templates", label: "Templates" },
-		{ href: "/changelog", label: "Changelog" },
 	];
 
 	const solutions = [
