@@ -7,9 +7,9 @@
   </a>
   <br/>
   <br/>
-  <h3>Stateful Backends. Finally Solved.</h3>
+  <h3>The primitive for software that thinks.</h3>
   <p>
-    <a href="https://www.rivet.dev/docs/actors/quickstart">Quickstart</a> •
+    <a href="https://www.rivet.dev/docs">Quickstart</a> •
     <a href="https://www.rivet.dev/docs/actors">Documentation</a> •
     <a href="https://www.rivet.dev/changelog">Changelog</a> •
     <a href="https://www.rivet.dev/discord">Discord</a> •
@@ -19,71 +19,94 @@
 
 ## What is Rivet?
 
-Rivet is an open-source platform for building stateful backends using **Actors**, long-lived processes that keep state in memory alongside compute. No more database round-trips for every request.
+Rivet Actors are a serverless primitive for stateful workloads. Each actor has built-in state, storage, workflows, scheduling, and WebSockets — everything needed to build the next generation of software.
 
 ```typescript
 import { actor } from "rivetkit";
 
 export const chatRoom = actor({
-  // In-memory, persisted state
+  // In-memory state, persisted automatically
   state: { messages: [] },
 
   // Type-safe RPC
   actions: {
     sendMessage: (c, user, text) => {
-      // High performance writes
       c.state.messages.push({ user, text });
-
-      // Realtime built-in
       c.broadcast("newMessage", { user, text });
     },
   },
 });
 ```
 
-Each actor is like a tiny server with its own memory. Create millions of them (one per user, per document, per game session) and they scale automatically.
+One Actor per agent, per session, per user — each with everything it needs built in.
 
-## How It Works
+## Built-In Features
+
+Every Rivet Actor comes with:
+
+| Feature | Description |
+|---------|-------------|
+| **In-memory state** | Co-located with compute for instant reads and writes |
+| **SQLite or JSON persistence** | Storage that survives restarts and deploys |
+| **Runs indefinitely, sleeps when idle** | Long-lived when active, hibernates when idle |
+| **Scales infinitely, scales to zero** | Supports bursty workloads, cost-efficient |
+| **WebSockets** | Real-time bidirectional streaming built in |
+| **Workflows** | Multi-step operations with automatic retries |
+| **Queues** | Durable message queues for reliable async processing |
+| **Scheduling** | Timers and cron jobs within your actor |
+
+## Use Cases
+
+Rivet is one primitive that adapts to agents, workflows, collaboration, and more.
+
+| Use Case | Description |
+|----------|-------------|
+| **AI Agent** | Each agent runs as its own actor with persistent context and memory |
+| **Sandbox Orchestration** | Coordinate sandbox sessions, queue work, and schedule cleanup |
+| **Workflows** | Multi-step operations with automatic retries and durable state |
+| **Collaborative Documents** | Real-time editing where each document is an actor |
+| **Per-Tenant Database** | One actor per tenant with low-latency in-memory reads |
+| **Chat** | One actor per room with in-memory state and realtime delivery |
+
+## Start Local. Scale to Millions.
+
+Three options, same API. Pick what works for you.
 
 <table>
 <tr>
-<td width="50%" valign="top">
+<td width="33%" valign="top">
 
-### RivetKit
+### Self-Host
 
-The TypeScript library for building actors. Works with any backend framework.
+Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB.
 
 ```bash
-npm install rivetkit
+docker run -p 6420:6420 rivetkit/engine
 ```
 
-Run standalone for development, deploy to Cloudflare Workers, or connect to Rivet Engine for scale.
+[Self-hosting documentation →](https://www.rivet.dev/docs/self-hosting/)
 
 </td>
-<td width="50%" valign="top">
+<td width="33%" valign="top">
 
-### Rivet Engine
+### Rivet Cloud
 
-High-performance Rust orchestration layer for production scale. Handles actor lifecycle, state persistence, and multi-region distribution.
+Fully managed. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
 
-- Self-host with Docker or binaries
-- Or use [Rivet Cloud](https://rivet.dev/cloud) (managed)
+[Sign up →](https://hub.rivet.dev)
+
+</td>
+<td width="33%" valign="top">
+
+### Open Source
+
+Apache 2.0. Audit the code, contribute features, run it however you want.
+
+[View on GitHub →](https://github.com/rivet-dev/rivet)
 
 </td>
 </tr>
 </table>
-
-**You don't need Rivet Engine to get started.** RivetKit runs standalone for development and simpler deployments. Add Rivet Engine when you need to scale.
-
-## Features
-
-- **Stateful Compute**: State lives with compute for sub-millisecond reads/writes, no database queries
-- **Realtime Built-In**: WebSocket events without extra infrastructure
-- **Hibernation**: Actors sleep when idle and wake instantly with no cold starts
-- **Infinitely Scalable**: Auto-scale from zero to millions of actors
-- **Fault Tolerant**: Automatic failover with state integrity
-- **Type-Safe**: End-to-end TypeScript types from actor to client
-- **Run Anywhere**: Your infrastructure, your cloud, your rules
 
 ## Getting Started
 
@@ -91,14 +114,15 @@ High-performance Rust orchestration layer for production scale. Handles actor li
 <tr>
 <td width="50%" valign="top">
 
-### Examples
+### Use with Your Coding Agent
 
-- [Chat Room](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room) - Realtime messaging
-- [AI Agent](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent) - Stateful AI conversations
-- [Cursors](https://github.com/rivet-dev/rivet/tree/main/examples/cursors) - Collaborative cursors
-- [Scheduling](https://github.com/rivet-dev/rivet/tree/main/examples/scheduling) - Async processing
+Give your coding agent the Rivet skills to create examples or integrate into existing projects:
 
-[View all examples →](https://github.com/rivet-dev/rivet/tree/main/examples)
+```bash
+npx skills add rivet-dev/skills
+```
+
+Works with Claude Code, Cursor, Windsurf, and other AI coding tools.
 
 </td>
 <td width="50%" valign="top">
@@ -115,30 +139,6 @@ High-performance Rust orchestration layer for production scale. Handles actor li
 </td>
 </tr>
 </table>
-
-## Deploy Anywhere
-
-### Rivet Cloud
-
-Deploy your backend anywhere, then connect to [Rivet Cloud](https://dashboard.rivet.dev) for actor orchestration: [Vercel](https://www.rivet.dev/docs/connect/vercel) • [Railway](https://railway.com/deploy/rivet) • [Kubernetes](https://www.rivet.dev/docs/connect/kubernetes) • [AWS ECS](https://www.rivet.dev/docs/connect/aws-ecs) • [Google Cloud Run](https://www.rivet.dev/docs/connect/gcp-cloud-run) • [Hetzner](https://www.rivet.dev/docs/connect/hetzner) • [VM & Bare Metal](https://www.rivet.dev/docs/connect/vm-and-bare-metal)
-
-### Self-Host Rivet Engine
-
-```bash
-# Docker
-docker run -p 6420:6420 rivetkit/engine
-
-# macOS (Apple Silicon)
-curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-aarch64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
-
-# macOS (Intel)
-curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-x86_64-apple-darwin" && chmod +x rivet-engine && ./rivet-engine start
-
-# Linux (x86)
-curl -o rivet-engine "https://releases.rivet.dev/rivet/latest/engine/rivet-engine-x86_64-unknown-linux-musl" && chmod +x rivet-engine && ./rivet-engine start
-```
-
-[Self-hosting documentation →](https://www.rivet.dev/docs/self-hosting/)
 
 ## Integrations
 
