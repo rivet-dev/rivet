@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rivet_util::Id;
 use tokio::time::Instant;
 
-use crate::{ctx::common::RETRY_TIMEOUT_MS, history::location::Location};
+use crate::ctx::common::RETRY_TIMEOUT_MS;
 
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
 
@@ -132,14 +132,6 @@ pub enum WorkflowError {
 
 	#[error("failed to deserialize event data: {0}")]
 	DeserializeEventData(#[source] anyhow::Error),
-
-	#[error("failed building workflow history for {workflow_id} at {location}: {err}")]
-	FailedBuildingWorkflowHistory {
-		workflow_id: Id,
-		location: Location,
-		#[source]
-		err: anyhow::Error,
-	},
 
 	#[error("udb error: {0}")]
 	Udb(#[source] anyhow::Error),

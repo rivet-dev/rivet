@@ -1507,19 +1507,19 @@ impl Database for DatabaseKv {
 													);
 
 													let loc = previous_event.location.clone();
-													events_by_location
-														.entry(previous_event.location.root())
-														.or_default()
-														.push(
-															Event::try_from(previous_event)
-																.map_err(|err| {
-																	WorkflowError::FailedBuildingWorkflowHistory {
-																		workflow_id: wf.workflow_id,
-																		location: loc,
-																		err: err.into(),
-																	}
-																})?,
-														);
+
+													match Event::try_from(previous_event) {
+														Ok(event) => {
+															events_by_location
+																.entry(loc.root())
+																.or_default()
+																.push(event);
+														}
+														Err(err) => {
+															tracing::error!(workflow_id=?wf.workflow_id, location=?loc, ?err, "failed building workflow history");
+															return Ok(None);
+														}
+													}
 												}
 											}
 
@@ -1680,18 +1680,18 @@ impl Database for DatabaseKv {
 										if !current_event.location.is_empty() {
 											let loc = current_event.location.clone();
 
-											events_by_location
-												.entry(current_event.location.root())
-												.or_default()
-												.push(Event::try_from(current_event).map_err(
-													|err| {
-														WorkflowError::FailedBuildingWorkflowHistory {
-															workflow_id: wf.workflow_id,
-															location: loc,
-															err: err.into(),
-														}
-													},
-												)?);
+											match Event::try_from(current_event) {
+												Ok(event) => {
+													events_by_location
+														.entry(loc.root())
+														.or_default()
+														.push(event);
+												}
+												Err(err) => {
+													tracing::error!(workflow_id=?wf.workflow_id, location=?loc, ?err, "failed building workflow history");
+													return Ok(None);
+												}
+											}
 										}
 
 										Ok(Some(events_by_location))
@@ -1715,10 +1715,15 @@ impl Database for DatabaseKv {
 									return Ok(None);
 								};
 
+								let (Some(create_ts_entry), Some(ray_id_entry)) = (create_ts_entry, ray_id_entry) else {
+									tracing::error!(workflow_id=?wf.workflow_id, "create_ts and ray_id keys should exist");
+									return Ok(None);
+								};
+
 								let create_ts = create_ts_key
-									.deserialize(&create_ts_entry.context("key should exist")?)?;
+									.deserialize(&create_ts_entry)?;
 								let ray_id = ray_id_key
-									.deserialize(&ray_id_entry.context("key should exist")?)?;
+									.deserialize(&ray_id_entry)?;
 								let input = input_key.combine(input_chunks)?;
 								let state = if state_chunks.is_empty() {
 									serde_json::value::RawValue::NULL.to_owned()
