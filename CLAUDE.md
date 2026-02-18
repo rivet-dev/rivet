@@ -204,6 +204,11 @@ Key points:
 - If available, use the workspace dependency (e.g., `anyhow.workspace = true`)
 - If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
 
+**Inspector HTTP API**
+- When updating the WebSocket inspector (`rivetkit-typescript/packages/rivetkit/src/inspector/`), also update the HTTP inspector endpoints in `rivetkit-typescript/packages/rivetkit/src/actor/router.ts`. The HTTP API mirrors the WebSocket inspector for agent-based debugging.
+- When adding or modifying inspector endpoints, also update the driver test at `rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts` to cover all inspector HTTP endpoints.
+- When adding or modifying inspector endpoints, also update the documentation in `website/src/metadata/skill-base-rivetkit.md` and `website/src/content/docs/actors/debugging.mdx` to keep them in sync.
+
 **Database Usage**
 - UniversalDB for distributed state storage
 - ClickHouse for analytics and time-series data

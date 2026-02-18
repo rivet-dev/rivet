@@ -1,29 +1,6 @@
 import { createMiddleware } from "hono/factory";
-import { inspectorLogger } from "./log";
 import type { RegistryConfig } from "@/registry/config";
-
-export function compareSecrets(providedSecret: string, validSecret: string) {
-	// Early length check to avoid unnecessary processing
-	if (providedSecret.length !== validSecret.length) {
-		return false;
-	}
-
-	const encoder = new TextEncoder();
-
-	const a = encoder.encode(providedSecret);
-	const b = encoder.encode(validSecret);
-
-	if (a.byteLength !== b.byteLength) {
-		return false;
-	}
-
-	// TODO:
-	// // Perform timing-safe comparison
-	// if (!crypto.timingSafeEqual(a, b)) {
-	// 	return false;
-	// }
-	return true;
-}
+import { timingSafeEqual } from "@/utils/crypto";
 
 export const secureInspector = (config: RegistryConfig) =>
 	createMiddleware(async (c, next) => {
@@ -37,8 +14,7 @@ export const secureInspector = (config: RegistryConfig) =>
 			return c.text("Unauthorized", 401);
 		}
 
-		const isValid = compareSecrets(userToken, inspectorToken);
-		if (!isValid) {
+		if (!timingSafeEqual(userToken, inspectorToken)) {
 			return c.text("Unauthorized", 401);
 		}
 		await next();
