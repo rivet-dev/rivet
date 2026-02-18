@@ -9,7 +9,7 @@
 		"dev:engine": "vite --config vite.engine.config.ts",
 		"dev:cloud": "vite --config vite.cloud.config.ts",
 		"check-types": "tsc --noEmit",
-		"build:inspector": "vite build --mode=production --config vite.inspector.config.ts",
+		"build:inspector": "vite build --mode=production --base=/ui/ --config vite.inspector.config.ts",
 		"build:engine": "vite build --mode=production --config vite.engine.config.ts",
 		"build:cloud": "vite build --mode=production --config vite.cloud.config.ts",
 		"preview:inspector": "vite preview --config vite.inspector.config.ts",

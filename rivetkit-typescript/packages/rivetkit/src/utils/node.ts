@@ -16,6 +16,7 @@ let nodePath: typeof import("node:path") | undefined;
 let nodeOs: typeof import("node:os") | undefined;
 let nodeChildProcess: typeof import("node:child_process") | undefined;
 let nodeStream: typeof import("node:stream/promises") | undefined;
+let nodeUrl: typeof import("node:url") | undefined;
 
 let hasImportedDependencies = false;
 
@@ -62,7 +63,7 @@ export function importNodeDependencies(): void {
 		nodeStream = requireFn(
 			/* webpackIgnore: true */ "node:stream/promises",
 		);
-
+		nodeUrl = requireFn(/* webpackIgnore: true */ "node:url");
 		hasImportedDependencies = true;
 	} catch (err) {
 		console.warn(
@@ -162,4 +163,16 @@ export function getNodeStream(): typeof import("node:stream/promises") {
 		);
 	}
 	return nodeStream;
+}
+
+/**
+ * Gets the Node.js url module lazily.
+ */
+export function getNodeUrl(): typeof import("node:url") {
+	if (!nodeUrl) {
+		throw new Error(
+			"Node url module not loaded. Ensure importNodeDependencies() has been called.",
+		);
+	}
+	return nodeUrl;
 }
