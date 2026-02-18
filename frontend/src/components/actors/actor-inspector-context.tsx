@@ -17,7 +17,7 @@ import {
 	type ToServer,
 	TO_CLIENT_VERSIONED as toClient,
 	TO_SERVER_VERSIONED as toServer,
-} from "rivetkit/inspector";
+} from "rivetkit/inspector/client";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
@@ -789,11 +789,12 @@ export const ActorInspectorProvider = ({
 			},
 
 			getDatabaseTableRows: async (table, limit, offset) => {
-				const { id, promise } =
-					actionsManager.current.createResolver<unknown[]>({
-						name: "getDatabaseTableRows",
-						timeoutMs: 10_000,
-					});
+				const { id, promise } = actionsManager.current.createResolver<
+					unknown[]
+				>({
+					name: "getDatabaseTableRows",
+					timeoutMs: 10_000,
+				});
 
 				sendMessage(
 					serverMessage(

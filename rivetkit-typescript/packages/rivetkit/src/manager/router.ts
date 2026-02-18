@@ -1,13 +1,11 @@
+import { serveStatic } from "@hono/node-server/serve-static";
 import { createRoute } from "@hono/zod-openapi";
 import * as cbor from "cbor-x";
-
 import type { Hono } from "hono";
 import invariant from "invariant";
 import { z } from "zod/v4";
 import { Forbidden, RestrictedFeature } from "@/actor/errors";
-
 import { serializeActorKey } from "@/actor/keys";
-
 import type { Encoding } from "@/client/mod";
 import {
 	HEADER_RIVET_TOKEN,
@@ -23,6 +21,7 @@ import type {
 	TestInlineDriverCallRequest,
 	TestInlineDriverCallResponse,
 } from "@/driver-test-suite/test-inline-client-driver";
+import { getInspectorDir } from "@/inspector/serve-ui";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -95,9 +94,9 @@ export function buildManagerRouter(
 
 				const actorIdsParsed = actor_ids
 					? actor_ids
-							.split(",")
-							.map((id) => id.trim())
-							.filter((id) => id.length > 0)
+						.split(",")
+						.map((id) => id.trim())
+						.filter((id) => id.length > 0)
 					: undefined;
 
 				const actors: ActorOutput[] = [];
@@ -585,6 +584,33 @@ export function buildManagerRouter(
 					return c.text(`Error: ${error}`, 500);
 				}
 			});
+		}
+
+		if (config.inspector.enabled) {
+			let inspectorRoot: string | undefined;
+
+
+			router.get("/ui/*", async (c, next) => {
+				if (!inspectorRoot) {
+					inspectorRoot = await getInspectorDir();
+				}
+				const root = inspectorRoot;
+				const rewrite = (path: string) =>
+					path.replace(/^\/ui/, "") || "/";
+
+				return serveStatic({
+					root,
+					rewriteRequestPath: rewrite,
+					onNotFound: async (_path, c) => {
+						await serveStatic({ root, path: "index.html" })(
+							c,
+							next,
+						);
+					},
+				})(c, next);
+			});
+
+			router.get("/ui", (c) => c.redirect("/ui/"));
 		}
 
 		router.get("/health", (c) => handleHealthRequest(c));

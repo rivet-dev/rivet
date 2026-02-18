@@ -160,7 +160,12 @@ export const templates: Template[] = [
     ],
     "noFrontend": false,
     "priority": 200,
-    "providers": {}
+    "providers": {
+      "vercel": {
+        "name": "per-tenant-database-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fper-tenant-database-vercel&project-name=per-tenant-database-vercel"
+      }
+    }
   },
   {
     "name": "cursors",
@@ -614,7 +619,12 @@ export const templates: Template[] = [
       "database"
     ],
     "noFrontend": true,
-    "providers": {}
+    "providers": {
+      "vercel": {
+        "name": "sqlite-raw-vercel",
+        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fsqlite-raw-vercel&project-name=sqlite-raw-vercel"
+      }
+    }
   },
   {
     "name": "stream",
