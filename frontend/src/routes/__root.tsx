@@ -14,7 +14,6 @@ import type {
 	CloudNamespaceContext,
 	EngineContext,
 	EngineNamespaceContext,
-	InspectorContext,
 	OrganizationContext,
 	ProjectContext,
 } from "@/app/data-providers/cache";
@@ -82,10 +81,6 @@ interface RootRouteContext {
 	getOrCreateEngineContext: (
 		engineToken: (() => string) | string | (() => Promise<string>),
 	) => EngineContext;
-	getOrCreateInspectorContext: (opts: {
-		url?: string;
-		token?: string;
-	}) => InspectorContext;
 	getOrCreateOrganizationContext: (
 		parent: CloudContext,
 		organization: string,

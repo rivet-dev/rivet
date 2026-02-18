@@ -9,7 +9,6 @@ import {
 	createNamespaceContext as createEngineNamespaceContext,
 	createGlobalContext as createGlobalEngineContext,
 } from "@/app/data-providers/engine-data-provider";
-import { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
 
 // Cache factories for data providers to maintain stable references across navigation
 export type CloudContext = ReturnType<typeof createGlobalCloudContext>;
@@ -20,7 +19,6 @@ export type EngineContext = ReturnType<typeof createGlobalEngineContext>;
 export type EngineNamespaceContext = ReturnType<
 	typeof createEngineNamespaceContext
 >;
-export type InspectorContext = ReturnType<typeof createGlobalInspectorContext>;
 export type OrganizationContext = ReturnType<typeof createOrganizationContext>;
 export type ProjectContext = ReturnType<typeof createProjectContext>;
 
@@ -28,7 +26,6 @@ let cloudContextCache: CloudContext | null = null;
 const cloudNamespaceContextCache = new Map<string, CloudNamespaceContext>();
 const engineContextCache = new Map<string, EngineContext>();
 const engineNamespaceContextCache = new Map<string, EngineNamespaceContext>();
-const inspectorContextCache = new Map<string, InspectorContext>();
 const organizationContextCache = new Map<string, OrganizationContext>();
 const projectContextCache = new Map<string, ProjectContext>();
 
@@ -52,20 +49,6 @@ export function getOrCreateEngineContext(
 	}
 	const context = createGlobalEngineContext({ engineToken });
 	engineContextCache.set(key, context);
-	return context;
-}
-
-export function getOrCreateInspectorContext(opts: {
-	url?: string;
-	token?: string;
-}): InspectorContext {
-	const key = `${opts.url ?? ""}:${opts.token ?? ""}`;
-	const cached = inspectorContextCache.get(key);
-	if (cached) {
-		return cached;
-	}
-	const context = createGlobalInspectorContext(opts);
-	inspectorContextCache.set(key, context);
 	return context;
 }
 

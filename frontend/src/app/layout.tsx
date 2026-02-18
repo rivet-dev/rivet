@@ -4,10 +4,7 @@ import {
 	faCog,
 	faGift,
 	faHome,
-	faLink,
-	faLinkSlash,
 	faMessageSmile,
-	faSpinnerThird,
 	faWallet,
 	Icon,
 } from "@rivet-gg/icons";
@@ -50,11 +47,6 @@ import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { HelpDropdown } from "./help-dropdown";
-import {
-	useInspectorContext,
-	useInspectorEndpoint,
-	useInspectorStatus,
-} from "./inspector-context";
 import { NamespaceSelect } from "./namespace-select";
 import { UserDropdown } from "./user-dropdown";
 
@@ -171,14 +163,6 @@ const Sidebar = ({
 					<Logo />
 					<div className="flex flex-1 flex-col gap-2 px-2 min-h-0">
 						{match(__APP_TYPE__)
-							.with("inspector", () => (
-								<>
-									<ConnectionStatus />
-									<ScrollArea>
-										<Subnav />
-									</ScrollArea>
-								</>
-							))
 							.with("engine", () => (
 								<>
 									<Breadcrumbs />
@@ -476,14 +460,10 @@ const NamespaceBreadcrumbs = ({
 
 const Subnav = () => {
 	const matchRoute = useMatchRoute();
-	const nsMatch = matchRoute(
-		__APP_TYPE__ === "engine"
-			? {
-					to: "/ns/$namespace",
-					fuzzy: true,
-				}
-			: { to: "/", fuzzy: true },
-	);
+	const nsMatch = matchRoute({
+		to: "/ns/$namespace",
+		fuzzy: true,
+	});
 
 	if (nsMatch === false) {
 		return null;
@@ -549,82 +529,6 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 	);
 }
 
-function ConnectionStatus(): ReactNode {
-	const endpoint = useInspectorEndpoint();
-
-	const { disconnect } = useInspectorContext();
-	const status = useInspectorStatus();
-
-	if (status === "reconnecting") {
-		return (
-			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes">
-				<div className="flex-1">
-					<p>Connecting</p>
-					<p className="text-muted-foreground text-xs">{endpoint}</p>
-				</div>
-				<Icon icon={faSpinnerThird} className="animate-spin ml-2" />
-			</div>
-		);
-	}
-
-	if (status === "disconnected") {
-		return (
-			<div className="text-red-500 border p-2 rounded-md flex items-center text-sm justify-between bg-stripes-destructive ">
-				<div className="flex items-center">
-					<div>
-						<p>Disconnected</p>
-						<p className="text-muted-foreground text-xs">
-							{endpoint}
-						</p>
-					</div>
-				</div>
-
-				<WithTooltip
-					delayDuration={0}
-					trigger={
-						<Button
-							variant="outline"
-							size="icon-sm"
-							className="ml-2 text-foreground"
-							onClick={() => disconnect()}
-						>
-							<Icon icon={faLink} />
-						</Button>
-					}
-					content="Reconnect"
-				/>
-			</div>
-		);
-	}
-
-	if (status === "connected") {
-		return (
-			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes justify-between">
-				<div>
-					<p>Connected</p>
-					<p className="text-muted-foreground text-xs">{endpoint}</p>
-				</div>
-
-				<WithTooltip
-					delayDuration={0}
-					trigger={
-						<Button
-							variant="outline"
-							size="icon-sm"
-							className="ml-2 text-foreground"
-							onClick={() => disconnect()}
-						>
-							<Icon icon={faLinkSlash} />
-						</Button>
-					}
-					content="Disconnect"
-				/>
-			</div>
-		);
-	}
-
-	return null;
-}
 
 function CloudSidebar(): ReactNode {
 	return (
