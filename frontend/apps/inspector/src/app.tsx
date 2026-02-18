@@ -1,9 +1,10 @@
-import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { Suspense } from "react";
+import { NotFoundCard } from "@/app/not-found-card";
+import { RouteLayout } from "@/app/route-layout";
 import {
 	ConfigProvider,
 	FullscreenLoading,
@@ -12,18 +13,8 @@ import {
 	Toaster,
 	TooltipProvider,
 } from "@/components";
-import {
-	getOrCreateCloudContext,
-	getOrCreateCloudNamespaceContext,
-	getOrCreateEngineContext,
-	getOrCreateEngineNamespaceContext,
-	getOrCreateOrganizationContext,
-	getOrCreateProjectContext,
-} from "./app/data-providers/cache";
-import { NotFoundCard } from "./app/not-found-card";
-import { RouteLayout } from "./app/route-layout";
-import { clerk } from "./lib/auth";
-import { queryClient } from "./queries/global";
+import { queryClient } from "@/queries/global";
+import { getOrCreateInspectorContext } from "./app/data-providers/cache";
 import { routeTree } from "./routeTree.gen";
 
 declare module "@tanstack/react-router" {
@@ -46,15 +37,8 @@ export const router = createRouter({
 	basepath: import.meta.env.BASE_URL,
 	routeTree,
 	context: {
-		clerk:
-			__APP_TYPE__ === "cloud" ? clerk : (undefined as unknown as Clerk),
 		queryClient: queryClient,
-		getOrCreateCloudContext,
-		getOrCreateEngineContext,
-		getOrCreateOrganizationContext,
-		getOrCreateProjectContext,
-		getOrCreateCloudNamespaceContext,
-		getOrCreateEngineNamespaceContext,
+		getOrCreateInspectorContext,
 	},
 	defaultPreloadStaleTime: 0,
 	defaultGcTime: 0,

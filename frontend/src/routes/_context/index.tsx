@@ -1,8 +1,6 @@
 import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
-import { InspectorContextProvider } from "@/app/inspector-context";
-import { InspectorRoot } from "@/app/inspector-root";
 import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 import { redirectToOrganization } from "@/lib/auth";
@@ -12,7 +10,6 @@ export const Route = createFileRoute("/_context/")({
 		match(__APP_TYPE__)
 			.with("cloud", () => <CloudRoute />)
 			.with("engine", () => <EngineRoute />)
-			.with("inspector", () => <InspectorRoute />)
 			.exhaustive(),
 	beforeLoad: async ({ context, search }) => {
 		return await match(context)
@@ -49,9 +46,6 @@ export const Route = createFileRoute("/_context/")({
 					return;
 				}
 			})
-			.with({ __type: "inspector" }, async () => {
-				return {};
-			})
 			.exhaustive();
 	},
 });
@@ -70,13 +64,5 @@ function EngineRoute() {
 				</Card>
 			</div>
 		</div>
-	);
-}
-
-function InspectorRoute() {
-	return (
-		<InspectorContextProvider>
-			<InspectorRoot />
-		</InspectorContextProvider>
 	);
 }
