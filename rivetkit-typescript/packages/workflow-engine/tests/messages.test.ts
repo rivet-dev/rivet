@@ -31,10 +31,12 @@ for (const mode of modes) {
 
 		it("should wait for messages", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const message = await ctx.listen<string>(
-					"wait-message",
-					"my-message",
-				);
+				const [message] = await ctx.queue.next<string>("wait-message", {
+					names: ["my-message"],
+				});
+				if (!message) {
+					throw new Error("Expected message");
+				}
 				return message.body;
 			};
 
@@ -55,12 +57,14 @@ for (const mode of modes) {
 			expect(result.output).toBe("payload");
 		});
 
-		it("should listen for any message in a name set", async () => {
+		it("should wait for any message in a name set", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const message = await ctx.listen<string>("wait-many", [
-					"first",
-					"second",
-				]);
+				const [message] = await ctx.queue.next<string>("wait-many", {
+					names: ["first", "second"],
+				});
+				if (!message) {
+					throw new Error("Expected message");
+				}
 				return { name: message.name, body: message.body };
 			};
 
@@ -107,13 +111,15 @@ for (const mode of modes) {
 				),
 			);
 
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				const message = await ctx.listen<string>(
-					"wait-message",
-					"my-message",
-				);
-				return message.body;
-			};
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const [message] = await ctx.queue.next<string>("wait-message", {
+						names: ["my-message"],
+					});
+					if (!message) {
+						throw new Error("Expected message");
+					}
+					return message.body;
+				};
 
 			const result = await runWorkflow(
 				"wf-1",
@@ -129,7 +135,7 @@ for (const mode of modes) {
 			expect(result.output).toBe("hello");
 		});
 
-		it("listen should return a completable message handle", async () => {
+			it("queue.next should return completable messages", async () => {
 			const completions: Array<{ id: string; response?: unknown }> = [];
 			const pending = [
 				buildMessagePayload("my-message", "hello", "msg-1") as {
@@ -165,11 +171,20 @@ for (const mode of modes) {
 			};
 			driver.messageDriver = messageDriver;
 
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				const message = await ctx.listen<string>("wait-message", "my-message");
-				await message.complete({ ok: true });
-				return message.body;
-			};
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const [message] = await ctx.queue.next<string>("wait-message", {
+						names: ["my-message"],
+						completable: true,
+					});
+					if (!message) {
+						throw new Error("Expected message");
+					}
+					if (!message.complete) {
+						throw new Error("Expected completable message");
+					}
+					await message.complete({ ok: true });
+					return message.body;
+				};
 
 			const result = await runWorkflow(
 				"wf-1",
@@ -186,7 +201,142 @@ for (const mode of modes) {
 			expect(completions).toEqual([{ id: "msg-1", response: { ok: true } }]);
 		});
 
-		it("should collect multiple messages with listenN", async () => {
+		it("replay should not block the next completable queue.next", async () => {
+			if (mode !== "yield") {
+				return;
+			}
+
+			await driver.set(
+				buildMessageKey("msg-1"),
+				serializeMessage(buildMessagePayload("my-message", "one", "msg-1")),
+			);
+			await driver.set(
+				buildMessageKey("msg-2"),
+				serializeMessage(buildMessagePayload("my-message", "two", "msg-2")),
+			);
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const [first] = await ctx.queue.next<string>("wait-first", {
+					names: ["my-message"],
+					completable: true,
+				});
+				if (!first || !first.complete) {
+					throw new Error("Expected first completable message");
+				}
+				const completeFirst = first.complete;
+				await ctx.step("complete-first", async () => {
+					await completeFirst({ ok: "first" });
+					return first.body;
+				});
+
+				await ctx.sleep("between", 120);
+
+				const [second] = await ctx.queue.next<string>("wait-second", {
+					names: ["my-message"],
+					completable: true,
+				});
+				if (!second || !second.complete) {
+					throw new Error("Expected second completable message");
+				}
+				const completeSecond = second.complete;
+				await ctx.step("complete-second", async () => {
+					await completeSecond({ ok: "second" });
+					return second.body;
+				});
+
+				return [first.body, second.body] as const;
+			};
+
+			const firstRun = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+			expect(firstRun.state).toBe("sleeping");
+
+			await new Promise((resolve) => setTimeout(resolve, 140));
+
+			const secondRun = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+			expect(secondRun.state).toBe("completed");
+			expect(secondRun.output).toEqual(["one", "two"]);
+		});
+
+		it("replay should keep blocking if completable message was not completed", async () => {
+			if (mode !== "yield") {
+				return;
+			}
+
+			await driver.set(
+				buildMessageKey("msg-1"),
+				serializeMessage(
+					buildMessagePayload("my-message", "one", "msg-1"),
+				),
+			);
+			await driver.set(
+				buildMessageKey("msg-2"),
+				serializeMessage(
+					buildMessagePayload("my-message", "two", "msg-2"),
+				),
+			);
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const [first] = await ctx.queue.next<string>("wait-first", {
+					names: ["my-message"],
+					completable: true,
+				});
+				if (!first || !first.complete) {
+					throw new Error("Expected first completable message");
+				}
+
+				// Intentionally do not complete the message.
+				await ctx.sleep("between", 120);
+
+				await ctx.queue.next<string>("wait-second", {
+					names: ["my-message"],
+					completable: true,
+				});
+
+				return first.body;
+			};
+
+			const firstRun = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+			expect(firstRun.state).toBe("sleeping");
+
+			await new Promise((resolve) => setTimeout(resolve, 140));
+
+			const secondRunHandle = runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			);
+			await expect(secondRunHandle.result).rejects.toThrow(
+				"Previous completable queue message is not completed.",
+			);
+
+			const queued = await driver.messageDriver.loadMessages();
+			expect(queued.map((message) => message.id).sort()).toEqual([
+				"msg-1",
+				"msg-2",
+			]);
+		});
+
+			it("should collect multiple messages with queue.next count", async () => {
 			await driver.set(
 				buildMessageKey("1"),
 				serializeMessage(buildMessagePayload("batch", "a", "1")),
@@ -196,9 +346,13 @@ for (const mode of modes) {
 				serializeMessage(buildMessagePayload("batch", "b", "2")),
 			);
 
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.listenN<string>("batch-wait", "batch", 2);
-			};
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const messages = await ctx.queue.next<string>("batch-wait", {
+						names: ["batch"],
+						count: 2,
+					});
+					return messages.map((message) => message.body);
+				};
 
 			const result = await runWorkflow(
 				"wf-1",
@@ -214,14 +368,14 @@ for (const mode of modes) {
 			expect(result.output).toEqual(["a", "b"]);
 		});
 
-		it("should time out listenWithTimeout", async () => {
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.listenWithTimeout<string>(
-					"timeout",
-					"missing",
-					50,
-				);
-			};
+			it("should time out queue.next", async () => {
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const messages = await ctx.queue.next<string>("timeout", {
+						names: ["missing"],
+						timeout: 50,
+					});
+					return messages[0]?.body ?? null;
+				};
 
 			if (mode === "yield") {
 				const result1 = await runWorkflow(
@@ -258,7 +412,7 @@ for (const mode of modes) {
 			expect(result.output).toBeNull();
 		});
 
-		it("should return a message before listenUntil deadline", async () => {
+			it("should return a message before queue.next timeout", async () => {
 			const messageId = generateId();
 			await driver.set(
 				buildMessageKey(messageId),
@@ -267,13 +421,13 @@ for (const mode of modes) {
 				),
 			);
 
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.listenUntil<string>(
-					"deadline",
-					"deadline",
-					Date.now() + 1000,
-				);
-			};
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const messages = await ctx.queue.next<string>("deadline", {
+						names: ["deadline"],
+						timeout: 1000,
+					});
+					return messages[0]?.body ?? null;
+				};
 
 			const result = await runWorkflow(
 				"wf-1",
@@ -289,15 +443,15 @@ for (const mode of modes) {
 			expect(result.output).toBe("data");
 		});
 
-		it("should wait for listenNWithTimeout messages", async () => {
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.listenNWithTimeout<string>(
-					"batch",
-					"batch",
-					2,
-					5000,
-				);
-			};
+			it("should wait for queue.next timeout messages", async () => {
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const messages = await ctx.queue.next<string>("batch", {
+						names: ["batch"],
+						count: 2,
+						timeout: 5000,
+					});
+					return messages.map((message) => message.body);
+				};
 
 			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
 				mode,
@@ -327,7 +481,7 @@ for (const mode of modes) {
 			expect(result.output).toEqual(["first"]);
 		});
 
-		it("should respect limits and FIFO ordering in listenNUntil", async () => {
+			it("should respect limits and FIFO ordering in queue.next", async () => {
 			await driver.set(
 				buildMessageKey("1"),
 				serializeMessage(buildMessagePayload("fifo", "first", "1")),
@@ -341,14 +495,14 @@ for (const mode of modes) {
 				serializeMessage(buildMessagePayload("fifo", "third", "3")),
 			);
 
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.listenNUntil<string>(
-					"fifo",
-					"fifo",
-					2,
-					Date.now() + 1000,
-				);
-			};
+				const workflow = async (ctx: WorkflowContextInterface) => {
+					const messages = await ctx.queue.next<string>("fifo", {
+						names: ["fifo"],
+						count: 2,
+						timeout: 1000,
+					});
+					return messages.map((message) => message.body);
+				};
 
 			const result = await runWorkflow(
 				"wf-1",
@@ -381,9 +535,14 @@ for (const mode of modes) {
 					return "ready";
 				});
 
-				const message = await ctx.listen<string>("wait", "mid");
-				return message.body;
-			};
+					const [message] = await ctx.queue.next<string>("wait", {
+						names: ["mid"],
+					});
+					if (!message) {
+						throw new Error("Expected message");
+					}
+					return message.body;
+				};
 
 			const handle = runWorkflow("wf-1", workflow, undefined, driver, {
 				mode,

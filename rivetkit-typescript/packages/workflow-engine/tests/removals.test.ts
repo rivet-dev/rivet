@@ -47,9 +47,11 @@ for (const mode of modes) {
 							return Loop.continue({ count: state.count + 1 });
 						},
 					});
-					await ctx.sleep("old-sleep", 0);
-					await ctx.listen<string>("old-listen", "old-message");
-					await ctx.join("old-join", {
+						await ctx.sleep("old-sleep", 0);
+						await ctx.queue.next<string>("old-listen", {
+							names: ["old-message"],
+						});
+						await ctx.join("old-join", {
 						branch: {
 							run: async () => "ok",
 						},

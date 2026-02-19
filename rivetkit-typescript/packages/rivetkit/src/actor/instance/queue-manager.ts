@@ -35,7 +35,7 @@ interface QueueWaiter {
 }
 
 interface MessageListener {
-	nameSet: Set<string>;
+	nameSet?: Set<string>;
 	resolve: () => void;
 	reject: (error: Error) => void;
 	actorAbortCleanup?: () => void;
@@ -345,12 +345,17 @@ export class QueueManager<
 	}
 
 	async waitForNames(
-		names: string[],
+		names: readonly string[] | undefined,
 		abortSignal?: AbortSignal,
 	): Promise<void> {
-		const nameSet = new Set(names);
+		const nameSet =
+			names && names.length > 0 ? new Set(names) : undefined;
 		const existing = await this.#loadQueueMessages();
-		if (existing.some((message) => nameSet.has(message.name))) {
+		if (nameSet) {
+			if (existing.some((message) => nameSet.has(message.name))) {
+				return;
+			}
+		} else if (existing.length > 0) {
 			return;
 		}
 
@@ -500,7 +505,7 @@ export class QueueManager<
 			return;
 		}
 		for (const listener of [...this.#messageListeners]) {
-			if (!listener.nameSet.has(name)) {
+			if (listener.nameSet && !listener.nameSet.has(name)) {
 				continue;
 			}
 			this.#removeMessageListener(listener);

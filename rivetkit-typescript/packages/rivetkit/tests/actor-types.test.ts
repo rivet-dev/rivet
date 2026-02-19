@@ -3,6 +3,7 @@ import { actor, event, queue } from "@/actor/mod";
 import type { ActorContext, ActorContextOf } from "@/actor/contexts";
 import type { ActorDefinition } from "@/actor/definition";
 import type { DatabaseProviderContext } from "@/db/config";
+import { workflow } from "@/workflow/mod";
 
 describe("ActorDefinition", () => {
 	describe("schema config types", () => {
@@ -169,6 +170,73 @@ describe("ActorDefinition", () => {
 			expectTypeOf<FooBody>().toEqualTypeOf<{ fooBody: string }>();
 			expectTypeOf<BarBody>().toEqualTypeOf<{ barBody: number }>();
 			expectTypeOf<CompletableBody>().toEqualTypeOf<{ input: string }>();
+		});
+	});
+
+	describe("workflow context type inference", () => {
+		it("infers queue and event types for workflow ctx", () => {
+			actor({
+				state: {},
+				queues: {
+					foo: queue<{ fooBody: string }>(),
+					bar: queue<{ barBody: number }>(),
+				},
+				events: {
+					updated: event<{ count: number }>(),
+					pair: event<[number, string]>(),
+				},
+				run: workflow(async (ctx) => {
+					const [single] = await ctx.queue.next("wait-single", {
+						names: ["foo"] as const,
+					});
+					if (single && single.name === "foo") {
+						expectTypeOf(single.body).toEqualTypeOf<{
+							fooBody: string;
+						}>();
+					}
+
+					const [union] = await ctx.queue.next("wait-union", {
+						names: ["foo", "bar"],
+					});
+					if (union?.name === "foo") {
+						expectTypeOf(union.body).toEqualTypeOf<{
+							fooBody: string;
+						}>();
+					}
+					if (union?.name === "bar") {
+						expectTypeOf(union.body).toEqualTypeOf<{
+							barBody: number;
+						}>();
+					}
+
+					ctx.broadcast("updated", { count: 1 });
+					ctx.broadcast("pair", 1, "ok");
+					// @ts-expect-error wrong payload shape
+					ctx.broadcast("updated", { count: "no" });
+					// @ts-expect-error unknown event name
+					ctx.broadcast("missing", { count: 1 });
+				}),
+				actions: {},
+			});
+		});
+
+		it("does not require explicit queue.next body generic for single-queue actors", () => {
+			type Decision = { approved: boolean; approver: string };
+			actor({
+				state: {},
+				queues: {
+					decision: queue<Decision>(),
+				},
+				run: workflow(async (ctx) => {
+					const [message] = await ctx.queue.next("wait-decision", {
+						names: ["decision"],
+					});
+					if (message) {
+						expectTypeOf(message.body).toEqualTypeOf<Decision>();
+					}
+				}),
+				actions: {},
+			});
 		});
 	});
 });

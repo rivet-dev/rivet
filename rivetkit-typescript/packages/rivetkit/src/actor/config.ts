@@ -81,14 +81,62 @@ export const RunConfigSchema = z.object({
 	/** Inspector integration for long-running run handlers. */
 	inspector: RunInspectorConfigSchema.optional(),
 });
-export type RunConfig = z.infer<typeof RunConfigSchema>;
+type RunConfigRuntime = z.infer<typeof RunConfigSchema>;
+export type RunConfig<
+	TState = unknown,
+	TConnParams = unknown,
+	TConnState = unknown,
+	TVars = unknown,
+	TInput = unknown,
+	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = Omit<RunConfigRuntime, "run"> & {
+	run: (
+		c: RunContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+	) => void | Promise<void>;
+};
+
+type AnyRunConfig = RunConfig<
+	any,
+	any,
+	any,
+	any,
+	any,
+	AnyDatabaseProvider,
+	any,
+	any
+>;
+
+export const RUN_FUNCTION_CONFIG_SYMBOL = Symbol.for(
+	"rivetkit.run_function_config",
+);
+
+interface RunFunctionConfig {
+	name?: string;
+	icon?: string;
+	inspector?: RunInspectorConfig;
+}
+
+type RunFunctionWithConfig = ((...args: any[]) => any) & {
+	[RUN_FUNCTION_CONFIG_SYMBOL]?: RunFunctionConfig;
+};
 
 // Run can be either a function or an object with name/icon/run
 const zRunHandler = z.union([zFunction(), RunConfigSchema]).optional();
 
 /** Extract the run function from either a function or RunConfig object. */
 export function getRunFunction(
-	run: ((...args: any[]) => any) | RunConfig | undefined,
+	run: ((...args: any[]) => any) | AnyRunConfig | undefined,
 ): ((...args: any[]) => any) | undefined {
 	if (!run) return undefined;
 	if (typeof run === "function") return run;
@@ -97,17 +145,28 @@ export function getRunFunction(
 
 /** Extract run metadata (name/icon) from RunConfig if provided. */
 export function getRunMetadata(
-	run: ((...args: any[]) => any) | RunConfig | undefined,
+	run: ((...args: any[]) => any) | AnyRunConfig | undefined,
 ): { name?: string; icon?: string } {
-	if (!run || typeof run === "function") return {};
+	if (!run) return {};
+	if (typeof run === "function") {
+		const config = (run as RunFunctionWithConfig)[
+			RUN_FUNCTION_CONFIG_SYMBOL
+		];
+		if (!config) return {};
+		return { name: config.name, icon: config.icon };
+	}
 	return { name: run.name, icon: run.icon };
 }
 
 /** Extract run inspector configuration if provided. */
 export function getRunInspectorConfig(
-	run: ((...args: any[]) => any) | RunConfig | undefined,
+	run: ((...args: any[]) => any) | AnyRunConfig | undefined,
 ): RunInspectorConfig | undefined {
-	if (!run || typeof run === "function") return undefined;
+	if (!run) return undefined;
+	if (typeof run === "function") {
+		return (run as RunFunctionWithConfig)[RUN_FUNCTION_CONFIG_SYMBOL]
+			?.inspector;
+	}
 	return run.inspector;
 }
 
@@ -467,7 +526,16 @@ interface BaseActorConfig<
 					TQueues
 				>,
 		  ) => void | Promise<void>)
-		| RunConfig;
+		| RunConfig<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+		  >;
 
 	/**
 	 * Called when the actor's state changes.

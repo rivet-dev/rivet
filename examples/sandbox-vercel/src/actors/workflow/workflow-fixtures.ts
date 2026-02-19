@@ -1,5 +1,5 @@
-import { actor } from "rivetkit";
-import { Loop, workflow, workflowQueueName } from "rivetkit/workflow";
+import { actor, queue } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
 
 const WORKFLOW_GUARD_KV_KEY = "__rivet_actor_workflow_guard_triggered";
 
@@ -50,18 +50,25 @@ export const workflowQueueActor = actor({
 	state: {
 		received: [] as unknown[],
 	},
+	queues: {
+		[WORKFLOW_QUEUE_NAME]: queue<unknown, { echo: unknown }>(),
+	},
 	run: workflow(async (ctx) => {
 		await ctx.loop({
 			name: "queue",
 			run: async (loopCtx) => {
 				const actorLoopCtx = loopCtx as any;
-				const message = await loopCtx.listen(
-					"queue-wait",
-					WORKFLOW_QUEUE_NAME,
-				);
+				const [message] = await loopCtx.queue.next("queue-wait", {
+					names: [WORKFLOW_QUEUE_NAME],
+					completable: true,
+				});
+				if (!message || !message.complete) {
+					return Loop.continue(undefined);
+				}
+				const complete = message.complete;
 				await loopCtx.step("store-message", async () => {
 					actorLoopCtx.state.received.push(message.body);
-					await message.complete({ echo: message.body });
+					await complete({ echo: message.body });
 				});
 				return Loop.continue(undefined);
 			},
@@ -97,4 +104,4 @@ export const workflowSleepActor = actor({
 	},
 });
 
-export { WORKFLOW_QUEUE_NAME, workflowQueueName };
+export { WORKFLOW_QUEUE_NAME };

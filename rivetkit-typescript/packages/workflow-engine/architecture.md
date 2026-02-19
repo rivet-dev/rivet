@@ -143,7 +143,7 @@ This optimization reduces storage size when the same names appear many times.
 ┌─────────────────────────────────────────────────────────────┐
 │                    WorkflowContextImpl                       │
 │  Implements WorkflowContext interface                        │
-│  - step(), loop(), sleep(), listen(), join(), race()         │
+│  - step(), loop(), sleep(), queue.next(), join(), race()     │
 │  - Manages current location                                  │
 │  - Creates branch contexts for parallel execution            │
 └─────────────────────────────────────────────────────────────┘
@@ -202,7 +202,7 @@ This optimization reduces storage size when the same names appear many times.
 ### Sleep/Message Yielding
 
 ```
-1. ctx.sleep() or ctx.listen() called
+1. ctx.sleep() or ctx.queue.next() called
 2. Check if deadline passed or message available (in memory)
 3. If not ready:
    a. Throw SleepError or MessageWaitError

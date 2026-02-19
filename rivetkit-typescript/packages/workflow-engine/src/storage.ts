@@ -399,6 +399,31 @@ export async function consumeMessage(
 }
 
 /**
+ * Peek up to N messages from the queue without consuming them.
+ */
+export function peekMessages(
+	storage: Storage,
+	messageName: string | string[],
+	limit: number,
+): Message[] {
+	const messageNameSet = new Set(
+		Array.isArray(messageName) ? messageName : [messageName],
+	);
+	const includeAll = messageNameSet.size === 0;
+	const results: Message[] = [];
+	for (const message of storage.messages) {
+		if (!includeAll && !messageNameSet.has(message.name)) {
+			continue;
+		}
+		results.push(message);
+		if (results.length >= limit) {
+			break;
+		}
+	}
+	return results;
+}
+
+/**
  * Consume up to N messages from the queue.
  *
  * Uses allSettled to handle partial failures gracefully:
@@ -415,13 +440,14 @@ export async function consumeMessages(
 	const messageNameSet = new Set(
 		Array.isArray(messageName) ? messageName : [messageName],
 	);
+	const includeAll = messageNameSet.size === 0;
 
 	// Find all matching messages up to limit (don't modify memory yet)
 	const toConsume: { message: Message; index: number }[] = [];
 	let count = 0;
 
 	for (let i = 0; i < storage.messages.length && count < limit; i++) {
-		if (messageNameSet.has(storage.messages[i].name)) {
+		if (includeAll || messageNameSet.has(storage.messages[i].name)) {
 			toConsume.push({ message: storage.messages[i], index: i });
 			count++;
 		}

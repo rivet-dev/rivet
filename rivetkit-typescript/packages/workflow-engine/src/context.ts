@@ -24,14 +24,13 @@ import {
 	registerName,
 } from "./location.js";
 import {
-	consumeMessage,
 	consumeMessages,
 	createEntry,
 	deleteEntriesWithPrefix,
 	flush,
-	getEntry,
 	getOrCreateMetadata,
 	loadMetadata,
+	peekMessages,
 	setEntry,
 } from "./storage.js";
 import type {
@@ -49,7 +48,9 @@ import type {
 	StepConfig,
 	Storage,
 	WorkflowContextInterface,
-	WorkflowListenMessage,
+	WorkflowQueue,
+	WorkflowQueueMessage,
+	WorkflowQueueNextOptions,
 	WorkflowMessageDriver,
 } from "./types.js";
 import { sleep } from "./utils.js";
@@ -66,7 +67,7 @@ export const DEFAULT_LOOP_HISTORY_EVERY = 20;
 export const DEFAULT_LOOP_HISTORY_KEEP = 20;
 export const DEFAULT_STEP_TIMEOUT = 30000; // 30 seconds
 
-const LISTEN_HISTORY_MESSAGE_MARKER = "__rivetWorkflowListenMessage";
+const QUEUE_HISTORY_MESSAGE_MARKER = "__rivetWorkflowQueueMessage";
 
 /**
  * Calculate backoff delay with exponential backoff.
@@ -113,6 +114,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private rollbackCheckpointSet: boolean;
 	/** Track names used in current execution to detect duplicates */
 	private usedNamesInExecution = new Set<string>();
+	private pendingCompletableMessageIds = new Set<string>();
 	private historyNotifier?: () => void;
 	private logger?: Logger;
 
@@ -140,6 +142,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 	get abortSignal(): AbortSignal {
 		return this.abortController.signal;
+	}
+
+	get queue(): WorkflowQueue {
+		return {
+			next: async (name, opts) => await this.queueNext(name, opts),
+			send: async (name, body) => await this.queueSend(name, body),
+		};
 	}
 
 	isEvicted(): boolean {
@@ -206,12 +215,12 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private checkDuplicateName(name: string): void {
 		const fullKey =
 			locationToKey(this.storage, this.currentLocation) + "/" + name;
-		if (this.usedNamesInExecution.has(fullKey)) {
-			throw new HistoryDivergedError(
-				`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
-					`Each step/loop/sleep/listen/join/race must have a unique name within its scope.`,
-			);
-		}
+			if (this.usedNamesInExecution.has(fullKey)) {
+				throw new HistoryDivergedError(
+					`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
+						`Each step/loop/sleep/queue.next/join/race must have a unique name within its scope.`,
+				);
+			}
 		this.usedNamesInExecution.add(fullKey);
 	}
 
@@ -953,66 +962,54 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		this.rollbackCheckpointSet = true;
 	}
 
-	// === Listen ===
-	//
-	// IMPORTANT: Messages are loaded once at workflow start (in loadStorage).
-	// If a message is sent via handle.message() DURING workflow execution,
-	// it won't be visible until the next execution. The workflow will yield
-	// (SleepError/MessageWaitError), then on the next run, loadStorage() will
-	// pick up the new message. This is intentional - no polling during execution.
+	// === Queue ===
 
-	async listen<T>(
+	private async queueSend(name: string, body: unknown): Promise<void> {
+		const message: Message = {
+			id: crypto.randomUUID(),
+			name,
+			data: body,
+			sentAt: Date.now(),
+		};
+		if (!this.messageDriver.receiveMessages) {
+			this.storage.messages.push(message);
+		}
+		await this.messageDriver.addMessage(message);
+	}
+
+	private async queueNext<T>(
 		name: string,
-		messageName: string | string[],
-	): Promise<WorkflowListenMessage<T>> {
+		opts?: WorkflowQueueNextOptions,
+	): Promise<Array<WorkflowQueueMessage<T>>> {
 		this.assertNotInProgress();
 		this.checkEvicted();
 
 		this.entryInProgress = true;
 		try {
-			const messages = await this.executeListenN(name, messageName, 1);
-			const message = messages[0];
-			if (!message) {
-				throw new HistoryDivergedError("Expected message for listen()");
-			}
-			return this.toListenMessage<T>(message);
+			return await this.executeQueueNext<T>(name, opts);
 		} finally {
 			this.entryInProgress = false;
 		}
 	}
 
-	async listenN<T>(
+	private async executeQueueNext<T>(
 		name: string,
-		messageName: string,
-		limit: number,
-	): Promise<T[]> {
-		this.assertNotInProgress();
-		this.checkEvicted();
-
-		this.entryInProgress = true;
-		try {
-			const messages = await this.executeListenN(name, messageName, limit);
-			await Promise.all(
-				messages.map((message) => this.completeConsumedMessage(message)),
+		opts?: WorkflowQueueNextOptions,
+	): Promise<Array<WorkflowQueueMessage<T>>> {
+		if (this.pendingCompletableMessageIds.size > 0) {
+			throw new Error(
+				"Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message.",
 			);
-			return messages.map((message) => message.data as T);
-		} finally {
-			this.entryInProgress = false;
 		}
-	}
 
-	private async executeListenN(
-		name: string,
-		messageName: string | string[],
-		limit: number,
-	): Promise<Message[]> {
-		const messageNames = this.normalizeMessageNames(messageName);
+		const resolvedOpts = opts ?? {};
+		const messageNames = this.normalizeQueueNames(resolvedOpts.names);
 		const messageNameLabel = this.messageNamesLabel(messageNames);
+		const count = Math.max(1, resolvedOpts.count ?? 1);
+		const completable = resolvedOpts.completable === true;
 
-		// Check for duplicate name in current execution
 		this.checkDuplicateName(name);
 
-		// Check for replay: first check if we have a count entry
 		const countLocation = appendName(
 			this.storage,
 			this.currentLocation,
@@ -1020,99 +1017,103 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		);
 		const countKey = locationToKey(this.storage, countLocation);
 		const existingCount = this.storage.history.entries.get(countKey);
-
-		// Mark count entry as visited
 		this.markVisited(countKey);
-
 		this.stopRollbackIfMissing(existingCount);
 
-		if (existingCount && existingCount.kind.type === "message") {
-			// Replay: read all recorded messages
-			const count = existingCount.kind.data.data as number;
-			const results: Message[] = [];
+		let deadline: number | undefined;
+		let deadlineEntry: Entry | undefined;
+		if (resolvedOpts.timeout !== undefined) {
+			const deadlineLocation = appendName(
+				this.storage,
+				this.currentLocation,
+				`${name}:deadline`,
+			);
+			const deadlineKey = locationToKey(this.storage, deadlineLocation);
+			deadlineEntry = this.storage.history.entries.get(deadlineKey);
+			this.markVisited(deadlineKey);
+			this.stopRollbackIfMissing(deadlineEntry);
 
-			for (let i = 0; i < count; i++) {
-				const messageLocation = appendName(
-					this.storage,
-					this.currentLocation,
-					`${name}:${i}`,
-				);
-				const messageKey = locationToKey(this.storage, messageLocation);
-
-				// Mark each message entry as visited
-				this.markVisited(messageKey);
-
-				const existingMessage =
-					this.storage.history.entries.get(messageKey);
-				if (
-					existingMessage &&
-					existingMessage.kind.type === "message"
-				) {
-					results.push(
-						this.fromHistoryListenMessage(
-							existingMessage.kind.data.name,
-							existingMessage.kind.data.data,
-						),
-					);
-				}
-			}
-
-			return results;
-		}
-
-		// Try to consume messages immediately
-		const messages = await consumeMessages(
-			this.storage,
-			this.messageDriver,
-			messageNames,
-			limit,
-		);
-
-		if (messages.length > 0) {
-			// Record each message in history with indexed names
-			for (let i = 0; i < messages.length; i++) {
-				const messageLocation = appendName(
-					this.storage,
-					this.currentLocation,
-					`${name}:${i}`,
-				);
-				const messageEntry = createEntry(messageLocation, {
-					type: "message",
-					data: {
-						name: messages[i].name,
-						data: this.toHistoryListenMessage(messages[i]),
-					},
+			if (deadlineEntry && deadlineEntry.kind.type === "sleep") {
+				deadline = deadlineEntry.kind.data.deadline;
+			} else {
+				deadline = Date.now() + resolvedOpts.timeout;
+				const created = createEntry(deadlineLocation, {
+					type: "sleep",
+					data: { deadline, state: "pending" },
 				});
-				setEntry(this.storage, messageLocation, messageEntry);
-
-				// Mark as visited
-				this.markVisited(locationToKey(this.storage, messageLocation));
+				setEntry(this.storage, deadlineLocation, created);
+				created.dirty = true;
+				await this.flushStorage();
+				deadlineEntry = created;
 			}
-
-			// Record the count for replay
-			const countEntry = createEntry(countLocation, {
-				type: "message",
-				data: {
-					name: `${messageNameLabel}:count`,
-					data: messages.length,
-				},
-			});
-			setEntry(this.storage, countLocation, countEntry);
-
-			await this.flushStorage();
-
-			return messages;
 		}
 
-		// No messages found, throw to yield to scheduler
-		throw new MessageWaitError(messageNames);
+		if (existingCount && existingCount.kind.type === "message") {
+			const replayCount = existingCount.kind.data.data as number;
+			return await this.readReplayQueueMessages<T>(
+				name,
+				replayCount,
+				completable,
+			);
+		}
+
+		const now = Date.now();
+		if (deadline !== undefined && now >= deadline) {
+			if (deadlineEntry && deadlineEntry.kind.type === "sleep") {
+				deadlineEntry.kind.data.state = "completed";
+				deadlineEntry.dirty = true;
+			}
+			await this.recordQueueCountEntry(
+				countLocation,
+				`${messageNameLabel}:count`,
+				0,
+			);
+			return [];
+		}
+
+		const received = await this.receiveMessagesNow(
+			messageNames,
+			count,
+			completable,
+		);
+		if (received.length > 0) {
+			const historyMessages = received.map((message) =>
+				this.toWorkflowQueueMessage<T>(message),
+			);
+			if (deadlineEntry && deadlineEntry.kind.type === "sleep") {
+				deadlineEntry.kind.data.state = "interrupted";
+				deadlineEntry.dirty = true;
+			}
+			await this.recordQueueMessages(
+				name,
+				countLocation,
+				messageNames,
+				historyMessages,
+			);
+			const queueMessages = received.map((message, index) =>
+				this.createQueueMessage<T>(message, completable, {
+					historyLocation: appendName(
+						this.storage,
+						this.currentLocation,
+						`${name}:${index}`,
+					),
+				}),
+			);
+			return queueMessages;
+		}
+
+		if (deadline === undefined) {
+			throw new MessageWaitError(messageNames);
+		}
+		throw new SleepError(deadline, messageNames);
 	}
 
-	private normalizeMessageNames(messageName: string | string[]): string[] {
-		const names = Array.isArray(messageName) ? messageName : [messageName];
+	private normalizeQueueNames(names?: readonly string[]): string[] {
+		if (!names || names.length === 0) {
+			return [];
+		}
 		const deduped: string[] = [];
 		const seen = new Set<string>();
-
 		for (const name of names) {
 			if (seen.has(name)) {
 				continue;
@@ -1120,437 +1121,52 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			seen.add(name);
 			deduped.push(name);
 		}
-
-		if (deduped.length === 0) {
-			throw new Error("listen() requires at least one message name");
-		}
-
 		return deduped;
 	}
 
 	private messageNamesLabel(messageNames: string[]): string {
+		if (messageNames.length === 0) {
+			return "*";
+		}
 		return messageNames.length === 1
 			? messageNames[0]
 			: messageNames.join("|");
 	}
 
-	private toListenMessage<T>(message: Message): WorkflowListenMessage<T> {
-		return {
-			id: message.id,
-			name: message.name,
-			body: message.data as T,
-			complete: async (response?: unknown) => {
-				if (message.complete) {
-					await message.complete(response);
-					return;
-				}
-				if (this.messageDriver.completeMessage) {
-					await this.messageDriver.completeMessage(message.id, response);
-				}
-			},
-		};
-	}
-
-	private async completeConsumedMessage(message: Message): Promise<void> {
-		if (message.complete) {
-			await message.complete();
-			return;
-		}
-		if (message.id && this.messageDriver.completeMessage) {
-			await this.messageDriver.completeMessage(message.id);
-		}
-	}
-
-	private toHistoryListenMessage(message: Message): unknown {
-		return {
-			[LISTEN_HISTORY_MESSAGE_MARKER]: 1,
-			id: message.id,
-			name: message.name,
-			body: message.data,
-		};
-	}
-
-	private fromHistoryListenMessage(name: string, value: unknown): Message {
-		if (
-			typeof value === "object" &&
-			value !== null &&
-			(value as Record<string, unknown>)[LISTEN_HISTORY_MESSAGE_MARKER] === 1
-		) {
-			const serialized = value as Record<string, unknown>;
-			const id =
-				typeof serialized.id === "string" ? serialized.id : "";
-			const serializedName =
-				typeof serialized.name === "string" ? serialized.name : name;
-			const complete = async (response?: unknown) => {
-				if (!id || !this.messageDriver.completeMessage) {
-					return;
-				}
-				await this.messageDriver.completeMessage(id, response);
-			};
-
-			return {
-				id,
-				name: serializedName,
-				data: serialized.body,
-				sentAt: 0,
-				complete,
-			};
-		}
-
-		return {
-			id: "",
-			name,
-			data: value,
-			sentAt: 0,
-		};
-	}
-
-	async listenWithTimeout<T>(
-		name: string,
-		messageName: string,
-		timeoutMs: number,
-	): Promise<T | null> {
-		const deadline = Date.now() + timeoutMs;
-		return this.listenUntil<T>(name, messageName, deadline);
-	}
-
-	async listenUntil<T>(
-		name: string,
-		messageName: string,
-		timestampMs: number,
-	): Promise<T | null> {
-		this.assertNotInProgress();
-		this.checkEvicted();
-
-		this.entryInProgress = true;
-		try {
-			return await this.executeListenUntil<T>(
-				name,
-				messageName,
-				timestampMs,
-			);
-		} finally {
-			this.entryInProgress = false;
-		}
-	}
-
-	private async executeListenUntil<T>(
-		name: string,
-		messageName: string,
-		deadline: number,
-	): Promise<T | null> {
-		// Check for duplicate name in current execution
-		this.checkDuplicateName(name);
-
-		const sleepLocation = appendName(
-			this.storage,
-			this.currentLocation,
-			name,
-		);
-		const messageLocation = appendName(
-			this.storage,
-			this.currentLocation,
-			`${name}:message`,
-		);
-		const sleepKey = locationToKey(this.storage, sleepLocation);
-		const messageKey = locationToKey(this.storage, messageLocation);
-
-		// Mark entries as visited for validateComplete
-		this.markVisited(sleepKey);
-		this.markVisited(messageKey);
-
-		const existingSleep = this.storage.history.entries.get(sleepKey);
-
-		this.stopRollbackIfMissing(existingSleep);
-
-		// Check for replay
-		if (existingSleep && existingSleep.kind.type === "sleep") {
-			const sleepData = existingSleep.kind.data;
-			if (sleepData.state === "completed") {
-				return null;
-			}
-
-			if (sleepData.state === "interrupted") {
-				const existingMessage = this.storage.history.entries.get(messageKey);
-				if (
-					existingMessage &&
-					existingMessage.kind.type === "message"
-				) {
-					const replayedMessage = this.fromHistoryListenMessage(
-						existingMessage.kind.data.name,
-						existingMessage.kind.data.data,
-					);
-					await this.completeConsumedMessage(replayedMessage);
-					return replayedMessage.data as T;
-				}
-				throw new HistoryDivergedError(
-					"Expected message entry after interrupted sleep",
-				);
-			}
-
-			this.stopRollbackIfIncomplete(true);
-
-			deadline = sleepData.deadline;
-		} else {
-			this.stopRollbackIfIncomplete(true);
-
-			// Create sleep entry
-			const sleepEntry = createEntry(sleepLocation, {
-				type: "sleep",
-				data: { deadline, state: "pending" },
+	private async receiveMessagesNow(
+		messageNames: string[],
+		count: number,
+		completable: boolean,
+	): Promise<Message[]> {
+		if (this.messageDriver.receiveMessages) {
+			return await this.messageDriver.receiveMessages({
+				names: messageNames.length > 0 ? messageNames : undefined,
+				count,
+				completable,
 			});
-			setEntry(this.storage, sleepLocation, sleepEntry);
-			sleepEntry.dirty = true;
-			await this.flushStorage();
 		}
-
-		const now = Date.now();
-		const remaining = deadline - now;
-
-		// Deadline passed, check for message one more time
-		if (remaining <= 0) {
-			const message = await consumeMessage(
+		if (completable) {
+			return peekMessages(
 				this.storage,
-				this.messageDriver,
-				messageName,
+				messageNames.length > 0 ? messageNames : [],
+				count,
 			);
-			const sleepEntry = getEntry(this.storage, sleepLocation)!;
-
-			if (message) {
-				if (sleepEntry.kind.type === "sleep") {
-					sleepEntry.kind.data.state = "interrupted";
-				}
-				sleepEntry.dirty = true;
-
-				const messageEntry = createEntry(messageLocation, {
-					type: "message",
-					data: {
-						name: message.name,
-						data: this.toHistoryListenMessage(message),
-					},
-				});
-				setEntry(this.storage, messageLocation, messageEntry);
-				await this.flushStorage();
-				await this.completeConsumedMessage(message);
-
-				return message.data as T;
-			}
-
-			if (sleepEntry.kind.type === "sleep") {
-				sleepEntry.kind.data.state = "completed";
-			}
-			sleepEntry.dirty = true;
-			await this.flushStorage();
-			return null;
 		}
-
-		// Check for message (messages are loaded at workflow start, no polling needed)
-		const message = await consumeMessage(
+		return await consumeMessages(
 			this.storage,
 			this.messageDriver,
-			messageName,
-		);
-		if (message) {
-			const sleepEntry = getEntry(this.storage, sleepLocation)!;
-			if (sleepEntry.kind.type === "sleep") {
-				sleepEntry.kind.data.state = "interrupted";
-			}
-			sleepEntry.dirty = true;
-
-			const messageEntry = createEntry(messageLocation, {
-				type: "message",
-				data: {
-					name: message.name,
-					data: this.toHistoryListenMessage(message),
-				},
-			});
-			setEntry(this.storage, messageLocation, messageEntry);
-			await this.flushStorage();
-			await this.completeConsumedMessage(message);
-
-			return message.data as T;
-		}
-
-		// Message not available, yield to scheduler until deadline or message
-		throw new SleepError(deadline, [messageName]);
-	}
-
-	async listenNWithTimeout<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		timeoutMs: number,
-	): Promise<T[]> {
-		this.assertNotInProgress();
-		this.checkEvicted();
-
-		this.entryInProgress = true;
-		try {
-			return await this.executeListenNWithTimeout<T>(
-				name,
-				messageName,
-				limit,
-				timeoutMs,
-			);
-		} finally {
-			this.entryInProgress = false;
-		}
-	}
-
-	private async executeListenNWithTimeout<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		timeoutMs: number,
-	): Promise<T[]> {
-		// Check for duplicate name in current execution
-		this.checkDuplicateName(name);
-
-		// Use a sleep entry to store the deadline for replay
-		const sleepLocation = appendName(
-			this.storage,
-			this.currentLocation,
-			`${name}:deadline`,
-		);
-		const sleepKey = locationToKey(this.storage, sleepLocation);
-		const existingSleep = this.storage.history.entries.get(sleepKey);
-
-		this.markVisited(sleepKey);
-
-		this.stopRollbackIfMissing(existingSleep);
-
-		let deadline: number;
-
-		if (existingSleep && existingSleep.kind.type === "sleep") {
-			// Replay: use stored deadline
-			deadline = existingSleep.kind.data.deadline;
-		} else {
-			// New execution: calculate and store deadline
-			deadline = Date.now() + timeoutMs;
-			const sleepEntry = createEntry(sleepLocation, {
-				type: "sleep",
-				data: { deadline, state: "pending" },
-			});
-			setEntry(this.storage, sleepLocation, sleepEntry);
-			sleepEntry.dirty = true;
-			// Flush immediately to persist deadline before potential SleepError
-			await this.flushStorage();
-		}
-
-		return this.executeListenNUntilImpl<T>(
-			name,
-			messageName,
-			limit,
-			deadline,
+			messageNames.length > 0 ? messageNames : [],
+			count,
 		);
 	}
 
-	async listenNUntil<T>(
+	private async recordQueueMessages<T>(
 		name: string,
-		messageName: string,
-		limit: number,
-		timestampMs: number,
-	): Promise<T[]> {
-		this.assertNotInProgress();
-		this.checkEvicted();
-
-		// Check for duplicate name in current execution
-		this.checkDuplicateName(name);
-
-		this.entryInProgress = true;
-		try {
-			return await this.executeListenNUntilImpl<T>(
-				name,
-				messageName,
-				limit,
-				timestampMs,
-			);
-		} finally {
-			this.entryInProgress = false;
-		}
-	}
-
-	/**
-	 * Internal implementation for listenNUntil with proper replay support.
-	 * Stores the count and individual messages for deterministic replay.
-	 */
-	private async executeListenNUntilImpl<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		deadline: number,
-	): Promise<T[]> {
-		// Check for replay: look for count entry
-		const countLocation = appendName(
-			this.storage,
-			this.currentLocation,
-			`${name}:count`,
-		);
-		const countKey = locationToKey(this.storage, countLocation);
-		const existingCount = this.storage.history.entries.get(countKey);
-
-		this.markVisited(countKey);
-
-		this.stopRollbackIfMissing(existingCount);
-
-		if (existingCount && existingCount.kind.type === "message") {
-			// Replay: read all recorded messages
-			const count = existingCount.kind.data.data as number;
-			const results: T[] = [];
-
-			for (let i = 0; i < count; i++) {
-				const messageLocation = appendName(
-					this.storage,
-					this.currentLocation,
-					`${name}:${i}`,
-				);
-				const messageKey = locationToKey(this.storage, messageLocation);
-
-				this.markVisited(messageKey);
-
-				const existingMessage = this.storage.history.entries.get(messageKey);
-				if (
-					existingMessage &&
-					existingMessage.kind.type === "message"
-				) {
-					const replayedMessage = this.fromHistoryListenMessage(
-						existingMessage.kind.data.name,
-						existingMessage.kind.data.data,
-					);
-					await this.completeConsumedMessage(replayedMessage);
-					results.push(replayedMessage.data as T);
-				}
-			}
-
-			return results;
-		}
-
-		// New execution: collect messages until timeout or limit reached
-		const results: T[] = [];
-
-		for (let i = 0; i < limit; i++) {
-			const now = Date.now();
-			if (now >= deadline) {
-				break;
-			}
-
-			// Try to consume a message
-			const message = await consumeMessage(
-				this.storage,
-				this.messageDriver,
-				messageName,
-			);
-			if (!message) {
-				// No message available - check if we should wait
-				if (results.length === 0) {
-					// No messages yet - yield to scheduler until deadline or message
-					throw new SleepError(deadline, [messageName]);
-				}
-				// We have some messages - return what we have
-				break;
-			}
-
-			// Record the message
+		countLocation: Location,
+		messageNames: string[],
+		messages: Array<WorkflowQueueMessage<T>>,
+	): Promise<void> {
+		for (let i = 0; i < messages.length; i++) {
 			const messageLocation = appendName(
 				this.storage,
 				this.currentLocation,
@@ -1559,27 +1175,226 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const messageEntry = createEntry(messageLocation, {
 				type: "message",
 				data: {
-					name: message.name,
-					data: this.toHistoryListenMessage(message),
+					name: messages[i].name,
+					data: this.toHistoryQueueMessage(messages[i]),
 				},
 			});
 			setEntry(this.storage, messageLocation, messageEntry);
 			this.markVisited(locationToKey(this.storage, messageLocation));
-			await this.completeConsumedMessage(message);
-
-			results.push(message.data as T);
 		}
+		await this.recordQueueCountEntry(
+			countLocation,
+			`${this.messageNamesLabel(messageNames)}:count`,
+			messages.length,
+		);
+	}
 
-		// Record the count for replay
+	private async recordQueueCountEntry(
+		countLocation: Location,
+		countLabel: string,
+		count: number,
+	): Promise<void> {
 		const countEntry = createEntry(countLocation, {
 			type: "message",
-			data: { name: `${messageName}:count`, data: results.length },
+			data: {
+				name: countLabel,
+				data: count,
+			},
 		});
 		setEntry(this.storage, countLocation, countEntry);
-
 		await this.flushStorage();
+	}
 
+	private async readReplayQueueMessages<T>(
+		name: string,
+		count: number,
+		completable: boolean,
+	): Promise<Array<WorkflowQueueMessage<T>>> {
+		const results: Array<WorkflowQueueMessage<T>> = [];
+		for (let i = 0; i < count; i++) {
+			const messageLocation = appendName(
+				this.storage,
+				this.currentLocation,
+				`${name}:${i}`,
+			);
+			const messageKey = locationToKey(this.storage, messageLocation);
+			this.markVisited(messageKey);
+			const existingMessage = this.storage.history.entries.get(messageKey);
+			if (!existingMessage || existingMessage.kind.type !== "message") {
+				throw new HistoryDivergedError(
+					`Expected queue message "${name}:${i}" in history`,
+				);
+			}
+			const parsed = this.fromHistoryQueueMessage(
+				existingMessage.kind.data.name,
+				existingMessage.kind.data.data,
+			);
+			results.push(
+				this.createQueueMessage<T>(parsed.message, completable, {
+					historyLocation: messageLocation,
+					completed: parsed.completed,
+					replay: true,
+				}),
+			);
+		}
 		return results;
+	}
+
+	private toWorkflowQueueMessage<T>(message: Message): WorkflowQueueMessage<T> {
+		return {
+			id: message.id,
+			name: message.name,
+			body: message.data as T,
+			createdAt: message.sentAt,
+		};
+	}
+
+	private createQueueMessage<T>(
+		message: Message,
+		completable: boolean,
+		opts?: {
+			historyLocation?: Location;
+			completed?: boolean;
+			replay?: boolean;
+		},
+	): WorkflowQueueMessage<T> {
+		const queueMessage = this.toWorkflowQueueMessage<T>(message);
+		if (!completable) {
+			return queueMessage;
+		}
+
+		if (opts?.replay && opts.completed) {
+			return {
+				...queueMessage,
+				complete: async () => {
+					// No-op: this message was already completed in a prior run.
+				},
+			};
+		}
+
+		const messageId = message.id;
+		this.pendingCompletableMessageIds.add(messageId);
+		let completed = false;
+
+		return {
+			...queueMessage,
+			complete: async (response?: unknown) => {
+				if (completed) {
+					throw new Error("Queue message already completed");
+				}
+				completed = true;
+				try {
+					await this.completeMessage(message, response);
+					await this.markQueueMessageCompleted(opts?.historyLocation);
+					this.pendingCompletableMessageIds.delete(messageId);
+				} catch (error) {
+					completed = false;
+					throw error;
+				}
+			},
+		};
+	}
+
+	private async markQueueMessageCompleted(
+		historyLocation: Location | undefined,
+	): Promise<void> {
+		if (!historyLocation) {
+			return;
+		}
+		const key = locationToKey(this.storage, historyLocation);
+		const entry = this.storage.history.entries.get(key);
+		if (!entry || entry.kind.type !== "message") {
+			return;
+		}
+		const parsed = this.fromHistoryQueueMessage(
+			entry.kind.data.name,
+			entry.kind.data.data,
+		);
+		entry.kind.data.data = this.toHistoryQueueMessage(
+			this.toWorkflowQueueMessage(parsed.message),
+			true,
+		);
+		entry.dirty = true;
+		await this.flushStorage();
+	}
+
+	private async completeMessage(
+		message: Message,
+		response?: unknown,
+	): Promise<void> {
+		if (message.complete) {
+			await message.complete(response);
+			return;
+		}
+		if (this.messageDriver.completeMessage) {
+			await this.messageDriver.completeMessage(message.id, response);
+			return;
+		}
+		const deleted = await this.messageDriver.deleteMessages([message.id]);
+		if (!deleted.includes(message.id)) {
+			return;
+		}
+		const idx = this.storage.messages.findIndex((entry) =>
+			entry.id === message.id
+		);
+		if (idx !== -1) {
+			this.storage.messages.splice(idx, 1);
+		}
+	}
+
+	private toHistoryQueueMessage(
+		message: WorkflowQueueMessage<unknown>,
+		completed = false,
+	): unknown {
+		return {
+			[QUEUE_HISTORY_MESSAGE_MARKER]: 1,
+			id: message.id,
+			name: message.name,
+			body: message.body,
+			createdAt: message.createdAt,
+			completed,
+		};
+	}
+
+	private fromHistoryQueueMessage(
+		name: string,
+		value: unknown,
+	): { message: Message; completed: boolean } {
+		if (
+			typeof value === "object" &&
+			value !== null &&
+			(value as Record<string, unknown>)[QUEUE_HISTORY_MESSAGE_MARKER] === 1
+		) {
+			const serialized = value as Record<string, unknown>;
+			const id =
+				typeof serialized.id === "string" ? serialized.id : "";
+			const serializedName =
+				typeof serialized.name === "string" ? serialized.name : name;
+			const createdAt =
+				typeof serialized.createdAt === "number" ? serialized.createdAt : 0;
+			const completed =
+				typeof serialized.completed === "boolean"
+					? serialized.completed
+					: false;
+			return {
+				message: {
+					id,
+					name: serializedName,
+					data: serialized.body,
+					sentAt: createdAt,
+				},
+				completed,
+			};
+		}
+		return {
+			message: {
+				id: "",
+				name,
+				data: value,
+				sentAt: 0,
+			},
+			completed: false,
+		};
 	}
 
 	// === Join ===
