@@ -124,8 +124,8 @@ async function validateReuseVersion(version: string): Promise<void> {
 	// Check Docker images exist
 	console.log(`Checking Docker images for ${shortCommit}...`);
 	try {
-		await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-amd64`;
-		await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-arm64`;
+		await $({ stdio: "inherit" })`docker manifest inspect rivetdev/engine:slim-${shortCommit}-amd64`;
+		await $({ stdio: "inherit" })`docker manifest inspect rivetdev/engine:slim-${shortCommit}-arm64`;
 		console.log("✅ Docker images exist");
 	} catch (error) {
 		throw new Error(
