@@ -4385,6 +4385,7 @@ dependencies = [
  "rivet-cache",
  "rivet-cache-purge",
  "rivet-config",
+ "rivet-engine-runner",
  "rivet-guard",
  "rivet-logs",
  "rivet-pools",
@@ -4418,6 +4419,26 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "vbare",
+]
+
+[[package]]
+name = "rivet-engine-runner"
+version = "2.0.38"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "rand 0.8.5",
+ "rivet-runner-protocol",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "urlencoding",
  "vbare",
 ]
 

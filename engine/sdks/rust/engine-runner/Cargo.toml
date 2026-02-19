@@ -1,0 +1,23 @@
+[package]
+name = "rivet-engine-runner"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Rust-based engine runner for Rivet, enabling programmatic actor lifecycle control"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+rand.workspace = true
+rivet-runner-protocol.workspace = true
+serde_bare.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+urlencoding.workspace = true
+vbare.workspace = true

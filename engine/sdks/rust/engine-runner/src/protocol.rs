@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::Result;
 use rivet_runner_protocol as rp;
 use rivet_runner_protocol::mk2 as rp2;
 use vbare::OwnedVersionedData;
