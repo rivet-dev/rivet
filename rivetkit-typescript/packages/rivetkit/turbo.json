@@ -39,12 +39,18 @@
 			"inputs": ["schemas/**/*.bare", "scripts/compile-bare.ts"],
 			"outputs": ["dist/schemas/**/*.ts"]
 		},
+		"build:pack-inspector": {
+			"dependsOn": ["@rivetkit/engine-frontend#build:inspector"],
+			"inputs": ["scripts/pack-inspector.ts", "package.json"],
+			"outputs": ["dist/inspector.tar.gz"]
+		},
 		"build": {
 			"dependsOn": [
 				"^build",
 				"manager-openapi-gen",
 				"dump-asyncapi",
-				"build:schema"
+				"build:schema",
+				"build:browser"
 			],
 			"inputs": [
 				"src/**",
@@ -52,8 +58,21 @@
 				"tsup.config.ts",
 				"package.json"
 			],
-			"outputs": ["dist/**"],
+			"outputs": ["dist/tsup/**"],
 			"env": ["FAST_BUILD", "CUSTOM_RIVETKIT_DEVTOOLS_URL"]
+		},
+		"build:browser": {
+			"dependsOn": ["build:schema"],
+			"inputs": [
+				"src/client/mod.browser.ts",
+				"src/inspector/mod.browser.ts",
+				"src/**",
+				"tsconfig.json",
+				"tsup.browser.config.ts",
+				"package.json"
+			],
+			"outputs": ["dist/browser/**"],
+			"env": ["CUSTOM_RIVETKIT_DEVTOOLS_URL"]
 		},
 		"test": {
 			"dependsOn": ["^test", "build"],
@@ -62,6 +81,10 @@
 		"check-types": {
 			"dependsOn": ["^build", "build:schema"],
 			"inputs": ["src/**", "schemas/**/*.bare", "tsconfig.json"]
+		},
+		"build:publish": {
+			"dependsOn": ["build", "build:pack-inspector"],
+			"outputs": []
 		}
 	}
 }

@@ -1,12 +1,19 @@
 import * as cbor from "cbor-x";
 import type {
 	TransportWorkflowHistory,
-	decodeWorkflowHistoryTransport,
-} from "rivetkit/inspector";
-import type { WorkflowHistory, EntryKind, EntryStatus, Location, SleepState, BranchStatus, BranchStatusType, EntryKindType } from "./workflow-types";
+} from "rivetkit/inspector/client";
+import type {
+	BranchStatus,
+	BranchStatusType,
+	EntryKind,
+	EntryKindType,
+	EntryStatus,
+	Location,
+	SleepState,
+	WorkflowHistory,
+} from "./workflow-types";
 
 type TransportWorkflowEntry = TransportWorkflowHistory["entries"][number];
-type TransportWorkflowEntryMetadata = ReturnType<TransportWorkflowHistory["entryMetadata"]["get"]>;
 
 function decodeCborOrNull(data: ArrayBuffer | null): unknown {
 	if (data === null) return undefined;
@@ -62,7 +69,10 @@ function transformBranchStatusType(status: string): BranchStatusType {
 }
 
 function transformBranches(
-	branches: ReadonlyMap<string, { status: string; output: ArrayBuffer | null; error: string | null }>,
+	branches: ReadonlyMap<
+		string,
+		{ status: string; output: ArrayBuffer | null; error: string | null }
+	>,
 ): Record<string, BranchStatus> {
 	const result: Record<string, BranchStatus> = {};
 	for (const [name, branch] of branches) {
@@ -165,7 +175,8 @@ function buildEntryKey(
 			if (typeof segment === "number") {
 				return nameRegistry[segment] ?? `unknown-${segment}`;
 			}
-			const loopName = nameRegistry[segment.loop] ?? `loop-${segment.loop}`;
+			const loopName =
+				nameRegistry[segment.loop] ?? `loop-${segment.loop}`;
 			return `${loopName}[${segment.iteration}]`;
 		})
 		.join("/");
@@ -191,9 +202,14 @@ export function transformWorkflowHistory(
 				location,
 				kind: transformEntryKind(entry.kind),
 				dirty: false,
-				status: meta ? transformEntryStatus(meta.status) : ("pending" as EntryStatus),
+				status: meta
+					? transformEntryStatus(meta.status)
+					: ("pending" as EntryStatus),
 				startedAt: meta ? Number(meta.createdAt) : undefined,
-				completedAt: meta?.completedAt != null ? Number(meta.completedAt) : undefined,
+				completedAt:
+					meta?.completedAt != null
+						? Number(meta.completedAt)
+						: undefined,
 				retryCount: meta ? meta.attempts : undefined,
 				error: meta?.error ?? undefined,
 			},
@@ -204,7 +220,9 @@ export function transformWorkflowHistory(
 	const hasRunning = history.some((h) => h.entry.status === "running");
 	const hasFailed = history.some((h) => h.entry.status === "failed");
 	const hasPending = history.some((h) => h.entry.status === "pending");
-	const allCompleted = history.length > 0 && history.every((h) => h.entry.status === "completed");
+	const allCompleted =
+		history.length > 0 &&
+		history.every((h) => h.entry.status === "completed");
 
 	let state: WorkflowHistory["state"] = "pending";
 	if (allCompleted) {
@@ -213,7 +231,10 @@ export function transformWorkflowHistory(
 		state = "failed";
 	} else if (hasRunning) {
 		state = "running";
-	} else if (hasPending && history.some((h) => h.entry.status === "completed")) {
+	} else if (
+		hasPending &&
+		history.some((h) => h.entry.status === "completed")
+	) {
 		state = "running";
 	}
 

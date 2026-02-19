@@ -2,6 +2,10 @@
 	"$schema": "https://turbo.build/schema.json",
 	"extends": ["//"],
 	"tasks": {
+		"build": {
+			"dependsOn": ["build:inspector"],
+			"outputs": ["dist/**"]
+		},
 		"build:engine": {
 			"dependsOn": ["^build"],
 			"env": ["VITE_APP_*", "DEPLOYMENT_TYPE"],
