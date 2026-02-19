@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::time::Instant;
 
 use anyhow::{Context, bail};
@@ -26,7 +25,7 @@ const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-s
 const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 
-const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(5);
+const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -383,35 +382,25 @@ async fn outbound_req_inner(
 
 					bail!("invalid status code ({code}):\n{}", body_slice);
 				}
-				Err(sse::Error::Transport(err)) => {
-					report_error(
-						ctx,
-						input.namespace_id,
-						&input.runner_name,
-						RunnerPoolError::ServerlessConnectionError {
-							message: if let Some(source) = err.source() {
-								format!("{err}\n{source}")
-							} else {
-								err.to_string()
-							},
-						},
-					)
-					.await;
-
-					return Err(err.into());
-				}
 				Err(err) => {
+					let wrapped_err = anyhow::Error::from(err);
+
 					report_error(
 						ctx,
 						input.namespace_id,
 						&input.runner_name,
 						RunnerPoolError::ServerlessConnectionError {
-							message: err.to_string(),
+							// Print entire error chain
+							message: wrapped_err
+								.chain()
+								.map(|err| err.to_string())
+								.collect::<Vec<_>>()
+								.join("\n"),
 						},
 					)
 					.await;
 
-					return Err(err.into());
+					return Err(wrapped_err);
 				}
 			}
 		}
