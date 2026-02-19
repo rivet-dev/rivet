@@ -22,38 +22,38 @@ export const dbActorRaw = actor({
 			await c.db.execute(
 				`INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()})`,
 			);
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ id: number }>(
 				`SELECT last_insert_rowid() as id`,
-			)) as Array<{ id: number }>;
+			);
 			return { id: results[0].id };
 		},
 		getValues: async (c) => {
-			const results = (await c.db.execute(
-				`SELECT * FROM test_data ORDER BY id`,
-			)) as Array<{
+			const results = await c.db.execute<{
 				id: number;
 				value: string;
 				payload: string;
 				created_at: number;
-			}>;
+			}>(
+				`SELECT * FROM test_data ORDER BY id`,
+			);
 			return results;
 		},
 		getValue: async (c, id: number) => {
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ value: string }>(
 				`SELECT value FROM test_data WHERE id = ${id}`,
-			)) as Array<{ value: string }>;
+			);
 			return results[0]?.value ?? null;
 		},
 		getCount: async (c) => {
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ count: number }>(
 				`SELECT COUNT(*) as count FROM test_data`,
-			)) as Array<{ count: number }>;
+			);
 			return results[0].count;
 		},
 		rawSelectCount: async (c) => {
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ count: number }>(
 				`SELECT COUNT(*) as count FROM test_data`,
-			)) as Array<{ count: number }>;
+			);
 			return results[0].count;
 		},
 		insertMany: async (c, count: number) => {
@@ -94,15 +94,15 @@ export const dbActorRaw = actor({
 			await c.db.execute(
 				`INSERT INTO test_data (value, payload, created_at) VALUES ('payload', '${payload}', ${Date.now()})`,
 			);
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ id: number }>(
 				`SELECT last_insert_rowid() as id`,
-			)) as Array<{ id: number }>;
+			);
 			return { id: results[0].id, size };
 		},
 		getPayloadSize: async (c, id: number) => {
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ size: number }>(
 				`SELECT length(payload) as size FROM test_data WHERE id = ${id}`,
-			)) as Array<{ size: number }>;
+			);
 			return results[0]?.size ?? 0;
 		},
 		repeatUpdate: async (c, id: number, count: number) => {
@@ -125,9 +125,9 @@ export const dbActorRaw = actor({
 			await c.db.execute(
 				`BEGIN; INSERT INTO test_data (value, payload, created_at) VALUES ('${value}', '', ${Date.now()}); UPDATE test_data SET value = '${value}-updated' WHERE id = last_insert_rowid(); COMMIT;`,
 			);
-			const results = (await c.db.execute(
+			const results = await c.db.execute<{ value: string }>(
 				`SELECT value FROM test_data ORDER BY id DESC LIMIT 1`,
-			)) as Array<{ value: string }>;
+			);
 			return results[0]?.value ?? null;
 		},
 		triggerSleep: (c) => {

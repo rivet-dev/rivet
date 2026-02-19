@@ -163,9 +163,36 @@ export function db<
 			const client = proxyDrizzle<TSchema>(callback, config);
 
 			return Object.assign(client, {
-				execute: async (query: string, ...args: unknown[]) => {
-					const result = await callback(query, args, "all");
-					return result.rows;
+				execute: async <
+					TRow extends Record<string, unknown> = Record<string, unknown>,
+				>(
+					query: string,
+					...args: unknown[]
+				): Promise<TRow[]> => {
+					if (args.length > 0) {
+						const { rows, columns } = await waDb.query(query, args);
+						return rows.map((row: unknown[]) => {
+							const rowObj: Record<string, unknown> = {};
+							for (let i = 0; i < row.length; i++) {
+								rowObj[columns[i]] = row[i];
+							}
+							return rowObj;
+						}) as TRow[];
+					}
+
+					const results: Record<string, unknown>[] = [];
+					let columnNames: string[] | null = null;
+					await waDb.exec(query, (row: unknown[], columns: string[]) => {
+						if (!columnNames) {
+							columnNames = columns;
+						}
+						const rowObj: Record<string, unknown> = {};
+						for (let i = 0; i < row.length; i++) {
+							rowObj[columnNames[i]] = row[i];
+						}
+						results.push(rowObj);
+					});
+					return results as TRow[];
 				},
 				close: async () => {
 					await waDb.close();

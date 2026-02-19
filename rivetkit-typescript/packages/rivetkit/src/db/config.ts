@@ -66,7 +66,10 @@ export type DatabaseProvider<DB extends RawAccess> = {
  * Raw database client with basic exec method
  */
 export interface RawDatabaseClient {
-	exec: (query: string, ...args: unknown[]) => Promise<unknown[]> | unknown[];
+	exec: <TRow extends Record<string, unknown> = Record<string, unknown>>(
+		query: string,
+		...args: unknown[]
+	) => Promise<TRow[]> | TRow[];
 }
 
 /**
@@ -77,10 +80,12 @@ export interface DrizzleDatabaseClient {
 	// For now, just a marker interface
 }
 
-type ExecuteFunction = (
+type ExecuteFunction = <
+	TRow extends Record<string, unknown> = Record<string, unknown>,
+>(
 	query: string,
 	...args: unknown[]
-) => Promise<unknown[]>;
+) => Promise<TRow[]>;
 
 export type RawAccess = {
 	/**
