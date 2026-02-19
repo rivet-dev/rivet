@@ -107,6 +107,7 @@ impl ActorEventDemuxer {
 	}
 }
 
+#[tracing::instrument(name="demuxer_channel", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), ?runner_id, ?actor_id))]
 async fn channel_handler(
 	ctx: StandaloneCtx,
 	runner_id: Id,

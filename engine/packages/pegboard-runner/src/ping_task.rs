@@ -13,7 +13,7 @@ use crate::{LifecycleResult, conn::Conn};
 const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Updates the ping of all runners requesting a ping update at once.
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(name="ping_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
