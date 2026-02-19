@@ -45,6 +45,11 @@ Actors transition through several states during their lifetime. Each transition 
 
 1. `onDisconnect`
 
+**On Inbound Invoke** (per inbound action/queue/subscribe/request/websocket)
+
+1. `canInvoke`
+2. Entry point handler executes (`action`, queue send, subscription, `onRequest`, or `onWebSocket`)
+
 ## Lifecycle Hooks
 
 Actor lifecycle hooks are defined as functions in the actor configuration.
@@ -435,6 +440,47 @@ const chatRoom = actor({
 ```
 
 Messages will not be processed for this actor until this hook succeeds. Errors thrown from this hook will cause the client to disconnect.
+
+### `canInvoke`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
+
+The `canInvoke` hook authorizes inbound invocations. Can be async.
+
+It runs for:
+
+- Actions
+- Queue sends
+- Subscriptions
+- Raw request handler invocations (`onRequest`)
+- Raw WebSocket handler invocations (`onWebSocket`)
+
+Return `true` to allow and `false` to deny. This hook must return a boolean.
+
+```typescript
+import { actor } from "rivetkit";
+
+const securedActor = actor({
+  canInvoke: (c, invoke) => {
+    if (invoke.kind === "action" && invoke.name === "publicAction") {
+      return true;
+    }
+
+    if (invoke.kind === "request") {
+      return true;
+    }
+
+    return false;
+  },
+
+  actions: {
+    publicAction: () => "ok",
+    privateAction: () => "secret",
+  },
+});
+```
+
+Use this hook as fail-by-default. Add explicit allow rules, then end with `return false`. See [Access Control](/docs/actors/access-control) for full guidance.
 
 ### `onDisconnect`
 

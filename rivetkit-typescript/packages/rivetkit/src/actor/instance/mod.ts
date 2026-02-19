@@ -18,7 +18,11 @@ import {
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
-import { type ActorConfig, getRunFunction } from "../config";
+import {
+	type AnyCanInvokeTarget,
+	type ActorConfig,
+	getRunFunction,
+} from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -32,8 +36,9 @@ import {
 	type PersistedConn,
 } from "../conn/persisted";
 import {
-	type ActionContext,
+	ActionContext,
 	ActorContext,
+	type ConnContext,
 	RequestContext,
 	WebSocketContext,
 } from "../contexts";
@@ -609,6 +614,32 @@ export class ActorInstance<
 		});
 	}
 
+	async assertCanInvoke(
+		ctx: ConnContext<S, CP, CS, V, I, DB, E, Q>,
+		invoke: AnyCanInvokeTarget,
+	): Promise<void> {
+		const canInvoke = this.#config.canInvoke;
+		if (!canInvoke) {
+			return;
+		}
+
+		const result = await canInvoke(ctx, invoke);
+		if (typeof result !== "boolean") {
+			throw new errors.InvalidCanInvokeResponse();
+		}
+		if (!result) {
+			throw new errors.Forbidden();
+		}
+	}
+
+	async assertCanInvokeWebSocket(
+		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
+	): Promise<void> {
+		await this.assertCanInvoke(new ActionContext(this, conn), {
+			kind: "websocket",
+		});
+	}
+
 	// MARK: - Action Execution
 	async executeAction(
 		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
@@ -616,6 +647,10 @@ export class ActorInstance<
 		args: unknown[],
 	): Promise<unknown> {
 		this.assertReady();
+		await this.assertCanInvoke(ctx, {
+			kind: "action",
+			name: actionName,
+		});
 
 		const actions = this.#config.actions ?? {};
 		if (!(actionName in actions)) {
@@ -739,8 +774,11 @@ export class ActorInstance<
 				"rivet.conn.id": conn.id,
 			},
 			async () => {
+				const ctx = new RequestContext(this, conn, request);
 				try {
-					const ctx = new RequestContext(this, conn, request);
+					await this.assertCanInvoke(ctx, {
+						kind: "request",
+					});
 					const response = await onRequest(ctx, request);
 					if (!response) {
 						throw new errors.InvalidRequestHandlerResponse();
