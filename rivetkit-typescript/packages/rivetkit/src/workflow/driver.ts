@@ -43,20 +43,15 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		const queueMessages = await this.#runCtx.keepAwake(
 			this.#actor.queueManager.getMessages(),
 		);
-		const now = Date.now();
 
 		const workflowMessages: Message[] = [];
 		for (const queueMessage of queueMessages) {
-			if (queueMessage.inFlight || queueMessage.availableAt > now) {
-				continue;
-			}
-
 			const workflowName = stripWorkflowQueueName(queueMessage.name);
 			if (!workflowName) continue;
 			const id = queueMessage.id.toString();
 			this.#completionHandles.set(id, async (response?: unknown) => {
 				await this.#runCtx.keepAwake(
-					this.#actor.queueManager.completeById(queueMessage.id, response),
+					this.#actor.queueManager.completeMessage(queueMessage, response),
 				);
 			});
 			workflowMessages.push({
@@ -103,22 +98,8 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		}
 
 		const deleted = await this.#runCtx.keepAwake(
-			this.#actor.queueManager.deleteMessagesById(validIds, {
-				resolveWaiters: false,
-			}),
+			this.#actor.queueManager.deleteMessagesById(validIds),
 		);
-
-		for (const id of deleted) {
-			const idString = id.toString();
-			if (this.#completionHandles.has(idString)) {
-				continue;
-			}
-			this.#completionHandles.set(idString, async (response?: unknown) => {
-				await this.#runCtx.keepAwake(
-					this.#actor.queueManager.completeById(id, response),
-				);
-			});
-		}
 
 		return deleted.map((id) => id.toString());
 	}
@@ -139,7 +120,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		}
 
 		await this.#runCtx.keepAwake(
-			this.#actor.queueManager.completeById(parsedId, response),
+			this.#actor.queueManager.completeMessageById(parsedId, response),
 		);
 	}
 }

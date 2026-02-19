@@ -23,8 +23,6 @@ import {
 	type PageConfig,
 } from "./page-data.ts";
 
-type ActorName = (typeof registry)["config"]["use"] extends Record<infer K, unknown> ? K & string : never;
-
 const GROUP_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
 	compass: Compass,
 	code: Code,
@@ -74,6 +72,28 @@ function MermaidDiagram({ chart }: { chart: string }) {
 const { useActor } = createRivetKit<typeof registry>(
 	`${location.origin}/api/rivet`,
 );
+
+type ActorPanelActor = {
+	connStatus: string | null;
+	error: unknown;
+	handle: {
+		action: (request: { name: string; args: unknown[] }) => Promise<unknown>;
+		fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+		webSocket: () => Promise<WebSocket>;
+	} | null;
+	connection: {
+		on: (event: string, callback: (...args: unknown[]) => void) => () => void;
+	} | null;
+};
+
+type LooseActorHook = (options: {
+	name: string;
+	key: string | string[];
+	params?: Record<string, string>;
+	createWithInput?: unknown;
+}) => ActorPanelActor;
+
+const useActorLoose = useActor as unknown as LooseActorHook;
 
 type JsonResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -305,8 +325,8 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 			? parsedInput.value
 			: undefined;
 
-	const actor = useActor({
-		name: actorName as ActorName,
+	const actor = useActorLoose({
+		name: actorName,
 		key: parsedKey.ok ? parsedKey.value : "demo",
 		params: resolvedParams,
 		createWithInput: resolvedInput,
@@ -401,7 +421,7 @@ function StatePanel({
 	stateAction,
 	refreshTrigger,
 }: {
-	actor: ReturnType<typeof useActor>;
+	actor: ActorPanelActor;
 	stateAction: string;
 	refreshTrigger: number;
 }) {
@@ -464,7 +484,7 @@ function StatePanel({
 
 // ── Events Panel ──────────────────────────────────
 
-function EventsPanel({ actor }: { actor: ReturnType<typeof useActor> }) {
+function EventsPanel({ actor }: { actor: ActorPanelActor }) {
 	const [eventName, setEventName] = useState("");
 	const [events, setEvents] = useState<Array<{ time: string; data: string }>>([]);
 
@@ -554,7 +574,7 @@ function ActionRunner({
 	templates,
 	onActionComplete,
 }: {
-	actor: ReturnType<typeof useActor>;
+	actor: ActorPanelActor;
 	templates: ActionTemplate[];
 	onActionComplete?: () => void;
 }) {
@@ -743,8 +763,8 @@ function RawHttpPanel({ page }: { page: PageConfig }) {
 		setBody(page.rawHttpDefaults?.body ?? "");
 	}, [page.id, page.actors, page.rawHttpDefaults]);
 
-	const actor = useActor({
-		name: selectedActor as ActorName,
+	const actor = useActorLoose({
+		name: selectedActor,
 		key: ["demo"],
 	});
 
@@ -859,8 +879,8 @@ function RawWebSocketPanel({ page }: { page: PageConfig }) {
 		setSelectedActor(page.actors[0] ?? "");
 	}, [page.id, page.actors]);
 
-	const actor = useActor({
-		name: selectedActor as ActorName,
+	const actor = useActorLoose({
+		name: selectedActor,
 		key: ["demo"],
 	});
 

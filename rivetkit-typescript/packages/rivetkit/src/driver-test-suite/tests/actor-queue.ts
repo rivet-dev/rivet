@@ -9,7 +9,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["client-send"]);
 
-			await handle.queue.greeting.send({ hello: "world" });
+			await handle.send("greeting", { hello: "world" });
 
 			const message = await handle.receiveOne("greeting");
 			expect(message).toEqual({
@@ -32,9 +32,9 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["receive-array"]);
 
-			await handle.queue.a.send(1);
-			await handle.queue.b.send(2);
-			await handle.queue.c.send(3);
+			await handle.send("a", 1);
+			await handle.send("b", 2);
+			await handle.send("c", 3);
 
 			const messages = await handle.receiveMany(["a", "b"], { count: 2 });
 			expect(messages).toEqual([
@@ -47,13 +47,29 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["receive-request"]);
 
-			await handle.queue.one.send("first");
-			await handle.queue.two.send("second");
+			await handle.send("one", "first");
+			await handle.send("two", "second");
 
 			const messages = await handle.receiveRequest({
-				name: ["one", "two"],
+				names: ["one", "two"],
 				count: 2,
 			});
+			expect(messages).toEqual([
+				{ name: "one", body: "first" },
+				{ name: "two", body: "second" },
+			]);
+		});
+
+		test("next defaults to all names when names is omitted", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"receive-request-all",
+			]);
+
+			await handle.send("one", "first");
+			await handle.send("two", "second");
+
+			const messages = await handle.receiveRequest({ count: 2 });
 			expect(messages).toEqual([
 				{ name: "one", body: "first" },
 				{ name: "two", body: "second" },
@@ -70,6 +86,17 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			expect(messages).toEqual([]);
 		});
 
+		test("tryNext does not wait and returns empty array", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["try-next-empty"]);
+
+			const messages = await handle.tryReceiveMany({
+				names: ["missing"],
+				count: 1,
+			});
+			expect(messages).toEqual([]);
+		});
+
 		test("abort throws ActorAborted", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["abort-test"]);
@@ -83,17 +110,49 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			}
 		});
 
+		test("next supports signal abort", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["signal-abort-next"]);
+
+			const result = await handle.waitForSignalAbort();
+			expect(result).toEqual({
+				group: "actor",
+				code: "aborted",
+			});
+		});
+
+		test("next supports actor abort when signal is provided", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"actor-abort-with-signal-next",
+			]);
+
+			const result = await handle.waitForActorAbortWithSignal();
+			expect(result).toEqual({
+				group: "actor",
+				code: "aborted",
+			});
+		});
+
+		test("iter supports signal abort", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["signal-abort-iter"]);
+
+			const result = await handle.iterWithSignalAbort();
+			expect(result).toEqual({ ok: true });
+		});
+
 		test("enforces queue size limit", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const key = `size-limit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 			const handle = client.queueLimitedActor.getOrCreate([key]);
 
-			await handle.queue.message.send(1);
+			await handle.send("message", 1);
 
 			await waitFor(driverTestConfig, 10);
 
 			try {
-				await handle.queue.message.send(2);
+				await handle.send("message", 2);
 				expect.fail("expected queue full error");
 			} catch (error) {
 				expect(error).toBeInstanceOf(Error);
@@ -115,7 +174,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const largePayload = "a".repeat(200);
 
 			try {
-				await handle.queue.oversize.send(largePayload);
+				await handle.send("oversize", largePayload);
 				expect.fail("expected message_too_large error");
 			} catch (error) {
 				expect((error as ActorError).group).toBe("queue");
@@ -128,7 +187,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const handle = client.queueActor.getOrCreate(["wait-complete"]);
 
 			const actionPromise = handle.receiveAndComplete("tasks");
-			const result = await handle.queue.tasks.send(
+			const result = await handle.send("tasks", 
 				{ value: 123 },
 				{ wait: true, timeout: 1_000 },
 			);
@@ -144,7 +203,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["wait-timeout"]);
 
-			const resultPromise = handle.queue.timeout.send(
+			const resultPromise = handle.send("timeout", 
 				{ value: 456 },
 				{ wait: true, timeout: 50 },
 			);
@@ -152,22 +211,65 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			await waitFor(driverTestConfig, 60);
 			const result = await resultPromise;
 
-			expect(result?.status).toBe("timedOut");
+			expect(result.status).toBe("timedOut");
 		});
 
-		test("complete throws when wait is false", async (c) => {
+		test("manual receive retries message when not completed", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"manual-retry-uncompleted",
+			]);
+
+			await handle.send("tasks", { value: 789 });
+			const first = await handle.receiveWithoutComplete("tasks");
+			expect(first).toEqual({ name: "tasks", body: { value: 789 } });
+
+			const retried = await handle.receiveOne("tasks", { timeout: 1_000 });
+			expect(retried).toEqual({ name: "tasks", body: { value: 789 } });
+		});
+
+		test("next throws when previous manual message is not completed", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"manual-next-requires-complete",
+			]);
+
+			await handle.send("tasks", { value: 111 });
+			const result = await handle.receiveManualThenNextWithoutComplete(
+				"tasks",
+			);
+			expect(result).toEqual({
+				group: "queue",
+				code: "previous_message_not_completed",
+			});
+		});
+
+		test("manual receive includes complete even without completion schema", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate([
 				"complete-not-allowed",
 			]);
 
-			await handle.queue.nowait.send({ value: "test" });
-			const result = await handle.receiveWithoutWaitComplete("nowait");
+			await handle.send("nowait", { value: "test" });
+			const result = await handle.receiveWithoutCompleteMethod("nowait");
 
 			expect(result).toEqual({
-				group: "queue",
-				code: "complete_not_allowed",
+				hasComplete: true,
 			});
+		});
+
+		test("manual receive retries queues without completion schema until completed", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"complete-not-allowed-consume",
+			]);
+
+			await handle.send("nowait", { value: "test" });
+			const result = await handle.receiveWithoutCompleteMethod("nowait");
+			expect(result).toEqual({ hasComplete: true });
+
+			const next = await handle.receiveOne("nowait", { timeout: 1_000 });
+			expect(next).toEqual({ name: "nowait", body: { value: "test" } });
 		});
 
 		test("complete throws when called twice", async (c) => {
@@ -176,7 +278,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 				"complete-twice",
 			]);
 
-			await handle.queue.twice.send({ value: "test" });
+			await handle.send("twice", { value: "test" });
 			const result = await handle.receiveAndCompleteTwice("twice");
 
 			expect(result).toEqual({
@@ -185,17 +287,38 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			});
 		});
 
-		test("next throws when message pending", async (c) => {
+		test("wait send no longer requires queue completion schema", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate(["pending-next"]);
+			const handle = client.queueActor.getOrCreate([
+				"missing-completion-schema",
+			]);
 
-			await handle.queue.pending.send({ value: "test" });
-			const result = await handle.receiveWhilePending("pending");
+			const result = await handle.send(
+				"nowait",
+				{ value: "test" },
+				{ wait: true, timeout: 50 },
+			);
+			expect(result).toEqual({ status: "timedOut" });
+		});
 
-			expect(result).toEqual({
-				group: "queue",
-				code: "message_pending",
-			});
+		test("iter can consume queued messages", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["iter-consume"]);
+
+			await handle.send("one", "first");
+			const message = await handle.receiveWithIterator("one");
+			expect(message).toEqual({ name: "one", body: "first" });
+		});
+
+		test("queue async iterator can consume queued messages", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"async-iter-consume",
+			]);
+
+			await handle.send("two", "second");
+			const message = await handle.receiveWithAsyncIterator();
+			expect(message).toEqual({ name: "two", body: "second" });
 		});
 	});
 }

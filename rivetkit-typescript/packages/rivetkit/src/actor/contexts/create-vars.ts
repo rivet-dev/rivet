@@ -1,6 +1,6 @@
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDefinition, AnyActorDefinition } from "../definition";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { ActorContext } from "./base/actor";
 
 /**
@@ -10,8 +10,8 @@ export class CreateVarsContext<
 	TState,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > extends ActorContext<
 	TState,
 	never,
@@ -31,8 +31,8 @@ export type CreateVarsContextOf<AD extends AnyActorDefinition> =
 		any,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
-		infer E extends SchemaConfig,
-		infer Q extends SchemaConfig,
+		infer E extends EventSchemaConfig,
+		infer Q extends QueueSchemaConfig,
 		any
 	>
 		? CreateVarsContext<S, I, DB, E, Q>

@@ -1,29 +1,28 @@
 ---
 title: "Queue Messages"
-description: "Send durable messages to Rivet Actors and optionally wait for completion."
+description: "Send durable queue messages to Rivet Actors and consume them from run loops."
 skill: true
 ---
 
-Rivet Actors include a pull-based queue for durable message processing. Clients enqueue messages, and actors pull them with `c.queue.next()`.
-
-Queues are durable: messages persist until the actor acknowledges them. When `wait: true`, the actor must call `msg.complete()` to remove the message.
+Rivet Actors include a pull-based queue for durable background processing.
 
 ## Send Messages (Client)
 
-Fire-and-forget sends a message and returns immediately:
+Use `handle.send(name, body)` for fire-and-forget:
 
-```typescript @nocheck
-const handle = client.myActor.getOrCreate(["orders"]);
+```typescript
+const handle = client.worker.getOrCreate(["main"]);
 
-await handle.queue.tasks.send({ id: "order-123" });
+await handle.send("jobs", { id: "job-1" });
 ```
 
-To wait for the actor to finish processing:
+Use `wait: true` for request/response:
 
-```typescript @nocheck
-const result = await handle.queue.tasks.send(
-  { id: "order-123" },
-  { wait: true, timeout: 30_000 }
+```typescript
+const result = await handle.send(
+  "jobs",
+  { id: "job-1" },
+  { wait: true, timeout: 30_000 },
 );
 
 if (result.status === "completed") {
@@ -33,109 +32,85 @@ if (result.status === "completed") {
 }
 ```
 
+## Queue Schema
+
+Define queue message types under `queues`. Use `complete` when a queue supports manual completion responses.
+
+```typescript
+import { actor, queue } from "rivetkit";
+
+const worker = actor({
+  state: {},
+  queues: {
+    jobs: queue<{ id: string }, { ok: true }>(),
+    logs: queue<{ line: string }>(),
+  },
+  actions: {},
+});
+```
+
 ## Receive Messages (Actor)
 
-Actors pull messages with `c.queue.next()`:
+### `next`
 
-```typescript @nocheck
-const msg = await c.queue.next("tasks");
-if (!msg) return;
+`next` returns an array and can block until messages are available.
 
-// Process the message...
+```typescript
+const messages = await c.queue.next({
+  names: ["jobs"],
+  count: 10,
+  timeout: 1000,
+  signal: abortController.signal,
+});
 ```
 
-Each message includes a stable `id` string you can log or correlate across systems.
+If no messages arrive before timeout, `next` returns `[]`.
 
-Use `wait: true` to hold the message until you explicitly complete it:
+### `tryNext`
 
-```typescript @nocheck
-const msg = await c.queue.next("tasks", { wait: true });
-if (!msg) return;
+`tryNext` is non-blocking and immediately returns `[]` when empty.
 
-// Process the message...
-await msg.complete();
+```typescript
+const messages = await c.queue.tryNext({ names: ["jobs"], count: 10 });
 ```
 
-You can also send data back to the waiting client:
+### `iter`
 
-```typescript @nocheck
-await msg.complete({ result: "ok" });
-```
+`iter` returns an async iterator yielding one message at a time.
 
-## Manual Completion
-
-When `wait: true`, the message is marked in-flight and remains persisted until completion. Calling `msg.complete()` removes the message and resolves any waiting client.
-
-If `wait: false`, calling `msg.complete()` throws `QueueCompleteNotAllowed`.
-
-If a client sends with `wait: true` but the actor receives without `wait: true`, the message auto-completes and the waiting client receives `{ status: \"completed\", response: undefined }`.
-
-## Persistence & Redelivery
-
-- Messages persist until `msg.complete()` is called.
-- In-flight state persists across restarts.
-- If the actor crashes before completion, the message is redelivered with exponential backoff.
-- Completion responses are not persisted and are only delivered to waiting clients.
-
-Backoff schedule:
-
-- 1s, 2s, 4s, 8s, ... (capped at 5 minutes)
-
-Messages are retried indefinitely. There is no forced timeout on the actor side.
-
-## Error Handling
-
-- `QueueCompleteNotAllowed`: `msg.complete()` called when `wait: false`.
-- `QueueMessagePending`: `c.queue.next()` called while a previous `wait: true` message is still pending.
-- `QueueAlreadyCompleted`: `msg.complete()` called more than once.
-
-If a message remains pending for more than 30 seconds, the actor logs a warning but does not time out automatically.
-
-## HTTP API
-
-Use the vanilla HTTP API to enqueue messages:
-
-```
-POST /queue/:name
-Body: { body: { ... } }
-Response: { status: "completed" }
-```
-
-Wait for completion:
-
-```
-POST /queue/:name
-Body: { body: { ... }, wait: true, timeout: 30000 }
-Response: { status: "completed", response: { ... } }
-```
-
-Timeouts still return HTTP 200:
-
-```
-{ status: "timedOut" }
-```
-
-## Examples
-
-### Fire-and-forget
-
-```typescript @nocheck
-await handle.queue.emails.send({ to: "user@example.com" });
-```
-
-### Request-response
-
-```typescript @nocheck
-// Client
-const result = await handle.queue.work.send(
-  { input: "value" },
-  { wait: true, timeout: 10_000 }
-);
-
-// Actor
-const msg = await c.queue.next("work", { wait: true });
-if (msg) {
-  const output = doWork(msg.body);
-  await msg.complete({ output });
+```typescript
+for await (const message of c.queue.iter({
+  names: ["jobs"],
+  signal: abortController.signal,
+})) {
+  // process message
 }
 ```
+
+### Iterate All Queue Names
+
+Use `iter()` without `names` to consume across all queue names.
+
+```typescript
+for await (const message of c.queue.iter()) {
+  // process message
+}
+```
+
+## Completable Messages
+
+Use `completable: true` to receive messages that expose `message.complete(...)`.
+
+```typescript
+for await (const message of c.queue.iter({ names: ["jobs"], completable: true })) {
+  await message.complete({ ok: true });
+}
+```
+
+The message stays in the queue until `message.complete(...)` is called.
+
+## Abort Behavior
+
+Use `c.aborted` for loop exit conditions when needed.
+
+Never wrap `c.queue.next(...)` in `try/catch` for normal shutdown handling. Queue receive calls throw special abort errors during actor shutdown so the run handler can stop cleanly.

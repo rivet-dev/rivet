@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 import type { Player } from "./types.ts";
 
 export type { Player };
@@ -18,6 +18,11 @@ const gameRoom = actor({
 	// Connection state - tracks which player belongs to each connection
 	connState: {
 		playerId: null as string | null,
+	},
+	events: {
+		playerJoined: event<{ playerId: string; player: Player }>(),
+		playerLeft: event<{ playerId: string }>(),
+		playerMoved: event<{ playerId: string; x: number; y: number }>(),
 	},
 
 	// Handle client connections

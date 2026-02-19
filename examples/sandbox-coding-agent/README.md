@@ -15,7 +15,7 @@ npm run dev
 ## Features
 
 - Actor-per-agent pattern with a coordinating manager Rivet Actor
-- Queue-based intake using `c.queue.next` inside the run loop
+- Queue-based intake using `for await` over `c.queue.iter(...)` inside the run loop
 - Sandbox Agent SDK sessions per agent with streamed output
 - Persistent history stored in Rivet Actor state
 - Live status updates via events and polling

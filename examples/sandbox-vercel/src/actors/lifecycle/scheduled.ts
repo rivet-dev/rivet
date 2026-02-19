@@ -1,10 +1,14 @@
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 
 export const scheduled = actor({
 	state: {
 		lastRun: 0,
 		scheduledCount: 0,
 		taskHistory: [] as string[],
+	},
+	events: {
+		scheduled: event<{ time: number; count: number }>(),
+		scheduledWithId: event<{ taskId: string; time: number; count: number }>(),
 	},
 	actions: {
 		// Schedule using 'at' with specific timestamp

@@ -15,9 +15,10 @@ import type {
 import { ActorQueue } from "../../instance/queue";
 import type { Schedule } from "../../schedule";
 import {
+	type EventSchemaConfig,
 	type InferEventArgs,
 	type InferSchemaMap,
-	type SchemaConfig,
+	type QueueSchemaConfig,
 	validateSchemaSync,
 } from "../../schema";
 
@@ -35,8 +36,8 @@ export class ActorContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
 	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyActorInstance;
 	#actor: ActorInstance<
@@ -288,6 +289,15 @@ export class ActorContext<
 	}
 
 	/**
+	 * True when the actor is stopping.
+	 *
+	 * Alias for `c.abortSignal.aborted`.
+	 */
+	get aborted(): boolean {
+		return this.#actor.abortSignal.aborted;
+	}
+
+	/**
 	 * Forces the actor to sleep.
 	 *
 	 * Not supported on all drivers.
@@ -318,8 +328,8 @@ export type ActorContextOf<AD extends AnyActorDefinition> =
 		infer V,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
-		infer E extends SchemaConfig,
-		infer Q extends SchemaConfig,
+		infer E extends EventSchemaConfig,
+		infer Q extends QueueSchemaConfig,
 		any
 	>
 		? ActorContext<S, CP, CS, V, I, DB, E, Q>

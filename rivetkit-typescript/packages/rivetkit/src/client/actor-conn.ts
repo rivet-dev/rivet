@@ -30,7 +30,13 @@ import { checkForSchedulingError, queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { logger } from "./log";
-import { createQueueProxy, createQueueSender } from "./queue";
+import {
+	createQueueSender,
+	type QueueSendNoWaitOptions,
+	type QueueSendOptions,
+	type QueueSendResult,
+	type QueueSendWaitOptions,
+} from "./queue";
 import {
 	type WebSocketMessage as ConnMessage,
 	messageLength,
@@ -197,8 +203,22 @@ export class ActorConnRaw {
 		this.#keepNodeAliveInterval = setInterval(() => 60_000);
 	}
 
-	get queue() {
-		return createQueueProxy(this.#queueSender);
+	send(
+		name: string,
+		body: unknown,
+		options: QueueSendWaitOptions,
+	): Promise<QueueSendResult>;
+	send(
+		name: string,
+		body: unknown,
+		options?: QueueSendNoWaitOptions,
+	): Promise<void>;
+	send(
+		name: string,
+		body: unknown,
+		options?: QueueSendOptions,
+	): Promise<QueueSendResult | void> {
+		return this.#queueSender.send(name, body, options as any);
 	}
 
 	/**

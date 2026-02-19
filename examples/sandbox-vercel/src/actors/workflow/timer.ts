@@ -2,7 +2,7 @@
 // Demonstrates: Durable sleep that survives restarts
 // One actor per timer - actor key is the timer ID
 
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -28,6 +28,10 @@ export const timer = actor({
 		durationMs: input?.durationMs ?? 10000,
 		startedAt: Date.now(),
 	}),
+	events: {
+		timerStarted: event<Timer>(),
+		timerCompleted: event<Timer>(),
+	},
 
 	actions: {
 		getTimer: (c): Timer => c.state,

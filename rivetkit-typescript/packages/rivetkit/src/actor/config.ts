@@ -20,7 +20,7 @@ import type {
 	WebSocketContext,
 } from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
-import type { SchemaConfig } from "./schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
 export interface ActorTypes<
 	TState,
@@ -223,8 +223,8 @@ type CreateState<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig,
-	TQueues extends SchemaConfig,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
 > =
 	| { state: TState }
 	| {
@@ -247,8 +247,8 @@ type CreateConnState<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig,
-	TQueues extends SchemaConfig,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
 > =
 	| { connState: TConnState }
 	| {
@@ -279,8 +279,8 @@ type CreateVars<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig,
-	TQueues extends SchemaConfig,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
 > =
 	| {
 			/**
@@ -312,8 +312,8 @@ export interface Actions<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
 	[Action: string]: (
 		c: ActionContext<
@@ -347,8 +347,8 @@ interface BaseActorConfig<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig,
-	TQueues extends SchemaConfig,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
 	TActions extends Actions<
 		TState,
 		TConnParams,
@@ -689,8 +689,8 @@ export type ActorConfig<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > = Omit<
 	z.infer<typeof ActorConfigSchema>,
 	| "actions"
@@ -776,8 +776,8 @@ export type ActorConfigInput<
 	TVars = undefined,
 	TInput = undefined,
 	TDatabase extends AnyDatabaseProvider = undefined,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 	TActions extends Actions<
 		TState,
 		TConnParams,
@@ -873,8 +873,8 @@ export function test<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig,
-	TQueues extends SchemaConfig,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
 	TActions extends Actions<
 		TState,
 		TConnParams,

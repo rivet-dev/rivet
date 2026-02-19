@@ -3,13 +3,14 @@
 /**
  * SQLite Benchmark Script
  *
- * Compares batch vs non-batch performance:
- * 1. Filesystem + Native SQLite (better-sqlite3)
- * 2. Filesystem + KV Filesystem (wa-sqlite with file-backed KV)
+ * Compares batch vs non-batch performance across driver configurations.
  */
 
 import Table from "cli-table3";
-import { createFileSystemDriver } from "@/drivers/file-system/mod";
+import {
+	createFileSystemDriver,
+	createMemoryDriver,
+} from "@/drivers/file-system/mod";
 import { registry } from "../fixtures/driver-test-suite/registry";
 
 interface TimingResult {
@@ -52,13 +53,13 @@ async function runBenchmark(client: Client, name: string): Promise<BenchmarkResu
 	{
 		const handle = await client.dbActorRaw.getOrCreate([`bench-batch-${Date.now()}`]);
 		const start = performance.now();
-		await handle.bulkInsert(ROW_COUNT);
+		await handle.insertMany(ROW_COUNT);
 		results.insert.batch = performance.now() - start;
 	}
 
 	// --- SELECT ---
 	const handle = await client.dbActorRaw.getOrCreate([`bench-select-${Date.now()}`]);
-	await handle.bulkInsert(ROW_COUNT);
+	await handle.insertMany(ROW_COUNT);
 
 	// Batch (single query)
 	{
@@ -89,7 +90,8 @@ async function runBenchmark(client: Client, name: string): Promise<BenchmarkResu
 	// Batch
 	{
 		const start = performance.now();
-		await handle.bulkUpdate(QUERY_COUNT);
+		// Single request that performs multiple updates in the actor.
+		await handle.repeatUpdate(1, QUERY_COUNT);
 		results.update.batch = performance.now() - start;
 	}
 
@@ -187,27 +189,29 @@ async function main(): Promise<void> {
 
 	const results: BenchmarkResult[] = [];
 
-	// 1. Native SQLite
-	console.log("1. Native SQLite...");
+	// 1. File System
+	console.log("1. File System...");
 	try {
 		const { client } = await registry.start({
-			driver: createFileSystemDriver({ useNativeSqlite: true }),
+			driver: createFileSystemDriver({
+				path: `/tmp/rivetkit-bench-${crypto.randomUUID()}`,
+			}),
 			defaultServerPort: 6430,
 		});
-		results.push(await runBenchmark(client, "Native SQLite"));
+		results.push(await runBenchmark(client, "File System"));
 		console.log("  Done");
 	} catch (err) {
 		console.log(`  Skipped: ${err}`);
 	}
 
-	// 2. KV Filesystem
-	console.log("2. KV Filesystem...");
+	// 2. Memory
+	console.log("2. Memory...");
 	try {
 		const { client } = await registry.start({
-			driver: createFileSystemDriver({ useNativeSqlite: false }),
+			driver: createMemoryDriver(),
 			defaultServerPort: 6431,
 		});
-		results.push(await runBenchmark(client, "KV Filesystem"));
+		results.push(await runBenchmark(client, "Memory"));
 		console.log("  Done");
 	} catch (err) {
 		console.log(`  Skipped: ${err}`);

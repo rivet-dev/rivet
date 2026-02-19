@@ -2,7 +2,7 @@
 // Demonstrates: Rollback checkpoints with compensating actions
 // One actor per transaction - actor key is the transaction ID
 
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -51,6 +51,11 @@ export const payment = actor({
 		],
 		startedAt: Date.now(),
 	}),
+	events: {
+		transactionStarted: event<Transaction>(),
+		transactionUpdated: event<Transaction>(),
+		transactionCompleted: event<Transaction>(),
+	},
 
 	actions: {
 		getTransaction: (c): Transaction => c.state,

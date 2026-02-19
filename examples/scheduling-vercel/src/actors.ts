@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 interface Reminder {
 	id: string;
@@ -17,6 +17,9 @@ const reminderActor = actor({
 		reminders: [] as Reminder[],
 		completedCount: 0,
 	} satisfies ReminderActorState as ReminderActorState,
+	events: {
+		reminderTriggered: event<Reminder>(),
+	},
 
 	actions: {
 		// Schedule a reminder with a delay in milliseconds

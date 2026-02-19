@@ -12,7 +12,7 @@ import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";
 import { convertConnToBarePersistedConn } from "../conn/persisted";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { isConnStatePath, isStatePath } from "../utils";
 import { KEYS, makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
@@ -42,8 +42,8 @@ export class StateManager<
 	CP,
 	CS,
 	I,
-	E extends SchemaConfig = Record<never, never>,
-	Q extends SchemaConfig = Record<never, never>,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	#actor: ActorInstance<S, CP, CS, any, I, any, E, Q>;
 	#actorDriver: ActorDriver;

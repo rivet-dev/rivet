@@ -2,7 +2,7 @@ import type { Conn } from "../../conn/mod";
 import type { AnyDatabaseProvider } from "../../database";
 import type { ActorDefinition, AnyActorDefinition } from "../../definition";
 import type { ActorInstance } from "../../instance/mod";
-import type { SchemaConfig } from "../../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../../schema";
 import { ActorContext } from "./actor";
 
 /**
@@ -16,8 +16,8 @@ export abstract class ConnContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > extends ActorContext<
 	TState,
 	TConnParams,
@@ -65,8 +65,8 @@ export type ConnContextOf<AD extends AnyActorDefinition> =
 		infer V,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
-		infer E extends SchemaConfig,
-		infer Q extends SchemaConfig,
+		infer E extends EventSchemaConfig,
+		infer Q extends QueueSchemaConfig,
 		any
 	>
 		? ConnContext<S, CP, CS, V, I, DB, E, Q>

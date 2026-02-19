@@ -25,8 +25,9 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.workflowQueueActor.getOrCreate(["workflow-queue"]);
 
-			const queueHandle = actor.queue[workflowQueueName(WORKFLOW_QUEUE_NAME)];
-			await queueHandle.send({ hello: "world" });
+			await actor.send(workflowQueueName(WORKFLOW_QUEUE_NAME), {
+				hello: "world",
+			});
 
 			await waitFor(driverTestConfig, 200);
 			const messages = await actor.getMessages();

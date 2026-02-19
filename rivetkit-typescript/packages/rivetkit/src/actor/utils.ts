@@ -84,6 +84,46 @@ export class Lock<T> {
 	}
 }
 
+export interface JoinedAbortSignal {
+	signal?: AbortSignal;
+	cleanup: () => void;
+}
+
+export function joinAbortSignals(
+	...signals: Array<AbortSignal | undefined>
+): JoinedAbortSignal {
+	const activeSignals = signals.filter(
+		(signal): signal is AbortSignal => signal !== undefined,
+	);
+	if (activeSignals.length === 0) {
+		return { signal: undefined, cleanup: () => {} };
+	}
+	if (activeSignals.length === 1) {
+		return { signal: activeSignals[0], cleanup: () => {} };
+	}
+
+	const controller = new AbortController();
+	if (activeSignals.some((signal) => signal.aborted)) {
+		controller.abort();
+		return { signal: controller.signal, cleanup: () => {} };
+	}
+
+	const cleanup = () => {
+		for (const signal of activeSignals) {
+			signal.removeEventListener("abort", onAbort);
+		}
+	};
+	const onAbort = () => {
+		controller.abort();
+		cleanup();
+	};
+	for (const signal of activeSignals) {
+		signal.addEventListener("abort", onAbort, { once: true });
+	}
+
+	return { signal: controller.signal, cleanup };
+}
+
 export function generateSecureToken(length = 32) {
 	const array = new Uint8Array(length);
 	crypto.getRandomValues(array);

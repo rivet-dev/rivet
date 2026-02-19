@@ -29,7 +29,7 @@ import {
 import { CONN_SEND_MESSAGE_SYMBOL, type Conn } from "../conn/mod";
 import { ActionContext } from "../contexts";
 import type { ActorInstance } from "../instance/mod";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 
 interface MessageEventOpts {
 	encoding: Encoding;
@@ -140,8 +140,8 @@ export interface ProcessMessageHandler<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig,
-	Q extends SchemaConfig,
+	E extends EventSchemaConfig,
+	Q extends QueueSchemaConfig,
 > {
 	onExecuteAction?: (
 		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
@@ -165,8 +165,8 @@ export async function processMessage<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig,
-	Q extends SchemaConfig,
+	E extends EventSchemaConfig,
+	Q extends QueueSchemaConfig,
 >(
 	message: {
 		body:

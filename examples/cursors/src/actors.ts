@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 export interface CursorPosition {
 	userId: string;
@@ -19,6 +19,11 @@ export interface TextLabel {
 export const cursorRoom = actor({
 	state: {
 		textLabels: [] as TextLabel[],
+	},
+	events: {
+		cursorMoved: event<CursorPosition>(),
+		textUpdated: event<TextLabel>(),
+		textRemoved: event<string>(),
 	},
 
 	connState: {

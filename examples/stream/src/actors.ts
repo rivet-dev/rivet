@@ -1,7 +1,13 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 export type StreamState = {
 	topValues: number[];
+};
+
+export type StreamUpdate = {
+	topValues: number[];
+	totalCount: number;
+	highestValue: number | null;
 };
 
 const streamProcessor = actor({
@@ -9,6 +15,9 @@ const streamProcessor = actor({
 	state: {
 		topValues: [] as number[],
 		totalValues: 0,
+	},
+	events: {
+		updated: event<StreamUpdate>(),
 	},
 
 	actions: {
@@ -44,7 +53,7 @@ const streamProcessor = actor({
 			// Sort descending to ensure correct order
 			c.state.topValues.sort((a, b) => b - a);
 
-			const result = {
+			const result: StreamUpdate = {
 				topValues: c.state.topValues,
 				totalCount: c.state.totalValues,
 				highestValue:
@@ -61,7 +70,7 @@ const streamProcessor = actor({
 			c.state.topValues = [];
 			c.state.totalValues = 0;
 
-			const result = {
+			const result: StreamUpdate = {
 				topValues: c.state.topValues,
 				totalCount: c.state.totalValues,
 				highestValue: null,

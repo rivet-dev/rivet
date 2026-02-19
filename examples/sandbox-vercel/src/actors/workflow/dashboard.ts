@@ -1,7 +1,7 @@
 // DASHBOARD (Join Demo)
 // Demonstrates: Parallel data fetching with join (wait-all)
 
-import { actor } from "rivetkit";
+import { actor, event, queue } from "rivetkit";
 import { Loop, workflow, workflowQueueName } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -46,6 +46,7 @@ export type DashboardState = {
 type State = DashboardState;
 
 const QUEUE_REFRESH = workflowQueueName("refresh");
+type RefreshMessage = Record<string, never>;
 
 async function fetchUserStats(): Promise<UserStats> {
 	await new Promise((r) => setTimeout(r, 800 + Math.random() * 1200));
@@ -86,6 +87,13 @@ export const dashboard = actor({
 			metrics: "pending" as BranchStatus,
 		},
 		lastRefresh: null as number | null,
+	},
+	queues: {
+		[QUEUE_REFRESH]: queue<RefreshMessage>(),
+	},
+	events: {
+		stateChanged: event<DashboardState>(),
+		refreshComplete: event<DashboardData>(),
 	},
 
 	actions: {

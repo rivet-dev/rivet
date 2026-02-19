@@ -2,7 +2,7 @@
 // Demonstrates: Loop with persistent state (cursor) for batch processing
 // One actor per batch job - actor key is the job ID
 
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -59,6 +59,11 @@ export const batch = actor({
 		batches: [],
 		startedAt: Date.now(),
 	}),
+	events: {
+		batchProcessed: event<BatchInfo>(),
+		stateChanged: event<BatchJob>(),
+		processingComplete: event<{ totalBatches: number; totalItems: number }>(),
+	},
 
 	actions: {
 		getJob: (c): BatchJob => c.state,

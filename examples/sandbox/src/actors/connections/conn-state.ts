@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 
 export type ConnState = {
 	username: string;
@@ -12,6 +12,11 @@ export const connStateActor = actor({
 	state: {
 		sharedCounter: 0,
 		disconnectionCount: 0,
+	},
+	events: {
+		userConnected: event<{ id: string; username: string; role: string }>(),
+		userDisconnected: event<{ id: string }>(),
+		directMessage: event<{ from: string; message: string }>(),
 	},
 	// Define connection state
 	createConnState: (
