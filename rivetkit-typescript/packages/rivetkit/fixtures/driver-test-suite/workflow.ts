@@ -132,18 +132,18 @@ export const workflowAccessActor = actor({
 				}
 
 				await loopCtx.step("access-step", async () => {
-					await actorLoopCtx.db.execute(
+					await loopCtx.db.execute(
 						`INSERT INTO workflow_access_log (created_at) VALUES (${Date.now()})`,
 					);
-					const counts = (await actorLoopCtx.db.execute(
+					const counts = await loopCtx.db.execute<{ count: number }>(
 						`SELECT COUNT(*) as count FROM workflow_access_log`,
-					)) as Array<{ count: number }>;
-					const client = actorLoopCtx.client();
+					);
+					const client = loopCtx.client<typeof registry>();
 
-					actorLoopCtx.state.outsideDbError = outsideDbError;
-					actorLoopCtx.state.outsideClientError = outsideClientError;
-					actorLoopCtx.state.insideDbCount = counts[0]?.count ?? 0;
-					actorLoopCtx.state.insideClientAvailable =
+					loopCtx.state.outsideDbError = outsideDbError;
+					loopCtx.state.outsideClientError = outsideClientError;
+					loopCtx.state.insideDbCount = counts[0]?.count ?? 0;
+					loopCtx.state.insideClientAvailable =
 						typeof client.workflowQueueActor.getForId === "function";
 				});
 

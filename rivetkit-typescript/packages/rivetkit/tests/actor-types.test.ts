@@ -3,6 +3,7 @@ import { actor, event, queue } from "@/actor/mod";
 import type { ActorContext, ActorContextOf } from "@/actor/contexts";
 import type { ActorDefinition } from "@/actor/definition";
 import type { DatabaseProviderContext } from "@/db/config";
+import { db } from "@/db/mod";
 import { workflow } from "@/workflow/mod";
 
 describe("ActorDefinition", () => {
@@ -236,6 +237,23 @@ describe("ActorDefinition", () => {
 					}
 				}),
 				actions: {},
+			});
+		});
+	});
+
+	describe("database type inference", () => {
+		it("supports typed rows for c.db.execute", () => {
+			actor({
+				state: {},
+				db: db(),
+				actions: {
+					readFoo: async (c) => {
+						const rows = await c.db.execute<{ foo: string }>(
+							"SELECT foo FROM bar",
+						);
+						expectTypeOf(rows).toEqualTypeOf<Array<{ foo: string }>>();
+					},
+				},
 			});
 		});
 	});

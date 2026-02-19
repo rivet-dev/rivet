@@ -46,8 +46,13 @@ export function db({
 			if (override) {
 				// Use the override
 				return {
-					execute: async (query, ...args) => {
-						return override.exec(query, ...args);
+					execute: async <
+						TRow extends Record<string, unknown> = Record<string, unknown>,
+					>(
+						query: string,
+						...args: unknown[]
+					): Promise<TRow[]> => {
+						return await override.exec<TRow>(query, ...args);
 					},
 					close: async () => {
 						// Override clients don't need cleanup
@@ -64,7 +69,12 @@ export function db({
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 
 			return {
-				execute: async (query, ...args) => {
+				execute: async <
+					TRow extends Record<string, unknown> = Record<string, unknown>,
+				>(
+					query: string,
+					...args: unknown[]
+				): Promise<TRow[]> => {
 					if (args.length > 0) {
 						// Use parameterized query when args are provided
 						const { rows, columns } = await db.query(query, args);
@@ -74,7 +84,7 @@ export function db({
 								rowObj[columns[i]] = row[i];
 							}
 							return rowObj;
-						});
+						}) as TRow[];
 					}
 
 					// Use exec for non-parameterized queries
@@ -90,7 +100,7 @@ export function db({
 						}
 						results.push(rowObj);
 					});
-					return results;
+					return results as TRow[];
 				},
 				close: async () => {
 					await db.close();
