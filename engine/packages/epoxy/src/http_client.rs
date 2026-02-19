@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{Context, Result, bail};
 use epoxy_protocol::{
 	PROTOCOL_VERSION,
 	protocol::{self, ReplicaId},
@@ -37,7 +37,13 @@ where
 	Fut: Future<Output = Result<T>> + Send,
 	T: Send,
 {
-	let quorum_size = utils::calculate_quorum(replica_ids.len(), quorum_type);
+	let target_responses = utils::calculate_fanout_quorum(replica_ids.len(), quorum_type);
+
+	if target_responses == 0 {
+		tracing::warn!("no fanout, target is 0");
+
+		return Ok(Vec::new());
+	}
 
 	// Create futures for all replicas (excluding the sender)
 	let mut responses = futures_util::stream::iter(
@@ -57,32 +63,22 @@ where
 	)
 	.collect::<FuturesUnordered<_>>()
 	.await;
-	tracing::debug!(?quorum_size, len = ?responses.len(), ?quorum_type, "fanout quorum size");
-
-	// Choose how many successful responses we need before considering a success
-	let target_responses = match quorum_type {
-		// Only require 1 response
-		utils::QuorumType::Any => 1,
-		// Include all responses
-		utils::QuorumType::All => responses.len(),
-		// Subtract 1 from quorum size since we're not counting ourselves
-		utils::QuorumType::Fast | utils::QuorumType::Slow => quorum_size - 1,
-	};
+	tracing::debug!(?target_responses, len=?responses.len(), "fanout target");
 
 	// Collect responses until we reach quorum or all futures complete
 	let mut successful_responses = Vec::new();
 	while successful_responses.len() < target_responses {
 		if let Some(response) = responses.next().await {
 			match response {
-				std::result::Result::Ok(result) => match result {
-					std::result::Result::Ok(response) => {
+				Ok(result) => match result {
+					Ok(response) => {
 						successful_responses.push(response);
 					}
-					std::result::Result::Err(err) => {
+					Err(err) => {
 						tracing::warn!(?err, "received error from replica");
 					}
 				},
-				std::result::Result::Err(err) => {
+				Err(err) => {
 					tracing::warn!(?err, "received timeout from replica");
 				}
 			}
@@ -159,8 +155,8 @@ pub async fn send_message_to_address(
 		.await;
 
 	let response = match response_result {
-		std::result::Result::Ok(resp) => resp,
-		std::result::Result::Err(e) => {
+		Ok(resp) => resp,
+		Err(e) => {
 			tracing::error!(
 				to_replica = to_replica_id,
 				replica_url = %replica_url,
