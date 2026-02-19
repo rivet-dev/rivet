@@ -16,6 +16,7 @@ struct ApiPublicService {
 
 #[async_trait]
 impl CustomServeTrait for ApiPublicService {
+	#[tracing::instrument(skip_all)]
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
