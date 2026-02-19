@@ -2,7 +2,7 @@
 // Demonstrates: Parallel data fetching with join (wait-all)
 
 import { actor, event, queue } from "rivetkit";
-import { Loop, workflow, workflowQueueName } from "rivetkit/workflow";
+import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
 export type UserStats = {
@@ -45,7 +45,7 @@ export type DashboardState = {
 
 type State = DashboardState;
 
-const QUEUE_REFRESH = workflowQueueName("refresh");
+const QUEUE_REFRESH = "refresh";
 type RefreshMessage = Record<string, never>;
 
 async function fetchUserStats(): Promise<UserStats> {
@@ -119,7 +119,9 @@ export const dashboard = actor({
 			run: async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
-				await loopCtx.listen("wait-refresh", "refresh");
+				await loopCtx.queue.next("wait-refresh", {
+					names: [QUEUE_REFRESH],
+				});
 
 				ctx.log.info({ msg: "starting dashboard refresh" });
 

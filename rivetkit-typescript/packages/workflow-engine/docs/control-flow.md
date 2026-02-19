@@ -74,17 +74,19 @@ const { winner, value } = await ctx.race("timeout", [
 
 ## Messages in Control Flow
 
-`ctx.listen()` and its variants pause the workflow until a message arrives. Message names are part of history, so keep them stable and unique.
+`ctx.queue.next()` pauses the workflow until matching messages arrive. Queue wait names are part of history, so keep them stable and unique.
 
 ```ts
-const approval = await ctx.listen<string>("approval", "approval-granted");
+const [approval] = await ctx.queue.next<string>("approval", {
+  names: ["approval-granted"],
+});
 ```
 
 Messages are loaded at workflow start. If a message arrives during execution, the workflow yields and picks it up on the next run.
 
 ## Best Practices
 
-- Use stable names for steps, loops, joins, races, and listens.
+- Use stable names for steps, loops, joins, races, and queue waits.
 - Keep all nondeterministic work inside steps.
 - Use loop state to avoid native `while`/`for` loops.
 - Handle cancellation via `ctx.abortSignal` in long-running branches.
@@ -92,4 +94,4 @@ Messages are loaded at workflow start. If a message arrives during execution, th
 ## Related
 
 - `rivetkit-typescript/packages/workflow-engine/QUICKSTART.md:155` for loop usage.
-- `rivetkit-typescript/packages/workflow-engine/QUICKSTART.md:207` for message waits.
+- `rivetkit-typescript/packages/workflow-engine/QUICKSTART.md:207` for queue waits.

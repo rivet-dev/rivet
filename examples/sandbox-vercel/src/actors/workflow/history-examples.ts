@@ -1,5 +1,5 @@
 import { actor, event, queue } from "rivetkit";
-import { Loop, workflow, workflowQueueName } from "rivetkit/workflow";
+import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
 function delay(ms: number): Promise<void> {
@@ -250,12 +250,12 @@ export type WorkflowHistoryFullState = {
 	completedAt?: number;
 };
 
-const QUEUE_ORDER_CREATED = workflowQueueName("order:created");
-const QUEUE_ORDER_UPDATED = workflowQueueName("order:updated");
-const QUEUE_ORDER_ITEM = workflowQueueName("order:item");
-const QUEUE_ORDER_ARTIFACT = workflowQueueName("order:artifact");
-const QUEUE_ORDER_READY = workflowQueueName("order:ready");
-const QUEUE_ORDER_OPTIONAL = workflowQueueName("order:optional");
+const QUEUE_ORDER_CREATED = "order:created";
+const QUEUE_ORDER_UPDATED = "order:updated";
+const QUEUE_ORDER_ITEM = "order:item";
+const QUEUE_ORDER_ARTIFACT = "order:artifact";
+const QUEUE_ORDER_READY = "order:ready";
+const QUEUE_ORDER_OPTIONAL = "order:optional";
 
 type OrderCreatedMessage = { id: string };
 type OrderUpdatedMessage = { id: string; status: string };
@@ -408,31 +408,36 @@ export const workflowHistoryFull = actor({
 			return { readyBy, readyBatchBy };
 		});
 
-		await ctx.listenN("listen-order-created", "order:created", 1);
-		await ctx.listenWithTimeout(
-			"listen-order-updated-timeout",
-			"order:updated",
-			250,
-		);
-		await ctx.listenN("listen-batch-two", "order:item", 2);
-		await ctx.listenNWithTimeout(
-			"listen-artifacts-timeout",
-			"order:artifact",
-			3,
-			300,
-		);
-		await ctx.listenWithTimeout("listen-optional", "order:optional", 200);
-		await ctx.listenUntil(
-			"listen-until",
-			"order:ready",
-			Date.now() + 300,
-		);
-		await ctx.listenNUntil(
-			"listen-batch-until",
-			"order:ready",
-			2,
-			Date.now() + 400,
-		);
+		await ctx.queue.next("listen-order-created", {
+			names: [QUEUE_ORDER_CREATED],
+			count: 1,
+		});
+		await ctx.queue.next("listen-order-updated-timeout", {
+			names: [QUEUE_ORDER_UPDATED],
+			timeout: 250,
+		});
+		await ctx.queue.next("listen-batch-two", {
+			names: [QUEUE_ORDER_ITEM],
+			count: 2,
+		});
+		await ctx.queue.next("listen-artifacts-timeout", {
+			names: [QUEUE_ORDER_ARTIFACT],
+			count: 3,
+			timeout: 300,
+		});
+		await ctx.queue.next("listen-optional", {
+			names: [QUEUE_ORDER_OPTIONAL],
+			timeout: 200,
+		});
+		await ctx.queue.next("listen-until", {
+			names: [QUEUE_ORDER_READY],
+			timeout: 300,
+		});
+		await ctx.queue.next("listen-batch-until", {
+			names: [QUEUE_ORDER_READY],
+			count: 2,
+			timeout: 400,
+		});
 
 		await ctx.join("join-dependencies", {
 			inventory: {

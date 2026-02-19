@@ -204,13 +204,45 @@ export interface Message {
 }
 
 /**
- * Message handle returned by listen().
+ * Options for receiving queue messages in workflows.
  */
-export interface WorkflowListenMessage<T = unknown> {
-	id: string;
+export interface WorkflowQueueNextOptions {
+	/**
+	 * Queue names to receive from.
+	 * If omitted, receives from all queue names.
+	 */
+	names?: readonly string[];
+	/** Maximum number of messages to receive. Defaults to 1. */
+	count?: number;
+	/**
+	 * Timeout in milliseconds.
+	 * Omit to wait indefinitely.
+	 */
+	timeout?: number;
+	/** Whether returned messages must be manually completed. */
+	completable?: boolean;
+}
+
+/**
+ * Message returned by workflow queue operations.
+ */
+export interface WorkflowQueueMessage<TBody = unknown> {
+	id: string | bigint;
 	name: string;
-	body: T;
-	complete(response?: unknown): Promise<void>;
+	body: TBody;
+	createdAt: number;
+	complete?(response?: unknown): Promise<void>;
+}
+
+/**
+ * Workflow queue interface.
+ */
+export interface WorkflowQueue {
+	next<TBody = unknown>(
+		name: string,
+		opts?: WorkflowQueueNextOptions,
+	): Promise<Array<WorkflowQueueMessage<TBody>>>;
+	send(name: string, body: unknown): Promise<void>;
 }
 
 /**
@@ -276,6 +308,17 @@ export interface Storage {
 export interface WorkflowMessageDriver {
 	loadMessages(): Promise<Message[]>;
 	addMessage(message: Message): Promise<void>;
+	/**
+	 * Optionally receive messages directly from the host queue implementation.
+	 * This is used by actor-backed workflows to reuse native queue behavior.
+	 *
+	 * The operation must be non-blocking and return immediately.
+	 */
+	receiveMessages?(opts: {
+		names?: readonly string[];
+		count: number;
+		completable: boolean;
+	}): Promise<Message[]>;
 	/**
 	 * Delete the specified messages and return the IDs that were successfully removed.
 	 */
@@ -353,6 +396,7 @@ export type BranchOutput<T> = T extends BranchConfig<infer O> ? O : never;
 export interface WorkflowContextInterface {
 	readonly workflowId: string;
 	readonly abortSignal: AbortSignal;
+	readonly queue: WorkflowQueue;
 
 	step<T>(name: string, run: () => Promise<T>): Promise<T>;
 	step<T>(config: StepConfig<T>): Promise<T>;
@@ -367,34 +411,6 @@ export interface WorkflowContextInterface {
 
 	sleep(name: string, durationMs: number): Promise<void>;
 	sleepUntil(name: string, timestampMs: number): Promise<void>;
-
-	listen<T>(
-		name: string,
-		messageName: string | string[],
-	): Promise<WorkflowListenMessage<T>>;
-	listenN<T>(name: string, messageName: string, limit: number): Promise<T[]>;
-	listenWithTimeout<T>(
-		name: string,
-		messageName: string,
-		timeoutMs: number,
-	): Promise<T | null>;
-	listenUntil<T>(
-		name: string,
-		messageName: string,
-		timestampMs: number,
-	): Promise<T | null>;
-	listenNWithTimeout<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		timeoutMs: number,
-	): Promise<T[]>;
-	listenNUntil<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		timestampMs: number,
-	): Promise<T[]>;
 
 	rollbackCheckpoint(name: string): Promise<void>;
 

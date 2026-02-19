@@ -2,16 +2,16 @@ import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/contexts/base/actor";
 import type { RunContext } from "@/actor/contexts/run";
 import type { AnyDatabaseProvider } from "@/actor/database";
 import type { AnyActorInstance } from "@/actor/instance/mod";
-import type { RunConfig } from "@/actor/config";
+import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
+import { RUN_FUNCTION_CONFIG_SYMBOL } from "@/actor/config";
 import { stringifyError } from "@/utils";
 import { runWorkflow } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
 import { ActorWorkflowContext } from "./context";
-import { ActorWorkflowDriver, workflowQueueName } from "./driver";
+import { ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
-export { workflowQueueName } from "./driver";
 export { ActorWorkflowContext } from "./context";
 
 export function workflow<
@@ -21,6 +21,8 @@ export function workflow<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 >(
 	fn: (
 		ctx: ActorWorkflowContext<
@@ -29,22 +31,37 @@ export function workflow<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 	) => Promise<unknown>,
-): RunConfig {
+): (
+	c: RunContext<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>,
+) => Promise<never> {
 	const workflowInspector = createWorkflowInspectorAdapter();
 
 	async function run(
 		runCtx: RunContext<
 			TState,
 			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-	): Promise<never> {
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>,
+		): Promise<never> {
 		const actor = (
 			runCtx as unknown as {
 				[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: AnyActorInstance;
@@ -92,9 +109,16 @@ export function workflow<
 		});
 	}
 
-	return {
+	const runWithConfig = run as typeof run & {
+		[RUN_FUNCTION_CONFIG_SYMBOL]?: {
+			icon?: string;
+			inspector?: { workflow: typeof workflowInspector.adapter };
+		};
+	};
+	runWithConfig[RUN_FUNCTION_CONFIG_SYMBOL] = {
 		icon: "diagram-project",
-		run: run as RunConfig["run"],
 		inspector: { workflow: workflowInspector.adapter },
 	};
+
+	return runWithConfig;
 }

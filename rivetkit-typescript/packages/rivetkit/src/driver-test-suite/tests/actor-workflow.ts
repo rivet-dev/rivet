@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
 	WORKFLOW_QUEUE_NAME,
-	workflowQueueName,
 } from "../../../fixtures/driver-test-suite/workflow";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
@@ -21,11 +20,11 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(state.guardTriggered).toBe(true);
 		});
 
-		test("consumes queue messages via workflow listen", async (c) => {
+		test("consumes queue messages via workflow queue.next", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.workflowQueueActor.getOrCreate(["workflow-queue"]);
 
-			await actor.send(workflowQueueName(WORKFLOW_QUEUE_NAME), {
+			await actor.send(WORKFLOW_QUEUE_NAME, {
 				hello: "world",
 			});
 
@@ -34,7 +33,7 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(messages).toEqual([{ hello: "world" }]);
 		});
 
-		test("workflow listen supports completing wait sends", async (c) => {
+		test("workflow queue.next supports completing wait sends", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.workflowQueueActor.getOrCreate([
 				"workflow-queue-wait",

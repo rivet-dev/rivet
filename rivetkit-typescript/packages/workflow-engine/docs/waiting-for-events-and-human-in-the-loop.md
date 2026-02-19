@@ -8,43 +8,49 @@ Workflows can pause until external events arrive. This enables human approvals, 
 - Messages are loaded at workflow start.
 - If a message arrives while the workflow is running, the workflow yields and picks it up on the next run.
 
-In live mode (`runWorkflow(..., { mode: "live" })`), incoming messages can also wake a workflow waiting on `ctx.listen()`.
+In live mode (`runWorkflow(..., { mode: "live" })`), incoming messages can also wake a workflow waiting on `ctx.queue.next()`.
 
-## Listening for Messages
+## Waiting for Queue Messages
 
 ```ts
-const approval = await ctx.listen<string>("wait-approval", "approval-granted");
+const [approval] = await ctx.queue.next<string>("wait-approval", {
+  names: ["approval-granted"],
+});
 ```
 
-Use the `listen*` variants to wait for multiple messages or apply timeouts:
+Use `count` and `timeout` to wait for batches or apply deadlines:
 
 ```ts
-const items = await ctx.listenN("batch", "item-added", 10);
-const result = await ctx.listenWithTimeout("approval", "approval-granted", 60000);
+const items = await ctx.queue.next("batch", {
+  names: ["item-added"],
+  count: 10,
+});
+const result = await ctx.queue.next("approval", {
+  names: ["approval-granted"],
+  timeout: 60000,
+});
 ```
 
 ## Deadlines and Timeouts
 
-Use `listenUntil` or `listenWithTimeout` to model approval windows:
+Use `timeout` to model approval windows:
 
 ```ts
-const approval = await ctx.listenUntil(
-  "approval-window",
-  "approval-granted",
-  Date.now() + 24 * 60 * 60 * 1000,
-);
+const [approval] = await ctx.queue.next("approval-window", {
+  names: ["approval-granted"],
+  timeout: 24 * 60 * 60 * 1000,
+});
 ```
 
-If the deadline passes, the method returns `null` instead of throwing.
+If the deadline passes, `ctx.queue.next(...)` returns `[]`.
 
 ## Human-in-the-Loop Example
 
 ```ts
-const approval = await ctx.listenWithTimeout(
-  "manual-approval",
-  "approval-granted",
-  30 * 60 * 1000,
-);
+const [approval] = await ctx.queue.next("manual-approval", {
+  names: ["approval-granted"],
+  timeout: 30 * 60 * 1000,
+});
 
 if (!approval) {
   await ctx.step("notify-timeout", () => sendTimeoutNotice());
@@ -62,5 +68,5 @@ await ctx.step("proceed", () => runApprovedWork());
 
 ## Related
 
-- `rivetkit-typescript/packages/workflow-engine/QUICKSTART.md:207` for listen helpers.
+- `rivetkit-typescript/packages/workflow-engine/QUICKSTART.md:207` for queue waits.
 - `rivetkit-typescript/packages/workflow-engine/architecture.md:218` for message delivery details.

@@ -17,8 +17,8 @@ export type QueueMessageOf<Name extends string, Body> = Omit<
 	body: Body;
 };
 
-type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
-type QueueFilterName<TQueues extends QueueSchemaConfig> =
+export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
+export type QueueFilterName<TQueues extends QueueSchemaConfig> =
 	keyof TQueues extends never ? string : QueueName<TQueues>;
 
 type QueueMessageForName<
@@ -54,7 +54,7 @@ type QueueCompletableMessageForName<
 	): Promise<void>;
 };
 
-type QueueResultMessageForName<
+export type QueueResultMessageForName<
 	TQueues extends QueueSchemaConfig,
 	TName extends QueueFilterName<TQueues>,
 	TCompletable extends boolean,

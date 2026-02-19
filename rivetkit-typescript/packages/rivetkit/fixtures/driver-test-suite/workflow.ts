@@ -1,8 +1,8 @@
 import { Loop } from "@rivetkit/workflow-engine";
-import { actor } from "@/actor/mod";
+import { actor, queue } from "@/actor/mod";
 import { db } from "@/db/mod";
 import { WORKFLOW_GUARD_KV_KEY } from "@/workflow/constants";
-import { workflow, workflowQueueName } from "@/workflow/mod";
+import { workflow } from "@/workflow/mod";
 import type { registry } from "./registry";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
@@ -52,18 +52,25 @@ export const workflowQueueActor = actor({
 	state: {
 		received: [] as unknown[],
 	},
+	queues: {
+		[WORKFLOW_QUEUE_NAME]: queue<unknown, { echo: unknown }>(),
+	},
 	run: workflow(async (ctx) => {
 		await ctx.loop({
 			name: "queue",
 			run: async (loopCtx) => {
 				const actorLoopCtx = loopCtx as any;
-				const message = await loopCtx.listen(
-					"queue-wait",
-					WORKFLOW_QUEUE_NAME,
-				);
+				const [message] = await loopCtx.queue.next("queue-wait", {
+					names: [WORKFLOW_QUEUE_NAME],
+					completable: true,
+				});
+				if (!message || !message.complete) {
+					return Loop.continue(undefined);
+				}
+				const complete = message.complete;
 				await loopCtx.step("store-message", async () => {
 					actorLoopCtx.state.received.push(message.body);
-					await message.complete({ echo: message.body });
+					await complete({ echo: message.body });
 				});
 				return Loop.continue(undefined);
 			},
@@ -75,7 +82,7 @@ export const workflowQueueActor = actor({
 			const client = c.client<typeof registry>();
 			const handle = client.workflowQueueActor.getForId(c.actorId);
 			return await handle.send(
-				workflowQueueName(WORKFLOW_QUEUE_NAME),
+				WORKFLOW_QUEUE_NAME,
 				payload,
 				{ wait: true, timeout: 1_000 },
 			);
@@ -175,4 +182,4 @@ export const workflowSleepActor = actor({
 	},
 });
 
-export { WORKFLOW_QUEUE_NAME, workflowQueueName };
+export { WORKFLOW_QUEUE_NAME };

@@ -28,7 +28,9 @@ async function orderWorkflow(ctx: WorkflowContextInterface, orderId: string) {
   });
 
   // Wait for shipping confirmation (external message)
-  const tracking = await ctx.listen<string>("wait-shipping", "shipment-confirmed");
+  const [tracking] = await ctx.queue.next<string>("wait-shipping", {
+    names: ["shipment-confirmed"],
+  });
 
   // Send notification
   await ctx.step("notify-customer", async () => {
@@ -213,46 +215,34 @@ await ctx.sleepUntil("wait-midnight", midnightTimestamp);
 
 Short sleeps (< `driver.workerPollInterval`) wait in memory. Longer sleeps yield to the scheduler and set an alarm for wake-up.
 
-### Messages (Listen)
+### Queue Messages
 
 Wait for external events delivered via `handle.message()`.
 
 ```typescript
 // Wait for a single message
-const data = await ctx.listen<PaymentResult>("payment", "payment-completed");
+const [data] = await ctx.queue.next<PaymentResult>("payment", {
+  names: ["payment-completed"],
+});
 
 // Wait for N messages
-const items = await ctx.listenN<Item>("batch", "item-added", 10);
+const items = await ctx.queue.next<Item>("batch", {
+  names: ["item-added"],
+  count: 10,
+});
 
-// Wait with timeout (returns null on timeout)
-const result = await ctx.listenWithTimeout<Response>(
-  "api-response",
-  "response-received",
-  30000
-);
-
-// Wait until timestamp (returns null on timeout)
-const result = await ctx.listenUntil<Response>(
-  "api-response",
-  "response-received",
-  deadline
-);
+// Wait with timeout (returns [] on timeout)
+const result = await ctx.queue.next<Response>("api-response", {
+  names: ["response-received"],
+  timeout: 30000,
+});
 
 // Wait for up to N messages with timeout
-const items = await ctx.listenNWithTimeout<Item>(
-  "batch",
-  "item-added",
-  10,       // max items
-  60000     // timeout ms
-);
-
-// Wait for up to N messages until timestamp
-const items = await ctx.listenNUntil<Item>(
-  "batch",
-  "item-added",
-  10,       // max items
-  deadline  // timestamp
-);
+const timedBatch = await ctx.queue.next<Item>("batch-timeout", {
+  names: ["item-added"],
+  count: 10,
+  timeout: 60000,
+});
 ```
 
 **Message delivery:** Messages are loaded once at workflow start. If a message is sent during execution, the workflow yields and picks it up on the next run.
@@ -429,7 +419,7 @@ type WorkflowState =
 
 ## Best Practices
 
-1. **Unique step names** - Each step/loop/sleep/listen within a scope must have a unique name
+1. **Unique step names** - Each step/loop/sleep/queue.next within a scope must have a unique name
 
 2. **Deterministic code** - Workflow code outside of steps must be deterministic. Don't use `Math.random()`, `Date.now()`, or read external state outside steps.
 

@@ -2,6 +2,17 @@ import type { RunContext } from "@/actor/contexts/run";
 import type { Client } from "@/client/client";
 import type { Registry } from "@/registry";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "@/actor/database";
+import type {
+	QueueFilterName,
+	QueueNextOptions,
+	QueueResultMessageForName,
+} from "@/actor/instance/queue";
+import type {
+	EventSchemaConfig,
+	InferEventArgs,
+	InferSchemaMap,
+	QueueSchemaConfig,
+} from "@/actor/schema";
 import type { WorkflowContextInterface } from "@rivetkit/workflow-engine";
 import type {
 	BranchConfig,
@@ -10,9 +21,71 @@ import type {
 	LoopConfig,
 	LoopResult,
 	StepConfig,
-	WorkflowListenMessage,
+	WorkflowQueueMessage,
 } from "@rivetkit/workflow-engine";
 import { WORKFLOW_GUARD_KV_KEY } from "./constants";
+
+type WorkflowActorQueueNextOptions<
+	TName extends string,
+	TCompletable extends boolean,
+> = Omit<QueueNextOptions<TName, TCompletable>, "signal">;
+
+type WorkflowActorQueueNextOptionsFallback<TCompletable extends boolean> = Omit<
+	QueueNextOptions<string, TCompletable>,
+	"signal"
+>;
+
+type ActorWorkflowLoopConfig<
+	S,
+	T,
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
+> = Omit<LoopConfig<S, T>, "run"> & {
+	run: (
+		ctx: ActorWorkflowContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		state: S,
+	) => Promise<LoopResult<S, T>>;
+};
+
+type ActorWorkflowBranchConfig<
+	TOutput,
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig,
+	TQueues extends QueueSchemaConfig,
+> = {
+	run: (
+		ctx: ActorWorkflowContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+	) => Promise<TOutput>;
+};
 
 export class ActorWorkflowContext<
 	TState,
@@ -21,17 +94,37 @@ export class ActorWorkflowContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > implements WorkflowContextInterface
 {
 	#inner: WorkflowContextInterface;
-	#runCtx: RunContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>;
+	#runCtx: RunContext<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>;
 	#actorAccessDepth = 0;
 	#allowActorAccess = false;
 	#guardViolation = false;
 
 	constructor(
 		inner: WorkflowContextInterface,
-		runCtx: RunContext<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		runCtx: RunContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
 	) {
 		this.#inner = inner;
 		this.#runCtx = runCtx;
@@ -45,39 +138,136 @@ export class ActorWorkflowContext<
 		return this.#inner.abortSignal;
 	}
 
-		async step<T>(
-			nameOrConfig: string | Parameters<WorkflowContextInterface["step"]>[0],
-			run?: () => Promise<T>,
-		): Promise<T> {
+	get queue() {
+		const self = this;
+		function next<
+			const TName extends QueueFilterName<TQueues>,
+			const TCompletable extends boolean = false,
+		>(
+			name: string,
+			opts?: WorkflowActorQueueNextOptions<TName, TCompletable>,
+		): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>>;
+		function next<const TCompletable extends boolean = false>(
+			name: string,
+			opts?: WorkflowActorQueueNextOptionsFallback<TCompletable>,
+		): Promise<
+			Array<
+				QueueResultMessageForName<
+					TQueues,
+					QueueFilterName<TQueues>,
+					TCompletable
+				>
+			>
+		>;
+		async function next(
+			name: string,
+			opts?: WorkflowActorQueueNextOptions<string, boolean>,
+		): Promise<Array<WorkflowQueueMessage<unknown>>> {
+			const messages = await self.#inner.queue.next(name, opts);
+			return messages.map((message) => self.#toActorQueueMessage(message));
+		}
+
+		function send<K extends keyof TQueues & string>(
+			name: K,
+			body: InferSchemaMap<TQueues>[K],
+		): Promise<void>;
+		function send(
+			name: keyof TQueues extends never ? string : never,
+			body: unknown,
+		): Promise<void>;
+		async function send(name: string, body: unknown): Promise<void> {
+			await self.#runCtx.queue.send(name as never, body as never);
+		}
+
+		return {
+			next,
+			send,
+		};
+	}
+
+	async step<T>(
+		nameOrConfig: string | Parameters<WorkflowContextInterface["step"]>[0],
+		run?: () => Promise<T>,
+	): Promise<T> {
 		if (typeof nameOrConfig === "string") {
 			if (!run) {
 				throw new Error("Step run function missing");
 			}
-				return await this.#wrapActive(() =>
-					this.#inner.step(nameOrConfig, () =>
-						this.#withActorAccess(run),
-					),
-				);
-			}
-			const stepConfig = nameOrConfig as StepConfig<T>;
-			const config: StepConfig<T> = {
-				...stepConfig,
-				run: () => this.#withActorAccess(stepConfig.run),
-			};
-			return await this.#wrapActive(() => this.#inner.step(config));
+			return await this.#wrapActive(() =>
+				this.#inner.step(nameOrConfig, () => this.#withActorAccess(run)),
+			);
 		}
+		const stepConfig = nameOrConfig as StepConfig<T>;
+		const config: StepConfig<T> = {
+			...stepConfig,
+			run: () => this.#withActorAccess(stepConfig.run),
+		};
+		return await this.#wrapActive(() => this.#inner.step(config));
+	}
 
+	async loop<T>(
+		name: string,
+		run: (
+			ctx: ActorWorkflowContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>,
+		) => Promise<LoopResult<undefined, T>>,
+	): Promise<T>;
 	async loop<T>(
 		name: string,
 		run: (
 			ctx: WorkflowContextInterface,
 		) => Promise<LoopResult<undefined, T>>,
 	): Promise<T>;
+	async loop<S, T>(
+		config: ActorWorkflowLoopConfig<
+			S,
+			T,
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+	): Promise<T>;
 	async loop<S, T>(config: LoopConfig<S, T>): Promise<T>;
 	async loop(
-		nameOrConfig: string | LoopConfig<unknown, unknown>,
+		nameOrConfig:
+			| string
+			| LoopConfig<unknown, unknown>
+			| ActorWorkflowLoopConfig<
+					unknown,
+					unknown,
+					TState,
+					TConnParams,
+					TConnState,
+					TVars,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+			  >,
 		run?: (
-			ctx: WorkflowContextInterface,
+			ctx: ActorWorkflowContext<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>,
 		) => Promise<LoopResult<undefined, unknown>>,
 	): Promise<unknown> {
 		if (typeof nameOrConfig === "string") {
@@ -106,68 +296,34 @@ export class ActorWorkflowContext<
 		return this.#inner.sleepUntil(name, timestampMs);
 	}
 
-	listen<T>(
-		name: string,
-		messageName: string | string[],
-	): Promise<WorkflowListenMessage<T>> {
-		return this.#inner.listen(name, messageName);
-	}
-
-	listenN<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-	): Promise<T[]> {
-		return this.#inner.listenN(name, messageName, limit);
-	}
-
-	listenWithTimeout<T>(
-		name: string,
-		messageName: string,
-		timeoutMs: number,
-	): Promise<T | null> {
-		return this.#inner.listenWithTimeout(name, messageName, timeoutMs);
-	}
-
-	listenUntil<T>(
-		name: string,
-		messageName: string,
-		timestampMs: number,
-	): Promise<T | null> {
-		return this.#inner.listenUntil(name, messageName, timestampMs);
-	}
-
-	listenNWithTimeout<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		timeoutMs: number,
-	): Promise<T[]> {
-		return this.#inner.listenNWithTimeout(
-			name,
-			messageName,
-			limit,
-			timeoutMs,
-		);
-	}
-
-	listenNUntil<T>(
-		name: string,
-		messageName: string,
-		limit: number,
-		timestampMs: number,
-	): Promise<T[]> {
-		return this.#inner.listenNUntil(name, messageName, limit, timestampMs);
-	}
-
 	async rollbackCheckpoint(name: string): Promise<void> {
 		await this.#wrapActive(() => this.#inner.rollbackCheckpoint(name));
 	}
 
+	async join<
+		T extends Record<
+			string,
+			ActorWorkflowBranchConfig<
+				unknown,
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>
+		>,
+	>(
+		name: string,
+		branches: T,
+	): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]["run"]>> }>;
 	async join<T extends Record<string, BranchConfig<unknown>>>(
 		name: string,
 		branches: T,
-	): Promise<{ [K in keyof T]: BranchOutput<T[K]> }> {
+	): Promise<{ [K in keyof T]: BranchOutput<T[K]> }>;
+	async join(name: string, branches: Record<string, BranchConfig<unknown>>) {
 		const wrappedBranches = Object.fromEntries(
 			Object.entries(branches).map(([key, branch]) => [
 				key,
@@ -176,13 +332,30 @@ export class ActorWorkflowContext<
 						branch.run(this.#createChildContext(ctx)),
 				},
 			]),
-		) as T;
-
-		return (await this.#wrapActive(() =>
+		) as Record<string, BranchConfig<unknown>>;
+		return await this.#wrapActive(() =>
 			this.#inner.join(name, wrappedBranches),
-		)) as { [K in keyof T]: BranchOutput<T[K]> };
+		);
 	}
 
+	async race<T>(
+		name: string,
+		branches: Array<{
+			name: string;
+			run: (
+				ctx: ActorWorkflowContext<
+					TState,
+					TConnParams,
+					TConnState,
+					TVars,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
+			) => Promise<T>;
+		}>,
+	): Promise<{ winner: string; value: T }>;
 	async race<T>(
 		name: string,
 		branches: Array<{
@@ -246,8 +419,37 @@ export class ActorWorkflowContext<
 		return this.#runCtx.actorId;
 	}
 
-	broadcast<Args extends Array<unknown>>(name: string, ...args: Args): void {
-		this.#runCtx.broadcast(name, ...args);
+	broadcast<K extends keyof TEvents & string>(
+		name: K,
+		...args: InferEventArgs<InferSchemaMap<TEvents>[K]>
+	): void;
+	broadcast(
+		name: keyof TEvents extends never ? string : never,
+		...args: Array<unknown>
+	): void;
+	broadcast(name: string, ...args: Array<unknown>): void {
+		this.#runCtx.broadcast(
+			name as never,
+			...((args as unknown[]) as never[]),
+		);
+	}
+
+	#toActorQueueMessage<T>(
+		message: WorkflowQueueMessage<T>,
+	): WorkflowQueueMessage<T> & { id: bigint } {
+		let id: bigint;
+		try {
+			id = BigInt(message.id);
+		} catch {
+			throw new Error(`Invalid queue message id "${message.id}"`);
+		}
+		return {
+			id,
+			name: message.name,
+			body: message.body,
+			createdAt: message.createdAt,
+			...(message.complete ? { complete: message.complete } : {}),
+		};
 	}
 
 	async #wrapActive<T>(run: () => Promise<T>): Promise<T> {
@@ -321,7 +523,9 @@ export class ActorWorkflowContext<
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	> {
 		return new ActorWorkflowContext(ctx, this.#runCtx);
 	}

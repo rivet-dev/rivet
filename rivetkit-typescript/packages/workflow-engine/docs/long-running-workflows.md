@@ -4,11 +4,13 @@ Long-running workflows can pause, sleep, and resume across process restarts. Thi
 
 ## Yielding Execution
 
-Use sleep and listen helpers to yield control while waiting:
+Use sleep and queue helpers to yield control while waiting:
 
 ```ts
 await ctx.sleep("wait-5-min", 5 * 60 * 1000);
-const message = await ctx.listen<string>("wait-approval", "approval");
+const [message] = await ctx.queue.next<string>("wait-approval", {
+  names: ["approval"],
+});
 ```
 
 When a workflow yields, `runWorkflow` returns a `WorkflowResult` with `state: "sleeping"`. The driver alarm or a message wake-up triggers the next run.

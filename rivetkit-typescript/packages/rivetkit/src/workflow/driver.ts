@@ -9,72 +9,66 @@ import type {
 	WorkflowMessageDriver,
 } from "@rivetkit/workflow-engine";
 
-const WORKFLOW_QUEUE_PREFIX = "__workflow:";
-
-export function workflowQueueName(name: string): string {
-	return `${WORKFLOW_QUEUE_PREFIX}${name}`;
-}
-
-function stripWorkflowQueueName(name: string): string | null {
-	if (!name.startsWith(WORKFLOW_QUEUE_PREFIX)) {
-		return null;
-	}
-	return name.slice(WORKFLOW_QUEUE_PREFIX.length);
-}
-
 function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
 	return prefixed.slice(KEYS.WORKFLOW_PREFIX.length);
 }
 
 class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 	#actor: AnyActorInstance;
-	#runCtx: RunContext<any, any, any, any, any, any>;
-	#completionHandles = new Map<string, (response?: unknown) => Promise<void>>();
+	#runCtx: RunContext<any, any, any, any, any, any, any, any>;
 
 	constructor(
 		actor: AnyActorInstance,
-		runCtx: RunContext<any, any, any, any, any, any>,
+		runCtx: RunContext<any, any, any, any, any, any, any, any>,
 	) {
 		this.#actor = actor;
 		this.#runCtx = runCtx;
 	}
 
 	async loadMessages(): Promise<Message[]> {
-		const queueMessages = await this.#runCtx.keepAwake(
-			this.#actor.queueManager.getMessages(),
-		);
-
-		const workflowMessages: Message[] = [];
-		for (const queueMessage of queueMessages) {
-			const workflowName = stripWorkflowQueueName(queueMessage.name);
-			if (!workflowName) continue;
-			const id = queueMessage.id.toString();
-			this.#completionHandles.set(id, async (response?: unknown) => {
-				await this.#runCtx.keepAwake(
-					this.#actor.queueManager.completeMessage(queueMessage, response),
-				);
-			});
-			workflowMessages.push({
-				id,
-				name: workflowName,
-				data: queueMessage.body,
-				sentAt: queueMessage.createdAt,
-				complete: async (response?: unknown) => {
-					await this.completeMessage(id, response);
-				},
-			});
-		}
-
-		return workflowMessages;
+		// Actor-backed workflows use receiveMessages() directly and do not
+		// mirror queue messages into workflow-engine storage.
+		return [];
 	}
 
 	async addMessage(message: Message): Promise<void> {
 		await this.#runCtx.keepAwake(
-			this.#actor.queueManager.enqueue(
-				workflowQueueName(message.name),
-				message.data,
+			this.#actor.queueManager.enqueue(message.name, message.data),
+		);
+	}
+
+	async receiveMessages(opts: {
+		names?: readonly string[];
+		count: number;
+		completable: boolean;
+	}): Promise<Message[]> {
+		const messages = await this.#runCtx.keepAwake(
+			this.#actor.queueManager.receive(
+				opts.names && opts.names.length > 0 ? [...opts.names] : undefined,
+				opts.count,
+				0,
+				undefined,
+				opts.completable,
 			),
 		);
+		return messages.map((message) => ({
+			id: message.id.toString(),
+			name: message.name,
+			data: message.body,
+			sentAt: message.createdAt,
+			...(opts.completable
+				? {
+						complete: async (response?: unknown) => {
+							await this.#runCtx.keepAwake(
+								this.#actor.queueManager.completeMessage(
+									message,
+									response,
+								),
+							);
+						},
+					}
+				: {}),
+		}));
 	}
 
 	async deleteMessages(messageIds: string[]): Promise<string[]> {
@@ -105,13 +99,6 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 	}
 
 	async completeMessage(messageId: string, response?: unknown): Promise<void> {
-		const complete = this.#completionHandles.get(messageId);
-		if (complete) {
-			await complete(response);
-			this.#completionHandles.delete(messageId);
-			return;
-		}
-
 		let parsedId: bigint;
 		try {
 			parsedId = BigInt(messageId);
@@ -129,19 +116,15 @@ export class ActorWorkflowDriver implements EngineDriver {
 	readonly workerPollInterval = 100;
 	readonly messageDriver: WorkflowMessageDriver;
 	#actor: AnyActorInstance;
-	#runCtx: RunContext<any, any, any, any, any, any>;
+	#runCtx: RunContext<any, any, any, any, any, any, any, any>;
 
 	constructor(
 		actor: AnyActorInstance,
-		runCtx: RunContext<any, any, any, any, any, any>,
+		runCtx: RunContext<any, any, any, any, any, any, any, any>,
 	) {
 		this.#actor = actor;
 		this.#runCtx = runCtx;
 		this.messageDriver = new ActorWorkflowMessageDriver(actor, runCtx);
-	}
-
-	#log(msg: string, data?: Record<string, unknown>) {
-		this.#runCtx.log.info({ msg: `[workflow-driver] ${msg}`, ...data });
 	}
 
 	async get(key: Uint8Array): Promise<Uint8Array | null> {
@@ -231,7 +214,9 @@ export class ActorWorkflowDriver implements EngineDriver {
 		messageNames: string[],
 		abortSignal: AbortSignal,
 	): Promise<void> {
-		const queueNames = messageNames.map((name) => workflowQueueName(name));
-		return this.#actor.queueManager.waitForNames(queueNames, abortSignal);
+		return this.#actor.queueManager.waitForNames(
+			messageNames.length > 0 ? messageNames : undefined,
+			abortSignal,
+		);
 	}
 }

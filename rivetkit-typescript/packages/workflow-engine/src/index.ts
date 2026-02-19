@@ -100,7 +100,9 @@ export type {
 	WorkflowContextInterface,
 	WorkflowFunction,
 	WorkflowHandle,
-	WorkflowListenMessage,
+	WorkflowQueue,
+	WorkflowQueueMessage,
+	WorkflowQueueNextOptions,
 	WorkflowMessageDriver,
 	WorkflowResult,
 	WorkflowRunMode,
@@ -200,9 +202,13 @@ function notifyMessage(runtime: LiveRuntime, name: string): void {
 
 	for (let i = 0; i < runtime.messageWaiters.length; i++) {
 		const waiter = runtime.messageWaiters[i];
-		const matchIndex = runtime.pendingMessageNames.findIndex((pending) =>
-			waiter.names.includes(pending),
-		);
+		const matchIndex = waiter.names.length === 0
+			? runtime.pendingMessageNames.length > 0
+				? 0
+				: -1
+			: runtime.pendingMessageNames.findIndex((pending) =>
+					waiter.names.includes(pending)
+				);
 		if (matchIndex !== -1) {
 			runtime.pendingMessageNames.splice(matchIndex, 1);
 			runtime.messageWaiters.splice(i, 1);
@@ -221,9 +227,13 @@ async function waitForMessage(
 		throw new EvictedError();
 	}
 
-	const matchIndex = runtime.pendingMessageNames.findIndex((pending) =>
-		names.includes(pending),
-	);
+	const matchIndex = names.length === 0
+		? runtime.pendingMessageNames.length > 0
+			? 0
+			: -1
+		: runtime.pendingMessageNames.findIndex((pending) =>
+				names.includes(pending)
+			);
 	if (matchIndex !== -1) {
 		runtime.pendingMessageNames.splice(matchIndex, 1);
 		return;
@@ -525,12 +535,11 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			return result;
 		}
 
-		const hasMessages =
-			result.waitingForMessages && result.waitingForMessages.length > 0;
-		const hasDeadline = result.sleepUntil !== undefined;
+			const hasMessages = result.waitingForMessages !== undefined;
+			const hasDeadline = result.sleepUntil !== undefined;
 
 		if (hasMessages && hasDeadline) {
-			// Wait for EITHER a message OR the deadline (for listenWithTimeout)
+			// Wait for EITHER a message OR the deadline (for queue.next timeout)
 			try {
 				const messagePromise = driver.waitForMessages
 					? awaitWithEviction(
