@@ -45,7 +45,7 @@ pub trait DatabaseDebug: Database {
 		names: &[&str],
 		error_like: &[&str],
 		dry_run: bool,
-		parallelization: u128,
+		parallelization: u16,
 	) -> Result<usize>;
 
 	/// Used by pruner workflow for automatic pruning.
@@ -57,7 +57,7 @@ pub trait DatabaseDebug: Database {
 		names: &[&str],
 		before_ts: i64,
 		dry_run: bool,
-		parallelization: u128,
+		parallelization: u16,
 	) -> Result<usize>;
 
 	/// Used for manual pruning.
@@ -66,7 +66,8 @@ pub trait DatabaseDebug: Database {
 		names: &[&str],
 		before_ts: i64,
 		dry_run: bool,
-		parallelization: u128,
+		parallelization: u16,
+		max_per_txn: Option<usize>,
 	) -> Result<usize>;
 }
 
