@@ -252,6 +252,7 @@ The `run` hook is called after the actor starts and runs in the background witho
 The handler receives an abort signal via `c.abortSignal` that fires when the actor is stopping. You should always check or listen to this signal to exit gracefully.
 
 **Important behavior:**
+- The actor may go to sleep at any time during the `run` handler. Use `c.keepAwake(promise)` to wrap async operations that should not be interrupted.
 - If the `run` handler exits (returns), the actor will crash and reschedule
 - If the `run` handler throws an error, the actor will crash and reschedule
 - On shutdown, the actor waits for the `run` handler to complete (with configurable timeout via `options.runStopTimeout`)
@@ -674,11 +675,48 @@ const myActor = actor({
 
 ## Advanced
 
-### Running Background Tasks
+### Preventing Sleep with `keepAwake`
 
-#### `waitUntil`
+The actor may go to sleep at any time when idle, including during the `run` handler. If you have async operations that should not be interrupted by sleep, wrap them with `c.keepAwake(promise)`.
 
-The `c.waitUntil` method allows you to execute promises asynchronously without blocking the actor's main execution flow. This is useful for fire-and-forget operations where you don't need to wait for completion.
+The method prevents the actor from sleeping while the promise is running, returns the resolved value, and resets the sleep timer on completion. Errors are propagated to the caller.
+
+```typescript
+import { actor } from "rivetkit";
+
+const tickActor = actor({
+  state: { tickCount: 0 },
+
+  run: async (c) => {
+    while (!c.abortSignal.aborted) {
+      // Keep actor awake while making the API call
+      const data = await c.keepAwake(
+        fetch('https://api.example.com/data').then(res => res.json())
+      );
+
+      c.state.tickCount++;
+      c.log.info({ msg: "fetched data", data, tickCount: c.state.tickCount });
+
+      // Wait before next iteration
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 5000);
+        c.abortSignal.addEventListener("abort", () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+      });
+    }
+  },
+
+  actions: {
+    getTickCount: (c) => c.state.tickCount
+  }
+});
+```
+
+### Fire-and-Forget with `waitUntil`
+
+The `c.waitUntil` method allows you to execute promises asynchronously without blocking the actor's main execution flow. This is useful for fire-and-forget operations where you don't need to wait for completion or handle errors.
 
 Common use cases:
 - **Analytics and logging**: Send events to external services without delaying responses
@@ -713,46 +751,6 @@ const gameRoom = actor({
 ```
 
 Note that errors thrown in `waitUntil` promises are logged but not propagated to the caller.
-
-#### `keepAwake`
-
-The `c.keepAwake` method prevents the actor from sleeping while a promise is running, and returns the resolved value. Unlike `waitUntil`, errors are propagated to the caller, making it suitable for tracked background work where you need to handle the result.
-
-Common use cases:
-- **Background work with results**: Perform async work that you need to await and handle errors for
-- **Preventing sleep during critical operations**: Keep the actor awake during important async operations
-
-```typescript
-import { actor } from "rivetkit";
-
-const dataProcessor = actor({
-  state: { processedCount: 0 },
-
-  actions: {
-    processData: async (c, data: string) => {
-      // Keep actor awake while processing, and get the result
-      const result = await c.keepAwake(
-        fetch('https://api.example.com/process', {
-          method: 'POST',
-          body: JSON.stringify({ data })
-        }).then(res => res.json())
-      );
-
-      c.state.processedCount++;
-
-      // Errors from the promise will propagate here
-      return result;
-    },
-  }
-});
-```
-
-| Aspect | `waitUntil` | `keepAwake` |
-|--------|-------------|-------------|
-| Return type | `void` | `Promise<T>` |
-| Error handling | Logs and swallows | Propagates to caller |
-| Prevents sleep | Yes (during shutdown) | Yes (prevents sleep timer) |
-| Use case | Fire-and-forget | Tracked background work |
 
 ### Actor Shutdown Abort Signal
 
