@@ -38,6 +38,7 @@ use crate::{
 };
 
 const EARLY_TXN_TIMEOUT: Duration = Duration::from_secs(3);
+const MAX_PRUNES_PER_TXN: usize = 1000;
 
 impl DatabaseKv {
 	#[tracing::instrument(skip_all)]
@@ -1377,6 +1378,10 @@ impl DatabaseDebug for DatabaseKv {
 
 							prune_count += 1;
 							new_last_key = [entry.key(), &[0xff]].concat();
+
+							if prune_count >= MAX_PRUNES_PER_TXN {
+								break;
+							}
 						}
 
 						Ok((prune_count, inserter, new_last_key))
