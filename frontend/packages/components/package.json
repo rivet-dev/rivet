@@ -30,8 +30,12 @@
 	},
 	"types": "./dist/index.d.ts",
 	"dependencies": {
+		"@codemirror/autocomplete": "^6.18.7",
+		"@codemirror/commands": "^6.8.1",
 		"@codemirror/lang-javascript": "^6.2.4",
 		"@codemirror/lang-json": "^6.0.2",
+		"@codemirror/lint": "^6.8.5",
+		"@codemirror/state": "^6.5.2",
 		"@codemirror/view": "^6.38.2",
 		"@fortawesome/fontawesome-svg-core": "^6.7.2",
 		"@fortawesome/free-brands-svg-icons": "^6.7.2",
