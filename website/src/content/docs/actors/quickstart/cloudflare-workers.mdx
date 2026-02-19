@@ -56,7 +56,9 @@ export const registry = setup({
 
 Choose your preferred web framework:
 
-<CodeGroup>
+<Tabs>
+
+<Tab title="Default">
 
 <CodeGroup workspace>
 ```ts {{"title":"registry.ts"}} @hide
@@ -78,7 +80,7 @@ export const registry = setup({
 });
 ```
 
-```ts Default
+```ts {{"title":"index.ts"}}
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -88,6 +90,10 @@ export { handler as default, ActorHandler };
 ```
 </CodeGroup>
 
+</Tab>
+
+<Tab title="Hono">
+
 <CodeGroup workspace>
 ```ts {{"title":"registry.ts"}} @hide
 import { actor, setup } from "rivetkit";
@@ -108,7 +114,7 @@ export const registry = setup({
 });
 ```
 
-```ts Hono
+```ts {{"title":"index.ts"}}
 import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
 import { registry } from "./registry";
@@ -132,6 +138,10 @@ export { handler as default, ActorHandler };
 ```
 </CodeGroup>
 
+</Tab>
+
+<Tab title="Manual Routing">
+
 <CodeGroup workspace>
 ```ts {{"title":"registry.ts"}} @hide
 import { actor, setup } from "rivetkit";
@@ -152,7 +162,7 @@ export const registry = setup({
 });
 ```
 
-```ts Manual-Routing @nocheck
+```ts {{"title":"index.ts"}} @nocheck
 import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -181,6 +191,10 @@ export { handler as default, ActorHandler };
 ```
 </CodeGroup>
 
+</Tab>
+
+<Tab title="Advanced">
+
 <CodeGroup workspace>
 ```ts {{"title":"registry.ts"}} @hide
 import { actor, setup } from "rivetkit";
@@ -201,7 +215,7 @@ export const registry = setup({
 });
 ```
 
-```ts Advanced @nocheck
+```ts {{"title":"index.ts"}} @nocheck
 import { createInlineClient } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
@@ -244,7 +258,9 @@ export default {
 ```
 </CodeGroup>
 
-</CodeGroup>
+</Tab>
+
+</Tabs>
 
 </Step>
 
@@ -453,4 +469,3 @@ See the [React documentation](/docs/clients/react) for more information.
 <Note>
 	Cloudflare Workers mounts the Rivet endpoint on `/api/rivet` by default.
 </Note>
-
