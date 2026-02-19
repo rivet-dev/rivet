@@ -14,13 +14,12 @@ runDriverTests({
 			join(__dirname, "../fixtures/driver-test-suite/registry.ts"),
 			async () => {
 				return {
-					driver: createFileSystemOrMemoryDriver(
-						true,
-						{
-							path: `/tmp/test-${crypto.randomUUID()}`,
-							useNativeSqlite: true,
-						},
-					),
+						driver: createFileSystemOrMemoryDriver(
+							true,
+							{
+								path: `/tmp/test-${crypto.randomUUID()}`,
+							},
+						),
 				};
 			},
 		);

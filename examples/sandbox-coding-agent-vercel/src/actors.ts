@@ -1,5 +1,5 @@
 import { SandboxAgent } from "sandbox-agent";
-import { actor, setup } from "rivetkit";
+import { actor, event, queue, setup } from "rivetkit";
 
 export type AgentMessage = {
 	id: string;
@@ -24,6 +24,14 @@ export type AgentInfo = {
 export type AgentQueueMessage = {
 	text: string;
 	sender?: string;
+};
+
+export type AgentResponseEvent = {
+	messageId: string;
+	delta: string;
+	content: string;
+	done: boolean;
+	error?: string;
 };
 
 type ItemContentPart = {
@@ -121,13 +129,19 @@ export const agent = actor({
 		} as AgentStatus,
 		sessionId: null as string | null,
 	},
+	queues: {
+		message: queue<AgentQueueMessage>(),
+	},
+	events: {
+		messageAdded: event<AgentMessage>(),
+		status: event<AgentStatus>(),
+		response: event<AgentResponseEvent>(),
+	},
 
 	// The run hook keeps the agent listening for queued messages.
 	run: async (c) => {
-		while (true) {
-			const queued = await c.queue.next("message");
-
-			const body = queued.body as AgentQueueMessage;
+		for await (const queued of c.queue.iter()) {
+			const { body } = queued;
 			if (!body?.text || typeof body.text !== "string") {
 				continue;
 			}
@@ -178,17 +192,16 @@ export const agent = actor({
 					c.state.sessionId = sessionId;
 				}
 
-				const eventStream = await client.streamTurn(sessionId, {
-					message: userMessage.content,
-					sync: false,
-				});
+					const eventStream = await client.streamTurn(sessionId, {
+						message: userMessage.content,
+					});
 
 				let content = "";
 				let assistantItemId: string | null = null;
 
 				for await (const rawEvent of eventStream) {
 					const event = rawEvent as StreamEvent;
-					if (c.abortSignal.aborted) {
+					if (c.aborted) {
 						break;
 					}
 

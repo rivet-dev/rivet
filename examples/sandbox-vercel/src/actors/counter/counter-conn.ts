@@ -1,8 +1,11 @@
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 
 export const counterConn = actor({
 	state: {
 		connectionCount: 0,
+	},
+	events: {
+		newCount: event<number>(),
 	},
 	connState: { count: 0 },
 	onConnect: (c, conn) => {

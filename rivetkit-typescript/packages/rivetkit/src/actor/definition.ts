@@ -4,7 +4,7 @@ import type { Actions, ActorConfig } from "./config";
 import type { ActionContextOf, ActorContext } from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
 import { ActorInstance } from "./instance/mod";
-import type { SchemaConfig } from "./schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
 export type AnyActorDefinition = ActorDefinition<
 	any,
@@ -25,8 +25,8 @@ export class ActorDefinition<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig = Record<never, never>,
-	Q extends SchemaConfig = Record<never, never>,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
 	R extends Actions<S, CP, CS, V, I, DB, E, Q> = Actions<
 		S,
 		CP,

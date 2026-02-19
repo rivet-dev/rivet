@@ -2,7 +2,7 @@
 // Demonstrates: Sequential workflow steps with automatic retries
 // One actor per order - actor key is the order ID
 
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -41,6 +41,9 @@ export const order = actor({
 		step: 0,
 		createdAt: Date.now(),
 	}),
+	events: {
+		orderUpdated: event<Order>(),
+	},
 
 	actions: {
 		getOrder: (c): Order => c.state,

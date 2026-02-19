@@ -2,7 +2,7 @@
 // Demonstrates: Message listening with timeout for approval workflows
 // One actor per approval request - actor key is the request ID
 
-import { actor } from "rivetkit";
+import { actor, event, queue } from "rivetkit";
 import { Loop, workflow, workflowQueueName } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -30,6 +30,11 @@ export type ApprovalRequestInput = {
 	description?: string;
 };
 
+type ApprovalDecision = {
+	approved: boolean;
+	approver: string;
+};
+
 export const approval = actor({
 	createState: (c, input?: ApprovalRequestInput): ApprovalRequest => ({
 		id: c.key[0] as string,
@@ -38,6 +43,13 @@ export const approval = actor({
 		status: "pending",
 		createdAt: Date.now(),
 	}),
+	queues: {
+		[QUEUE_DECISION]: queue<ApprovalDecision>(),
+	},
+	events: {
+		requestUpdated: event<ApprovalRequest>(),
+		requestCreated: event<ApprovalRequest>(),
+	},
 
 	actions: {
 		getRequest: (c): ApprovalRequest => c.state,
@@ -72,10 +84,11 @@ export const approval = actor({
 					c.broadcast("requestCreated", c.state);
 				});
 
-				const decision = await loopCtx.listenWithTimeout<{
-					approved: boolean;
-					approver: string;
-				}>("wait-decision", "decision", APPROVAL_TIMEOUT_MS);
+				const decision = await loopCtx.listenWithTimeout<ApprovalDecision>(
+					"wait-decision",
+					"decision",
+					APPROVAL_TIMEOUT_MS,
+				);
 
 				await loopCtx.step("update-status", async () => {
 					c.state.deciding = false;

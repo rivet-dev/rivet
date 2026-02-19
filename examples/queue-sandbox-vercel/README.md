@@ -36,7 +36,7 @@ See [`src/actors/sender.ts`](https://github.com/rivet-dev/rivet/tree/main/exampl
 
 ### Multi-Queue
 
-Listen to multiple named queues (high, normal, low priority) simultaneously using `c.queue.next(names, { count })`.
+Listen to multiple named queues (high, normal, low priority) simultaneously using `for await (const m of c.queue.iter({ names: [...] }))`.
 
 See [`src/actors/multi-queue.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/queue-sandbox/src/actors/multi-queue.ts).
 
@@ -48,7 +48,7 @@ See [`src/actors/timeout.ts`](https://github.com/rivet-dev/rivet/tree/main/examp
 
 ### Worker
 
-Use the `run` handler to continuously consume queue messages in a loop. The worker polls for jobs and processes them automatically.
+Use the `run` handler to continuously consume queue messages in a `for await` loop.
 
 See [`src/actors/worker.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/queue-sandbox/src/actors/worker.ts).
 

@@ -1,6 +1,6 @@
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDefinition, AnyActorDefinition } from "../definition";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { ConnInitContext } from "./base/conn-init";
 
 /**
@@ -12,8 +12,8 @@ export class CreateConnStateContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > extends ConnInitContext<TState, TVars, TInput, TDatabase, TEvents, TQueues> {}
 
 export type CreateConnStateContextOf<AD extends AnyActorDefinition> =
@@ -24,8 +24,8 @@ export type CreateConnStateContextOf<AD extends AnyActorDefinition> =
 		infer V,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
-		infer E extends SchemaConfig,
-		infer Q extends SchemaConfig,
+		infer E extends EventSchemaConfig,
+		infer Q extends QueueSchemaConfig,
 		any
 	>
 		? CreateConnStateContext<S, V, I, DB, E, Q>

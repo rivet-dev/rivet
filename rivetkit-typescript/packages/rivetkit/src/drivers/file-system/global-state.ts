@@ -1117,11 +1117,11 @@ export class FileSystemGlobalState {
 			entry.startPromise = undefined;
 
 			return entry.actor;
-		} catch (innerError) {
-			const error = new Error(
-				`Failed to start actor ${actorId}: ${innerError}`,
-				{ cause: innerError },
-			);
+			} catch (innerError) {
+				const error = new Error(
+					`Failed to start actor ${actorId}: ${innerError}`,
+					{ cause: innerError },
+				);
 			entry.startPromise?.reject(error);
 			entry.startPromise = undefined;
 			throw error;

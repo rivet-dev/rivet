@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { z } from "zod";
 import { getWeather } from "./my-tools.ts";
 import type { Message } from "./types.ts";
@@ -9,6 +9,9 @@ export const aiAgent = actor({
 	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
 	state: {
 		messages: [] as Message[],
+	},
+	events: {
+		messageReceived: event<Message>(),
 	},
 
 	actions: {

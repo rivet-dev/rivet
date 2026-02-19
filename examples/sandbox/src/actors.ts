@@ -78,13 +78,7 @@ import {
 } from "./actors/lifecycle/destroy.ts";
 import { hibernationActor } from "./actors/lifecycle/hibernation.ts";
 // Queues
-import { queueActor, queueLimitedActor } from "./actors/queue/queue.ts";
-import { sender } from "./actors/queue/sender.ts";
-import { multiQueue } from "./actors/queue/multi-queue.ts";
-import { timeout } from "./actors/queue/timeout.ts";
 import { worker } from "./actors/queue/worker.ts";
-import { selfSender } from "./actors/queue/self-sender.ts";
-import { keepAwake } from "./actors/queue/keep-awake.ts";
 // Workflows
 import {
 	workflowCounterActor,
@@ -179,14 +173,7 @@ export const registry = setup({
 		destroyObserver,
 		hibernationActor,
 		// Queues
-		queueActor,
-		queueLimitedActor,
-		sender,
-		multiQueue,
-		timeout,
 		worker,
-		selfSender,
-		keepAwake,
 		// Workflows
 		timer,
 		order,

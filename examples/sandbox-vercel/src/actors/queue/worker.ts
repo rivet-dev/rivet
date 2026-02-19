@@ -1,16 +1,28 @@
-import { actor } from "rivetkit";
+import { actor, event, queue } from "rivetkit";
+
+export interface WorkerJob {
+	id: string;
+	payload: string;
+}
 
 export interface WorkerState {
 	status: "idle" | "running";
 	processed: number;
-	lastJob: unknown;
+	lastJob: WorkerJob | null;
 }
 
 export const worker = actor({
 	state: {
 		status: "idle" as "idle" | "running",
 		processed: 0,
-		lastJob: null as unknown,
+		lastJob: null as WorkerJob | null,
+	},
+	events: {
+		statusChanged: event<{ status: "idle" | "running"; processed: number }>(),
+		jobProcessed: event<{ processed: number; job: WorkerJob }>(),
+	},
+	queues: {
+		jobs: queue<WorkerJob>(),
 	},
 	async run(c) {
 		c.state.status = "running";
@@ -19,16 +31,13 @@ export const worker = actor({
 			processed: c.state.processed,
 		});
 
-		while (!c.abortSignal.aborted) {
-			const job = await c.queue.next("jobs", { timeout: 1000 });
-			if (job) {
-				c.state.processed += 1;
-				c.state.lastJob = job.body;
-				c.broadcast("jobProcessed", {
-					processed: c.state.processed,
-					job: job.body,
-				});
-			}
+		for await (const job of c.queue.iter()) {
+			c.state.processed += 1;
+			c.state.lastJob = job.body;
+			c.broadcast("jobProcessed", {
+				processed: c.state.processed,
+				job: job.body,
+			});
 		}
 
 		c.state.status = "idle";

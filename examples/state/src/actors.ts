@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 export type Message = {
 	id: string;
@@ -11,6 +11,10 @@ export const chatRoom = actor({
 	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
 	state: {
 		messages: [] as Message[],
+	},
+	events: {
+		newMessage: event<Message>(),
+		messagesCleared: event<[]>(),
 	},
 
 	actions: {

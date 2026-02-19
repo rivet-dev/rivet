@@ -1,7 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import type { DurableStream } from "@durable-streams/client";
 import { streamText } from "ai";
-import { type ActorContextOf, actor, setup } from "rivetkit";
+import { type ActorContextOf, actor, setup, event } from "rivetkit";
 import { getStreams } from "./shared/streams.ts";
 import type { PromptMessage, ResponseChunk } from "./shared/types.ts";
 
@@ -17,6 +17,10 @@ export const aiAgent = actor({
 		// undefined means start from the beginning of the stream
 		promptStreamOffset: undefined as string | undefined,
 	}),
+	events: {
+		responseError: event<{ promptId: string; error: string }>(),
+		responseComplete: event<{ promptId: string; fullResponse: string }>(),
+	},
 
 	onWake: (c) => {
 		consumeStream(c);
@@ -69,7 +73,7 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 				offset: chunk.offset,
 			});
 
-			if (c.abortSignal.aborted) break;
+			if (c.aborted) break;
 
 			c.state.promptStreamOffset = chunk.offset;
 
@@ -129,9 +133,9 @@ async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
 		c.log.error({
 			msg: "error in consumeStream",
 			error,
-			aborted: c.abortSignal.aborted,
+			aborted: c.aborted,
 		});
-		if (!c.abortSignal.aborted) {
+		if (!c.aborted) {
 			c.log.error({ msg: "error consuming prompts", error });
 		}
 	}

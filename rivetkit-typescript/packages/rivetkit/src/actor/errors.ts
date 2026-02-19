@@ -243,6 +243,50 @@ export class QueuePayloadInvalid extends ActorError {
 	}
 }
 
+export class QueueCompletionPayloadInvalid extends ActorError {
+	constructor(name: string, issues?: unknown[]) {
+		super(
+			"queue",
+			"invalid_completion_payload",
+			`Queue completion payload failed validation for '${name}'.`,
+			{ public: true, metadata: { name, issues } },
+		);
+	}
+}
+
+export class QueueAlreadyCompleted extends ActorError {
+	constructor() {
+		super("queue", "already_completed", "Queue message was already completed.", {
+			public: true,
+		});
+	}
+}
+
+export class QueuePreviousMessageNotCompleted extends ActorError {
+	constructor() {
+		super(
+			"queue",
+			"previous_message_not_completed",
+			"Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message.",
+			{ public: true },
+		);
+	}
+}
+
+export class QueueCompleteNotConfigured extends ActorError {
+	constructor(name: string) {
+		super(
+			"queue",
+			"complete_not_configured",
+			`Queue '${name}' does not support completion responses.`,
+			{
+				public: true,
+				metadata: { name },
+			},
+		);
+	}
+}
+
 export class ActorAborted extends ActorError {
 	constructor() {
 		super("actor", "aborted", "Actor aborted.", { public: true });

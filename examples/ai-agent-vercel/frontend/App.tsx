@@ -79,7 +79,7 @@ function AgentPanel({ info }: { info: AgentInfo }) {
 			return;
 		}
 
-		await agent.connection.queue.message.send({
+		await agent.connection.send("message", {
 			text: trimmed,
 			sender: "Operator",
 		});

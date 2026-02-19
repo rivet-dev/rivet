@@ -15,7 +15,7 @@ export const runWithTicks = actor({
 		c.state.runStarted = true;
 		c.log.info("run handler started");
 
-		while (!c.abortSignal.aborted) {
+		while (!c.aborted) {
 			c.state.tickCount += 1;
 			c.state.lastTickAt = Date.now();
 			c.log.info({ msg: "tick", tickCount: c.state.tickCount });
@@ -56,13 +56,18 @@ export const runWithQueueConsumer = actor({
 	state: {
 		messagesReceived: [] as Array<{ name: string; body: unknown }>,
 		runStarted: false,
+		wakeCount: 0,
+	},
+	onWake: (c) => {
+		c.state.wakeCount += 1;
 	},
 	run: async (c) => {
 		c.state.runStarted = true;
 		c.log.info("run handler started, waiting for messages");
 
-		while (!c.abortSignal.aborted) {
-			const message = await c.queue.next("messages", { timeout: 100 });
+		while (!c.aborted) {
+			const messages = await c.queue.next({ names: ["messages"] });
+			const message = messages[0];
 			if (message) {
 				c.log.info({ msg: "received message", body: message.body });
 				c.state.messagesReceived.push({
@@ -78,11 +83,12 @@ export const runWithQueueConsumer = actor({
 		getState: (c) => ({
 			messagesReceived: c.state.messagesReceived,
 			runStarted: c.state.runStarted,
+			wakeCount: c.state.wakeCount,
 		}),
 		sendMessage: async (c, body: unknown) => {
 			const client = c.client<typeof registry>();
 			const handle = client.runWithQueueConsumer.getForId(c.actorId);
-			await handle.queue.messages.send(body);
+			await handle.send("messages", body);
 			return true;
 		},
 	},

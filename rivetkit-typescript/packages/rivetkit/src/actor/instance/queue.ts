@@ -1,24 +1,109 @@
+import * as errors from "../errors";
 import type { AnyDatabaseProvider } from "../database";
-import type { InferSchemaMap, SchemaConfig } from "../schema";
+import type {
+	EventSchemaConfig,
+	InferQueueCompleteMap,
+	InferSchemaMap,
+	QueueSchemaConfig,
+} from "../schema";
+import { joinAbortSignals } from "../utils";
 import type { QueueManager, QueueMessage } from "./queue-manager";
 
-/** Options for receiving messages from the queue. */
-export interface QueueReceiveOptions {
-	/** Maximum number of messages to receive. Defaults to 1. */
-	count?: number;
-	/** Timeout in milliseconds to wait for messages. Waits indefinitely if not specified. */
-	timeout?: number;
-}
-
-/** Request object for receiving messages from the queue. */
-export interface QueueReceiveRequest extends QueueReceiveOptions {
-	/** Queue name or names to receive from. */
-	name: string | string[];
-}
-
-export type QueueMessageOf<Body> = Omit<QueueMessage, "body"> & {
+export type QueueMessageOf<Name extends string, Body> = Omit<
+	QueueMessage,
+	"name" | "body"
+> & {
+	name: Name;
 	body: Body;
 };
+
+type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
+type QueueFilterName<TQueues extends QueueSchemaConfig> =
+	keyof TQueues extends never ? string : QueueName<TQueues>;
+
+type QueueMessageForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = keyof TQueues extends never
+	? QueueMessage
+	: TName extends QueueName<TQueues>
+		? QueueMessageOf<TName, InferSchemaMap<TQueues>[TName]>
+		: never;
+
+type QueueCompleteArgs<T> = undefined extends T
+	? [response?: T]
+	: [response: T];
+
+type QueueCompleteArgsForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = keyof TQueues extends never
+	? [response?: unknown]
+	: TName extends QueueName<TQueues>
+		? [InferQueueCompleteMap<TQueues>[TName]] extends [never]
+			? [response?: unknown]
+			: QueueCompleteArgs<InferQueueCompleteMap<TQueues>[TName]>
+		: [response?: unknown];
+
+type QueueCompletableMessageForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+> = QueueMessageForName<TQueues, TName> & {
+	complete(
+		...args: QueueCompleteArgsForName<TQueues, TName>
+	): Promise<void>;
+};
+
+type QueueResultMessageForName<
+	TQueues extends QueueSchemaConfig,
+	TName extends QueueFilterName<TQueues>,
+	TCompletable extends boolean,
+> = TCompletable extends true
+	? QueueCompletableMessageForName<TQueues, TName>
+	: QueueMessageForName<TQueues, TName>;
+
+/** Options for receiving queue messages. */
+export interface QueueNextOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	/** Queue names to receive from. If omitted, reads from all queue names. */
+	names?: readonly TName[];
+	/** Maximum number of messages to receive. Defaults to 1. */
+	count?: number;
+	/** Timeout in milliseconds. Omit to wait indefinitely. */
+	timeout?: number;
+	/** Optional abort signal for this receive call. */
+	signal?: AbortSignal;
+	/** Whether to return completable messages. */
+	completable?: TCompletable;
+}
+
+/** Options for non-blocking queue reads. */
+export interface QueueTryNextOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	/** Queue names to receive from. If omitted, reads from all queue names. */
+	names?: readonly TName[];
+	/** Maximum number of messages to receive. Defaults to 1. */
+	count?: number;
+	/** Whether to return completable messages. */
+	completable?: TCompletable;
+}
+
+/** Options for queue async iteration. */
+export interface QueueIterOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	/** Queue names to receive from. If omitted, reads from all queue names. */
+	names?: readonly TName[];
+	/** Optional abort signal for this iterator. */
+	signal?: AbortSignal;
+	/** Whether to return completable messages. */
+	completable?: TCompletable;
+}
 
 /** User-facing queue interface exposed on ActorContext. */
 export class ActorQueue<
@@ -28,11 +113,12 @@ export class ActorQueue<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
 	#queueManager: QueueManager<S, CP, CS, V, I, DB, TEvents, TQueues>;
 	#abortSignal: AbortSignal;
+	#pendingCompletableMessageIds = new Set<string>();
 
 	constructor(
 		queueManager: QueueManager<S, CP, CS, V, I, DB, TEvents, TQueues>,
@@ -42,66 +128,113 @@ export class ActorQueue<
 		this.#abortSignal = abortSignal;
 	}
 
-	/** Receives the next message from a single queue. Returns undefined if no message available. */
-	next<K extends keyof TQueues & string>(
-		name: K,
-		opts?: QueueReceiveOptions,
-	): Promise<QueueMessageOf<InferSchemaMap<TQueues>[K]> | undefined>;
-	next(
-		name: keyof TQueues extends never ? string : never,
-		opts?: QueueReceiveOptions,
-	): Promise<QueueMessage | undefined>;
-	/** Receives messages from multiple queues. Returns messages matching any of the queue names. */
-	next<K extends keyof TQueues & string>(
-		name: K[],
-		opts?: QueueReceiveOptions,
-	): Promise<Array<QueueMessageOf<InferSchemaMap<TQueues>[K]>> | undefined>;
-	next(
-		name: keyof TQueues extends never ? string[] : never,
-		opts?: QueueReceiveOptions,
-	): Promise<QueueMessage[] | undefined>;
-	/** Receives messages using a request object for full control over options. */
-	next<K extends keyof TQueues & string>(
-		request: QueueReceiveRequest & { name: K },
-	): Promise<QueueMessageOf<InferSchemaMap<TQueues>[K]> | undefined>;
-	next<K extends keyof TQueues & string>(
-		request: QueueReceiveRequest & { name: K[] },
-	): Promise<Array<QueueMessageOf<InferSchemaMap<TQueues>[K]>> | undefined>;
-	next(
-		request: QueueReceiveRequest & {
-			name: keyof TQueues extends never ? string | string[] : never;
-		},
-	): Promise<QueueMessage[] | undefined>;
-	async next(
-		nameOrRequest: string | string[] | QueueReceiveRequest,
-		opts: QueueReceiveOptions = {},
-	): Promise<QueueMessage | QueueMessage[] | undefined> {
-		const request =
-			typeof nameOrRequest === "object" && !Array.isArray(nameOrRequest)
-				? nameOrRequest
-				: { name: nameOrRequest };
-		const mergedOptions = request === nameOrRequest ? request : opts;
-		const names = Array.isArray(request.name)
-			? request.name
-			: [request.name];
-		const count = mergedOptions.count ?? 1;
+	async next<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueNextOptions<TName, TCompletable>,
+	): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>> {
+		const resolvedOpts = (opts ?? {}) as QueueNextOptions<
+			TName,
+			TCompletable
+		>;
+		const completable = resolvedOpts.completable === true;
 
-		const messages = await this.#queueManager.receive(
-			names,
-			count,
-			mergedOptions.timeout,
+		if (this.#pendingCompletableMessageIds.size > 0) {
+			throw new errors.QueuePreviousMessageNotCompleted();
+		}
+
+		const names = this.#normalizeNames(resolvedOpts.names);
+		const count = Math.max(1, resolvedOpts.count ?? 1);
+		const { signal, cleanup } = joinAbortSignals(
 			this.#abortSignal,
+			resolvedOpts.signal,
 		);
-
-		if (Array.isArray(request.name)) {
-			return messages;
+		const messages = await this.#queueManager
+			.receive(
+				names,
+				count,
+				resolvedOpts.timeout,
+				signal,
+				completable,
+			)
+			.finally(cleanup);
+		if (!completable) {
+			return messages as Array<
+				QueueResultMessageForName<TQueues, TName, TCompletable>
+			>;
 		}
+		return messages.map((message) => this.#makeCompletableMessage(message)) as unknown as Array<
+			QueueResultMessageForName<TQueues, TName, TCompletable>
+		>;
+	}
 
-		if (!messages || messages.length === 0) {
-			return undefined;
+	async tryNext<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueTryNextOptions<TName, TCompletable>,
+	): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>> {
+		const resolvedOpts = (opts ?? {}) as QueueTryNextOptions<
+			TName,
+			TCompletable
+		>;
+		if (resolvedOpts.completable === true) {
+			return (await this.next<TName, true>({
+				names: resolvedOpts.names,
+				count: resolvedOpts.count,
+				timeout: 0,
+				completable: true,
+			})) as Array<QueueResultMessageForName<TQueues, TName, TCompletable>>;
 		}
+		return (await this.next<TName, false>({
+			names: resolvedOpts.names,
+			count: resolvedOpts.count,
+			timeout: 0,
+		})) as Array<QueueResultMessageForName<TQueues, TName, TCompletable>>;
+	}
 
-		return messages[0];
+	async *iter<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueIterOptions<TName, TCompletable>,
+	): AsyncIterableIterator<
+		QueueResultMessageForName<TQueues, TName, TCompletable>
+	> {
+		const resolvedOpts = (opts ?? {}) as QueueIterOptions<
+			TName,
+			TCompletable
+		>;
+		while (!this.#abortSignal.aborted) {
+			try {
+				const messages = resolvedOpts.completable === true
+					? await this.next<TName, true>({
+							names: resolvedOpts.names,
+							count: 1,
+							signal: resolvedOpts.signal,
+							completable: true,
+						})
+					: await this.next<TName, false>({
+							names: resolvedOpts.names,
+							count: 1,
+							signal: resolvedOpts.signal,
+						});
+				if (messages.length === 0) {
+					continue;
+				}
+				yield messages[0] as QueueResultMessageForName<
+					TQueues,
+					TName,
+					TCompletable
+				>;
+			} catch (error) {
+				if (error instanceof errors.ActorAborted) {
+					return;
+				}
+				throw error;
+			}
+		}
 	}
 
 	/** Sends a message to the specified queue. */
@@ -115,5 +248,40 @@ export class ActorQueue<
 	): Promise<QueueMessage>;
 	async send(name: string, body: unknown): Promise<QueueMessage> {
 		return await this.#queueManager.enqueue(name, body);
+	}
+
+	#normalizeNames(names: readonly string[] | undefined): string[] | undefined {
+		if (!names || names.length === 0) {
+			return undefined;
+		}
+		return [...new Set(names)];
+	}
+
+	#makeCompletableMessage(
+		message: QueueMessage,
+	): QueueMessage & {
+		complete: (response?: unknown) => Promise<void>;
+	} {
+		const messageId = message.id.toString();
+		this.#pendingCompletableMessageIds.add(messageId);
+
+		let completed = false;
+		const completableMessage = {
+			...message,
+			complete: async (response?: unknown) => {
+				if (completed) {
+					throw new errors.QueueAlreadyCompleted();
+				}
+				completed = true;
+				try {
+					await this.#queueManager.completeMessage(message, response);
+					this.#pendingCompletableMessageIds.delete(messageId);
+				} catch (error) {
+					completed = false;
+					throw error;
+				}
+			},
+		};
+		return completableMessage;
 	}
 }

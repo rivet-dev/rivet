@@ -52,7 +52,7 @@ export const dynamicVarActor = actor({
 		};
 	},
 	actions: {
-		getVars: (c) => {
+		getVars: (c: any) => {
 			return c.vars;
 		},
 	},
@@ -68,7 +68,7 @@ export const uniqueVarActor = actor({
 		};
 	},
 	actions: {
-		getVars: (c) => {
+		getVars: (c: any) => {
 			return c.vars;
 		},
 	},
@@ -84,7 +84,7 @@ export const driverCtxActor = actor({
 		};
 	},
 	actions: {
-		getVars: (c) => {
+		getVars: (c: any) => {
 			return c.vars;
 		},
 	},

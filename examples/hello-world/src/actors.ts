@@ -1,9 +1,12 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 export const counter = actor({
 	// Persistent state that survives restarts: https://rivet.dev/docs/actors/state
 	state: {
 		count: 0,
+	},
+	events: {
+		newCount: event<number>(),
 	},
 
 	actions: {

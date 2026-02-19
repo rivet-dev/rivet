@@ -1,8 +1,11 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 const counter = actor({
 	state: {
 		count: 0,
+	},
+	events: {
+		newCount: event<number>(),
 	},
 	actions: {
 		increment: (c, x: number) => {

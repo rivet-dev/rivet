@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, event, queue } from "rivetkit";
 import { Loop, workflow, workflowQueueName } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -250,19 +250,38 @@ export type WorkflowHistoryFullState = {
 	completedAt?: number;
 };
 
-type MessageSeed = { name: string; payload: unknown };
+const QUEUE_ORDER_CREATED = workflowQueueName("order:created");
+const QUEUE_ORDER_UPDATED = workflowQueueName("order:updated");
+const QUEUE_ORDER_ITEM = workflowQueueName("order:item");
+const QUEUE_ORDER_ARTIFACT = workflowQueueName("order:artifact");
+const QUEUE_ORDER_READY = workflowQueueName("order:ready");
+const QUEUE_ORDER_OPTIONAL = workflowQueueName("order:optional");
+
+type OrderCreatedMessage = { id: string };
+type OrderUpdatedMessage = { id: string; status: string };
+type OrderItemMessage = { sku: string; qty: number };
+type OrderArtifactMessage = { artifactId: string };
+type OrderReadyMessage = { batch: number };
+type OrderOptionalMessage = { note?: string };
+
+type MessageSeed =
+	| { name: typeof QUEUE_ORDER_CREATED; payload: OrderCreatedMessage }
+	| { name: typeof QUEUE_ORDER_UPDATED; payload: OrderUpdatedMessage }
+	| { name: typeof QUEUE_ORDER_ITEM; payload: OrderItemMessage }
+	| { name: typeof QUEUE_ORDER_ARTIFACT; payload: OrderArtifactMessage }
+	| { name: typeof QUEUE_ORDER_READY; payload: OrderReadyMessage };
 
 const FULL_WORKFLOW_MESSAGE_SEEDS: MessageSeed[] = [
-	{ name: "order:created", payload: { id: "order-1" } },
-	{ name: "order:updated", payload: { id: "order-1", status: "paid" } },
-	{ name: "order:item", payload: { sku: "sku-0", qty: 1 } },
-	{ name: "order:item", payload: { sku: "sku-4", qty: 1 } },
-	{ name: "order:artifact", payload: { artifactId: "artifact-0" } },
-	{ name: "order:artifact", payload: { artifactId: "artifact-1" } },
-	{ name: "order:artifact", payload: { artifactId: "artifact-2" } },
-	{ name: "order:ready", payload: { batch: 3 } },
-	{ name: "order:ready", payload: { batch: 0 } },
-	{ name: "order:ready", payload: { batch: 2 } },
+	{ name: QUEUE_ORDER_CREATED, payload: { id: "order-1" } },
+	{ name: QUEUE_ORDER_UPDATED, payload: { id: "order-1", status: "paid" } },
+	{ name: QUEUE_ORDER_ITEM, payload: { sku: "sku-0", qty: 1 } },
+	{ name: QUEUE_ORDER_ITEM, payload: { sku: "sku-4", qty: 1 } },
+	{ name: QUEUE_ORDER_ARTIFACT, payload: { artifactId: "artifact-0" } },
+	{ name: QUEUE_ORDER_ARTIFACT, payload: { artifactId: "artifact-1" } },
+	{ name: QUEUE_ORDER_ARTIFACT, payload: { artifactId: "artifact-2" } },
+	{ name: QUEUE_ORDER_READY, payload: { batch: 3 } },
+	{ name: QUEUE_ORDER_READY, payload: { batch: 0 } },
+	{ name: QUEUE_ORDER_READY, payload: { batch: 2 } },
 ];
 
 const FULL_WORKFLOW_ITEMS = [
@@ -278,12 +297,20 @@ export const workflowHistoryFull = actor({
 		status: "pending",
 		seededMessages: false,
 	}),
+	queues: {
+		[QUEUE_ORDER_CREATED]: queue<OrderCreatedMessage>(),
+		[QUEUE_ORDER_UPDATED]: queue<OrderUpdatedMessage>(),
+		[QUEUE_ORDER_ITEM]: queue<OrderItemMessage>(),
+		[QUEUE_ORDER_ARTIFACT]: queue<OrderArtifactMessage>(),
+		[QUEUE_ORDER_READY]: queue<OrderReadyMessage>(),
+		[QUEUE_ORDER_OPTIONAL]: queue<OrderOptionalMessage>(),
+	},
 	actions: {
 		getState: (c): WorkflowHistoryFullState => c.state,
 		seedMessages: async (c) => {
 			if (c.state.seededMessages) return;
 			for (const seed of FULL_WORKFLOW_MESSAGE_SEEDS) {
-				await c.queue.send(workflowQueueName(seed.name), seed.payload);
+				await c.queue.send(seed.name, seed.payload);
 			}
 			c.state.seededMessages = true;
 		},

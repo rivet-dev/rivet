@@ -29,7 +29,13 @@ import { checkForSchedulingError, queryActor } from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
 import { ActorError, isSchedulingError } from "./errors";
 import { logger } from "./log";
-import { createQueueProxy, createQueueSender } from "./queue";
+import {
+	createQueueSender,
+	type QueueSendNoWaitOptions,
+	type QueueSendOptions,
+	type QueueSendResult,
+	type QueueSendWaitOptions,
+} from "./queue";
 import { rawHttpFetch, rawWebSocket } from "./raw-utils";
 import { sendHttpRequest } from "./utils";
 
@@ -80,8 +86,22 @@ export class ActorHandleRaw {
 		});
 	}
 
-	get queue() {
-		return createQueueProxy(this.#queueSender);
+	send(
+		name: string,
+		body: unknown,
+		options: QueueSendWaitOptions,
+	): Promise<QueueSendResult>;
+	send(
+		name: string,
+		body: unknown,
+		options?: QueueSendNoWaitOptions,
+	): Promise<void>;
+	send(
+		name: string,
+		body: unknown,
+		options?: QueueSendOptions,
+	): Promise<QueueSendResult | void> {
+		return this.#queueSender.send(name, body, options as any);
 	}
 
 	/**

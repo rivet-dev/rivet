@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { handleHttpRequest, httpActions } from "./http.ts";
 import { handleWebSocket, websocketActions } from "./websocket.ts";
 
@@ -13,6 +13,11 @@ export const demo = actor({
 	}),
 	connState: {
 		connectionTime: 0,
+	},
+	events: {
+		countChanged: event<{ count: number; amount: number }>(),
+		messageChanged: event<{ message: string }>(),
+		alarmTriggered: event<{ id: string; time: number; data?: any }>(),
 	},
 	onWake: (c) => {
 		c.state.startCount += 1;
@@ -138,7 +143,7 @@ export const demo = actor({
 
 		// Events
 		broadcastCustomEvent: (c, eventName: string, data: any) => {
-			c.broadcast(eventName, data);
+			c.broadcast(eventName as never, data);
 			return { eventName, data, timestamp: Date.now() };
 		},
 

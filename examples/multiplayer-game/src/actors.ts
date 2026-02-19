@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 import type { GameState, JoinResult, Player, RoomStats } from "./types.ts";
 
 const MAX_PLAYERS = 10;
@@ -42,6 +42,12 @@ const buildGameState = (roomId: string, maxPlayers: number, players: Record<stri
 	players,
 	updatedAt: Date.now(),
 });
+
+type GameRoomState = {
+	roomId: string;
+	maxPlayers: number;
+	players: Record<string, Player>;
+};
 
 const matchmaker = actor({
 	// Coordinator actor that tracks active game rooms. https://rivet.dev/docs/actors/design-patterns
@@ -97,13 +103,29 @@ const matchmaker = actor({
 
 const gameRoom = actor({
 	// Data actor that owns room state and broadcasts changes. https://rivet.dev/docs/actors/state
-	createState: (_c, input: { roomId: string; maxPlayers: number }) => ({
+	createState: (
+		_c,
+		input: { roomId: string; maxPlayers: number },
+	): GameRoomState => ({
 		roomId: input.roomId,
 		maxPlayers: input.maxPlayers,
-		players: {} as Record<string, Player>,
+		players: {},
 	}),
 	connState: {
 		playerId: null as string | null,
+	},
+	events: {
+		playerLeft: event<{ playerId: string }>(),
+		gameState: event<GameState>(),
+		playerJoined: event<{ playerId: string; player: Player }>(),
+		playerEaten: event<{ eaterId: string; eatenId: string; eaterMass: number }>(),
+		playerMoved: event<{
+			playerId: string;
+			x: number;
+			y: number;
+			mass: number;
+			radius: number;
+		}>(),
 	},
 	onDisconnect: (c, conn) => {
 		const playerId = conn.state.playerId;
@@ -234,7 +256,10 @@ const resolveCollisions = (
 	return eaten;
 };
 
-const reportRoomCount = async (c: { state: { roomId: string; maxPlayers: number; players: Record<string, Player> }; client: <T>() => any }) => {
+const reportRoomCount = async (c: {
+	state: GameRoomState;
+	client: <T>() => any;
+}) => {
 	const client = c.client<typeof registry>();
 	await client.matchmaker
 		.getOrCreate(["main"])

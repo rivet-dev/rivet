@@ -46,18 +46,19 @@ export function App() {
 	});
 
 	useEffect(() => {
-		if (!matchmaker.connection || roomId) return;
+		const connection = matchmaker.connection;
+		if (!connection || roomId) return;
 
-		matchmaker.connection
-			.findGame()
-			.then((nextRoomId: string) => {
+		void (async () => {
+			try {
+				const nextRoomId = await (await connection.findGame());
 				setRoomId(nextRoomId);
 				setStatus(`Connected to ${nextRoomId}`);
-			})
-			.catch((err: unknown) => {
+			} catch (err) {
 				console.error("Failed to find game:", err);
 				setErrorMessage("Matchmaking failed. Try again.");
-			});
+			}
+		})();
 	}, [matchmaker.connection, roomId]);
 
 	useEffect(() => {

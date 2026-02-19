@@ -38,26 +38,28 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			expect(state2.tickCount).toBeGreaterThan(count1);
 		});
 
-		test("run handler exits gracefully on actor stop", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
+			test("active run handler keeps actor awake past sleep timeout", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
 
-			const actor = client.runWithTicks.getOrCreate([
-				"run-graceful-exit",
-			]);
+				const actor = client.runWithTicks.getOrCreate([
+					"run-stays-awake",
+				]);
 
-			// Wait for run to start
-			await waitFor(driverTestConfig, 100);
+				// Wait for run to start
+				await waitFor(driverTestConfig, 100);
 
-			const state1 = await actor.getState();
-			expect(state1.runStarted).toBe(true);
+				const state1 = await actor.getState();
+				expect(state1.runStarted).toBe(true);
+				const tickCount1 = state1.tickCount;
 
-			// Wait for sleep timeout to trigger sleep
-			await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 300);
+				// Active run loops should keep the actor awake.
+				await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 300);
 
-			// Wake actor again and check state persisted
-			const state2 = await actor.getState();
-			expect(state2.runExited).toBe(true);
-		});
+				const state2 = await actor.getState();
+				expect(state2.runStarted).toBe(true);
+				expect(state2.runExited).toBe(false);
+				expect(state2.tickCount).toBeGreaterThan(tickCount1);
+			});
 
 		test("actor without run handler works normally", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
@@ -76,8 +78,8 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 			expect(state2.wakeCount).toBe(2);
 		});
 
-		test("run handler can consume from queue", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
+			test("run handler can consume from queue", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const actor = client.runWithQueueConsumer.getOrCreate([
 				"queue-consumer",
@@ -105,11 +107,28 @@ export function runActorRunTests(driverTestConfig: DriverTestConfig) {
 				type: "test",
 				value: 2,
 			});
-			expect(state.messagesReceived[2].body).toEqual({
-				type: "test",
-				value: 3,
+				expect(state.messagesReceived[2].body).toEqual({
+					type: "test",
+					value: 3,
+				});
 			});
-		});
+
+			test("queue-waiting run handler can sleep and resume", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const actor = client.runWithQueueConsumer.getOrCreate([
+					"queue-consumer-sleep",
+				]);
+
+				await waitFor(driverTestConfig, 100);
+				const state1 = await actor.getState();
+				expect(state1.runStarted).toBe(true);
+
+				await waitFor(driverTestConfig, RUN_SLEEP_TIMEOUT + 500);
+				const state2 = await actor.getState();
+
+				expect(state2.wakeCount).toBeGreaterThan(state1.wakeCount);
+			});
 
 		test("run handler that exits early triggers destroy", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

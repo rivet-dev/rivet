@@ -214,7 +214,7 @@ export class SqliteVfs {
 
 				// Initialize wa-sqlite module - each instance gets its own module
 				const module = await SQLiteESMFactory({ wasmBinary });
-				this.#sqlite3 = Factory(module) as SQLite3Api;
+					this.#sqlite3 = Factory(module) as unknown as SQLite3Api;
 
 				// Create and register VFS with unique name
 				this.#sqliteSystem = new SqliteSystem(this.#sqlite3, `kv-vfs-${this.#instanceId}`);

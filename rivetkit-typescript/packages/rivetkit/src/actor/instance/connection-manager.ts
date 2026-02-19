@@ -30,7 +30,7 @@ import {
 } from "../contexts";
 import type { AnyDatabaseProvider } from "../database";
 import { CachedSerializer } from "../protocol/serde";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { deadline } from "../utils";
 import { makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
@@ -45,8 +45,8 @@ export class ConnectionManager<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig = Record<never, never>,
-	Q extends SchemaConfig = Record<never, never>,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>>();

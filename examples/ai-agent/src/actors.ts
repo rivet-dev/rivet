@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { streamText, type CoreMessage } from "ai";
-import { actor, setup } from "rivetkit";
+import { actor, event, queue, setup } from "rivetkit";
 
 export type AgentMessage = {
 	id: string;
@@ -25,6 +25,14 @@ export type AgentInfo = {
 export type AgentQueueMessage = {
 	text: string;
 	sender?: string;
+};
+
+export type AgentResponseEvent = {
+	messageId: string;
+	delta: string;
+	content: string;
+	done: boolean;
+	error?: string;
 };
 
 const SYSTEM_PROMPT =
@@ -52,13 +60,19 @@ export const agent = actor({
 			updatedAt: Date.now(),
 		} as AgentStatus,
 	},
+	queues: {
+		message: queue<AgentQueueMessage>(),
+	},
+	events: {
+		messageAdded: event<AgentMessage>(),
+		status: event<AgentStatus>(),
+		response: event<AgentResponseEvent>(),
+	},
 
 	// The run hook keeps the agent listening for queued messages.
 	run: async (c) => {
-		while (true) {
-			const queued = await c.queue.next("message");
-
-			const body = queued.body as AgentQueueMessage;
+		for await (const queued of c.queue.iter()) {
+			const { body } = queued;
 			if (!body?.text || typeof body.text !== "string") {
 				continue;
 			}
@@ -102,7 +116,7 @@ export const agent = actor({
 
 				let content = "";
 				for await (const delta of result.textStream) {
-					if (c.abortSignal.aborted) {
+					if (c.aborted) {
 						break;
 					}
 

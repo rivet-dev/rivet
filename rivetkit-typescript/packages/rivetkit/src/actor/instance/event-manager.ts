@@ -18,7 +18,7 @@ import {
 import type { AnyDatabaseProvider } from "../database";
 import * as errors from "../errors";
 import { CachedSerializer } from "../protocol/serde";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import type { ActorInstance } from "./mod";
 
 /**
@@ -32,8 +32,8 @@ export class EventManager<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig = Record<never, never>,
-	Q extends SchemaConfig = Record<never, never>,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#subscriptionIndex = new Map<

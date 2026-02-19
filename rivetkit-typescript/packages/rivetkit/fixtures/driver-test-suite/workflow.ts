@@ -74,7 +74,8 @@ export const workflowQueueActor = actor({
 		sendAndWait: async (c, payload: unknown) => {
 			const client = c.client<typeof registry>();
 			const handle = client.workflowQueueActor.getForId(c.actorId);
-			return await handle.queue[workflowQueueName(WORKFLOW_QUEUE_NAME)].send(
+			return await handle.send(
+				workflowQueueName(WORKFLOW_QUEUE_NAME),
 				payload,
 				{ wait: true, timeout: 1_000 },
 			);
@@ -117,7 +118,7 @@ export const workflowAccessActor = actor({
 				}
 
 				try {
-					actorLoopCtx.client<typeof registry>();
+					actorLoopCtx.client();
 				} catch (error) {
 					outsideClientError =
 						error instanceof Error ? error.message : String(error);
@@ -130,7 +131,7 @@ export const workflowAccessActor = actor({
 					const counts = (await actorLoopCtx.db.execute(
 						`SELECT COUNT(*) as count FROM workflow_access_log`,
 					)) as Array<{ count: number }>;
-					const client = actorLoopCtx.client<typeof registry>();
+					const client = actorLoopCtx.client();
 
 					actorLoopCtx.state.outsideDbError = outsideDbError;
 					actorLoopCtx.state.outsideClientError = outsideClientError;

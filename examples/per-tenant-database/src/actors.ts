@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, event } from "rivetkit";
 
 export type Employee = {
 	id: string;
@@ -53,6 +53,10 @@ export const companyDatabase = actor({
 			created_at: now,
 			updated_at: now,
 		};
+	},
+	events: {
+		employeeAdded: event<Employee>(),
+		projectAdded: event<Project>(),
 	},
 
 	// Callable functions from clients. https://rivet.dev/docs/actors/actions

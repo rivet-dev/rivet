@@ -14,9 +14,10 @@ import { EventPayloadInvalid, InternalError } from "../errors";
 import type { ActorInstance } from "../instance/mod";
 import { CachedSerializer } from "../protocol/serde";
 import {
+	type EventSchemaConfig,
 	type InferEventArgs,
 	type InferSchemaMap,
-	type SchemaConfig,
+	type QueueSchemaConfig,
 	validateSchemaSync,
 } from "../schema";
 import type { ConnDriver } from "./driver";
@@ -47,8 +48,8 @@ export class Conn<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig = Record<never, never>,
-	Q extends SchemaConfig = Record<never, never>,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
 

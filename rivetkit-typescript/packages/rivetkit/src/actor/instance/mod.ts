@@ -44,7 +44,7 @@ import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
 import { Schedule } from "../schedule";
-import type { SchemaConfig } from "../schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import {
 	assertUnreachable,
 	DeadlineError,
@@ -72,6 +72,7 @@ enum CanSleep {
 	ActiveConns,
 	ActiveHonoHttpRequests,
 	ActiveKeepAwake,
+	ActiveRun,
 }
 
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
@@ -109,8 +110,8 @@ export class ActorInstance<
 	V,
 	I,
 	DB extends AnyDatabaseProvider,
-	E extends SchemaConfig = Record<never, never>,
-	Q extends SchemaConfig = Record<never, never>,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	// MARK: - Core Properties
 	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
@@ -164,6 +165,8 @@ export class ActorInstance<
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
 	#runPromise?: Promise<void>;
+	#runHandlerActive = false;
+	#activeQueueWaitCount = 0;
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
@@ -174,7 +177,7 @@ export class ActorInstance<
 
 	// MARK: - Inspector
 	#inspectorToken?: string;
-	#inspector = new ActorInspector(this);
+	#inspector: ActorInspector;
 
 	// MARK: - Tracing
 	#traces!: Traces<OtlpExportTraceServiceRequestJson>;
@@ -183,6 +186,7 @@ export class ActorInstance<
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {
 		this.#config = config;
 		this.actorContext = new ActorContext(this);
+		this.#inspector = new ActorInspector(this);
 	}
 
 	// MARK: - Public Getters
@@ -895,6 +899,24 @@ export class ActorInstance<
 		}
 	}
 
+	beginQueueWait() {
+		this.assertReady(true);
+		this.#activeQueueWaitCount++;
+		this.resetSleepTimer();
+	}
+
+	endQueueWait() {
+		this.#activeQueueWaitCount--;
+		if (this.#activeQueueWaitCount < 0) {
+			this.#activeQueueWaitCount = 0;
+			this.#rLog.warn({
+				msg: "active queue wait count went below 0, this is a RivetKit bug",
+				...EXTRA_ERROR_LOG,
+			});
+		}
+		this.resetSleepTimer();
+	}
+
 	// MARK: - Private Helper Methods
 	#initializeTraces() {
 		this.#traces = createTraces({
@@ -1201,6 +1223,8 @@ export class ActorInstance<
 		if (!runFn) return;
 
 		this.#rLog.debug({ msg: "starting run handler" });
+		this.#runHandlerActive = true;
+		this.resetSleepTimer();
 
 		const runSpan = this.startTraceSpan("actor.run");
 		const runResult = this.#traces.withSpan(runSpan, () =>
@@ -1244,9 +1268,15 @@ export class ActorInstance<
 						error: stringifyError(error),
 					});
 					this.startDestroy();
+				})
+				.finally(() => {
+					this.#runHandlerActive = false;
+					this.resetSleepTimer();
 				});
 		} else if (runSpan.isActive()) {
 			this.endTraceSpan(runSpan, { code: "OK" });
+			this.#runHandlerActive = false;
+			this.resetSleepTimer();
 		}
 	}
 
@@ -1277,7 +1307,25 @@ export class ActorInstance<
 	async #setupDatabase() {
 		if ("db" in this.#config && this.#config.db) {
 			const client = await this.#config.db.createClient({
-				getDatabase: () => this.driver.getDatabase(this.#actorId),
+				actorId: this.#actorId,
+				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
+					? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
+					: undefined,
+				overrideDrizzleDatabaseClient:
+					this.driver.overrideDrizzleDatabaseClient
+						? () =>
+								this.driver.overrideDrizzleDatabaseClient!(
+									this.#actorId,
+								)
+						: undefined,
+				kv: {
+					batchPut: (entries) =>
+						this.driver.kvBatchPut(this.#actorId, entries),
+					batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
+					batchDelete: (keys) =>
+						this.driver.kvBatchDelete(this.#actorId, keys),
+				},
+				sqliteVfs: this.driver.sqliteVfs,
 			});
 			this.#rLog.info({ msg: "database migration starting" });
 			await this.#config.db.onMigrate?.(client);
@@ -1385,6 +1433,9 @@ export class ActorInstance<
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
 		if (this.#activeKeepAwakeCount > 0) return CanSleep.ActiveKeepAwake;
+		if (this.#runHandlerActive && this.#activeQueueWaitCount === 0) {
+			return CanSleep.ActiveRun;
+		}
 
 		for (const _conn of this.connectionManager.connections.values()) {
 			// TODO: Add back

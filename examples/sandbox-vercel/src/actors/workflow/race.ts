@@ -2,7 +2,7 @@
 // Demonstrates: Race (parallel first-wins) for timeout patterns
 // One actor per race task - actor key is the task ID
 
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 import { actorCtx } from "./_helpers.ts";
 
@@ -32,6 +32,10 @@ export const race = actor({
 		status: "running",
 		startedAt: Date.now(),
 	}),
+	events: {
+		raceStarted: event<RaceTask>(),
+		raceCompleted: event<RaceTask>(),
+	},
 
 	actions: {
 		getTask: (c): RaceTask => c.state,

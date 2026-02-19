@@ -1,4 +1,4 @@
-import { actor } from "rivetkit";
+import { actor, event, queue } from "rivetkit";
 import type { registry } from "../../actors.ts";
 
 export const RUN_SLEEP_TIMEOUT = 500;
@@ -15,7 +15,7 @@ export const runWithTicks = actor({
 		c.state.runStarted = true;
 		c.log.info("run handler started");
 
-		while (!c.abortSignal.aborted) {
+		while (!c.aborted) {
 			c.state.tickCount += 1;
 			c.state.lastTickAt = Date.now();
 			c.log.info({ msg: "tick", tickCount: c.state.tickCount });
@@ -57,19 +57,19 @@ export const runWithQueueConsumer = actor({
 		messagesReceived: [] as Array<{ name: string; body: unknown }>,
 		runStarted: false,
 	},
+	queues: {
+		messages: queue<unknown>(),
+	},
 	run: async (c) => {
 		c.state.runStarted = true;
 		c.log.info("run handler started, waiting for messages");
 
-		while (!c.abortSignal.aborted) {
-			const message = await c.queue.next("messages", { timeout: 100 });
-			if (message) {
-				c.log.info({ msg: "received message", body: message.body });
-				c.state.messagesReceived.push({
-					name: message.name,
-					body: message.body,
-				});
-			}
+		for await (const message of c.queue.iter()) {
+			c.log.info({ msg: "received message", body: message.body });
+			c.state.messagesReceived.push({
+				name: message.name,
+				body: message.body,
+			});
 		}
 
 		c.log.info("run handler exiting gracefully");
@@ -82,7 +82,7 @@ export const runWithQueueConsumer = actor({
 		sendMessage: async (c, body: unknown) => {
 			const client = c.client<typeof registry>();
 			const handle = client.runWithQueueConsumer.getForId(c.actorId);
-			await handle.queue.messages.send(body);
+			await handle.send("messages", body);
 			return true;
 		},
 	},

@@ -65,7 +65,7 @@ console.log(metadata.tags, metadata.region);`,
 });`,
 	kv: `await actor.putText("greeting", "hello");
 const value = await actor.getText("greeting");`,
-	queue: `await actor.queue.work.send({ id: "task-1" });
+	queue: `await actor.send("work", { id: "task-1" });
 const message = await actor.receiveOne("work");`,
 	workflow: `const workflow = client.order.getOrCreate([orderId]);
 await workflow.getOrder();`,
@@ -247,15 +247,7 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Ping", action: "ping", args: [] },
 		{ label: "Actor Counts", action: "getActorCounts", args: [] },
 	],
-	queueActor: [
-		{ label: "Receive One", action: "receiveOne", args: ["work"] },
-	],
-	sender: [{ label: "Get Messages", action: "getMessages", args: [] }],
-	multiQueue: [{ label: "Get Messages", action: "getMessages", args: [] }],
-	timeout: [{ label: "Wait", action: "waitForMessage", args: [2000] }],
 	worker: [{ label: "Get State", action: "getState", args: [] }],
-	selfSender: [{ label: "Get State", action: "getState", args: [] }],
-	keepAwake: [{ label: "Get State", action: "getState", args: [] }],
 	order: [{ label: "Get Order", action: "getOrder", args: [] }],
 	timer: [{ label: "Get Timer", action: "getTimer", args: [] }],
 	batch: [{ label: "Get Job", action: "getJob", args: [] }],
@@ -808,40 +800,33 @@ export const PAGE_GROUPS: PageGroup[] = [
 		title: "Queues",
 		icon: "list",
 		pages: [
-			{
-				id: "queue-basics",
-				title: "Queue Basics",
-				description: "Send and receive queue messages from actors.",
+				{
+					id: "queue-basics",
+					title: "Queue Basics",
+					description: "Send and receive queue messages from actors.",
 				docs: [
 					{
 						label: "Queue",
 						href: "https://rivet.dev/docs/actors/queue",
 					},
 				],
-				actors: ["queueActor", "queueLimitedActor"],
-				snippet: SNIPPETS.queue,
-			},
-			{
-				id: "queue-patterns",
-				title: "Queue Patterns",
-				description:
-					"Explore sending, timeouts, workers, and keep-awake patterns.",
+					actors: ["worker"],
+					snippet: SNIPPETS.queue,
+				},
+				{
+					id: "queue-patterns",
+					title: "Queue Patterns",
+					description:
+						"Run a worker loop that consumes queued jobs.",
 				docs: [
 					{
 						label: "Queue",
 						href: "https://rivet.dev/docs/actors/queue",
 					},
 				],
-				actors: [
-					"sender",
-					"multiQueue",
-					"timeout",
-					"worker",
-					"selfSender",
-					"keepAwake",
-				],
-				snippet: SNIPPETS.queue,
-			},
+					actors: ["worker"],
+					snippet: SNIPPETS.queue,
+				},
 			{
 				id: "queue-run-loop",
 				title: "Queue in Run Loop",

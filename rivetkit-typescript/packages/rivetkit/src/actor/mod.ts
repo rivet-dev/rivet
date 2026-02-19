@@ -7,7 +7,8 @@ import {
 } from "./config";
 import type { AnyDatabaseProvider } from "./database";
 import { ActorDefinition } from "./definition";
-import type { SchemaConfig } from "./schema";
+import { event as schemaEvent, queue as schemaQueue } from "./schema";
+import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
 export function actor<
 	TState,
@@ -16,8 +17,8 @@ export function actor<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-	TEvents extends SchemaConfig = Record<never, never>,
-	TQueues extends SchemaConfig = Record<never, never>,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
 	TActions extends Actions<
 		TState,
 		TConnParams,
@@ -104,4 +105,6 @@ export {
 	createActorRouter,
 } from "./router";
 export { routeWebSocket } from "./router-websocket-endpoints";
-export { type Raw, raw } from "./schema";
+export type { Type } from "./schema";
+export const event = schemaEvent;
+export const queue = schemaQueue;

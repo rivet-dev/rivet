@@ -1,4 +1,4 @@
-import { actor, type UniversalWebSocket } from "rivetkit";
+import { actor, event, type UniversalWebSocket } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
 
 export const SLEEP_TIMEOUT = 1000;
@@ -37,6 +37,9 @@ export const sleepWithLongRpc = actor({
 	state: { startCount: 0, sleepCount: 0 },
 	createVars: () =>
 		({}) as { longRunningResolve: PromiseWithResolvers<void> },
+	events: {
+		waiting: event<[]>(),
+	},
 	onWake: (c) => {
 		c.state.startCount += 1;
 	},

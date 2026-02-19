@@ -1,5 +1,10 @@
-import { actor, setup } from "rivetkit";
-import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protocols/awareness";
+import { actor, setup, event } from "rivetkit";
+import {
+	applyAwarenessUpdate,
+	Awareness,
+	encodeAwarenessUpdate,
+	removeAwarenessStates,
+} from "y-protocols/awareness";
 import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 
@@ -14,6 +19,7 @@ export type SyncEvent = { update: number[] };
 export type AwarenessEvent = { update: number[] };
 
 type DocumentInput = { title: string; createdAt: number };
+type DocumentState = { title: string; createdAt: number; updatedAt: number };
 
 type UpdateKind = "sync" | "awareness";
 
@@ -25,9 +31,13 @@ export const document = actor({
 	connState: {
 		clientIds: [] as number[],
 	},
+	events: {
+		sync: event<SyncEvent>(),
+		awareness: event<AwarenessEvent>(),
+	},
 
 	// Persistent metadata that survives restarts: https://rivet.dev/docs/actors/state
-	createState: (_c, input: DocumentInput) => ({
+	createState: (_c, input: DocumentInput): DocumentState => ({
 		title: input.title,
 		createdAt: input.createdAt,
 		updatedAt: input.createdAt,
@@ -49,7 +59,7 @@ export const document = actor({
 		if (clientIds.length === 0) {
 			return;
 		}
-		c.vars.awareness.removeStates(clientIds, "disconnect");
+		removeAwarenessStates(c.vars.awareness, clientIds, "disconnect");
 		const update = encodeAwarenessUpdate(c.vars.awareness, clientIds);
 		c.broadcast("awareness", { update: toNumbers(update) });
 		conn.state.clientIds = [];
