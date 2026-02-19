@@ -43,12 +43,54 @@ pub fn get_all_replicas(config: &protocol::ClusterConfig) -> Vec<ReplicaId> {
 	config.replicas.iter().map(|r| r.replica_id).collect()
 }
 
+// See EPaxos 4.3
 pub fn calculate_quorum(n: usize, q: QuorumType) -> usize {
-	match q {
-		QuorumType::Fast => (n * 3) / 4 + 1,
-		QuorumType::Slow => n / 2 + 1,
-		QuorumType::All => n,
-		QuorumType::Any => 1,
+	match n {
+		// Nonsensical
+		0 => 0,
+		1 => 1,
+		// EPaxos does not apply to clusters with N < 3 because you cannot tolerate any faults. However we can
+		// still get correctness invariants to hold by requiring both nodes to agree on everything (quorum
+		// size is always 2)
+		2 => match q {
+			QuorumType::Fast => 2,
+			QuorumType::Slow => 2,
+			QuorumType::All => 2,
+			QuorumType::Any => 1,
+		},
+		// Note that for even N's we don't gain any extra fault tolerance but we get potentially better read
+		// latency. N=4 acts like N=3 in terms of fault tolerance.
+		n => {
+			let f = (n - 1) / 2;
+
+			match q {
+				QuorumType::Fast => f + (f + 1) / 2,
+				QuorumType::Slow => f + 1,
+				QuorumType::All => n,
+				QuorumType::Any => 1,
+			}
+		}
+	}
+}
+
+/// Calculates quorum size assuming the sender is excluded.
+pub fn calculate_fanout_quorum(n: usize, q: QuorumType) -> usize {
+	match n {
+		// Nonsensical
+		0 => 0,
+		1 => 0,
+		// NOTE: See comments in `calculate_quorum`
+		2 => 1,
+		n => {
+			let f = (n - 1) / 2;
+
+			match q {
+				QuorumType::Fast => (f + (f + 1) / 2) - 1,
+				QuorumType::Slow => f,
+				QuorumType::All => n - 1,
+				QuorumType::Any => 1,
+			}
+		}
 	}
 }
 
