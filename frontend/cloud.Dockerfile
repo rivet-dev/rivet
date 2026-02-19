@@ -1,15 +1,8 @@
 # Frontend (Cloud) Dockerfile
-# Multi-stage build: Node.js for building, nginx for serving
-
-# =============================================================================
-# Stage 1: Build
-# =============================================================================
 FROM node:22-alpine AS builder
 
-# Install git, git-lfs, and coreutils (for env -S support in build scripts)
 RUN apk add --no-cache git git-lfs coreutils
 
-# Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
@@ -17,40 +10,43 @@ WORKDIR /app
 # Copy workspace configuration files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json turbo.json tsup.base.ts ./
 
-# Copy all workspace packages that frontend depends on (including transitive deps)
-# frontend -> rivetkit, @rivetkit/engine-api-full
-# rivetkit -> @rivetkit/virtual-websocket, @rivetkit/engine-runner
-# @rivetkit/engine-runner -> @rivetkit/engine-runner-protocol
+# Copy frontend package
 COPY frontend/ frontend/
+
+# Copy engine SDK dependencies
 COPY engine/sdks/typescript/api-full/ engine/sdks/typescript/api-full/
 COPY engine/sdks/typescript/runner/ engine/sdks/typescript/runner/
 COPY engine/sdks/typescript/runner-protocol/ engine/sdks/typescript/runner-protocol/
+
+# Copy rivetkit dependencies
 COPY rivetkit-typescript/packages/rivetkit/ rivetkit-typescript/packages/rivetkit/
 COPY rivetkit-typescript/packages/traces/ rivetkit-typescript/packages/traces/
 COPY rivetkit-typescript/packages/workflow-engine/ rivetkit-typescript/packages/workflow-engine/
+COPY rivetkit-typescript/packages/sqlite-vfs/ rivetkit-typescript/packages/sqlite-vfs/
+COPY rivetkit-typescript/packages/sqlite-vfs-linux-arm64/ rivetkit-typescript/packages/sqlite-vfs-linux-arm64/
+COPY rivetkit-typescript/packages/sqlite-vfs-linux-x64/ rivetkit-typescript/packages/sqlite-vfs-linux-x64/
+
+# Copy shared libraries
 COPY shared/typescript/virtual-websocket/ shared/typescript/virtual-websocket/
+
+# Copy examples and public assets
 COPY examples/ examples/
 COPY frontend/public/examples/ frontend/public/examples/
 
-# Copy generated API docs (used by rivetkit build)
+# Copy generated API docs
 COPY rivetkit-asyncapi/ rivetkit-asyncapi/
 COPY rivetkit-openapi/ rivetkit-openapi/
 
-# Fetch LFS files if build platform doesn't support Git LFS natively
+# Fetch LFS files
 COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
 RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
 
-# Arguments required before installing dependencies
 ARG FONTAWESOME_PACKAGE_TOKEN=""
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 
-# Install dependencies (with pnpm store cache)
-RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-/pnpm/store,target=/pnpm/store \
+RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Build arguments for environment variables
-# Use placeholder URLs that pass validation but can be replaced at runtime
-# Format: https://__PLACEHOLDER__.rivet.dev allows easy sed replacement
 ARG VITE_APP_API_URL="https://VITE_APP_API_URL.placeholder.rivet.dev"
 ARG VITE_APP_CLOUD_API_URL="https://VITE_APP_CLOUD_API_URL.placeholder.rivet.dev"
 ARG VITE_APP_ASSETS_URL="https://VITE_APP_ASSETS_URL.placeholder.rivet.dev"
@@ -60,9 +56,7 @@ ARG VITE_APP_SENTRY_PROJECT_ID="0"
 ARG VITE_APP_POSTHOG_API_KEY=""
 ARG VITE_APP_POSTHOG_HOST=""
 ARG DEPLOYMENT_TYPE="staging"
-ARG FONTAWESOME_PACKAGE_TOKEN=""
 
-# Set environment variables for build
 ENV VITE_APP_API_URL=${VITE_APP_API_URL}
 ENV VITE_APP_CLOUD_API_URL=${VITE_APP_CLOUD_API_URL}
 ENV VITE_APP_ASSETS_URL=${VITE_APP_ASSETS_URL}
@@ -76,31 +70,17 @@ ENV DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 ENV VITE_APP_SENTRY_TUNNEL="/tunnel"
 
-# Build the cloud frontend using turbo (automatically builds all dependencies, with turbo cache)
-RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-/app/.turbo,target=/app/.turbo \
+RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-turbo,target=/app/.turbo \
     npx turbo run build:cloud --filter=@rivetkit/engine-frontend
 
-# =============================================================================
-# Stage 2: Serve with Caddy
-# =============================================================================
 FROM caddy:alpine
 
-# Install bash for entrypoint script
 RUN apk add --no-cache bash
 
-# Copy Caddyfile configuration
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
-
-# Copy built files from builder stage
 COPY --from=builder /app/frontend/dist /srv
-
-# Copy entrypoint script for runtime env var substitution
 COPY frontend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Default port (platform injects PORT env var)
 ENV PORT=80
-
-# Use custom entrypoint for env var substitution
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
