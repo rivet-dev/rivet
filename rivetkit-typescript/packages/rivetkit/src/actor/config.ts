@@ -210,8 +210,9 @@ export const ActorConfigSchema = z
 				createVarsTimeout: z.number().positive().default(5000),
 				createConnStateTimeout: z.number().positive().default(5000),
 				onConnectTimeout: z.number().positive().default(5000),
-				// This must be less than ACTOR_STOP_THRESHOLD_MS
+				// This must be less than engine config > pegboard.actor_stop_threshold
 				onSleepTimeout: z.number().positive().default(5000),
+				// This must be less than engine config > pegboard.actor_stop_threshold
 				onDestroyTimeout: z.number().positive().default(5000),
 				stateSaveInterval: z.number().positive().default(10_000),
 				actionTimeout: z.number().positive().default(60_000),
@@ -289,11 +290,11 @@ type CreateState<
 > =
 	| { state: TState }
 	| {
-			createState: (
-				c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
-				input: TInput,
-			) => TState | Promise<TState>;
-	  }
+		createState: (
+			c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
+			input: TInput,
+		) => TState | Promise<TState>;
+	}
 	| Record<never, never>;
 
 // Creates connection state config
@@ -313,18 +314,18 @@ type CreateConnState<
 > =
 	| { connState: TConnState }
 	| {
-			createConnState: (
-				c: CreateConnStateContext<
-					TState,
-					TVars,
-					TInput,
-					TDatabase,
-					TEvents,
-					TQueues
-				>,
-				params: TConnParams,
-			) => TConnState | Promise<TConnState>;
-	  }
+		createConnState: (
+			c: CreateConnStateContext<
+				TState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>,
+			params: TConnParams,
+		) => TConnState | Promise<TConnState>;
+	}
 	| Record<never, never>;
 
 // Creates vars config
@@ -344,26 +345,26 @@ type CreateVars<
 	TQueues extends QueueSchemaConfig,
 > =
 	| {
-			/**
-			 * @experimental
-			 */
-			vars: TVars;
-	  }
+		/**
+		 * @experimental
+		 */
+		vars: TVars;
+	}
 	| {
-			/**
-			 * @experimental
-			 */
-			createVars: (
-				c: CreateVarsContext<
-					TState,
-					TInput,
-					TDatabase,
-					TEvents,
-					TQueues
-				>,
-				driverCtx: any,
-			) => TVars | Promise<TVars>;
-	  }
+		/**
+		 * @experimental
+		 */
+		createVars: (
+			c: CreateVarsContext<
+				TState,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+			>,
+			driverCtx: any,
+		) => TVars | Promise<TVars>;
+	}
 	| Record<never, never>;
 
 export interface Actions<
@@ -417,43 +418,43 @@ export type CanInvokeTarget<
 	TQueues extends QueueSchemaConfig,
 > =
 	| {
-			kind: "action";
-			name: CanInvokeActionName<TActions>;
-	  }
+		kind: "action";
+		name: CanInvokeActionName<TActions>;
+	}
 	| {
-			kind: "subscribe";
-			name: CanInvokeSubscribeName<TEvents>;
-	  }
+		kind: "subscribe";
+		name: CanInvokeSubscribeName<TEvents>;
+	}
 	| {
-			kind: "queue";
-			name: CanInvokeQueueName<TQueues>;
-	  }
+		kind: "queue";
+		name: CanInvokeQueueName<TQueues>;
+	}
 	| {
-			kind: "request";
-	  }
+		kind: "request";
+	}
 	| {
-			kind: "websocket";
-	  };
+		kind: "websocket";
+	};
 
 export type AnyCanInvokeTarget =
 	| {
-			kind: "action";
-			name: string;
-	  }
+		kind: "action";
+		name: string;
+	}
 	| {
-			kind: "subscribe";
-			name: string;
-	  }
+		kind: "subscribe";
+		name: string;
+	}
 	| {
-			kind: "queue";
-			name: string;
-	  }
+		kind: "queue";
+		name: string;
+	}
 	| {
-			kind: "request";
-	  }
+		kind: "request";
+	}
 	| {
-			kind: "websocket";
-	  };
+		kind: "websocket";
+	};
 
 interface BaseActorConfig<
 	TState,
@@ -570,28 +571,28 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise. If the promise exits, the actor crashes.
 	 */
 	run?:
-		| ((
-				c: RunContext<
-					TState,
-					TConnParams,
-					TConnState,
-					TVars,
-					TInput,
-					TDatabase,
-					TEvents,
-					TQueues
-				>,
-		  ) => void | Promise<void>)
-		| RunConfig<
-				TState,
-				TConnParams,
-				TConnState,
-				TVars,
-				TInput,
-				TDatabase,
-				TEvents,
-				TQueues
-		  >;
+	| ((
+		c: RunContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+	) => void | Promise<void>)
+	| RunConfig<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>;
 
 	/**
 	 * Called when the actor's state changes.
@@ -819,11 +820,11 @@ interface BaseActorConfig<
 
 type ActorDatabaseConfig<TDatabase extends AnyDatabaseProvider> =
 	| {
-			/**
-			 * @experimental
-			 */
-			db: TDatabase;
-	  }
+		/**
+		 * @experimental
+		 */
+		db: TDatabase;
+	}
 	| Record<never, never>;
 
 // 1. Infer schema
