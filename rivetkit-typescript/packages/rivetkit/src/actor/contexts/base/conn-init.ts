@@ -1,9 +1,7 @@
 import type { AnyDatabaseProvider } from "../../database";
-import type {
-	ActorDefinition,
-	AnyActorDefinition,
-} from "../../definition";
+import type { ActorDefinition, AnyActorDefinition } from "../../definition";
 import type { ActorInstance } from "../../instance/mod";
+import type { SchemaConfig } from "../../schema";
 import { ActorContext } from "./actor";
 
 /**
@@ -15,7 +13,18 @@ export abstract class ConnInitContext<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-> extends ActorContext<TState, never, never, TVars, TInput, TDatabase> {
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
+> extends ActorContext<
+	TState,
+	never,
+	never,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+> {
 	/**
 	 * The incoming request that initiated the connection.
 	 * May be undefined for connections initiated without a direct HTTP request.
@@ -26,7 +35,16 @@ export abstract class ConnInitContext<
 	 * @internal
 	 */
 	constructor(
-		actor: ActorInstance<TState, any, any, TVars, TInput, TDatabase>,
+		actor: ActorInstance<
+			TState,
+			any,
+			any,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
 		request: Request | undefined,
 	) {
 		super(actor as any);
@@ -42,7 +60,9 @@ export type ConnInitContextOf<AD extends AnyActorDefinition> =
 		infer V,
 		infer I,
 		infer DB extends AnyDatabaseProvider,
+		infer E extends SchemaConfig,
+		infer Q extends SchemaConfig,
 		any
 	>
-		? ConnInitContext<S, V, I, DB>
+		? ConnInitContext<S, V, I, DB, E, Q>
 		: never;

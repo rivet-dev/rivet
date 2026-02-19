@@ -12,6 +12,7 @@ import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "../conn/mod";
 import { convertConnToBarePersistedConn } from "../conn/persisted";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
+import type { SchemaConfig } from "../schema";
 import { isConnStatePath, isStatePath } from "../utils";
 import { KEYS, makeConnKey } from "./keys";
 import type { ActorInstance } from "./mod";
@@ -36,8 +37,15 @@ export interface SaveStateOptions {
  * Manages actor state persistence, proxying, and synchronization.
  * Handles automatic state change detection and throttled persistence to KV storage.
  */
-export class StateManager<S, CP, CS, I> {
-	#actor: ActorInstance<S, CP, CS, any, I, any>;
+export class StateManager<
+	S,
+	CP,
+	CS,
+	I,
+	E extends SchemaConfig = Record<never, never>,
+	Q extends SchemaConfig = Record<never, never>,
+> {
+	#actor: ActorInstance<S, CP, CS, any, I, any, E, Q>;
 	#actorDriver: ActorDriver;
 
 	// State tracking
@@ -58,7 +66,7 @@ export class StateManager<S, CP, CS, I> {
 	#stateSaveInterval: number;
 
 	constructor(
-		actor: ActorInstance<S, CP, CS, any, I, any>,
+		actor: ActorInstance<S, CP, CS, any, I, any, E, Q>,
 		actorDriver: ActorDriver,
 		config: any,
 	) {

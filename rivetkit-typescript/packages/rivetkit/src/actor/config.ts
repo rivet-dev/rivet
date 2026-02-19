@@ -20,6 +20,7 @@ import type {
 	WebSocketContext,
 } from "./contexts";
 import type { AnyDatabaseProvider } from "./database";
+import type { SchemaConfig } from "./schema";
 
 export interface ActorTypes<
 	TState,
@@ -57,9 +58,10 @@ export interface RunInspectorConfig<THistory = unknown> {
 
 const WorkflowInspectorConfigSchema = z.object({
 	getHistory: zFunction<WorkflowInspectorConfig<unknown>["getHistory"]>(),
-	onHistoryUpdated: zFunction<
-		NonNullable<WorkflowInspectorConfig<unknown>["onHistoryUpdated"]>
-	>().optional(),
+	onHistoryUpdated:
+		zFunction<
+			NonNullable<WorkflowInspectorConfig<unknown>["onHistoryUpdated"]>
+		>().optional(),
 });
 
 const RunInspectorConfigSchema = z
@@ -129,6 +131,8 @@ export const ActorConfigSchema = z
 		onRequest: zFunction().optional(),
 		onWebSocket: zFunction().optional(),
 		actions: z.record(z.string(), zFunction()).default(() => ({})),
+		events: z.record(z.string(), z.any()).optional(),
+		queues: z.record(z.string(), z.any()).optional(),
 		state: z.any().optional(),
 		createState: zFunction().optional(),
 		connState: z.any().optional(),
@@ -219,11 +223,13 @@ type CreateState<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig,
+	TQueues extends SchemaConfig,
 > =
 	| { state: TState }
 	| {
 			createState: (
-				c: CreateContext<TState, TInput, TDatabase>,
+				c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
 				input: TInput,
 			) => TState | Promise<TState>;
 	  }
@@ -241,11 +247,20 @@ type CreateConnState<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig,
+	TQueues extends SchemaConfig,
 > =
 	| { connState: TConnState }
 	| {
 			createConnState: (
-				c: CreateConnStateContext<TState, TVars, TInput, TDatabase>,
+				c: CreateConnStateContext<
+					TState,
+					TVars,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
 				params: TConnParams,
 			) => TConnState | Promise<TConnState>;
 	  }
@@ -264,6 +279,8 @@ type CreateVars<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig,
+	TQueues extends SchemaConfig,
 > =
 	| {
 			/**
@@ -276,7 +293,13 @@ type CreateVars<
 			 * @experimental
 			 */
 			createVars: (
-				c: CreateVarsContext<TState, TInput, TDatabase>,
+				c: CreateVarsContext<
+					TState,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
 				driverCtx: any,
 			) => TVars | Promise<TVars>;
 	  }
@@ -289,6 +312,8 @@ export interface Actions<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
 > {
 	[Action: string]: (
 		c: ActionContext<
@@ -297,7 +322,9 @@ export interface Actions<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 		...args: any[]
 	) => any;
@@ -320,13 +347,17 @@ interface BaseActorConfig<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig,
+	TQueues extends SchemaConfig,
 	TActions extends Actions<
 		TState,
 		TConnParams,
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	>,
 > {
 	/**
@@ -336,7 +367,7 @@ interface BaseActorConfig<
 	 * This is called before any other lifecycle hooks.
 	 */
 	onCreate?: (
-		c: CreateContext<TState, TInput, TDatabase>,
+		c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
 		input: TInput,
 	) => void | Promise<void>;
 
@@ -350,7 +381,9 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 	) => void | Promise<void>;
 
@@ -369,7 +402,9 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 	) => void | Promise<void>;
 
@@ -390,7 +425,9 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 	) => void | Promise<void>;
 
@@ -425,7 +462,9 @@ interface BaseActorConfig<
 					TConnState,
 					TVars,
 					TInput,
-					TDatabase
+					TDatabase,
+					TEvents,
+					TQueues
 				>,
 		  ) => void | Promise<void>)
 		| RunConfig;
@@ -448,7 +487,9 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 		newState: TState,
 	) => void;
@@ -464,7 +505,14 @@ interface BaseActorConfig<
 	 * @throws Throw an error to reject the connection
 	 */
 	onBeforeConnect?: (
-		c: BeforeConnectContext<TState, TVars, TInput, TDatabase>,
+		c: BeforeConnectContext<
+			TState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
 		params: TConnParams,
 	) => void | Promise<void>;
 
@@ -484,9 +532,20 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		conn: Conn<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
 	) => void | Promise<void>;
 
 	/**
@@ -505,9 +564,20 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
+		conn: Conn<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
 	) => void | Promise<void>;
 
 	/**
@@ -529,7 +599,9 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 		name: string,
 		args: unknown[],
@@ -554,7 +626,9 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 		request: Request,
 	) => Response | Promise<Response>;
@@ -576,12 +650,24 @@ interface BaseActorConfig<
 			TConnState,
 			TVars,
 			TInput,
-			TDatabase
+			TDatabase,
+			TEvents,
+			TQueues
 		>,
 		websocket: UniversalWebSocket,
 	) => void | Promise<void>;
 
 	actions?: TActions;
+
+	/**
+	 * Schema map for events broadcasted by this actor.
+	 */
+	events?: TEvents;
+
+	/**
+	 * Schema map for queue payloads sent by this actor.
+	 */
+	queues?: TQueues;
 }
 
 type ActorDatabaseConfig<TDatabase extends AnyDatabaseProvider> =
@@ -603,9 +689,13 @@ export type ActorConfig<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
 > = Omit<
 	z.infer<typeof ActorConfigSchema>,
 	| "actions"
+	| "events"
+	| "queues"
 	| "onCreate"
 	| "onDestroy"
 	| "onWake"
@@ -633,11 +723,49 @@ export type ActorConfig<
 		TVars,
 		TInput,
 		TDatabase,
-		Actions<TState, TConnParams, TConnState, TVars, TInput, TDatabase>
+		TEvents,
+		TQueues,
+		Actions<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>
 	> &
-	CreateState<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
-	CreateConnState<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
-	CreateVars<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
+	CreateState<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> &
+	CreateConnState<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> &
+	CreateVars<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> &
 	ActorDatabaseConfig<TDatabase>;
 
 // See description on `ActorConfig`
@@ -648,13 +776,17 @@ export type ActorConfigInput<
 	TVars = undefined,
 	TInput = undefined,
 	TDatabase extends AnyDatabaseProvider = undefined,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
 	TActions extends Actions<
 		TState,
 		TConnParams,
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	> = Record<never, never>,
 > = {
 	types?: ActorTypes<
@@ -668,6 +800,8 @@ export type ActorConfigInput<
 } & Omit<
 	z.input<typeof ActorConfigSchema>,
 	| "actions"
+	| "events"
+	| "queues"
 	| "onCreate"
 	| "onDestroy"
 	| "onWake"
@@ -695,11 +829,40 @@ export type ActorConfigInput<
 		TVars,
 		TInput,
 		TDatabase,
+		TEvents,
+		TQueues,
 		TActions
 	> &
-	CreateState<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
-	CreateConnState<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
-	CreateVars<TState, TConnParams, TConnState, TVars, TInput, TDatabase> &
+	CreateState<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> &
+	CreateConnState<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> &
+	CreateVars<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> &
 	ActorDatabaseConfig<TDatabase>;
 
 // For testing type definitions:
@@ -710,13 +873,17 @@ export function test<
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig,
+	TQueues extends SchemaConfig,
 	TActions extends Actions<
 		TState,
 		TConnParams,
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	>,
 >(
 	input: ActorConfigInput<
@@ -726,16 +893,29 @@ export function test<
 		TVars,
 		TInput,
 		TDatabase,
+		TEvents,
+		TQueues,
 		TActions
 	>,
-): ActorConfig<TState, TConnParams, TConnState, TVars, TInput, TDatabase> {
+): ActorConfig<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+> {
 	const config = ActorConfigSchema.parse(input) as ActorConfig<
 		TState,
 		TConnParams,
 		TConnState,
 		TVars,
 		TInput,
-		TDatabase
+		TDatabase,
+		TEvents,
+		TQueues
 	>;
 	return config;
 }
@@ -959,6 +1139,14 @@ export const DocActorConfigSchema = z
 			.describe(
 				"Map of action name to handler function. Defaults to an empty object.",
 			),
+		events: z
+			.record(z.string(), z.unknown())
+			.optional()
+			.describe("Map of event names to schemas."),
+		queues: z
+			.record(z.string(), z.unknown())
+			.optional()
+			.describe("Map of queue names to schemas."),
 		options: DocActorOptionsSchema.optional(),
 	})
 	.describe("Actor configuration passed to the actor() function.");

@@ -1,6 +1,6 @@
 import type { AnyDatabaseProvider } from "../database";
-import * as errors from "../errors";
-import type { QueueManager, QueueMessage as QueueMessageRecord } from "./queue-manager";
+import type { InferSchemaMap, SchemaConfig } from "../schema";
+import type { QueueManager, QueueMessage } from "./queue-manager";
 
 /** Options for receiving messages from the queue. */
 export interface QueueReceiveOptions {
@@ -8,8 +8,6 @@ export interface QueueReceiveOptions {
 	count?: number;
 	/** Timeout in milliseconds to wait for messages. Waits indefinitely if not specified. */
 	timeout?: number;
-	/** When true, message must be manually completed. */
-	wait?: boolean;
 }
 
 /** Request object for receiving messages from the queue. */
@@ -18,13 +16,26 @@ export interface QueueReceiveRequest extends QueueReceiveOptions {
 	name: string | string[];
 }
 
+export type QueueMessageOf<Body> = Omit<QueueMessage, "body"> & {
+	body: Body;
+};
+
 /** User-facing queue interface exposed on ActorContext. */
-export class ActorQueue<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
-	#queueManager: QueueManager<S, CP, CS, V, I, DB>;
+export class ActorQueue<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+	TEvents extends SchemaConfig = Record<never, never>,
+	TQueues extends SchemaConfig = Record<never, never>,
+> {
+	#queueManager: QueueManager<S, CP, CS, V, I, DB, TEvents, TQueues>;
 	#abortSignal: AbortSignal;
 
 	constructor(
-		queueManager: QueueManager<S, CP, CS, V, I, DB>,
+		queueManager: QueueManager<S, CP, CS, V, I, DB, TEvents, TQueues>,
 		abortSignal: AbortSignal,
 	) {
 		this.#queueManager = queueManager;
@@ -32,17 +43,35 @@ export class ActorQueue<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	/** Receives the next message from a single queue. Returns undefined if no message available. */
+	next<K extends keyof TQueues & string>(
+		name: K,
+		opts?: QueueReceiveOptions,
+	): Promise<QueueMessageOf<InferSchemaMap<TQueues>[K]> | undefined>;
 	next(
-		name: string,
+		name: keyof TQueues extends never ? string : never,
 		opts?: QueueReceiveOptions,
 	): Promise<QueueMessage | undefined>;
 	/** Receives messages from multiple queues. Returns messages matching any of the queue names. */
+	next<K extends keyof TQueues & string>(
+		name: K[],
+		opts?: QueueReceiveOptions,
+	): Promise<Array<QueueMessageOf<InferSchemaMap<TQueues>[K]>> | undefined>;
 	next(
-		name: string[],
+		name: keyof TQueues extends never ? string[] : never,
 		opts?: QueueReceiveOptions,
 	): Promise<QueueMessage[] | undefined>;
 	/** Receives messages using a request object for full control over options. */
-	next(request: QueueReceiveRequest): Promise<QueueMessage[] | undefined>;
+	next<K extends keyof TQueues & string>(
+		request: QueueReceiveRequest & { name: K },
+	): Promise<QueueMessageOf<InferSchemaMap<TQueues>[K]> | undefined>;
+	next<K extends keyof TQueues & string>(
+		request: QueueReceiveRequest & { name: K[] },
+	): Promise<Array<QueueMessageOf<InferSchemaMap<TQueues>[K]>> | undefined>;
+	next(
+		request: QueueReceiveRequest & {
+			name: keyof TQueues extends never ? string | string[] : never;
+		},
+	): Promise<QueueMessage[] | undefined>;
 	async next(
 		nameOrRequest: string | string[] | QueueReceiveRequest,
 		opts: QueueReceiveOptions = {},
@@ -62,51 +91,29 @@ export class ActorQueue<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			count,
 			mergedOptions.timeout,
 			this.#abortSignal,
-			mergedOptions.wait ?? false,
 		);
 
 		if (Array.isArray(request.name)) {
-			return messages?.map((message) =>
-				this.#toQueueMessage(message, mergedOptions.wait ?? false),
-			);
+			return messages;
 		}
 
 		if (!messages || messages.length === 0) {
 			return undefined;
 		}
 
-		return this.#toQueueMessage(messages[0], mergedOptions.wait ?? false);
-	}
-
-	#toQueueMessage(
-		message: QueueMessageRecord,
-		wait: boolean,
-	): QueueMessage {
-		const base: QueueMessage = {
-			id: message.id.toString(),
-			name: message.name,
-			body: message.body,
-			complete: async (data?: unknown) => {
-				if (!wait) {
-					throw new errors.QueueCompleteNotAllowed();
-				}
-				await this.#queueManager.complete(message, data);
-			},
-		};
-
-		return base;
+		return messages[0];
 	}
 
 	/** Sends a message to the specified queue. */
+	send<K extends keyof TQueues & string>(
+		name: K,
+		body: InferSchemaMap<TQueues>[K],
+	): Promise<QueueMessage>;
+	send(
+		name: keyof TQueues extends never ? string : never,
+		body: unknown,
+	): Promise<QueueMessage>;
 	async send(name: string, body: unknown): Promise<QueueMessage> {
-		const message = await this.#queueManager.enqueue(name, body);
-		return this.#toQueueMessage(message, false);
+		return await this.#queueManager.enqueue(name, body);
 	}
-}
-
-export interface QueueMessage<T = unknown> {
-	name: string;
-	body: T;
-	id: string;
-	complete(data?: unknown): Promise<void>;
 }

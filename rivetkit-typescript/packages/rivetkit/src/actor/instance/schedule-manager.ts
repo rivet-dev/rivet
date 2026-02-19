@@ -6,6 +6,7 @@ import {
 } from "@/utils";
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDriver } from "../driver";
+import type { SchemaConfig } from "../schema";
 import type { ActorInstance } from "./mod";
 import type { PersistedScheduleEvent } from "./persisted";
 
@@ -13,15 +14,24 @@ import type { PersistedScheduleEvent } from "./persisted";
  * Manages scheduled events and alarms for actor instances.
  * Handles event scheduling, alarm triggers, and automatic event execution.
  */
-export class ScheduleManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
-	#actor: ActorInstance<S, CP, CS, V, I, DB>;
+export class ScheduleManager<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig = Record<never, never>,
+	Q extends SchemaConfig = Record<never, never>,
+> {
+	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#actorDriver: ActorDriver;
 	#alarmWriteQueue = new SinglePromiseQueue();
 	#config: any; // ActorConfig type
 	#persist: any; // Reference to PersistedActor
 
 	constructor(
-		actor: ActorInstance<S, CP, CS, V, I, DB>,
+		actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
 		actorDriver: ActorDriver,
 		config: any,
 	) {

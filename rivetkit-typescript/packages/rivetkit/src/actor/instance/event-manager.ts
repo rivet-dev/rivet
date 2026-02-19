@@ -18,17 +18,30 @@ import {
 import type { AnyDatabaseProvider } from "../database";
 import * as errors from "../errors";
 import { CachedSerializer } from "../protocol/serde";
+import type { SchemaConfig } from "../schema";
 import type { ActorInstance } from "./mod";
 
 /**
  * Manages event subscriptions and broadcasting for actor instances.
  * Handles subscription tracking and efficient message distribution to connected clients.
  */
-export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
-	#actor: ActorInstance<S, CP, CS, V, I, DB>;
-	#subscriptionIndex = new Map<string, Set<Conn<S, CP, CS, V, I, DB>>>();
+export class EventManager<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+	E extends SchemaConfig = Record<never, never>,
+	Q extends SchemaConfig = Record<never, never>,
+> {
+	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#subscriptionIndex = new Map<
+		string,
+		Set<Conn<S, CP, CS, V, I, DB, E, Q>>
+	>();
 
-	constructor(actor: ActorInstance<S, CP, CS, V, I, DB>) {
+	constructor(actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>) {
 		this.#actor = actor;
 	}
 
@@ -43,7 +56,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	addSubscription(
 		eventName: string,
-		connection: Conn<S, CP, CS, V, I, DB>,
+		connection: Conn<S, CP, CS, V, I, DB, E, Q>,
 		fromPersist: boolean,
 	) {
 		// Check if already subscribed
@@ -94,7 +107,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	removeSubscription(
 		eventName: string,
-		connection: Conn<S, CP, CS, V, I, DB>,
+		connection: Conn<S, CP, CS, V, I, DB, E, Q>,
 		fromRemoveConn: boolean,
 	) {
 		// Check if subscription exists
@@ -241,7 +254,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	getSubscribers(
 		eventName: string,
-	): Set<Conn<S, CP, CS, V, I, DB>> | undefined {
+	): Set<Conn<S, CP, CS, V, I, DB, E, Q>> | undefined {
 		return this.#subscriptionIndex.get(eventName);
 	}
 
@@ -264,7 +277,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 *
 	 * @param connection - The connection to clear subscriptions for
 	 */
-	clearConnectionSubscriptions(connection: Conn<S, CP, CS, V, I, DB>) {
+	clearConnectionSubscriptions(connection: Conn<S, CP, CS, V, I, DB, E, Q>) {
 		for (const eventName of [...connection.subscriptions.values()]) {
 			this.removeSubscription(eventName, connection, true);
 		}
