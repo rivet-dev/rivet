@@ -68,6 +68,7 @@ import {
 	workflowCounterActor,
 	workflowQueueActor,
 	workflowSleepActor,
+	workflowStopTeardownActor,
 } from "./workflow";
 
 // Consolidated setup with all actors
@@ -155,6 +156,7 @@ export const registry = setup({
 		workflowQueueActor,
 		workflowAccessActor,
 		workflowSleepActor,
+		workflowStopTeardownActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
 		// From actor-db-drizzle.ts

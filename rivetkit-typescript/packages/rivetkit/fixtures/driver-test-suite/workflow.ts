@@ -182,4 +182,41 @@ export const workflowSleepActor = actor({
 	},
 });
 
+export const workflowStopTeardownActor = actor({
+	state: {
+		wakeAts: [] as number[],
+		sleepAts: [] as number[],
+	},
+	queues: {
+		never: queue<unknown>(),
+	},
+	onWake: (c) => {
+		c.state.wakeAts.push(Date.now());
+	},
+	onSleep: (c) => {
+		c.state.sleepAts.push(Date.now());
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop({
+			name: "wait-forever",
+			run: async (loopCtx) => {
+				await loopCtx.queue.next("wait-for-never", {
+					names: ["never"],
+				});
+				return Loop.continue(undefined);
+			},
+		});
+	}),
+	actions: {
+		getTimeline: (c) => ({
+			wakeAts: [...c.state.wakeAts],
+			sleepAts: [...c.state.sleepAts],
+		}),
+	},
+	options: {
+		sleepTimeout: 75,
+		runStopTimeout: 2_000,
+	},
+});
+
 export { WORKFLOW_QUEUE_NAME };

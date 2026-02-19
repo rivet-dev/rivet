@@ -1272,6 +1272,16 @@ export class ActorInstance<
 		if (runResult instanceof Promise) {
 			this.#runPromise = runResult
 				.then(() => {
+					if (this.#stopCalled) {
+						if (runSpan.isActive()) {
+							this.endTraceSpan(runSpan, { code: "OK" });
+						}
+						this.#rLog.debug({
+							msg: "run handler exited during actor stop",
+						});
+						return;
+					}
+
 					// Run handler exited normally - this should crash the actor
 					this.emitTraceEvent(
 						"actor.crash",
@@ -1288,6 +1298,17 @@ export class ActorInstance<
 					this.startDestroy();
 				})
 				.catch((error) => {
+					if (this.#stopCalled) {
+						if (runSpan.isActive()) {
+							this.endTraceSpan(runSpan, { code: "OK" });
+						}
+						this.#rLog.debug({
+							msg: "run handler threw during actor stop",
+							error: stringifyError(error),
+						});
+						return;
+					}
+
 					// Run handler threw an error - crash the actor
 					this.emitTraceEvent(
 						"actor.crash",

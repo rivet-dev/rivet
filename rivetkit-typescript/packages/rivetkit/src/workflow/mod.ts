@@ -47,21 +47,21 @@ export function workflow<
 		TEvents,
 		TQueues
 	>,
-) => Promise<never> {
+) => Promise<void> {
 	const workflowInspector = createWorkflowInspectorAdapter();
 
 	async function run(
 		runCtx: RunContext<
 			TState,
 			TConnParams,
-				TConnState,
-				TVars,
-				TInput,
-				TDatabase,
-				TEvents,
-				TQueues
-			>,
-		): Promise<never> {
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+	): Promise<void> {
 		const actor = (
 			runCtx as unknown as {
 				[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: AnyActorInstance;
@@ -83,30 +83,28 @@ export function workflow<
 			},
 		);
 
-		runCtx.abortSignal.addEventListener(
-			"abort",
-			() => {
-				handle.evict();
-			},
-			{ once: true },
-		);
+		const onAbort = () => {
+			handle.evict();
+		};
+		if (runCtx.abortSignal.aborted) {
+			onAbort();
+		} else {
+			runCtx.abortSignal.addEventListener("abort", onAbort, {
+				once: true,
+			});
+		}
 
-		runCtx.waitUntil(
-			handle.result
-				.then(() => {
-					// Ignore normal completion; the actor will be restarted if needed.
-				})
-				.catch((error) => {
-					runCtx.log.error({
-						msg: "workflow run failed",
-						error: stringifyError(error),
-					});
-				}),
-		);
-
-		return await new Promise<never>(() => {
-			// Intentionally never resolve to keep the run handler alive.
-		});
+		try {
+			await handle.result;
+		} catch (error) {
+			runCtx.log.error({
+				msg: "workflow run failed",
+				error: stringifyError(error),
+			});
+			throw error;
+		} finally {
+			runCtx.abortSignal.removeEventListener("abort", onAbort);
+		}
 	}
 
 	const runWithConfig = run as typeof run & {
