@@ -64,6 +64,12 @@ interface ActorStateReference<AD extends AnyActorDefinition> {
 		 * Defaults to true.
 		 */
 		enabled?: boolean;
+		/**
+		 * If true, only gets the actor if it already exists. Does not create the actor.
+		 * Throws an error if the actor is not found.
+		 * Defaults to false.
+		 */
+		noCreate?: boolean;
 	};
 }
 
@@ -106,6 +112,12 @@ export interface ActorOptions<
 	 * Defaults to true.
 	 */
 	enabled?: boolean;
+	/**
+	 * If true, only gets the actor if it already exists. Does not create the actor.
+	 * Throws an error if the actor is not found.
+	 * Defaults to false.
+	 */
+	noCreate?: boolean;
 }
 
 export type ActorsStateDerived<
@@ -424,15 +436,23 @@ function create<
 	});
 
 	try {
-		const handle = client.getOrCreate(
-			actor.opts.name as string,
-			actor.opts.key,
-			{
-				params: actor.opts.params,
-				createInRegion: actor.opts.createInRegion,
-				createWithInput: actor.opts.createWithInput,
-			},
-		);
+		const handle = actor.opts.noCreate
+			? client.get(
+					actor.opts.name as string,
+					actor.opts.key,
+					{
+						params: actor.opts.params,
+					},
+				)
+			: client.getOrCreate(
+					actor.opts.name as string,
+					actor.opts.key,
+					{
+						params: actor.opts.params,
+						createInRegion: actor.opts.createInRegion,
+						createWithInput: actor.opts.createWithInput,
+					},
+				);
 
 		const connection = handle.connect();
 
@@ -494,8 +514,8 @@ function create<
 	}
 }
 
-function defaultHashFunction({ name, key, params }: AnyActorOptions) {
-	return JSON.stringify({ name, key, params });
+function defaultHashFunction({ name, key, params, noCreate }: AnyActorOptions) {
+	return JSON.stringify({ name, key, params, noCreate });
 }
 
 function optsEqual(a: AnyActorOptions, b: AnyActorOptions) {
