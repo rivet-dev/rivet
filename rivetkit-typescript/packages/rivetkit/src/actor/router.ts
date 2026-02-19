@@ -1,13 +1,16 @@
 import { Hono } from "hono";
+import z from "zod";
+import * as errors from "@/actor/errors";
 import {
 	type ActionOpts,
 	type ActionOutput,
 	type ConnsMessageOpts,
+	getRequestEncoding,
 	handleAction,
+	handleQueueRequest,
 	handleQueueSend,
 	handleRawRequest,
 } from "@/actor/router-endpoints";
-
 import {
 	PATH_CONNECT,
 	PATH_INSPECTOR_CONNECT,
@@ -20,11 +23,20 @@ import {
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
 import { inspectorLogger } from "@/inspector/log";
+import type { RegistryConfig } from "@/registry/config";
+import {
+	HttpInspectorQueueResponseSchema,
+	HttpInspectorWorkflowHistoryResponseSchema,
+} from "@/schemas/client-protocol-zod/mod";
+import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
+	HTTP_INSPECTOR_QUEUE_RESPONSE_VERSIONED,
+	HTTP_INSPECTOR_WORKFLOW_HISTORY_RESPONSE_VERSIONED,
+} from "@/schemas/client-protocol/versioned";
+import { contentTypeForEncoding, serializeWithEncoding } from "@/serde";
+import { type GetUpgradeWebSocket, VERSION } from "@/utils";
 import { timingSafeEqual } from "@/utils/crypto";
 import { getNodeEnv } from "@/utils/env-vars";
-
-import type { RegistryConfig } from "@/registry/config";
-import { type GetUpgradeWebSocket, VERSION } from "@/utils";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
@@ -174,7 +186,9 @@ export function createActorRouter(
 				return undefined;
 			}
 
-			const userToken = c.req.header("Authorization")?.replace("Bearer ", "");
+			const userToken = c.req
+				.header("Authorization")
+				?.replace("Bearer ", "");
 			if (!userToken) {
 				return c.text("Unauthorized", 401);
 			}
@@ -197,7 +211,9 @@ export function createActorRouter(
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
 			const isStateEnabled = actor.inspector.isStateEnabled();
-			const state = isStateEnabled ? actor.inspector.getStateJson() : undefined;
+			const state = isStateEnabled
+				? actor.inspector.getStateJson()
+				: undefined;
 			return c.json({ state, isStateEnabled });
 		});
 
@@ -249,8 +265,29 @@ export function createActorRouter(
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
 			const limit = parseInt(c.req.query("limit") ?? "50", 10);
+			const encoding = getRequestEncoding(c.req);
 			const status = await actor.inspector.getQueueStatusJson(limit);
-			return c.json(status);
+			const body = serializeWithEncoding(
+				encoding,
+				status,
+				HTTP_INSPECTOR_QUEUE_RESPONSE_VERSIONED,
+				CLIENT_PROTOCOL_CURRENT_VERSION,
+				HttpInspectorQueueResponseSchema,
+				(v) => v,
+				(v) => ({
+					size: BigInt(v.size),
+					maxSize: BigInt(v.maxSize),
+					truncated: v.truncated,
+					messages: v.messages.map((m) => ({
+						id: BigInt(m.id),
+						name: m.name,
+						createdAtMs: BigInt(m.createdAtMs),
+					})),
+				}),
+			);
+			return c.body(body as Uint8Array as any, 200, {
+				"Content-Type": contentTypeForEncoding(encoding),
+			});
 		});
 
 		router.get("/inspector/traces", async (c) => {
@@ -279,8 +316,25 @@ export function createActorRouter(
 			if (authResponse) return authResponse;
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
-			const result = actor.inspector.getWorkflowHistoryJson();
-			return c.json(result);
+			const encoding = getRequestEncoding(c.req);
+			const isWorkflowEnabled = actor.inspector.isWorkflowEnabled();
+			const rawHistory = actor.inspector.getWorkflowHistory();
+			const jsonResult = actor.inspector.getWorkflowHistoryJson();
+			const body = serializeWithEncoding(
+				encoding,
+				jsonResult,
+				HTTP_INSPECTOR_WORKFLOW_HISTORY_RESPONSE_VERSIONED,
+				CLIENT_PROTOCOL_CURRENT_VERSION,
+				HttpInspectorWorkflowHistoryResponseSchema,
+				(v) => v,
+				(_v) => ({
+					history: rawHistory,
+					isWorkflowEnabled,
+				}),
+			);
+			return c.body(body as Uint8Array as any, 200, {
+				"Content-Type": contentTypeForEncoding(encoding),
+			});
 		});
 
 		router.get("/inspector/summary", async (c) => {
@@ -340,6 +394,12 @@ export function createActorRouter(
 			c.req.param("name"),
 		);
 	});
+
+	router.get("/queue", async (c) => {
+		return handleQueueRequest(c, actorDriver);
+	});
+
+	router.get("/");
 
 	router.all("/request/*", async (c) => {
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path

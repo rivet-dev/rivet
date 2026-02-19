@@ -1,0 +1,117 @@
+# MARK: Message To Client
+type Init struct {
+	actorId: str
+	connectionId: str
+}
+
+type Error struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<data>
+	actionId: optional<uint>
+}
+
+type ActionResponse struct {
+	id: uint
+	output: data
+}
+
+type Event struct {
+	name: str
+	# CBOR array
+	args: data
+}
+
+type ToClientBody union {
+	Init |
+	Error |
+	ActionResponse |
+	Event
+}
+
+type ToClient struct {
+	body: ToClientBody
+}
+
+# MARK: Message To Server
+type ActionRequest struct {
+	id: uint
+	name: str
+	# CBOR array
+	args: data
+}
+
+type SubscriptionRequest struct {
+	eventName: str
+	subscribe: bool
+}
+
+type ToServerBody union {
+	ActionRequest |
+	SubscriptionRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+# MARK: HTTP Action
+type HttpActionRequest struct {
+	# CBOR array
+	args: data
+}
+
+type HttpActionResponse struct {
+	output: data
+}
+
+# MARK: HTTP Queue
+
+type HttpQueueSendRequest struct {
+	body: data
+	name: optional<str>
+	wait: optional<bool>
+	timeout: optional<u64>
+}
+
+type HttpQueueSendResponse struct {
+	status: str
+	response: optional<data>
+}
+
+# MARK: HTTP Error
+type HttpResponseError struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<data>
+}
+
+# MARK: HTTP Resolve
+type HttpResolveRequest void
+
+type HttpResolveResponse struct {
+	actorId: str
+}
+
+# MARK: HTTP Inspector Queue
+type HttpInspectorQueueMessageSummary struct {
+	id: uint
+	name: str
+	createdAtMs: uint
+}
+
+type HttpInspectorQueueResponse struct {
+	size: uint
+	maxSize: uint
+	truncated: bool
+	messages: list<HttpInspectorQueueMessageSummary>
+}
+
+# MARK: HTTP Inspector Workflow History
+type HttpInspectorWorkflowHistoryResponse struct {
+	# CBOR-encoded workflow history, absent if not enabled or no history
+	history: optional<data>
+	isWorkflowEnabled: bool
+}
