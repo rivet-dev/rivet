@@ -12,6 +12,7 @@ import {
 } from "@/registry/config";
 import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
+import { runAccessControlTests } from "./tests/access-control";
 import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnHibernationTests } from "./tests/actor-conn-hibernation";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
@@ -119,6 +120,8 @@ export function runDriverTests(
 						runActorHandleTests(driverTestConfig);
 
 						runActionFeaturesTests(driverTestConfig);
+
+						runAccessControlTests(driverTestConfig);
 
 						runActorVarsTests(driverTestConfig);
 

@@ -28,6 +28,10 @@ Authentication is configured through either:
 - `onBeforeConnect` for simple pass/fail validation
 - `createConnState` when you need to access user data in your actions via `c.conn.state`
 
+## Access Control
+
+After a connection is authenticated, use [Access Control](/docs/actors/access-control) to enforce per-entrypoint permissions with `canInvoke`.
+
 ### `onBeforeConnect`
 
 The `onBeforeConnect` hook validates credentials before allowing a connection. Throw an error to reject the connection.
@@ -584,4 +588,3 @@ const cachedAuthActor = actor({
 - [`AuthIntent`](/typedoc/types/rivetkit.mod.AuthIntent.html) - Authentication intent type
 - [`BeforeConnectContext`](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html) - Context for auth checks
 - [`ConnectContext`](/typedoc/interfaces/rivetkit.mod.ConnectContext.html) - Context after connection
-

@@ -1,0 +1,97 @@
+---
+title: "Access Control"
+description: "Authorize inbound actor entrypoints with the canInvoke hook."
+skill: true
+---
+
+Use `canInvoke` to allow or deny inbound actor entrypoints.
+
+This is authorization, not authentication:
+
+- Use [authentication](/docs/actors/authentication) to identify who is calling.
+- Use `canInvoke` to decide what they are allowed to do.
+
+## Supported Entrypoints
+
+`canInvoke` runs for inbound:
+
+- Actions (`kind: "action"`)
+- Queue sends (`kind: "queue"`)
+- Event subscriptions (`kind: "subscribe"`)
+- Raw HTTP handler requests (`kind: "request"`)
+- Raw WebSocket handler connections (`kind: "websocket"`)
+
+## Fail By Default
+
+Structure `canInvoke` as fail-by-default:
+
+1. Add explicit allow rules with `if` statements.
+2. End with `return false`.
+
+```ts
+import { actor } from "rivetkit";
+
+export const chatRoom = actor({
+  canInvoke: (c, invoke) => {
+    // Example: block a specific connection.
+    if (c.conn.id === "blocked-conn-id") {
+      return false;
+    }
+
+    if (invoke.kind === "action" && invoke.name === "sendMessage") {
+      return true;
+    }
+
+    if (invoke.kind === "queue" && invoke.name === "jobs") {
+      return true;
+    }
+
+    if (invoke.kind === "subscribe" && invoke.name === "messages") {
+      return true;
+    }
+
+    if (invoke.kind === "request") {
+      return true;
+    }
+
+    if (invoke.kind === "websocket") {
+      return true;
+    }
+
+    return false;
+  },
+  actions: {
+    sendMessage: () => {},
+  },
+});
+```
+
+## Return Value Contract
+
+`canInvoke` must return a boolean:
+
+- `true`: allow invocation
+- `false`: deny invocation with `forbidden`
+
+Returning `undefined`, `null`, or any non-boolean throws an internal error.
+
+## Hook Shape
+
+```ts
+type InvokeTarget =
+  | { kind: "action"; name: string }
+  | { kind: "queue"; name: string }
+  | { kind: "subscribe"; name: string }
+  | { kind: "request" }
+  | { kind: "websocket" };
+
+canInvoke?: (
+  c: ConnContext<...>,
+  invoke: InvokeTarget,
+) => boolean | Promise<boolean>;
+```
+
+## Notes
+
+- This hook applies to inbound client invocations.
+- Denied invocations return `forbidden` to the client.

@@ -165,6 +165,10 @@ export const sitemap = [
 								//icon: faFingerprint,
 							},
 							{
+								title: "Access Control",
+								href: "/docs/actors/access-control",
+							},
+							{
 								title: "Connections",
 								href: "/docs/actors/connections",
 								//icon: faNetworkWired,

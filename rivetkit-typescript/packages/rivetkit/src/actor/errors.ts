@@ -449,6 +449,17 @@ export class InvalidRequestHandlerResponse extends ActorError {
 	}
 }
 
+export class InvalidCanInvokeResponse extends ActorError {
+	constructor() {
+		super(
+			"handler",
+			"invalid_can_invoke_response",
+			"Actor's canInvoke hook must return a boolean value.",
+		);
+		this.statusCode = 500;
+	}
+}
+
 // Manager-specific errors
 export class MissingActorHeader extends ActorError {
 	constructor() {

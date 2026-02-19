@@ -274,6 +274,16 @@ export async function processMessage<
 			});
 
 			if (subscribe) {
+				await actor.assertCanInvoke(
+					new ActionContext<S, CP, CS, V, I, DB, E, Q>(
+						actor,
+						conn,
+					),
+					{
+						kind: "subscribe",
+						name: eventName,
+					},
+				);
 				await handler.onSubscribe(eventName, conn);
 			} else {
 				await handler.onUnsubscribe(eventName, conn);
