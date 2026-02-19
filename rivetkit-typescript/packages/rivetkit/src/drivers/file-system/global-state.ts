@@ -14,8 +14,6 @@ import {
 	CURRENT_VERSION as FILE_SYSTEM_DRIVER_CURRENT_VERSION,
 } from "@/schemas/file-system-driver/versioned";
 import {
-	arrayBuffersEqual,
-	bufferToArrayBuffer,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
@@ -33,6 +31,13 @@ import {
 	ensureDirectoryExistsSync,
 	getStoragePath,
 } from "./utils";
+import {
+	computePrefixUpperBound,
+	ensureUint8Array,
+	loadSqliteRuntime,
+	type SqliteRuntime,
+	type SqliteRuntimeDatabase,
+} from "./sqlite-runtime";
 
 // Actor handler to track running instances
 
@@ -78,6 +83,8 @@ export interface FileSystemDriverOptions {
 	persist?: boolean;
 	/** Custom path for storage */
 	customPath?: string;
+	/** Deprecated option retained for explicit migration to sqlite-only KV. */
+	useNativeSqlite?: boolean;
 }
 
 /**
@@ -90,6 +97,8 @@ export class FileSystemGlobalState {
 	#alarmsDir: string;
 
 	#persist: boolean;
+	#sqliteRuntime: SqliteRuntime;
+	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
 
 	/** SQLite VFS instance for this driver. */
 	readonly sqliteVfs = new SqliteVfs();
@@ -120,8 +129,14 @@ export class FileSystemGlobalState {
 	}
 
 	constructor(options: FileSystemDriverOptions = {}) {
-		const { persist = true, customPath } = options;
+		const { persist = true, customPath, useNativeSqlite = true } = options;
+		if (!useNativeSqlite) {
+			throw new Error(
+				"File-system driver no longer supports non-SQLite KV storage.",
+			);
+		}
 		this.#persist = persist;
+		this.#sqliteRuntime = loadSqliteRuntime();
 		this.#storagePath = persist ? (customPath ?? getStoragePath()) : "/tmp";
 		const path = getNodePath();
 		this.#stateDir = path.join(this.#storagePath, "state");
@@ -146,6 +161,7 @@ export class FileSystemGlobalState {
 				msg: "file system driver ready",
 				dir: this.#storagePath,
 				actorCount: this.#actorCountOnStartup,
+				sqliteRuntime: this.#sqliteRuntime.kind,
 			});
 
 			// Cleanup stale temp files on startup
@@ -157,8 +173,21 @@ export class FileSystemGlobalState {
 					error: err,
 				});
 			}
+
+			try {
+				this.#migrateLegacyKvToSqliteOnStartupSync();
+			} catch (error) {
+				logger().error({
+					msg: "failed legacy kv startup migration",
+					error,
+				});
+				throw error;
+			}
 		} else {
-			logger().debug({ msg: "memory driver ready" });
+			logger().debug({
+				msg: "memory driver ready",
+				sqliteRuntime: this.#sqliteRuntime.kind,
+			});
 		}
 	}
 
@@ -172,6 +201,154 @@ export class FileSystemGlobalState {
 
 	getActorAlarmPath(actorId: string): string {
 		return getNodePath().join(this.#alarmsDir, actorId);
+	}
+
+	#getActorKvDatabasePath(actorId: string): string {
+		if (this.#persist) {
+			return this.getActorDbPath(actorId);
+		}
+		return ":memory:";
+	}
+
+	#ensureActorKvTables(db: SqliteRuntimeDatabase): void {
+		db.exec(`
+			CREATE TABLE IF NOT EXISTS kv (
+				key BLOB PRIMARY KEY NOT NULL,
+				value BLOB NOT NULL
+			)
+		`);
+	}
+
+	#getOrCreateActorKvDatabase(actorId: string): SqliteRuntimeDatabase {
+		const existing = this.#actorKvDatabases.get(actorId);
+		if (existing) {
+			return existing;
+		}
+
+		const dbPath = this.#getActorKvDatabasePath(actorId);
+		if (this.#persist) {
+			const path = getNodePath();
+			ensureDirectoryExistsSync(path.dirname(dbPath));
+		}
+
+		let db: SqliteRuntimeDatabase;
+		try {
+			db = this.#sqliteRuntime.open(dbPath);
+		} catch (error) {
+			throw new Error(
+				`failed to open actor kv database for actor ${actorId} at ${dbPath}: ${error}`,
+			);
+		}
+
+		this.#ensureActorKvTables(db);
+		this.#actorKvDatabases.set(actorId, db);
+		return db;
+	}
+
+	#closeActorKvDatabase(actorId: string): void {
+		const db = this.#actorKvDatabases.get(actorId);
+		if (!db) {
+			return;
+		}
+
+		try {
+			db.close();
+		} finally {
+			this.#actorKvDatabases.delete(actorId);
+		}
+	}
+
+	#putKvEntriesInDb(
+		db: SqliteRuntimeDatabase,
+		entries: [Uint8Array, Uint8Array][],
+	): void {
+		if (entries.length === 0) {
+			return;
+		}
+
+		db.exec("BEGIN");
+		try {
+			for (const [key, value] of entries) {
+				db.run("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", [
+					key,
+					value,
+				]);
+			}
+			db.exec("COMMIT");
+		} catch (error) {
+			try {
+				db.exec("ROLLBACK");
+			} catch {
+				// Ignore rollback errors, original error is more actionable.
+			}
+			throw error;
+		}
+	}
+
+	#isKvDbPopulated(db: SqliteRuntimeDatabase): boolean {
+		const row = db.get<{ count: number | bigint }>(
+			"SELECT COUNT(*) AS count FROM kv",
+		);
+		const count = row ? Number(row.count) : 0;
+		return count > 0;
+	}
+
+	#migrateLegacyKvToSqliteOnStartupSync(): void {
+		const fsSync = getNodeFsSync();
+		if (!fsSync.existsSync(this.#stateDir)) {
+			return;
+		}
+
+		const actorIds = fsSync
+			.readdirSync(this.#stateDir)
+			.filter((id) => !id.includes(".tmp."));
+
+		for (const actorId of actorIds) {
+			const statePath = this.getActorStatePath(actorId);
+			let state: schema.ActorState;
+			try {
+				const stateBytes = fsSync.readFileSync(statePath);
+				state = ACTOR_STATE_VERSIONED.deserializeWithEmbeddedVersion(
+					new Uint8Array(stateBytes),
+				);
+			} catch (error) {
+				logger().warn({
+					msg: "failed to parse actor state during startup migration",
+					actorId,
+					error,
+				});
+				continue;
+			}
+
+			if (!state.kvStorage || state.kvStorage.length === 0) {
+				continue;
+			}
+
+			const dbPath = this.getActorDbPath(actorId);
+			const path = getNodePath();
+			ensureDirectoryExistsSync(path.dirname(dbPath));
+			const db = this.#sqliteRuntime.open(dbPath);
+			try {
+				this.#ensureActorKvTables(db);
+				if (this.#isKvDbPopulated(db)) {
+					continue;
+				}
+
+				const legacyEntries = state.kvStorage.map((entry) => [
+					new Uint8Array(entry.key),
+					new Uint8Array(entry.value),
+				]) as [Uint8Array, Uint8Array][];
+				this.#putKvEntriesInDb(db, legacyEntries);
+
+				logger().info({
+					msg: "migrated legacy actor kv storage to sqlite",
+					actorId,
+					entryCount: legacyEntries.length,
+				});
+			} finally {
+				db.close();
+			}
+		}
 	}
 
 	async *getActorsIterator(params: {
@@ -260,15 +437,8 @@ export class FileSystemGlobalState {
 			entry.generation = crypto.randomUUID();
 		}
 
-		// Initialize storage
-		const kvStorage: schema.ActorKvEntry[] = [];
+		// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
 		const initialKvState = getInitialActorKvState(input);
-		for (const [key, value] of initialKvState) {
-			kvStorage.push({
-				key: bufferToArrayBuffer(key),
-				value: bufferToArrayBuffer(value),
-			});
-		}
 
 		// Initialize metadata
 		await this.#withActorWrite(actorId, async (lockedEntry) => {
@@ -277,7 +447,7 @@ export class FileSystemGlobalState {
 				name,
 				key,
 				createdAt: BigInt(Date.now()),
-				kvStorage,
+				kvStorage: [],
 				startTs: null,
 				connectableTs: null,
 				sleepTs: null,
@@ -290,6 +460,10 @@ export class FileSystemGlobalState {
 					lockedEntry.generation,
 					lockedEntry.state,
 				);
+			}
+			if (initialKvState.length > 0) {
+				const db = this.#getOrCreateActorKvDatabase(actorId);
+				this.#putKvEntriesInDb(db, initialKvState);
 			}
 		});
 
@@ -336,10 +510,16 @@ export class FileSystemGlobalState {
 			const fs = getNodeFs();
 			const stateData = await fs.readFile(stateFilePath);
 
-			// Cache the loaded state in handler
-			entry.state = ACTOR_STATE_VERSIONED.deserializeWithEmbeddedVersion(
-				new Uint8Array(stateData),
-			);
+			const loadedState =
+				ACTOR_STATE_VERSIONED.deserializeWithEmbeddedVersion(
+					new Uint8Array(stateData),
+				);
+
+			// Runtime reads/writes are SQLite-only; legacy kvStorage is for one-time startup migration.
+			entry.state = {
+				...loadedState,
+				kvStorage: [],
+			};
 
 			return entry;
 		} catch (innerError: any) {
@@ -381,39 +561,36 @@ export class FileSystemGlobalState {
 				entry.generation = crypto.randomUUID();
 			}
 
-			// Initialize kvStorage with the initial persist data
-			const kvStorage: schema.ActorKvEntry[] = [];
-			const initialKvState = getInitialActorKvState(input);
-			for (const [key, value] of initialKvState) {
-				kvStorage.push({
-					key: bufferToArrayBuffer(key),
-					value: bufferToArrayBuffer(value),
+				// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
+				const initialKvState = getInitialActorKvState(input);
+
+				await this.#withActorWrite(actorId, async (lockedEntry) => {
+					lockedEntry.state = {
+						actorId,
+						name,
+						key: key as readonly string[],
+						createdAt: BigInt(Date.now()),
+						kvStorage: [],
+						startTs: null,
+						connectableTs: null,
+						sleepTs: null,
+						destroyTs: null,
+					};
+					if (this.#persist) {
+						await this.#performWrite(
+							actorId,
+							lockedEntry.generation,
+							lockedEntry.state,
+						);
+					}
+					if (initialKvState.length > 0) {
+						const db = this.#getOrCreateActorKvDatabase(actorId);
+						this.#putKvEntriesInDb(db, initialKvState);
+					}
 				});
 			}
-
-			await this.#withActorWrite(actorId, async (lockedEntry) => {
-				lockedEntry.state = {
-					actorId,
-					name,
-					key: key as readonly string[],
-					createdAt: BigInt(Date.now()),
-					kvStorage,
-					startTs: null,
-					connectableTs: null,
-					sleepTs: null,
-					destroyTs: null,
-				};
-				if (this.#persist) {
-					await this.#performWrite(
-						actorId,
-						lockedEntry.generation,
-						lockedEntry.state,
-					);
-				}
-			});
+			return entry;
 		}
-		return entry;
-	}
 
 	async sleepActor(actorId: string) {
 		invariant(
@@ -461,11 +638,12 @@ export class FileSystemGlobalState {
 			// Stop actor
 			invariant(actor.actor, "actor should be loaded");
 			await actor.actor.onStop("sleep");
-		} finally {
-			// Ensure any pending KV writes finish before removing the entry.
-			await this.#withActorWrite(actorId, async () => {});
-			actor.stopPromise?.resolve();
-			actor.stopPromise = undefined;
+			} finally {
+				// Ensure any pending KV writes finish before removing the entry.
+				await this.#withActorWrite(actorId, async () => {});
+				this.#closeActorKvDatabase(actorId);
+				actor.stopPromise?.resolve();
+				actor.stopPromise = undefined;
 
 			// Remove from map after stop is complete
 			this.#actors.delete(actorId);
@@ -515,8 +693,9 @@ export class FileSystemGlobalState {
 				await actor.actor.onStop("destroy");
 			}
 
-			// Ensure any pending KV writes finish before deleting files.
-			await this.#withActorWrite(actorId, async () => {});
+				// Ensure any pending KV writes finish before deleting files.
+				await this.#withActorWrite(actorId, async () => {});
+				this.#closeActorKvDatabase(actorId);
 
 			// Clear alarm timeout if exists
 			if (actor.alarmTimeout) {
@@ -924,14 +1103,14 @@ export class FileSystemGlobalState {
 					connectableTs: now,
 					sleepTs: null, // Clear sleep timestamp when actor wakes up
 				};
-				if (this.#persist) {
-					await this.#performWrite(
-						actorId,
-						lockedEntry.generation,
-						lockedEntry.state,
-					);
-				}
-			});
+					if (this.#persist) {
+						await this.#performWrite(
+							actorId,
+							lockedEntry.generation,
+							lockedEntry.state,
+						);
+					}
+				});
 
 			// Finish
 			entry.startPromise.resolve();
@@ -1147,46 +1326,8 @@ export class FileSystemGlobalState {
 				}
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
-
-			// Create a mutable copy of kvStorage
-			const newKvStorage = [...entry.state.kvStorage];
-
-			// Update kvStorage with new entries
-			for (const [key, value] of entries) {
-				// Find existing entry with the same key
-				const existingIndex = newKvStorage.findIndex((e) =>
-					arrayBuffersEqual(e.key, bufferToArrayBuffer(key)),
-				);
-
-				if (existingIndex >= 0) {
-					// Replace existing entry with new one
-					newKvStorage[existingIndex] = {
-						key: bufferToArrayBuffer(key),
-						value: bufferToArrayBuffer(value),
-					};
-				} else {
-					// Add new entry
-					newKvStorage.push({
-						key: bufferToArrayBuffer(key),
-						value: bufferToArrayBuffer(value),
-					});
-				}
-			}
-
-			// Update state with new kvStorage
-			entry.state = {
-				...entry.state,
-				kvStorage: newKvStorage,
-			};
-
-			// Save state to disk
-			if (this.#persist) {
-				await this.#performWrite(
-					actorId,
-					entry.generation,
-					entry.state,
-				);
-			}
+			const db = this.#getOrCreateActorKvDatabase(actorId);
+			this.#putKvEntriesInDb(db, entries);
 		});
 	}
 
@@ -1207,18 +1348,18 @@ export class FileSystemGlobalState {
 			}
 		}
 
+		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const results: (Uint8Array | null)[] = [];
 		for (const key of keys) {
-			// Find entry with the same key
-			const foundEntry = entry.state.kvStorage.find((e) =>
-				arrayBuffersEqual(e.key, bufferToArrayBuffer(key)),
+			const row = db.get<{ value: Uint8Array | ArrayBuffer }>(
+				"SELECT value FROM kv WHERE key = ?",
+				[key],
 			);
-
-			if (foundEntry) {
-				results.push(new Uint8Array(foundEntry.value));
-			} else {
+			if (!row) {
 				results.push(null);
+				continue;
 			}
+			results.push(ensureUint8Array(row.value, "value"));
 		}
 		return results;
 	}
@@ -1235,34 +1376,24 @@ export class FileSystemGlobalState {
 				}
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
-
-			// Create a mutable copy of kvStorage
-			const newKvStorage = [...entry.state.kvStorage];
-
-			// Delete entries from kvStorage
-			for (const key of keys) {
-				const indexToDelete = newKvStorage.findIndex((e) =>
-					arrayBuffersEqual(e.key, bufferToArrayBuffer(key)),
-				);
-
-				if (indexToDelete >= 0) {
-					newKvStorage.splice(indexToDelete, 1);
-				}
+			if (keys.length === 0) {
+				return;
 			}
 
-			// Update state with new kvStorage
-			entry.state = {
-				...entry.state,
-				kvStorage: newKvStorage,
-			};
-
-			// Save state to disk
-			if (this.#persist) {
-				await this.#performWrite(
-					actorId,
-					entry.generation,
-					entry.state,
-				);
+			const db = this.#getOrCreateActorKvDatabase(actorId);
+			db.exec("BEGIN");
+			try {
+				for (const key of keys) {
+					db.run("DELETE FROM kv WHERE key = ?", [key]);
+				}
+				db.exec("COMMIT");
+			} catch (error) {
+				try {
+					db.exec("ROLLBACK");
+				} catch {
+					// Ignore rollback errors, original error is more actionable.
+				}
+				throw error;
 			}
 		});
 	}
@@ -1284,23 +1415,21 @@ export class FileSystemGlobalState {
 			}
 		}
 
-		const results: [Uint8Array, Uint8Array][] = [];
-		for (const kvEntry of entry.state.kvStorage) {
-			const keyBytes = new Uint8Array(kvEntry.key);
-			// Check if key starts with prefix
-			if (keyBytes.length >= prefix.length) {
-				let hasPrefix = true;
-				for (let i = 0; i < prefix.length; i++) {
-					if (keyBytes[i] !== prefix[i]) {
-						hasPrefix = false;
-						break;
-					}
-				}
-				if (hasPrefix) {
-					results.push([keyBytes, new Uint8Array(kvEntry.value)]);
-				}
-			}
-		}
-		return results;
+		const db = this.#getOrCreateActorKvDatabase(actorId);
+		const upperBound = computePrefixUpperBound(prefix);
+		const rows = upperBound
+			? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+					"SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ASC",
+					[prefix, upperBound],
+				)
+			: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+					"SELECT key, value FROM kv WHERE key >= ? ORDER BY key ASC",
+					[prefix],
+				);
+
+		return rows.map((row) => [
+			ensureUint8Array(row.key, "key"),
+			ensureUint8Array(row.value, "value"),
+		]);
 	}
 }
