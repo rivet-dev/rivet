@@ -1,0 +1,195 @@
+# MARK: Message To Server
+
+type PatchStateRequest struct {
+	state: data
+}
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: data
+}
+
+type StateRequest struct {
+	id: uint
+}
+
+type ConnectionsRequest struct {
+	id: uint
+}
+
+type RpcsListRequest struct {
+	id: uint
+}
+
+type TraceQueryRequest struct {
+	id: uint
+	startMs: uint
+	endMs: uint
+	limit: uint
+}
+
+type QueueRequest struct {
+	id: uint
+	limit: uint
+}
+
+type WorkflowHistoryRequest struct {
+	id: uint
+}
+
+type DatabaseSchemaRequest struct {
+	id: uint
+}
+
+# Fetches rows from a specific table with a row limit and offset.
+type DatabaseTableRowsRequest struct {
+	id: uint
+	table: str
+	limit: uint
+	offset: uint
+}
+
+type ToServerBody union {
+	PatchStateRequest |
+	StateRequest |
+	ConnectionsRequest |
+	ActionRequest |
+	RpcsListRequest |
+	TraceQueryRequest |
+	QueueRequest |
+	WorkflowHistoryRequest |
+	DatabaseSchemaRequest |
+	DatabaseTableRowsRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+# MARK: Message To Client
+
+type State data
+
+type Connection struct {
+	id: str
+	details: data
+}
+
+# Workflow history is encoded using schemas/transport.
+type WorkflowHistory data
+
+type Init struct {
+	connections: list<Connection>
+	state: optional<State>
+	isStateEnabled: bool
+	rpcs: list<str>
+	isDatabaseEnabled: bool
+	queueSize: uint
+	workflowHistory: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
+}
+
+type ConnectionsResponse struct {
+	rid: uint
+	connections: list<Connection>
+}
+
+type StateResponse struct {
+	rid: uint
+	state: optional<State>
+	isStateEnabled: bool
+}
+
+type ActionResponse struct {
+	rid: uint
+	output: data
+}
+
+type TraceQueryResponse struct {
+	rid: uint
+	payload: data
+}
+
+type QueueMessageSummary struct {
+	id: uint
+	name: str
+	createdAtMs: uint
+}
+
+type QueueStatus struct {
+	size: uint
+	maxSize: uint
+	messages: list<QueueMessageSummary>
+	truncated: bool
+}
+
+type QueueResponse struct {
+	rid: uint
+	status: QueueStatus
+}
+
+type WorkflowHistoryResponse struct {
+	rid: uint
+	history: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
+}
+
+# Database schema is CBOR-encoded with table metadata.
+type DatabaseSchemaResponse struct {
+	rid: uint
+	schema: data
+}
+
+# Database table rows result is CBOR-encoded rows.
+type DatabaseTableRowsResponse struct {
+	rid: uint
+	result: data
+}
+
+type StateUpdated struct {
+	state: State
+}
+
+type QueueUpdated struct {
+	queueSize: uint
+}
+
+type WorkflowHistoryUpdated struct {
+	history: WorkflowHistory
+}
+
+type RpcsListResponse struct {
+	rid: uint
+	rpcs: list<str>
+}
+
+type ConnectionsUpdated struct {
+	connections: list<Connection>
+}
+
+type Error struct {
+	message: str
+}
+
+type ToClientBody union {
+	StateResponse |
+	ConnectionsResponse |
+	ActionResponse |
+	ConnectionsUpdated |
+	QueueUpdated |
+	StateUpdated |
+	WorkflowHistoryUpdated |
+	RpcsListResponse |
+	TraceQueryResponse |
+	QueueResponse |
+	WorkflowHistoryResponse |
+	Error |
+	Init |
+	DatabaseSchemaResponse |
+	DatabaseTableRowsResponse
+}
+
+type ToClient struct {
+	body: ToClientBody
+}

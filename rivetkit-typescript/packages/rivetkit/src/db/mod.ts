@@ -6,6 +6,31 @@ interface DatabaseFactoryConfig {
 }
 
 /**
+ * Mutex to serialize async operations on a wa-sqlite database handle.
+ * wa-sqlite is not safe for concurrent operations on the same handle.
+ */
+class DbMutex {
+	#locked = false;
+	#waiting: (() => void)[] = [];
+
+	async run<T>(fn: () => Promise<T>): Promise<T> {
+		while (this.#locked) {
+			await new Promise<void>((resolve) => this.#waiting.push(resolve));
+		}
+		this.#locked = true;
+		try {
+			return await fn();
+		} finally {
+			this.#locked = false;
+			const next = this.#waiting.shift();
+			if (next) {
+				next();
+			}
+		}
+	}
+}
+
+/**
  * Create a KV store wrapper that uses the actor driver's KV operations
  */
 function createActorKvStore(kv: {
@@ -36,6 +61,8 @@ function createActorKvStore(kv: {
 export function db({
 	onMigrate,
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
+	const mutex = new DbMutex();
+
 	return {
 		createClient: async (ctx) => {
 			// Check if override is provided
@@ -71,37 +98,39 @@ export function db({
 			return {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<string, unknown>,
-				>(
-					query: string,
-					...args: unknown[]
-				): Promise<TRow[]> => {
-					if (args.length > 0) {
-						// Use parameterized query when args are provided
-						const { rows, columns } = await db.query(query, args);
-						return rows.map((row: unknown[]) => {
-							const rowObj: Record<string, unknown> = {};
-							for (let i = 0; i < row.length; i++) {
-								rowObj[columns[i]] = row[i];
+					>(
+						query: string,
+						...args: unknown[]
+					): Promise<TRow[]> => {
+						return mutex.run(async () => {
+							if (args.length > 0) {
+								// Use parameterized query when args are provided
+								const { rows, columns } = await db.query(query, args);
+								return rows.map((row: unknown[]) => {
+									const rowObj: Record<string, unknown> = {};
+									for (let i = 0; i < row.length; i++) {
+										rowObj[columns[i]] = row[i];
+									}
+									return rowObj;
+								}) as TRow[];
 							}
-							return rowObj;
-						}) as TRow[];
-					}
 
-					// Use exec for non-parameterized queries
-					const results: Record<string, unknown>[] = [];
-					let columnNames: string[] | null = null;
-					await db.exec(query, (row: unknown[], columns: string[]) => {
-						if (!columnNames) {
-							columnNames = columns;
-						}
-						const rowObj: Record<string, unknown> = {};
-						for (let i = 0; i < row.length; i++) {
-							rowObj[columnNames[i]] = row[i];
-						}
-						results.push(rowObj);
-					});
-					return results as TRow[];
-				},
+							// Use exec for non-parameterized queries
+							const results: Record<string, unknown>[] = [];
+							let columnNames: string[] | null = null;
+							await db.exec(query, (row: unknown[], columns: string[]) => {
+								if (!columnNames) {
+									columnNames = columns;
+								}
+								const rowObj: Record<string, unknown> = {};
+								for (let i = 0; i < row.length; i++) {
+									rowObj[columnNames[i]] = row[i];
+								}
+								results.push(rowObj);
+							});
+							return results as TRow[];
+						});
+					},
 				close: async () => {
 					await db.close();
 				},

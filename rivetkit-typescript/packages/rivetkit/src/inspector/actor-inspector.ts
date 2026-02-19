@@ -103,6 +103,73 @@ export class ActorInspector {
 		}
 	}
 
+	async getDatabaseSchema(): Promise<ArrayBuffer> {
+		if (!this.isDatabaseEnabled()) {
+			throw new actorErrors.DatabaseNotEnabled();
+		}
+
+		const db = this.actor.db;
+
+		// Get table list from sqlite_master, excluding internal tables.
+		const tables = await db.execute(
+			"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'",
+		) as { name: string; type: string }[];
+
+		// Serialize all queries to avoid concurrent wa-sqlite access
+		// which can cause "file is not a database" errors.
+		const tableInfos = [];
+		for (const table of tables) {
+			const quoted = `"${escapeDoubleQuotes(table.name)}"`;
+			const sample = await db.execute(
+				`SELECT * FROM ${quoted} LIMIT 1`,
+			) as Record<string, unknown>[];
+			const countResult = await db.execute(
+				`SELECT COUNT(*) as count FROM ${quoted}`,
+			) as { count: number }[];
+
+			const columnNames = sample?.[0]
+				? Object.keys(sample[0])
+				: [];
+
+			tableInfos.push({
+				table: { schema: "main", name: table.name, type: table.type },
+				columns: columnNames.map((name, cid) => ({
+					cid,
+					name,
+					type: "",
+					notnull: 0,
+					dflt_value: null,
+					pk: 0,
+				})),
+				foreignKeys: [],
+				records: countResult?.[0]?.count ?? 0,
+			});
+		}
+
+		return bufferToArrayBuffer(cbor.encode({ tables: tableInfos }));
+	}
+
+	async getDatabaseTableRows(
+		table: string,
+		limit: number,
+		offset: number,
+	): Promise<ArrayBuffer> {
+		if (!this.isDatabaseEnabled()) {
+			throw new actorErrors.DatabaseNotEnabled();
+		}
+
+		const db = this.actor.db;
+		const safeLimit = Math.max(0, Math.min(Math.floor(limit), 500));
+		const safeOffset = Math.max(0, Math.floor(offset));
+		const quoted = `"${escapeDoubleQuotes(table)}"`;
+		const result = await db.execute(
+			`SELECT * FROM ${quoted} LIMIT ? OFFSET ?`,
+			safeLimit,
+			safeOffset,
+		);
+		return bufferToArrayBuffer(cbor.encode(result));
+	}
+
 	isStateEnabled() {
 		return this.actor.stateEnabled;
 	}
@@ -278,3 +345,8 @@ export class ActorInspector {
 		}));
 	}
 }
+
+function escapeDoubleQuotes(value: string): string {
+	return value.replace(/"/g, '""');
+}
+

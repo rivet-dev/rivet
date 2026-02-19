@@ -1,14 +1,10 @@
-import {
-	type BetterSQLite3Database,
-	drizzle as sqliteDrizzle,
-} from "drizzle-orm/better-sqlite3";
-import {
-	type SqliteRemoteDatabase,
-	drizzle as proxyDrizzle,
-} from "drizzle-orm/sqlite-proxy";
-import type { KvVfsOptions } from "../sqlite-vfs";
-import type { DatabaseProvider, RawAccess } from "../config";
 import type { Database } from "@rivetkit/sqlite-vfs";
+import {
+	drizzle as proxyDrizzle,
+	type SqliteRemoteDatabase,
+} from "drizzle-orm/sqlite-proxy";
+import type { DatabaseProvider, RawAccess } from "../config";
+import type { KvVfsOptions } from "../sqlite-vfs";
 
 export * from "./sqlite-core";
 
@@ -60,29 +56,64 @@ function createActorKvStore(kv: {
 }
 
 /**
+ * Mutex to serialize async operations on a wa-sqlite database handle.
+ * wa-sqlite is not safe for concurrent operations on the same handle.
+ */
+class DbMutex {
+	#locked = false;
+	#waiting: (() => void)[] = [];
+
+	async acquire(): Promise<void> {
+		while (this.#locked) {
+			await new Promise<void>((resolve) => this.#waiting.push(resolve));
+		}
+		this.#locked = true;
+	}
+
+	release(): void {
+		this.#locked = false;
+		const next = this.#waiting.shift();
+		if (next) {
+			next();
+		}
+	}
+
+	async run<T>(fn: () => Promise<T>): Promise<T> {
+		await this.acquire();
+		try {
+			return await fn();
+		} finally {
+			this.release();
+		}
+	}
+}
+
+/**
  * Create a sqlite-proxy async callback from a wa-sqlite Database
  */
-function createProxyCallback(waDb: Database) {
+function createProxyCallback(waDb: Database, mutex: DbMutex) {
 	return async (
 		sql: string,
 		params: any[],
 		method: "run" | "all" | "values" | "get",
 	): Promise<{ rows: any }> => {
-		if (method === "run") {
-			await waDb.run(sql, params);
-			return { rows: [] };
-		}
+		return mutex.run(async () => {
+			if (method === "run") {
+				await waDb.run(sql, params);
+				return { rows: [] };
+			}
 
-		// For all/get/values, use parameterized query
-		const result = await waDb.query(sql, params);
+			// For all/get/values, use parameterized query
+			const result = await waDb.query(sql, params);
 
-		// drizzle's mapResultRow accesses rows by column index (positional arrays)
-		// so we return raw arrays for all methods
-		if (method === "get") {
-			return { rows: result.rows[0] };
-		}
+			// drizzle's mapResultRow accesses rows by column index (positional arrays)
+			// so we return raw arrays for all methods
+			if (method === "get") {
+				return { rows: result.rows[0] };
+			}
 
-		return { rows: result.rows };
+			return { rows: result.rows };
+		});
 	};
 }
 
@@ -92,24 +123,29 @@ function createProxyCallback(waDb: Database) {
  */
 async function runInlineMigrations(
 	waDb: Database,
+	mutex: DbMutex,
 	migrations: any,
 ): Promise<void> {
 	// Create migrations table
-	await waDb.exec(`
+	await mutex.run(() =>
+		waDb.exec(`
 		CREATE TABLE IF NOT EXISTS __drizzle_migrations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			hash TEXT NOT NULL,
 			created_at INTEGER
 		)
-	`);
+	`),
+	);
 
 	// Get the last applied migration
 	let lastCreatedAt = 0;
-	await waDb.exec(
-		"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
-		(row) => {
-			lastCreatedAt = Number(row[2]) || 0;
-		},
+	await mutex.run(() =>
+		waDb.exec(
+			"SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
+			(row) => {
+				lastCreatedAt = Number(row[2]) || 0;
+			},
+		),
 	);
 
 	// Apply pending migrations from journal entries
@@ -126,11 +162,13 @@ async function runInlineMigrations(
 		if (!sql) continue;
 
 		// Execute migration SQL
-		await waDb.exec(sql);
+		await mutex.run(() => waDb.exec(sql));
 
 		// Record migration
-		await waDb.exec(
-			`INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('${entry.tag}', ${entry.when})`,
+		await mutex.run(() =>
+			waDb.exec(
+				`INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('${entry.tag}', ${entry.when})`,
+			),
 		);
 	}
 }
@@ -142,6 +180,7 @@ export function db<
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
 	// Store the wa-sqlite Database instance alongside the drizzle client
 	let waDbInstance: Database | null = null;
+	const mutex = new DbMutex();
 
 	return {
 		createClient: async (ctx) => {
@@ -157,7 +196,7 @@ export function db<
 			waDbInstance = waDb;
 
 			// Create the async proxy callback
-			const callback = createProxyCallback(waDb);
+			const callback = createProxyCallback(waDb, mutex);
 
 			// Create the drizzle instance using sqlite-proxy
 			const client = proxyDrizzle<TSchema>(callback, config);
@@ -169,30 +208,40 @@ export function db<
 					query: string,
 					...args: unknown[]
 				): Promise<TRow[]> => {
-					if (args.length > 0) {
-						const { rows, columns } = await waDb.query(query, args);
-						return rows.map((row: unknown[]) => {
-							const rowObj: Record<string, unknown> = {};
-							for (let i = 0; i < row.length; i++) {
-								rowObj[columns[i]] = row[i];
-							}
-							return rowObj;
-						}) as TRow[];
-					}
-
-					const results: Record<string, unknown>[] = [];
-					let columnNames: string[] | null = null;
-					await waDb.exec(query, (row: unknown[], columns: string[]) => {
-						if (!columnNames) {
-							columnNames = columns;
+					return mutex.run(async () => {
+						if (args.length > 0) {
+							const result = await waDb.query(query, args);
+							return result.rows.map((row: unknown[]) => {
+								const obj: Record<string, unknown> = {};
+								for (
+									let i = 0;
+									i < result.columns.length;
+									i++
+									) {
+										obj[result.columns[i]] = row[i];
+									}
+									return obj;
+								}) as TRow[];
 						}
-						const rowObj: Record<string, unknown> = {};
-						for (let i = 0; i < row.length; i++) {
-							rowObj[columnNames[i]] = row[i];
-						}
-						results.push(rowObj);
+						// Use exec for non-parameterized queries since
+						// wa-sqlite's query() can crash on some statements.
+						const results: Record<string, unknown>[] = [];
+						let columnNames: string[] | null = null;
+						await waDb.exec(
+							query,
+							(row: unknown[], columns: string[]) => {
+									if (!columnNames) {
+										columnNames = columns;
+									}
+									const obj: Record<string, unknown> = {};
+									for (let i = 0; i < row.length; i++) {
+										obj[columnNames[i]] = row[i];
+									}
+									results.push(obj);
+								},
+							);
+							return results as TRow[];
 					});
-					return results as TRow[];
 				},
 				close: async () => {
 					await waDb.close();
@@ -202,7 +251,11 @@ export function db<
 		},
 		onMigrate: async (_client) => {
 			if (config?.migrations && waDbInstance) {
-				await runInlineMigrations(waDbInstance, config.migrations);
+				await runInlineMigrations(
+					waDbInstance,
+					mutex,
+					config.migrations,
+				);
 			}
 		},
 		onDestroy: async (client) => {

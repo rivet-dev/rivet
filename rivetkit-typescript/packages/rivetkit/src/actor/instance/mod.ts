@@ -473,7 +473,7 @@ export class ActorInstance<
 		// Abort listeners
 		try {
 			this.#abortController.abort();
-		} catch {}
+		} catch { }
 
 		// Wait for run handler to complete
 		await this.#waitForRunHandler(this.#config.options.runStopTimeout);
@@ -590,14 +590,14 @@ export class ActorInstance<
 	async processMessage(
 		message: {
 			body:
-				| {
-						tag: "ActionRequest";
-						val: { id: bigint; name: string; args: unknown };
-				  }
-				| {
-						tag: "SubscriptionRequest";
-						val: { eventName: string; subscribe: boolean };
-				  };
+			| {
+				tag: "ActionRequest";
+				val: { id: bigint; name: string; args: unknown };
+			}
+			| {
+				tag: "SubscriptionRequest";
+				val: { eventName: string; subscribe: boolean };
+			};
 		},
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) {
@@ -668,6 +668,8 @@ export class ActorInstance<
 			throw new errors.ActionNotFound(actionName);
 		}
 
+		this.#activeKeepAwakeCount++;
+		this.resetSleepTimer();
 		const actionSpan = this.startTraceSpan(`actor.action.${actionName}`, {
 			"rivet.action.name": actionName,
 		});
@@ -688,9 +690,15 @@ export class ActorInstance<
 				);
 
 				let output: unknown;
-				if (outputOrPromise instanceof Promise) {
+				const maybeThenable = outputOrPromise as {
+					then?: (
+						onfulfilled?: unknown,
+						onrejected?: unknown,
+					) => unknown;
+				};
+				if (maybeThenable && typeof maybeThenable.then === "function") {
 					output = await deadline(
-						outputOrPromise,
+						Promise.resolve(outputOrPromise),
 						this.#config.options.actionTimeout,
 					);
 				} else {
@@ -750,6 +758,15 @@ export class ActorInstance<
 					status: { code: "OK" },
 				});
 			}
+			this.#activeKeepAwakeCount--;
+			if (this.#activeKeepAwakeCount < 0) {
+				this.#activeKeepAwakeCount = 0;
+				this.#rLog.warn({
+					msg: "active keep awake count went below 0, this is a RivetKit bug",
+					...EXTRA_ERROR_LOG,
+				});
+			}
+			this.resetSleepTimer();
 			this.stateManager.savePersistThrottled();
 		}
 	}
@@ -1365,31 +1382,52 @@ export class ActorInstance<
 
 	async #setupDatabase() {
 		if ("db" in this.#config && this.#config.db) {
-			const client = await this.#config.db.createClient({
-				actorId: this.#actorId,
-				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
-					? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
-					: undefined,
-				overrideDrizzleDatabaseClient:
-					this.driver.overrideDrizzleDatabaseClient
+			try {
+				const client = await this.#config.db.createClient({
+					actorId: this.#actorId,
+					overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
 						? () =>
-								this.driver.overrideDrizzleDatabaseClient!(
-									this.#actorId,
-								)
+								this.driver.overrideRawDatabaseClient!(this.#actorId)
 						: undefined,
-				kv: {
-					batchPut: (entries) =>
-						this.driver.kvBatchPut(this.#actorId, entries),
-					batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
-					batchDelete: (keys) =>
-						this.driver.kvBatchDelete(this.#actorId, keys),
-				},
-				sqliteVfs: this.driver.sqliteVfs,
-			});
-			this.#rLog.info({ msg: "database migration starting" });
-			await this.#config.db.onMigrate?.(client);
-			this.#rLog.info({ msg: "database migration complete" });
-			this.#db = client;
+					overrideDrizzleDatabaseClient:
+						this.driver.overrideDrizzleDatabaseClient
+							? () =>
+									this.driver.overrideDrizzleDatabaseClient!(
+										this.#actorId,
+									)
+							: undefined,
+					kv: {
+						batchPut: (entries) =>
+							this.driver.kvBatchPut(this.#actorId, entries),
+						batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
+						batchDelete: (keys) =>
+							this.driver.kvBatchDelete(this.#actorId, keys),
+					},
+					sqliteVfs: this.driver.sqliteVfs,
+				});
+				this.#rLog.info({ msg: "database migration starting" });
+				await this.#config.db.onMigrate?.(client);
+				this.#rLog.info({ msg: "database migration complete" });
+					this.#db = client;
+				} catch (error) {
+					if (error instanceof Error) {
+						this.#rLog.error({
+							msg: "database setup failed",
+						error: stringifyError(error),
+					});
+					throw error;
+				}
+				const wrappedError = new Error(
+					`Database setup failed: ${String(error)}`,
+				);
+				this.#rLog.error({
+					msg: "database setup failed with non-Error object",
+					error: String(error),
+					errorType: typeof error,
+					});
+					throw wrappedError;
+				}
+			}
 		}
 	}
 
