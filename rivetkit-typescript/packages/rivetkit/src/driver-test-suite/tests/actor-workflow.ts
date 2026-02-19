@@ -79,6 +79,27 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 			expect(next.ticks).toBeGreaterThan(initial.ticks);
 		});
 
+		test.skipIf(driverTestConfig.skip?.sleep)(
+			"workflow run teardown does not wait for runStopTimeout",
+			async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.workflowStopTeardownActor.getOrCreate([
+					"workflow-stop-teardown",
+				]);
+
+				await actor.getTimeline();
+				await waitFor(driverTestConfig, 1_200);
+				const timeline = await actor.getTimeline();
+
+				expect(timeline.wakeAts.length).toBeGreaterThanOrEqual(2);
+				expect(timeline.sleepAts.length).toBeGreaterThanOrEqual(1);
+
+				const firstSleepDelayMs =
+					timeline.sleepAts[0] - timeline.wakeAts[0];
+				expect(firstSleepDelayMs).toBeLessThan(1_000);
+			},
+		);
+
 		// NOTE: Test for workflow persistence across actor sleep is complex because
 		// calling c.sleep() during a workflow prevents clean shutdown. The workflow
 		// persistence is implicitly tested by the "sleeps and resumes between ticks"
