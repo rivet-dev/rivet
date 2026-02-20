@@ -61,17 +61,6 @@
 		"native_url": "http://clickhouse:9301",
 		"username": "system",
 		"password": "default",
-		"provision_users": {
-			"vector": {
-				"username": "vector",
-				"password": "vector",
-				"role": "write"
-			}
-		},
 		"secure": false
-	},
-	"vector_http": {
-		"host": "vector-client-dc-b",
-		"port": 5022
 	}
 }
