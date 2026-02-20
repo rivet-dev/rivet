@@ -19,7 +19,6 @@ import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
 import { ActorTracesTab } from "./actor-traces-tab";
-import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
 import {
@@ -28,6 +27,7 @@ import {
 } from "./guard-connectable-inspector";
 import type { ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
+import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
 
 interface ActorsActorDetailsProps {
 	tab?: string;
@@ -132,46 +132,6 @@ export function ActorTabs({
 						>
 							Connections
 						</TabsTrigger>
-
-						<TabsTrigger
-							disabled={disabled}
-							value="queue"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Queue
-						</TabsTrigger>
-
-						<TabsTrigger
-							disabled={disabled}
-							value="traces"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Traces
-						</TabsTrigger>
-
-						<TabsTrigger
-							disabled={disabled}
-							value="workflow"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Workflow
-						</TabsTrigger>
-
-						<TabsTrigger
-							disabled={disabled}
-							value="database"
-							className="text-xs px-3 py-1 pb-2"
-						>
-							Database
-						</TabsTrigger>
-
-						{/* <TabsTrigger
-								disabled={disabled}
-								value="logs"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Logs
-							</TabsTrigger> */}
 						<TabsTrigger
 							disabled={disabled}
 							value="metadata"
@@ -179,13 +139,6 @@ export function ActorTabs({
 						>
 							Metadata
 						</TabsTrigger>
-						{/* <TabsTrigger
-								disabled={disabled}
-								value="metrics"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Metrics
-							</TabsTrigger> */}
 					</TabsList>
 					{actorId ? (
 						<Flex
@@ -227,42 +180,12 @@ export function ActorTabs({
 							<ActorConnectionsTab actorId={actorId} />
 						)}
 					</TabsContent>
-
-					<TabsContent value="queue" className="min-h-0 flex-1 mt-0">
-						{guardContent || <ActorQueueTab actorId={actorId} />}
-					</TabsContent>
-
-					<TabsContent value="traces" className="min-h-0 flex-1 mt-0">
-						{guardContent || <ActorTracesTab actorId={actorId} />}
-					</TabsContent>
-					<TabsContent
-						value="workflow"
-						className="min-h-0 flex-1 mt-0 h-full"
-					>
-						{guardContent || <ActorWorkflowTab actorId={actorId} />}
-					</TabsContent>
-					<TabsContent
-						value="database"
-						className="min-h-0 min-w-0 flex-1 mt-0 h-full"
-					>
-						{guardContent || <ActorDatabaseTab actorId={actorId} />}
-					</TabsContent>
 					<TabsContent
 						value="state"
 						className="min-h-0 flex-1 mt-0 relative"
 					>
 						{guardContent || <ActorStateTab actorId={actorId} />}
 					</TabsContent>
-					{/* {supportsMetrics ? (
-						<TabsContent
-							value="metrics"
-							className="min-h-0 flex-1 mt-0 h-full"
-						>
-							{guardContent || (
-								<ActorMetricsTab actorId={actorId} />
-							)}
-						</TabsContent>
-					) : null} */}
 				</>
 			) : null}
 			{children}
