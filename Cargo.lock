@@ -3379,6 +3379,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runner-protocol",
  "rivet-runtime",
+ "rivet-types",
  "serde",
  "serde_bare",
  "serde_json",

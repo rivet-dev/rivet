@@ -497,7 +497,27 @@ export class EngineActorDriver implements ActorDriver {
 
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
+
 			handler.actor = await definition.instantiate();
+
+			// Apply protocol limits as per-instance overrides without mutating the shared definition
+			const protocolMetadata = this.#runner.getProtocolMetadata();
+			if (protocolMetadata) {
+				logger().debug({
+					msg: "applying config limits from protocol",
+					protocolMetadata,
+				});
+
+				const stopThresholdMax = Math.max(Number(protocolMetadata.actorStopThreshold) - 1000, 0);
+				handler.actor.overrides.onSleepTimeout = stopThresholdMax;
+				handler.actor.overrides.onDestroyTimeout = stopThresholdMax;
+
+				if (protocolMetadata.serverlessDrainGracePeriod) {
+					const drainMax = Math.max(Number(protocolMetadata.serverlessDrainGracePeriod) - 1000, 0);
+					handler.actor.overrides.runStopTimeout = drainMax;
+					handler.actor.overrides.waitUntilTimeout = drainMax;
+				}
+			}
 
 			// Start actor
 			await handler.actor.start(

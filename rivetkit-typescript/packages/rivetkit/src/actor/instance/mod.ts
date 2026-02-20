@@ -195,6 +195,19 @@ export class ActorInstance<
 	// MARK: - Tracing
 	#traces!: Traces<OtlpExportTraceServiceRequestJson>;
 
+	// MARK: - Driver Overrides
+	/**
+	 * Per-instance config option overrides applied by the driver after creation.
+	 * When set, the effective option value is the minimum of the base config
+	 * value and the override value.
+	 */
+	overrides: {
+		onSleepTimeout?: number;
+		onDestroyTimeout?: number;
+		runStopTimeout?: number;
+		waitUntilTimeout?: number;
+	} = {};
+
 	// MARK: - Constructor
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {
 		this.#config = config;
@@ -495,7 +508,7 @@ export class ActorInstance<
 			} catch { }
 
 			// Wait for run handler to complete
-			await this.#waitForRunHandler(this.#config.options.runStopTimeout);
+			await this.#waitForRunHandler(this.overrides.runStopTimeout !== undefined ? Math.min(this.#config.options.runStopTimeout, this.overrides.runStopTimeout) : this.#config.options.runStopTimeout);
 
 			// Call onStop lifecycle
 			if (mode === "sleep") {
@@ -511,7 +524,7 @@ export class ActorInstance<
 
 			// Wait for background tasks
 			await this.#waitBackgroundPromises(
-				this.#config.options.waitUntilTimeout,
+				this.overrides.waitUntilTimeout !== undefined ? Math.min(this.#config.options.waitUntilTimeout, this.overrides.waitUntilTimeout) : this.#config.options.waitUntilTimeout,
 			);
 
 			// Clear timeouts and save state
@@ -1265,7 +1278,7 @@ export class ActorInstance<
 						if (result instanceof Promise) {
 							await deadline(
 								result,
-								this.#config.options.onSleepTimeout,
+								this.overrides.onSleepTimeout !== undefined ? Math.min(this.#config.options.onSleepTimeout, this.overrides.onSleepTimeout) : this.#config.options.onSleepTimeout,
 							);
 						}
 					},
@@ -1297,7 +1310,7 @@ export class ActorInstance<
 						if (result instanceof Promise) {
 							await deadline(
 								result,
-								this.#config.options.onDestroyTimeout,
+								this.overrides.onDestroyTimeout !== undefined ? Math.min(this.#config.options.onDestroyTimeout, this.overrides.onDestroyTimeout) : this.#config.options.onDestroyTimeout,
 							);
 						}
 					},

@@ -877,7 +877,7 @@ async fn handle_tunnel_message_mk1(
 
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
-	let msg_serialized = versioned::ToGateway::v3_to_v4(versioned::ToGateway::V3(
+	let msg_serialized = versioned::ToGateway::v3_to_v6(versioned::ToGateway::V3(
 		protocol::ToGateway::ToServerTunnelMessage(msg),
 	))?
 	.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)

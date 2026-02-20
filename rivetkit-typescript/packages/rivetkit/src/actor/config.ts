@@ -208,9 +208,7 @@ export const ActorConfigSchema = z
 				createVarsTimeout: z.number().positive().default(5000),
 				createConnStateTimeout: z.number().positive().default(5000),
 				onConnectTimeout: z.number().positive().default(5000),
-				// This must be less than engine config > pegboard.actor_stop_threshold
 				onSleepTimeout: z.number().positive().default(5000),
-				// This must be less than engine config > pegboard.actor_stop_threshold
 				onDestroyTimeout: z.number().positive().default(5000),
 				stateSaveInterval: z.number().positive().default(10_000),
 				actionTimeout: z.number().positive().default(60_000),

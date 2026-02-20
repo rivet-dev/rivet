@@ -960,6 +960,15 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "serverless_drain_grace_period": {
+          "description": "Drain grace period for serverless runners.\n\nThis time is subtracted from the configured request duration. Once `duration - grace` is reached, the runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full duration is reached) the runner websocket is forcibly closed.\n\nDefault is 10 seconds.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "serverless_retry_reset_duration": {
           "description": "How long a serverless runner goes without connection failures before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.\n\n**Experimental**",
           "type": [

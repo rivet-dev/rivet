@@ -178,6 +178,19 @@ pub struct Pegboard {
 	pub runner_event_demuxer_gc_interval_ms: Option<u64>,
 	/// Max time since last seen before actor is considered stale, in milliseconds.
 	pub runner_event_demuxer_max_last_seen_ms: Option<u64>,
+
+	/// Drain grace period for serverless runners.
+	///
+	/// This time is subtracted from the configured request duration. Once `duration - grace` is reached, the
+	/// runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full
+	/// duration is reached) the runner websocket is forcibly closed.
+	///
+	/// Default is 10 seconds.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub serverless_drain_grace_period: Option<u64>,
 }
 
 impl Pegboard {
@@ -369,5 +382,9 @@ impl Pegboard {
 
 	pub fn runner_event_demuxer_max_last_seen_ms(&self) -> u64 {
 		self.runner_event_demuxer_max_last_seen_ms.unwrap_or(30_000)
+	}
+
+	pub fn serverless_drain_grace_period(&self) -> u64 {
+		self.serverless_drain_grace_period.unwrap_or(10_000)
 	}
 }

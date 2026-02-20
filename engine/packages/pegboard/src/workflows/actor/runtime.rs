@@ -8,10 +8,7 @@ use rand::prelude::SliceRandom;
 use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
-use rivet_types::{
-	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
-	runner_configs::RunnerConfigKind,
-};
+use rivet_types::{actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant};
 
 use super::FailureReason;
 use std::time::Instant;
@@ -246,21 +243,6 @@ async fn allocate_actor_v2(
 	let crash_policy = state.crash_policy;
 	let runner_name_selector = &state.runner_name_selector;
 
-	// Check if valid serverless config exists for the current ns + runner name
-	let runner_config_res = ctx
-		.op(crate::ops::runner_config::get::Input {
-			runners: vec![(namespace_id, runner_name_selector.clone())],
-			bypass_cache: false,
-		})
-		.await?;
-	let has_valid_serverless = runner_config_res
-		.first()
-		.map(|runner| match &runner.config.kind {
-			RunnerConfigKind::Serverless { max_runners, .. } => *max_runners != 0,
-			_ => false,
-		})
-		.unwrap_or_default();
-
 	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
 	let actor_allocation_candidate_sample_size = ctx
 		.config()
@@ -274,20 +256,39 @@ async fn allocate_actor_v2(
 		.run(|tx| async move {
 			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
-			// Check if runner is an serverless runner
-			let for_serverless = tx
-				.with_subspace(namespace::keys::subspace())
-				.exists(
-					&keys::runner_config::ByVariantKey::new(
-						namespace_id,
-						RunnerConfigVariant::Serverless,
-						runner_name_selector.clone(),
-					),
-					Serializable,
-				)
-				.await?;
-
 			let tx = tx.with_subspace(keys::subspace());
+
+			// Check if a queue exists
+			let pending_actor_subspace = keys::subspace().subspace(
+				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
+					namespace_id,
+					runner_name_selector.clone(),
+				),
+			);
+
+			let ns_tx = tx.with_subspace(namespace::keys::subspace());
+			let runner_config_variant_key = keys::runner_config::ByVariantKey::new(
+				namespace_id,
+				RunnerConfigVariant::Serverless,
+				runner_name_selector.clone(),
+			);
+			let mut queue_stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
+					mode: StreamingMode::Exact,
+					limit: Some(1),
+					..(&pending_actor_subspace).into()
+				},
+				// NOTE: This is not Serializable because we don't want to conflict with other
+				// inserts/clears to this range
+				Snapshot,
+			);
+			let (for_serverless_res, queue_exists_res) = tokio::join!(
+				// Check if runner is an serverless runner
+				ns_tx.exists(&runner_config_variant_key, Serializable),
+				queue_stream.next(),
+			);
+			let for_serverless = for_serverless_res?;
+			let queue_exists = queue_exists_res.is_some();
 
 			if for_serverless {
 				tx.atomic_op(
@@ -299,28 +300,6 @@ async fn allocate_actor_v2(
 					MutationType::Add,
 				);
 			}
-
-			// Check if a queue exists
-			let pending_actor_subspace = keys::subspace().subspace(
-				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
-					namespace_id,
-					runner_name_selector.clone(),
-				),
-			);
-			let queue_exists = tx
-				.get_ranges_keyvalues(
-					universaldb::RangeOption {
-						mode: StreamingMode::Exact,
-						limit: Some(1),
-						..(&pending_actor_subspace).into()
-					},
-					// NOTE: This is not Serializable because we don't want to conflict with other
-					// inserts/clears to this range
-					Snapshot,
-				)
-				.next()
-				.await
-				.is_some();
 
 			if !queue_exists {
 				let runner_alloc_subspace =
@@ -454,9 +433,9 @@ async fn allocate_actor_v2(
 
 			// At this point in the txn there is no availability
 
-			match (crash_policy, input.force_allocate, has_valid_serverless) {
+			match (crash_policy, input.force_allocate, for_serverless) {
 				(CrashPolicy::Sleep, false, false) => Ok(AllocateActorOutputV2 {
-					serverless: for_serverless,
+					serverless: false,
 					status: AllocateActorStatus::Sleep,
 				}),
 				// Write the actor to the alloc queue to wait
