@@ -153,7 +153,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => {},
+			onDisconnected: (_code, _reason) => { },
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -356,7 +356,7 @@ export class EngineActorDriver implements ActorDriver {
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
+			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
@@ -457,6 +457,36 @@ export class EngineActorDriver implements ActorDriver {
 
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
+
+			// Apply protocol limits
+			let protocolMetadata = this.#runner.getProtocolMetadata();
+			if (protocolMetadata) {
+				logger().debug({
+					msg: "applying config limits from protocol",
+					protocolMetadata,
+				});
+
+				definition.config.options.onSleepTimeout = Math.min(
+					definition.config.options.onSleepTimeout,
+					Math.max(Number(protocolMetadata.actorStopThreshold) - 1000, 0),
+				);
+				definition.config.options.onDestroyTimeout = Math.min(
+					definition.config.options.onDestroyTimeout,
+					Math.max(Number(protocolMetadata.actorStopThreshold) - 1000, 0),
+				);
+
+				if (protocolMetadata.serverlessDrainGracePeriod) {
+					definition.config.options.runStopTimeout = Math.min(
+						definition.config.options.runStopTimeout,
+						Math.max(Number(protocolMetadata.serverlessDrainGracePeriod) - 1000, 0)
+					);
+					definition.config.options.waitUntilTimeout = Math.min(
+						definition.config.options.waitUntilTimeout,
+						Math.max(Number(protocolMetadata.serverlessDrainGracePeriod) - 1000, 0)
+					);
+				}
+			}
+
 			handler.actor = await definition.instantiate();
 
 			// Start actor

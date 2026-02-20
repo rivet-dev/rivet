@@ -108,6 +108,19 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub actor_allocation_candidate_sample_size: Option<usize>,
+
+	/// Drain grace period for serverless runners.
+	///
+	/// This time is subtracted from the configured request duration. Once `duration - grace` is reached, the
+	/// runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full
+	/// duration is reached) the runner websocket is forcibly closed.
+	///
+	/// Default is 10 seconds.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub serverless_drain_grace_period: Option<u64>,
 }
 
 impl Pegboard {
@@ -172,5 +185,9 @@ impl Pegboard {
 
 	pub fn actor_allocation_candidate_sample_size(&self) -> usize {
 		self.actor_allocation_candidate_sample_size.unwrap_or(100)
+	}
+
+	pub fn serverless_drain_grace_period(&self) -> u64 {
+		self.serverless_drain_grace_period.unwrap_or(10_000)
 	}
 }

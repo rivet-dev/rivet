@@ -1743,16 +1743,22 @@ export function decodeToServer(bytes: Uint8Array): ToServer {
  */
 export type ProtocolMetadata = {
     readonly runnerLostThreshold: i64
+    readonly actorStopThreshold: i64
+    readonly serverlessDrainGracePeriod: i64 | null
 }
 
 export function readProtocolMetadata(bc: bare.ByteCursor): ProtocolMetadata {
     return {
         runnerLostThreshold: bare.readI64(bc),
+        actorStopThreshold: bare.readI64(bc),
+        serverlessDrainGracePeriod: read7(bc),
     }
 }
 
 export function writeProtocolMetadata(bc: bare.ByteCursor, x: ProtocolMetadata): void {
     bare.writeI64(bc, x.runnerLostThreshold)
+    bare.writeI64(bc, x.actorStopThreshold)
+    write7(bc, x.serverlessDrainGracePeriod)
 }
 
 export type ToClientInit = {
