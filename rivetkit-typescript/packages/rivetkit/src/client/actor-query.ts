@@ -43,6 +43,7 @@ export async function queryActor(
 			key: query.getOrCreateForKey.key,
 			input: query.getOrCreateForKey.input,
 			region: query.getOrCreateForKey.region,
+			runner: query.getOrCreateForKey.runner,
 		});
 		actorOutput = {
 			actorId: getOrCreateOutput.actorId,
@@ -54,6 +55,7 @@ export async function queryActor(
 			key: query.create.key,
 			input: query.create.input,
 			region: query.create.region,
+			runner: query.create.runner,
 		});
 		actorOutput = {
 			actorId: createOutput.actorId,
