@@ -6,3 +6,4 @@ export {
     decodeWorkflowHistoryTransport,
     encodeWorkflowHistoryTransport,
 } from "./transport";
+export * from './types';

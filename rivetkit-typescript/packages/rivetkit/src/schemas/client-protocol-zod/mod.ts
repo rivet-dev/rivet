@@ -116,3 +116,32 @@ export const HttpResolveResponseSchema = z.object({
 	actorId: z.string(),
 });
 export type HttpResolveResponse = z.infer<typeof HttpResolveResponseSchema>;
+
+// MARK: HTTP Inspector Queue
+export const HttpInspectorQueueMessageSummarySchema = z.object({
+	id: z.number(),
+	name: z.string(),
+	createdAtMs: z.number(),
+});
+export type HttpInspectorQueueMessageSummary = z.infer<
+	typeof HttpInspectorQueueMessageSummarySchema
+>;
+
+export const HttpInspectorQueueResponseSchema = z.object({
+	size: z.number(),
+	maxSize: z.number(),
+	truncated: z.boolean(),
+	messages: z.array(HttpInspectorQueueMessageSummarySchema),
+});
+export type HttpInspectorQueueResponse = z.infer<
+	typeof HttpInspectorQueueResponseSchema
+>;
+
+// MARK: HTTP Inspector Workflow History
+export const HttpInspectorWorkflowHistoryResponseSchema = z.object({
+	history: z.unknown().nullable(),
+	isWorkflowEnabled: z.boolean(),
+});
+export type HttpInspectorWorkflowHistoryResponse = z.infer<
+	typeof HttpInspectorWorkflowHistoryResponseSchema
+>;

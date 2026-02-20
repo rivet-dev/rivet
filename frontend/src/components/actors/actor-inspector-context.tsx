@@ -12,6 +12,10 @@ import { createContext, useContext, useMemo, useRef } from "react";
 import type ReconnectingWebSocket from "reconnectingwebsocket";
 import {
 	type Connection,
+	type DatabaseColumn,
+	type DatabaseForeignKey,
+	type DatabaseSchema,
+	type DatabaseTableInfo,
 	decodeWorkflowHistoryTransport,
 	type QueueStatus,
 	type ToServer,
@@ -48,6 +52,13 @@ export const actorInspectorQueriesKeys = {
 		["actor", actorId, "is-workflow-enabled"] as const,
 };
 
+export type {
+	DatabaseColumn,
+	DatabaseForeignKey,
+	DatabaseSchema,
+	DatabaseTableInfo,
+};
+
 type QueueStatusSummary = {
 	size: number;
 	maxSize: number;
@@ -57,33 +68,6 @@ type QueueStatusSummary = {
 		name: string;
 		createdAtMs: number;
 	}>;
-};
-
-export type DatabaseColumn = {
-	cid: number;
-	name: string;
-	type: string;
-	notnull: boolean;
-	dflt_value: string | null;
-	pk: boolean | null;
-};
-
-export type DatabaseForeignKey = {
-	id: number;
-	table: string;
-	from: string;
-	to: string;
-};
-
-export type DatabaseTableInfo = {
-	table: { schema: string; name: string; type: string };
-	columns: DatabaseColumn[];
-	foreignKeys: DatabaseForeignKey[];
-	records: number;
-};
-
-export type DatabaseSchema = {
-	tables: DatabaseTableInfo[];
 };
 
 interface ActorInspectorApi {

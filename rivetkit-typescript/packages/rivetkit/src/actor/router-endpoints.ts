@@ -1,5 +1,6 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
+import z from "zod";
 import type { AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts";
 import * as errors from "@/actor/errors";
@@ -13,6 +14,7 @@ import {
 	WS_PROTOCOL_ENCODING,
 } from "@/common/actor-router-consts";
 import { stringifyError } from "@/common/utils";
+import type { QueueStatus } from "@/inspector/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
@@ -370,4 +372,46 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 			`Invalid params JSON: ${stringifyError(err)}`,
 		);
 	}
+}
+
+export async function handleQueueRequest(
+	c: HonoContext,
+	actorDriver: ActorDriver,
+) {
+	const limit = z.coerce.number().positive().safeParse(c.req.query("limit"));
+
+	if (!limit.success) {
+		throw new errors.InvalidRequest("Invalid limit parameter");
+	}
+	const actor = await actorDriver.loadActor(c.env.actorId);
+	const queueNames = await actor.inspector.getQueueStatus(limit.data);
+	return c.json({ queues: queueNames });
+}
+
+export async function handleWorkflowHistoryRequest(
+	c: HonoContext,
+	actorDriver: ActorDriver,
+) {
+	const actor = await actorDriver.loadActor(c.env.actorId);
+	if (!actor.inspector.isWorkflowEnabled()) {
+		throw new errors.InvalidRequest("Workflow history is not enabled");
+	}
+
+	const history = actor.inspector.getWorkflowHistory();
+	// TODO:
+}
+
+export async function handleDatabaseSchemaRequest(
+	c: HonoContext,
+	actorDriver: ActorDriver,
+) {
+	const actor = await actorDriver.loadActor(c.env.actorId);
+	if (!actor.inspector.isDatabaseEnabled()) {
+		throw new errors.InvalidRequest("Database is not enabled");
+	}
+
+	const schemaBuffer = await actor.inspector.getDatabaseSchema();
+	return c.body(schemaBuffer, 200, {
+		"Content-Type": "application/octet-stream",
+	});
 }
