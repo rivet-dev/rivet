@@ -91,7 +91,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "sishort"
         },
         "overrides": []
       },
@@ -127,7 +128,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (workflow_name) (rivet_gasoline_workflow_active{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"})",
+          "expr": "sum by (workflow_name) (\n    max by(workflow_name, rivet_project, rivet_datacenter) (\n        rivet_gasoline_workflow_active{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"}\n        * on(k8s_pod_name) group_left(rivet_project, rivet_datacenter)\n        (\n            (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} == bool\n            on(rivet_project, rivet_datacenter) group_left()\n            max by (rivet_project, rivet_datacenter) (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}))\n        )\n    )\n)",
           "instant": false,
           "legendFormat": "{{workflow_name}}",
           "range": true,
@@ -194,7 +195,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "sishort"
         },
         "overrides": []
       },
@@ -230,7 +232,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max by (workflow_name) (rivet_gasoline_workflow_sleeping{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"})",
+          "expr": "sum by (workflow_name) (\n    max by(workflow_name, rivet_project, rivet_datacenter) (\n        rivet_gasoline_workflow_sleeping{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"}\n        * on(k8s_pod_name) group_left(rivet_project, rivet_datacenter)\n        (\n            (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} == bool\n            on(rivet_project, rivet_datacenter) group_left()\n            max by (rivet_project, rivet_datacenter) (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}))\n        )\n    )\n)",
           "instant": false,
           "legendFormat": "{{workflow_name}}",
           "range": true,
@@ -297,7 +299,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "sishort"
         },
         "overrides": []
       },
@@ -333,7 +336,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (workflow_name) (rivet_gasoline_workflow_dead{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"})",
+          "expr": "sum by (workflow_name) (\n    max by(workflow_name, error, rivet_project, rivet_datacenter) (\n        rivet_gasoline_workflow_dead{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"}\n        * on(k8s_pod_name) group_left(rivet_project, rivet_datacenter)\n        (\n            (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} == bool\n            on(rivet_project, rivet_datacenter) group_left()\n            max by (rivet_project, rivet_datacenter) (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}))\n        )\n    )\n)",
           "instant": false,
           "legendFormat": "{{workflow_name}}",
           "range": true,
@@ -401,7 +404,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "sishort"
         },
         "overrides": []
       },
@@ -437,7 +441,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (workflow_name, error) (rivet_gasoline_workflow_dead{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"})",
+          "expr": "sum by (workflow_name, error) (\n    max by(workflow_name, error, rivet_project, rivet_datacenter) (\n        rivet_gasoline_workflow_dead{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"}\n        * on(k8s_pod_name) group_left(rivet_project, rivet_datacenter)\n        (\n            (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} == bool\n            on(rivet_project, rivet_datacenter) group_left()\n            max by (rivet_project, rivet_datacenter) (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}))\n        )\n    )\n)",
           "instant": false,
           "legendFormat": "{{workflow_name}}: {{error}}",
           "range": true,
@@ -605,7 +609,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "sishort"
         },
         "overrides": []
       },
@@ -641,7 +646,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (signal_name) (rivet_gasoline_signal_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
+          "expr": "sum by (signal_name) (\n    max by(signal_name, rivet_project, rivet_datacenter) (\n        rivet_gasoline_signal_pending{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}\n        * on(k8s_pod_name) group_left(rivet_project, rivet_datacenter)\n        (\n            (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} == bool\n            on(rivet_project, rivet_datacenter) group_left()\n            max by (rivet_project, rivet_datacenter) (rivet_gasoline_worker_last_metrics_publish{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"}))\n        )\n    )\n)",
           "instant": false,
           "legendFormat": "{{signal_name}}",
           "range": true,
@@ -1183,396 +1188,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 51
-      },
-      "id": 23,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(rivet_gasoline_pull_workflows_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
-          "format": "heatmap",
-          "legendFormat": "{{le}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Pull Workflows Duration",
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 51
-      },
-      "id": 24,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(rivet_gasoline_pull_workflows_history_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
-          "format": "heatmap",
-          "legendFormat": "{{le}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Pull Workflows History Duration",
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 0.1,
-            "axisSoftMin": 0,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 59
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": false,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "max by (worker_id) (rivet_gasoline_last_pull_workflows_duration{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
-          "instant": false,
-          "legendFormat": "{{worker_id}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Last Pull Workflows Duration",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 0.1,
-            "axisSoftMin": 0,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 59
-      },
-      "id": 14,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": false,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.7",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "max by (worker_id) (rivet_gasoline_last_pull_workflows_history_duration{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"})",
-          "instant": false,
-          "legendFormat": "{{worker_id}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Last Pull Workflows History Duration",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 51
       },
       "id": 20,
       "interval": "15s",
@@ -1660,7 +1279,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 51
       },
       "id": 26,
       "interval": "15s",
@@ -1723,6 +1342,386 @@
       ],
       "title": "Load Shedding Ratio",
       "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 60
+      },
+      "id": 23,
+      "interval": "15s",
+      "options": {
+        "calculate": false,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size"
+          }
+        },
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "max": "60",
+          "min": 0,
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "11.6.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_gasoline_pull_workflows_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pull Workflows Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 60
+      },
+      "id": 24,
+      "interval": "15s",
+      "options": {
+        "calculate": false,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size"
+          }
+        },
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdBu",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "max": "60",
+          "min": 0,
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "11.6.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(rivet_gasoline_pull_workflows_history_duration_bucket{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\"} [$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pull Workflows History Duration",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 68
+      },
+      "id": 36,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (sub_workflow_name) (rate(rivet_gasoline_workflow_dispatched_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=~\"$workflow_name\"} [$__rate_interval]))",
+          "format": "heatmap",
+          "legendFormat": "{{signal_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Workflows Dispatched/s",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 68
+      },
+      "id": 35,
+      "interval": "15s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.7",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (sub_workflow_name) (rate(rivet_gasoline_workflow_dispatched_total{rivet_project=~\"$project\",rivet_datacenter=~\"$datacenter\",workflow_name=\"\"} [$__rate_interval]))",
+          "format": "heatmap",
+          "legendFormat": "{{sub_workflow_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Workflows Dispatched/s (Not From Workflow)",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -2162,41 +2161,9 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "sishort"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "epoxy_coordinator",
-                  "epoxy_purger",
-                  "namespace",
-                  "pegboard_runner",
-                  "pegboard_runner2",
-                  "pegboard_runner_pool",
-                  "pegboard_runner_pool_error_tracker",
-                  "pegboard_serverless_conn"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 9,
@@ -2612,7 +2579,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_project)",
+        "definition": "label_values(up, rivet_project)",
         "includeAll": true,
         "label": "Project",
         "multi": true,
@@ -2620,34 +2587,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(rivet_project)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "text": "All",
-          "value": [
-            "$__all"
-          ]
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
-        "includeAll": true,
-        "label": "Datacenter",
-        "multi": true,
-        "name": "datacenter",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+          "query": "label_values(up, rivet_project)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -2660,6 +2600,33 @@
           "text": [
             "All"
           ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(up{rivet_project=~\"$project\"},rivet_datacenter)",
+        "includeAll": true,
+        "label": "Datacenter",
+        "multi": true,
+        "name": "datacenter",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up{rivet_project=~\"$project\"},rivet_datacenter)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -2686,12 +2653,12 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Gasoline",
   "uid": "636d22f9-d18f-4086-8b45-7c50886a105c",
-  "version": 7
+  "version": 9
 }

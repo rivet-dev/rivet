@@ -343,6 +343,8 @@ export function generateDockerCompose(context: TemplateContext) {
 				environment: [
 					`RIVET_ENDPOINT=http://${context.getServiceHost("rivet-engine", datacenter.name, 0)}:6420`,
 					`RIVET_RUNNER_TOTAL_SLOTS=1000000`,
+					`AUTOSTART_RUNNER=1`,
+					`AUTOCONFIGURE_SERVERLESS=0`
 				],
 				stop_grace_period: "4s",
 				ports: isPrimary && i === 0 ? [`5050:5050`] : undefined,

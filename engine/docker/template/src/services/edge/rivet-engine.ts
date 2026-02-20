@@ -63,10 +63,6 @@ export function generateDatacenterRivetEngine(
 				password: "default",
 				secure: false,
 			},
-			vector_http: {
-				host: context.getServiceHost("vector-client", datacenter.name),
-				port: 5022,
-			},
 		};
 
 		context.writeDatacenterServiceFile(

@@ -830,7 +830,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(rivet_project)",
+        "definition": "label_values(up, rivet_project)",
         "includeAll": true,
         "label": "Project",
         "multi": true,
@@ -838,7 +838,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(rivet_project)",
+          "query": "label_values(up, rivet_project)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -857,7 +857,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+        "definition": "label_values(up{rivet_project=~\"$project\"},rivet_datacenter)",
         "includeAll": true,
         "label": "Datacenter",
         "multi": true,
@@ -865,7 +865,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values({rivet_project=~\"$project\"},rivet_datacenter)",
+          "query": "label_values(up{rivet_project=~\"$project\"},rivet_datacenter)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
