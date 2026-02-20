@@ -1,5 +1,4 @@
 import { faQuestionSquare, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
 import { memo, type ReactNode, Suspense } from "react";
 import {
 	cn,
@@ -11,14 +10,11 @@ import {
 } from "@/components";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
-import { ActorDatabaseTab } from "./actor-db-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorLogsTab } from "./actor-logs-tab";
-import { ActorQueueTab } from "./actor-queue-tab";
 import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
-import { ActorTracesTab } from "./actor-traces-tab";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
 import {
@@ -27,7 +23,6 @@ import {
 } from "./guard-connectable-inspector";
 import type { ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
-import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
 
 interface ActorsActorDetailsProps {
 	tab?: string;
