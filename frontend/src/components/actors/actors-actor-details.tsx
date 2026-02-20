@@ -127,6 +127,21 @@ export function ActorTabs({
 						>
 							Connections
 						</TabsTrigger>
+
+						<TabsTrigger
+							disabled={disabled}
+							value="queue"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Queue
+						</TabsTrigger>
+						<TabsTrigger
+							disabled={disabled}
+							value="workflow"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Workflow
+						</TabsTrigger>
 						<TabsTrigger
 							disabled={disabled}
 							value="metadata"
@@ -174,6 +189,21 @@ export function ActorTabs({
 						{guardContent || (
 							<ActorConnectionsTab actorId={actorId} />
 						)}
+					</TabsContent>
+					<TabsContent value="queue" className="min-h-0 flex-1 mt-0">
+						{guardContent || <ActorQueueTab actorId={actorId} />}
+					</TabsContent>
+					<TabsContent
+						value="workflow"
+						className="min-h-0 flex-1 mt-0 h-full"
+					>
+						{guardContent || <ActorWorkflowTab actorId={actorId} />}
+					</TabsContent>
+					<TabsContent
+						value="database"
+						className="min-h-0 min-w-0 flex-1 mt-0 h-full"
+					>
+						{guardContent || <ActorDatabaseTab actorId={actorId} />}
 					</TabsContent>
 					<TabsContent
 						value="state"
