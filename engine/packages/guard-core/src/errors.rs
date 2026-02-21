@@ -4,6 +4,24 @@ use serde::{Deserialize, Serialize};
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
 	"guard",
+	"invalid_request_body",
+	"Unable to parse request body.",
+	"Unable to parse request body: {0}."
+)]
+pub struct InvalidRequestBody(pub String);
+
+#[derive(RivetError, Serialize, Deserialize)]
+#[error(
+	"guard",
+	"invalid_response_body",
+	"Unable to parse response body.",
+	"Unable to parse response body: {0}."
+)]
+pub struct InvalidResponseBody(pub String);
+
+#[derive(RivetError, Serialize, Deserialize)]
+#[error(
+	"guard",
 	"rate_limit",
 	"Too many requests. Try again later.",
 	"Too many requests to '{method} {path}' from IP {ip}."
@@ -42,7 +60,7 @@ pub struct UriParseError(pub String);
 pub struct RequestBuildError(pub String);
 
 #[derive(RivetError)]
-#[error("guard", "upstream_error", "Upstream error.", "Upstream error: {0}")]
+#[error("guard", "upstream_error", "Upstream error.", "Upstream error: {0}.")]
 pub struct UpstreamError(pub String);
 
 #[derive(RivetError, Serialize, Deserialize)]
