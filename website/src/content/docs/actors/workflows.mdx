@@ -1,0 +1,678 @@
+---
+title: "Workflows"
+description: "Build durable, replayable run loops in Rivet Actors with steps, queue waits, timers, and rollback."
+skill: true
+---
+
+Use workflows when your `run` logic needs durable, multi-step execution with replay safety.
+
+## What are workflows?
+
+- **Durable execution**: each named workflow entry is persisted and replayed after restarts.
+- **Deterministic control flow**: `step`, `loop`, `sleep`, `queue.next`, `join`, and `race` are history-backed.
+- **Queue integration**: workflow logic can wait on actor queues and complete wait/send responses.
+- **Actor-aware context**: workflow code runs inside Rivet Actors and can mutate state in steps.
+
+Import workflow APIs from `rivetkit/workflow`:
+
+```ts
+import { Loop, workflow } from "rivetkit/workflow";
+```
+
+## Basic workflow loop
+
+- Define your actor `run` handler with `workflow(async (ctx) => { ... })`.
+- Use `ctx.loop(...)` for long-running behavior.
+- Wrap mutations in `ctx.step(...)`.
+- Return `Loop.continue(...)` to keep looping.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+export const workflowCounter = actor({
+  state: {
+    runCount: 0,
+    history: [] as number[],
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "counter-loop",
+      run: async (loopCtx) => {
+        await loopCtx.step("increment", async () => {
+          loopCtx.state.runCount += 1;
+          loopCtx.state.history.push(loopCtx.state.runCount);
+        });
+
+        await loopCtx.sleep("tick-delay", 50);
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+  options: {
+    sleepTimeout: 100,
+  },
+});
+
+export const registry = setup({ use: { workflowCounter } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.workflowCounter.getOrCreate(["main"]);
+
+const before = await handle.getState();
+await new Promise((resolve) => setTimeout(resolve, 250));
+const after = await handle.getState();
+
+console.log(before.runCount, after.runCount);
+```
+</CodeGroup>
+
+## Queue waits and completable messages
+
+- Workflow queue receives use `ctx.queue.next(entryName, opts)`.
+- `entryName` is the workflow history name for this wait point.
+- To complete `send(..., { wait: true })`, receive with `completable: true` and call `message.complete(...)`.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, queue, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+export const WORKFLOW_QUEUE_NAME = "jobs";
+
+export const workflowQueueActor = actor({
+  state: {
+    received: [] as Array<{ value: number }>,
+  },
+  queues: {
+    [WORKFLOW_QUEUE_NAME]: queue<{ value: number }, { echo: number }>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "queue-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-job", {
+          names: [WORKFLOW_QUEUE_NAME],
+          completable: true,
+        });
+
+        if (!message || !message.complete) {
+          return Loop.continue(undefined);
+        }
+
+        await loopCtx.step("store-and-complete", async () => {
+          loopCtx.state.received.push(message.body);
+          await message.complete({ echo: message.body.value });
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getMessages: (c) => c.state.received,
+  },
+});
+
+export const registry = setup({ use: { workflowQueueActor } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+import { WORKFLOW_QUEUE_NAME } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.workflowQueueActor.getOrCreate(["workflow-queue"]);
+
+const result = await handle.send(
+  WORKFLOW_QUEUE_NAME,
+  { value: 123 },
+  { wait: true, timeout: 1_000 },
+);
+
+if (result.status === "completed") {
+  console.log(result.response.echo);
+}
+
+const messages = await handle.getMessages();
+console.log(messages);
+```
+</CodeGroup>
+
+## Step-only access to actor APIs
+
+- `state`, `vars`, `db`, and `client()` are only valid inside `ctx.step(...)` callbacks.
+- Accessing those APIs outside a step throws with a guard error.
+- Use steps as the boundary where actor-local side effects happen.
+
+```ts
+import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
+import { Loop, workflow } from "rivetkit/workflow";
+
+export const workflowAccessActor = actor({
+  db: db({
+    onMigrate: async (rawDb) => {
+      await rawDb.execute(`
+        CREATE TABLE IF NOT EXISTS workflow_access_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at INTEGER NOT NULL
+        )
+      `);
+    },
+  }),
+  state: {
+    outsideDbError: null as string | null,
+    outsideClientError: null as string | null,
+    insideDbCount: 0,
+    insideClientAvailable: false,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "access-loop",
+      run: async (loopCtx) => {
+        let outsideDbError: string | null = null;
+        let outsideClientError: string | null = null;
+
+        try {
+          // This throws because db access is outside a step.
+          void loopCtx.db;
+        } catch (error) {
+          outsideDbError = error instanceof Error ? error.message : String(error);
+        }
+
+        try {
+          // This also throws outside a step.
+          loopCtx.client();
+        } catch (error) {
+          outsideClientError = error instanceof Error ? error.message : String(error);
+        }
+
+        await loopCtx.step("access-step", async () => {
+          await loopCtx.db.execute(
+            "INSERT INTO workflow_access_log (created_at) VALUES (?)",
+            Date.now(),
+          );
+
+          const counts = await loopCtx.db.execute<{ count: number }>(
+            "SELECT COUNT(*) as count FROM workflow_access_log",
+          );
+
+          const client = loopCtx.client();
+
+          loopCtx.state.outsideDbError = outsideDbError;
+          loopCtx.state.outsideClientError = outsideClientError;
+          loopCtx.state.insideDbCount = counts[0]?.count ?? 0;
+          loopCtx.state.insideClientAvailable = typeof client === "object";
+        });
+
+        await loopCtx.sleep("idle", 50);
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+
+export const registry = setup({ use: { workflowAccessActor } });
+```
+
+## Timers with sleep and sleepUntil
+
+- Use `ctx.sleep(name, durationMs)` for relative waits.
+- Use `ctx.sleepUntil(name, timestampMs)` for absolute deadlines.
+- Both waits are durable and resume correctly across actor sleep/restart.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, queue, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+type Reminder = {
+  text: string;
+  at: number;
+};
+
+const REMINDER_QUEUE = "reminders";
+
+export const workflowTimerActor = actor({
+  state: {
+    fired: [] as string[],
+  },
+  queues: {
+    [REMINDER_QUEUE]: queue<Reminder>(),
+  },
+  actions: {
+    scheduleAt: async (c, text: string, at: number) => {
+      await c.queue.send(REMINDER_QUEUE, { text, at });
+    },
+    getState: (c) => c.state,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "timer-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-reminder", {
+          names: [REMINDER_QUEUE],
+        });
+
+        if (!message) {
+          return Loop.continue(undefined);
+        }
+
+        const wakeAt = Math.max(Date.now(), message.body.at);
+        await loopCtx.sleepUntil("sleep-until-reminder", wakeAt);
+
+        await loopCtx.step("record-reminder", async () => {
+          loopCtx.state.fired.push(message.body.text);
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+});
+
+export const registry = setup({ use: { workflowTimerActor } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.workflowTimerActor.getOrCreate(["timers"]);
+
+await handle.scheduleAt("send email", Date.now() + 500);
+await new Promise((resolve) => setTimeout(resolve, 700));
+
+const state = await handle.getState();
+console.log(state.fired);
+```
+</CodeGroup>
+
+## Parallel work with join
+
+- `ctx.join(name, branches)` runs branches in parallel and waits for all.
+- Each branch gets its own workflow context.
+- Return values are strongly typed by branch key.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, queue, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+const REFRESH_QUEUE = "refresh";
+
+export const dashboardActor = actor({
+  state: {
+    summary: null as null | {
+      users: number;
+      orders: number;
+      revenue: number;
+    },
+  },
+  queues: {
+    [REFRESH_QUEUE]: queue<Record<string, never>>(),
+  },
+  actions: {
+    refresh: async (c) => {
+      await c.queue.send(REFRESH_QUEUE, {});
+    },
+    getState: (c) => c.state,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "refresh-loop",
+      run: async (loopCtx) => {
+        await loopCtx.queue.next("wait-refresh", {
+          names: [REFRESH_QUEUE],
+        });
+
+        const result = await loopCtx.join("fetch-metrics", {
+          users: {
+            run: async (branchCtx) => {
+              return await branchCtx.step("fetch-users", async () => 42);
+            },
+          },
+          orders: {
+            run: async (branchCtx) => {
+              return await branchCtx.step("fetch-orders", async () => 12);
+            },
+          },
+          revenue: {
+            run: async (branchCtx) => {
+              return await branchCtx.step("fetch-revenue", async () => 9_900);
+            },
+          },
+        });
+
+        await loopCtx.step("save-summary", async () => {
+          loopCtx.state.summary = {
+            users: result.users,
+            orders: result.orders,
+            revenue: result.revenue,
+          };
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+});
+
+export const registry = setup({ use: { dashboardActor } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.dashboardActor.getOrCreate(["dashboard"]);
+
+await handle.refresh();
+await new Promise((resolve) => setTimeout(resolve, 100));
+
+const state = await handle.getState();
+console.log(state.summary);
+```
+</CodeGroup>
+
+## First-winner logic with race
+
+- `ctx.race(name, branches)` returns the first completed branch.
+- Result shape is `{ winner, value }`.
+- Non-winning branches are canceled by abort signal.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, queue, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+const START_QUEUE = "start";
+
+export const raceActor = actor({
+  state: {
+    lastWinner: null as string | null,
+    lastValue: null as string | null,
+  },
+  queues: {
+    [START_QUEUE]: queue<Record<string, never>>(),
+  },
+  actions: {
+    runRace: async (c) => {
+      await c.queue.send(START_QUEUE, {});
+    },
+    getState: (c) => c.state,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "race-loop",
+      run: async (loopCtx) => {
+        await loopCtx.queue.next("wait-start", {
+          names: [START_QUEUE],
+        });
+
+        const { winner, value } = await loopCtx.race("work-vs-timeout", [
+          {
+            name: "work",
+            run: async (branchCtx) => {
+              await branchCtx.sleep("work-delay", 75);
+              return await branchCtx.step("finish-work", async () => "work-complete");
+            },
+          },
+          {
+            name: "timeout",
+            run: async (branchCtx) => {
+              await branchCtx.sleep("timeout-delay", 500);
+              return "timed-out";
+            },
+          },
+        ]);
+
+        await loopCtx.step("save-race-result", async () => {
+          loopCtx.state.lastWinner = winner;
+          loopCtx.state.lastValue = value;
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+});
+
+export const registry = setup({ use: { raceActor } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.raceActor.getOrCreate(["race"]);
+
+await handle.runRace();
+await new Promise((resolve) => setTimeout(resolve, 200));
+
+const state = await handle.getState();
+console.log(state.lastWinner, state.lastValue);
+```
+</CodeGroup>
+
+## Retries, timeouts, and rollback checkpoints
+
+- Use `ctx.step({ ... })` for retry/timeouts.
+- Add `ctx.rollbackCheckpoint(...)` before steps with rollback handlers.
+- Use `ephemeral: true` for non-persisted idempotent side work.
+
+```ts
+import { actor, queue, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+const ORDER_QUEUE = "orders";
+
+async function reserveInventory(orderId: string): Promise<string> {
+  return `reservation-${orderId}`;
+}
+
+async function releaseInventory(_reservationId: string): Promise<void> {}
+
+async function chargeCard(orderId: string): Promise<string> {
+  return `charge-${orderId}`;
+}
+
+async function refundCharge(_chargeId: string): Promise<void> {}
+
+const inMemoryCache = new Map<string, string>();
+
+export const checkoutActor = actor({
+  state: {
+    lastOrderId: null as string | null,
+    lastReservationId: null as string | null,
+    lastChargeId: null as string | null,
+  },
+  queues: {
+    [ORDER_QUEUE]: queue<{ orderId: string }>(),
+  },
+  actions: {
+    submit: async (c, orderId: string) => {
+      await c.queue.send(ORDER_QUEUE, { orderId });
+    },
+    getState: (c) => c.state,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "checkout-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-order", {
+          names: [ORDER_QUEUE],
+        });
+
+        if (!message) {
+          return Loop.continue(undefined);
+        }
+
+        const { orderId } = message.body;
+
+        await loopCtx.rollbackCheckpoint("checkout-checkpoint");
+
+        const reservationId = await loopCtx.step({
+          name: "reserve-inventory",
+          run: async () => await reserveInventory(orderId),
+          rollback: async (_rollbackCtx, output) => {
+            await releaseInventory(output);
+          },
+        });
+
+        const chargeId = await loopCtx.step({
+          name: "charge-card",
+          timeout: 5_000,
+          maxRetries: 5,
+          retryBackoffBase: 200,
+          retryBackoffMax: 2_000,
+          run: async () => await chargeCard(orderId),
+          rollback: async (_rollbackCtx, output) => {
+            await refundCharge(output);
+          },
+        });
+
+        await loopCtx.step({
+          name: "cache-last-charge",
+          ephemeral: true,
+          run: async () => {
+            inMemoryCache.set(orderId, chargeId);
+          },
+        });
+
+        await loopCtx.step("mark-complete", async () => {
+          loopCtx.state.lastOrderId = orderId;
+          loopCtx.state.lastReservationId = reservationId;
+          loopCtx.state.lastChargeId = chargeId;
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+});
+
+export const registry = setup({ use: { checkoutActor } });
+```
+
+## Workflow migrations with removed
+
+- Use `ctx.removed(name, originalType)` when old history entries were removed/renamed.
+- This keeps replay compatible across deployed workflow versions.
+
+```ts
+import { actor, setup } from "rivetkit";
+import { workflow } from "rivetkit/workflow";
+
+export const migratedWorkflowActor = actor({
+  state: {
+    migrationsApplied: 0,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.step("validate-order-v2", async () => {
+      // New validation logic.
+    });
+
+    // In a previous deployment this existed as `validate-order-v1`.
+    await ctx.removed("validate-order-v1", "step");
+
+    await ctx.step("persist-v2-state", async () => {
+      ctx.state.migrationsApplied += 1;
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+
+export const registry = setup({ use: { migratedWorkflowActor } });
+```
+
+## Workflow inspector history
+
+- `GET /inspector/workflow-history` returns workflow history status for an actor.
+- Response includes `isWorkflowEnabled` and `history`.
+- In non-dev mode, inspector endpoints require authorization.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+export const workflowInspectorActor = actor({
+  state: {
+    ticks: 0,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "inspector-loop",
+      run: async (loopCtx) => {
+        await loopCtx.step("tick", async () => {
+          loopCtx.state.ticks += 1;
+        });
+
+        await loopCtx.sleep("delay", 50);
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+});
+
+export const registry = setup({ use: { workflowInspectorActor } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.workflowInspectorActor.getOrCreate(["inspector-workflow"]);
+
+const gatewayUrl = await handle.getGatewayUrl();
+const inspectorToken = "token";
+
+const response = await fetch(`${gatewayUrl}/inspector/workflow-history`, {
+  headers: {
+    Authorization: `Bearer ${inspectorToken}`,
+  },
+});
+
+const data = (await response.json()) as {
+  history: unknown;
+  isWorkflowEnabled: boolean;
+};
+
+console.log(data.isWorkflowEnabled, data.history);
+```
+</CodeGroup>
+
+## Recommendations
+
+- Keep workflow entry names stable once deployed.
+- Keep all actor-local reads/writes inside `step` callbacks.
+- Use queue-driven triggers (`queue.next`) for external workflow events.
+- Prefer `join` and `race` over hand-rolled branch orchestration.
+- Add rollback handlers for any side effect that must be compensated.
+
+## Read more
+
+- [Queues & Run Loops](/docs/actors/queue)
+- [Debugging](/docs/actors/debugging)
+- [SQLite](/docs/actors/sqlite)

@@ -14,6 +14,10 @@ function colorFromId(id: string): string {
 	return `hsl(${hue}, 70%, 55%)`;
 }
 
+type IoStyleMatchConn = ReturnType<
+	ReturnType<GameClient["ioStyleMatch"]["get"]>["connect"]
+>;
+
 export class IoGame {
 	private stopped = false;
 	private rafId = 0;
@@ -24,11 +28,7 @@ export class IoGame {
 	private lastIx = 0;
 	private lastIy = 0;
 	private botInterval = 0;
-	private conn: {
-		setInput: (i: { inputX: number; inputY: number }) => Promise<unknown>;
-		on: (e: string, cb: (d: unknown) => void) => void;
-		dispose: () => Promise<void>;
-	};
+	private conn: IoStyleMatchConn;
 
 	constructor(
 		private canvas: HTMLCanvasElement | null,
@@ -40,7 +40,7 @@ export class IoGame {
 			.get([matchInfo.matchId], {
 				params: { playerToken: matchInfo.playerToken },
 			})
-			.connect() as typeof this.conn;
+			.connect();
 
 		this.conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as {

@@ -1,7 +1,7 @@
 import { actor, queue, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { INTERNAL_TOKEN } from "../../auth.ts";
+import { hasInvalidInternalToken, INTERNAL_TOKEN, isInternalToken } from "../../auth.ts";
 import { registry } from "../index.ts";
 import { generatePartyCode, generatePlayerName, MAX_PARTY_SIZE } from "./config.ts";
 
@@ -10,6 +10,26 @@ export const partyMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
+	onBeforeConnect: (_c, params: { internalToken?: string }) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		if (
+			invoke.kind === "queue" &&
+			(invoke.name === "createParty" || invoke.name === "joinParty")
+		) {
+			return !isInternal;
+		}
+		if (invoke.kind === "queue" && invoke.name === "closeParty") {
+			return isInternal;
+		}
+		return false;
+	},
 	queues: {
 		createParty: queue<
 			{ hostName?: string },
