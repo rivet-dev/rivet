@@ -19,17 +19,14 @@ function colorFromId(id: string): string {
 	return `hsl(${hue}, 70%, 55%)`;
 }
 
+type OpenWorldChunkConn = ReturnType<
+	ReturnType<GameClient["openWorldChunk"]["getOrCreate"]>["connect"]
+>;
+
 interface ChunkConnection {
 	cx: number;
 	cy: number;
-	conn: {
-		setInput: (i: { inputX: number; inputY: number; sprint?: boolean }) => Promise<unknown>;
-		removePlayer: (i: { playerId: string }) => Promise<unknown>;
-		placeBlock: (i: { gridX: number; gridY: number }) => Promise<unknown>;
-		removeBlock: (i: { gridX: number; gridY: number }) => Promise<unknown>;
-		on: (e: string, cb: (d: unknown) => void) => void;
-		dispose: () => Promise<void>;
-	};
+	conn: OpenWorldChunkConn;
 	players: Record<string, { x: number; y: number; name: string }>;
 	display: Record<string, { x: number; y: number }>;
 	blocks: Set<string>;
@@ -99,7 +96,7 @@ export class OpenWorldGame {
 
 		const conn = this.client.openWorldChunk
 			.getOrCreate(["default", String(cx), String(cy)], { params })
-			.connect() as ChunkConnection["conn"];
+			.connect();
 
 		const chunk: ChunkConnection = {
 			cx,

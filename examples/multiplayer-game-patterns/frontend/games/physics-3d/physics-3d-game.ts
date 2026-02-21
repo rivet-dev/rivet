@@ -7,6 +7,10 @@ import {
 	SCENE_STATIC,
 } from "../../../src/actors/physics-3d/config.ts";
 
+type Physics3dConn = ReturnType<
+	ReturnType<GameClient["physics3dWorld"]["getOrCreate"]>["connect"]
+>;
+
 interface BodySnapshot {
 	id: string;
 	x: number;
@@ -63,12 +67,7 @@ export class Physics3dGame {
 	private raycaster = new THREE.Raycaster();
 	private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-	private conn: {
-		setInput: (i: { inputX: number; inputZ: number; jump?: boolean }) => Promise<unknown>;
-		spawnBox: (i: { x: number; z: number }) => Promise<unknown>;
-		on: (e: string, cb: (d: unknown) => void) => void;
-		dispose: () => Promise<void>;
-	};
+	private conn: Physics3dConn;
 
 	constructor(
 		private container: HTMLDivElement,
@@ -132,7 +131,7 @@ export class Physics3dGame {
 		const handle = client.physics3dWorld.getOrCreate(["main"], {
 			params: { name: matchInfo.name },
 		});
-		this.conn = handle.connect() as typeof this.conn;
+		this.conn = handle.connect();
 
 		this.conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as Snapshot;
