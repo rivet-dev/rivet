@@ -1,7 +1,7 @@
-import { actor, queue } from "rivetkit";
+import { actor, queue, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { INTERNAL_TOKEN } from "../../auth.ts";
+import { hasInvalidInternalToken, INTERNAL_TOKEN, isInternalToken } from "../../auth.ts";
 import { registry } from "../index.ts";
 import { LOBBY_CAPACITY } from "./config.ts";
 
@@ -10,6 +10,26 @@ export const battleRoyaleMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
+	onBeforeConnect: (_c, params: { internalToken?: string }) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		if (invoke.kind === "queue" && invoke.name === "findMatch") {
+			return !isInternal;
+		}
+		if (
+			invoke.kind === "queue" &&
+			(invoke.name === "updateMatch" || invoke.name === "closeMatch")
+		) {
+			return isInternal;
+		}
+		return false;
+	},
 	queues: {
 		findMatch: queue<
 			Record<string, never>,

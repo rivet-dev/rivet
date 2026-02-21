@@ -17,12 +17,27 @@ export class RankedBot {
 			const botUsername = `Bot#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
 			const mm = this.client.rankedMatchmaker.getOrCreate(["main"]).connect();
 			this.mm = mm;
-			await mm.send("queueForMatch", { username: botUsername }, { wait: true, timeout: 120_000 });
+			const queueResult = await mm.send(
+				"queueForMatch",
+				{ username: botUsername },
+				{ wait: true, timeout: 120_000 },
+			);
+			const queueResponse = (
+				queueResult as { response?: { registrationToken: string } }
+			)?.response;
+			if (!queueResponse || this.destroyed) return;
+			await mm.registerPlayer({
+				username: botUsername,
+				registrationToken: queueResponse.registrationToken,
+			});
 			if (this.destroyed) return;
 
 			// Poll for assignment until paired.
 			while (!this.destroyed) {
-				const assignment = await mm.getAssignment({ username: botUsername });
+				const assignment = await mm.getAssignment({
+					username: botUsername,
+					registrationToken: queueResponse.registrationToken,
+				});
 				if (assignment) {
 					mm.dispose();
 					this.mm = null;

@@ -1,5 +1,10 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
+import {
+	hasInvalidInternalToken,
+	INTERNAL_TOKEN,
+	isInternalToken,
+} from "../../auth.ts";
 import { registry } from "../index.ts";
 import {
 	TICK_MS,
@@ -12,6 +17,7 @@ import {
 } from "./config.ts";
 
 interface PlayerEntry {
+	token: string;
 	connId: string | null;
 	x: number;
 	y: number;
@@ -32,6 +38,7 @@ interface State {
 interface AssignedPlayer {
 	username: string;
 	rating: number;
+	token: string;
 }
 
 export const rankedMatch = actor({
@@ -47,6 +54,7 @@ export const rankedMatch = actor({
 		const players: Record<string, PlayerEntry> = {};
 		for (const ap of input.assignedPlayers) {
 			players[ap.username] = {
+				token: ap.token,
 				connId: null,
 				x: Math.random() * WORLD_SIZE,
 				y: Math.random() * WORLD_SIZE,
@@ -66,23 +74,50 @@ export const rankedMatch = actor({
 	},
 	onBeforeConnect: (
 		c,
-		params: { username?: string },
+		params: { playerToken?: string; internalToken?: string },
 	) => {
-		const username = params?.username?.trim();
-		if (!username) {
-			throw new UserError("username required", { code: "auth_required" });
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
 		}
-		if (!c.state.players[username]) {
-			throw new UserError("not assigned to this match", { code: "not_assigned" });
+		if (params?.internalToken === INTERNAL_TOKEN) return;
+		const playerToken = params?.playerToken?.trim();
+		if (!playerToken) {
+			throw new UserError("authentication required", { code: "auth_required" });
+		}
+		if (!findPlayerByToken(c.state, playerToken)) {
+			throw new UserError("invalid player token", { code: "invalid_player_token" });
 		}
 	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "updatePosition" ||
+				invoke.name === "shoot" ||
+				invoke.name === "getSnapshot")
+		) {
+			return !isInternal && isAssignedPlayer;
+		}
+		if (
+			invoke.kind === "subscribe" &&
+			(invoke.name === "snapshot" || invoke.name === "shoot")
+		) {
+			return !isInternal && isAssignedPlayer;
+		}
+		return false;
+	},
 	onConnect: (c, conn) => {
-		const username = conn.params?.username?.trim();
-		if (!username || !c.state.players[username]) {
-			conn.disconnect("not_assigned");
+		const playerToken = conn.params?.playerToken?.trim();
+		if (!playerToken) return;
+		const found = findPlayerByToken(c.state, playerToken);
+		if (!found) {
+			conn.disconnect("invalid_player_token");
 			return;
 		}
-		const player = c.state.players[username]!;
+		const [, player] = found;
 		player.connId = conn.id;
 
 		if (c.state.phase === "waiting") {
@@ -105,7 +140,7 @@ export const rankedMatch = actor({
 			if (winner && loser && loserUsername) {
 				const [newWR, newLR] = calculateElo(winner.rating, loser.rating);
 				await client.rankedMatchmaker
-					.getOrCreate(["main"])
+					.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
 					.send("matchCompleted", {
 						matchId: c.state.matchId,
 						winnerUsername: c.state.winnerId,
@@ -117,7 +152,7 @@ export const rankedMatch = actor({
 			}
 		}
 		await client.rankedMatchmaker
-			.getOrCreate(["main"])
+			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
 			.send("matchCompleted", {
 				matchId: c.state.matchId,
 				winnerUsername: "",
@@ -314,6 +349,16 @@ function findPlayerByConnId(
 ): [string, PlayerEntry] | null {
 	for (const [id, entry] of Object.entries(state.players)) {
 		if (entry.connId === connId) return [id, entry];
+	}
+	return null;
+}
+
+function findPlayerByToken(
+	state: State,
+	token: string,
+): [string, PlayerEntry] | null {
+	for (const [id, entry] of Object.entries(state.players)) {
+		if (entry.token === token) return [id, entry];
 	}
 	return null;
 }

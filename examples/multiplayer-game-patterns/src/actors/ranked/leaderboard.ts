@@ -1,5 +1,6 @@
-import { actor, type ActorContextOf, event } from "rivetkit";
+import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
+import { hasInvalidInternalToken, isInternalToken } from "../../auth.ts";
 
 export interface LeaderboardEntry {
 	username: string;
@@ -15,6 +16,26 @@ export const rankedLeaderboard = actor({
 	}),
 	events: {
 		leaderboardUpdate: event<LeaderboardEntry[]>(),
+	},
+	onBeforeConnect: (_c, params: { internalToken?: string }) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		if (invoke.kind === "action" && invoke.name === "updatePlayer") {
+			return isInternal;
+		}
+		if (invoke.kind === "action" && invoke.name === "getTopScores") {
+			return true;
+		}
+		if (invoke.kind === "subscribe" && invoke.name === "leaderboardUpdate") {
+			return !isInternal;
+		}
+		return false;
 	},
 	actions: {
 		updatePlayer: async (c, input: { username: string; rating: number; wins: number; losses: number }) => {

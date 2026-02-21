@@ -1,6 +1,10 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { INTERNAL_TOKEN } from "../../auth.ts";
+import {
+	hasInvalidInternalToken,
+	INTERNAL_TOKEN,
+	isInternalToken,
+} from "../../auth.ts";
 import { CHUNK_SIZE, TICK_MS, SPEED, SPRINT_MULTIPLIER } from "./config.ts";
 
 const DISCONNECT_GRACE_MS = 5000;
@@ -46,6 +50,9 @@ export const openWorldChunk = actor({
 		c,
 		params: { playerToken?: string; internalToken?: string; observer?: string },
 	) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
 		if (params?.internalToken === INTERNAL_TOKEN) return;
 		// Allow observer connections (for viewing adjacent chunks).
 		if (params?.observer === "true") return;
@@ -56,6 +63,38 @@ export const openWorldChunk = actor({
 		if (!findPlayerByToken(c.state, playerToken)) {
 			throw new UserError("invalid player token", { code: "invalid_player_token" });
 		}
+	},
+	canInvoke: (c, invoke) => {
+		const params = c.conn.params as
+			| { internalToken?: string; observer?: string }
+			| undefined;
+		const isInternal = isInternalToken(params);
+		const isObserver = params?.observer === "true";
+		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "initialize" || invoke.name === "createPlayer")
+		) {
+			return isInternal;
+		}
+		if (invoke.kind === "action" && invoke.name === "getSnapshot") {
+			return isObserver || isAssignedPlayer;
+		}
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "setInput" ||
+				invoke.name === "placeBlock" ||
+				invoke.name === "removeBlock")
+		) {
+			return isAssignedPlayer;
+		}
+		if (invoke.kind === "action" && invoke.name === "removePlayer") {
+			return isAssignedPlayer || isInternal;
+		}
+		if (invoke.kind === "subscribe" && invoke.name === "snapshot") {
+			return isObserver || isAssignedPlayer;
+		}
+		return false;
 	},
 	onConnect: (c, conn) => {
 		// Observer connections just receive broadcasts.
@@ -145,7 +184,15 @@ export const openWorldChunk = actor({
 			player.sprint = !!input.sprint;
 		},
 		removePlayer: (c, input: { playerId: string }) => {
-			delete c.state.players[input.playerId];
+			if (isInternalToken(c.conn.params as { internalToken?: string } | undefined)) {
+				delete c.state.players[input.playerId];
+				broadcastSnapshot(c);
+				return;
+			}
+			const found = findPlayerByConnId(c.state, c.conn.id);
+			if (!found) return;
+			const [playerId] = found;
+			delete c.state.players[playerId];
 			broadcastSnapshot(c);
 		},
 		placeBlock: (c, input: { gridX: number; gridY: number }) => {
