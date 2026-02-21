@@ -7,6 +7,10 @@ import {
 	SCENE_STATIC,
 } from "../../../src/actors/physics-2d/config.ts";
 
+type Physics2dConn = ReturnType<
+	ReturnType<GameClient["physics2dWorld"]["getOrCreate"]>["connect"]
+>;
+
 interface BodySnapshot {
 	id: string;
 	x: number;
@@ -53,12 +57,7 @@ export class Physics2dGame {
 	private lastSnapshotTime = 0;
 	private tickIntervalMs = 0;
 	private latencyMs = 0;
-	private conn: {
-		setInput: (i: { inputX: number; jump?: boolean }) => Promise<unknown>;
-		spawnBox: (i: { x: number; y: number }) => Promise<unknown>;
-		on: (e: string, cb: (d: unknown) => void) => void;
-		dispose: () => Promise<void>;
-	};
+	private conn: Physics2dConn;
 
 	constructor(
 		private canvas: HTMLCanvasElement,
@@ -68,12 +67,7 @@ export class Physics2dGame {
 		const handle = client.physics2dWorld.getOrCreate(["main"], {
 			params: { name: matchInfo.name },
 		});
-		this.conn = handle.connect() as typeof this.conn;
-
-		// Capture connection id from the handle.
-		(handle as unknown as { id: Promise<string> }).id?.then?.((id: string) => {
-			this.myConnId = id;
-		});
+		this.conn = handle.connect();
 
 		this.conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as Snapshot;

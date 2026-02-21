@@ -1,11 +1,25 @@
-import { actor, queue } from "rivetkit";
+import { actor, queue, UserError } from "rivetkit";
 
-import { INTERNAL_TOKEN } from "../../auth.ts";
+import { hasInvalidInternalToken, INTERNAL_TOKEN, isInternalToken } from "../../auth.ts";
 import { registry } from "../index.ts";
 import { CHUNK_SIZE, WORLD_ID } from "./config.ts";
 
 export const openWorldIndex = actor({
 	options: { name: "Open World - Index", icon: "map" },
+	onBeforeConnect: (_c, params: { internalToken?: string }) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		if (invoke.kind === "queue" && invoke.name === "getChunkForPosition") {
+			return !isInternal;
+		}
+		return false;
+	},
 	queues: {
 		getChunkForPosition: queue<
 			{ x: number; y: number; playerName: string },
