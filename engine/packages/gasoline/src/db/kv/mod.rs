@@ -481,7 +481,7 @@ impl Database for DatabaseKv {
 					let start = Instant::now();
 					let now = rivet_util::timestamp::now();
 
-					let mut last_ping_cache: Vec<(Id, i64)> = Vec::new();
+					let mut last_ping_cache = HashMap::<Id, i64>::new();
 					let mut lost_worker_ids = HashSet::new();
 					let mut expired_workflow_count = 0;
 
@@ -518,8 +518,8 @@ impl Database for DatabaseKv {
 						let last_ping_ts_key = keys::worker::LastPingTsKey::new(worker_id);
 
 						// Get last ping of worker for this lease
-						let last_ping_ts = if let Some((_, last_ping_ts)) =
-							last_ping_cache.iter().find(|(k, _)| k == &worker_id)
+						let last_ping_ts = if let Some(last_ping_ts) =
+							last_ping_cache.get(&worker_id)
 						{
 							*last_ping_ts
 						} else if let Some(last_ping_entry) = tx
@@ -534,12 +534,12 @@ impl Database for DatabaseKv {
 							let last_ping_ts = last_ping_ts_key.deserialize(&last_ping_entry)?;
 
 							// Update cache
-							last_ping_cache.push((worker_id, last_ping_ts));
+							last_ping_cache.insert(worker_id, last_ping_ts);
 
 							last_ping_ts
 						} else {
 							// Update cache
-							last_ping_cache.push((worker_id, 0));
+							last_ping_cache.insert(worker_id, 0);
 
 							0
 						};

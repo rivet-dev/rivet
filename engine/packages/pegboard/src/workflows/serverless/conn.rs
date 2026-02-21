@@ -25,8 +25,6 @@ const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-s
 const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 
-const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(10);
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
 	pub pool_wf_id: Id,
@@ -412,8 +410,9 @@ async fn outbound_req_inner(
 		.with_label_values(&[&input.namespace_id.to_string(), &input.runner_name])
 		.inc();
 
-	let sleep_until_drain =
-		Duration::from_secs(request_lifespan as u64).saturating_sub(DRAIN_GRACE_PERIOD);
+	let sleep_until_drain = Duration::from_secs(request_lifespan as u64).saturating_sub(
+		Duration::from_millis(ctx.config().pegboard().serverless_drain_grace_period()),
+	);
 	tokio::select! {
 		res = stream_handler => {
 			match res {
@@ -518,7 +517,7 @@ async fn finish_non_critical_draining(
 	// Wait for runner to shut down
 	tokio::select! {
 		res = wait_for_shutdown_fut => return res.map_err(Into::into),
-		_ = tokio::time::sleep(DRAIN_GRACE_PERIOD) => {
+		_ = tokio::time::sleep(Duration::from_millis(ctx.config().pegboard().serverless_drain_grace_period())) => {
 			tracing::debug!(?runner_id, "reached drain grace period before runner shut down")
 		}
 		_ = term_signal.recv() => {}

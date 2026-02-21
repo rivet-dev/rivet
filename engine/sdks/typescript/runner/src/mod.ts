@@ -208,8 +208,10 @@ export class Runner {
 	#reconnectAttempt: number = 0;
 	#reconnectTimeout?: NodeJS.Timeout;
 
+	// Protocol metadata
+	#protocolMetadata?: protocol.ProtocolMetadata;
+
 	// Runner lost threshold management
-	#runnerLostThreshold?: number;
 	#runnerLostTimeout?: NodeJS.Timeout;
 
 	// Event storage for resending
@@ -839,14 +841,11 @@ export class Runner {
 					this.#stopAllActors();
 				}
 
-				// Store the runner lost threshold from metadata
-				this.#runnerLostThreshold = init.metadata?.runnerLostThreshold
-					? Number(init.metadata.runnerLostThreshold)
-					: undefined;
+				this.#protocolMetadata = init.metadata;
 
 				this.log?.info({
 					msg: "received init",
-					runnerLostThreshold: this.#runnerLostThreshold,
+					protocolMetadata: this.#protocolMetadata,
 				});
 
 				// Resend pending events
@@ -888,27 +887,7 @@ export class Runner {
 			});
 
 			if (!this.#shutdown) {
-				// Start runner lost timeout if we have a threshold and are not shutting down
-				if (
-					!this.#runnerLostTimeout &&
-					this.#runnerLostThreshold &&
-					this.#runnerLostThreshold > 0
-				) {
-					this.log?.info({
-						msg: "starting runner lost timeout",
-						seconds: this.#runnerLostThreshold / 1000,
-					});
-					this.#runnerLostTimeout = setTimeout(() => {
-						try {
-							this.#handleLost();
-						} catch (err) {
-							this.log?.error({
-								msg: "error handling runner lost",
-								error: stringifyError(err),
-							});
-						}
-					}, this.#runnerLostThreshold);
-				}
+				this.#startRunnerLostTimeout();
 
 				// Attempt to reconnect if not stopped
 				this.#scheduleReconnect();
@@ -944,27 +923,7 @@ export class Runner {
 					this.#ackInterval = undefined;
 				}
 
-				// Start runner lost timeout if we have a threshold and are not shutting down
-				if (
-					!this.#runnerLostTimeout &&
-					this.#runnerLostThreshold &&
-					this.#runnerLostThreshold > 0
-				) {
-					this.log?.info({
-						msg: "starting runner lost timeout",
-						seconds: this.#runnerLostThreshold / 1000,
-					});
-					this.#runnerLostTimeout = setTimeout(() => {
-						try {
-							this.#handleLost();
-						} catch (err) {
-							this.log?.error({
-								msg: "error handling runner lost",
-								error: stringifyError(err),
-							});
-						}
-					}, this.#runnerLostThreshold);
-				}
+				this.#startRunnerLostTimeout();
 
 				// Attempt to reconnect if not stopped
 				this.#scheduleReconnect();
@@ -974,6 +933,30 @@ export class Runner {
 				this.#config.onDisconnected(ev.code, ev.reason);
 			}
 		});
+	}
+
+	#startRunnerLostTimeout() {
+		// Start runner lost timeout if we have a threshold and are not shutting down
+		if (
+			!this.#runnerLostTimeout &&
+			this.#protocolMetadata &&
+			this.#protocolMetadata.runnerLostThreshold > 0
+		) {
+			this.log?.info({
+				msg: "starting runner lost timeout",
+				seconds: this.#protocolMetadata.runnerLostThreshold / 1000n,
+			});
+			this.#runnerLostTimeout = setTimeout(() => {
+				try {
+					this.#handleLost();
+				} catch (err) {
+					this.log?.error({
+						msg: "error handling runner lost",
+						error: stringifyError(err),
+					});
+				}
+			}, Number(this.#protocolMetadata.runnerLostThreshold));
+		}
 	}
 
 	#handleCommands(commands: protocol.ToClientCommands) {
@@ -1858,5 +1841,9 @@ export class Runner {
 		if (toDelete.length > 0) {
 			//this.#log?.log(`Cleaned up ${toDelete.length} expired KV requests`);
 		}
+	}
+
+	getProtocolMetadata(): protocol.ProtocolMetadata | undefined {
+		return this.#protocolMetadata;
 	}
 }
