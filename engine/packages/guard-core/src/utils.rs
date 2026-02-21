@@ -181,6 +181,8 @@ pub(crate) fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseB
 				("guard", "service_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "actor_ready_timeout") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "no_route") => StatusCode::NOT_FOUND,
+				("guard", "invalid_request_body") => StatusCode::PAYLOAD_TOO_LARGE,
+				("guard", "invalid_response_body") => StatusCode::BAD_GATEWAY,
 				_ => StatusCode::BAD_REQUEST,
 			};
 

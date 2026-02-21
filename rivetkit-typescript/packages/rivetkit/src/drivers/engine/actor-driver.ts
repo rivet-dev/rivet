@@ -794,7 +794,7 @@ export class EngineActorDriver implements ActorDriver {
 						entry.bufferedMessageSize >=
 						CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD
 					) {
-						// Reset buffered message size immeidatley (instead
+						// Reset buffered message size immediately (instead
 						// of waiting for onAfterPersistConn) since we may
 						// receive more messages before onAfterPersistConn
 						// is called, which would called saveState

@@ -1,5 +1,8 @@
 import { logger } from "./log";
 
+// 20MiB. Keep in sync with MAX_BODY_SIZE from engine/packages/guard-core/src/proxy_service.rs
+export const MAX_BODY_SIZE = 20 * 1024 * 1024;
+
 export function unreachable(x: never): never {
 	throw `Unreachable: ${x}`;
 }

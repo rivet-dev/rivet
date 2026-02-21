@@ -15,7 +15,7 @@ import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import { arraysEqual, idToStr, stringifyError, unreachable } from "./utils";
+import { arraysEqual, idToStr, MAX_BODY_SIZE, stringifyError, unreachable } from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,
@@ -855,6 +855,10 @@ export class Tunnel {
 		// Read the body first to get the actual content
 		const body = response.body ? await response.arrayBuffer() : null;
 
+		if (body && body.byteLength > MAX_BODY_SIZE) {
+			throw new Error("Response body too large");
+		}
+
 		// Convert headers to map and add Content-Length if not present
 		const headers = new Map<string, string>();
 		response.headers.forEach((value, key) => {
@@ -1079,7 +1083,7 @@ export class Tunnel {
 		});
 
 		if (clientMessageIndex < 0 || clientMessageIndex > 65535)
-			throw new Error("invalid websocket ack index");
+			throw new Error("Invalid websocket ack index");
 
 		// Get the actor to find the gatewayId
 		//
@@ -1157,7 +1161,7 @@ function buildRequestForWebSocket(
 	};
 
 	if (!path.startsWith("/")) {
-		throw new Error("path must start with leading slash");
+		throw new Error("Path must start with leading slash");
 	}
 
 	const request = new Request(`http://actor${path}`, {

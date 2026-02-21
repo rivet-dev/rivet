@@ -154,6 +154,7 @@ impl PegboardGateway {
 			max_age: None,
 		});
 
+		// NOTE: Size constraints have already been applied by guard
 		let body_bytes = req
 			.into_body()
 			.collect()
