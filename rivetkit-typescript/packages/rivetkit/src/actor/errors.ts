@@ -449,12 +449,23 @@ export class InvalidRequestHandlerResponse extends ActorError {
 	}
 }
 
-export class InvalidCanInvokeResponse extends ActorError {
+export class InvalidCanSubscribeResponse extends ActorError {
 	constructor() {
 		super(
 			"handler",
-			"invalid_can_invoke_response",
-			"Actor's canInvoke hook must return a boolean value.",
+			"invalid_can_subscribe_response",
+			"Event canSubscribe hook must return a boolean value.",
+		);
+		this.statusCode = 500;
+	}
+}
+
+export class InvalidCanPublishResponse extends ActorError {
+	constructor() {
+		super(
+			"handler",
+			"invalid_can_publish_response",
+			"Queue canPublish hook must return a boolean value.",
 		);
 		this.statusCode = 500;
 	}

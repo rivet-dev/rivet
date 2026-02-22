@@ -96,7 +96,6 @@ export async function routeWebSocket(
 		// Route WebSocket & create driver
 		let handler: WebSocketHandler;
 		let connDriver: ConnDriver;
-		let isRawWebSocketRoute = false;
 		if (requestPathWithoutQuery === PATH_CONNECT) {
 			const { driver, setWebSocket } = createWebSocketDriver(
 				isHibernatable
@@ -112,7 +111,6 @@ export async function routeWebSocket(
 			requestPathWithoutQuery === PATH_WEBSOCKET_BASE ||
 			requestPathWithoutQuery.startsWith(PATH_WEBSOCKET_PREFIX)
 		) {
-			isRawWebSocketRoute = true;
 			const { driver, setWebSocket } = createRawWebSocketDriver(
 				isHibernatable
 					? { gatewayId: gatewayId!, requestId: requestId! }
@@ -159,10 +157,6 @@ export async function routeWebSocket(
 			isRestoringHibernatable,
 		);
 		createdConn = conn;
-
-		if (isRawWebSocketRoute) {
-			await actor.assertCanInvokeWebSocket(conn);
-		}
 
 		// Create handler
 		//
