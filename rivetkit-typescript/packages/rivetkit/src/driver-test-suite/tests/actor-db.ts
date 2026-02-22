@@ -93,6 +93,20 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				}
 			});
 
+			test("completes onDisconnect DB writes before sleeping", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const key = `db-${variant}-disconnect-${crypto.randomUUID()}`;
+
+				const actor = getDbActor(client, variant).getOrCreate([key]);
+				await actor.reset();
+				await actor.configureDisconnectInsert(true, 250);
+
+				await waitFor(driverTestConfig, SLEEP_WAIT_MS + 250);
+				await actor.configureDisconnectInsert(false, 0);
+
+				expect(await actor.getDisconnectInsertCount()).toBe(1);
+			});
+
 			test("handles high-volume inserts", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const actor = getDbActor(client, variant).getOrCreate([

@@ -75,6 +75,7 @@ enum CanSleep {
 	NotReady,
 	NotStarted,
 	ActiveConns,
+	ActiveDisconnectCallbacks,
 	ActiveHonoHttpRequests,
 	ActiveKeepAwake,
 	ActiveRun,
@@ -1531,6 +1532,10 @@ export class ActorInstance<
 			// if (!_conn.isHibernatable) {
 			return CanSleep.ActiveConns;
 			// }
+		}
+
+		if (this.connectionManager.pendingDisconnectCount > 0) {
+			return CanSleep.ActiveDisconnectCallbacks;
 		}
 
 		return CanSleep.Yes;

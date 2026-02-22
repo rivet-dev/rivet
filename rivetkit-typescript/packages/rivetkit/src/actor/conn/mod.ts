@@ -260,14 +260,17 @@ export class Conn<
 				});
 			}
 
-			this.#actor.connectionManager.connDisconnected(this);
+			try {
+				await this.#actor.connectionManager.connDisconnected(this);
+			} finally {
+				this[CONN_DRIVER_SYMBOL] = undefined;
+			}
 		} else {
 			this.#actor.rLog.warn({
 				msg: "missing connection driver state for disconnect",
 				conn: this.id,
 			});
+			this[CONN_DRIVER_SYMBOL] = undefined;
 		}
-
-		this[CONN_DRIVER_SYMBOL] = undefined;
 	}
 }

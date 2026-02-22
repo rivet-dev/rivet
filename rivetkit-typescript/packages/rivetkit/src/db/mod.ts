@@ -94,6 +94,12 @@ export function db({
 
 			const kvStore = createActorKvStore(ctx.kv);
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
+			let closed = false;
+			const ensureOpen = () => {
+				if (closed) {
+					throw new Error("database is closed");
+				}
+			};
 
 			return {
 				execute: async <
@@ -103,6 +109,8 @@ export function db({
 						...args: unknown[]
 					): Promise<TRow[]> => {
 						return mutex.run(async () => {
+							ensureOpen();
+
 							if (args.length > 0) {
 								// Use parameterized query when args are provided
 								const { rows, columns } = await db.query(query, args);
@@ -132,7 +140,13 @@ export function db({
 						});
 					},
 				close: async () => {
-					await db.close();
+					await mutex.run(async () => {
+						if (closed) {
+							return;
+						}
+						closed = true;
+						await db.close();
+					});
 				},
 			} satisfies RawAccess;
 		},
