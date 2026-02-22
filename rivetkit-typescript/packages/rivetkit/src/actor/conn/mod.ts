@@ -128,7 +128,7 @@ export class Conn<
 	 * If the underlying connection can hibernate.
 	 */
 	get isHibernatable(): boolean {
-		return this[CONN_DRIVER_SYMBOL]?.hibernatable !== undefined;
+		return this.#stateManager.hibernatableDataRaw !== undefined;
 	}
 
 	/**
