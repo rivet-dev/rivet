@@ -50,6 +50,7 @@ export class ConnectionManager<
 > {
 	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>>();
+	#pendingDisconnectCount = 0;
 
 	/** Connections that have had their state changed and need to be persisted. */
 	#connsWithPersistChanged = new Set<ConnId>();
@@ -68,6 +69,10 @@ export class ConnectionManager<
 
 	get connsWithPersistChanged(): Set<ConnId> {
 		return this.#connsWithPersistChanged;
+	}
+
+	get pendingDisconnectCount(): number {
+		return this.#pendingDisconnectCount;
 	}
 
 	clearConnWithPersistChanged() {
@@ -307,9 +312,8 @@ export class ConnectionManager<
 			this.#actor.eventManager.removeSubscription(eventName, conn, true);
 		}
 
-		this.#actor.resetSleepTimer();
-
 		this.#actor.inspector.emitter.emit("connectionsUpdated");
+		this.#pendingDisconnectCount += 1;
 
 		const attributes = {
 			"rivet.conn.id": conn.id,
@@ -321,7 +325,6 @@ export class ConnectionManager<
 			attributes,
 		);
 
-		// Trigger disconnect
 		try {
 			if (this.#actor.config.onDisconnect) {
 				const result = this.#actor.traces.withSpan(span, () =>
@@ -336,23 +339,9 @@ export class ConnectionManager<
 					span,
 				);
 				if (result instanceof Promise) {
-					result
-						.then(() => {
-							this.#actor.endTraceSpan(span, { code: "OK" });
-						})
-						.catch((error) => {
-							this.#actor.endTraceSpan(span, {
-								code: "ERROR",
-								message: stringifyError(error),
-							});
-							this.#actor.rLog.error({
-								msg: "error in `onDisconnect`",
-								error: stringifyError(error),
-							});
-						});
-				} else {
-					this.#actor.endTraceSpan(span, { code: "OK" });
+					await result;
 				}
+				this.#actor.endTraceSpan(span, { code: "OK" });
 			} else {
 				this.#actor.emitTraceEvent(
 					"connection.disconnect",
@@ -370,29 +359,35 @@ export class ConnectionManager<
 				msg: "error in `onDisconnect`",
 				error: stringifyError(error),
 			});
-		}
+		} finally {
+			// Remove from connsWithPersistChanged after onDisconnect to handle any
+			// state changes made during the disconnect callback. Disconnected connections
+			// are removed from KV storage via kvBatchDelete below, not through the
+			// normal persist save flow, so they should not trigger persist saves.
+			this.#connsWithPersistChanged.delete(conn.id);
 
-		// Remove from connsWithPersistChanged after onDisconnect to handle any
-		// state changes made during the disconnect callback. Disconnected connections
-		// are removed from KV storage via kvBatchDelete below, not through the
-		// normal persist save flow, so they should not trigger persist saves.
-		this.#connsWithPersistChanged.delete(conn.id);
-
-		// Remove from KV storage
-		if (conn.isHibernatable) {
-			const key = makeConnKey(conn.id);
-			try {
-				await this.#actor.driver.kvBatchDelete(this.#actor.id, [key]);
-				this.#actor.rLog.debug({
-					msg: "removed connection from KV",
-					connId: conn.id,
-				});
-			} catch (err) {
-				this.#actor.rLog.error({
-					msg: "kvBatchDelete failed for conn",
-					err: stringifyError(err),
-				});
+			// Remove from KV storage.
+			if (conn.isHibernatable) {
+				const key = makeConnKey(conn.id);
+				try {
+					await this.#actor.driver.kvBatchDelete(this.#actor.id, [key]);
+					this.#actor.rLog.debug({
+						msg: "removed connection from KV",
+						connId: conn.id,
+					});
+				} catch (err) {
+					this.#actor.rLog.error({
+						msg: "kvBatchDelete failed for conn",
+						err: stringifyError(err),
+					});
+				}
 			}
+
+			this.#pendingDisconnectCount = Math.max(
+				0,
+				this.#pendingDisconnectCount - 1,
+			);
+			this.#actor.resetSleepTimer();
 		}
 	}
 

@@ -91,13 +91,21 @@ class DbMutex {
 /**
  * Create a sqlite-proxy async callback from a wa-sqlite Database
  */
-function createProxyCallback(waDb: Database, mutex: DbMutex) {
+function createProxyCallback(
+	waDb: Database,
+	mutex: DbMutex,
+	isClosed: () => boolean,
+) {
 	return async (
 		sql: string,
 		params: any[],
 		method: "run" | "all" | "values" | "get",
 	): Promise<{ rows: any }> => {
 		return mutex.run(async () => {
+			if (isClosed()) {
+				throw new Error("database is closed");
+			}
+
 			if (method === "run") {
 				await waDb.run(sql, params);
 				return { rows: [] };
@@ -194,9 +202,15 @@ export function db<
 			const kvStore = createActorKvStore(ctx.kv);
 			const waDb = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			waDbInstance = waDb;
+			let closed = false;
+			const ensureOpen = () => {
+				if (closed) {
+					throw new Error("database is closed");
+				}
+			};
 
 			// Create the async proxy callback
-			const callback = createProxyCallback(waDb, mutex);
+			const callback = createProxyCallback(waDb, mutex, () => closed);
 
 			// Create the drizzle instance using sqlite-proxy
 			const client = proxyDrizzle<TSchema>(callback, config);
@@ -209,6 +223,8 @@ export function db<
 					...args: unknown[]
 				): Promise<TRow[]> => {
 					return mutex.run(async () => {
+						ensureOpen();
+
 						if (args.length > 0) {
 							const result = await waDb.query(query, args);
 							return result.rows.map((row: unknown[]) => {
@@ -244,8 +260,14 @@ export function db<
 					});
 				},
 				close: async () => {
-					await waDb.close();
-					waDbInstance = null;
+					await mutex.run(async () => {
+						if (closed) {
+							return;
+						}
+						closed = true;
+						await waDb.close();
+						waDbInstance = null;
+					});
 				},
 			} satisfies RawAccess);
 		},
