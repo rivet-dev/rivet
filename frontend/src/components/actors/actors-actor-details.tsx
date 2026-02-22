@@ -1,5 +1,4 @@
 import { faQuestionSquare, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
 import { memo, type ReactNode, Suspense } from "react";
 import {
 	cn,
@@ -18,7 +17,6 @@ import { ActorQueueTab } from "./actor-queue-tab";
 import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
-import { ActorTracesTab } from "./actor-traces-tab";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
 import {
@@ -132,6 +130,21 @@ export function ActorTabs({
 						>
 							Connections
 						</TabsTrigger>
+
+						<TabsTrigger
+							disabled={disabled}
+							value="queue"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Queue
+						</TabsTrigger>
+						<TabsTrigger
+							disabled={disabled}
+							value="workflow"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Workflow
+						</TabsTrigger>
 						<TabsTrigger
 							disabled={disabled}
 							value="metadata"
@@ -179,6 +192,21 @@ export function ActorTabs({
 						{guardContent || (
 							<ActorConnectionsTab actorId={actorId} />
 						)}
+					</TabsContent>
+					<TabsContent value="queue" className="min-h-0 flex-1 mt-0">
+						{guardContent || <ActorQueueTab actorId={actorId} />}
+					</TabsContent>
+					<TabsContent
+						value="workflow"
+						className="min-h-0 flex-1 mt-0 h-full"
+					>
+						{guardContent || <ActorWorkflowTab actorId={actorId} />}
+					</TabsContent>
+					<TabsContent
+						value="database"
+						className="min-h-0 min-w-0 flex-1 mt-0 h-full"
+					>
+						{guardContent || <ActorDatabaseTab actorId={actorId} />}
 					</TabsContent>
 					<TabsContent
 						value="state"
