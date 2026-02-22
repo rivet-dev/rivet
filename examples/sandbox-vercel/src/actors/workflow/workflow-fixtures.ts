@@ -1,9 +1,10 @@
-import { actor, queue } from "rivetkit";
+import { actor, event, queue } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 
 const WORKFLOW_GUARD_KV_KEY = "__rivet_actor_workflow_guard_triggered";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
+const WORKFLOW_TIMEOUT_QUEUE_NAME = "workflow-timeout";
 
 export const workflowCounterActor = actor({
 	state: {
@@ -104,4 +105,72 @@ export const workflowSleepActor = actor({
 	},
 });
 
-export { WORKFLOW_QUEUE_NAME };
+export const workflowQueueTimeoutActor = actor({
+	state: {
+		processed: 0,
+		ticks: 0,
+		lastTickAt: null as number | null,
+		lastJob: null as { id: string; payload: string } | null,
+		timeoutMs: 2_000,
+	},
+	events: {
+		tick: event<{ ticks: number; at: number }>(),
+		jobProcessed: event<{ processed: number; job: { id: string; payload: string } }>(),
+	},
+	queues: {
+		[WORKFLOW_TIMEOUT_QUEUE_NAME]: queue<{ id: string; payload: string }>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop({
+			name: "queue-timeout-loop",
+			run: async (loopCtx) => {
+				const actorLoopCtx = loopCtx as any;
+				const timeoutMs = await loopCtx.step("read-timeout", async () => {
+					return actorLoopCtx.state.timeoutMs;
+				});
+
+				const [message] = await loopCtx.queue.next("wait-job-or-timeout", {
+					names: [WORKFLOW_TIMEOUT_QUEUE_NAME],
+					timeout: timeoutMs,
+				});
+
+				if (!message) {
+					await loopCtx.step("tick", async () => {
+						const at = Date.now();
+						actorLoopCtx.state.ticks += 1;
+						actorLoopCtx.state.lastTickAt = at;
+						actorLoopCtx.broadcast("tick", {
+							ticks: actorLoopCtx.state.ticks,
+							at,
+						});
+					});
+					return Loop.continue(undefined);
+				}
+
+				await loopCtx.step("process-job", async () => {
+					actorLoopCtx.state.processed += 1;
+					actorLoopCtx.state.lastJob = message.body;
+					actorLoopCtx.broadcast("jobProcessed", {
+						processed: actorLoopCtx.state.processed,
+						job: message.body,
+					});
+				});
+				return Loop.continue(undefined);
+			},
+		});
+	}),
+	actions: {
+		enqueueJob: async (c, payload: string) => {
+			const job = { id: crypto.randomUUID(), payload };
+			await c.queue.send(WORKFLOW_TIMEOUT_QUEUE_NAME, job);
+			return job;
+		},
+		setTimeoutMs: (c, timeoutMs: number) => {
+			c.state.timeoutMs = Math.max(100, Math.floor(timeoutMs));
+			return c.state.timeoutMs;
+		},
+		getState: (c) => c.state,
+	},
+});
+
+export { WORKFLOW_QUEUE_NAME, WORKFLOW_TIMEOUT_QUEUE_NAME };

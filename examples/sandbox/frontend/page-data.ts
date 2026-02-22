@@ -64,11 +64,45 @@ console.log(metadata.tags, metadata.region);`,
 	actions: { getVars: (c) => c.vars },
 });`,
 	kv: `await actor.putText("greeting", "hello");
-const value = await actor.getText("greeting");`,
+	const value = await actor.getText("greeting");`,
 	queue: `await actor.send("work", { id: "task-1" });
-const message = await actor.receiveOne("work");`,
+	const message = await actor.receiveOne("work");`,
+	queueTimeout: `while (!c.aborted) {
+	const [message] = await c.queue.next({
+		names: ["jobs"],
+		timeout: 2_000,
+	});
+
+	if (!message) {
+		c.broadcast("tick", { at: Date.now() });
+		continue;
+	}
+
+	c.broadcast("jobProcessed", { job: message.body });
+}`,
 	workflow: `const workflow = client.order.getOrCreate([orderId]);
-await workflow.getOrder();`,
+	await workflow.getOrder();`,
+	workflowQueueTimeout: `await ctx.loop({
+	name: "queue-timeout-loop",
+	run: async (loopCtx) => {
+		const [message] = await loopCtx.queue.next("wait-job-or-timeout", {
+			names: ["workflow-timeout"],
+			timeout: 2_000,
+		});
+
+		if (!message) {
+			await loopCtx.step("tick", async () => {
+				/* heartbeat every N seconds */
+			});
+			return Loop.continue(undefined);
+		}
+
+		await loopCtx.step("process-job", async () => {
+			/* process queue message */
+		});
+		return Loop.continue(undefined);
+	},
+});`,
 	rawHttp: `const response = await actor.fetch("/api/hello");
 const data = await response.json();`,
 	rawWebSocket: `const socket = actor.webSocket("/chat");
@@ -248,6 +282,11 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Actor Counts", action: "getActorCounts", args: [] },
 	],
 	worker: [{ label: "Get State", action: "getState", args: [] }],
+	workerTimeout: [
+		{ label: "Enqueue Job", action: "enqueueJob", args: ["task from queue timeout"] },
+		{ label: "Set Timeout 1s", action: "setTimeoutMs", args: [1000] },
+		{ label: "Get State", action: "getState", args: [] },
+	],
 	order: [{ label: "Get Order", action: "getOrder", args: [] }],
 	timer: [{ label: "Get Timer", action: "getTimer", args: [] }],
 	batch: [{ label: "Get Job", action: "getJob", args: [] }],
@@ -279,6 +318,11 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Allow Success", action: "allowSuccess", args: [] },
 	],
 	workflowHistoryFailed: [
+		{ label: "Get State", action: "getState", args: [] },
+	],
+	workflowQueueTimeoutActor: [
+		{ label: "Enqueue Job", action: "enqueueJob", args: ["task from workflow timeout"] },
+		{ label: "Set Timeout 1s", action: "setTimeoutMs", args: [1000] },
 		{ label: "Get State", action: "getState", args: [] },
 	],
 	inventory: [{ label: "Get Stock", action: "getStock", args: [] }],
@@ -827,21 +871,35 @@ export const PAGE_GROUPS: PageGroup[] = [
 					actors: ["worker"],
 					snippet: SNIPPETS.queue,
 				},
-			{
-				id: "queue-run-loop",
-				title: "Queue in Run Loop",
-				description: "Consume queue messages inside run handlers.",
+				{
+					id: "queue-run-loop",
+					title: "Queue in Run Loop",
+					description: "Consume queue messages inside run handlers.",
 				docs: [
 					{
 						label: "Queue",
 						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
-				actors: ["runWithQueueConsumer"],
-				snippet: SNIPPETS.queue,
-			},
-		],
-	},
+					actors: ["runWithQueueConsumer"],
+					snippet: SNIPPETS.queue,
+				},
+				{
+					id: "queue-timeout-loop",
+					title: "Queue Timeout Tick",
+					description:
+						"Use queue timeouts to trigger a heartbeat every N seconds while waiting for jobs.",
+					docs: [
+						{
+							label: "Queue",
+							href: "https://rivet.dev/docs/actors/queues",
+						},
+					],
+					actors: ["workerTimeout"],
+					snippet: SNIPPETS.queueTimeout,
+				},
+			],
+		},
 	{
 		id: "workflows",
 		title: "Workflows",
@@ -886,19 +944,33 @@ export const PAGE_GROUPS: PageGroup[] = [
 				actors: ["batch"],
 				snippet: SNIPPETS.workflow,
 			},
-			{
-				id: "workflow-listen",
-				title: "Listen",
-				description: "Wait for approvals and events in workflows.",
+				{
+					id: "workflow-listen",
+					title: "Listen",
+					description: "Wait for approvals and events in workflows.",
 				docs: [
 					{
 						label: "Workflows",
 						href: "https://rivet.dev/docs/workflows",
 					},
 				],
-				actors: ["approval"],
-				snippet: SNIPPETS.workflow,
-			},
+					actors: ["approval"],
+					snippet: SNIPPETS.workflow,
+				},
+				{
+					id: "workflow-queue-timeout",
+					title: "Queue Timeout Tick",
+					description:
+						"Wait for queue messages with a timeout and run a periodic heartbeat step between messages.",
+					docs: [
+						{
+							label: "Workflows",
+							href: "https://rivet.dev/docs/actors/workflows",
+						},
+					],
+					actors: ["workflowQueueTimeoutActor"],
+					snippet: SNIPPETS.workflowQueueTimeout,
+				},
 			{
 				id: "workflow-join",
 				title: "Join",
