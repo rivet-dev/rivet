@@ -79,11 +79,13 @@ import {
 import { hibernationActor } from "./actors/lifecycle/hibernation.ts";
 // Queues
 import { worker } from "./actors/queue/worker.ts";
+import { workerTimeout } from "./actors/queue/worker-timeout.ts";
 // Workflows
 import {
 	workflowCounterActor,
 	workflowQueueActor,
 	workflowSleepActor,
+	workflowQueueTimeoutActor,
 } from "./actors/workflow/workflow-fixtures.ts";
 import { timer } from "./actors/workflow/timer.ts";
 import { order } from "./actors/workflow/order.ts";
@@ -174,6 +176,7 @@ export const registry = setup({
 		hibernationActor,
 		// Queues
 		worker,
+		workerTimeout,
 		// Workflows
 		timer,
 		order,
@@ -193,6 +196,7 @@ export const registry = setup({
 		workflowCounterActor,
 		workflowQueueActor,
 		workflowSleepActor,
+		workflowQueueTimeoutActor,
 		// Inter-actor
 		inventory,
 		checkout,
