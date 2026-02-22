@@ -176,6 +176,15 @@ async function initializeTypesenseClient() {
 		return null;
 	}
 
+	// Only index on production to avoid PR previews overwriting the search index.
+	const railwayEnv = process.env.RAILWAY_ENVIRONMENT;
+	if (railwayEnv && railwayEnv !== "production") {
+		console.log(
+			`Non-production Railway environment (${railwayEnv}), skipping search indexing`,
+		);
+		return null;
+	}
+
 	const client = new Typesense.Client({
 		nodes: [
 			{
