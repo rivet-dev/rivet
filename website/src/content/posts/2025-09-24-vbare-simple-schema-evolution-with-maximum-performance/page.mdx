@@ -140,14 +140,14 @@ For examples, VBARE powers almost all of Rivet:
 
 Here's a simple example demonstrating how VBARE handles a complex schema migration that is not possible with any existing tools:
 
-```text {{"title":"schema/v1.bare"}}
+```text schema/v1.bare
 type User struct {
   id: string
   name: string
 }
 ```
 
-```text {{"title":"schema/v2.bare"}}
+```text schema/v2.bare
 type User struct {
   id: string
   // Split `name` in to 2 properties

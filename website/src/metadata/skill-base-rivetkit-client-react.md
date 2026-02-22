@@ -10,6 +10,12 @@ Use this skill when building React apps that connect to Rivet Actors with `@rive
    ```
 2. Create hooks with `createRivetKit()` and connect with `useActor()`.
 
+## Error Handling Policy
+
+- Prefer fail-fast behavior by default.
+- Avoid `try/catch` unless absolutely needed.
+- If a `catch` is used, handle the error explicitly, at minimum by logging it.
+
 <!-- CONTENT -->
 
 ## Need More Than the Client?

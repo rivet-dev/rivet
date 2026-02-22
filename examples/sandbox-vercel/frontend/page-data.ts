@@ -121,6 +121,23 @@ export const myActor = actor({
 		},
 	},
 });`,
+	sqliteVanilla: `import { db } from "rivetkit/db";
+
+export const notes = actor({
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(\`CREATE TABLE IF NOT EXISTS notes (...)\`);
+		},
+	}),
+	actions: {
+		set: async (c, key: string, value: string) => {
+			await c.db.execute("INSERT OR REPLACE ...", key, value);
+		},
+		get: async (c, key: string) => {
+			return await c.db.execute("SELECT * FROM notes WHERE key = ?", key);
+		},
+	},
+});`,
 };
 
 export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
@@ -301,6 +318,12 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Get Todos", action: "getTodos", args: [] },
 		{ label: "Toggle Todo", action: "toggleTodo", args: [1] },
 		{ label: "Delete Todo", action: "deleteTodo", args: [1] },
+	],
+	sqliteVanillaActor: [
+		{ label: "Set", action: "set", args: ["greeting", "hello world"] },
+		{ label: "Get", action: "get", args: ["greeting"] },
+		{ label: "Get All", action: "getAll", args: [] },
+		{ label: "Remove", action: "remove", args: ["greeting"] },
 	],
 };
 
@@ -532,6 +555,20 @@ export const PAGE_GROUPS: PageGroup[] = [
 				],
 				actors: ["sqliteDrizzleActor"],
 				snippet: SNIPPETS.sqliteDrizzle,
+			},
+			{
+				id: "sqlite-vanilla",
+				title: "SQLite Vanilla",
+				description:
+					"Use a vanilla SQLite key-value pattern with upserts and queries on a per-actor database.",
+				docs: [
+					{
+						label: "SQLite",
+						href: "https://rivet.dev/docs/actors/sqlite",
+					},
+				],
+				actors: ["sqliteVanillaActor"],
+				snippet: SNIPPETS.sqliteVanilla,
 			},
 		],
 	},

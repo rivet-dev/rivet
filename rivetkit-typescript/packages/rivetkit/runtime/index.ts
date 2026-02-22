@@ -122,6 +122,7 @@ export class Runtime<A extends RegistryActors> {
 				version: config.serverless.engineVersion,
 			});
 		} else if (config.serveManager) {
+			const configuredManagerPort = config.managerPort;
 			let upgradeWebSocket: any;
 			const getUpgradeWebSocket: GetUpgradeWebSocket = () =>
 				upgradeWebSocket;
@@ -139,6 +140,21 @@ export class Runtime<A extends RegistryActors> {
 				msg: "serving manager",
 				port: managerPort,
 			});
+
+			// `publicEndpoint` is derived from `config.managerPort` during config parsing,
+			// but we may have chosen a different free port at runtime. Keep them in sync
+			// so browser clients that rely on `/metadata` connect to the correct manager.
+			//
+			// Only rewrite when `publicEndpoint` is still on the default localhost pattern,
+			// to avoid clobbering explicitly-configured public endpoints.
+			if (
+				config.publicEndpoint ===
+				`http://127.0.0.1:${configuredManagerPort}`
+			) {
+				config.publicEndpoint = `http://127.0.0.1:${managerPort}`;
+				config.serverless.publicEndpoint = config.publicEndpoint;
+			}
+			config.managerPort = managerPort;
 
 			const out = await crossPlatformServe(
 				config,

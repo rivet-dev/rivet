@@ -38,6 +38,7 @@ import {
 } from "./actors/state/large-payloads.ts";
 import { sqliteRawActor } from "./actors/state/sqlite-raw.ts";
 import { sqliteDrizzleActor } from "./actors/state/sqlite-drizzle/mod.ts";
+import { sqliteVanillaActor } from "./actors/state/sqlite-vanilla.ts";
 // Connections
 import { connStateActor } from "./actors/connections/conn-state.ts";
 import { rejectConnectionActor } from "./actors/connections/reject-connection.ts";
@@ -143,6 +144,7 @@ export const registry = setup({
 		largePayloadConnActor,
 		sqliteRawActor,
 		sqliteDrizzleActor,
+		sqliteVanillaActor,
 		// Realtime and connections
 		connStateActor,
 		rejectConnectionActor,

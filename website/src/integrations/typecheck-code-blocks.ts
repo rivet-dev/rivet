@@ -232,11 +232,6 @@ function wrapCodeForTypecheck(code: string): string {
 	// For partial snippets without imports, add common imports and wrap in async IIFE
 	const imports: string[] = [];
 
-	// Add rivetkit import if code uses rivetkit types and doesn't have imports
-	if (code.includes("actor(") || code.includes("registry(") || code.includes("createClient(")) {
-		imports.push('import { actor, registry, createClient, UserError } from "rivetkit";');
-	}
-
 	// Add hono import if code uses Hono
 	if (code.includes("Hono") && !hasImports) {
 		imports.push('import { Hono } from "hono";');

@@ -1,0 +1,13 @@
+export const LOBBY_CAPACITY = 16;
+export const TICK_MS = 100; // 10 tps
+export const WORLD_SIZE = 1200;
+export const MAX_SPEED = 150; // pixels per second
+export const SHOOT_RANGE = 250;
+export const SHOOT_ANGLE = 0.15;
+export const ZONE_INITIAL_RADIUS = 550;
+export const ZONE_SHRINK_START_TICK = 50;
+export const ZONE_SHRINK_RATE = 0.5;
+export const ZONE_MIN_RADIUS = 30;
+export const ZONE_DAMAGE_PER_TICK = 1;
+export const PLAYER_MAX_HP = 10;
+export const LOBBY_COUNTDOWN_TICKS = 30; // 3 seconds at 10 tps

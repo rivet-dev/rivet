@@ -77,3 +77,26 @@ function validatePlayer(
 }
 ```
 
+### All Context Types
+
+Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported from `"rivetkit"`. Pass `typeof myActor` as the type parameter.
+
+| Hook / Handler | Context Type |
+|---|---|
+| `createState` | `CreateContextOf` |
+| `createVars` | `CreateVarsContextOf` |
+| `createConnState` | `CreateConnStateContextOf` |
+| `onBeforeConnect` | `BeforeConnectContextOf` |
+| `onConnect` | `ConnectContextOf` |
+| `onDisconnect` | `DisconnectContextOf` |
+| `onDestroy` | `DestroyContextOf` |
+| `onWake` | `WakeContextOf` |
+| `onSleep` | `SleepContextOf` |
+| `onStateChange` | `StateChangeContextOf` |
+| `onBeforeActionResponse` | `BeforeActionResponseContextOf` |
+| `actions.*` | `ActionContextOf` |
+| `run` | `RunContextOf` |
+| `onRequest` | `RequestContextOf` |
+| `onWebSocket` | `WebSocketContextOf` |
+
+`ActorContextOf`, `ConnContextOf`, and `ConnInitContextOf` are general-purpose base context types useful for helper functions that don't correspond to a specific hook.

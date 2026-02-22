@@ -116,7 +116,7 @@ Access the actor's key within the actor using the [metadata](/docs/actors/metada
 
 <CodeGroup>
 
-```typescript {{"title":"registry.ts"}}
+```typescript registry.ts
 import { actor, setup } from "rivetkit";
 
 const chatRoom = actor({
@@ -135,7 +135,7 @@ export const registry = setup({
 });
 ```
 
-```typescript {{"title":"client.ts"}}
+```typescript client.ts
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
@@ -172,7 +172,7 @@ Use keys to provide basic actor configuration:
 
 <CodeGroup>
 
-```typescript {{"title":"registry.ts"}}
+```typescript registry.ts
 import { actor, setup } from "rivetkit";
 
 interface UserSessionState {
@@ -199,7 +199,7 @@ export const registry = setup({
 });
 ```
 
-```typescript {{"title":"client.ts"}}
+```typescript client.ts
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
@@ -222,7 +222,7 @@ const userSessionHandle = client.userSession.getOrCreate([userId]);
 
 For more complex configuration, use [input parameters](/docs/actors/input):
 
-```typescript {{"title":"client.ts"}}
+```typescript client.ts
 import { actor, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 

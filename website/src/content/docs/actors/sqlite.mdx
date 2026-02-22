@@ -1,0 +1,244 @@
+---
+title: "SQLite"
+description: "Use embedded SQLite in Rivet Actors with raw SQL queries."
+skill: true
+---
+
+## What is SQLite?
+
+- **Database per actor**: each actor instance has its own SQLite database, scoped to that actor.
+- **High performance**: Rivet Actors keep compute and storage together, so queries avoid network round trips to an external database.
+- **Larger-than-memory storage**: SQLite stores data on disk, so you can work with datasets that do not fit in actor memory.
+- **Embedded relational database**: use tables, indexes, and SQL queries directly inside actor logic.
+
+### SQLite features
+
+- **Indexes**: speed up lookups on frequently queried fields.
+- **Search and filtering**: use `WHERE`, `LIKE`, and `ORDER BY` instead of manual in-memory loops.
+- **Relationships**: use multiple tables and `JOIN` queries for connected data.
+- **Constraints**: use primary keys, unique constraints, and foreign keys for data integrity.
+- **Transactions**: apply multiple writes atomically when changes must stay consistent.
+
+## Raw SQL vs ORM (Drizzle)
+
+Rivet supports both raw SQL and [Drizzle](https://orm.drizzle.team/) for actor-local SQLite.
+
+Use **raw SQL** when you want direct query control and minimal abstraction.
+
+```ts @nocheck
+await c.db.execute("INSERT INTO todos (title) VALUES (?)", title);
+const rows = await c.db.execute("SELECT id, title FROM todos ORDER BY id DESC");
+```
+
+Use **Drizzle** when you want typed schema and typed query APIs.
+
+```ts @nocheck
+await c.vars.drizzle.insert(todos).values({ title });
+const rows = await c.vars.drizzle.select().from(todos).orderBy(desc(todos.id));
+```
+
+You can mix both in the same actor.
+
+For Drizzle setup, see [SQLite + Drizzle](/docs/actors/sqlite-drizzle).
+
+## Basic setup
+
+Define `db: db({ onMigrate })` on your actor, create your schema in `onMigrate`, and execute SQL with `c.db.execute(...)`.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, setup } from "rivetkit";
+import { db } from "rivetkit/db";
+
+export const todoList = actor({
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS todos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS comments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          todo_id INTEGER NOT NULL,
+          body TEXT NOT NULL,
+          FOREIGN KEY(todo_id) REFERENCES todos(id)
+        );
+      `);
+    },
+  }),
+  actions: {
+    addTodo: async (c, title: string) => {
+      await c.db.execute("INSERT INTO todos (title) VALUES (?)", title);
+    },
+    addComment: async (c, todoId: number, body: string) => {
+      await c.db.execute(
+        "INSERT INTO comments (todo_id, body) VALUES (?, ?)",
+        todoId,
+        body,
+      );
+    },
+    getTodos: async (c) => {
+      return (await c.db.execute(
+        "SELECT id, title FROM todos ORDER BY id DESC",
+      )) as {
+        id: number;
+        title: string;
+      }[];
+    },
+  },
+});
+
+export const registry = setup({ use: { todoList } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.todoList.getOrCreate(["main"]);
+
+await handle.addTodo("Write SQLite docs");
+await handle.addTodo("Ship docs update");
+
+const todos = await handle.getTodos();
+console.log(todos);
+```
+</CodeGroup>
+
+## Queries
+
+`c.db.execute(...)` returns an array of row objects for `SELECT` queries.
+
+```ts @nocheck
+const rows = await c.db.execute(
+  "SELECT id, title FROM todos WHERE title LIKE ?",
+  `%${query}%`,
+);
+```
+
+### Parameterized queries
+
+Use `?` placeholders for dynamic values and pass parameters in order after the SQL string.
+
+```ts @nocheck
+await c.db.execute("INSERT INTO todos (title) VALUES (?)", title);
+```
+
+### Transactions
+
+Use transactions when multiple writes must succeed or fail together.
+
+- Start with `BEGIN`.
+- End with `COMMIT` if all queries succeed.
+- On error, run `ROLLBACK` and rethrow.
+- A transaction is global for the entire shared `c.db` connection. Be careful with other interleaved queries.
+
+```ts @nocheck
+await c.db.execute("BEGIN");
+
+try {
+  await c.db.execute("INSERT INTO todos (title) VALUES (?)", title);
+  await c.db.execute(
+    "INSERT INTO comments (todo_id, body) VALUES (last_insert_rowid(), ?)",
+    body,
+  );
+  await c.db.execute("COMMIT");
+} catch (error) {
+  await c.db.execute("ROLLBACK");
+  throw error;
+}
+```
+
+## Queues
+
+It's recommended to use queues for mutations and actions for read-only queries. This is the same code structure as the basic setup, but mutation writes are routed through queues.
+
+<CodeGroup workspace>
+```ts registry.ts
+import { actor, queue, setup } from "rivetkit";
+import { db } from "rivetkit/db";
+
+export const todoList = actor({
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS todos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS comments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          todo_id INTEGER NOT NULL,
+          body TEXT NOT NULL,
+          FOREIGN KEY(todo_id) REFERENCES todos(id)
+        );
+      `);
+    },
+  }),
+  queues: {
+    addTodo: queue<{ title: string }>(),
+    addComment: queue<{ todoId: number; body: string }>(),
+  },
+  run: async (c) => {
+    for await (const message of c.queue.iter()) {
+      if (message.name === "addTodo") {
+        await c.db.execute("INSERT INTO todos (title) VALUES (?)", message.body.title);
+      } else if (message.name === "addComment") {
+        await c.db.execute(
+          "INSERT INTO comments (todo_id, body) VALUES (?, ?)",
+          message.body.todoId,
+          message.body.body,
+        );
+      }
+    }
+  },
+  actions: {
+    getTodos: async (c) => {
+      return (await c.db.execute(
+        "SELECT id, title FROM todos ORDER BY id DESC",
+      )) as {
+        id: number;
+        title: string;
+      }[];
+    },
+  },
+});
+
+export const registry = setup({ use: { todoList } });
+```
+
+```ts client.ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>();
+const handle = client.todoList.getOrCreate(["main"]);
+
+await handle.send("addTodo", { title: "Write SQLite docs" });
+await handle.send("addTodo", { title: "Ship docs update" });
+
+const todos = await handle.getTodos();
+console.log(todos);
+```
+</CodeGroup>
+
+## Recommendations
+
+- Keep schema creation and migration steps in `onMigrate`.
+- Use `?` placeholders for dynamic values.
+- Prefer queue-driven writes for ordered or background work.
+- Use transactions for related multi-step mutations when atomicity matters.
+
+## Read more
+
+- [SQLite + Drizzle in Rivet Actors](/docs/actors/sqlite-drizzle)
+- [SQLite docs](https://sqlite.org/docs.html)
+- [SQLite SQL language reference](https://sqlite.org/lang.html)
