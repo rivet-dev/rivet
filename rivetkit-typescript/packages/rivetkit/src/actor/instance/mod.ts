@@ -456,6 +456,13 @@ export class ActorInstance<
 			throw new errors.InternalError("Actor is stopping");
 	}
 
+	async cleanupPersistedConnections(reason?: string): Promise<number> {
+		this.assertReady(true);
+		return await this.connectionManager.cleanupPersistedHibernatableConnections(
+			reason,
+		);
+	}
+
 	// MARK: - Stop
 	async onStop(mode: "sleep" | "destroy") {
 		if (this.#stopCalled) {

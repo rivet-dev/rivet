@@ -26,6 +26,7 @@ import { counter } from "./counter";
 import { counterConn } from "./counter-conn";
 import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
+import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
 import { hibernationActor } from "./hibernation";
 import { inlineClientActor } from "./inline-client";
 import { kvActor } from "./kv";
@@ -145,6 +146,8 @@ export const registry = setup({
 		destroyObserver,
 		// From hibernation.ts
 		hibernationActor,
+		// From file-system-hibernation-cleanup.ts
+		fileSystemHibernationCleanupActor,
 		// From large-payloads.ts
 		largePayloadActor,
 		largePayloadConnActor,

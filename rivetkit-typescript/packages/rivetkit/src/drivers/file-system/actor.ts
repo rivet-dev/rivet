@@ -94,4 +94,8 @@ export class FileSystemActorDriver implements ActorDriver {
 	async startDestroy(actorId: string): Promise<void> {
 		await this.#state.destroyActor(actorId);
 	}
+
+	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
+		await actor.cleanupPersistedConnections("file-system-driver.start");
+	}
 }

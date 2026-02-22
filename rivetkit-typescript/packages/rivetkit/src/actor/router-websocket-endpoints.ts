@@ -213,6 +213,10 @@ export async function handleWebSocketConnect(
 		exposeInternalError,
 	}: WebSocketHandlerOpts,
 ): Promise<UpgradeWebSocketArgs> {
+	// Process WS messages in order to avoid races between subscription updates
+	// and subsequent action requests.
+	let pendingMessage = Promise.resolve();
+
 	return {
 		conn,
 		actor,
@@ -230,32 +234,17 @@ export async function handleWebSocketConnect(
 			actor.connectionManager.connectConn(conn);
 		},
 		onMessage: (evt: RivetMessageEvent, ws: WSContext) => {
-			// Handle message asynchronously
 			actor.rLog.debug({ msg: "received message" });
-
 			const value = evt.data.valueOf() as InputData;
-			parseMessage(value, {
-				encoding: encoding,
-				maxIncomingMessageSize: runConfig.maxIncomingMessageSize,
-			})
-				.then((message) => {
-					actor.processMessage(message, conn).catch((error) => {
-						const { group, code } = deconstructError(
-							error,
-							actor.rLog,
-							{
-								wsEvent: "message",
-							},
-							exposeInternalError,
-						);
-						ws.close(1011, `${group}.${code}`);
+			pendingMessage = pendingMessage
+				.then(async () => {
+					const message = await parseMessage(value, {
+						encoding: encoding,
+						maxIncomingMessageSize: runConfig.maxIncomingMessageSize,
 					});
+					await actor.processMessage(message, conn);
 				})
 				.catch((error) => {
-					// Close connection on parse errors (including incoming message too large).
-					// This is fail-fast behavior: we cannot send an error response for a
-					// message we couldn't parse (no actionId), and skipping the message
-					// could cause request/response ordering corruption.
 					const { group, code } = deconstructError(
 						error,
 						actor.rLog,
