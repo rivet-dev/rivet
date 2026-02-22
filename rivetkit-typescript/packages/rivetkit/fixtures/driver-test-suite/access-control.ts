@@ -1,66 +1,58 @@
 import { actor, event, queue } from "rivetkit";
+import { Forbidden } from "rivetkit/errors";
 
-interface AccessControlConnParams {
+export interface AccessControlConnParams {
 	allowRequest?: boolean;
 	allowWebSocket?: boolean;
-	invalidCanInvokeReturn?: boolean;
 }
+
+const accessControlEvents: Record<
+	string,
+	ReturnType<typeof event<{ value: string }>>
+> = {
+	allowedEvent: event<{ value: string }>({
+		canSubscribe: (c) => {
+			c.state.lastCanSubscribeConnId = c.conn.id;
+			return true;
+		},
+	}),
+	blockedEvent: event<{ value: string }>({
+		canSubscribe: (c) => {
+			c.state.lastCanSubscribeConnId = c.conn.id;
+			return false;
+		},
+	}),
+};
+
+const accessControlQueues: Record<
+	string,
+	ReturnType<typeof queue<{ value: string }>>
+> = {
+	allowedQueue: queue<{ value: string }>({
+		canPublish: (c) => {
+			c.state.lastCanPublishConnId = c.conn.id;
+			return true;
+		},
+	}),
+	blockedQueue: queue<{ value: string }>({
+		canPublish: (c) => {
+			c.state.lastCanPublishConnId = c.conn.id;
+			return false;
+		},
+	}),
+};
 
 export const accessControlActor = actor({
 	state: {
-		lastCanInvokeConnId: "",
+		lastCanPublishConnId: "",
+		lastCanSubscribeConnId: "",
 	},
-	events: {
-		allowedEvent: event<{ value: string }>(),
-		blockedEvent: event<{ value: string }>(),
-	},
-	queues: {
-		allowedQueue: queue<{ value: string }>(),
-		blockedQueue: queue<{ value: string }>(),
-	},
-	canInvoke: (c, invoke) => {
-		c.state.lastCanInvokeConnId = c.conn.id;
-		const params = c.conn.params as AccessControlConnParams | undefined;
-		if (params?.invalidCanInvokeReturn) {
-			return undefined as never;
+	events: accessControlEvents,
+	queues: accessControlQueues,
+	onBeforeConnect: (_c, params: AccessControlConnParams) => {
+		if (params?.allowRequest === false || params?.allowWebSocket === false) {
+			throw new Forbidden();
 		}
-
-		if (invoke.kind === "action") {
-			if (invoke.name.startsWith("allowed")) {
-				return true;
-			}
-			return false;
-		}
-
-		if (invoke.kind === "queue") {
-			if (invoke.name === "allowedQueue") {
-				return true;
-			}
-			return false;
-		}
-
-		if (invoke.kind === "subscribe") {
-			if (invoke.name === "allowedEvent") {
-				return true;
-			}
-			return false;
-		}
-
-		if (invoke.kind === "request") {
-			if (params?.allowRequest === true) {
-				return true;
-			}
-			return false;
-		}
-
-		if (invoke.kind === "websocket") {
-			if (params?.allowWebSocket === true) {
-				return true;
-			}
-			return false;
-		}
-
-		return false;
 	},
 	onRequest(_c, request) {
 		const url = new URL(request.url);
@@ -76,11 +68,11 @@ export const accessControlActor = actor({
 		allowedAction: (_c, value: string) => {
 			return `allowed:${value}`;
 		},
-		blockedAction: () => {
-			return "blocked";
+		allowedGetLastCanPublishConnId: (c) => {
+			return c.state.lastCanPublishConnId;
 		},
-		allowedGetLastCanInvokeConnId: (c) => {
-			return c.state.lastCanInvokeConnId;
+		allowedGetLastCanSubscribeConnId: (c) => {
+			return c.state.lastCanSubscribeConnId;
 		},
 		allowedReceiveQueue: async (c) => {
 			const [message] = await c.queue.tryNext({
@@ -88,8 +80,28 @@ export const accessControlActor = actor({
 			});
 			return message?.body ?? null;
 		},
+		allowedReceiveAnyQueue: async (c) => {
+			const [message] = await c.queue.tryNext();
+			return message?.body ?? null;
+		},
 		allowedBroadcastAllowedEvent: (c, value: string) => {
 			c.broadcast("allowedEvent", { value });
+		},
+		allowedBroadcastBlockedEvent: (c, value: string) => {
+			c.broadcast("blockedEvent", { value });
+		},
+		allowedBroadcastUndefinedEvent: (c, value: string) => {
+			c.broadcast("undefinedEvent", { value });
+		},
+	},
+});
+
+export const accessControlNoQueuesActor = actor({
+	state: {},
+	actions: {
+		readAnyQueue: async (c) => {
+			const [message] = await c.queue.tryNext();
+			return message?.body ?? null;
 		},
 	},
 });

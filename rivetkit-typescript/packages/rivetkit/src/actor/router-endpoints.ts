@@ -236,10 +236,7 @@ export async function handleQueueSend(
 	};
 	try {
 		const ctx = new ActionContext(actor, conn);
-		await actor.assertCanInvoke(ctx, {
-			kind: "queue",
-			name,
-		});
+		await actor.assertCanPublish(ctx, name);
 
 		if (request.wait) {
 			result = await actor.queueManager.enqueueAndWait(

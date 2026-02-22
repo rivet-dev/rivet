@@ -19,7 +19,6 @@ import {
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
 import {
-	type AnyCanInvokeTarget,
 	type ActorConfig,
 	getRunFunction,
 } from "../config";
@@ -38,7 +37,6 @@ import {
 import {
 	ActionContext,
 	ActorContext,
-	type ConnContext,
 	RequestContext,
 	WebSocketContext,
 } from "../contexts";
@@ -49,7 +47,12 @@ import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
 import { Schedule } from "../schedule";
-import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
+import {
+	type EventSchemaConfig,
+	getEventCanSubscribe,
+	getQueueCanPublish,
+	type QueueSchemaConfig,
+} from "../schema";
 import {
 	assertUnreachable,
 	DeadlineError,
@@ -615,30 +618,42 @@ export class ActorInstance<
 		});
 	}
 
-	async assertCanInvoke(
-		ctx: ConnContext<S, CP, CS, V, I, DB, E, Q>,
-		invoke: AnyCanInvokeTarget,
+	async assertCanSubscribe(
+		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
+		eventName: string,
 	): Promise<void> {
-		const canInvoke = this.#config.canInvoke;
-		if (!canInvoke) {
+		const canSubscribe = getEventCanSubscribe(this.#config.events, eventName);
+		if (!canSubscribe) {
 			return;
 		}
 
-		const result = await canInvoke(ctx, invoke);
+		const result = await canSubscribe(ctx);
 		if (typeof result !== "boolean") {
-			throw new errors.InvalidCanInvokeResponse();
+			throw new errors.InvalidCanSubscribeResponse();
 		}
 		if (!result) {
 			throw new errors.Forbidden();
 		}
 	}
 
-	async assertCanInvokeWebSocket(
-		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
+	async assertCanPublish(
+		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
+		queueName: string,
 	): Promise<void> {
-		await this.assertCanInvoke(new ActionContext(this, conn), {
-			kind: "websocket",
-		});
+		const canPublish = getQueueCanPublish<
+			ActionContext<S, CP, CS, V, I, DB, E, Q>
+		>(this.#config.queues, queueName);
+		if (!canPublish) {
+			return;
+		}
+
+		const result = await canPublish(ctx);
+		if (typeof result !== "boolean") {
+			throw new errors.InvalidCanPublishResponse();
+		}
+		if (!result) {
+			throw new errors.Forbidden();
+		}
 	}
 
 	// MARK: - Action Execution
@@ -648,10 +663,6 @@ export class ActorInstance<
 		args: unknown[],
 	): Promise<unknown> {
 		this.assertReady();
-		await this.assertCanInvoke(ctx, {
-			kind: "action",
-			name: actionName,
-		});
 
 		const actions = this.#config.actions ?? {};
 		if (!(actionName in actions)) {
@@ -784,36 +795,33 @@ export class ActorInstance<
 		}
 		const onRequest = this.#config.onRequest;
 
-		return await this.runInTraceSpan(
-			"actor.onRequest",
-			{
-				"http.method": request.method,
-				"http.url": request.url,
-				"rivet.conn.id": conn.id,
-			},
-			async () => {
-				const ctx = new RequestContext(this, conn, request);
-				try {
-					await this.assertCanInvoke(ctx, {
-						kind: "request",
-					});
-					const response = await onRequest(ctx, request);
-					if (!response) {
-						throw new errors.InvalidRequestHandlerResponse();
+			return await this.runInTraceSpan(
+				"actor.onRequest",
+				{
+					"http.method": request.method,
+					"http.url": request.url,
+					"rivet.conn.id": conn.id,
+				},
+				async () => {
+					const ctx = new RequestContext(this, conn, request);
+					try {
+						const response = await onRequest(ctx, request);
+						if (!response) {
+							throw new errors.InvalidRequestHandlerResponse();
+						}
+						return response;
+					} catch (error) {
+						this.#rLog.error({
+							msg: "onRequest error",
+							error: stringifyError(error),
+						});
+						throw error;
+					} finally {
+						this.stateManager.savePersistThrottled();
 					}
-					return response;
-				} catch (error) {
-					this.#rLog.error({
-						msg: "onRequest error",
-						error: stringifyError(error),
-					});
-					throw error;
-				} finally {
-					this.stateManager.savePersistThrottled();
-				}
-			},
-		);
-	}
+				},
+			);
+		}
 
 	handleRawWebSocket(
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,

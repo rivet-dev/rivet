@@ -19,6 +19,7 @@ import {
 	type InferEventArgs,
 	type InferSchemaMap,
 	type QueueSchemaConfig,
+	hasSchemaConfigKey,
 	validateSchemaSync,
 } from "../../schema";
 
@@ -125,6 +126,16 @@ export class ActorContext<
 		...args: Array<unknown>
 	): void;
 	broadcast(name: string, ...args: Array<unknown>): void {
+		if (
+			this.#actor.config.events !== undefined &&
+			!hasSchemaConfigKey(this.#actor.config.events, name)
+		) {
+			this.#actor.rLog.warn({
+				msg: "broadcasting event not defined in actor events config",
+				eventName: name,
+			});
+		}
+
 		const payload = args.length === 1 ? args[0] : args;
 		const result = validateSchemaSync(
 			this.#actor.config.events,
