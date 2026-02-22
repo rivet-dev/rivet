@@ -2,17 +2,29 @@
 
 import Typesense from "typesense";
 import { Button, Dialog, DialogPortal, Kbd, cn } from "@rivet-gg/components";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+const TYPESENSE_HOST =
+	import.meta.env.PUBLIC_TYPESENSE_HOST ||
+	"3lsug6t152oxcjndp-1.a1.typesense.net";
+const TYPESENSE_PORT = Number(import.meta.env.PUBLIC_TYPESENSE_PORT) || 443;
+const TYPESENSE_PROTOCOL =
+	import.meta.env.PUBLIC_TYPESENSE_PROTOCOL || "https";
+const TYPESENSE_SEARCH_API_KEY =
+	import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY ||
+	"pKb2bCyP3pHvB4H46bv6mi0t13zuhCTp";
+const TYPESENSE_COLLECTION_NAME =
+	import.meta.env.PUBLIC_TYPESENSE_COLLECTION_NAME || "rivet-docs";
 
 const searchClient = new Typesense.Client({
 	nodes: [
 		{
-			host: import.meta.env.PUBLIC_TYPESENSE_HOST || "localhost",
-			port: Number(import.meta.env.PUBLIC_TYPESENSE_PORT) || 443,
-			protocol: import.meta.env.PUBLIC_TYPESENSE_PROTOCOL || "https",
+			host: TYPESENSE_HOST,
+			port: TYPESENSE_PORT,
+			protocol: TYPESENSE_PROTOCOL,
 		},
 	],
-	apiKey: import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY || "xyz",
+	apiKey: TYPESENSE_SEARCH_API_KEY,
 	connectionTimeoutSeconds: 2,
 });
 
@@ -36,55 +48,54 @@ export function TypesenseSearch() {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [inputFocused, setInputFocused] = useState(false);
 
-	const hasRequiredKeys = !!(
-		import.meta.env.PUBLIC_TYPESENSE_HOST &&
-		import.meta.env.PUBLIC_TYPESENSE_SEARCH_API_KEY
-	);
-
-	if (!hasRequiredKeys) {
-		return null;
-	}
-
-	const handleResultClick = (result: SearchResult) => {
+	const handleResultClick = useCallback((result: SearchResult) => {
 		window.location.href = result.url;
 		setIsOpen(false);
 		setQuery("");
-	};
+	}, []);
 
-	useEffect(function setShortcutListener() {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-				e.preventDefault();
-				setIsOpen((prev) => !prev);
-			}
-			if (e.key === "Escape") {
-				if (isOpen) {
-					if (!inputFocused) {
-						e.preventDefault();
-						e.stopPropagation();
-						setIsOpen(false);
+	useEffect(
+		function setShortcutListener() {
+			const handleKeyDown = (e: KeyboardEvent) => {
+				if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+					e.preventDefault();
+					setIsOpen((prev) => !prev);
+				}
+				if (e.key === "Escape") {
+					if (isOpen) {
+						if (!inputFocused) {
+							e.preventDefault();
+							e.stopPropagation();
+							setIsOpen(false);
+						}
 					}
 				}
-			}
-			if (isOpen && results.length > 0) {
-				if (e.key === "ArrowDown") {
-					e.preventDefault();
-					setSelectedIndex((prev) => (prev + 1) % results.length);
+				if (isOpen && results.length > 0) {
+					if (e.key === "ArrowDown") {
+						e.preventDefault();
+						setSelectedIndex(
+							(prev) => (prev + 1) % results.length,
+						);
+					}
+					if (e.key === "ArrowUp") {
+						e.preventDefault();
+						setSelectedIndex(
+							(prev) =>
+								(prev - 1 + results.length) % results.length,
+						);
+					}
+					if (e.key === "Enter" && selectedIndex >= 0) {
+						e.preventDefault();
+						handleResultClick(results[selectedIndex]);
+					}
 				}
-				if (e.key === "ArrowUp") {
-					e.preventDefault();
-					setSelectedIndex((prev) => (prev - 1 + results.length) % results.length);
-				}
-				if (e.key === "Enter" && selectedIndex >= 0) {
-					e.preventDefault();
-					handleResultClick(results[selectedIndex]);
-				}
-			}
-		};
+			};
 
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isOpen, results, selectedIndex, handleResultClick]);
+			window.addEventListener("keydown", handleKeyDown);
+			return () => window.removeEventListener("keydown", handleKeyDown);
+		},
+		[isOpen, results, selectedIndex, handleResultClick, inputFocused],
+	);
 
 	useEffect(() => {
 		if (!query.trim()) {
@@ -93,16 +104,12 @@ export function TypesenseSearch() {
 			return;
 		}
 
-		// Show loading immediately when typing
 		setIsLoading(true);
 
 		const searchDebounce = setTimeout(async () => {
 			try {
 				const searchResults = await searchClient
-					.collections(
-						import.meta.env.PUBLIC_TYPESENSE_COLLECTION_NAME ||
-						"rivet-docs",
-					)
+					.collections(TYPESENSE_COLLECTION_NAME)
 					.documents()
 					.search({
 						q: query,
@@ -121,7 +128,7 @@ export function TypesenseSearch() {
 					})) || [];
 
 				setResults(hits);
-				setSelectedIndex(0); // Reset selection to first result
+				setSelectedIndex(0);
 			} catch (error) {
 				console.error("Search error:", error);
 			} finally {
@@ -187,7 +194,8 @@ export function TypesenseSearch() {
 											key={result.id}
 											className={cn(
 												"p-3 hover:bg-muted cursor-pointer border-b border-border last:border-b-0",
-												index === selectedIndex && "bg-muted"
+												index === selectedIndex &&
+													"bg-muted",
 											)}
 											onClick={() =>
 												handleResultClick(result)
