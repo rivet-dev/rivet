@@ -30,7 +30,11 @@ Authentication is configured through either:
 
 ## Access Control
 
-After a connection is authenticated, use [Access Control](/docs/actors/access-control) to enforce per-entrypoint permissions with `canInvoke`.
+After a connection is authenticated, use [Access Control](/docs/actors/access-control) to enforce authorization:
+
+- Check permissions in action handlers.
+- Use `queues.<name>.canPublish` to gate inbound queue publishes.
+- Use `events.<name>.canSubscribe` to gate event subscriptions.
 
 ### `onBeforeConnect`
 

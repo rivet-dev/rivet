@@ -76,7 +76,7 @@ const useCases: Record<string, UseCaseConfig> = {
     description: 'Each agent runs as its own actor with persistent context, memory, and the ability to schedule tool calls.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Context', href: '/docs/actors/state' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'Memory', href: '/docs/actors/state' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Memory', href: '/docs/actors/persistence' },
       { icon: Clock, label: 'Scheduling', detail: 'Tool calls', href: '/docs/actors/schedule' },
     ],
     serverCode: `// One actor per agent
@@ -99,9 +99,9 @@ const reply = await agent.chat("Hello!");`,
     title: 'Workflows',
     description: 'Multi-step operations with automatic retries, scheduling, and durable state across steps.',
     features: [
-      { icon: Workflow, label: 'Workflows', detail: 'Steps', href: '/docs/actors/communicating-between-actors' },
+      { icon: Workflow, label: 'Workflows', detail: 'Steps', href: '/docs/actors/workflows' },
       { icon: Clock, label: 'Scheduling', detail: 'Retry', href: '/docs/actors/schedule' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'State', href: '/docs/actors/state' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'State', href: '/docs/actors/persistence' },
     ],
     serverCode: `// One actor per workflow run
 const workflow = actor({
@@ -127,7 +127,7 @@ await job.run();`,
     description: 'Real-time collaborative editing where each document is an actor broadcasting changes to all connected users.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Document', href: '/docs/actors/state' },
-      { icon: Wifi, label: 'WebSockets', detail: 'Sync', href: '/docs/actors/connections' },
+      { icon: Wifi, label: 'WebSockets', detail: 'Sync', href: '/docs/actors/events' },
       { icon: Zap, label: 'Runs indefinitely', detail: 'Always on', href: '/docs/actors/lifecycle' },
     ],
     serverCode: `// One actor per document
@@ -149,11 +149,11 @@ await doc.edit({ insert: "Hello", pos: 0 });
 doc.on("update", (state) => render(state));`,
   },
   'Per-Tenant Database': {
-    title: 'Per-Tenant Database',
+    title: 'Per-Tenant DB',
     description: 'One actor per tenant with low-latency in-memory reads and durable tenant data persistence.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Hot reads', href: '/docs/actors/state' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'Tenant data', href: '/docs/actors/state' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Tenant data', href: '/docs/actors/persistence' },
       { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient', href: '/docs/actors/lifecycle' },
     ],
     serverCode: `// One actor per tenant
@@ -176,7 +176,7 @@ const user = await tenant.getUser("u1");`,
     description: 'Coordinate sandbox sessions, queue work, and schedule cleanup in one long-lived actor per workspace.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Live sessions', href: '/docs/actors/state' },
-      { icon: Database, label: 'Queue messages', detail: 'Jobs', href: '/docs/actors/queue' },
+      { icon: Database, label: 'Queue messages', detail: 'Jobs', href: '/docs/actors/queues' },
       { icon: Clock, label: 'Scheduling', detail: 'Timeouts', href: '/docs/actors/schedule' },
     ],
     serverCode: `// One actor per sandbox workspace
@@ -204,8 +204,8 @@ sandbox.on("runComplete", (result) => render(result));`,
     description: 'One actor per room or conversation with in-memory state, persistent history, and realtime delivery.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Room state', href: '/docs/actors/state' },
-      { icon: Database, label: 'SQLite or JSON persistence', detail: 'History', href: '/docs/actors/state' },
-      { icon: Wifi, label: 'WebSockets', detail: 'Realtime', href: '/docs/actors/connections' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'History', href: '/docs/actors/persistence' },
+      { icon: Wifi, label: 'WebSockets', detail: 'Realtime', href: '/docs/actors/events' },
     ],
     serverCode: `// One actor per chat room
 const chatRoom = actor({
@@ -241,7 +241,7 @@ const useCaseTabLabels: Record<UseCaseKey, string> = {
   'Sandbox Orchestration': 'Sandboxes',
   'Workflows': 'Workflows',
   'Collab Docs': 'Multiplayer',
-  'Per-Tenant Database': 'Databases',
+  'Per-Tenant Database': 'Per-Tenant DB',
   'Chat': 'Chat',
 };
 

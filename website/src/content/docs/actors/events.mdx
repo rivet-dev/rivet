@@ -10,16 +10,27 @@ Events can be sent to clients connected using `.connect()`. They have no effect 
 
 ### Broadcasting to All Clients
 
-Use `c.broadcast(eventName, data)` to send events to all connected clients:
+Define event names and payload types with `events` and `event<T>()`, then use `c.broadcast(eventName, ...args)` to send events to all connected clients:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
+
+type Message = {
+  id: string;
+  userId: string;
+  text: string;
+  timestamp: number;
+};
 
 const chatRoom = actor({
-  state: { 
-    messages: [] as Array<{id: string, userId: string, text: string, timestamp: number}>
+  state: {
+    messages: [] as Message[]
   },
-  
+
+  events: {
+    messageReceived: event<Message>()
+  },
+
   actions: {
     sendMessage: (c, userId: string, text: string) => {
       const message = {
@@ -42,10 +53,10 @@ const chatRoom = actor({
 
 ### Sending to Specific Connections
 
-Send events to individual connections using `conn.send(eventName, data)`:
+Send events to individual connections using `conn.send(eventName, ...args)`:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 
 interface ConnState {
   playerId: string;
@@ -56,6 +67,15 @@ const gameRoom = actor({
   state: {
     players: {} as Record<string, {health: number, position: {x: number, y: number}}>
   },
+
+  events: {
+    privateMessage: event<{
+      from?: string;
+      message: string;
+      timestamp: number;
+    }>()
+  },
+
   connState: { playerId: "", role: "player" } as ConnState,
 
   createConnState: (c, params: { playerId: string, role?: string }) => ({
@@ -91,7 +111,7 @@ const gameRoom = actor({
 Send events to all connections except the sender:
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, event } from "rivetkit";
 
 interface ConnState {
   playerId: string;
@@ -102,6 +122,14 @@ const gameRoom = actor({
   state: {
     players: {} as Record<string, {health: number, position: {x: number, y: number}}>
   },
+
+  events: {
+    playerMoved: event<{
+      playerId: string;
+      position: { x: number; y: number };
+    }>()
+  },
+
   connState: { playerId: "", role: "player" } as ConnState,
 
   createConnState: (c, params: { playerId: string, role?: string }) => ({
@@ -140,12 +168,17 @@ Use `connection.on(eventName, callback)` to listen for events:
 <CodeGroup>
 
 ```typescript TypeScript
-import { actor, setup } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
+
+type Message = { id: string; userId: string; text: string };
 
 // Define the actor
 const chatRoom = actor({
-  state: { messages: [] as Array<{id: string, userId: string, text: string}> },
+  state: { messages: [] as Message[] },
+  events: {
+    messageReceived: event<Message>()
+  },
   actions: {
     sendMessage: (c, userId: string, text: string) => {
       const message = { id: crypto.randomUUID(), userId, text };
@@ -160,7 +193,7 @@ const registry = setup({ use: { chatRoom } });
 const client = createClient<typeof registry>("http://localhost:8080");
 
 // Helper function for demonstration
-function displayMessage(message: { userId: string; text: string }) {
+function displayMessage(message: Message) {
   console.log("Display:", message);
 }
 
@@ -169,7 +202,7 @@ const chatRoomHandle = client.chatRoom.getOrCreate(["general"]);
 const connection = chatRoomHandle.connect();
 
 // Listen for events
-connection.on('messageReceived', (message: { userId: string; text: string }) => {
+connection.on('messageReceived', (message: Message) => {
   console.log(`${message.userId}: ${message.text}`);
   displayMessage(message);
 });
@@ -208,15 +241,18 @@ Use `connection.once(eventName, callback)` for events that should only trigger o
 <CodeGroup>
 
 ```typescript TypeScript
-import { actor, setup } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
 
 const gameRoom = actor({
   state: { started: false },
+  events: {
+    gameStarted: event<[]>()
+  },
   actions: {
     startGame: (c) => {
       c.state.started = true;
-      c.broadcast('gameStarted', {});
+      c.broadcast('gameStarted');
     }
   }
 });
@@ -279,11 +315,16 @@ Use the callback returned from `.on()` to remove event listeners:
 <CodeGroup>
 
 ```typescript TypeScript
-import { actor, setup } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 import { createClient } from "rivetkit/client";
+
+type Message = { text: string };
 
 const chatRoom = actor({
   state: { messages: [] as string[] },
+  events: {
+    messageReceived: event<Message>()
+  },
   actions: {
     sendMessage: (c, text: string) => {
       c.state.messages.push(text);
@@ -297,7 +338,7 @@ const client = createClient<typeof registry>("http://localhost:8080");
 const connection = client.chatRoom.getOrCreate(["general"]).connect();
 
 // Add listener
-const unsubscribe = connection.on('messageReceived', (message: { text: string }) => {
+const unsubscribe = connection.on('messageReceived', (message) => {
   console.log("Received:", message);
 });
 
@@ -323,7 +364,7 @@ function ConditionalListener() {
 
     // Add listener
     const unsubscribe = chatRoom.connection.on('messageReceived', (message) => {
-      setMessages(prev => [...prev, `${message.userId}: ${message.text}`]);
+      setMessages(prev => [...prev, message.text]);
     });
 
     // Cleanup - remove listener when component unmounts or listening stops
@@ -338,6 +379,13 @@ function ConditionalListener() {
 
 </CodeGroup>
 
+## Debugging
+
+- `GET /inspector/connections` shows active connections and connection metadata.
+- Use this to confirm clients are connected before expecting broadcasts.
+- `GET /inspector/summary` provides connections, RPCs, and queue size in one response.
+- In non-dev mode, inspector endpoints require authorization.
+
 ## More About Connections
 
 For more details on actor connections, including connection lifecycle, authentication, and advanced connection patterns, see the [Connections documentation](/docs/actors/connections).
@@ -351,4 +399,3 @@ For more details on actor connections, including connection lifecycle, authentic
 - [`UniversalMessageEvent`](/typedoc/interfaces/rivetkit.mod.UniversalMessageEvent.html) - Universal message event
 - [`UniversalErrorEvent`](/typedoc/interfaces/rivetkit.mod.UniversalErrorEvent.html) - Universal error event
 - [`EventUnsubscribe`](/typedoc/types/rivetkit.client_mod.EventUnsubscribe.html) - Unsubscribe function type
-
