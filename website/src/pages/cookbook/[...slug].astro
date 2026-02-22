@@ -21,7 +21,7 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
 
 const { title, description, templates } = entry.data as {
 	title: string;
@@ -29,8 +29,21 @@ const { title, description, templates } = entry.data as {
 	templates?: string[];
 };
 
+// Build table of contents from headings (same pattern as docs)
+const tableOfContents = headings
+	.filter((h) => h.depth === 2 || h.depth === 3)
+	.reduce((acc, h) => {
+		if (h.depth === 2) {
+			acc.push({ title: h.text, id: h.slug, children: [] });
+		} else if (acc.length > 0) {
+			acc[acc.length - 1].children.push({ title: h.text, id: h.slug, children: [] });
+		}
+		return acc;
+	}, [] as Array<{ title: string; id: string; children: Array<{ title: string; id: string; children: never[] }> }>);
+
 const slugPath = entry.id.replace(/\/index$/, "");
 const canonicalUrl = `https://rivet.dev/cookbook/${slugPath}/`;
+const skillId = `rivetkit-${slugPath.replaceAll("/", "-")}`;
 
 function resolveTemplates(names?: string[]): Array<Template & { githubUrl: string }> {
 	if (!names?.length) return [];
@@ -71,7 +84,7 @@ const resolvedTemplates = resolveTemplates(templates);
 			<div class="mx-auto max-w-7xl px-6">
 				<div class="max-w-2xl mb-12">
 					<a href="/cookbook" class="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors mb-6">
-						← Back to Cookbook
+						← Back to Cookbooks
 					</a>
 					<h1 class="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
 						{title}
@@ -108,29 +121,133 @@ const resolvedTemplates = resolveTemplates(templates);
 			</div>
 		</div>
 
+		<div class="border-t border-white/10 py-12">
+			<div class="mx-auto max-w-7xl px-6">
+				<div class="max-w-2xl">
+					<h2 class="text-2xl font-normal tracking-tight text-white mb-3">Install skill for coding agents</h2>
+					<p class="text-sm text-zinc-500 mb-4">Let your AI coding agent follow this guide automatically.</p>
+					<div class="relative group">
+						<code id="skill-install-cmd" class="block rounded bg-white/5 border border-white/10 px-4 py-3 pr-12 font-mono text-sm text-zinc-200 select-all">npx skills add rivet-dev/skills -s {skillId}</code>
+						<button
+							id="copy-skill-btn"
+							class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+							aria-label="Copy to clipboard"
+						>
+							<svg id="copy-icon" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+								<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+							</svg>
+							<svg id="check-icon" class="h-4 w-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="20 6 9 17 4 12"></polyline>
+							</svg>
+						</button>
+					</div>
+					<p class="mt-3 text-xs text-zinc-600">Supports Claude Code, Cursor, Windsurf, and other AI coding assistants.</p>
+				</div>
+			</div>
+		</div>
+
 		<div class="border-t border-white/10 py-16">
 			<div class="mx-auto max-w-7xl px-6">
 				<div class="flex flex-col lg:flex-row gap-12">
-					<div class="flex-1 lg:w-2/3">
+					<div class="flex-1 min-w-0 max-w-prose-docs">
 						<article class="prose prose-invert prose-zinc max-w-none prose-headings:font-normal prose-headings:tracking-tight prose-p:text-zinc-400 prose-a:text-white prose-code:text-zinc-300">
 							<Content components={mdxComponents} />
 						</article>
 					</div>
-					<aside class="lg:w-72 flex-shrink-0">
-						<div class="space-y-6">
-							<div class="rounded-lg border border-white/10 bg-black p-5">
-								<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Use As A Skill</h3>
-								<p class="text-sm text-zinc-400">
-									This guide has a standalone skill generated for it.
-								</p>
-								<p class="mt-2 text-xs text-zinc-500">
-									Install the base <code class="font-mono">rivetkit</code> skill if needed, then follow the generated <code class="font-mono">rivetkit-*</code> skill for this page.
-								</p>
-							</div>
-						</div>
-					</aside>
+					{tableOfContents.length > 0 && (
+						<aside class="hidden lg:block lg:w-56 flex-shrink-0">
+							<nav id="cookbook-toc" class="lg:sticky lg:top-24 space-y-1">
+								<ul class="space-y-1">
+									{tableOfContents.map((section) => (
+										<li>
+											<a href={`#${section.id}`} data-toc-link={section.id} class="block text-sm text-zinc-500 hover:text-white transition-colors py-0.5">
+												{section.title}
+											</a>
+											{section.children.length > 0 && (
+												<ul class="pl-3 space-y-1">
+													{section.children.map((child) => (
+														<li>
+															<a href={`#${child.id}`} data-toc-link={child.id} class="block text-sm text-zinc-500 hover:text-white transition-colors py-0.5">
+																{child.title}
+															</a>
+														</li>
+													))}
+												</ul>
+											)}
+										</li>
+									))}
+								</ul>
+							</nav>
+						</aside>
+					)}
 				</div>
 			</div>
 		</div>
+
+		<script>
+			function initCopyButton() {
+				const btn = document.getElementById('copy-skill-btn');
+				const cmd = document.getElementById('skill-install-cmd');
+				const copyIcon = document.getElementById('copy-icon');
+				const checkIcon = document.getElementById('check-icon');
+				if (!btn || !cmd || !copyIcon || !checkIcon) return;
+
+				btn.addEventListener('click', () => {
+					navigator.clipboard.writeText(cmd.textContent || '');
+					copyIcon.classList.add('hidden');
+					checkIcon.classList.remove('hidden');
+					setTimeout(() => {
+						copyIcon.classList.remove('hidden');
+						checkIcon.classList.add('hidden');
+					}, 2000);
+				});
+			}
+
+			initCopyButton();
+			document.addEventListener('astro:after-swap', initCopyButton);
+
+			function initCookbookToc() {
+				const tocLinks = document.querySelectorAll('[data-toc-link]');
+				if (tocLinks.length === 0) return;
+
+				const headingIds = Array.from(tocLinks).map(link => link.getAttribute('data-toc-link')!);
+
+				function updateActiveLink() {
+					const scrollTop = window.scrollY;
+					let activeId = headingIds[0];
+
+					for (const id of headingIds) {
+						const el = document.getElementById(id);
+						if (!el) continue;
+						const style = window.getComputedStyle(el);
+						const scrollMt = parseFloat(style.scrollMarginTop) || 0;
+						const top = window.scrollY + el.getBoundingClientRect().top - scrollMt;
+						if (scrollTop >= top - 16) {
+							activeId = id;
+						} else {
+							break;
+						}
+					}
+
+					tocLinks.forEach(link => {
+						const linkId = link.getAttribute('data-toc-link');
+						if (linkId === activeId) {
+							link.classList.add('text-white');
+							link.classList.remove('text-zinc-500');
+						} else {
+							link.classList.remove('text-white');
+							link.classList.add('text-zinc-500');
+						}
+					});
+				}
+
+				window.addEventListener('scroll', updateActiveLink, { passive: true });
+				updateActiveLink();
+			}
+
+			initCookbookToc();
+			document.addEventListener('astro:after-swap', initCookbookToc);
+		</script>
 	</main>
 </MarketingLayout>

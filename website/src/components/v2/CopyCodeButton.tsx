@@ -13,9 +13,9 @@ export function CopyCodeTrigger({ children }) {
 		} else {
 			// Use the original behavior - get code from innerText
 			code =
-				event.currentTarget.parentNode.parentNode.querySelector(
+				event.currentTarget.closest('[data-code-block]')?.querySelector(
 					".code",
-				).innerText;
+				)?.innerText ?? '';
 		}
 
 		navigator.clipboard.writeText(code);

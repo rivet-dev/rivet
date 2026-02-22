@@ -96,7 +96,7 @@ See also the [raw fetch handler example](https://github.com/rivet-dev/rivet/tree
 Use the `.fetch()` method on an actor handle to send HTTP requests to the actor's `onRequest` handler. This can be executed from either your frontend or backend.
 
 <CodeGroup workspace>
-```typescript registry.ts @hide
+```typescript actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -113,7 +113,7 @@ export const registry = setup({ use: { counter } });
 
 ```typescript client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 
@@ -131,7 +131,7 @@ console.log(data); // { count: 0 }
 Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful when you need to use the URL with external tools or custom HTTP clients.
 
 <CodeGroup workspace>
-```typescript registry.ts @hide
+```typescript actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -148,7 +148,7 @@ export const registry = setup({ use: { counter } });
 
 ```typescript client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 

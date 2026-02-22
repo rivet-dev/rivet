@@ -1,5 +1,7 @@
 import type { GameClient } from "../../client.ts";
 import type { OpenWorldMatchInfo } from "./menu.tsx";
+import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
+import { getPlayerColor } from "../../../src/actors/player-color.ts";
 
 const PLAYER_RADIUS = 12;
 const LERP_FACTOR = 0.2;
@@ -10,15 +12,6 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.15;
 
-function colorFromId(id: string): string {
-	let hash = 0;
-	for (let i = 0; i < id.length; i++) {
-		hash = (hash * 31 + id.charCodeAt(i)) | 0;
-	}
-	const hue = ((hash % 360) + 360) % 360;
-	return `hsl(${hue}, 70%, 55%)`;
-}
-
 type OpenWorldChunkConn = ReturnType<
 	ReturnType<GameClient["openWorldChunk"]["getOrCreate"]>["connect"]
 >;
@@ -27,19 +20,29 @@ interface ChunkConnection {
 	cx: number;
 	cy: number;
 	conn: OpenWorldChunkConn;
-	players: Record<string, { x: number; y: number; name: string }>;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
 	display: Record<string, { x: number; y: number }>;
-	blocks: Set<string>;
+	blocks: Map<string, string>;
+	selfPresent: boolean;
+}
+
+interface ChunkSnapshot {
+	chunkSize: number;
+	chunkX: number;
+	chunkY: number;
+	selfPlayerId: string | null;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
+	blocks?: Record<string, string> | string[];
 }
 
 export class OpenWorldGame {
 	private stopped = false;
 	private rafId = 0;
-	private chunkSize = 1200;
+	private chunkSize = CHUNK_SIZE;
 	private chunkX: number;
 	private chunkY: number;
-	private playerId: string;
-	private playerToken: string;
+	private readonly playerId = createPlayerId();
+	private playerName: string;
 	private keys: Record<string, boolean> = {};
 	private lastIx = 0;
 	private lastIy = 0;
@@ -60,11 +63,18 @@ export class OpenWorldGame {
 	) {
 		this.chunkX = matchInfo.chunkKey[1];
 		this.chunkY = matchInfo.chunkKey[2];
-		this.playerId = matchInfo.playerId;
-		this.playerToken = matchInfo.playerToken;
+		this.playerName = matchInfo.playerName;
 
-		this.connectToChunk(matchInfo.chunkKey[1], matchInfo.chunkKey[2], matchInfo.playerToken, true);
-		this.updateAdjacentChunks();
+		this.connectToChunk(
+			matchInfo.chunkKey[1],
+			matchInfo.chunkKey[2],
+		);
+		void this.setPrimaryChunk(
+			matchInfo.chunkKey[1],
+			matchInfo.chunkKey[2],
+			matchInfo.spawnX,
+			matchInfo.spawnY,
+		);
 
 		if (options.bot) {
 			this.botInterval = window.setInterval(() => {
@@ -86,16 +96,15 @@ export class OpenWorldGame {
 		}
 	}
 
-	private connectToChunk(cx: number, cy: number, playerToken: string | null, isPrimary: boolean) {
+	private connectToChunk(cx: number, cy: number): ChunkConnection {
 		const key = chunkKey(cx, cy);
-		if (this.chunks.has(key)) return;
-
-		const params = playerToken
-			? { playerToken }
-			: { observer: "true" };
+		const existing = this.chunks.get(key);
+		if (existing) return existing;
 
 		const conn = this.client.openWorldChunk
-			.getOrCreate(["default", String(cx), String(cy)], { params })
+			.getOrCreate([WORLD_ID, String(cx), String(cy)], {
+				params: { playerId: this.playerId },
+			})
 			.connect();
 
 		const chunk: ChunkConnection = {
@@ -104,18 +113,15 @@ export class OpenWorldGame {
 			conn,
 			players: {},
 			display: {},
-			blocks: new Set(),
+			blocks: new Map(),
+			selfPresent: false,
 		};
 
 		conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as {
-				chunkSize: number;
-				chunkX: number;
-				chunkY: number;
-				players: Record<string, { x: number; y: number; name: string }>;
-				blocks?: string[];
-			};
+			const snap = raw as ChunkSnapshot;
 			this.chunkSize = snap.chunkSize;
+			const isPrimaryChunk = chunk.cx === this.chunkX && chunk.cy === this.chunkY;
+			chunk.selfPresent = snap.selfPlayerId === this.playerId;
 			for (const [id, pos] of Object.entries(snap.players)) {
 				chunk.players[id] = pos;
 				if (!chunk.display[id]) chunk.display[id] = { x: pos.x, y: pos.y };
@@ -127,11 +133,17 @@ export class OpenWorldGame {
 				}
 			}
 			if (snap.blocks) {
-				chunk.blocks = new Set(snap.blocks);
+				if (Array.isArray(snap.blocks)) {
+					chunk.blocks = new Map(
+						snap.blocks.map((blockKey) => [blockKey, "#ff4f00"]),
+					);
+				} else {
+					chunk.blocks = new Map(Object.entries(snap.blocks));
+				}
 			}
 
 			// Client-driven chunk transfer detection (only for primary chunk).
-			if (isPrimary) {
+			if (isPrimaryChunk) {
 				const me = snap.players[this.playerId];
 				if (me && !this.transferring) {
 					const atLeft = me.x <= 0 && this.lastIx < 0;
@@ -146,6 +158,7 @@ export class OpenWorldGame {
 		});
 
 		this.chunks.set(key, chunk);
+		return chunk;
 	}
 
 	private disconnectChunk(cx: number, cy: number) {
@@ -155,6 +168,61 @@ export class OpenWorldGame {
 			chunk.conn.dispose().catch(() => {});
 			this.chunks.delete(key);
 		}
+	}
+
+	private async setPrimaryChunk(
+		cx: number,
+		cy: number,
+		spawnX: number,
+		spawnY: number,
+	) {
+		const previousChunkX = this.chunkX;
+		const previousChunkY = this.chunkY;
+		const oldPrimaryKey = chunkKey(previousChunkX, previousChunkY);
+		const newPrimaryKey = chunkKey(cx, cy);
+		const oldPrimary = this.chunks.get(oldPrimaryKey);
+
+		const newPrimary = this.connectToChunk(cx, cy);
+
+		await newPrimary.conn
+			.enterChunk({
+				name: this.playerName,
+				spawnX,
+				spawnY,
+			})
+			.catch(() => {});
+
+		// Keep the old primary active until the target chunk confirms this connection's presence.
+		const ready = await this.waitForSelfInChunk(cx, cy);
+		if (!ready || this.stopped) {
+			if (oldPrimaryKey !== newPrimaryKey) {
+				newPrimary.conn.leaveChunk().catch(() => {});
+			}
+			return;
+		}
+
+		this.chunkX = cx;
+		this.chunkY = cy;
+		this.updateAdjacentChunks();
+
+		if (oldPrimary && oldPrimaryKey !== newPrimaryKey) {
+			oldPrimary.conn.leaveChunk().catch(() => {});
+		}
+
+		newPrimary.conn
+			.setInput({ inputX: this.lastIx, inputY: this.lastIy, sprint: this.lastSprint })
+			.catch(() => {});
+	}
+
+	private async waitForSelfInChunk(cx: number, cy: number): Promise<boolean> {
+		const key = chunkKey(cx, cy);
+		const deadline = Date.now() + 1500;
+		while (!this.stopped && Date.now() < deadline) {
+			const chunk = this.chunks.get(key);
+			if (chunk?.selfPresent) return true;
+			await sleep(16);
+		}
+		return false;
 	}
 
 	/** Compute which chunk indices are visible based on player position and zoom. */
@@ -199,7 +267,7 @@ export class OpenWorldGame {
 		for (const key of needed) {
 			if (!this.chunks.has(key)) {
 				const [cx, cy] = parseChunkKey(key);
-				this.connectToChunk(cx, cy, null, false);
+				this.connectToChunk(cx, cy);
 			}
 		}
 	}
@@ -213,57 +281,21 @@ export class OpenWorldGame {
 			else if (this.lastIx > 0) absX += 1;
 			if (this.lastIy < 0) absY -= 1;
 			else if (this.lastIy > 0) absY += 1;
-
-			const primaryChunk = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
-			const myName = primaryChunk?.players[this.playerId]?.name ?? "Player";
-
-			const index = this.client.openWorldIndex.getOrCreate(["main"]).connect();
-			const result = await index.send(
-				"getChunkForPosition",
-				{ x: absX, y: absY, playerName: myName },
-				{ wait: true, timeout: 10_000 },
+			const response = resolveChunkForPosition(absX, absY);
+			if (this.stopped) return;
+			await this.setPrimaryChunk(
+				response.chunkKey[1],
+				response.chunkKey[2],
+				response.spawnX,
+				response.spawnY,
 			);
-			index.dispose();
-			const response = (
-				result as { response?: { chunkKey: [string, number, number]; playerId: string; playerToken: string } }
-			)?.response;
-			if (!response || this.stopped) return;
-
-			// Remove old player from old chunk so it doesn't appear as a ghost.
-			const oldPrimary = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
-			const oldPlayerId = this.playerId;
-			oldPrimary?.conn.removePlayer({ playerId: oldPlayerId }).catch(() => {});
-
-			// Update identity.
-			this.playerId = response.playerId;
-			this.playerToken = response.playerToken;
-			this.chunkX = response.chunkKey[1];
-			this.chunkY = response.chunkKey[2];
-
-			// Disconnect any existing observer connection to the target chunk
-			// so connectToChunk can establish a proper primary connection.
-			this.disconnectChunk(this.chunkX, this.chunkY);
-
-			// Connect to new primary chunk.
-			this.connectToChunk(this.chunkX, this.chunkY, response.playerToken, true);
-
-			// Pre-initialize display position so the player doesn't snap to center.
-			const newPrimary = this.chunks.get(chunkKey(this.chunkX, this.chunkY));
-			if (newPrimary) {
-				const expectedLocalX = absX - this.chunkX * this.chunkSize;
-				const expectedLocalY = absY - this.chunkY * this.chunkSize;
-				newPrimary.display[response.playerId] = { x: expectedLocalX, y: expectedLocalY };
-			}
-
-			// Update visible chunks.
-			this.updateAdjacentChunks();
-
-			// Re-send current input to new primary.
-			newPrimary?.conn.setInput({ inputX: this.lastIx, inputY: this.lastIy, sprint: this.lastSprint }).catch(() => {});
 		} catch {
 			// Transfer failed, stay in current chunk.
 		} finally {
 			this.transferring = false;
+			// Flush the latest key state after transfer so key-up events that happened
+			// during transfer do not leave stale movement latched on the new chunk.
+			this.sendInput();
 		}
 	}
 
@@ -406,6 +438,7 @@ export class OpenWorldGame {
 		const localPlayerY = meDisplay?.y ?? this.chunkSize / 2;
 		const worldPlayerX = this.chunkX * this.chunkSize + localPlayerX;
 		const worldPlayerY = this.chunkY * this.chunkSize + localPlayerY;
+		const selfColor = me?.color ?? getPlayerColor(this.playerId);
 
 		// Periodically update which chunks we're connected to as the player moves.
 		const now = Date.now();
@@ -443,16 +476,16 @@ export class OpenWorldGame {
 
 		// Draw blocks from all connected chunks.
 		for (const chunk of this.chunks.values()) {
-			for (const blockKey of chunk.blocks) {
+			for (const [blockKey, blockColor] of chunk.blocks) {
 				const [gx, gy] = blockKey.split(",").map(Number);
 				const wx = chunk.cx * this.chunkSize + gx! * BLOCK_SIZE;
 				const wy = chunk.cy * this.chunkSize + gy! * BLOCK_SIZE;
 				const sx = wx - camX;
 				const sy = wy - camY;
 				if (sx + BLOCK_SIZE < 0 || sx > viewportSize || sy + BLOCK_SIZE < 0 || sy > viewportSize) continue;
-				ctx.fillStyle = "rgba(255, 79, 0, 0.3)";
+				ctx.fillStyle = colorWithAlpha(blockColor, 0.3);
 				ctx.fillRect(sx, sy, BLOCK_SIZE, BLOCK_SIZE);
-				ctx.strokeStyle = "rgba(255, 79, 0, 0.6)";
+				ctx.strokeStyle = colorWithAlpha(blockColor, 0.65);
 				ctx.lineWidth = 1 / scale;
 				ctx.strokeRect(sx, sy, BLOCK_SIZE, BLOCK_SIZE);
 			}
@@ -466,7 +499,7 @@ export class OpenWorldGame {
 			const gy = Math.floor(mWorldY / BLOCK_SIZE) * BLOCK_SIZE;
 			const sx = gx - camX;
 			const sy = gy - camY;
-			ctx.strokeStyle = "rgba(255, 79, 0, 0.3)";
+			ctx.strokeStyle = colorWithAlpha(selfColor, 0.4);
 			ctx.lineWidth = 1 / scale;
 			ctx.strokeRect(sx, sy, BLOCK_SIZE, BLOCK_SIZE);
 		}
@@ -522,7 +555,7 @@ export class OpenWorldGame {
 		// Draw players from all connected chunks.
 		for (const chunk of this.chunks.values()) {
 			for (const [id, target] of Object.entries(chunk.players)) {
-				if (id === this.playerId && chunk.cx === this.chunkX && chunk.cy === this.chunkY) continue;
+				if (id === this.playerId) continue;
 				const d = chunk.display[id];
 				if (!d) continue;
 				d.x += (target.x - d.x) * LERP_FACTOR;
@@ -537,7 +570,7 @@ export class OpenWorldGame {
 
 				ctx.beginPath();
 				ctx.arc(px, py, PLAYER_RADIUS / scale, 0, Math.PI * 2);
-				ctx.fillStyle = colorFromId(id);
+				ctx.fillStyle = target.color;
 				ctx.fill();
 
 				ctx.fillStyle = "#ffffff";
@@ -552,7 +585,7 @@ export class OpenWorldGame {
 		const selfScreenY = viewportSize / 2;
 		ctx.beginPath();
 		ctx.arc(selfScreenX, selfScreenY, PLAYER_RADIUS / scale, 0, Math.PI * 2);
-		ctx.fillStyle = "#ff4f00";
+		ctx.fillStyle = selfColor;
 		ctx.fill();
 		ctx.lineWidth = 2 / scale;
 		ctx.strokeStyle = "#ffffff";
@@ -562,7 +595,12 @@ export class OpenWorldGame {
 			ctx.fillStyle = "#ffffff";
 			ctx.font = `${11 / scale}px sans-serif`;
 			ctx.textAlign = "center";
-			ctx.fillText(me.name || this.playerId.slice(0, 6), selfScreenX, selfScreenY - PLAYER_RADIUS / scale - 4 / scale);
+			const fallbackId = this.playerId || "self";
+			ctx.fillText(
+				me.name || fallbackId.slice(0, 6),
+				selfScreenX,
+				selfScreenY - PLAYER_RADIUS / scale - 4 / scale,
+			);
 		}
 
 		ctx.restore();
@@ -613,4 +651,42 @@ function chunkKey(cx: number, cy: number): string {
 function parseChunkKey(key: string): [number, number] {
 	const [cx, cy] = key.split(",").map(Number);
 	return [cx!, cy!];
+}
+
+function resolveChunkForPosition(
+	x: number,
+	y: number,
+): { chunkKey: [string, number, number]; spawnX: number; spawnY: number } {
+	const chunkX = Math.floor(x / CHUNK_SIZE);
+	const chunkY = Math.floor(y / CHUNK_SIZE);
+	return {
+		chunkKey: [WORLD_ID, chunkX, chunkY],
+		spawnX: ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+		spawnY: ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+	};
+}
+
+function createPlayerId(): string {
+	if (typeof globalThis.crypto?.randomUUID === "function") {
+		return globalThis.crypto.randomUUID();
+	}
+	const random = Math.floor(Math.random() * 1_000_000_000).toString(36);
+	return `player-${Date.now().toString(36)}-${random}`;
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => {
+		window.setTimeout(resolve, ms);
+	});
+}
+
+function colorWithAlpha(color: string, alpha: number): string {
+	const normalized = color.trim();
+	if (/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+		const r = Number.parseInt(normalized.slice(1, 3), 16);
+		const g = Number.parseInt(normalized.slice(3, 5), 16);
+		const b = Number.parseInt(normalized.slice(5, 7), 16);
+		return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+	}
+	return color;
 }

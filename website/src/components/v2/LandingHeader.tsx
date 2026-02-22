@@ -41,7 +41,7 @@ export function LandingHeader() {
 							className="text-sm font-medium transition-colors"
 							style={{ color: '#A0A0A0' }}
 						>
-							Docs
+							Documentation
 						</a>
 						<a href="/blog"
 							className="text-sm font-medium transition-colors"

@@ -16,6 +16,9 @@ interface BodySnapshot {
 	x: number;
 	y: number;
 	z: number;
+	hx: number;
+	hy: number;
+	hz: number;
 	qx: number;
 	qy: number;
 	qz: number;
@@ -26,7 +29,7 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; z: number; name: string }>;
+	players: Record<string, { x: number; y: number; z: number; name: string; color: string }>;
 }
 
 function colorFromId(id: string): number {
@@ -48,7 +51,7 @@ export class Physics3dGame {
 	private lastIz = 0;
 	private lastJump = false;
 	private myConnId = "";
-	private playerNames: Record<string, string> = {};
+	private playerMeta: Record<string, { name: string; color: string }> = {};
 	private lastSnapshotTime = 0;
 	private tickIntervalMs = 0;
 	private latencyMs = 0;
@@ -144,7 +147,7 @@ export class Physics3dGame {
 			this.latencyMs = Math.max(0, now - snap.serverTime);
 
 			for (const [id, info] of Object.entries(snap.players)) {
-				this.playerNames[id] = info.name;
+				this.playerMeta[id] = { name: info.name, color: info.color };
 				if (info.name === matchInfo.name && !this.myConnId) {
 					this.myConnId = id;
 				}
@@ -155,11 +158,15 @@ export class Physics3dGame {
 
 				// Create meshes for dynamic bodies we don't have yet (e.g. spawned cubes).
 				if (!body.id.startsWith("player-") && !this.dynamicMeshes[body.id]) {
-					const size = 0.5; // Default visual size; server controls physics.
-					const geo = new THREE.BoxGeometry(size * 2, size * 2, size * 2);
+					const geo = new THREE.BoxGeometry(
+						body.hx * 2,
+						body.hy * 2,
+						body.hz * 2,
+					);
 					const mat = new THREE.MeshStandardMaterial({ color: colorFromId(body.id) });
 					const mesh = new THREE.Mesh(geo, mat);
 					mesh.position.set(body.x, body.y, body.z);
+					mesh.quaternion.set(body.qx, body.qy, body.qz, body.qw);
 					mesh.castShadow = true;
 					mesh.receiveShadow = true;
 					this.scene.add(mesh);
@@ -182,10 +189,9 @@ export class Physics3dGame {
 			// Manage player meshes.
 			for (const [id, info] of Object.entries(snap.players)) {
 				if (!this.playerMeshes[id]) {
-					const isMe = id === this.myConnId;
 					const geo = new THREE.SphereGeometry(PLAYER_RADIUS, 16, 12);
 					const mat = new THREE.MeshStandardMaterial({
-						color: isMe ? 0xff4f00 : colorFromId(id),
+						color: info.color,
 					});
 					const mesh = new THREE.Mesh(geo, mat);
 					mesh.castShadow = true;
@@ -196,6 +202,10 @@ export class Physics3dGame {
 					const label = this.createLabel(info.name);
 					this.scene.add(label);
 					this.playerLabels[id] = label;
+				} else {
+					const mesh = this.playerMeshes[id];
+					const mat = mesh.material as THREE.MeshStandardMaterial;
+					mat.color.set(info.color);
 				}
 			}
 
@@ -206,7 +216,7 @@ export class Physics3dGame {
 					this.scene.remove(this.playerLabels[id]);
 					delete this.playerMeshes[id];
 					delete this.playerLabels[id];
-					delete this.playerNames[id];
+					delete this.playerMeta[id];
 				}
 			}
 		});

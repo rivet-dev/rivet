@@ -1,6 +1,7 @@
 import { mdxAnnotations } from "mdx-annotations";
 import remarkGfm from "remark-gfm";
 import { execSync } from "child_process";
+import { visit } from "unist-util-visit";
 
 // Remark plugin to add last modified time from git history
 function remarkModifiedTime() {
@@ -26,4 +27,38 @@ function remarkModifiedTime() {
 	};
 }
 
-export const remarkPlugins = [mdxAnnotations.remark, remarkGfm, remarkModifiedTime];
+// Preserve plain code fence metastrings (for example: ```ts registry.ts @hide) on hProperties.
+// mdx-annotations only consumes JSON-like annotation blocks, so we bridge remaining metastrings
+// using a neutral property that does not go through mdx-annotations' recma parser.
+function remarkCodeFenceMetaToAnnotation() {
+	return (tree: unknown) => {
+		visit(tree, "code", (node: unknown) => {
+			const code = node as {
+				meta?: string | null;
+				data?: {
+					hProperties?: Record<string, unknown>;
+				};
+			};
+			const meta = code.meta?.trim();
+			if (!meta) return;
+
+			const data = (code.data ??= {});
+			const hProperties = (data.hProperties ??= {});
+			const existingMetaString = hProperties.metastring;
+
+			if (
+				typeof existingMetaString !== "string" ||
+				existingMetaString.trim().length === 0
+			) {
+				hProperties.metastring = meta;
+			}
+		});
+	};
+}
+
+export const remarkPlugins = [
+	mdxAnnotations.remark,
+	remarkCodeFenceMetaToAnnotation,
+	remarkGfm,
+	remarkModifiedTime,
+];

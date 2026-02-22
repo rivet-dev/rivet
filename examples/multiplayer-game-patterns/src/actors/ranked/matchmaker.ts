@@ -1,7 +1,14 @@
-import { actor, type ActorContextOf, queue, UserError } from "rivetkit";
+/*
+This matchmaker uses a rating window flow.
+1. queueForMatch adds players to player_pool with current rating and queue time.
+2. attemptPairing scans the pool and looks for two players whose rating windows overlap.
+3. createRankedMatch removes paired players, creates a match actor, stores assignments, and broadcasts assignmentReady.
+4. matchCompleted updates player rating actors and leaderboard entries, then removes the match row.
+*/
+import { actor, type ActorContextOf, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
+import { interval } from "rivetkit/utils";
 
-import { hasInvalidInternalToken, INTERNAL_TOKEN, isInternalToken } from "../../auth.ts";
 import { registry } from "../index.ts";
 import {
 	INITIAL_RATING_WINDOW,
@@ -13,7 +20,6 @@ export interface RankedAssignment {
 	matchId: string;
 	username: string;
 	rating: number;
-	playerToken: string;
 	connId: string | null;
 }
 
@@ -22,48 +28,22 @@ type QueuePlayerRow = {
 	rating: number;
 	queued_at: number;
 	conn_id: string | null;
-	registration_token: string | null;
 };
 
-type StoredRankedAssignment = RankedAssignment & {
-	registrationToken: string | null;
-};
+const QUEUE_UPDATE_TICK_MS = 1000;
+const PAIRING_RETRY_TICK_MS = 2000;
 
 export const rankedMatchmaker = actor({
 	options: { name: "Ranked - Matchmaker", icon: "ranking-star" },
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (invoke.kind === "queue" && invoke.name === "queueForMatch") {
-			return !isInternal;
-		}
-		if (invoke.kind === "queue" && invoke.name === "matchCompleted") {
-			return isInternal;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "registerPlayer" ||
-				invoke.name === "getQueueSize" ||
-				invoke.name === "getAssignment")
-		) {
-			return !isInternal;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "queueUpdate") {
-			return !isInternal;
-		}
-		return false;
-	},
 	queues: {
-		queueForMatch: queue<{ username: string }, { registrationToken: string }>(),
+		queueForMatch: queue<{
+			username: string;
+			connId: string;
+		}>(),
+		unqueueForMatch: queue<{ connId: string }>(),
 		matchCompleted: queue<{
 			matchId: string;
 			winnerUsername: string;
@@ -73,35 +53,13 @@ export const rankedMatchmaker = actor({
 		}>(),
 	},
 	actions: {
-		registerPlayer: async (
-			c,
-			{ username, registrationToken }: { username: string; registrationToken: string },
-		) => {
-			await c.db.execute(
-				`UPDATE player_pool SET conn_id = ? WHERE username = ? AND registration_token = ?`,
-				c.conn.id,
+		queueForMatch: async (c, { username }: { username: string }) => {
+			const connId = c.conn.id;
+			await c.queue.send("queueForMatch", {
 				username,
-				registrationToken,
-			);
-			const playerPoolChangeRows = await c.db.execute<{ changed: number }>(
-				`SELECT changes() AS changed`,
-			);
-			const playerPoolChanges = playerPoolChangeRows[0]?.changed ?? 0;
-
-			await c.db.execute(
-				`UPDATE assignments SET conn_id = ? WHERE username = ? AND registration_token = ?`,
-				c.conn.id,
-				username,
-				registrationToken,
-			);
-			const assignmentChangeRows = await c.db.execute<{ changed: number }>(
-				`SELECT changes() AS changed`,
-			);
-			const assignmentChanges = assignmentChangeRows[0]?.changed ?? 0;
-
-			if (playerPoolChanges === 0 && assignmentChanges === 0) {
-				throw new UserError("forbidden", { code: "forbidden" });
-			}
+				connId,
+			});
+			return { queued: true, connId };
 		},
 		getQueueSize: async (c) => {
 			const rows = await c.db.execute<{ cnt: number }>(
@@ -111,22 +69,17 @@ export const rankedMatchmaker = actor({
 		},
 		getAssignment: async (
 			c,
-			{
-				username,
-				registrationToken,
-			}: { username: string; registrationToken: string },
+			{ username }: { username: string },
 		) => {
 			const rows = await c.db.execute<{
 				match_id: string;
 				username: string;
 				rating: number;
-				player_token: string;
 				conn_id: string | null;
 			}>(
-				`SELECT * FROM assignments WHERE username = ? AND conn_id = ? AND registration_token = ?`,
+				`SELECT * FROM assignments WHERE username = ? AND conn_id = ?`,
 				username,
 				c.conn.id,
-				registrationToken,
 			);
 			if (rows.length === 0) return null;
 			const row = rows[0]!;
@@ -134,63 +87,71 @@ export const rankedMatchmaker = actor({
 				matchId: row.match_id,
 				username: row.username,
 				rating: row.rating,
-				playerToken: row.player_token,
 				connId: row.conn_id,
 			};
 		},
 	},
 	onDisconnect: async (c, conn) => {
-		await c.db.execute(`DELETE FROM player_pool WHERE conn_id = ?`, conn.id);
-		await broadcastQueueSize(c);
+		await c.queue.send("unqueueForMatch", { connId: conn.id });
 	},
 	run: async (c) => {
-		for await (const message of c.queue.iter({ completable: true })) {
-			if (message.name === "queueForMatch") {
-				const { username } = message.body;
-				const registrationToken = crypto.randomUUID();
+		c.waitUntil(runQueueUpdateTicker(c));
 
-				// Ensure player actor exists and look up ELO.
+		while (!c.aborted) {
+			const [message] = await c.queue.next({
+				timeout: PAIRING_RETRY_TICK_MS,
+			});
+			if (!message) {
+				// Retry pairing periodically so widening rating windows can form matches
+				// even when no new queue messages arrive.
+				await attemptPairing(c);
+				continue;
+			}
+
+			if (message.name === "queueForMatch") {
+				const { username, connId } = message.body;
+
 				const client = c.client<typeof registry>();
-				const playerHandle = client.rankedPlayer.getOrCreate([username], {
-					params: { internalToken: INTERNAL_TOKEN },
-				});
+				const playerHandle = client.rankedPlayer.getOrCreate([username]);
 				await playerHandle.initialize({ username });
 				const rating = await playerHandle.getRating() as number;
 
+				// Clear any stale assignment for this username before re-queueing.
 				await c.db.execute(
-					`INSERT OR REPLACE INTO player_pool (username, rating, queued_at, registration_token) VALUES (?, ?, ?, ?)`,
+					`DELETE FROM assignments WHERE username = ?`,
+					username,
+				);
+
+				await c.db.execute(
+					`INSERT OR REPLACE INTO player_pool (username, rating, queued_at, conn_id) VALUES (?, ?, ?, ?)`,
 					username,
 					rating,
 					Date.now(),
-					registrationToken,
+					connId,
 				);
 
-				await broadcastQueueSize(c);
+				await sendQueueUpdates(c);
 				await attemptPairing(c);
-				await message.complete({ registrationToken });
+			} else if (message.name === "unqueueForMatch") {
+				await c.db.execute(
+					`DELETE FROM player_pool WHERE conn_id = ?`,
+					message.body.connId,
+				);
+				await sendQueueUpdates(c);
 			} else if (message.name === "matchCompleted") {
 				const body = message.body;
 				const client = c.client<typeof registry>();
 
 				if (body.winnerUsername && body.loserUsername) {
-					// Update player actors with new ratings.
-					const winnerHandle = client.rankedPlayer.getOrCreate([body.winnerUsername], {
-						params: { internalToken: INTERNAL_TOKEN },
-					});
+					const winnerHandle = client.rankedPlayer.getOrCreate([body.winnerUsername]);
 					await winnerHandle.applyMatchResult({ won: true, newRating: body.winnerNewRating });
-					const loserHandle = client.rankedPlayer.getOrCreate([body.loserUsername], {
-						params: { internalToken: INTERNAL_TOKEN },
-					});
+					const loserHandle = client.rankedPlayer.getOrCreate([body.loserUsername]);
 					await loserHandle.applyMatchResult({ won: false, newRating: body.loserNewRating });
 
-					// Fetch updated profiles for leaderboard.
 					const winnerProfile = await winnerHandle.getProfile() as { username: string; rating: number; wins: number; losses: number };
 					const loserProfile = await loserHandle.getProfile() as { username: string; rating: number; wins: number; losses: number };
 
-					// Update leaderboard.
-					const lb = client.rankedLeaderboard.getOrCreate(["main"], {
-						params: { internalToken: INTERNAL_TOKEN },
-					});
+					const lb = client.rankedLeaderboard.getOrCreate(["main"]);
 					await lb.updatePlayer(winnerProfile);
 					await lb.updatePlayer(loserProfile);
 				}
@@ -199,7 +160,10 @@ export const rankedMatchmaker = actor({
 					`DELETE FROM matches WHERE match_id = ?`,
 					body.matchId,
 				);
-				await message.complete();
+				await c.db.execute(
+					`DELETE FROM assignments WHERE match_id = ?`,
+					body.matchId,
+				);
 			}
 		}
 	},
@@ -262,16 +226,12 @@ async function createRankedMatch(
 		{
 			username: a.username,
 			rating: a.rating,
-			token: crypto.randomUUID(),
 			connId: a.conn_id,
-			registrationToken: a.registration_token,
 		},
 		{
 			username: b.username,
 			rating: b.rating,
-			token: crypto.randomUUID(),
 			connId: b.conn_id,
-			registrationToken: b.registration_token,
 		},
 	] as const;
 
@@ -282,7 +242,6 @@ async function createRankedMatch(
 			assignedPlayers: assignedPlayers.map((p) => ({
 				username: p.username,
 				rating: p.rating,
-				token: p.token,
 			})),
 		},
 	});
@@ -293,35 +252,82 @@ async function createRankedMatch(
 		Date.now(),
 	);
 
-	await broadcastQueueSize(c);
+	await sendQueueUpdates(c);
 
-	// Store assignments so clients can poll for them.
-	const assignments: StoredRankedAssignment[] = assignedPlayers.map((player) => ({
-		matchId,
-		username: player.username,
-		rating: player.rating,
-		playerToken: player.token,
-		connId: player.connId,
-		registrationToken: player.registrationToken,
-	}));
-	for (const assignment of assignments) {
+	for (const player of assignedPlayers) {
 		await c.db.execute(
-			`INSERT INTO assignments (username, match_id, rating, player_token, conn_id, registration_token) VALUES (?, ?, ?, ?, ?, ?)`,
-			assignment.username,
-			assignment.matchId,
-			assignment.rating,
-			assignment.playerToken,
-			assignment.connId,
-			assignment.registrationToken,
+			`INSERT OR REPLACE INTO assignments (username, match_id, rating, conn_id) VALUES (?, ?, ?, ?)`,
+			player.username,
+			matchId,
+			player.rating,
+			player.connId,
 		);
+		c.broadcast("assignmentReady", {
+			matchId,
+			username: player.username,
+			rating: player.rating,
+			connId: player.connId,
+		} satisfies RankedAssignment);
 	}
 }
 
-async function broadcastQueueSize(c: ActorContextOf<typeof rankedMatchmaker>) {
-	const rows = await c.db.execute<{ cnt: number }>(
-		`SELECT COUNT(*) as cnt FROM player_pool`,
+function calculateRatingWindow(now: number, queuedAt: number): number {
+	const waitSec = Math.max(0, (now - queuedAt) / 1000);
+	return Math.min(
+		INITIAL_RATING_WINDOW + WINDOW_EXPAND_PER_SEC * waitSec,
+		MAX_RATING_WINDOW,
 	);
-	c.broadcast("queueUpdate", { count: rows[0]?.cnt ?? 0 });
+}
+
+async function sendQueueUpdates(c: ActorContextOf<typeof rankedMatchmaker>) {
+	if (c.conns.size === 0) return;
+
+	const now = Date.now();
+	const pool = await c.db.execute<QueuePlayerRow>(
+		`SELECT * FROM player_pool`,
+	);
+	const count = pool.length;
+
+	const playerByConnId = new Map<string, QueuePlayerRow>();
+	for (const row of pool) {
+		if (!row.conn_id) continue;
+		const existing = playerByConnId.get(row.conn_id);
+		if (!existing || row.queued_at > existing.queued_at) {
+			playerByConnId.set(row.conn_id, row);
+		}
+	}
+
+	for (const [connId, conn] of c.conns.entries()) {
+		const player = playerByConnId.get(connId);
+		if (!player) {
+			conn.send("queueUpdate", {
+				queued: false,
+				count,
+			});
+			continue;
+		}
+
+		const ratingWindow = calculateRatingWindow(now, player.queued_at);
+		conn.send("queueUpdate", {
+			queued: true,
+			count,
+			username: player.username,
+			rating: player.rating,
+			queueDurationMs: Math.max(0, now - player.queued_at),
+			ratingWindow: Math.round(ratingWindow),
+			ratingMin: Math.round(player.rating - ratingWindow),
+			ratingMax: Math.round(player.rating + ratingWindow),
+		});
+	}
+}
+
+async function runQueueUpdateTicker(c: ActorContextOf<typeof rankedMatchmaker>) {
+	const tick = interval(QUEUE_UPDATE_TICK_MS);
+	while (!c.aborted) {
+		await tick();
+		if (c.aborted) break;
+		await sendQueueUpdates(c);
+	}
 }
 
 async function migrateTables(dbHandle: RawAccess) {
@@ -330,8 +336,7 @@ async function migrateTables(dbHandle: RawAccess) {
 			username TEXT PRIMARY KEY,
 			rating INTEGER NOT NULL,
 			queued_at INTEGER NOT NULL,
-			conn_id TEXT,
-			registration_token TEXT
+			conn_id TEXT
 		)
 	`);
 	await dbHandle.execute(`
@@ -345,28 +350,7 @@ async function migrateTables(dbHandle: RawAccess) {
 			username TEXT PRIMARY KEY,
 			match_id TEXT NOT NULL,
 			rating INTEGER NOT NULL,
-			player_token TEXT NOT NULL,
-			conn_id TEXT,
-			registration_token TEXT
+			conn_id TEXT
 		)
 	`);
-
-	await ensureColumn(dbHandle, "player_pool", "registration_token", "TEXT");
-	await ensureColumn(dbHandle, "assignments", "registration_token", "TEXT");
-}
-
-async function ensureColumn(
-	dbHandle: RawAccess,
-	table: "player_pool" | "assignments",
-	column: "registration_token",
-	definition: "TEXT",
-) {
-	const columns = await dbHandle.execute<{ name: string }>(
-		`PRAGMA table_info(${table})`,
-	);
-	if (!columns.some((col) => col.name === column)) {
-		await dbHandle.execute(
-			`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
-		);
-	}
 }

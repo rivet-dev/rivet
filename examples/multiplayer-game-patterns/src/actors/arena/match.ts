@@ -1,10 +1,5 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
 import { registry } from "../index.ts";
 import {
 	type Mode,
@@ -15,11 +10,12 @@ import {
 	SHOOT_ANGLE,
 	SCORE_LIMIT,
 } from "./config.ts";
+import { getPlayerColor } from "../player-color.ts";
 
 interface PlayerEntry {
-	token: string;
 	connId: string | null;
-	teamId: number; // -1 for FFA
+	teamId: number;
+	color: string;
 	x: number;
 	y: number;
 	lastPositionAt: number;
@@ -40,7 +36,6 @@ interface State {
 
 interface AssignedPlayer {
 	playerId: string;
-	token: string;
 	teamId: number;
 }
 
@@ -62,9 +57,9 @@ export const arenaMatch = actor({
 		const players: Record<string, PlayerEntry> = {};
 		for (const ap of input.assignedPlayers) {
 			players[ap.playerId] = {
-				token: ap.token,
 				connId: null,
 				teamId: ap.teamId,
+				color: getPlayerColor(ap.playerId),
 				x: Math.random() * WORLD_SIZE,
 				y: Math.random() * WORLD_SIZE,
 				lastPositionAt: Date.now(),
@@ -83,59 +78,16 @@ export const arenaMatch = actor({
 			winnerPlayerId: null,
 		};
 	},
-	onBeforeConnect: (
-		c,
-		params: { playerToken?: string; internalToken?: string },
-	) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-		if (params?.internalToken === INTERNAL_TOKEN) return;
-		const playerToken = params?.playerToken?.trim();
-		if (!playerToken) {
-			throw new UserError("authentication required", {
-				code: "auth_required",
-			});
-		}
-		if (!findPlayerByToken(c.state, playerToken)) {
-			throw new UserError("invalid player token", {
-				code: "invalid_player_token",
-			});
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "updatePosition" ||
-				invoke.name === "shoot" ||
-				invoke.name === "getSnapshot")
-		) {
-			return !isInternal && isAssignedPlayer;
-		}
-		if (
-			invoke.kind === "subscribe" &&
-			(invoke.name === "snapshot" || invoke.name === "shoot")
-		) {
-			return !isInternal && isAssignedPlayer;
-		}
-		return false;
-	},
 	onConnect: (c, conn) => {
-		const playerToken = conn.params?.playerToken?.trim();
-		if (!playerToken) return;
-		const found = findPlayerByToken(c.state, playerToken);
-		if (!found) {
-			conn.disconnect("invalid_player_token");
+		const playerId = (conn.params as { playerId?: string })?.playerId;
+		if (!playerId) return;
+		const player = c.state.players[playerId];
+		if (!player) {
+			conn.disconnect("invalid_player");
 			return;
 		}
-		const [, player] = found;
 		player.connId = conn.id;
 
-		// Check if all players have connected → transition to live.
 		if (c.state.phase === "waiting") {
 			const allConnected = Object.values(c.state.players).every(
 				(p) => p.connId !== null,
@@ -150,7 +102,7 @@ export const arenaMatch = actor({
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.arenaMatchmaker
-			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+			.getOrCreate(["main"])
 			.send("matchCompleted", { matchId: c.state.matchId });
 	},
 	onDisconnect: (c, conn) => {
@@ -199,7 +151,6 @@ export const arenaMatch = actor({
 			let newX: number;
 			let newY: number;
 			if (dist > maxDist && dist > 0) {
-				// Clamp to max allowed distance along the movement vector.
 				newX = player.x + (dx / dist) * maxDist;
 				newY = player.y + (dy / dist) * maxDist;
 			} else {
@@ -226,7 +177,6 @@ export const arenaMatch = actor({
 				throw new UserError("match is not live", { code: "not_live" });
 			}
 
-			// Normalize direction.
 			const mag = Math.sqrt(
 				input.dirX * input.dirX + input.dirY * input.dirY,
 			);
@@ -234,14 +184,12 @@ export const arenaMatch = actor({
 			const ndx = input.dirX / mag;
 			const ndy = input.dirY / mag;
 
-			// Find closest valid hit.
 			let closestId: string | null = null;
 			let closestDist = Infinity;
 
 			for (const [targetId, target] of Object.entries(c.state.players)) {
 				if (targetId === shooterId) continue;
 				if (!target.alive) continue;
-				// In team modes, skip teammates.
 				if (shooter.teamId >= 0 && target.teamId === shooter.teamId) continue;
 
 				const tx = target.x - shooter.x;
@@ -249,7 +197,6 @@ export const arenaMatch = actor({
 				const targetDist = Math.sqrt(tx * tx + ty * ty);
 				if (targetDist > SHOOT_RANGE || targetDist === 0) continue;
 
-				// Check angle between shot direction and target direction.
 				const dot = (tx / targetDist) * ndx + (ty / targetDist) * ndy;
 				const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
 				if (angle > SHOOT_ANGLE) continue;
@@ -263,7 +210,6 @@ export const arenaMatch = actor({
 			if (closestId) {
 				const victim = c.state.players[closestId]!;
 				shooter.score += 1;
-				// Respawn victim at a random position.
 				victim.x = Math.random() * WORLD_SIZE;
 				victim.y = Math.random() * WORLD_SIZE;
 				victim.lastPositionAt = Date.now();
@@ -279,7 +225,6 @@ export const arenaMatch = actor({
 			};
 			c.broadcast("shoot", shootEvent);
 
-			// Check win condition after scoring.
 			checkWinCondition(c);
 			if ((c.state.phase as string) === "finished") {
 				broadcastSnapshot(c);
@@ -301,7 +246,6 @@ function checkWinCondition(c: ActorContextOf<typeof arenaMatch>) {
 			}
 		}
 	} else {
-		// Team mode: sum scores per team.
 		const teamScores: Record<number, number> = {};
 		for (const player of Object.values(c.state.players)) {
 			teamScores[player.teamId] = (teamScores[player.teamId] ?? 0) + player.score;
@@ -330,7 +274,7 @@ interface Snapshot {
 	winnerPlayerId: string | null;
 	worldSize: number;
 	scoreLimit: number;
-	players: Record<string, { x: number; y: number; teamId: number; score: number }>;
+	players: Record<string, { x: number; y: number; teamId: number; color: string; score: number }>;
 }
 
 interface ShootEvent {
@@ -343,12 +287,13 @@ interface ShootEvent {
 }
 
 function buildSnapshot(c: ActorContextOf<typeof arenaMatch>): Snapshot {
-	const players: Record<string, { x: number; y: number; teamId: number; score: number }> = {};
+	const players: Record<string, { x: number; y: number; teamId: number; color: string; score: number }> = {};
 	for (const [id, entry] of Object.entries(c.state.players)) {
 		players[id] = {
 			x: entry.x,
 			y: entry.y,
 			teamId: entry.teamId,
+			color: entry.color,
 			score: entry.score,
 		};
 	}
@@ -364,16 +309,6 @@ function buildSnapshot(c: ActorContextOf<typeof arenaMatch>): Snapshot {
 		scoreLimit: SCORE_LIMIT,
 		players,
 	};
-}
-
-function findPlayerByToken(
-	state: State,
-	token: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.token === token) return [id, entry];
-	}
-	return null;
 }
 
 function findPlayerByConnId(

@@ -1,25 +1,24 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { actor, event } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
 import { CHUNK_SIZE, TICK_MS, SPEED, SPRINT_MULTIPLIER } from "./config.ts";
+import { getPlayerColor } from "../player-color.ts";
 
-const DISCONNECT_GRACE_MS = 5000;
 const GRID_COLS = Math.floor(CHUNK_SIZE / 50);
 
 interface PlayerEntry {
-	token: string;
-	connId: string | null;
+	connId: string;
 	name: string;
+	color: string;
 	x: number;
 	y: number;
 	inputX: number;
 	inputY: number;
 	sprint: boolean;
-	disconnectedAt: number | null;
+}
+
+interface ConnectionMeta {
+	playerId: string;
+	inChunk: boolean;
 }
 
 interface State {
@@ -27,123 +26,74 @@ interface State {
 	chunkX: number;
 	chunkY: number;
 	tick: number;
+	connections: Record<string, ConnectionMeta>;
 	players: Record<string, PlayerEntry>;
-	blocks: string[];
-	initialized: boolean;
+	blocks: Record<string, string>;
 }
 
+// The open world is partitioned into fixed size chunks keyed by world ID and chunk coordinates.
+// Clients can keep multiple chunk connections open to observe nearby state.
+// Each connection carries a stable player ID while explicit enter/leave actions control chunk membership.
 export const openWorldChunk = actor({
 	options: { name: "Open World - Chunk", icon: "map" },
 	events: {
 		snapshot: event<Snapshot>(),
 	},
-	state: {
-		worldId: "",
-		chunkX: 0,
-		chunkY: 0,
-		tick: 0,
-		players: {} as Record<string, PlayerEntry>,
-		blocks: [] as string[],
-		initialized: false as boolean,
-	} satisfies State,
-	onBeforeConnect: (
-		c,
-		params: { playerToken?: string; internalToken?: string; observer?: string },
-	) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-		if (params?.internalToken === INTERNAL_TOKEN) return;
-		// Allow observer connections (for viewing adjacent chunks).
-		if (params?.observer === "true") return;
-		const playerToken = params?.playerToken?.trim();
-		if (!playerToken) {
-			throw new UserError("authentication required", { code: "auth_required" });
-		}
-		if (!findPlayerByToken(c.state, playerToken)) {
-			throw new UserError("invalid player token", { code: "invalid_player_token" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const params = c.conn.params as
-			| { internalToken?: string; observer?: string }
-			| undefined;
-		const isInternal = isInternalToken(params);
-		const isObserver = params?.observer === "true";
-		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "initialize" || invoke.name === "createPlayer")
-		) {
-			return isInternal;
-		}
-		if (invoke.kind === "action" && invoke.name === "getSnapshot") {
-			return isObserver || isAssignedPlayer;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "setInput" ||
-				invoke.name === "placeBlock" ||
-				invoke.name === "removeBlock")
-		) {
-			return isAssignedPlayer;
-		}
-		if (invoke.kind === "action" && invoke.name === "removePlayer") {
-			return isAssignedPlayer || isInternal;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "snapshot") {
-			return isObserver || isAssignedPlayer;
-		}
-		return false;
+	createState: (c): State => {
+		const key = Array.isArray(c.key) ? c.key : [c.key];
+		const chunkX = Number(key[1] ?? "0");
+		const chunkY = Number(key[2] ?? "0");
+		return {
+			worldId: key[0] ?? "",
+			chunkX: Number.isFinite(chunkX) ? chunkX : 0,
+			chunkY: Number.isFinite(chunkY) ? chunkY : 0,
+			tick: 0,
+			connections: {},
+			players: {},
+			blocks: {},
+		};
 	},
 	onConnect: (c, conn) => {
-		// Observer connections just receive broadcasts.
-		if (conn.params?.observer === "true") return;
-		const playerToken = conn.params?.playerToken?.trim();
-		if (!playerToken) return;
-		const found = findPlayerByToken(c.state, playerToken);
-		if (!found) {
-			conn.disconnect("invalid_player_token");
-			return;
-		}
-		const [, player] = found;
-		player.connId = conn.id;
-		player.disconnectedAt = null;
+		if (!c.state.connections) c.state.connections = {};
+		const playerId = parsePlayerId(conn.params) ?? conn.id;
+		c.state.connections[conn.id] = {
+			playerId,
+			inChunk: false,
+		};
 		broadcastSnapshot(c);
 	},
 	onDisconnect: (c, conn) => {
-		const found = findPlayerByConnId(c.state, conn.id);
-		if (!found) return;
-		const [, player] = found;
-		player.connId = null;
-		player.disconnectedAt = Date.now();
+		const meta = c.state.connections?.[conn.id];
+		if (!meta) return;
+		delete c.state.connections[conn.id];
+
+		const player = c.state.players[meta.playerId];
+		if (player?.connId === conn.id) {
+			delete c.state.players[meta.playerId];
+		}
 		broadcastSnapshot(c);
 	},
 	run: async (c) => {
-		if (!c.state.blocks) c.state.blocks = [];
+		if (Array.isArray(c.state.blocks)) {
+			const migratedBlocks: Record<string, string> = {};
+			for (const blockKey of c.state.blocks) {
+				migratedBlocks[blockKey] = "#ff4f00";
+			}
+			c.state.blocks = migratedBlocks;
+		}
+		if (!c.state.blocks) c.state.blocks = {};
+		if (!c.state.connections) c.state.connections = {};
 		const tick = interval(TICK_MS);
 		while (!c.aborted) {
 			await tick();
 			if (c.aborted) break;
 			c.state.tick += 1;
 
-			const now = Date.now();
-
-			for (const [id, player] of Object.entries(c.state.players)) {
-				// Remove disconnected beyond grace.
-				if (
-					player.disconnectedAt &&
-					now - player.disconnectedAt > DISCONNECT_GRACE_MS
-				) {
-					delete c.state.players[id];
-					continue;
-				}
-
+			for (const player of Object.values(c.state.players)) {
 				const speed = player.sprint ? SPEED * SPRINT_MULTIPLIER : SPEED;
 				player.x += speed * player.inputX;
 				player.y += speed * player.inputY;
 
-				// Clamp to chunk bounds.
 				player.x = Math.max(0, Math.min(CHUNK_SIZE - 1, player.x));
 				player.y = Math.max(0, Math.min(CHUNK_SIZE - 1, player.y));
 			}
@@ -152,71 +102,105 @@ export const openWorldChunk = actor({
 		}
 	},
 	actions: {
-		initialize: (c, input: { worldId: string; chunkX: number; chunkY: number }) => {
-			if (c.state.initialized) return;
-			c.state.worldId = input.worldId;
-			c.state.chunkX = input.chunkX;
-			c.state.chunkY = input.chunkY;
-			c.state.initialized = true;
-		},
-		createPlayer: (
+		enterChunk: (
 			c,
-			input: { playerId: string; playerToken: string; playerName: string; x: number; y: number },
+			input: { name: string; spawnX?: number; spawnY?: number },
 		) => {
-			c.state.players[input.playerId] = {
-				token: input.playerToken,
-				connId: null,
-				name: input.playerName,
-				x: input.x,
-				y: input.y,
+			const meta = getConnectionMeta(c, c.conn.id);
+			if (!meta) return;
+
+			const nameRaw = input.name.trim();
+			const name = nameRaw ? nameRaw.slice(0, 24) : "Player";
+			const existing = c.state.players[meta.playerId];
+			c.state.players[meta.playerId] = {
+				connId: c.conn.id,
+				name,
+				color: existing?.color ?? getPlayerColor(meta.playerId),
+				x: clampToChunk(input.spawnX) ?? CHUNK_SIZE / 2,
+				y: clampToChunk(input.spawnY) ?? CHUNK_SIZE / 2,
 				inputX: 0,
 				inputY: 0,
 				sprint: false,
-				disconnectedAt: Date.now(),
 			};
+			meta.inChunk = true;
+			broadcastSnapshot(c);
+		},
+		addPlayer: (
+			c,
+			input: { name: string; spawnX?: number; spawnY?: number },
+		) => {
+			const meta = getConnectionMeta(c, c.conn.id);
+			if (!meta) return;
+
+			const nameRaw = input.name.trim();
+			const name = nameRaw ? nameRaw.slice(0, 24) : "Player";
+			const existing = c.state.players[meta.playerId];
+			c.state.players[meta.playerId] = {
+				connId: c.conn.id,
+				name,
+				color: existing?.color ?? getPlayerColor(meta.playerId),
+				x: clampToChunk(input.spawnX) ?? CHUNK_SIZE / 2,
+				y: clampToChunk(input.spawnY) ?? CHUNK_SIZE / 2,
+				inputX: 0,
+				inputY: 0,
+				sprint: false,
+			};
+			meta.inChunk = true;
+			broadcastSnapshot(c);
+		},
+		leaveChunk: (c) => {
+			const meta = getConnectionMeta(c, c.conn.id);
+			if (!meta) return;
+
+			meta.inChunk = false;
+			const player = c.state.players[meta.playerId];
+			if (player?.connId === c.conn.id) {
+				delete c.state.players[meta.playerId];
+			}
+			broadcastSnapshot(c);
+		},
+		removePlayer: (c) => {
+			const meta = getConnectionMeta(c, c.conn.id);
+			if (!meta) return;
+
+			meta.inChunk = false;
+			const player = c.state.players[meta.playerId];
+			if (player?.connId === c.conn.id) {
+				delete c.state.players[meta.playerId];
+			}
+			broadcastSnapshot(c);
 		},
 		setInput: (c, input: { inputX: number; inputY: number; sprint?: boolean }) => {
-			const found = findPlayerByConnId(c.state, c.conn.id);
-			if (!found) return;
-			const [, player] = found;
+			const player = getControlledPlayer(c, c.conn.id);
+			if (!player) return;
 			player.inputX = Math.max(-1, Math.min(1, input.inputX));
 			player.inputY = Math.max(-1, Math.min(1, input.inputY));
 			player.sprint = !!input.sprint;
 		},
-		removePlayer: (c, input: { playerId: string }) => {
-			if (isInternalToken(c.conn.params as { internalToken?: string } | undefined)) {
-				delete c.state.players[input.playerId];
-				broadcastSnapshot(c);
-				return;
-			}
-			const found = findPlayerByConnId(c.state, c.conn.id);
-			if (!found) return;
-			const [playerId] = found;
-			delete c.state.players[playerId];
-			broadcastSnapshot(c);
-		},
 		placeBlock: (c, input: { gridX: number; gridY: number }) => {
-			if (!findPlayerByConnId(c.state, c.conn.id)) return;
-			if (!c.state.blocks) c.state.blocks = [];
+			const player = getControlledPlayer(c, c.conn.id);
+			if (!player) return;
+			if (Array.isArray(c.state.blocks)) c.state.blocks = {};
+			if (!c.state.blocks) c.state.blocks = {};
 			const { gridX, gridY } = input;
 			if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_COLS) return;
 			const key = `${gridX},${gridY}`;
-			if (!c.state.blocks.includes(key)) {
-				c.state.blocks.push(key);
+			if (c.state.blocks[key] !== player.color) {
+				c.state.blocks[key] = player.color;
 				broadcastSnapshot(c);
 			}
 		},
 		removeBlock: (c, input: { gridX: number; gridY: number }) => {
-			if (!findPlayerByConnId(c.state, c.conn.id)) return;
-			if (!c.state.blocks) c.state.blocks = [];
+			if (!getConnectionMeta(c, c.conn.id)) return;
+			if (Array.isArray(c.state.blocks)) c.state.blocks = {};
+			if (!c.state.blocks) c.state.blocks = {};
 			const key = `${input.gridX},${input.gridY}`;
-			const idx = c.state.blocks.indexOf(key);
-			if (idx !== -1) {
-				c.state.blocks.splice(idx, 1);
+			if (key in c.state.blocks) {
+				delete c.state.blocks[key];
 				broadcastSnapshot(c);
 			}
 		},
-		getSnapshot: (c) => buildSnapshot(c),
+		getSnapshot: (c) => buildSnapshot(c, null),
 	},
 });
 
@@ -226,15 +210,18 @@ interface Snapshot {
 	chunkY: number;
 	chunkSize: number;
 	tick: number;
-	players: Record<string, { x: number; y: number; name: string }>;
-	blocks: string[];
+	selfPlayerId: string | null;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
+	blocks: Record<string, string>;
 }
 
-function buildSnapshot(c: ActorContextOf<typeof openWorldChunk>): Snapshot {
+function buildSnapshot(
+	c: { state: State },
+	playerId: string | null,
+): Snapshot {
 	const players: Snapshot["players"] = {};
-	for (const [id, entry] of Object.entries(c.state.players)) {
-		if (entry.disconnectedAt) continue;
-		players[id] = { x: entry.x, y: entry.y, name: entry.name };
+	for (const [id, player] of Object.entries(c.state.players)) {
+		players[id] = { x: player.x, y: player.y, name: player.name, color: player.color };
 	}
 	return {
 		worldId: c.state.worldId,
@@ -242,31 +229,65 @@ function buildSnapshot(c: ActorContextOf<typeof openWorldChunk>): Snapshot {
 		chunkY: c.state.chunkY,
 		chunkSize: CHUNK_SIZE,
 		tick: c.state.tick,
+		selfPlayerId: playerId,
 		players,
-		blocks: c.state.blocks,
+		blocks: Array.isArray(c.state.blocks)
+			? Object.fromEntries(c.state.blocks.map((blockKey) => [blockKey, "#ff4f00"]))
+			: { ...c.state.blocks },
 	};
 }
 
-function broadcastSnapshot(c: ActorContextOf<typeof openWorldChunk>) {
-	c.broadcast("snapshot", buildSnapshot(c));
-}
-
-function findPlayerByToken(
-	state: State,
-	token: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.token === token) return [id, entry];
+function broadcastSnapshot(c: {
+	state: State;
+	conns: Map<
+		string,
+		{
+			id: string;
+			send: (eventName: "snapshot", data: Snapshot) => void;
+		}
+	>;
+}) {
+	for (const conn of c.conns.values()) {
+		const meta = c.state.connections?.[conn.id];
+		const player = meta ? c.state.players[meta.playerId] : undefined;
+		const selfPlayerId =
+			meta?.inChunk && player?.connId === conn.id ? meta.playerId : null;
+		try {
+			conn.send("snapshot", buildSnapshot(c, selfPlayerId));
+		} catch {
+			// Skip connections that are not fully established yet.
+		}
 	}
-	return null;
 }
 
-function findPlayerByConnId(
-	state: State,
+function clampToChunk(raw: number | undefined): number | null {
+	if (raw === undefined) return null;
+	const value = Number(raw);
+	if (!Number.isFinite(value)) return null;
+	return Math.max(0, Math.min(CHUNK_SIZE - 1, value));
+}
+
+function parsePlayerId(params: unknown): string | null {
+	const playerId = (params as { playerId?: string } | null)?.playerId;
+	if (typeof playerId !== "string") return null;
+	const trimmed = playerId.trim();
+	return trimmed ? trimmed.slice(0, 64) : null;
+}
+
+function getConnectionMeta(
+	c: { state: State },
 	connId: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.connId === connId) return [id, entry];
-	}
-	return null;
+): ConnectionMeta | null {
+	return c.state.connections?.[connId] ?? null;
+}
+
+function getControlledPlayer(
+	c: { state: State },
+	connId: string,
+): PlayerEntry | null {
+	const meta = getConnectionMeta(c, connId);
+	if (!meta?.inChunk) return null;
+	const player = c.state.players[meta.playerId];
+	if (!player || player.connId !== connId) return null;
+	return player;
 }

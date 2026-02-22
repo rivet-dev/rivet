@@ -8,7 +8,6 @@ import { idleWorld } from "./idle/world.ts";
 import { ioStyleMatch } from "./io-style/match.ts";
 import { ioStyleMatchmaker } from "./io-style/matchmaker.ts";
 import { openWorldChunk } from "./open-world/chunk.ts";
-import { openWorldIndex } from "./open-world/world-index.ts";
 import { partyMatch } from "./party/match.ts";
 import { partyMatchmaker } from "./party/matchmaker.ts";
 import { physics2dWorld } from "./physics-2d/world.ts";
@@ -30,7 +29,6 @@ export {
 	ioStyleMatch,
 	ioStyleMatchmaker,
 	openWorldChunk,
-	openWorldIndex,
 	partyMatch,
 	partyMatchmaker,
 	physics2dWorld,
@@ -54,7 +52,6 @@ export const registry = setup({
 		ioStyleMatchmaker,
 		ioStyleMatch,
 		openWorldChunk,
-		openWorldIndex,
 		partyMatch,
 		partyMatchmaker,
 		physics2dWorld,

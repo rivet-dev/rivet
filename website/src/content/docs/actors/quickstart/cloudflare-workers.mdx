@@ -31,7 +31,7 @@ npm install rivetkit @rivetkit/cloudflare-workers
 
 Create a simple counter actor:
 
-```ts registry.ts
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -61,7 +61,7 @@ Choose your preferred web framework:
 <Tab title="Default">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -82,7 +82,7 @@ export const registry = setup({
 
 ```ts index.ts
 import { createHandler } from "@rivetkit/cloudflare-workers";
-import { registry } from "./registry";
+import { registry } from "./actors";
 
 // The `/api/rivet` endpoint is automatically exposed here for external clients
 const { handler, ActorHandler } = createHandler(registry);
@@ -95,7 +95,7 @@ export { handler as default, ActorHandler };
 <Tab title="Hono">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -117,7 +117,7 @@ export const registry = setup({
 ```ts index.ts
 import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
-import { registry } from "./registry";
+import { registry } from "./actors";
 
 const app = new Hono<{ Bindings: { RIVET: Client<typeof registry> } }>();
 
@@ -143,7 +143,7 @@ export { handler as default, ActorHandler };
 <Tab title="Manual Routing">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -164,7 +164,7 @@ export const registry = setup({
 
 ```ts index.ts @nocheck
 import { createHandler } from "@rivetkit/cloudflare-workers";
-import { registry } from "./registry";
+import { registry } from "./actors";
 
 // The `/api/rivet` endpoint is automatically mounted on this router for external clients
 const { handler, ActorHandler } = createHandler(registry, {
@@ -196,7 +196,7 @@ export { handler as default, ActorHandler };
 <Tab title="Advanced">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -217,7 +217,7 @@ export const registry = setup({
 
 ```ts index.ts @nocheck
 import { createInlineClient } from "@rivetkit/cloudflare-workers";
-import { registry } from "./registry";
+import { registry } from "./actors";
 
 const {
 	client,
@@ -359,7 +359,7 @@ Create a type-safe client to connect from your frontend or another service:
 <Tab title="JavaScript">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -380,7 +380,7 @@ export const registry = setup({
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 // Create typed client (use your deployed URL)
 const client = createClient<typeof registry>("https://your-app.workers.dev/api/rivet");
@@ -410,7 +410,7 @@ See the [JavaScript client documentation](/docs/clients/javascript) for more inf
 <Tab title="React">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -432,7 +432,7 @@ export const registry = setup({
 ```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const { useActor } = createRivetKit<typeof registry>("https://your-app.workers.dev/api/rivet");
 

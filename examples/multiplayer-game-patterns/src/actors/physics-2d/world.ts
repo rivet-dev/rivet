@@ -1,6 +1,7 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
 import RAPIER from "@dimforge/rapier2d-compat";
+import { getPlayerColor } from "../player-color.ts";
 import {
 	TICK_MS,
 	SUB_STEPS,
@@ -16,6 +17,7 @@ const DISCONNECT_GRACE_MS = 5000;
 interface PlayerEntry {
 	connId: string;
 	name: string;
+	color: string;
 	bodyHandle: number;
 	inputX: number;
 	jump: boolean;
@@ -37,7 +39,7 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; name: string }>;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
 }
 
 export const physics2dWorld = actor({
@@ -53,21 +55,6 @@ export const physics2dWorld = actor({
 		if (name.length > 20) {
 			throw new UserError("name too long", { code: "invalid_name" });
 		}
-	},
-	canInvoke: (c, invoke) => {
-		const isConnectedPlayer = c.vars.players[c.conn.id] !== undefined;
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "setInput" ||
-				invoke.name === "spawnBox" ||
-				invoke.name === "getSnapshot")
-		) {
-			return isConnectedPlayer;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "snapshot") {
-			return isConnectedPlayer;
-		}
-		return false;
 	},
 	state: {
 		tick: 0,
@@ -98,6 +85,7 @@ export const physics2dWorld = actor({
 		c.vars.players[conn.id] = {
 			connId: conn.id,
 			name,
+			color: getPlayerColor(conn.id),
 			bodyHandle: body.handle,
 			inputX: 0,
 			jump: false,
@@ -224,9 +212,11 @@ export const physics2dWorld = actor({
 			const id = `spawned-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 			const hw = 0.2 + Math.random() * 0.2;
 			const hh = 0.2 + Math.random() * 0.2;
+			const angle = Math.random() * Math.PI * 2;
 
 			const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
 				.setTranslation(input.x, input.y)
+				.setRotation(angle)
 				.setLinearDamping(0.5)
 				.setCcdEnabled(true);
 			const body = world.createRigidBody(bodyDesc);
@@ -285,7 +275,7 @@ function buildSnapshot(c: ActorContextOf<typeof physics2dWorld>): Snapshot {
 			hw: PLAYER_RADIUS,
 			hh: PLAYER_RADIUS,
 		});
-		players[id] = { x: pos.x, y: pos.y, name: entry.name };
+		players[id] = { x: pos.x, y: pos.y, name: entry.name, color: entry.color };
 	}
 
 	return { tick: c.state.tick, serverTime: Date.now(), bodies, players };

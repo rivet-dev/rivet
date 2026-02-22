@@ -1,16 +1,15 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
+import { interval } from "rivetkit/utils";
 import { registry } from "../index.ts";
+import { getPlayerColor } from "../player-color.ts";
 import { BOARD_SIZE, type CellValue, type GameResult } from "./config.ts";
 
+const EMPTY_MATCH_DESTROY_DELAY_MS = 10_000;
+
 interface PlayerEntry {
-	token: string;
 	connId: string | null;
 	name: string;
+	color: string;
 	symbol: "X" | "O";
 }
 
@@ -21,6 +20,7 @@ interface State {
 	currentTurn: "X" | "O";
 	result: GameResult;
 	moveCount: number;
+	emptySince: number | null;
 }
 
 export const turnBasedMatch = actor({
@@ -40,53 +40,19 @@ export const turnBasedMatch = actor({
 			currentTurn: "X",
 			result: null,
 			moveCount: 0,
+			emptySince: null,
 		};
 	},
-	onBeforeConnect: (
-		c,
-		params: { playerToken?: string; internalToken?: string },
-	) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-		if (params?.internalToken === INTERNAL_TOKEN) return;
-		const playerToken = params?.playerToken?.trim();
-		if (!playerToken) {
-			throw new UserError("authentication required", { code: "auth_required" });
-		}
-		if (!findPlayerByToken(c.state, playerToken)) {
-			throw new UserError("invalid player token", { code: "invalid_player_token" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
-		if (invoke.kind === "action" && invoke.name === "createPlayer") {
-			return isInternal;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "makeMove" || invoke.name === "getSnapshot")
-		) {
-			return !isInternal && isAssignedPlayer;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "gameUpdate") {
-			return !isInternal && isAssignedPlayer;
-		}
-		return false;
-	},
 	onConnect: (c, conn) => {
-		const playerToken = conn.params?.playerToken?.trim();
-		if (!playerToken) return;
-		const found = findPlayerByToken(c.state, playerToken);
-		if (!found) {
-			conn.disconnect("invalid_player_token");
+		const playerId = (conn.params as { playerId?: string })?.playerId;
+		if (!playerId) return;
+		const player = c.state.players[playerId];
+		if (!player) {
+			conn.disconnect("invalid_player");
 			return;
 		}
-		const [, player] = found;
 		player.connId = conn.id;
+		c.state.emptySince = null;
 		broadcastSnapshot(c);
 	},
 	onDisconnect: (c, conn) => {
@@ -96,27 +62,46 @@ export const turnBasedMatch = actor({
 		player.connId = null;
 		broadcastSnapshot(c);
 
-		// Destroy the match if no one is connected.
 		const anyConnected = Object.values(c.state.players).some((p) => p.connId !== null);
 		if (!anyConnected) {
-			c.destroy();
+			c.state.emptySince = Date.now();
+		}
+	},
+	run: async (c) => {
+		const tick = interval(1_000);
+		while (!c.aborted) {
+			await tick();
+			if (c.aborted) break;
+
+			const anyConnected = Object.values(c.state.players).some(
+				(p) => p.connId !== null,
+			);
+			if (anyConnected) {
+				c.state.emptySince = null;
+				continue;
+			}
+			if (c.state.emptySince === null) continue;
+			if (Date.now() - c.state.emptySince >= EMPTY_MATCH_DESTROY_DELAY_MS) {
+				c.destroy();
+				break;
+			}
 		}
 	},
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.turnBasedMatchmaker
-			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+			.getOrCreate(["main"])
 			.send("closeMatch", { matchId: c.state.matchId });
 	},
 	actions: {
 		createPlayer: (
 			c,
-			input: { playerId: string; playerToken: string; playerName: string; symbol: "X" | "O" },
+			input: { playerId: string; playerName: string; symbol: "X" | "O" },
 		) => {
 			c.state.players[input.playerId] = {
-				token: input.playerToken,
 				connId: null,
 				name: input.playerName,
+				color: getPlayerColor(input.playerId),
 				symbol: input.symbol,
 			};
 		},
@@ -143,7 +128,6 @@ export const turnBasedMatch = actor({
 			c.state.board[row]![col] = player.symbol;
 			c.state.moveCount += 1;
 
-			// Check win/draw.
 			const winner = checkWinner(c.state.board);
 			if (winner) {
 				c.state.result = winner === "X" ? "x_wins" : "o_wins";
@@ -160,19 +144,16 @@ export const turnBasedMatch = actor({
 });
 
 function checkWinner(board: CellValue[][]): "X" | "O" | null {
-	// Rows.
 	for (let r = 0; r < BOARD_SIZE; r++) {
 		if (board[r]![0] !== "" && board[r]![0] === board[r]![1] && board[r]![1] === board[r]![2]) {
 			return board[r]![0] as "X" | "O";
 		}
 	}
-	// Columns.
 	for (let c = 0; c < BOARD_SIZE; c++) {
 		if (board[0]![c] !== "" && board[0]![c] === board[1]![c] && board[1]![c] === board[2]![c]) {
 			return board[0]![c] as "X" | "O";
 		}
 	}
-	// Diagonals.
 	if (board[0]![0] !== "" && board[0]![0] === board[1]![1] && board[1]![1] === board[2]![2]) {
 		return board[0]![0] as "X" | "O";
 	}
@@ -188,7 +169,7 @@ interface GameSnapshot {
 	currentTurn: "X" | "O";
 	result: GameResult;
 	moveCount: number;
-	players: Record<string, { name: string; symbol: "X" | "O"; connected: boolean }>;
+	players: Record<string, { name: string; color: string; symbol: "X" | "O"; connected: boolean }>;
 }
 
 function buildSnapshot(c: ActorContextOf<typeof turnBasedMatch>): GameSnapshot {
@@ -196,6 +177,7 @@ function buildSnapshot(c: ActorContextOf<typeof turnBasedMatch>): GameSnapshot {
 	for (const [id, entry] of Object.entries(c.state.players)) {
 		players[id] = {
 			name: entry.name,
+			color: entry.color,
 			symbol: entry.symbol,
 			connected: entry.connId !== null,
 		};
@@ -212,16 +194,6 @@ function buildSnapshot(c: ActorContextOf<typeof turnBasedMatch>): GameSnapshot {
 
 function broadcastSnapshot(c: ActorContextOf<typeof turnBasedMatch>) {
 	c.broadcast("gameUpdate", buildSnapshot(c));
-}
-
-function findPlayerByToken(
-	state: State,
-	token: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.token === token) return [id, entry];
-	}
-	return null;
 }
 
 function findPlayerByConnId(

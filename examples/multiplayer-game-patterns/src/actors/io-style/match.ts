@@ -1,19 +1,15 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
 import { registry } from "../index.ts";
+import { getPlayerColor } from "../player-color.ts";
 import { CAPACITY, SPEED, WORLD_SIZE } from "./config.ts";
 
 const TICK_MS = 100;
 const DISCONNECT_GRACE_MS = 5000;
 
 interface PlayerEntry {
-	token: string;
 	connId: string | null;
+	color: string;
 	x: number;
 	y: number;
 	inputX: number;
@@ -27,6 +23,10 @@ interface State {
 	players: Record<string, PlayerEntry>;
 }
 
+interface ConnParams {
+	playerId?: string;
+}
+
 export const ioStyleMatch = actor({
 	options: { name: "IO - Match", icon: "earth-americas" },
 	events: {
@@ -37,56 +37,33 @@ export const ioStyleMatch = actor({
 		tick: 0,
 		players: {},
 	}),
-	onBeforeConnect: (
-		c,
-		params: { playerToken?: string; internalToken?: string },
-	) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-		if (params?.internalToken === INTERNAL_TOKEN) return;
-		const playerToken = params?.playerToken?.trim();
-		if (!playerToken) {
-			throw new UserError("authentication required", {
-				code: "auth_required",
-			});
-		}
-		if (!findPlayerByToken(c.state, playerToken)) {
-			throw new UserError("invalid player token", {
-				code: "invalid_player_token",
-			});
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
-		if (invoke.kind === "action" && invoke.name === "createPlayer") {
-			return isInternal;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "setInput" || invoke.name === "getSnapshot")
-		) {
-			return !isInternal && isAssignedPlayer;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "snapshot") {
-			return !isInternal && isAssignedPlayer;
-		}
-		return false;
-	},
 	onConnect: async (c, conn) => {
-		const playerToken = conn.params?.playerToken?.trim();
-		if (!playerToken) return;
-		const found = findPlayerByToken(c.state, playerToken);
-		if (!found) {
-			conn.disconnect("invalid_player_token");
+		const params = (conn.params as ConnParams | null) ?? {};
+		const playerId = params.playerId;
+		if (!playerId) {
+			conn.disconnect("invalid_player");
 			return;
 		}
-		const [, player] = found;
-		player.connId = conn.id;
-		player.disconnectedAt = null;
+		const existingPlayer = c.state.players[playerId];
+		if (existingPlayer) {
+			existingPlayer.connId = conn.id;
+			existingPlayer.disconnectedAt = null;
+		} else {
+			const confirmed = await claimPendingPlayer(c, playerId);
+			if (!confirmed) {
+				conn.disconnect("player_not_pending");
+				return;
+			}
+			c.state.players[playerId] = {
+				connId: conn.id,
+				color: getPlayerColor(playerId),
+				x: Math.random() * WORLD_SIZE,
+				y: Math.random() * WORLD_SIZE,
+				inputX: 0,
+				inputY: 0,
+				disconnectedAt: null,
+			};
+		}
 
 		await updateMatchmaker(c);
 		broadcastSnapshot(c);
@@ -94,7 +71,7 @@ export const ioStyleMatch = actor({
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.ioStyleMatchmaker
-			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+			.getOrCreate(["main"])
 			.send("closeMatch", {
 				matchId: c.state.matchId,
 			});
@@ -117,13 +94,14 @@ export const ioStyleMatch = actor({
 			c.state.tick += 1;
 
 			const now = Date.now();
+			let removedPlayer = false;
 			for (const [id, player] of Object.entries(c.state.players)) {
-				// Remove players that disconnected beyond the grace period.
 				if (
 					player.disconnectedAt &&
 					now - player.disconnectedAt > DISCONNECT_GRACE_MS
 				) {
 					delete c.state.players[id];
+					removedPlayer = true;
 					continue;
 				}
 
@@ -136,24 +114,14 @@ export const ioStyleMatch = actor({
 					Math.min(WORLD_SIZE, player.y + SPEED * player.inputY),
 				);
 			}
+			if (removedPlayer) {
+				await updateMatchmaker(c);
+			}
 
 			broadcastSnapshot(c);
 		}
 	},
 	actions: {
-		// Called by matchmaker to add a player
-		createPlayer: (c, input: { playerId: string; playerToken: string }) => {
-			c.state.players[input.playerId] = {
-				token: input.playerToken,
-				connId: null,
-				x: Math.random() * WORLD_SIZE,
-				y: Math.random() * WORLD_SIZE,
-				inputX: 0,
-				inputY: 0,
-				disconnectedAt: Date.now(),
-			};
-		},
-		// Called by player to update state
 		setInput: (c, input: { inputX: number; inputY: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -176,11 +144,33 @@ function broadcastSnapshot(c: ActorContextOf<typeof ioStyleMatch>) {
 async function updateMatchmaker(c: ActorContextOf<typeof ioStyleMatch>) {
 	const client = c.client<typeof registry>();
 	await client.ioStyleMatchmaker
-		.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+		.getOrCreate(["main"])
 		.send("updateMatch", {
 			matchId: c.state.matchId,
-			playerCount: activePlayerCount(c.state),
+			connectedPlayerCount: occupiedPlayerCount(c.state),
 		});
+}
+
+async function claimPendingPlayer(
+	c: ActorContextOf<typeof ioStyleMatch>,
+	playerId: string,
+): Promise<boolean> {
+	const client = c.client<typeof registry>();
+	const result = await client.ioStyleMatchmaker
+		.getOrCreate(["main"])
+		.send(
+			"pendingPlayerConnected",
+			{
+				matchId: c.state.matchId,
+				playerId,
+			},
+			{ wait: true, timeout: 3_000 },
+		);
+	if (result.status !== "completed") {
+		return false;
+	}
+	const response = (result as { response?: { accepted?: boolean } }).response;
+	return response?.accepted === true;
 }
 
 interface Snapshot {
@@ -189,14 +179,14 @@ interface Snapshot {
 	tick: number;
 	playerCount: number;
 	worldSize: number;
-	players: Record<string, { x: number; y: number }>;
+	players: Record<string, { x: number; y: number; color: string }>;
 }
 
 function buildSnapshot(c: ActorContextOf<typeof ioStyleMatch>): Snapshot {
-	const players: Record<string, { x: number; y: number }> = {};
+	const players: Record<string, { x: number; y: number; color: string }> = {};
 	for (const [id, entry] of Object.entries(c.state.players)) {
 		if (entry.disconnectedAt) continue;
-		players[id] = { x: entry.x, y: entry.y };
+		players[id] = { x: entry.x, y: entry.y, color: entry.color };
 	}
 	return {
 		matchId: c.state.matchId,
@@ -206,16 +196,6 @@ function buildSnapshot(c: ActorContextOf<typeof ioStyleMatch>): Snapshot {
 		worldSize: WORLD_SIZE,
 		players,
 	};
-}
-
-function findPlayerByToken(
-	state: State,
-	token: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.token === token) return [id, entry];
-	}
-	return null;
 }
 
 function findPlayerByConnId(
@@ -234,4 +214,8 @@ function activePlayerCount(state: State): number {
 		if (!player.disconnectedAt) count++;
 	}
 	return count;
+}
+
+function occupiedPlayerCount(state: State): number {
+	return Object.keys(state.players).length;
 }

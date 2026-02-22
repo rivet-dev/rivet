@@ -46,7 +46,7 @@ For Drizzle setup, see [SQLite + Drizzle](/docs/actors/sqlite-drizzle).
 Define `db: db({ onMigrate })` on your actor, create your schema in `onMigrate`, and execute SQL with `c.db.execute(...)`.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 import { db } from "rivetkit/db";
 
@@ -97,7 +97,7 @@ export const registry = setup({ use: { todoList } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.todoList.getOrCreate(["main"]);
@@ -159,7 +159,7 @@ try {
 It's recommended to use queues for mutations and actions for read-only queries. This is the same code structure as the basic setup, but mutation writes are routed through queues.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { db } from "rivetkit/db";
 
@@ -217,7 +217,7 @@ export const registry = setup({ use: { todoList } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.todoList.getOrCreate(["main"]);
