@@ -111,6 +111,12 @@
         ]
       },
       {
+        "icon": "faAlarmClock",
+        "aliases": [
+          "faAlarmClock"
+        ]
+      },
+      {
         "icon": "faAlignCenter",
         "aliases": [
           "faAlignCenter"
@@ -260,6 +266,12 @@
         ]
       },
       {
+        "icon": "faAquarius",
+        "aliases": [
+          "faAquarius"
+        ]
+      },
+      {
         "icon": "faBoxArchive",
         "aliases": [
           "faBoxArchive",
@@ -277,6 +289,12 @@
         "aliases": [
           "faChartArea",
           "faAreaChart"
+        ]
+      },
+      {
+        "icon": "faAries",
+        "aliases": [
+          "faAries"
         ]
       },
       {
@@ -1600,6 +1618,12 @@
         ]
       },
       {
+        "icon": "faBusSide",
+        "aliases": [
+          "faBusSide"
+        ]
+      },
+      {
         "icon": "faC",
         "aliases": [
           "faC"
@@ -1701,6 +1725,12 @@
         ]
       },
       {
+        "icon": "faCancer",
+        "aliases": [
+          "faCancer"
+        ]
+      },
+      {
         "icon": "faCandyCane",
         "aliases": [
           "faCandyCane"
@@ -1710,6 +1740,12 @@
         "icon": "faCannabis",
         "aliases": [
           "faCannabis"
+        ]
+      },
+      {
+        "icon": "faCapricorn",
+        "aliases": [
+          "faCapricorn"
         ]
       },
       {
@@ -1923,6 +1959,12 @@
         "icon": "faChartColumn",
         "aliases": [
           "faChartColumn"
+        ]
+      },
+      {
+        "icon": "faChartDiagram",
+        "aliases": [
+          "faChartDiagram"
         ]
       },
       {
@@ -2330,6 +2372,12 @@
         ]
       },
       {
+        "icon": "faClosedCaptioningSlash",
+        "aliases": [
+          "faClosedCaptioningSlash"
+        ]
+      },
+      {
         "icon": "faCloud",
         "aliases": [
           "faCloud"
@@ -2541,6 +2589,12 @@
         "icon": "faCommentMedical",
         "aliases": [
           "faCommentMedical"
+        ]
+      },
+      {
+        "icon": "faCommentNodes",
+        "aliases": [
+          "faCommentNodes"
         ]
       },
       {
@@ -3011,7 +3065,8 @@
       {
         "icon": "faDrawPolygon",
         "aliases": [
-          "faDrawPolygon"
+          "faDrawPolygon",
+          "faVectorPolygon"
         ]
       },
       {
@@ -3749,6 +3804,18 @@
         ]
       },
       {
+        "icon": "faFileFragment",
+        "aliases": [
+          "faFileFragment"
+        ]
+      },
+      {
+        "icon": "faFileHalfDashed",
+        "aliases": [
+          "faFileHalfDashed"
+        ]
+      },
+      {
         "icon": "faFileImage",
         "aliases": [
           "faFileImage"
@@ -3836,7 +3903,9 @@
       {
         "icon": "faFilm",
         "aliases": [
-          "faFilm"
+          "faFilm",
+          "faFilmAlt",
+          "faFilmSimple"
         ]
       },
       {
@@ -4113,6 +4182,12 @@
         ]
       },
       {
+        "icon": "faGemini",
+        "aliases": [
+          "faGemini"
+        ]
+      },
+      {
         "icon": "faGenderless",
         "aliases": [
           "faGenderless"
@@ -4217,7 +4292,15 @@
         "icon": "faGrip",
         "aliases": [
           "faGrip",
+          "faGridHorizontal",
           "faGripHorizontal"
+        ]
+      },
+      {
+        "icon": "faGripVertical",
+        "aliases": [
+          "faGripVertical",
+          "faGridVertical"
         ]
       },
       {
@@ -4230,12 +4313,6 @@
         "icon": "faGripLinesVertical",
         "aliases": [
           "faGripLinesVertical"
-        ]
-      },
-      {
-        "icon": "faGripVertical",
-        "aliases": [
-          "faGripVertical"
         ]
       },
       {
@@ -4473,27 +4550,17 @@
       {
         "icon": "faHandshake",
         "aliases": [
-          "faHandshake"
-        ]
-      },
-      {
-        "icon": "faHandshakeSimple",
-        "aliases": [
-          "faHandshakeSimple",
-          "faHandshakeAlt"
-        ]
-      },
-      {
-        "icon": "faHandshakeSimpleSlash",
-        "aliases": [
-          "faHandshakeSimpleSlash",
-          "faHandshakeAltSlash"
+          "faHandshake",
+          "faHandshakeAlt",
+          "faHandshakeSimple"
         ]
       },
       {
         "icon": "faHandshakeSlash",
         "aliases": [
-          "faHandshakeSlash"
+          "faHandshakeSlash",
+          "faHandshakeAltSlash",
+          "faHandshakeSimpleSlash"
         ]
       },
       {
@@ -4575,14 +4642,9 @@
       {
         "icon": "faHeadphones",
         "aliases": [
-          "faHeadphones"
-        ]
-      },
-      {
-        "icon": "faHeadphonesSimple",
-        "aliases": [
-          "faHeadphonesSimple",
-          "faHeadphonesAlt"
+          "faHeadphones",
+          "faHeadphonesAlt",
+          "faHeadphonesSimple"
         ]
       },
       {
@@ -4670,6 +4732,31 @@
         "icon": "faHelmetUn",
         "aliases": [
           "faHelmetUn"
+        ]
+      },
+      {
+        "icon": "faSeptagon",
+        "aliases": [
+          "faSeptagon",
+          "faHeptagon"
+        ]
+      },
+      {
+        "icon": "faHexagon",
+        "aliases": [
+          "faHexagon"
+        ]
+      },
+      {
+        "icon": "faHexagonNodes",
+        "aliases": [
+          "faHexagonNodes"
+        ]
+      },
+      {
+        "icon": "faHexagonNodesBolt",
+        "aliases": [
+          "faHexagonNodesBolt"
         ]
       },
       {
@@ -5261,6 +5348,12 @@
         ]
       },
       {
+        "icon": "faLeo",
+        "aliases": [
+          "faLeo"
+        ]
+      },
+      {
         "icon": "faLessThan",
         "aliases": [
           "faLessThan"
@@ -5284,6 +5377,12 @@
         "aliases": [
           "faTurnUp",
           "faLevelUpAlt"
+        ]
+      },
+      {
+        "icon": "faLibra",
+        "aliases": [
+          "faLibra"
         ]
       },
       {
@@ -5786,6 +5885,12 @@
         ]
       },
       {
+        "icon": "faMobileVibrate",
+        "aliases": [
+          "faMobileVibrate"
+        ]
+      },
+      {
         "icon": "faMoneyBill",
         "aliases": [
           "faMoneyBill"
@@ -5957,6 +6062,12 @@
         ]
       },
       {
+        "icon": "faNonBinary",
+        "aliases": [
+          "faNonBinary"
+        ]
+      },
+      {
         "icon": "faNotEqual",
         "aliases": [
           "faNotEqual"
@@ -5997,6 +6108,12 @@
         "icon": "faObjectUngroup",
         "aliases": [
           "faObjectUngroup"
+        ]
+      },
+      {
+        "icon": "faOctagon",
+        "aliases": [
+          "faOctagon"
         ]
       },
       {
@@ -6173,6 +6290,12 @@
         "aliases": [
           "faPencil",
           "faPencilAlt"
+        ]
+      },
+      {
+        "icon": "faPentagon",
+        "aliases": [
+          "faPentagon"
         ]
       },
       {
@@ -6534,6 +6657,12 @@
         ]
       },
       {
+        "icon": "faPictureInPicture",
+        "aliases": [
+          "faPictureInPicture"
+        ]
+      },
+      {
         "icon": "faPiggyBank",
         "aliases": [
           "faPiggyBank"
@@ -6551,6 +6680,12 @@
           "faTableTennisPaddleBall",
           "faPingPongPaddleBall",
           "faTableTennis"
+        ]
+      },
+      {
+        "icon": "faPisces",
+        "aliases": [
+          "faPisces"
         ]
       },
       {
@@ -7116,6 +7251,12 @@
         ]
       },
       {
+        "icon": "faSagittarius",
+        "aliases": [
+          "faSagittarius"
+        ]
+      },
+      {
         "icon": "faSailboat",
         "aliases": [
           "faSailboat"
@@ -7167,6 +7308,12 @@
         "icon": "faSchoolLock",
         "aliases": [
           "faSchoolLock"
+        ]
+      },
+      {
+        "icon": "faScorpio",
+        "aliases": [
+          "faScorpio"
         ]
       },
       {
@@ -7393,6 +7540,18 @@
         ]
       },
       {
+        "icon": "faSingleQuoteLeft",
+        "aliases": [
+          "faSingleQuoteLeft"
+        ]
+      },
+      {
+        "icon": "faSingleQuoteRight",
+        "aliases": [
+          "faSingleQuoteRight"
+        ]
+      },
+      {
         "icon": "faSink",
         "aliases": [
           "faSink"
@@ -7529,6 +7688,12 @@
         ]
       },
       {
+        "icon": "faSpiral",
+        "aliases": [
+          "faSpiral"
+        ]
+      },
+      {
         "icon": "faSplotch",
         "aliases": [
           "faSplotch"
@@ -7551,6 +7716,12 @@
         "icon": "faSquare",
         "aliases": [
           "faSquare"
+        ]
+      },
+      {
+        "icon": "faSquareBinary",
+        "aliases": [
+          "faSquareBinary"
         ]
       },
       {
@@ -7870,6 +8041,12 @@
         ]
       },
       {
+        "icon": "faTaurus",
+        "aliases": [
+          "faTaurus"
+        ]
+      },
+      {
         "icon": "faTeeth",
         "aliases": [
           "faTeeth"
@@ -8100,7 +8277,9 @@
       {
         "icon": "faToiletPaper",
         "aliases": [
-          "faToiletPaper"
+          "faToiletPaper",
+          "faToiletPaperAlt",
+          "faToiletPaperBlank"
         ]
       },
       {
@@ -8384,21 +8563,17 @@
       {
         "icon": "faUser",
         "aliases": [
-          "faUser"
+          "faUser",
+          "faUserAlt",
+          "faUserLarge"
         ]
       },
       {
-        "icon": "faUserLarge",
+        "icon": "faUserSlash",
         "aliases": [
-          "faUserLarge",
-          "faUserAlt"
-        ]
-      },
-      {
-        "icon": "faUserLargeSlash",
-        "aliases": [
-          "faUserLargeSlash",
-          "faUserAltSlash"
+          "faUserSlash",
+          "faUserAltSlash",
+          "faUserLargeSlash"
         ]
       },
       {
@@ -8502,12 +8677,6 @@
         ]
       },
       {
-        "icon": "faUserSlash",
-        "aliases": [
-          "faUserSlash"
-        ]
-      },
-      {
         "icon": "faUserTag",
         "aliases": [
           "faUserTag"
@@ -8588,12 +8757,6 @@
         ]
       },
       {
-        "icon": "faVectorSquare",
-        "aliases": [
-          "faVectorSquare"
-        ]
-      },
-      {
         "icon": "faVenus",
         "aliases": [
           "faVenus"
@@ -8667,6 +8830,12 @@
         ]
       },
       {
+        "icon": "faVirgo",
+        "aliases": [
+          "faVirgo"
+        ]
+      },
+      {
         "icon": "faVirus",
         "aliases": [
           "faVirus"
@@ -8713,6 +8882,13 @@
         "aliases": [
           "faVolleyball",
           "faVolleyballBall"
+        ]
+      },
+      {
+        "icon": "faVolume",
+        "aliases": [
+          "faVolume",
+          "faVolumeMedium"
         ]
       },
       {
@@ -8941,6 +9117,13 @@
   "@fortawesome/free-brands-svg-icons": {
     "icons": [
       {
+        "icon": "faEleventy",
+        "aliases": [
+          "faEleventy",
+          "fa11ty"
+        ]
+      },
+      {
         "icon": "fa42Group",
         "aliases": [
           "fa42Group",
@@ -9074,6 +9257,12 @@
         ]
       },
       {
+        "icon": "faArchLinux",
+        "aliases": [
+          "faArchLinux"
+        ]
+      },
+      {
         "icon": "faArtstation",
         "aliases": [
           "faArtstation"
@@ -9144,6 +9333,13 @@
         "aliases": [
           "faSquareBehance",
           "faBehanceSquare"
+        ]
+      },
+      {
+        "icon": "faBoardGameGeek",
+        "aliases": [
+          "faBoardGameGeek",
+          "faBgg"
         ]
       },
       {
@@ -9279,6 +9475,12 @@
         ]
       },
       {
+        "icon": "faCashApp",
+        "aliases": [
+          "faCashApp"
+        ]
+      },
+      {
         "icon": "faCcAmazonPay",
         "aliases": [
           "faCcAmazonPay"
@@ -9360,6 +9562,18 @@
         "icon": "faChromecast",
         "aliases": [
           "faChromecast"
+        ]
+      },
+      {
+        "icon": "faCircleZulip",
+        "aliases": [
+          "faCircleZulip"
+        ]
+      },
+      {
+        "icon": "faClaude",
+        "aliases": [
+          "faClaude"
         ]
       },
       {
@@ -9525,6 +9739,12 @@
         ]
       },
       {
+        "icon": "faCss",
+        "aliases": [
+          "faCss"
+        ]
+      },
+      {
         "icon": "faCss3",
         "aliases": [
           "faCss3"
@@ -9651,6 +9871,12 @@
         ]
       },
       {
+        "icon": "faDisqus",
+        "aliases": [
+          "faDisqus"
+        ]
+      },
+      {
         "icon": "faDochub",
         "aliases": [
           "faDochub"
@@ -9691,6 +9917,12 @@
         "icon": "faDrupal",
         "aliases": [
           "faDrupal"
+        ]
+      },
+      {
+        "icon": "faDuolingo",
+        "aliases": [
+          "faDuolingo"
         ]
       },
       {
@@ -9821,6 +10053,12 @@
         ]
       },
       {
+        "icon": "faFediverse",
+        "aliases": [
+          "faFediverse"
+        ]
+      },
+      {
         "icon": "faFedora",
         "aliases": [
           "faFedora"
@@ -9830,6 +10068,12 @@
         "icon": "faFigma",
         "aliases": [
           "faFigma"
+        ]
+      },
+      {
+        "icon": "faFilesPinwheel",
+        "aliases": [
+          "faFilesPinwheel"
         ]
       },
       {
@@ -9903,6 +10147,12 @@
         "icon": "faFonticonsFi",
         "aliases": [
           "faFonticonsFi"
+        ]
+      },
+      {
+        "icon": "faForgejo",
+        "aliases": [
+          "faForgejo"
         ]
       },
       {
@@ -9997,6 +10247,12 @@
         ]
       },
       {
+        "icon": "faGitee",
+        "aliases": [
+          "faGitee"
+        ]
+      },
+      {
         "icon": "faGithub",
         "aliases": [
           "faGithub"
@@ -10050,6 +10306,12 @@
         "icon": "faGlideG",
         "aliases": [
           "faGlideG"
+        ]
+      },
+      {
+        "icon": "faGlobaleaks",
+        "aliases": [
+          "faGlobaleaks"
         ]
       },
       {
@@ -10247,6 +10509,12 @@
         ]
       },
       {
+        "icon": "faHuggingFace",
+        "aliases": [
+          "faHuggingFace"
+        ]
+      },
+      {
         "icon": "faIdeal",
         "aliases": [
           "faIdeal"
@@ -10375,6 +10643,12 @@
         ]
       },
       {
+        "icon": "faJulia",
+        "aliases": [
+          "faJulia"
+        ]
+      },
+      {
         "icon": "faJxl",
         "aliases": [
           "faJxl"
@@ -10384,6 +10658,12 @@
         "icon": "faKaggle",
         "aliases": [
           "faKaggle"
+        ]
+      },
+      {
+        "icon": "faKakaoTalk",
+        "aliases": [
+          "faKakaoTalk"
         ]
       },
       {
@@ -10412,9 +10692,21 @@
         ]
       },
       {
+        "icon": "faKoFi",
+        "aliases": [
+          "faKoFi"
+        ]
+      },
+      {
         "icon": "faKorvue",
         "aliases": [
           "faKorvue"
+        ]
+      },
+      {
+        "icon": "faKubernetes",
+        "aliases": [
+          "faKubernetes"
         ]
       },
       {
@@ -10440,6 +10732,12 @@
         "icon": "faLeanpub",
         "aliases": [
           "faLeanpub"
+        ]
+      },
+      {
+        "icon": "faLeetcode",
+        "aliases": [
+          "faLeetcode"
         ]
       },
       {
@@ -10473,6 +10771,12 @@
         ]
       },
       {
+        "icon": "faLinktree",
+        "aliases": [
+          "faLinktree"
+        ]
+      },
+      {
         "icon": "faLinode",
         "aliases": [
           "faLinode"
@@ -10482,6 +10786,18 @@
         "icon": "faLinux",
         "aliases": [
           "faLinux"
+        ]
+      },
+      {
+        "icon": "faLumon",
+        "aliases": [
+          "faLumon"
+        ]
+      },
+      {
+        "icon": "faLumonDrop",
+        "aliases": [
+          "faLumonDrop"
         ]
       },
       {
@@ -10672,6 +10988,12 @@
         ]
       },
       {
+        "icon": "faNotion",
+        "aliases": [
+          "faNotion"
+        ]
+      },
+      {
         "icon": "faNpm",
         "aliases": [
           "faNpm"
@@ -10687,6 +11009,12 @@
         "icon": "faNutritionix",
         "aliases": [
           "faNutritionix"
+        ]
+      },
+      {
+        "icon": "faObsidian",
+        "aliases": [
+          "faObsidian"
         ]
       },
       {
@@ -10721,6 +11049,12 @@
         ]
       },
       {
+        "icon": "faOpenai",
+        "aliases": [
+          "faOpenai"
+        ]
+      },
+      {
         "icon": "faOpencart",
         "aliases": [
           "faOpencart"
@@ -10730,6 +11064,12 @@
         "icon": "faOpenid",
         "aliases": [
           "faOpenid"
+        ]
+      },
+      {
+        "icon": "faOpenstreetmap",
+        "aliases": [
+          "faOpenstreetmap"
         ]
       },
       {
@@ -10784,6 +11124,12 @@
         "icon": "faPalfed",
         "aliases": [
           "faPalfed"
+        ]
+      },
+      {
+        "icon": "faPandora",
+        "aliases": [
+          "faPandora"
         ]
       },
       {
@@ -10891,6 +11237,12 @@
         ]
       },
       {
+        "icon": "faPixelfed",
+        "aliases": [
+          "faPixelfed"
+        ]
+      },
+      {
         "icon": "faPixiv",
         "aliases": [
           "faPixiv"
@@ -10900,6 +11252,12 @@
         "icon": "faPlaystation",
         "aliases": [
           "faPlaystation"
+        ]
+      },
+      {
+        "icon": "faPostgresql",
+        "aliases": [
+          "faPostgresql"
         ]
       },
       {
@@ -11085,6 +11443,12 @@
         ]
       },
       {
+        "icon": "faScaleway",
+        "aliases": [
+          "faScaleway"
+        ]
+      },
+      {
         "icon": "faSchlix",
         "aliases": [
           "faSchlix"
@@ -11226,6 +11590,12 @@
         ]
       },
       {
+        "icon": "faSolana",
+        "aliases": [
+          "faSolana"
+        ]
+      },
+      {
         "icon": "faSoundcloud",
         "aliases": [
           "faSoundcloud"
@@ -11262,6 +11632,24 @@
         ]
       },
       {
+        "icon": "faSquareBluesky",
+        "aliases": [
+          "faSquareBluesky"
+        ]
+      },
+      {
+        "icon": "faSquareDeskpro",
+        "aliases": [
+          "faSquareDeskpro"
+        ]
+      },
+      {
+        "icon": "faSquareFigma",
+        "aliases": [
+          "faSquareFigma"
+        ]
+      },
+      {
         "icon": "faSquareFontAwesome",
         "aliases": [
           "faSquareFontAwesome"
@@ -11271,6 +11659,12 @@
         "icon": "faSquareLetterboxd",
         "aliases": [
           "faSquareLetterboxd"
+        ]
+      },
+      {
+        "icon": "faSquareLinkedin",
+        "aliases": [
+          "faSquareLinkedin"
         ]
       },
       {
@@ -11462,9 +11856,21 @@
         ]
       },
       {
+        "icon": "faSupportnow",
+        "aliases": [
+          "faSupportnow"
+        ]
+      },
+      {
         "icon": "faSuse",
         "aliases": [
           "faSuse"
+        ]
+      },
+      {
+        "icon": "faSvelte",
+        "aliases": [
+          "faSvelte"
         ]
       },
       {
@@ -11477,6 +11883,18 @@
         "icon": "faSymfony",
         "aliases": [
           "faSymfony"
+        ]
+      },
+      {
+        "icon": "faSymfonycasts",
+        "aliases": [
+          "faSymfonycasts"
+        ]
+      },
+      {
+        "icon": "faTailwindCss",
+        "aliases": [
+          "faTailwindCss"
         ]
       },
       {
@@ -11496,6 +11914,12 @@
         "icon": "faTencentWeibo",
         "aliases": [
           "faTencentWeibo"
+        ]
+      },
+      {
+        "icon": "faTex",
+        "aliases": [
+          "faTex"
         ]
       },
       {
@@ -11529,9 +11953,27 @@
         ]
       },
       {
+        "icon": "faThreema",
+        "aliases": [
+          "faThreema"
+        ]
+      },
+      {
+        "icon": "faTidal",
+        "aliases": [
+          "faTidal"
+        ]
+      },
+      {
         "icon": "faTiktok",
         "aliases": [
           "faTiktok"
+        ]
+      },
+      {
+        "icon": "faTorBrowser",
+        "aliases": [
+          "faTorBrowser"
         ]
       },
       {
@@ -11565,6 +12007,12 @@
         ]
       },
       {
+        "icon": "faTypescript",
+        "aliases": [
+          "faTypescript"
+        ]
+      },
+      {
         "icon": "faTypo3",
         "aliases": [
           "faTypo3"
@@ -11589,6 +12037,24 @@
         ]
       },
       {
+        "icon": "faUltralytics",
+        "aliases": [
+          "faUltralytics"
+        ]
+      },
+      {
+        "icon": "faUltralyticsHub",
+        "aliases": [
+          "faUltralyticsHub"
+        ]
+      },
+      {
+        "icon": "faUltralyticsYolo",
+        "aliases": [
+          "faUltralyticsYolo"
+        ]
+      },
+      {
         "icon": "faUmbraco",
         "aliases": [
           "faUmbraco"
@@ -11607,9 +12073,21 @@
         ]
       },
       {
+        "icon": "faUnison",
+        "aliases": [
+          "faUnison"
+        ]
+      },
+      {
         "icon": "faUnity",
         "aliases": [
           "faUnity"
+        ]
+      },
+      {
+        "icon": "faUnrealEngine",
+        "aliases": [
+          "faUnrealEngine"
         ]
       },
       {
@@ -11661,6 +12139,18 @@
         ]
       },
       {
+        "icon": "faVenmo",
+        "aliases": [
+          "faVenmo"
+        ]
+      },
+      {
+        "icon": "faVenmoV",
+        "aliases": [
+          "faVenmoV"
+        ]
+      },
+      {
         "icon": "faViacoin",
         "aliases": [
           "faViacoin"
@@ -11676,6 +12166,12 @@
         "icon": "faViber",
         "aliases": [
           "faViber"
+        ]
+      },
+      {
+        "icon": "faVim",
+        "aliases": [
+          "faVim"
         ]
       },
       {
@@ -11709,9 +12205,21 @@
         ]
       },
       {
+        "icon": "faVsco",
+        "aliases": [
+          "faVsco"
+        ]
+      },
+      {
         "icon": "faVuejs",
         "aliases": [
           "faVuejs"
+        ]
+      },
+      {
+        "icon": "faW3c",
+        "aliases": [
+          "faW3c"
         ]
       },
       {
@@ -11854,6 +12362,12 @@
         ]
       },
       {
+        "icon": "faXmpp",
+        "aliases": [
+          "faXmpp"
+        ]
+      },
+      {
         "icon": "faYCombinator",
         "aliases": [
           "faYCombinator"
@@ -11912,6 +12426,18 @@
         "aliases": [
           "faZhihu"
         ]
+      },
+      {
+        "icon": "faZoom",
+        "aliases": [
+          "faZoom"
+        ]
+      },
+      {
+        "icon": "faZulip",
+        "aliases": [
+          "faZulip"
+        ]
       }
     ],
     "prefix": "fab"
@@ -11965,12 +12491,6 @@
         "icon": "faAirplay",
         "aliases": [
           "faAirplay"
-        ]
-      },
-      {
-        "icon": "faAlarmClock",
-        "aliases": [
-          "faAlarmClock"
         ]
       },
       {
@@ -15293,12 +15813,6 @@
         ]
       },
       {
-        "icon": "faClosedCaptioningSlash",
-        "aliases": [
-          "faClosedCaptioningSlash"
-        ]
-      },
-      {
         "icon": "faClothesHanger",
         "aliases": [
           "faClothesHanger"
@@ -18309,6 +18823,20 @@
         ]
       },
       {
+        "icon": "faHandshakeSimple",
+        "aliases": [
+          "faHandshakeSimple",
+          "faHandshakeAlt"
+        ]
+      },
+      {
+        "icon": "faHandshakeSimpleSlash",
+        "aliases": [
+          "faHandshakeSimpleSlash",
+          "faHandshakeAltSlash"
+        ]
+      },
+      {
         "icon": "faHashtagLock",
         "aliases": [
           "faHashtagLock"
@@ -18388,6 +18916,13 @@
         ]
       },
       {
+        "icon": "faHeadphonesSimple",
+        "aliases": [
+          "faHeadphonesSimple",
+          "faHeadphonesAlt"
+        ]
+      },
+      {
         "icon": "faHeartHalf",
         "aliases": [
           "faHeartHalf"
@@ -18424,12 +18959,6 @@
         "icon": "faHelmetBattle",
         "aliases": [
           "faHelmetBattle"
-        ]
-      },
-      {
-        "icon": "faHexagon",
-        "aliases": [
-          "faHexagon"
         ]
       },
       {
@@ -19916,12 +20445,6 @@
         "icon": "faObjectsColumn",
         "aliases": [
           "faObjectsColumn"
-        ]
-      },
-      {
-        "icon": "faOctagon",
-        "aliases": [
-          "faOctagon"
         ]
       },
       {
@@ -23273,6 +23796,20 @@
         ]
       },
       {
+        "icon": "faUserLarge",
+        "aliases": [
+          "faUserLarge",
+          "faUserAlt"
+        ]
+      },
+      {
+        "icon": "faUserLargeSlash",
+        "aliases": [
+          "faUserLargeSlash",
+          "faUserAltSlash"
+        ]
+      },
+      {
         "icon": "faUserBeardBolt",
         "aliases": [
           "faUserBeardBolt"
@@ -23535,6 +24072,12 @@
         ]
       },
       {
+        "icon": "faVectorSquare",
+        "aliases": [
+          "faVectorSquare"
+        ]
+      },
+      {
         "icon": "faVentDamper",
         "aliases": [
           "faVentDamper"
@@ -23562,13 +24105,6 @@
         "icon": "faViolin",
         "aliases": [
           "faViolin"
-        ]
-      },
-      {
-        "icon": "faVolume",
-        "aliases": [
-          "faVolume",
-          "faVolumeMedium"
         ]
       },
       {
@@ -23850,12 +24386,6 @@
         ]
       },
       {
-        "icon": "faClaude",
-        "aliases": [
-          "faClaude"
-        ]
-      },
-      {
         "icon": "faCursor",
         "aliases": [
           "faCursor"
@@ -23892,15 +24422,15 @@
         ]
       },
       {
-        "icon": "faKubernetes",
-        "aliases": [
-          "faKubernetes"
-        ]
-      },
-      {
         "icon": "faLinear",
         "aliases": [
           "faLinear"
+        ]
+      },
+      {
+        "icon": "faNetlify",
+        "aliases": [
+          "faNetlify"
         ]
       },
       {
@@ -23940,6 +24470,12 @@
         ]
       },
       {
+        "icon": "faSqlite",
+        "aliases": [
+          "faSqlite"
+        ]
+      },
+      {
         "icon": "faTs",
         "aliases": [
           "faTs"
@@ -23961,6 +24497,18 @@
         "icon": "faWord",
         "aliases": [
           "faWord"
+        ]
+      },
+      {
+        "icon": "faWorkflow",
+        "aliases": [
+          "faWorkflow"
+        ]
+      },
+      {
+        "icon": "faWorkflowBorderless",
+        "aliases": [
+          "faWorkflowBorderless"
         ]
       }
     ]

@@ -538,7 +538,7 @@ export default function PerTenantDBPage() {
 							<a href="/docs" className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
 								Start Building Now
 							</a>
-							<a href="/docs/actors/external-sql" className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20">
+							<a href="/docs/actors/persistence" className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20">
 								Read the Docs
 							</a>
 						</motion.div>
