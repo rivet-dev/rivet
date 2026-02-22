@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { GameClient } from "../../client.ts";
+import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
 
 export interface OpenWorldMatchInfo {
 	chunkKey: [string, number, number];
-	playerId: string;
-	playerToken: string;
+	spawnX: number;
+	spawnY: number;
 	playerName: string;
 }
 
@@ -25,23 +26,8 @@ export function OpenWorldMenu({
 		if (!name.trim()) return;
 		setStatus("loading");
 		setError("");
-		try {
-			const index = client.openWorldIndex.getOrCreate(["main"]).connect();
-			const result = await index.send(
-				"getChunkForPosition",
-				{ x: 600, y: 600, playerName: name.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
-			index.dispose();
-			const response = (
-				result as { response?: { chunkKey: [string, number, number]; playerId: string; playerToken: string } }
-			)?.response;
-			if (!response?.chunkKey) throw new Error("Failed to enter world");
-			onReady({ ...response, playerName: name.trim() });
-		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
-			setStatus("error");
-		}
+		const response = resolveChunkForPosition(600, 600);
+		onReady({ ...response, playerName: name.trim() });
 	};
 
 	return (
@@ -80,4 +66,17 @@ export function OpenWorldMenu({
 			</div>
 		</div>
 	);
+}
+
+function resolveChunkForPosition(
+	x: number,
+	y: number,
+): { chunkKey: [string, number, number]; spawnX: number; spawnY: number } {
+	const chunkX = Math.floor(x / CHUNK_SIZE);
+	const chunkY = Math.floor(y / CHUNK_SIZE);
+	return {
+		chunkKey: [WORLD_ID, chunkX, chunkY],
+		spawnX: ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+		spawnY: ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+	};
 }

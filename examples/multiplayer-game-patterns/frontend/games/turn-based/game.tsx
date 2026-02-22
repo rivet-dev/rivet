@@ -10,7 +10,7 @@ interface GameSnapshot {
 	currentTurn: "X" | "O";
 	result: GameResult;
 	moveCount: number;
-	players: Record<string, { name: string; symbol: "X" | "O"; connected: boolean }>;
+	players: Record<string, { name: string; color: string; symbol: "X" | "O"; connected: boolean }>;
 }
 
 export function TurnBasedGame({
@@ -35,7 +35,7 @@ export function TurnBasedGame({
 
 	useEffect(() => {
 		const conn = client.turnBasedMatch
-			.get([matchInfo.matchId], { params: { playerToken: matchInfo.playerToken } })
+			.get([matchInfo.matchId], { params: { playerId: matchInfo.playerId } })
 			.connect();
 		connRef.current = conn;
 
@@ -93,7 +93,7 @@ export function TurnBasedGame({
 			<div className="menu-container">
 				<div style={{ textAlign: "center", marginBottom: 16 }}>
 					{playerEntries.map(([id, p]) => (
-						<span key={id} style={{ margin: "0 12px", fontSize: 14 }}>
+						<span key={id} style={{ margin: "0 12px", fontSize: 14, color: p.color }}>
 							<strong>{p.symbol}</strong>: {p.name}
 							{id === matchInfo.playerId ? " (You)" : ""}
 						</span>

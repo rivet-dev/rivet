@@ -1,9 +1,4 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
+import { actor, type ActorContextOf, event } from "rivetkit";
 import { registry } from "../index.ts";
 import { BUILDINGS, STARTING_RESOURCES, type BuildingType } from "./config.ts";
 
@@ -44,32 +39,6 @@ export const idleWorld = actor({
 	events: {
 		stateUpdate: event<IdleSnapshot>(),
 	},
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "initialize" ||
-				invoke.name === "build" ||
-				invoke.name === "getState" ||
-				invoke.name === "getLeaderboard")
-		) {
-			return !isInternal;
-		}
-		if (invoke.kind === "action" && invoke.name === "collectProduction") {
-			return isInternal;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "stateUpdate") {
-			return !isInternal;
-		}
-		return false;
-	},
 	state: {
 		playerId: "",
 		playerName: "",
@@ -85,10 +54,14 @@ export const idleWorld = actor({
 				return;
 			}
 			c.state.playerName = input.playerName;
-			if (input.playerId) c.state.playerId = input.playerId;
+			const keyPlayerId = Array.isArray(c.key) ? c.key[0] : c.key;
+			if (input.playerId) {
+				c.state.playerId = input.playerId;
+			} else if (typeof keyPlayerId === "string" && keyPlayerId) {
+				c.state.playerId = keyPlayerId;
+			}
 			c.state.initialized = true;
 
-			// Build initial farm.
 			const farmType = BUILDINGS.find((b) => b.id === "farm")!;
 			const building: BuildingEntry = {
 				id: crypto.randomUUID(),
@@ -98,6 +71,7 @@ export const idleWorld = actor({
 			};
 			c.state.buildings.push(building);
 			scheduleCollection(c, building.id, farmType.productionIntervalMs);
+			updateLeaderboard(c);
 			broadcastState(c);
 		},
 		build: (c, input: { buildingTypeId: string }) => {
@@ -127,12 +101,10 @@ export const idleWorld = actor({
 			const buildingType = BUILDINGS.find((b: BuildingType) => b.id === building.typeId);
 			if (!buildingType) return;
 
-			// Calculate production with offline catch-up.
 			const now = Date.now();
 			const elapsed = now - building.lastCollectedAt;
 			const intervals = Math.floor(elapsed / buildingType.productionIntervalMs);
 			if (intervals <= 0) {
-				// Schedule for next interval.
 				const remaining = buildingType.productionIntervalMs - elapsed;
 				scheduleCollection(c, building.id, remaining);
 				return;
@@ -143,10 +115,8 @@ export const idleWorld = actor({
 			c.state.totalProduced += produced;
 			building.lastCollectedAt = now;
 
-			// Schedule next collection.
 			scheduleCollection(c, building.id, buildingType.productionIntervalMs);
 
-			// Update leaderboard.
 			updateLeaderboard(c);
 			broadcastState(c);
 		},
@@ -171,8 +141,8 @@ function scheduleCollection(
 function updateLeaderboard(c: ActorContextOf<typeof idleWorld>) {
 	const client = c.client<typeof registry>();
 	client.idleLeaderboard
-		.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
-		.updateScore({
+		.getOrCreate(["main"])
+		.send("updateScore", {
 			playerId: c.state.playerId,
 			playerName: c.state.playerName,
 			totalProduced: c.state.totalProduced,

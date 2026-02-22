@@ -1,16 +1,18 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
 import { registry } from "../index.ts";
-import type { PartyPhase } from "./config.ts";
+import { getPlayerColor } from "../player-color.ts";
+import { MAX_PARTY_SIZE, type PartyPhase } from "./config.ts";
+
+interface PartyConnState {
+	playerId: string;
+	playerName: string;
+	isHost: boolean;
+}
 
 interface MemberEntry {
-	token: string;
-	connId: string | null;
+	connId: string;
 	name: string;
+	color: string;
 	isHost: boolean;
 	isReady: boolean;
 }
@@ -27,113 +29,131 @@ export const partyMatch = actor({
 	events: {
 		partyUpdate: event<PartySnapshot>(),
 	},
-	createState: (_c, input: { matchId: string; partyCode: string }): State => ({
+	createState: (
+		_c,
+		input: { matchId: string; partyCode: string; hostPlayerId: string },
+	): State => ({
 		matchId: input.matchId,
 		partyCode: input.partyCode,
 		phase: "waiting",
 		members: {},
 	}),
-	onBeforeConnect: (
+	createConnState: async (
 		c,
-		params: { playerToken?: string; internalToken?: string },
-	) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
+		params: { playerId?: string; joinToken?: string },
+	): Promise<PartyConnState> => {
+		const playerId = params?.playerId;
+		const joinToken = params?.joinToken;
+		const matchId = c.key[0];
+
+		if (!matchId || !playerId || !joinToken) {
+			throw new UserError("invalid join params", { code: "invalid_join_params" });
 		}
-		if (params?.internalToken === INTERNAL_TOKEN) return;
-		const playerToken = params?.playerToken?.trim();
-		if (!playerToken) {
-			throw new UserError("authentication required", { code: "auth_required" });
+
+		const client = c.client<typeof registry>();
+		const result = await client.partyMatchmaker
+			.getOrCreate(["main"])
+			.send(
+				"verifyJoin",
+				{
+					matchId,
+					playerId,
+					joinToken,
+				},
+				{ wait: true, timeout: 3_000 },
+			);
+		if (result.status !== "completed") {
+			throw new UserError("join verification timed out", {
+				code: "join_verification_timed_out",
+			});
 		}
-		if (!findMemberByToken(c.state, playerToken)) {
-			throw new UserError("invalid player token", { code: "invalid_player_token" });
+		const response = (result as {
+			response?: { allowed?: boolean; playerName?: string; isHost?: boolean };
+		}).response;
+		if (!response?.allowed || !response.playerName) {
+			throw new UserError("invalid join ticket", { code: "invalid_join_ticket" });
 		}
+
+		return {
+			playerId,
+			playerName: response.playerName,
+			isHost: response.isHost === true,
+		};
 	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		const isAssignedMember = findMemberByConnId(c.state, c.conn.id) !== null;
-		if (invoke.kind === "action" && invoke.name === "createPlayer") {
-			return isInternal;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "setName" ||
-				invoke.name === "toggleReady" ||
-				invoke.name === "startGame" ||
-				invoke.name === "finishGame" ||
-				invoke.name === "getSnapshot")
-		) {
-			return !isInternal && isAssignedMember;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "partyUpdate") {
-			return !isInternal && isAssignedMember;
-		}
-		return false;
-	},
-	onConnect: (c, conn) => {
-		const playerToken = conn.params?.playerToken?.trim();
-		if (!playerToken) return;
-		const found = findMemberByToken(c.state, playerToken);
-		if (!found) {
-			conn.disconnect("invalid_player_token");
+	onConnect: async (c, conn) => {
+		const playerId = conn.state.playerId;
+		const existing = c.state.members[playerId];
+		if (!existing && Object.keys(c.state.members).length >= MAX_PARTY_SIZE) {
+			conn.disconnect("party_full");
 			return;
 		}
-		const [, member] = found;
-		member.connId = conn.id;
+		if (existing && existing.connId !== conn.id) {
+			conn.disconnect("duplicate_player");
+			return;
+		}
+
+		const hasHost = Object.values(c.state.members).some((member) => member.isHost);
+		const isHost = conn.state.isHost || !hasHost;
+		if (isHost) {
+			for (const member of Object.values(c.state.members)) {
+				member.isHost = false;
+			}
+		}
+
+		c.state.members[playerId] = {
+			connId: conn.id,
+			name: conn.state.playerName,
+			color: existing?.color ?? getPlayerColor(playerId),
+			isHost,
+			isReady: existing?.isReady ?? false,
+		};
+
 		broadcastSnapshot(c);
+		await updatePartySize(c);
 	},
-	onDisconnect: (c, conn) => {
-		const found = findMemberByConnId(c.state, conn.id);
-		if (!found) return;
-		const [, member] = found;
-		member.connId = null;
+	onDisconnect: async (c, conn) => {
+		const playerId = conn.state.playerId;
+		const member = c.state.members[playerId];
+		if (!member || member.connId !== conn.id) return;
+
+		const removedHost = member.isHost;
+		delete c.state.members[playerId];
+
+		if (removedHost) {
+			promoteNextHost(c.state);
+		}
+
 		broadcastSnapshot(c);
+		await updatePartySize(c);
 	},
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.partyMatchmaker
-			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+			.getOrCreate(["main"])
 			.send("closeParty", { matchId: c.state.matchId });
 	},
 	actions: {
-		createPlayer: (
-			c,
-			input: { playerId: string; playerToken: string; playerName: string; isHost: boolean },
-		) => {
-			c.state.members[input.playerId] = {
-				token: input.playerToken,
-				connId: null,
-				name: input.playerName,
-				isHost: input.isHost,
-				isReady: false,
-			};
-		},
 		setName: (c, input: { name: string }) => {
-			const found = findMemberByConnId(c.state, c.conn.id);
-			if (!found) {
+			const member = c.state.members[c.conn.state.playerId];
+			if (!member || member.connId !== c.conn.id) {
 				throw new UserError("member not found", { code: "member_not_found" });
 			}
-			const [, member] = found;
 			member.name = input.name.trim() || "Player";
 			broadcastSnapshot(c);
 		},
 		toggleReady: (c) => {
-			const found = findMemberByConnId(c.state, c.conn.id);
-			if (!found) {
+			const member = c.state.members[c.conn.state.playerId];
+			if (!member || member.connId !== c.conn.id) {
 				throw new UserError("member not found", { code: "member_not_found" });
 			}
-			const [, member] = found;
 			member.isReady = !member.isReady;
 			broadcastSnapshot(c);
 		},
 		startGame: (c) => {
-			const found = findMemberByConnId(c.state, c.conn.id);
-			if (!found) {
+			const member = c.state.members[c.conn.state.playerId];
+			if (!member || member.connId !== c.conn.id) {
 				throw new UserError("member not found", { code: "member_not_found" });
 			}
-			const [, member] = found;
 			if (!member.isHost) {
 				throw new UserError("only host can start", { code: "not_host" });
 			}
@@ -144,11 +164,10 @@ export const partyMatch = actor({
 			broadcastSnapshot(c);
 		},
 		finishGame: (c) => {
-			const found = findMemberByConnId(c.state, c.conn.id);
-			if (!found) {
+			const member = c.state.members[c.conn.state.playerId];
+			if (!member || member.connId !== c.conn.id) {
 				throw new UserError("member not found", { code: "member_not_found" });
 			}
-			const [, member] = found;
 			if (!member.isHost) {
 				throw new UserError("only host can finish", { code: "not_host" });
 			}
@@ -166,7 +185,7 @@ interface PartySnapshot {
 	matchId: string;
 	partyCode: string;
 	phase: PartyPhase;
-	members: Record<string, { name: string; isHost: boolean; isReady: boolean; connected: boolean }>;
+	members: Record<string, { name: string; color: string; isHost: boolean; isReady: boolean; connected: boolean }>;
 }
 
 function buildSnapshot(c: ActorContextOf<typeof partyMatch>): PartySnapshot {
@@ -174,9 +193,10 @@ function buildSnapshot(c: ActorContextOf<typeof partyMatch>): PartySnapshot {
 	for (const [id, entry] of Object.entries(c.state.members)) {
 		members[id] = {
 			name: entry.name,
+			color: entry.color,
 			isHost: entry.isHost,
 			isReady: entry.isReady,
-			connected: entry.connId !== null,
+			connected: true,
 		};
 	}
 	return {
@@ -191,22 +211,23 @@ function broadcastSnapshot(c: ActorContextOf<typeof partyMatch>) {
 	c.broadcast("partyUpdate", buildSnapshot(c));
 }
 
-function findMemberByToken(
-	state: State,
-	token: string,
-): [string, MemberEntry] | null {
-	for (const [id, entry] of Object.entries(state.members)) {
-		if (entry.token === token) return [id, entry];
-	}
-	return null;
+async function updatePartySize(c: ActorContextOf<typeof partyMatch>) {
+	const client = c.client<typeof registry>();
+	await client.partyMatchmaker
+		.getOrCreate(["main"])
+		.send("updatePartySize", {
+			matchId: c.state.matchId,
+			playerCount: Object.keys(c.state.members).length,
+		});
 }
 
-function findMemberByConnId(
-	state: State,
-	connId: string,
-): [string, MemberEntry] | null {
-	for (const [id, entry] of Object.entries(state.members)) {
-		if (entry.connId === connId) return [id, entry];
+function promoteNextHost(state: State) {
+	for (const member of Object.values(state.members)) {
+		member.isHost = false;
 	}
-	return null;
+	const next = Object.values(state.members)[0];
+	if (next) {
+		next.isHost = true;
+		next.isReady = false;
+	}
 }

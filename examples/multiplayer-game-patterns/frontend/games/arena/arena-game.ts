@@ -9,17 +9,6 @@ const MOVE_SPEED = 200; // pixels per second (matches server MAX_SPEED)
 const SHOT_LINE_DURATION = 150; // ms to show shot line
 const RUBBER_BAND_THRESHOLD = 40; // pixels before snapping local player to server
 
-const TEAM_COLORS = ["#ff4f00", "#3b82f6", "#30d158", "#bf5af2"];
-
-function colorFromId(id: string): string {
-	let hash = 0;
-	for (let i = 0; i < id.length; i++) {
-		hash = (hash * 31 + id.charCodeAt(i)) | 0;
-	}
-	const hue = ((hash % 360) + 360) % 360;
-	return `hsl(${hue}, 70%, 55%)`;
-}
-
 interface ShotLine {
 	fromX: number;
 	fromY: number;
@@ -37,7 +26,7 @@ export class ArenaGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 600;
-	private targets: Record<string, { x: number; y: number; teamId: number; score: number }> = {};
+	private targets: Record<string, { x: number; y: number; teamId: number; color: string; score: number }> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private phase: "waiting" | "live" | "finished" = "waiting";
@@ -60,7 +49,7 @@ export class ArenaGame {
 	) {
 		this.conn = client.arenaMatch
 			.get([matchInfo.matchId], {
-				params: { playerToken: matchInfo.playerToken },
+				params: { playerId: matchInfo.playerId },
 			})
 			.connect();
 
@@ -71,7 +60,7 @@ export class ArenaGame {
 				phase: "waiting" | "live" | "finished";
 				winnerTeam: number | null;
 				winnerPlayerId: string | null;
-				players: Record<string, { x: number; y: number; teamId: number; score: number }>;
+				players: Record<string, { x: number; y: number; teamId: number; color: string; score: number }>;
 			};
 			this.worldSize = snap.worldSize;
 			this.scoreLimit = snap.scoreLimit;
@@ -178,13 +167,6 @@ export class ArenaGame {
 		this.conn.shoot({ dirX: dx / mag, dirY: dy / mag }).catch(() => {});
 	};
 
-	private getPlayerColor(id: string, teamId: number): string {
-		if (teamId >= 0) {
-			return TEAM_COLORS[teamId % TEAM_COLORS.length]!;
-		}
-		return colorFromId(id);
-	}
-
 	private draw = () => {
 		if (this.stopped) return;
 		const now = performance.now();
@@ -278,7 +260,7 @@ export class ArenaGame {
 				py = d.y * sy;
 			}
 
-			const color = this.getPlayerColor(id, target.teamId);
+			const color = target.color;
 
 			ctx.beginPath();
 			ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI * 2);

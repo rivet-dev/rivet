@@ -1,6 +1,5 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { actor, type ActorContextOf, event, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
-import { hasInvalidInternalToken, isInternalToken } from "../../auth.ts";
 
 export interface LeaderboardEntry {
 	playerId: string;
@@ -13,52 +12,40 @@ export const idleLeaderboard = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
+	queues: {
+		updateScore: queue<{
+			playerId: string;
+			playerName: string;
+			totalProduced: number;
+		}>(),
+	},
 	events: {
 		leaderboardUpdate: event<LeaderboardEntry[]>(),
 	},
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (invoke.kind === "action" && invoke.name === "updateScore") {
-			return isInternal;
-		}
-		if (invoke.kind === "action" && invoke.name === "getTopScores") {
-			return true;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "leaderboardUpdate") {
-			return !isInternal;
-		}
-		return false;
-	},
 	actions: {
-		updateScore: async (
-			c,
-			input: { playerId: string; playerName: string; totalProduced: number },
-		) => {
+		getTopScores: async (c, input: { limit?: number }) => {
+			return await getTop(c, input.limit ?? 10);
+		},
+	},
+	run: async (c) => {
+		for await (const message of c.queue.iter()) {
+			if (message.name !== "updateScore") continue;
+
 			await c.db.execute(
 				`INSERT INTO scores (player_id, player_name, total_produced, updated_at) VALUES (?, ?, ?, ?)
-				 ON CONFLICT(player_id) DO UPDATE SET player_name = ?, total_produced = ?, updated_at = ?`,
-				input.playerId,
-				input.playerName,
-				input.totalProduced,
+					 ON CONFLICT(player_id) DO UPDATE SET player_name = ?, total_produced = ?, updated_at = ?`,
+				message.body.playerId,
+				message.body.playerName,
+				message.body.totalProduced,
 				Date.now(),
-				input.playerName,
-				input.totalProduced,
+				message.body.playerName,
+				message.body.totalProduced,
 				Date.now(),
 			);
 
 			const top = await getTop(c, 10);
 			c.broadcast("leaderboardUpdate", top);
-		},
-		getTopScores: async (c, input: { limit?: number }) => {
-			return await getTop(c, input.limit ?? 10);
-		},
+		}
 	},
 });
 

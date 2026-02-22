@@ -26,7 +26,7 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; name: string }>;
+	players: Record<string, { x: number; y: number; name: string; color: string }>;
 }
 
 interface DisplayBody {
@@ -52,7 +52,7 @@ export class Physics2dGame {
 	private lastJump = false;
 	private targets: Record<string, BodySnapshot> = {};
 	private display: Record<string, DisplayBody> = {};
-	private playerNames: Record<string, string> = {};
+	private playerMeta: Record<string, { name: string; color: string }> = {};
 	private myConnId = "";
 	private lastSnapshotTime = 0;
 	private tickIntervalMs = 0;
@@ -82,7 +82,7 @@ export class Physics2dGame {
 
 			// Track player names and find our connection ID from players map.
 			for (const [id, info] of Object.entries(snap.players)) {
-				this.playerNames[id] = info.name;
+				this.playerMeta[id] = { name: info.name, color: info.color };
 				if (info.name === matchInfo.name && !this.myConnId) {
 					this.myConnId = id;
 				}
@@ -109,9 +109,9 @@ export class Physics2dGame {
 			}
 
 			// Remove stale players.
-			for (const id of Object.keys(this.playerNames)) {
+			for (const id of Object.keys(this.playerMeta)) {
 				if (!snap.players[id]) {
-					delete this.playerNames[id];
+					delete this.playerMeta[id];
 				}
 			}
 		});
@@ -217,7 +217,7 @@ export class Physics2dGame {
 		}
 
 		// Draw player circles.
-		for (const [connId, name] of Object.entries(this.playerNames)) {
+		for (const [connId, meta] of Object.entries(this.playerMeta)) {
 			const bodyId = `player-${connId}`;
 			const disp = this.display[bodyId];
 			if (!disp) continue;
@@ -228,7 +228,7 @@ export class Physics2dGame {
 
 			ctx.beginPath();
 			ctx.arc(px, py, PLAYER_RADIUS * SCALE, 0, Math.PI * 2);
-			ctx.fillStyle = isMe ? "#ff4f00" : colorFromId(connId);
+			ctx.fillStyle = meta.color;
 			ctx.fill();
 			if (isMe) {
 				ctx.lineWidth = 2;
@@ -239,7 +239,7 @@ export class Physics2dGame {
 			ctx.fillStyle = "#ffffff";
 			ctx.font = "11px sans-serif";
 			ctx.textAlign = "center";
-			ctx.fillText(name, px, py - PLAYER_RADIUS * SCALE - 4);
+			ctx.fillText(meta.name, px, py - PLAYER_RADIUS * SCALE - 4);
 		}
 
 		// HUD: tick rate and latency.
