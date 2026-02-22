@@ -5,12 +5,14 @@
 	"type": "module",
 	"scripts": {
 		"dev": "astro dev",
+		"prebuild": "pnpm gen:markdown",
 		"build": "tsx ./scripts/build.ts",
 		"preview": "astro preview",
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"astro": "astro",
 		"new-post": "tsx ./scripts/new-post.ts",
+		"gen:markdown": "tsx ./scripts/generateMarkdownAndLlms.ts",
 		"postinstall": "cd scripts/typecheck-staging && pnpm install --ignore-scripts"
 	},
 	"browserslist": "defaults, not ie <= 11",
