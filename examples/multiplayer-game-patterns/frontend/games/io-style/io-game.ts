@@ -5,15 +5,6 @@ const PLAYER_RADIUS = 12;
 const LERP_FACTOR = 0.2;
 const GRID_SPACING = 50;
 
-function colorFromId(id: string): string {
-	let hash = 0;
-	for (let i = 0; i < id.length; i++) {
-		hash = (hash * 31 + id.charCodeAt(i)) | 0;
-	}
-	const hue = ((hash % 360) + 360) % 360;
-	return `hsl(${hue}, 70%, 55%)`;
-}
-
 type IoStyleMatchConn = ReturnType<
 	ReturnType<GameClient["ioStyleMatch"]["get"]>["connect"]
 >;
@@ -22,7 +13,7 @@ export class IoGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 600;
-	private targets: Record<string, { x: number; y: number }> = {};
+	private targets: Record<string, { x: number; y: number; color: string }> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private lastIx = 0;
@@ -38,14 +29,16 @@ export class IoGame {
 	) {
 		this.conn = client.ioStyleMatch
 			.get([matchInfo.matchId], {
-				params: { playerToken: matchInfo.playerToken },
+				params: {
+					playerId: matchInfo.playerId,
+				},
 			})
 			.connect();
 
 		this.conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as {
 				worldSize: number;
-				players: Record<string, { x: number; y: number }>;
+				players: Record<string, { x: number; y: number; color: string }>;
 			};
 			this.worldSize = snap.worldSize;
 			for (const [id, pos] of Object.entries(snap.players)) {
@@ -145,7 +138,7 @@ export class IoGame {
 
 			ctx.beginPath();
 			ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI * 2);
-			ctx.fillStyle = isMe ? "#ff4f00" : colorFromId(id);
+			ctx.fillStyle = target.color;
 			ctx.fill();
 			if (isMe) {
 				ctx.lineWidth = 2;

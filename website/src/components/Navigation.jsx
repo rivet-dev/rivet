@@ -105,7 +105,7 @@ export function Navigation({ navigation, ...props }) {
 			<ul role="list">
 				{/* Header */}
 				<TopLevelNavItem href="/docs" icon={faBooks}>
-					Docs
+					Documentation
 				</TopLevelNavItem>
 				<TopLevelNavItem href="/changelog" icon={faNewspaper}>
 					Changelog

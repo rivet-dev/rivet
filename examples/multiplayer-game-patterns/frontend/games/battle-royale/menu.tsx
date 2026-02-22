@@ -4,7 +4,6 @@ import type { GameClient } from "../../client.ts";
 export interface BattleRoyaleMatchInfo {
 	matchId: string;
 	playerId: string;
-	playerToken: string;
 }
 
 export function BattleRoyaleMenu({
@@ -26,7 +25,7 @@ export function BattleRoyaleMenu({
 			const result = await mm.send("findMatch", {}, { wait: true, timeout: 10_000 });
 			mm.dispose();
 			const response = (result as { response?: BattleRoyaleMatchInfo })?.response;
-			if (!response?.matchId || !response?.playerToken || !response?.playerId) {
+			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid match");
 			}
 			onReady(response);

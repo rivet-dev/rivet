@@ -1,36 +1,10 @@
-import { actor, event, UserError } from "rivetkit";
-import { hasInvalidInternalToken, isInternalToken } from "../../auth.ts";
+import { actor, event } from "rivetkit";
 import { DEFAULT_RATING } from "./config.ts";
 
 export const rankedPlayer = actor({
 	options: { name: "Ranked - Player", icon: "ranking-star" },
 	events: {
 		stateUpdate: event<PlayerSnapshot>(),
-	},
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "initialize" ||
-				invoke.name === "getProfile" ||
-				invoke.name === "getRating")
-		) {
-			return true;
-		}
-		if (invoke.kind === "action" && invoke.name === "applyMatchResult") {
-			return isInternal;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "stateUpdate") {
-			return !isInternal;
-		}
-		return false;
 	},
 	state: {
 		username: "",

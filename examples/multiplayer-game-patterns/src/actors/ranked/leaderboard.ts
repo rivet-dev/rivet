@@ -1,6 +1,5 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { actor, type ActorContextOf, event, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
-import { hasInvalidInternalToken, isInternalToken } from "../../auth.ts";
 
 export interface LeaderboardEntry {
 	username: string;
@@ -14,50 +13,45 @@ export const rankedLeaderboard = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
+	queues: {
+		updatePlayer: queue<{
+			username: string;
+			rating: number;
+			wins: number;
+			losses: number;
+		}>(),
+	},
 	events: {
 		leaderboardUpdate: event<LeaderboardEntry[]>(),
 	},
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (invoke.kind === "action" && invoke.name === "updatePlayer") {
-			return isInternal;
-		}
-		if (invoke.kind === "action" && invoke.name === "getTopScores") {
-			return true;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "leaderboardUpdate") {
-			return !isInternal;
-		}
-		return false;
-	},
 	actions: {
 		updatePlayer: async (c, input: { username: string; rating: number; wins: number; losses: number }) => {
-			await c.db.execute(
-				`INSERT INTO leaderboard (username, rating, wins, losses, updated_at) VALUES (?, ?, ?, ?, ?)
-				 ON CONFLICT(username) DO UPDATE SET rating = ?, wins = ?, losses = ?, updated_at = ?`,
-				input.username,
-				input.rating,
-				input.wins,
-				input.losses,
-				Date.now(),
-				input.rating,
-				input.wins,
-				input.losses,
-				Date.now(),
-			);
-			const top = await getTop(c);
-			c.broadcast("leaderboardUpdate", top);
+			await c.queue.send("updatePlayer", input);
 		},
 		getTopScores: async (c) => {
 			return await getTop(c);
 		},
+	},
+	run: async (c) => {
+		for await (const message of c.queue.iter()) {
+			if (message.name !== "updatePlayer") continue;
+
+			await c.db.execute(
+				`INSERT INTO leaderboard (username, rating, wins, losses, updated_at) VALUES (?, ?, ?, ?, ?)
+					 ON CONFLICT(username) DO UPDATE SET rating = ?, wins = ?, losses = ?, updated_at = ?`,
+				message.body.username,
+				message.body.rating,
+				message.body.wins,
+				message.body.losses,
+				Date.now(),
+				message.body.rating,
+				message.body.wins,
+				message.body.losses,
+				Date.now(),
+			);
+			const top = await getTop(c);
+			c.broadcast("leaderboardUpdate", top);
+		}
 	},
 });
 

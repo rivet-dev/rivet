@@ -4,9 +4,45 @@
 ---
 
 <script>
+  function looksLikeMermaid(code) {
+    const firstLine = code
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+    if (!firstLine) return false;
+
+    return /^(sequenceDiagram|flowchart|graph|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|quadrantChart|requirementDiagram|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/.test(
+      firstLine
+    );
+  }
+
+  // Fallback for legacy MDX output where Mermaid fences are rendered as plain code blocks.
+  function promoteLegacyMermaidBlocks() {
+    const legacyBlocks = document.querySelectorAll('[data-code-block]');
+
+    legacyBlocks.forEach((block) => {
+      if (block.dataset.codeLang === 'mermaid') return;
+
+      const content = block.querySelector('.p-4');
+      if (!content) return;
+
+      const code = content.textContent || '';
+      if (!looksLikeMermaid(code)) return;
+
+      const pre = document.createElement('pre');
+      pre.className = 'mermaid';
+      pre.textContent = code;
+      block.replaceWith(pre);
+    });
+  }
+
   // Only initialize if there are mermaid diagrams on the page
   async function initMermaid() {
-    const mermaidElements = document.querySelectorAll('pre.mermaid');
+    promoteLegacyMermaidBlocks();
+
+    const mermaidElements = document.querySelectorAll(
+      'pre.mermaid:not(.mermaid-rendered):not(.mermaid-error)'
+    );
     if (mermaidElements.length === 0) return;
 
     // Dynamically import mermaid only when needed

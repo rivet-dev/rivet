@@ -48,7 +48,7 @@ See also the [raw WebSocket handler example](https://github.com/rivet-dev/rivet/
 Use the `.websocket()` method on an actor handle to open a WebSocket connection to the actor's `onWebSocket` handler. This can be executed from either your frontend or backend.
 
 <CodeGroup workspace>
-```typescript registry.ts @hide @nocheck
+```typescript actors.ts @hide @nocheck
 import { actor, setup } from "rivetkit";
 
 export const chat = actor({
@@ -66,7 +66,7 @@ export const registry = setup({ use: { chat } });
 
 ```typescript client.ts @nocheck
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 
@@ -93,7 +93,7 @@ The `.websocket()` method returns a standard WebSocket.
 Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful when you need to use the URL with external tools or custom WebSocket clients.
 
 <CodeGroup workspace>
-```typescript registry.ts @hide @nocheck
+```typescript actors.ts @hide @nocheck
 import { actor, setup } from "rivetkit";
 
 export const chat = actor({
@@ -111,7 +111,7 @@ export const registry = setup({ use: { chat } });
 
 ```typescript client.ts @nocheck
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 

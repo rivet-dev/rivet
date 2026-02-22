@@ -1,6 +1,7 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { getPlayerColor } from "../player-color.ts";
 import {
 	TICK_MS,
 	SUB_STEPS,
@@ -16,6 +17,7 @@ const DISCONNECT_GRACE_MS = 5000;
 interface PlayerEntry {
 	connId: string;
 	name: string;
+	color: string;
 	bodyHandle: number;
 	inputX: number;
 	inputZ: number;
@@ -28,6 +30,9 @@ interface BodySnapshot {
 	x: number;
 	y: number;
 	z: number;
+	hx: number;
+	hy: number;
+	hz: number;
 	qx: number;
 	qy: number;
 	qz: number;
@@ -41,7 +46,7 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; z: number; name: string }>;
+	players: Record<string, { x: number; y: number; z: number; name: string; color: string }>;
 }
 
 export const physics3dWorld = actor({
@@ -57,21 +62,6 @@ export const physics3dWorld = actor({
 		if (name.length > 20) {
 			throw new UserError("name too long", { code: "invalid_name" });
 		}
-	},
-	canInvoke: (c, invoke) => {
-		const isConnectedPlayer = c.vars.players[c.conn.id] !== undefined;
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "setInput" ||
-				invoke.name === "spawnBox" ||
-				invoke.name === "getSnapshot")
-		) {
-			return isConnectedPlayer;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "snapshot") {
-			return isConnectedPlayer;
-		}
-		return false;
 	},
 	state: {
 		tick: 0,
@@ -105,6 +95,7 @@ export const physics3dWorld = actor({
 		c.vars.players[conn.id] = {
 			connId: conn.id,
 			name,
+			color: getPlayerColor(conn.id),
 			bodyHandle: body.handle,
 			inputX: 0,
 			inputZ: 0,
@@ -242,9 +233,11 @@ export const physics3dWorld = actor({
 			if (!world) return;
 			const id = `spawned-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 			const h = 0.2 + Math.random() * 0.3;
+			const rotation = randomQuaternion();
 
 			const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
 				.setTranslation(input.x, 5, input.z)
+				.setRotation(rotation)
 				.setLinearDamping(0.5)
 				.setCcdEnabled(true);
 			const body = world.createRigidBody(bodyDesc);
@@ -272,11 +265,15 @@ function buildSnapshot(c: ActorContextOf<typeof physics3dWorld>): Snapshot {
 		const pos = body.translation();
 		const rot = body.rotation();
 		const vel = body.linvel();
+		const size = c.vars.dynamicSizes[id] ?? { hx: 0.25, hy: 0.25, hz: 0.25 };
 		bodies.push({
 			id,
 			x: pos.x,
 			y: pos.y,
 			z: pos.z,
+			hx: size.hx,
+			hy: size.hy,
+			hz: size.hz,
 			qx: rot.x,
 			qy: rot.y,
 			qz: rot.z,
@@ -300,6 +297,9 @@ function buildSnapshot(c: ActorContextOf<typeof physics3dWorld>): Snapshot {
 			x: pos.x,
 			y: pos.y,
 			z: pos.z,
+			hx: PLAYER_RADIUS,
+			hy: PLAYER_RADIUS,
+			hz: PLAYER_RADIUS,
 			qx: rot.x,
 			qy: rot.y,
 			qz: rot.z,
@@ -308,7 +308,13 @@ function buildSnapshot(c: ActorContextOf<typeof physics3dWorld>): Snapshot {
 			vy: vel.y,
 			vz: vel.z,
 		});
-		players[id] = { x: pos.x, y: pos.y, z: pos.z, name: entry.name };
+		players[id] = {
+			x: pos.x,
+			y: pos.y,
+			z: pos.z,
+			name: entry.name,
+			color: entry.color,
+		};
 	}
 
 	return { tick: c.state.tick, serverTime: Date.now(), bodies, players };
@@ -316,4 +322,21 @@ function buildSnapshot(c: ActorContextOf<typeof physics3dWorld>): Snapshot {
 
 function broadcastSnapshot(c: ActorContextOf<typeof physics3dWorld>) {
 	c.broadcast("snapshot", buildSnapshot(c));
+}
+
+function randomQuaternion(): { x: number; y: number; z: number; w: number } {
+	// Shoemake method for uniform random 3D rotation.
+	const u1 = Math.random();
+	const u2 = Math.random();
+	const u3 = Math.random();
+	const sqrt1MinusU1 = Math.sqrt(1 - u1);
+	const sqrtU1 = Math.sqrt(u1);
+	const theta1 = 2 * Math.PI * u2;
+	const theta2 = 2 * Math.PI * u3;
+	return {
+		x: sqrt1MinusU1 * Math.sin(theta1),
+		y: sqrt1MinusU1 * Math.cos(theta1),
+		z: sqrtU1 * Math.sin(theta2),
+		w: sqrtU1 * Math.cos(theta2),
+	};
 }

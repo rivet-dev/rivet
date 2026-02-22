@@ -3,6 +3,7 @@ import type { GameClient } from "../../client.ts";
 import type { LeaderboardEntry } from "../../../src/actors/ranked/leaderboard.ts";
 import type { PlayerSnapshot } from "../../../src/actors/ranked/player.ts";
 import { RankedBot } from "./bot.ts";
+import { waitForAssignment } from "./wait-for-assignment.ts";
 
 const STORAGE_KEY = "ranked_username";
 
@@ -30,7 +31,13 @@ export interface RankedMatchInfo {
 	matchId: string;
 	username: string;
 	rating: number;
-	playerToken: string;
+}
+
+function formatQueueDuration(ms: number): string {
+	const totalSec = Math.max(0, Math.floor(ms / 1000));
+	const mins = Math.floor(totalSec / 60);
+	const secs = totalSec % 60;
+	return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 export function RankedMenu({
@@ -47,6 +54,12 @@ export function RankedMenu({
 		"idle" | "queuing" | "queued" | "matched" | "error"
 	>("idle");
 	const [queueCount, setQueueCount] = useState(0);
+	const [queueDurationMs, setQueueDurationMs] = useState(0);
+	const [ratingWindow, setRatingWindow] = useState<number | null>(null);
+	const [ratingRange, setRatingRange] = useState<{
+		min: number;
+		max: number;
+	} | null>(null);
 	const [error, setError] = useState("");
 	const [profile, setProfile] = useState<PlayerSnapshot | null>(null);
 	const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -106,6 +119,9 @@ export function RankedMenu({
 	const leaveQueue = useCallback(async () => {
 		await cleanup();
 		setQueueCount(0);
+		setQueueDurationMs(0);
+		setRatingWindow(null);
+		setRatingRange(null);
 		setStatus("idle");
 	}, [cleanup]);
 
@@ -133,44 +149,53 @@ export function RankedMenu({
 			};
 
 			mm.on("queueUpdate", (raw: unknown) => {
-				const data = raw as { count: number };
-				setQueueCount(data.count);
+				const data = raw as {
+					queued: boolean;
+					count: number;
+					queueDurationMs?: number;
+					ratingWindow?: number;
+					ratingMin?: number;
+					ratingMax?: number;
+				};
+				setQueueCount(data.count ?? 0);
+				if (!data.queued) {
+					setQueueDurationMs(0);
+					setRatingWindow(null);
+					setRatingRange(null);
+					return;
+				}
+				setQueueDurationMs(data.queueDurationMs ?? 0);
+				if (typeof data.ratingWindow === "number") {
+					setRatingWindow(data.ratingWindow);
+				} else {
+					setRatingWindow(null);
+				}
+				if (
+					typeof data.ratingMin === "number" &&
+					typeof data.ratingMax === "number"
+				) {
+					setRatingRange({ min: data.ratingMin, max: data.ratingMax });
+				} else {
+					setRatingRange(null);
+				}
 			});
 
 			setStatus("queued");
 
-			const queueResult = await mm.send(
-				"queueForMatch",
-				{ username },
-				{ wait: true, timeout: 120_000 },
-			);
-			const queueResponse = (
-				queueResult as { response?: { registrationToken: string } }
-			)?.response;
-			if (!queueResponse || abortRef.current) {
+			const queueResult = await mm.queueForMatch({ username }) as {
+				queued: boolean;
+				connId?: string;
+			};
+			if (abortRef.current) {
 				throw new Error("Failed to queue");
 			}
-			await mm.registerPlayer({
+
+			const assignment = await waitForAssignment(
+				mm,
 				username,
-				registrationToken: queueResponse.registrationToken,
-			});
-
-			if (abortRef.current) return;
-
-			const size = await mm.getQueueSize();
-			if (!abortRef.current) setQueueCount(size as number);
-
-			while (!matched && !abortRef.current) {
-				const existing = await mm.getAssignment({
-					username,
-					registrationToken: queueResponse.registrationToken,
-				});
-				if (existing) {
-					resolveMatch(existing as RankedMatchInfo);
-					break;
-				}
-				await new Promise((resolve) => setTimeout(resolve, 200));
-			}
+				queueResult.connId,
+			);
+			resolveMatch(assignment);
 		} catch (err) {
 			if (abortRef.current) return;
 			await cleanup();
@@ -303,6 +328,17 @@ export function RankedMenu({
 							{queueCount}
 						</div>
 						<div className="queue-label">players in queue</div>
+						<div className="queue-label">
+							in queue: {formatQueueDuration(queueDurationMs)}
+						</div>
+						{ratingWindow !== null && (
+							<div className="queue-label">
+								match window: ±{ratingWindow}
+								{ratingRange
+									? ` (${ratingRange.min} - ${ratingRange.max})`
+									: ""}
+							</div>
+						)}
 						<div style={{ display: "flex", gap: 12, marginTop: 20 }}>
 							<button
 								className="btn btn-secondary"

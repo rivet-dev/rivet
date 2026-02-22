@@ -50,61 +50,170 @@
 	function initializeCodeGroups() {
 		const codeGroupContainers = document.querySelectorAll('[data-code-group-container]');
 		codeGroupContainers.forEach((container) => {
-			const tabsList = container.querySelector('[data-code-group-tabs]');
-			const contentContainer = container.querySelector('[data-code-group-content-container]');
-			const source = container.querySelector('[data-code-group-source]');
+			const isWorkspace = container.hasAttribute('data-code-group-workspace');
 
-			if (!tabsList || !contentContainer || !source) return;
+			if (isWorkspace) {
+				initializeWorkspaceCodeGroup(container);
+			} else {
+				initializeTabCodeGroup(container);
+			}
+		});
+	}
 
-			// Already initialized
-			if (tabsList.children.length > 0) return;
+	function initializeTabCodeGroup(container: Element) {
+		const tabsList = container.querySelector('[data-code-group-tabs]');
+		const contentContainer = container.querySelector('[data-code-group-content-container]');
+		const source = container.querySelector('[data-code-group-source]');
 
-			// Find all code blocks in source (they have data-code-block attribute)
-			const codeBlocks = source.querySelectorAll('[data-code-block]');
-			let visibleIndex = 0;
-			codeBlocks.forEach((block, index) => {
-				const title = block.getAttribute('data-code-title') || 'Code';
-				const id = block.getAttribute('data-code-id') || `code-${index}`;
-				const isHidden = block.getAttribute('data-code-hide') === 'true';
+		if (!tabsList || !contentContainer || !source) return;
 
-				// Skip hidden blocks (don't create tabs for them, don't add to DOM)
-				if (isHidden) {
-					return;
-				}
+		// Already initialized
+		if (tabsList.children.length > 0) return;
 
-				// Create tab button
-				const button = document.createElement('button');
-				button.type = 'button';
-				button.setAttribute('data-code-group-trigger', id);
-				button.className = [
-					'relative inline-flex min-h-[2.75rem] items-center justify-center whitespace-nowrap',
-					'rounded-none border-b-2 bg-transparent px-4 py-2.5 text-sm font-semibold',
-					'ring-offset-background transition-none',
-					'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-					'disabled:pointer-events-none disabled:opacity-50',
-					visibleIndex === 0 ? 'border-b-primary text-white' : 'border-b-transparent text-muted-foreground'
-				].join(' ');
-				button.textContent = title;
-				tabsList.appendChild(button);
+		// Find all code blocks in source (they have data-code-block attribute)
+		const codeBlocks = source.querySelectorAll('[data-code-block]');
+		let visibleIndex = 0;
+		codeBlocks.forEach((block, index) => {
+			const title = block.getAttribute('data-code-title') || 'Code';
+			const id = block.getAttribute('data-code-id') || `code-${index}`;
+			const isHidden = block.getAttribute('data-code-hide') === 'true';
 
-				// Create content wrapper and move code block
-				const contentWrapper = document.createElement('div');
-				contentWrapper.setAttribute('data-code-group-content', id);
-				contentWrapper.className = visibleIndex === 0 ? '' : 'hidden';
-				contentWrapper.appendChild(block.cloneNode(true));
-				contentContainer.appendChild(contentWrapper);
+			// Skip hidden blocks (don't create tabs for them, don't add to DOM)
+			if (isHidden) {
+				return;
+			}
 
-				visibleIndex++;
-			});
+			// Create tab button
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.setAttribute('data-code-group-trigger', id);
+			button.className = [
+				'relative inline-flex min-h-[2.75rem] items-center justify-center whitespace-nowrap',
+				'rounded-none border-b-2 bg-transparent px-4 py-2.5 text-sm font-semibold',
+				'ring-offset-background transition-none',
+				'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+				'disabled:pointer-events-none disabled:opacity-50',
+				visibleIndex === 0 ? 'border-b-primary text-white' : 'border-b-transparent text-muted-foreground'
+			].join(' ');
+			button.textContent = title;
+			tabsList.appendChild(button);
+
+			// Create content wrapper and move code block
+			const clonedBlock = block.cloneNode(true) as HTMLElement;
+
+			const contentWrapper = document.createElement('div');
+			contentWrapper.setAttribute('data-code-group-content', id);
+			contentWrapper.className = visibleIndex === 0 ? '' : 'hidden';
+			contentWrapper.appendChild(clonedBlock);
+			contentContainer.appendChild(contentWrapper);
+
+			visibleIndex++;
+		});
+	}
+
+	function initializeWorkspaceCodeGroup(container: Element) {
+		const sidebar = container.querySelector('[data-code-group-sidebar]');
+		const contentContainer = container.querySelector('[data-code-group-content-container]');
+		const source = container.querySelector('[data-code-group-source]');
+
+		if (!sidebar || !contentContainer || !source) return;
+
+		// Already initialized
+		if (sidebar.children.length > 0) return;
+
+		const codeBlocks = source.querySelectorAll('[data-code-block]');
+		let firstVisibleId: string | null = null;
+
+		codeBlocks.forEach((block, index) => {
+			const title = block.getAttribute('data-code-title') || 'Code';
+			const id = block.getAttribute('data-code-id') || `code-${index}`;
+			const isHidden = block.getAttribute('data-code-hide') === 'true';
+
+			if (!firstVisibleId && !isHidden) {
+				firstVisibleId = id;
+			}
+
+			// Create sidebar file tree item
+			const item = document.createElement('button');
+			item.type = 'button';
+			item.setAttribute('data-code-group-trigger', id);
+			item.className = [
+				'flex items-center gap-2.5 px-3 py-1.5 text-sm text-left w-full rounded-lg',
+				'transition-colors cursor-pointer',
+				isHidden ? 'opacity-40' : '',
+				id === firstVisibleId ? 'text-white bg-white/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5',
+			].filter(Boolean).join(' ');
+			const iconEl = block.querySelector('[data-code-icon]');
+			if (iconEl) {
+				const iconClone = iconEl.cloneNode(true) as HTMLElement;
+				iconClone.removeAttribute('data-code-icon');
+				iconClone.className = 'flex items-center shrink-0 [&_svg]:size-4';
+				item.appendChild(iconClone);
+			}
+			const span = document.createElement('span');
+			span.textContent = title;
+			item.appendChild(span);
+			sidebar.appendChild(item);
+
+			const clonedBlock = block.cloneNode(true) as HTMLElement;
+
+			const contentWrapper = document.createElement('div');
+			contentWrapper.setAttribute('data-code-group-content', id);
+			contentWrapper.className = [
+				'h-full overflow-hidden rounded-xl border bg-neutral-950',
+				id === firstVisibleId ? '' : 'hidden',
+			].filter(Boolean).join(' ');
+			contentWrapper.appendChild(clonedBlock);
+			contentContainer.appendChild(contentWrapper);
+		});
+
+	}
+
+	const CODE_COLLAPSE_HEIGHT = 500;
+
+	function initializeCollapsibleCodeBlocks() {
+		const codeBlocks = document.querySelectorAll('[data-code-block]');
+		codeBlocks.forEach((block) => {
+			// Skip if already initialized or inside a code group (workspace handles its own)
+			if (block.hasAttribute('data-code-collapsible-init')) return;
+			block.setAttribute('data-code-collapsible-init', 'true');
+
+			const scrollArea = block.querySelector('.overflow-x-auto') as HTMLElement;
+			if (!scrollArea) return;
+
+			// Check if the code content is tall enough to collapse
+			if (scrollArea.scrollHeight <= CODE_COLLAPSE_HEIGHT) return;
+
+			// Mark as collapsed
+			block.setAttribute('data-code-collapsed', 'true');
+			scrollArea.style.maxHeight = CODE_COLLAPSE_HEIGHT + 'px';
+			scrollArea.style.overflow = 'hidden';
+
+			// Create gradient overlay with "show more" button
+			const overlay = document.createElement('div');
+			overlay.setAttribute('data-code-collapse-overlay', '');
+			overlay.className = 'group/collapse absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end pb-3 pt-32 bg-gradient-to-t from-neutral-950 from-30% to-transparent z-10 cursor-pointer';
+
+			const btn = document.createElement('button');
+			btn.type = 'button';
+			btn.setAttribute('data-code-collapse-toggle', '');
+			btn.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 group-hover/collapse:text-white transition-colors pointer-events-none';
+			btn.innerHTML = 'Show more <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+			overlay.appendChild(btn);
+			// The block is position:relative, so overlay will position against it
+			block.appendChild(overlay);
 		});
 	}
 
 	// Run on page load and after view transitions
 	initializeTabs();
 	initializeCodeGroups();
+	initializeCollapsibleCodeBlocks();
 	document.addEventListener('astro:after-swap', () => {
 		initializeTabs();
 		initializeCodeGroups();
+		initializeCollapsibleCodeBlocks();
 	});
 
 	// Use event delegation - only need one listener on document
@@ -161,16 +270,30 @@
 				const codeGroupContainer = codeGroupTrigger.closest('[data-code-group-container]');
 				if (!codeGroupContainer) return;
 
-				// Update trigger styles (underline style, same as Tabs)
+				const isWorkspace = codeGroupContainer.hasAttribute('data-code-group-workspace');
+
+				// Update trigger styles
 				const triggers = codeGroupContainer.querySelectorAll('[data-code-group-trigger]');
 				triggers.forEach((trigger) => {
 					const isActive = trigger.getAttribute('data-code-group-trigger') === triggerId;
-					if (isActive) {
-						trigger.classList.add('border-b-primary', 'text-white');
-						trigger.classList.remove('border-b-transparent', 'text-muted-foreground');
+					if (isWorkspace) {
+						// Sidebar style
+						if (isActive) {
+							trigger.classList.add('text-white', 'bg-white/10');
+							trigger.classList.remove('text-zinc-500', 'hover:text-zinc-300', 'hover:bg-white/5');
+						} else {
+							trigger.classList.remove('text-white', 'bg-white/10');
+							trigger.classList.add('text-zinc-500', 'hover:text-zinc-300', 'hover:bg-white/5');
+						}
 					} else {
-						trigger.classList.remove('border-b-primary', 'text-white');
-						trigger.classList.add('border-b-transparent', 'text-muted-foreground');
+						// Tab style (underline)
+						if (isActive) {
+							trigger.classList.add('border-b-primary', 'text-white');
+							trigger.classList.remove('border-b-transparent', 'text-muted-foreground');
+						} else {
+							trigger.classList.remove('border-b-primary', 'text-white');
+							trigger.classList.add('border-b-transparent', 'text-muted-foreground');
+						}
 					}
 				});
 
@@ -187,6 +310,27 @@
 						content.classList.add('hidden');
 					}
 				});
+
+				return;
+			}
+
+			// Handle code collapse toggle (clicking anywhere on the overlay or the button)
+			const collapseOverlay = target.closest('[data-code-collapse-overlay]');
+			if (collapseOverlay) {
+				const block = collapseOverlay.closest('[data-code-block]');
+				if (!block) return;
+
+				const scrollArea = block.querySelector('.overflow-x-auto') as HTMLElement;
+				const btn = collapseOverlay.querySelector('[data-code-collapse-toggle]') as HTMLElement;
+				if (!scrollArea) return;
+
+				const isCollapsed = block.getAttribute('data-code-collapsed') === 'true';
+				if (isCollapsed) {
+					block.setAttribute('data-code-collapsed', 'false');
+					scrollArea.style.maxHeight = '';
+					scrollArea.style.overflow = '';
+					collapseOverlay.remove();
+				}
 				return;
 			}
 

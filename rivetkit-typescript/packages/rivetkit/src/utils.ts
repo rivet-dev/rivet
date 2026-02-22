@@ -1,11 +1,23 @@
-export { stringifyError } from "@/common/utils";
-export { assertUnreachable } from "./common/utils";
+import { stringifyError } from "@/common/utils";
+import type { Context as HonoContext, Handler as HonoHandler } from "hono";
+import { stringify as uuidstringify } from "uuid";
+import pkgJson from "../package.json" with { type: "json" };
+import { getLogger } from "./common/log";
+import { assertUnreachable } from "./common/utils";
+
+/** @experimental */
+export { stringifyError };
+
+/** @experimental */
+export { assertUnreachable };
 
 /**
  * Joins multiple abort signals into one.
  *
  * The returned signal aborts when the first input signal aborts.
  * Uses `AbortSignal.any(...)` when available, with a runtime fallback.
+ *
+ * @experimental
  */
 export function joinSignals(
 	...signals: Array<AbortSignal | undefined | null>
@@ -63,6 +75,8 @@ export function joinSignals(
 
 /**
  * Returns a promise that resolves after the given number of milliseconds.
+ *
+ * @experimental
  */
 export function sleep(ms: number): Promise<void> {
 	return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -78,16 +92,12 @@ export function sleep(ms: number): Promise<void> {
  *   if (c.aborted) break;
  *   // ... game logic
  * }
+ *
+ * @experimental
  */
 export function interval(ms: number): () => Promise<void> {
 	return () => sleep(ms);
 }
-
-import type { Context as HonoContext, Handler as HonoHandler } from "hono";
-import { stringify as uuidstringify } from "uuid";
-import { stringifyError } from "@/common/utils";
-import pkgJson from "../package.json" with { type: "json" };
-import { getLogger } from "./common/log";
 
 export const VERSION = pkgJson.version;
 
@@ -97,6 +107,11 @@ function logger() {
 	return getLogger("utils");
 }
 
+/**
+ * Builds the HTTP user agent used by this library.
+ *
+ * @experimental
+ */
 export function httpUserAgent(): string {
 	// Return cached value if already initialized
 	if (_userAgent !== undefined) {
@@ -122,6 +137,11 @@ export type UpgradeWebSocket = (
 
 export type GetUpgradeWebSocket = () => UpgradeWebSocket;
 
+/**
+ * Reads an environment variable from Deno or Node runtimes.
+ *
+ * @experimental
+ */
 export function getEnvUniversal(key: string): string | undefined {
 	if (typeof Deno !== "undefined") {
 		return Deno.env.get(key);
@@ -131,6 +151,11 @@ export function getEnvUniversal(key: string): string | undefined {
 	}
 }
 
+/**
+ * Traces a debug value and returns it.
+ *
+ * @experimental
+ */
 export function dbg<T>(x: T): T {
 	console.trace(`=== DEBUG ===\n${x}`);
 	return x;
@@ -142,6 +167,8 @@ export function dbg<T>(x: T): T {
  *
  * @param data - The ArrayBuffer or ArrayBufferView to convert
  * @returns A Uint8Array view of the data
+ *
+ * @experimental
  */
 export function toUint8Array(data: ArrayBuffer | ArrayBufferView): Uint8Array {
 	if (data instanceof Uint8Array) {
@@ -175,6 +202,8 @@ export type LongTimeoutHandle = { abort: () => void };
  * Polyfill for Promise.withResolvers().
  *
  * This is specifically for Cloudflare Workers. Their implementation of Promise.withResolvers does not work correctly.
+ *
+ * @experimental
  */
 export function promiseWithResolvers<T>(onReject: (reason?: any) => void): {
 	promise: Promise<T>;
@@ -191,6 +220,11 @@ export function promiseWithResolvers<T>(onReject: (reason?: any) => void): {
 	return { promise, resolve, reject };
 }
 
+/**
+ * Sets a timeout that supports delays larger than the JavaScript timer limit.
+ *
+ * @experimental
+ */
 export function setLongTimeout(
 	listener: () => void,
 	after: number,
@@ -282,6 +316,11 @@ export class SinglePromiseQueue {
 	}
 }
 
+/**
+ * Converts a Buffer or Uint8Array into an ArrayBuffer view.
+ *
+ * @experimental
+ */
 export function bufferToArrayBuffer(buf: Buffer | Uint8Array): ArrayBuffer {
 	return buf.buffer.slice(
 		buf.byteOffset,
@@ -304,6 +343,8 @@ export function bufferToArrayBuffer(buf: Buffer | Uint8Array): ArrayBuffer {
  * @param path The path to append to the endpoint (may include query parameters)
  * @param queryParams Optional additional query parameters to append
  * @returns The properly combined URL string
+ *
+ * @experimental
  */
 export function combineUrlPath(
 	endpoint: string,
@@ -342,6 +383,11 @@ export function combineUrlPath(
 	return `${baseUrl.protocol}//${baseUrl.host}${fullPath}${fullQuery}`;
 }
 
+/**
+ * Compares two ArrayBuffer values by byte content.
+ *
+ * @experimental
+ */
 export function arrayBuffersEqual(
 	buf1: ArrayBuffer,
 	buf2: ArrayBuffer,
@@ -365,6 +411,11 @@ export const EXTRA_ERROR_LOG = {
 
 export type Runtime = "deno" | "bun" | "node";
 
+/**
+ * Detects the current JavaScript runtime from the user agent.
+ *
+ * @experimental
+ */
 export function detectRuntime(): Runtime {
 	const userAgent =
 		typeof navigator !== "undefined" ? navigator.userAgent : "";

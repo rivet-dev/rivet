@@ -71,7 +71,7 @@ Set up your React application:
 ```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const { useActor } = createRivetKit<typeof registry>();
 
@@ -101,7 +101,7 @@ function Counter() {
 }
 ```
 
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({

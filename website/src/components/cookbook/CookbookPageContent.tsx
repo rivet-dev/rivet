@@ -27,7 +27,7 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
 				className="block w-full rounded-md border border-white/10 bg-black pl-10 pr-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/20 focus:outline-none transition-colors"
-				placeholder="Search..."
+				placeholder="Search guides..."
 			/>
 		</div>
 	);
@@ -49,26 +49,24 @@ function FilterChips({
 	if (items.length === 0) return null;
 
 	return (
-		<div>
-			<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">{title}</h3>
-			<div className="flex flex-wrap gap-2">
-				{items.map((item) => {
-					const isSelected = selected.includes(item);
-					return (
-						<button
-							key={item}
-							onClick={() => onToggle(item)}
-							className={`rounded-full border px-3 py-1 text-xs transition-all ${
-								isSelected
-									? "border-white/20 text-white bg-white/5"
-									: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
-							}`}
-						>
-							{getDisplayName(item)}
-						</button>
-					);
-				})}
-			</div>
+		<div className="flex flex-wrap items-center gap-2">
+			<span className="text-xs text-zinc-500 mr-1">{title}:</span>
+			{items.map((item) => {
+				const isSelected = selected.includes(item);
+				return (
+					<button
+						key={item}
+						onClick={() => onToggle(item)}
+						className={`rounded-full border px-3 py-1 text-xs transition-all ${
+							isSelected
+								? "border-white/20 text-white bg-white/5"
+								: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
+						}`}
+					>
+						{getDisplayName(item)}
+					</button>
+				);
+			})}
 		</div>
 	);
 }
@@ -117,23 +115,25 @@ export function CookbookPageContent({ pages, allTags, allTechnologies }: Cookboo
 	return (
 		<div className="min-h-screen bg-black">
 			<div className="relative overflow-hidden pb-12 pt-32 md:pt-48">
-				<div className="mx-auto max-w-7xl px-6">
-					<div className="max-w-2xl">
-						<h1 className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
-							Cookbook
-						</h1>
-						<p className="mb-4 text-base leading-relaxed text-zinc-500">
-							Step-by-step guides that build on Rivet Actors, with links to working templates and example code.
-						</p>
-					</div>
+				<div className="mx-auto max-w-4xl px-6">
+					<h1 className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+						Cookbooks
+					</h1>
+					<p className="mb-8 text-base leading-relaxed text-zinc-500 max-w-xl">
+						Step-by-step guides that build on Rivet Actors, with links to working templates and example code.
+					</p>
 				</div>
 			</div>
 
-			<div className="border-t border-white/10 py-16">
-				<div className="mx-auto max-w-7xl px-6">
-					<div className="flex flex-col lg:flex-row gap-12">
-						<aside className="lg:w-56 flex-shrink-0">
-							<div className="space-y-8">
+			<div className="border-t border-white/10 py-12">
+				<div className="mx-auto max-w-4xl px-6">
+					<div className="mb-8 space-y-4">
+						<div className="max-w-sm mx-auto">
+							<SearchInput value={searchQuery} onChange={setSearchQuery} />
+						</div>
+
+						{(allTags.length > 0 || allTechnologies.length > 0) && (
+							<div className="flex flex-wrap items-center justify-center gap-4">
 								<FilterChips
 									title="Type"
 									items={allTags}
@@ -143,7 +143,7 @@ export function CookbookPageContent({ pages, allTags, allTechnologies }: Cookboo
 								/>
 
 								<FilterChips
-									title="Technology"
+									title="Tech"
 									items={allTechnologies}
 									selected={selectedTechnologies}
 									onToggle={(t) => toggle(selectedTechnologies, setSelectedTechnologies, t)}
@@ -159,28 +159,22 @@ export function CookbookPageContent({ pages, allTags, allTechnologies }: Cookboo
 										}}
 										className="text-xs text-zinc-500 hover:text-white transition-colors"
 									>
-										Clear all filters
+										Clear
 									</button>
 								)}
 							</div>
-						</aside>
-
-						<div className="flex-1">
-							<div className="mb-8 max-w-md">
-								<SearchInput value={searchQuery} onChange={setSearchQuery} />
-							</div>
-
-							{filteredPages.length === 0 ? (
-								<div className="text-center py-12 text-zinc-400">No guides found matching your filters</div>
-							) : (
-								<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-									{filteredPages.map((page) => (
-										<CookbookCard key={page.href} page={page} />
-									))}
-								</div>
-							)}
-						</div>
+						)}
 					</div>
+
+					{filteredPages.length === 0 ? (
+						<div className="text-center py-12 text-zinc-400">No guides found matching your filters</div>
+					) : (
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							{filteredPages.map((page) => (
+								<CookbookCard key={page.href} page={page} />
+							))}
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

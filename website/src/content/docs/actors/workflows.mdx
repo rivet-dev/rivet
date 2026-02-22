@@ -21,7 +21,7 @@ A workflow is a durable, replayable run handler for a Rivet Actor.
 Use this when you need a short multi-step sequence.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 import { workflow } from "rivetkit/workflow";
 
@@ -56,7 +56,7 @@ export const registry = setup({ use: { invoiceActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.invoiceActor.getOrCreate(["main"]);
@@ -75,11 +75,9 @@ This is the recommended workflow shape for most actor workloads.
 - This gives you one durable workflow that manages all actor progress.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const COUNTER_QUEUE = "counter";
 
 export const workflowCounter = actor({
   state: {
@@ -87,7 +85,7 @@ export const workflowCounter = actor({
     processed: 0,
   },
   queues: {
-    [COUNTER_QUEUE]: queue<{ delta: number }>(),
+    counter: queue<{ delta: number }>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
@@ -116,14 +114,13 @@ export const registry = setup({ use: { workflowCounter } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { COUNTER_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.workflowCounter.getOrCreate(["main"]);
 
-await handle.send(COUNTER_QUEUE, { delta: 1 });
-await handle.send(COUNTER_QUEUE, { delta: 2 });
+await handle.send("counter", { delta: 1 });
+await handle.send("counter", { delta: 2 });
 
 const state = await handle.getState();
 console.log(state.value, state.processed);
@@ -135,12 +132,9 @@ console.log(state.value, state.processed);
 Use this when the workflow should initialize resources, process queued commands, then clean up.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const WORK_QUEUE = "work";
-export const CONTROL_QUEUE = "control";
 
 type WorkMessage = { amount: number };
 type ControlMessage = { type: "stop"; reason: string };
@@ -153,8 +147,8 @@ export const setupRunTeardownActor = actor({
     stopReason: null as string | null,
   },
   queues: {
-    [WORK_QUEUE]: queue<WorkMessage>(),
-    [CONTROL_QUEUE]: queue<ControlMessage>(),
+    work: queue<WorkMessage>(),
+    control: queue<ControlMessage>(),
   },
   run: workflow(async (ctx) => {
     await ctx.step("setup", async () => {
@@ -166,12 +160,12 @@ export const setupRunTeardownActor = actor({
       name: "worker-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-command", {
-          names: [WORK_QUEUE, CONTROL_QUEUE],
+          names: ["work", "control"],
         });
 
         if (!message) return Loop.continue(undefined);
 
-        if (message.name === WORK_QUEUE) {
+        if (message.name === "work") {
           const work = message.body as WorkMessage;
           await loopCtx.step("apply-work", async () => {
             loopCtx.state.total += work.amount;
@@ -204,15 +198,14 @@ export const registry = setup({ use: { setupRunTeardownActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { CONTROL_QUEUE, WORK_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.setupRunTeardownActor.getOrCreate(["main"]);
 
-await handle.send(WORK_QUEUE, { amount: 5 });
-await handle.send(WORK_QUEUE, { amount: 3 });
-await handle.send(CONTROL_QUEUE, { type: "stop", reason: "maintenance" });
+await handle.send("work", { amount: 5 });
+await handle.send("work", { amount: 3 });
+await handle.send("control", { type: "stop", reason: "maintenance" });
 
 const state = await handle.getState();
 console.log(state.phase, state.total, state.stopReason);
@@ -232,25 +225,23 @@ Use the `Loops` example above as the baseline pattern.
 Use this when the caller needs a response from queued processing.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const REQUEST_QUEUE = "requests";
 
 export const requestResponseActor = actor({
   state: {
     handled: 0,
   },
   queues: {
-    [REQUEST_QUEUE]: queue<{ value: number }, { doubled: number }>(),
+    requests: queue<{ value: number }, { doubled: number }>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "request-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-request", {
-          names: [REQUEST_QUEUE],
+          names: ["requests"],
           completable: true,
         });
 
@@ -273,14 +264,13 @@ export const registry = setup({ use: { requestResponseActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { REQUEST_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.requestResponseActor.getOrCreate(["main"]);
 
 const result = await handle.send(
-  REQUEST_QUEUE,
+  "requests",
   { value: 21 },
   { wait: true, timeout: 1_000 },
 );
@@ -297,11 +287,9 @@ if (result.status === "completed") {
 Use queue messages as the trigger source, then sleep durably inside the workflow.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const REMINDER_QUEUE = "reminders";
 
 type Reminder = {
   text: string;
@@ -313,14 +301,14 @@ export const reminderActor = actor({
     fired: [] as string[],
   },
   queues: {
-    [REMINDER_QUEUE]: queue<Reminder>(),
+    reminders: queue<Reminder>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "reminder-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-reminder", {
-          names: [REMINDER_QUEUE],
+          names: ["reminders"],
         });
 
         if (!message) return Loop.continue(undefined);
@@ -346,13 +334,12 @@ export const registry = setup({ use: { reminderActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { REMINDER_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.reminderActor.getOrCreate(["main"]);
 
-await handle.send(REMINDER_QUEUE, {
+await handle.send("reminders", {
   text: "send weekly report",
   at: Date.now() + 1_000,
 });
@@ -367,11 +354,9 @@ console.log(await handle.getState());
 Use `join` when several independent tasks can run in parallel.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const REFRESH_QUEUE = "refresh";
 
 export const dashboardActor = actor({
   state: {
@@ -382,14 +367,14 @@ export const dashboardActor = actor({
     },
   },
   queues: {
-    [REFRESH_QUEUE]: queue<Record<string, never>>(),
+    refresh: queue<Record<string, never>>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "dashboard-loop",
       run: async (loopCtx) => {
         await loopCtx.queue.next("wait-refresh", {
-          names: [REFRESH_QUEUE],
+          names: ["refresh"],
         });
 
         const summary = await loopCtx.join("fetch-summary", {
@@ -432,13 +417,12 @@ export const registry = setup({ use: { dashboardActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { REFRESH_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.dashboardActor.getOrCreate(["main"]);
 
-await handle.send(REFRESH_QUEUE, {});
+await handle.send("refresh", {});
 console.log(await handle.getState());
 ```
 </CodeGroup>
@@ -448,11 +432,9 @@ console.log(await handle.getState());
 Use `race` when you need first-winner behavior.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const START_QUEUE = "start";
 
 export const raceActor = actor({
   state: {
@@ -460,14 +442,14 @@ export const raceActor = actor({
     lastValue: null as null | string,
   },
   queues: {
-    [START_QUEUE]: queue<Record<string, never>>(),
+    start: queue<Record<string, never>>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "race-loop",
       run: async (loopCtx) => {
         await loopCtx.queue.next("wait-start", {
-          names: [START_QUEUE],
+          names: ["start"],
         });
 
         const { winner, value } = await loopCtx.race("work-vs-timeout", [
@@ -506,13 +488,12 @@ export const registry = setup({ use: { raceActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { START_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.raceActor.getOrCreate(["main"]);
 
-await handle.send(START_QUEUE, {});
+await handle.send("start", {});
 console.log(await handle.getState());
 ```
 </CodeGroup>
@@ -525,8 +506,6 @@ Use step timeouts and retries for slow or flaky dependencies.
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 
-export const CHARGE_QUEUE = "charge";
-
 async function chargeCard(orderId: string): Promise<string> {
   return `charge-${orderId}`;
 }
@@ -536,14 +515,14 @@ export const timeoutActor = actor({
     lastChargeId: null as string | null,
   },
   queues: {
-    [CHARGE_QUEUE]: queue<{ orderId: string }>(),
+    charge: queue<{ orderId: string }>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "charge-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-charge", {
-          names: [CHARGE_QUEUE],
+          names: ["charge"],
         });
 
         if (!message) return Loop.continue(undefined);
@@ -578,8 +557,6 @@ Use rollback checkpoints before steps that have compensating actions.
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 
-export const CHECKOUT_QUEUE = "checkout";
-
 async function reserveInventory(orderId: string): Promise<string> {
   return `reservation-${orderId}`;
 }
@@ -599,14 +576,14 @@ export const checkoutActor = actor({
     lastChargeId: null as string | null,
   },
   queues: {
-    [CHECKOUT_QUEUE]: queue<{ orderId: string }>(),
+    checkout: queue<{ orderId: string }>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "checkout-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-checkout", {
-          names: [CHECKOUT_QUEUE],
+          names: ["checkout"],
         });
 
         if (!message) return Loop.continue(undefined);
@@ -651,11 +628,9 @@ export const registry = setup({ use: { checkoutActor } });
 Store progress in `state` so replay and recovery always restore it. Broadcast state changes so clients can render progress in realtime.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, event, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-
-export const JOB_QUEUE = "jobs";
 
 type Progress = {
   stage: "idle" | "running" | "completed";
@@ -676,14 +651,14 @@ export const progressActor = actor({
     progressUpdated: event<Progress>(),
   },
   queues: {
-    [JOB_QUEUE]: queue<{ value: number }>(),
+    jobs: queue<{ value: number }>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "progress-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-job", {
-          names: [JOB_QUEUE],
+          names: ["jobs"],
         });
 
         if (!message) return Loop.continue(undefined);
@@ -721,8 +696,7 @@ export const registry = setup({ use: { progressActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { JOB_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.progressActor.getOrCreate(["main"]);
@@ -732,8 +706,8 @@ conn.on("progressUpdated", (progress) => {
   console.log("progress", progress);
 });
 
-await handle.send(JOB_QUEUE, { value: 5 });
-await handle.send(JOB_QUEUE, { value: 7 });
+await handle.send("jobs", { value: 5 });
+await handle.send("jobs", { value: 7 });
 
 console.log(await handle.getState());
 ```
@@ -748,8 +722,6 @@ Rivet scheduling triggers actions. For cron-like workflows, use a small schedule
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 
-export const CRON_TICK_QUEUE = "cron-tick";
-
 function nextMinute(timestamp: number): number {
   const minuteMs = 60_000;
   return Math.floor(timestamp / minuteMs) * minuteMs + minuteMs;
@@ -761,7 +733,7 @@ export const cronActor = actor({
     lastRunAt: null as number | null,
   },
   queues: {
-    [CRON_TICK_QUEUE]: queue<{ scheduledAt: number }>(),
+    "cron-tick": queue<{ scheduledAt: number }>(),
   },
   onCreate: async (c) => {
     const firstTickAt = nextMinute(Date.now());
@@ -769,7 +741,7 @@ export const cronActor = actor({
   },
   actions: {
     enqueueCronTick: async (c, scheduledAt: number) => {
-      await c.queue.send(CRON_TICK_QUEUE, { scheduledAt });
+      await c.queue.send("cron-tick", { scheduledAt });
 
       const nextTickAt = nextMinute(scheduledAt + 1);
       await c.schedule.at(nextTickAt, "enqueueCronTick", nextTickAt);
@@ -781,7 +753,7 @@ export const cronActor = actor({
       name: "cron-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-cron-tick", {
-          names: [CRON_TICK_QUEUE],
+          names: ["cron-tick"],
         });
 
         if (!message) return Loop.continue(undefined);
@@ -1133,26 +1105,25 @@ export const registry = setup({ use: { coordinatorActor, workerActor } });
 Use this when you want decoupled actor-to-actor communication with durable waits and explicit completion.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 
 type RequestMessage = { value: number };
-export const REQUEST_QUEUE = "requests";
 
 export const requestResponseActor = actor({
   state: {
     handled: 0,
   },
   queues: {
-    [REQUEST_QUEUE]: queue<RequestMessage, { doubled: number }>(),
+    requests: queue<RequestMessage, { doubled: number }>(),
   },
   run: workflow(async (ctx) => {
     await ctx.loop({
       name: "request-response-loop",
       run: async (loopCtx) => {
         const [message] = await loopCtx.queue.next("wait-request", {
-          names: [REQUEST_QUEUE],
+          names: ["requests"],
           completable: true,
         });
 
@@ -1175,13 +1146,12 @@ export const registry = setup({ use: { requestResponseActor } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import { REQUEST_QUEUE } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.requestResponseActor.getOrCreate(["main"]);
 
-const result = await handle.send(REQUEST_QUEUE, { value: 21 }, { wait: true });
+const result = await handle.send("requests", { value: 21 }, { wait: true });
 
 if (result.status === "completed") {
   const response = result.response as { doubled: number };

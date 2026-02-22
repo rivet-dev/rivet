@@ -9,15 +9,6 @@ const MOVE_SPEED = 200;
 const SHOT_LINE_DURATION = 150;
 const RUBBER_BAND_THRESHOLD = 40;
 
-function colorFromId(id: string): string {
-	let hash = 0;
-	for (let i = 0; i < id.length; i++) {
-		hash = (hash * 31 + id.charCodeAt(i)) | 0;
-	}
-	const hue = ((hash % 360) + 360) % 360;
-	return `hsl(${hue}, 70%, 55%)`;
-}
-
 interface ShotLine {
 	fromX: number;
 	fromY: number;
@@ -35,7 +26,7 @@ export class RankedGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 600;
-	private targets: Record<string, { x: number; y: number; score: number; rating: number }> = {};
+	private targets: Record<string, { x: number; y: number; color: string; score: number; rating: number }> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private phase: "waiting" | "live" | "finished" = "waiting";
@@ -57,7 +48,7 @@ export class RankedGame {
 	) {
 		this.conn = client.rankedMatch
 			.get([matchInfo.matchId], {
-				params: { playerToken: matchInfo.playerToken },
+				params: { username: matchInfo.username },
 			})
 			.connect();
 
@@ -67,7 +58,7 @@ export class RankedGame {
 				phase: "waiting" | "live" | "finished";
 				winnerId: string | null;
 				scoreLimit: number;
-				players: Record<string, { x: number; y: number; score: number; rating: number }>;
+				players: Record<string, { x: number; y: number; color: string; score: number; rating: number }>;
 			};
 			this.worldSize = snap.worldSize;
 			this.phase = snap.phase;
@@ -240,7 +231,7 @@ export class RankedGame {
 				py = d.y * sy;
 			}
 
-			const color = isMe ? "#ff4f00" : colorFromId(id);
+			const color = target.color;
 
 			ctx.beginPath();
 			ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI * 2);
