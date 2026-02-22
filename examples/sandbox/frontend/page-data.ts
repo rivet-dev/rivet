@@ -807,7 +807,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 				docs: [
 					{
 						label: "Queue",
-						href: "https://rivet.dev/docs/actors/queue",
+						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
 					actors: ["worker"],
@@ -821,7 +821,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 				docs: [
 					{
 						label: "Queue",
-						href: "https://rivet.dev/docs/actors/queue",
+						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
 					actors: ["worker"],
@@ -834,7 +834,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 				docs: [
 					{
 						label: "Queue",
-						href: "https://rivet.dev/docs/actors/queue",
+						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
 				actors: ["runWithQueueConsumer"],

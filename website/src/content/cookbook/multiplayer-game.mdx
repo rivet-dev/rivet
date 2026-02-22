@@ -41,34 +41,6 @@ This document uses the base reference game types from `examples/multiplayer-game
 | `turn-based` | Async invite flow plus open-pool pairing. | Matchmaker: `turnBasedMatchmaker["main"]`<br/>Match: `turnBasedMatch[matchId]` | Supports direct invites and pooled matching for long-lived asynchronous play. |
 | `idle` | No matchmaker. Per-player actor accessed directly. | World: `idleWorld[playerId]`<br/>Leaderboard: `idleLeaderboard["main"]` | Each player gets their own persistent actor. Global leaderboard actor tracks top scores. |
 
-## Access Control Rules By Mechanism
-
-This section summarizes the strict auth policy used in the reference actors.
-
-| Game Classification | `onBeforeConnect` Rule (General) | `canInvoke` Rule (General) |
-| --- | --- | --- |
-| `battle-royale` | Match actor requires a valid `playerToken` (or `internalToken` for actor-to-actor setup). Matchmaker rejects invalid internal tokens. | Matchmaker only allows public `findMatch`; `updateMatch` and `closeMatch` are internal-only queues. Match actor only allows assigned players to call gameplay actions/subscribe, and only allows internal callers to `createPlayer`. |
-| `arena` | Match actor requires valid `playerToken` (or `internalToken`). Matchmaker rejects invalid internal tokens. | Matchmaker allows public queue/join polling APIs, but `matchCompleted` is internal-only and connection-claim (`registerPlayer`) requires a queue-issued registration token. Match actor only allows assigned players to call gameplay actions/subscribe. |
-| `io-style` | Match actor requires valid `playerToken` (or `internalToken`). Matchmaker rejects invalid internal tokens. | Matchmaker allows public `findLobby`; `updateMatch` and `closeMatch` are internal-only queues. Match actor allows internal `createPlayer` only, and restricts gameplay actions/subscriptions to assigned players. |
-| `open-world` | World index rejects invalid internal tokens. Chunk actor allows one of: valid `playerToken`, `observer=true`, or `internalToken`. | World index only allows public `getChunkForPosition`. Chunk actor keeps `initialize`/`createPlayer` internal-only, makes observer connections read-only, and allows mutation actions only for assigned player connections. |
-| `party` | Match actor requires valid `playerToken` (or `internalToken`). Matchmaker rejects invalid internal tokens. | Matchmaker allows public `createParty`/`joinParty`; `closeParty` is internal-only. Match actor allows internal `createPlayer` only, and restricts lobby/game actions + subscriptions to assigned party members. |
-| `ranked` | Match actor requires valid `playerToken` (or `internalToken`). Matchmaker rejects invalid internal tokens. | Matchmaker allows public queue/assignment polling APIs, but rating finalization (`matchCompleted`) is internal-only and connection-claim (`registerPlayer`) requires a queue-issued registration token. Match actor restricts gameplay actions/subscriptions to assigned players. Player and leaderboard actors expose read paths publicly but keep mutation paths (`applyMatchResult`, `updatePlayer`) internal-only. |
-| `turn-based` | Match actor requires valid `playerToken` (or `internalToken`). Matchmaker rejects invalid internal tokens. | Matchmaker allows public `createGame`/`joinByCode`/`findMatch`; `closeMatch` is internal-only. Match actor allows internal `createPlayer` only, and restricts turn actions/subscriptions to assigned players. |
-| `idle` | Actors reject invalid internal tokens. | `idleWorld` keeps scheduled collection action (`collectProduction`) internal-only and exposes player-facing actions publicly. `idleLeaderboard` keeps score mutation (`updateScore`) internal-only and exposes reads/subscriptions publicly. |
-
-## Actor Ownership Constraints
-
-These examples enforce ownership with coordinator-created assignments, per-player join tokens, and explicit `canInvoke` allowlists. They are still scaffold constraints, not full external identity auth.
-
-| Constraint Area | Current Constraint In Examples | Implication |
-| --- | --- | --- |
-| Lobby/match creation authority | Coordinator actors create gameplay actors (`*Matchmaker`, `openWorldIndex`) via `create(...)`/`getOrCreate(...)`. Clients are expected to call the coordinator, not create match/chunk actors directly. | Lifecycle and discovery stay centralized in one actor per pattern. |
-| Player record creation authority | Gameplay actors create in-memory player rows on `join` after token checks (`joinToken`, party auth, room auth). | Player state inside a lobby/match/chunk is server-created at join time. |
-| Match/chunk trust boundary | Coordinator actors own assignment/index rows, and gameplay actors reject unknown players during `onBeforeConnect` via per-player tokens. | Orphaned sessions and unauthorized joins are rejected at connect time. |
-| Action/queue ownership after join | `canInvoke` applies fail-by-default allowlists per actor. Internal queues/actions are protected by `internalToken`; gameplay actions/subscriptions require an assigned player/member connection. | Clients cannot call coordinator maintenance queues (`close*`, `update*`, `matchCompleted`) or gameplay setup actions (`createPlayer`, `initialize`) directly. |
-| Open-world chunk ownership | Chunk keys are canonical (`openWorldChunk[worldId,chunkX,chunkY]`), `ensureChunk` enforces key/world/chunk consistency, and cross-chunk moves return the next chunk key instead of silently migrating state. | World partition boundaries are explicit and server-checked. |
-| Explicit gap: external identity source of truth | These examples bind access to actor-issued tokens/connection identity, but do not integrate external auth providers (JWT/session/SSO) by default. | Good for examples, but production code should bind all actor access to authenticated principals from your auth system. |
-
 ## Game Loop And Tick Rates
 
 ### Recommended Tick Rates

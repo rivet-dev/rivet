@@ -1,15 +1,8 @@
 ---
-title: "State"
+title: "In-Memory State"
 description: "Actor state provides the best of both worlds: it's stored in-memory and persisted automatically. This lets you work with the data without added latency while still being able to survive crashes & upgrades."
 skill: true
 ---
-
-<Tip>
-Actors can also be used with external SQL databases. This can be useful to integrate actors with existing
-applications or for storing relational data. Read more [here](/docs/actors/external-sql).
-</Tip>
-
-If you need low-level key-value storage for dynamic keys or blobs, see [Low-Level KV Storage](/docs/actors/kv).
 
 ## Initializing State
 
@@ -203,6 +196,12 @@ State is currently constrained to the following types:
 - `Set`
 - `Array`
 - Plain objects
+
+## Debugging
+
+- `GET /inspector/state` returns the actor's current persisted state and `isStateEnabled`.
+- `PATCH /inspector/state` lets you set state directly while debugging.
+- In non-dev mode, inspector endpoints require authorization.
 
 ## API Reference
 
