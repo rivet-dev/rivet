@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameClient } from "../../client.ts";
 import { type Mode, MODE_CONFIG } from "../../../src/actors/arena/config.ts";
 import { ArenaBot } from "./bot.ts";
+import { waitForAssignment } from "./wait-for-assignment.ts";
 
 export interface ArenaMatchInfo {
 	matchId: string;
 	playerId: string;
-	playerToken: string;
 	teamId: number;
 	mode: Mode;
 }
@@ -90,42 +90,21 @@ export function ArenaMenu({
 
 			setStatus("queued");
 
-			// Queue message completes immediately with playerId.
-			const result = await mm.send(
-				"queueForMatch",
-				{ mode },
-				{ wait: true, timeout: 120_000 },
-			);
-			const response = (
-				result as {
-					response?: { playerId: string; registrationToken: string };
-				}
-			)?.response;
-			if (!response || abortRef.current)
+			const response = await mm.queueForMatch({
+				mode,
+			}) as { playerId?: string };
+			if (!response?.playerId || abortRef.current)
 				throw new Error("Failed to queue");
 			myPlayerId = response.playerId;
-			await mm.registerPlayer({
-				playerId: myPlayerId,
-				registrationToken: response.registrationToken,
-			});
 
-			// Fetch current queue sizes since the broadcast during queue
-			// processing may have fired before the WebSocket was connected.
 			const sizes = await mm.getQueueSizes();
 			if (!abortRef.current) setQueueCount((sizes as Record<string, number>)[mode] ?? 0);
 
-			// Poll for assignment until this connection is matched.
-			while (!matched && !abortRef.current) {
-				const existing = await mm.getAssignment({
-					playerId: myPlayerId,
-					registrationToken: response.registrationToken,
-				});
-				if (existing) {
-					resolveMatch(existing as ArenaMatchInfo);
-					break;
-				}
-				await new Promise((resolve) => setTimeout(resolve, 200));
-			}
+			const assignment = await waitForAssignment<ArenaMatchInfo>(
+				mm,
+				myPlayerId,
+			);
+			resolveMatch(assignment);
 		} catch (err) {
 			if (abortRef.current) return;
 			await cleanup();

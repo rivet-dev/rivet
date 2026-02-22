@@ -1,14 +1,19 @@
-import { actor, type ActorContextOf, queue, UserError } from "rivetkit";
+/*
+This matchmaker uses a queue and fill flow.
+1. queueForMatch adds players to player_pool for a specific mode.
+2. Once enough players are queued for that mode, fillMatch removes them from the pool and creates a match actor.
+3. The matchmaker stores assignments and broadcasts assignmentReady so each client can connect to the new match.
+4. onDisconnect unqueues pending players so stale queue entries do not stay in the pool.
+*/
+import { actor, type ActorContextOf, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { hasInvalidInternalToken, INTERNAL_TOKEN, isInternalToken } from "../../auth.ts";
 import { registry } from "../index.ts";
 import { type Mode, MODE_CONFIG } from "./config.ts";
 
 export interface ArenaAssignment {
 	matchId: string;
 	playerId: string;
-	playerToken: string;
 	teamId: number;
 	mode: Mode;
 	connId: string | null;
@@ -17,11 +22,6 @@ export interface ArenaAssignment {
 type QueuePlayerRow = {
 	player_id: string;
 	conn_id: string | null;
-	registration_token: string | null;
-};
-
-type StoredArenaAssignment = ArenaAssignment & {
-	registrationToken: string | null;
 };
 
 export const arenaMatchmaker = actor({
@@ -29,72 +29,24 @@ export const arenaMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (invoke.kind === "queue" && invoke.name === "queueForMatch") {
-			return !isInternal;
-		}
-		if (invoke.kind === "queue" && invoke.name === "matchCompleted") {
-			return isInternal;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "registerPlayer" ||
-				invoke.name === "getQueueSizes" ||
-				invoke.name === "getAssignment")
-		) {
-			return !isInternal;
-		}
-		if (invoke.kind === "subscribe" && invoke.name === "queueUpdate") {
-			return !isInternal;
-		}
-		return false;
-	},
 	queues: {
-		queueForMatch: queue<
-			{ mode: Mode },
-			{ playerId: string; registrationToken: string }
-		>(),
+		queueForMatch: queue<{
+			mode: Mode;
+			playerId: string;
+			connId: string;
+		}>(),
+		unqueueForMatch: queue<{ connId: string }>(),
 		matchCompleted: queue<{ matchId: string }>(),
 	},
 	actions: {
-		registerPlayer: async (
-			c,
-			{
+		queueForMatch: async (c, { mode }: { mode: Mode }) => {
+			const playerId = crypto.randomUUID();
+			await c.queue.send("queueForMatch", {
+				mode,
 				playerId,
-				registrationToken,
-			}: { playerId: string; registrationToken: string },
-		) => {
-			await c.db.execute(
-				`UPDATE player_pool SET conn_id = ? WHERE player_id = ? AND registration_token = ?`,
-				c.conn.id,
-				playerId,
-				registrationToken,
-			);
-			const playerPoolChangeRows = await c.db.execute<{ changed: number }>(
-				`SELECT changes() AS changed`,
-			);
-			const playerPoolChanges = playerPoolChangeRows[0]?.changed ?? 0;
-			await c.db.execute(
-				`UPDATE assignments SET conn_id = ? WHERE player_id = ? AND registration_token = ?`,
-				c.conn.id,
-				playerId,
-				registrationToken,
-			);
-			const assignmentChangeRows = await c.db.execute<{ changed: number }>(
-				`SELECT changes() AS changed`,
-			);
-			const assignmentChanges = assignmentChangeRows[0]?.changed ?? 0;
-			if (playerPoolChanges === 0 && assignmentChanges === 0) {
-				throw new UserError("forbidden", { code: "forbidden" });
-			}
+				connId: c.conn.id,
+			});
+			return { playerId };
 		},
 		getQueueSizes: async (c) => {
 			const rows = await c.db.execute<{ mode: string; cnt: number }>(
@@ -108,30 +60,24 @@ export const arenaMatchmaker = actor({
 		},
 		getAssignment: async (
 			c,
-			{
-				playerId,
-				registrationToken,
-			}: { playerId: string; registrationToken: string },
+			{ playerId }: { playerId: string },
 		) => {
 			const rows = await c.db.execute<{
 				match_id: string;
 				player_id: string;
-				player_token: string;
 				team_id: number;
 				mode: string;
 				conn_id: string | null;
 			}>(
-				`SELECT * FROM assignments WHERE player_id = ? AND conn_id = ? AND registration_token = ?`,
+				`SELECT * FROM assignments WHERE player_id = ? AND conn_id = ?`,
 				playerId,
 				c.conn.id,
-				registrationToken,
 			);
 			if (rows.length === 0) return null;
 			const row = rows[0]!;
 			return {
 				matchId: row.match_id,
 				playerId: row.player_id,
-				playerToken: row.player_token,
 				teamId: row.team_id,
 				mode: row.mode as Mode,
 				connId: row.conn_id,
@@ -139,20 +85,28 @@ export const arenaMatchmaker = actor({
 		},
 	},
 	onDisconnect: async (c, conn) => {
-		await c.db.execute(`DELETE FROM player_pool WHERE conn_id = ?`, conn.id);
-		await broadcastQueueSizes(c);
+		await c.queue.send("unqueueForMatch", { connId: conn.id });
 	},
 	run: async (c) => {
-		for await (const message of c.queue.iter({ completable: true })) {
+		for await (const message of c.queue.iter()) {
 			if (message.name === "queueForMatch") {
-				const queueResult = await processQueueEntry(c, message.body.mode);
-				await message.complete(queueResult);
+				await processQueueEntry(
+					c,
+					message.body.mode,
+					message.body.playerId,
+					message.body.connId,
+				);
+			} else if (message.name === "unqueueForMatch") {
+				await c.db.execute(
+					`DELETE FROM player_pool WHERE conn_id = ?`,
+					message.body.connId,
+				);
+				await broadcastQueueSizes(c);
 			} else if (message.name === "matchCompleted") {
 				await c.db.execute(
 					`DELETE FROM matches WHERE match_id = ?`,
 					message.body.matchId,
 				);
-				await message.complete();
 			}
 		}
 	},
@@ -174,23 +128,21 @@ async function broadcastQueueSizes(
 async function processQueueEntry(
 	c: ActorContextOf<typeof arenaMatchmaker>,
 	mode: Mode,
-): Promise<{ playerId: string; registrationToken: string }> {
-	const playerId = crypto.randomUUID();
-	const registrationToken = crypto.randomUUID();
+	playerId: string,
+	connId: string,
+): Promise<void> {
 	const config = MODE_CONFIG[mode];
 
-	// Insert player into pool.
 	await c.db.execute(
-		`INSERT OR REPLACE INTO player_pool (player_id, mode, queued_at, registration_token) VALUES (?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO player_pool (player_id, mode, queued_at, conn_id) VALUES (?, ?, ?, ?)`,
 		playerId,
 		mode,
 		Date.now(),
-		registrationToken,
+		connId,
 	);
 
 	await broadcastQueueSizes(c);
 
-	// Count queued players for this mode.
 	const countRows = await c.db.execute<{ cnt: number }>(
 		`SELECT COUNT(*) as cnt FROM player_pool WHERE mode = ?`,
 		mode,
@@ -200,8 +152,6 @@ async function processQueueEntry(
 	if (count >= config.capacity) {
 		await fillMatch(c, mode, config);
 	}
-
-	return { playerId, registrationToken };
 }
 
 async function fillMatch(
@@ -209,9 +159,8 @@ async function fillMatch(
 	mode: Mode,
 	config: { capacity: number; teams: number },
 ) {
-	// Pop oldest N players.
 	const queued = await c.db.execute<QueuePlayerRow>(
-		`SELECT player_id, conn_id, registration_token FROM player_pool WHERE mode = ? ORDER BY queued_at ASC LIMIT ?`,
+		`SELECT player_id, conn_id FROM player_pool WHERE mode = ? ORDER BY queued_at ASC LIMIT ?`,
 		mode,
 		config.capacity,
 	);
@@ -219,26 +168,20 @@ async function fillMatch(
 	const queuedPlayers = queued.map((r) => ({
 		playerId: r.player_id,
 		connId: r.conn_id,
-		registrationToken: r.registration_token,
 	}));
 	const playerIds = queuedPlayers.map((r) => r.playerId);
 
-	// Remove from queue.
 	for (const pid of playerIds) {
 		await c.db.execute(`DELETE FROM player_pool WHERE player_id = ?`, pid);
 	}
 
-	// Assign teams and generate tokens.
 	const matchId = crypto.randomUUID();
 	const assignedPlayers = queuedPlayers.map((queuedPlayer, idx) => ({
 		playerId: queuedPlayer.playerId,
-		token: crypto.randomUUID(),
 		connId: queuedPlayer.connId,
-		registrationToken: queuedPlayer.registrationToken,
 		teamId: config.teams > 0 ? idx % config.teams : -1,
 	}));
 
-	// Create match actor with all players in input.
 	const client = c.client<typeof registry>();
 	await client.arenaMatch.create([matchId], {
 		input: {
@@ -247,13 +190,11 @@ async function fillMatch(
 			capacity: config.capacity,
 			assignedPlayers: assignedPlayers.map((ap) => ({
 				playerId: ap.playerId,
-				token: ap.token,
 				teamId: ap.teamId,
 			})),
 		},
 	});
 
-	// Insert match record.
 	await c.db.execute(
 		`INSERT INTO matches (match_id, mode, capacity, created_at) VALUES (?, ?, ?, ?)`,
 		matchId,
@@ -264,27 +205,22 @@ async function fillMatch(
 
 	await broadcastQueueSizes(c);
 
-	// Store assignments in DB so bots can poll for them.
-	const assignments: StoredArenaAssignment[] = assignedPlayers.map((ap) => ({
-		matchId,
-		playerId: ap.playerId,
-		playerToken: ap.token,
-		teamId: ap.teamId,
-		mode,
-		connId: ap.connId,
-		registrationToken: ap.registrationToken,
-	}));
-	for (const a of assignments) {
+	for (const ap of assignedPlayers) {
 		await c.db.execute(
-			`INSERT INTO assignments (player_id, match_id, player_token, team_id, mode, conn_id, registration_token) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			a.playerId,
-			a.matchId,
-			a.playerToken,
-			a.teamId,
-			a.mode,
-			a.connId,
-			a.registrationToken,
+			`INSERT INTO assignments (player_id, match_id, team_id, mode, conn_id) VALUES (?, ?, ?, ?, ?)`,
+			ap.playerId,
+			matchId,
+			ap.teamId,
+			mode,
+			ap.connId,
 		);
+		c.broadcast("assignmentReady", {
+			matchId,
+			playerId: ap.playerId,
+			teamId: ap.teamId,
+			mode,
+			connId: ap.connId,
+		} satisfies ArenaAssignment);
 	}
 }
 
@@ -294,8 +230,7 @@ async function migrateTables(dbHandle: RawAccess) {
 			player_id TEXT PRIMARY KEY,
 			mode TEXT NOT NULL,
 			queued_at INTEGER NOT NULL,
-			conn_id TEXT,
-			registration_token TEXT
+			conn_id TEXT
 		)
 	`);
 	await dbHandle.execute(`
@@ -310,29 +245,9 @@ async function migrateTables(dbHandle: RawAccess) {
 		CREATE TABLE IF NOT EXISTS assignments (
 			player_id TEXT PRIMARY KEY,
 			match_id TEXT NOT NULL,
-			player_token TEXT NOT NULL,
 			team_id INTEGER NOT NULL,
 			mode TEXT NOT NULL,
-			conn_id TEXT,
-			registration_token TEXT
+			conn_id TEXT
 		)
 	`);
-	await ensureColumn(dbHandle, "player_pool", "registration_token", "TEXT");
-	await ensureColumn(dbHandle, "assignments", "registration_token", "TEXT");
-}
-
-async function ensureColumn(
-	dbHandle: RawAccess,
-	table: "player_pool" | "assignments",
-	column: "registration_token",
-	definition: "TEXT",
-) {
-	const columns = await dbHandle.execute<{ name: string }>(
-		`PRAGMA table_info(${table})`,
-	);
-	if (!columns.some((col) => col.name === column)) {
-		await dbHandle.execute(
-			`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
-		);
-	}
 }

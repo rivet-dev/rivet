@@ -1,7 +1,13 @@
-import { actor, type ActorContextOf, queue, UserError } from "rivetkit";
+/*
+This matchmaker uses an open lobby flow.
+1. findLobby finds the most populated lobby that still has space, or creates a new match actor and row.
+2. The matchmaker adds the player to that match and increments stored lobby count immediately.
+3. The match actor reports authoritative connected count through updateMatch.
+4. closeMatch removes lobbies after the match actor shuts down.
+*/
+import { actor, type ActorContextOf, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
-import { hasInvalidInternalToken, INTERNAL_TOKEN, isInternalToken } from "../../auth.ts";
 import { registry } from "../index.ts";
 import { CAPACITY } from "./config.ts";
 
@@ -10,32 +16,9 @@ export const ioStyleMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	onBeforeConnect: (_c, params: { internalToken?: string }) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		if (invoke.kind === "queue" && invoke.name === "findLobby") {
-			return !isInternal;
-		}
-		if (
-			invoke.kind === "queue" &&
-			(invoke.name === "updateMatch" || invoke.name === "closeMatch")
-		) {
-			return isInternal;
-		}
-		return false;
-	},
 	queues: {
-		// Sent by player
-		findLobby: queue<Record<string, never>, { matchId: string; playerId: string; playerToken: string }>(),
-		// Sent from match actor
+		findLobby: queue<Record<string, never>, { matchId: string; playerId: string }>(),
 		updateMatch: queue<{ matchId: string; playerCount: number }>(),
-		// Sent from match actor
 		closeMatch: queue<{ matchId: string }>(),
 	},
 	run: async (c) => {
@@ -64,7 +47,7 @@ export const ioStyleMatchmaker = actor({
 
 async function processFindLobby(
 	c: ActorContextOf<typeof ioStyleMatchmaker>,
-): Promise<{ matchId: string; playerId: string; playerToken: string }> {
+): Promise<{ matchId: string; playerId: string }> {
 	const rows = await c.db.execute<{ match_id: string; player_count: number }>(
 		`SELECT match_id, player_count FROM matches WHERE player_count < ? ORDER BY player_count DESC, updated_at DESC LIMIT 1`,
 		CAPACITY,
@@ -86,18 +69,14 @@ async function processFindLobby(
 	}
 
 	const playerId = crypto.randomUUID();
-	const playerToken = crypto.randomUUID();
 	const client = c.client<typeof registry>();
-	await client.ioStyleMatch.get([matchId], { params: { internalToken: INTERNAL_TOKEN } }).createPlayer({
-		playerId,
-		playerToken,
-	});
+	await client.ioStyleMatch.get([matchId]).createPlayer({ playerId });
 	await c.db.execute(
 		`UPDATE matches SET player_count = player_count + 1, updated_at = ? WHERE match_id = ?`,
 		Date.now(),
 		matchId,
 	);
-	return { matchId, playerId, playerToken };
+	return { matchId, playerId };
 }
 
 async function migrateTables(dbHandle: RawAccess) {

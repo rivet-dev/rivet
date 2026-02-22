@@ -4,8 +4,9 @@ import type { GameClient } from "../../client.ts";
 export interface PartyMatchInfo {
 	matchId: string;
 	playerId: string;
-	playerToken: string;
 	partyCode: string;
+	joinToken: string;
+	playerName: string;
 }
 
 export function PartyMenu({
@@ -54,7 +55,14 @@ export function PartyMenu({
 			);
 			mm.dispose();
 			const response = (
-				result as { response?: { matchId: string; playerId: string; playerToken: string } }
+				result as {
+					response?: {
+						matchId: string;
+						playerId: string;
+						joinToken: string;
+						playerName: string;
+					};
+				}
 			)?.response;
 			if (!response?.matchId) throw new Error("Failed to join party");
 			onReady({ ...response, partyCode: joinCode.trim().toUpperCase() });

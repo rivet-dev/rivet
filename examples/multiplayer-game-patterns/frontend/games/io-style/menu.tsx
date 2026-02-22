@@ -4,7 +4,6 @@ import type { GameClient } from "../../client.ts";
 export interface IoStyleMatchInfo {
 	matchId: string;
 	playerId: string;
-	playerToken: string;
 }
 
 export function IoStyleMenu({
@@ -26,7 +25,7 @@ export function IoStyleMenu({
 			const result = await mm.send("findLobby", {}, { wait: true, timeout: 10_000 });
 			mm.dispose();
 			const response = (result as { response?: IoStyleMatchInfo })?.response;
-			if (!response?.matchId || !response?.playerToken || !response?.playerId) {
+			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid lobby");
 			}
 			onReady(response);

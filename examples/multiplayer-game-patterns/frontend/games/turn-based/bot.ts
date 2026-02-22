@@ -28,13 +28,13 @@ export class TurnBasedBot {
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: { matchId: string; playerId: string; playerToken: string } })?.response;
+			const response = (result as { response?: { matchId: string; playerId: string } })?.response;
 			if (!response || this.destroyed) return;
 
 			this.playerId = response.playerId;
 
 			this.conn = this.client.turnBasedMatch
-				.get([response.matchId], { params: { playerToken: response.playerToken } })
+				.get([response.matchId], { params: { playerId: response.playerId } })
 				.connect();
 
 			this.conn.on("gameUpdate", (raw: unknown) => {

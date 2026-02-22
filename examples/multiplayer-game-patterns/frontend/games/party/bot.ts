@@ -18,11 +18,23 @@ export class PartyBot {
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: { matchId: string; playerId: string; playerToken: string } })?.response;
+			const response = (result as {
+				response?: {
+					matchId: string;
+					playerId: string;
+					joinToken: string;
+					playerName: string;
+				};
+			})?.response;
 			if (!response || this.destroyed) return;
 
 			this.conn = this.client.partyMatch
-				.get([response.matchId], { params: { playerToken: response.playerToken } })
+				.get([response.matchId], {
+					params: {
+						playerId: response.playerId,
+						joinToken: response.joinToken,
+					},
+				})
 				.connect();
 
 			// Auto-ready after a short delay.
