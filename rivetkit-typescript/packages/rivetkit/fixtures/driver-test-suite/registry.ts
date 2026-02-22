@@ -166,16 +166,16 @@ export const registry = setup({
 		workflowStopTeardownActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
-			// From actor-db-drizzle.ts
-			dbActorDrizzle,
-			// From db-lifecycle.ts
-			dbLifecycle,
-			dbLifecycleFailing,
-			dbLifecycleObserver,
-			// From stateless.ts
-			statelessActor,
-			// From access-control.ts
-			accessControlActor,
-			accessControlNoQueuesActor,
-		},
-	});
+		// From actor-db-drizzle.ts
+		dbActorDrizzle,
+		// From db-lifecycle.ts
+		dbLifecycle,
+		dbLifecycleFailing,
+		dbLifecycleObserver,
+		// From stateless.ts
+		statelessActor,
+		// From access-control.ts
+		accessControlActor,
+		accessControlNoQueuesActor,
+	},
+});
