@@ -4,11 +4,43 @@ import { migrations } from "./db/migrations";
 import { schema } from "./db/schema";
 
 export const dbActorDrizzle = actor({
+	state: {
+		disconnectInsertEnabled: false,
+		disconnectInsertDelayMs: 0,
+	},
 	db: db({
 		schema,
 		migrations,
 	}),
+	onDisconnect: async (c) => {
+		if (!c.state.disconnectInsertEnabled) {
+			return;
+		}
+
+		if (c.state.disconnectInsertDelayMs > 0) {
+			await new Promise<void>((resolve) =>
+				setTimeout(resolve, c.state.disconnectInsertDelayMs),
+			);
+		}
+
+		await c.db.execute(
+			`INSERT INTO test_data (value, payload, created_at) VALUES ('__disconnect__', '', ${Date.now()})`,
+		);
+	},
 	actions: {
+		configureDisconnectInsert: (c, enabled: boolean, delayMs: number) => {
+			c.state.disconnectInsertEnabled = enabled;
+			c.state.disconnectInsertDelayMs = Math.max(
+				0,
+				Math.floor(delayMs),
+			);
+		},
+		getDisconnectInsertCount: async (c) => {
+			const results = await c.db.execute<{ count: number }>(
+				`SELECT COUNT(*) as count FROM test_data WHERE value = '__disconnect__'`,
+			);
+			return results[0]?.count ?? 0;
+		},
 		reset: async (c) => {
 			await c.db.execute(`DELETE FROM test_data`);
 		},
