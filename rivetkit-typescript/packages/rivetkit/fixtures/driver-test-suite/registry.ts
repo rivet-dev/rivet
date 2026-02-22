@@ -18,6 +18,7 @@ import {
 } from "./action-types";
 import { dbActorRaw } from "./actor-db-raw";
 import { dbActorDrizzle } from "./actor-db-drizzle";
+import { dbLifecycle, dbLifecycleFailing, dbLifecycleObserver } from "./db-lifecycle";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { counterWithParams } from "./conn-params";
 import { connStateActor } from "./conn-state";
@@ -165,10 +166,14 @@ export const registry = setup({
 		workflowStopTeardownActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
-		// From actor-db-drizzle.ts
-		dbActorDrizzle,
-		// From stateless.ts
-		statelessActor,
+			// From actor-db-drizzle.ts
+			dbActorDrizzle,
+			// From db-lifecycle.ts
+			dbLifecycle,
+			dbLifecycleFailing,
+			dbLifecycleObserver,
+			// From stateless.ts
+			statelessActor,
 			// From access-control.ts
 			accessControlActor,
 			accessControlNoQueuesActor,

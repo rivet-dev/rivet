@@ -5,7 +5,6 @@ import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
-import { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
@@ -99,9 +98,6 @@ export class FileSystemGlobalState {
 	#persist: boolean;
 	#sqliteRuntime: SqliteRuntime;
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
-
-	/** SQLite VFS instance for this driver. */
-	readonly sqliteVfs = new SqliteVfs();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
 	// conditions since the actor generation will cease to be tracked
