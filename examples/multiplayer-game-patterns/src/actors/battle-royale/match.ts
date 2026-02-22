@@ -1,10 +1,5 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import {
-	hasInvalidInternalToken,
-	INTERNAL_TOKEN,
-	isInternalToken,
-} from "../../auth.ts";
 import { registry } from "../index.ts";
 import {
 	LOBBY_CAPACITY,
@@ -21,10 +16,11 @@ import {
 	PLAYER_MAX_HP,
 	LOBBY_COUNTDOWN_TICKS,
 } from "./config.ts";
+import { getPlayerColor } from "../player-color.ts";
 
 interface PlayerEntry {
-	token: string;
 	connId: string | null;
+	color: string;
 	x: number;
 	y: number;
 	lastPositionAt: number;
@@ -45,6 +41,10 @@ interface State {
 	lobbyCountdown: number | null;
 }
 
+interface ConnParams {
+	playerId?: string;
+}
+
 export const battleRoyaleMatch = actor({
 	options: { name: "Battle Royale - Match", icon: "skull-crossbones" },
 	events: {
@@ -61,57 +61,36 @@ export const battleRoyaleMatch = actor({
 		winnerId: null,
 		lobbyCountdown: null,
 	}),
-	onBeforeConnect: (
-		c,
-		params: { playerToken?: string; internalToken?: string },
-	) => {
-		if (hasInvalidInternalToken(params)) {
-			throw new UserError("forbidden", { code: "forbidden" });
-		}
-		if (params?.internalToken === INTERNAL_TOKEN) return;
-		const playerToken = params?.playerToken?.trim();
-		if (!playerToken) {
-			throw new UserError("authentication required", { code: "auth_required" });
-		}
-		if (!findPlayerByToken(c.state, playerToken)) {
-			throw new UserError("invalid player token", { code: "invalid_player_token" });
-		}
-	},
-	canInvoke: (c, invoke) => {
-		const isInternal = isInternalToken(
-			c.conn.params as { internalToken?: string } | undefined,
-		);
-		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
-		if (invoke.kind === "action" && invoke.name === "createPlayer") {
-			return isInternal;
-		}
-		if (
-			invoke.kind === "action" &&
-			(invoke.name === "updatePosition" ||
-				invoke.name === "shoot" ||
-				invoke.name === "getSnapshot")
-		) {
-			return !isInternal && isAssignedPlayer;
-		}
-		if (
-			invoke.kind === "subscribe" &&
-			(invoke.name === "snapshot" || invoke.name === "shoot")
-		) {
-			return !isInternal && isAssignedPlayer;
-		}
-		return false;
-	},
 	onConnect: async (c, conn) => {
-		const playerToken = conn.params?.playerToken?.trim();
-		if (!playerToken) return;
-		const found = findPlayerByToken(c.state, playerToken);
-		if (!found) {
-			conn.disconnect("invalid_player_token");
+		const params = (conn.params as ConnParams | null) ?? {};
+		const playerId = params.playerId;
+		if (!playerId) {
+			conn.disconnect("invalid_player");
 			return;
 		}
-		const [, player] = found;
-		player.connId = conn.id;
-		player.disconnectedAt = null;
+		const existingPlayer = c.state.players[playerId];
+		if (existingPlayer) {
+			existingPlayer.connId = conn.id;
+			existingPlayer.disconnectedAt = null;
+		} else {
+			const confirmed = await claimPendingPlayer(c, playerId);
+			if (!confirmed) {
+				conn.disconnect("player_not_pending");
+				return;
+			}
+			const pos = randomPositionInZone(c.state.zone);
+			c.state.players[playerId] = {
+				connId: conn.id,
+				color: getPlayerColor(playerId),
+				x: pos.x,
+				y: pos.y,
+				lastPositionAt: Date.now(),
+				hp: PLAYER_MAX_HP,
+				alive: true,
+				placement: null,
+				disconnectedAt: null,
+			};
+		}
 
 		await updateMatchmaker(c);
 		broadcastSnapshot(c);
@@ -129,7 +108,7 @@ export const battleRoyaleMatch = actor({
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.battleRoyaleMatchmaker
-			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+			.getOrCreate(["main"])
 			.send("closeMatch", { matchId: c.state.matchId });
 	},
 	run: async (c) => {
@@ -141,19 +120,22 @@ export const battleRoyaleMatch = actor({
 			c.state.tick += 1;
 			const now = Date.now();
 
-			// Remove players disconnected > 5s in lobby phase.
 			if (c.state.phase === "lobby") {
+				let removedPlayer = false;
 				for (const [id, player] of Object.entries(c.state.players)) {
 					if (
 						player.disconnectedAt &&
 						now - player.disconnectedAt > 5000
 					) {
 						delete c.state.players[id];
+						removedPlayer = true;
 					}
+				}
+				if (removedPlayer) {
+					await updateMatchmaker(c);
 				}
 			}
 
-			// Lobby countdown logic.
 			if (c.state.phase === "lobby") {
 				const connectedCount = Object.values(c.state.players).filter(
 					(p) => p.connId !== null,
@@ -169,7 +151,6 @@ export const battleRoyaleMatch = actor({
 				}
 			}
 
-			// Live phase: zone shrink + damage.
 			if (c.state.phase === "live") {
 				if (c.state.tick > ZONE_SHRINK_START_TICK) {
 					c.state.zone.radius = Math.max(
@@ -178,7 +159,6 @@ export const battleRoyaleMatch = actor({
 					);
 				}
 
-				// Zone damage.
 				for (const [id, player] of Object.entries(c.state.players)) {
 					if (!player.alive) continue;
 					const dx = player.x - c.state.zone.centerX;
@@ -195,7 +175,6 @@ export const battleRoyaleMatch = actor({
 					}
 				}
 
-				// Check for winner.
 				const alivePlayers = Object.entries(c.state.players).filter(
 					([, p]) => p.alive,
 				);
@@ -213,20 +192,6 @@ export const battleRoyaleMatch = actor({
 		}
 	},
 	actions: {
-		createPlayer: (c, input: { playerId: string; playerToken: string }) => {
-			const pos = randomPositionInZone(c.state.zone);
-			c.state.players[input.playerId] = {
-				token: input.playerToken,
-				connId: null,
-				x: pos.x,
-				y: pos.y,
-				lastPositionAt: Date.now(),
-				hp: PLAYER_MAX_HP,
-				alive: true,
-				placement: null,
-				disconnectedAt: Date.now(),
-			};
-		},
 		updatePosition: (c, input: { x: number; y: number }) => {
 			const found = findPlayerByConnId(c.state, c.conn.id);
 			if (!found) {
@@ -316,7 +281,6 @@ export const battleRoyaleMatch = actor({
 			};
 			c.broadcast("shoot", shootEvent);
 
-			// Check for winner after elimination.
 			const alivePlayers = Object.entries(c.state.players).filter(
 				([, p]) => p.alive,
 			);
@@ -345,7 +309,6 @@ function startGame(c: ActorContextOf<typeof battleRoyaleMatch>) {
 		radius: ZONE_INITIAL_RADIUS,
 	};
 
-	// Reset positions to random spots within the zone.
 	for (const player of Object.values(c.state.players)) {
 		const pos = randomPositionInZone(c.state.zone);
 		player.x = pos.x;
@@ -368,12 +331,34 @@ function randomPositionInZone(zone: { centerX: number; centerY: number; radius: 
 async function updateMatchmaker(c: ActorContextOf<typeof battleRoyaleMatch>) {
 	const client = c.client<typeof registry>();
 	await client.battleRoyaleMatchmaker
-		.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+		.getOrCreate(["main"])
 		.send("updateMatch", {
 			matchId: c.state.matchId,
-			playerCount: Object.values(c.state.players).filter((p) => p.connId !== null).length,
+			connectedPlayerCount: Object.keys(c.state.players).length,
 			isStarted: c.state.phase !== "lobby",
 		});
+}
+
+async function claimPendingPlayer(
+	c: ActorContextOf<typeof battleRoyaleMatch>,
+	playerId: string,
+): Promise<boolean> {
+	const client = c.client<typeof registry>();
+	const result = await client.battleRoyaleMatchmaker
+		.getOrCreate(["main"])
+		.send(
+			"pendingPlayerConnected",
+			{
+				matchId: c.state.matchId,
+				playerId,
+			},
+			{ wait: true, timeout: 3_000 },
+		);
+	if (result.status !== "completed") {
+		return false;
+	}
+	const response = (result as { response?: { accepted?: boolean } }).response;
+	return response?.accepted === true;
 }
 
 function countAlivePlayers(state: State): number {
@@ -391,7 +376,7 @@ interface Snapshot {
 	lobbyCountdown: number | null;
 	worldSize: number;
 	zone: { centerX: number; centerY: number; radius: number };
-	players: Record<string, { x: number; y: number; hp: number; maxHp: number; alive: boolean; placement: number | null }>;
+	players: Record<string, { x: number; y: number; color: string; hp: number; maxHp: number; alive: boolean; placement: number | null }>;
 }
 
 interface ShootEvent {
@@ -413,6 +398,7 @@ function buildSnapshot(c: ActorContextOf<typeof battleRoyaleMatch>): Snapshot {
 		players[id] = {
 			x: entry.x,
 			y: entry.y,
+			color: entry.color,
 			hp: entry.hp,
 			maxHp: PLAYER_MAX_HP,
 			alive: entry.alive,
@@ -432,16 +418,6 @@ function buildSnapshot(c: ActorContextOf<typeof battleRoyaleMatch>): Snapshot {
 		zone: { ...c.state.zone },
 		players,
 	};
-}
-
-function findPlayerByToken(
-	state: State,
-	token: string,
-): [string, PlayerEntry] | null {
-	for (const [id, entry] of Object.entries(state.players)) {
-		if (entry.token === token) return [id, entry];
-	}
-	return null;
 }
 
 function findPlayerByConnId(

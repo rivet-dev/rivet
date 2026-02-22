@@ -12,6 +12,8 @@ skill: true
 - **Scalable**: queues absorb large bursts and handle heavy backpressure safely.
 - **Local per actor**: each actor instance has its own queue storage (scoped by actor key/id).
 
+Queues are commonly referred to as "mailboxes" in other actor frameworks.
+
 ## What are queues good for?
 
 - Great for any task that changes actor state.
@@ -23,7 +25,7 @@ skill: true
 This is the default pattern. Define queue names in `queues`, process them in `run`, and publish from the client with `handle.send(...)`.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 
 export const counter = actor({
@@ -43,7 +45,7 @@ export const registry = setup({ use: { counter } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.counter.getOrCreate(["main"]);
@@ -62,7 +64,7 @@ Use this when you want explicit completion/ack semantics but do not need to retu
 - `status: "timedOut"` means sender timeout elapsed before `message.complete(...)`.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 
 export const counter = actor({
@@ -83,7 +85,7 @@ export const registry = setup({ use: { counter } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.counter.getOrCreate(["main"]);
@@ -107,7 +109,7 @@ if (result.status === "completed") {
 Use this when the sender needs data back from queued work.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 
 export const counter = actor({
@@ -128,7 +130,7 @@ export const registry = setup({ use: { counter } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.counter.getOrCreate(["main"]);
@@ -156,7 +158,7 @@ Queueing is useful from inside actor logic too, not just from clients.
 - `c.queue.send(...)` confirms durable enqueue. It does not wait for processing to finish.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 
 export const counter = actor({
@@ -181,7 +183,7 @@ export const registry = setup({ use: { counter } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.counter.getOrCreate(["main"]);
@@ -195,8 +197,7 @@ await handle.increment(2);
 
 You can define queue types with `queue<TMessage, TComplete>()` or with schema objects. Schema objects support [Standard Schema](https://standardschema.dev/) validators, including [Zod](https://zod.dev/).
 
-<CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { z } from "zod";
 
@@ -215,7 +216,6 @@ export const worker = actor({
 
 export const registry = setup({ use: { worker } });
 ```
-</CodeGroup>
 
 ## Pull messages with `next`
 
@@ -224,8 +224,7 @@ Use `next` when you want to wait for queue messages.
 - Waits until messages are available unless timeout is hit.
 - Omit `timeout` to wait indefinitely.
 
-<CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 
 export const queueWorker = actor({
@@ -254,7 +253,6 @@ export const queueWorker = actor({
 
 export const registry = setup({ use: { queueWorker } });
 ```
-</CodeGroup>
 
 ## Poll messages
 
@@ -262,8 +260,7 @@ Use `tryNext` when you need a non-blocking read.
 
 - Returns immediately and never waits.
 
-<CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 
 export const queueWorker = actor({
@@ -286,14 +283,13 @@ export const queueWorker = actor({
 
 export const registry = setup({ use: { queueWorker } });
 ```
-</CodeGroup>
 
 ## Abort signals
 
 Use `signal` when your receive loop needs external cancellation semantics in addition to actor shutdown behavior.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
 import { joinSignals } from "rivetkit/utils";
 
@@ -334,7 +330,7 @@ export const registry = setup({ use: { signalWorker } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.signalWorker.getOrCreate(["main"]);
@@ -351,7 +347,7 @@ Multiple queues let you separate message flows by purpose. By default, receive c
 Use `iter({ names: ["prompt"] })` as the main stream and `next({ names: ["stop"] })` as a stop signal.
 
 <CodeGroup workspace>
-```ts registry.ts
+```ts actors.ts
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { actor, queue, setup } from "rivetkit";
@@ -400,7 +396,7 @@ export const registry = setup({ use: { agent } });
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 const handle = client.agent.getOrCreate(["main"]);

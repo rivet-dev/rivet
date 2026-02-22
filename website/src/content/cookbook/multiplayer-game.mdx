@@ -1,67 +1,39 @@
 ---
 title: "Multiplayer Game"
-description: "Pragmatic patterns for building multiplayer games with RivetKit: matchmaking, tick loops, realtime state, interest management, and validation."
+description: "Pragmatic patterns for building multiplayer games: matchmaking, tick loops, realtime state, interest management, and validation."
 templates: []
 ---
 
 Patterns for building multiplayer games with RivetKit, intended as a practical checklist you can adapt per genre.
 
-This document uses the base reference game types from `examples/multiplayer-game-patterns/src/actors/*` in alphabetical order.
+## Starter Code
 
-| Game Classification | Common Examples |
-| --- | --- |
-| `battle-royale` | Fortnite, Apex Legends, PUBG, Warzone |
-| `arena` | Call of Duty TDM/FFA, Halo Slayer, Counter-Strike casual, VALORANT unrated, Overwatch Quick Play, Rocket League |
-| `io-style` | Agar.io, Slither.io, surviv.io |
-| `open-world` | Minecraft survival servers, Rust-like worlds, MMO zone/chunk worlds |
-| `party` | Fall Guys private lobbies, custom game rooms, social party sessions |
-| `ranked` | Chess ladders, competitive card games, duel arena ranked queues |
-| `turn-based` | Chess correspondence, Words With Friends, async board games |
-| `idle` | Cookie Clicker, Idle Miner Tycoon, Adventure Capitalist |
+Start with one of the working examples on [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/) and adapt it to your game. Do not start from scratch for matchmaking and lifecycle flows.
 
-## Architecture Patterns
+| Game Classification | Starter Code | Common Examples |
+| --- | --- | --- |
+| Battle Royale | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/battle-royale/) | Fortnite, Apex Legends, PUBG, Warzone |
+| Arena | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/arena/) | Call of Duty TDM/FFA, Halo Slayer, Counter-Strike casual, VALORANT unrated, Overwatch Quick Play, Rocket League |
+| IO Style | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/io-style/) | Agar.io, Slither.io, surviv.io |
+| Open World | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/open-world/) | Minecraft survival servers, Rust-like worlds, MMO zone/chunk worlds |
+| Party | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/party/) | Fall Guys private lobbies, custom game rooms, social party sessions |
+| Physics 2D | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-2d/) | Top-down physics brawlers, 2D arena games, platform fighters |
+| Physics 3D | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-3d/) | Physics sandbox sessions, 3D arena games, movement playgrounds |
+| Ranked | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/ranked/) | Chess ladders, competitive card games, duel arena ranked queues |
+| Turn-Based | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/turn-based/) | Chess correspondence, Words With Friends, async board games |
+| Idle | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/idle/) | Cookie Clicker, Idle Miner Tycoon, Adventure Capitalist |
 
-- Rivet Actor per gameplay boundary (room, chunk, match), not per physics entity.
-  - In realtime simulations, keep players, projectiles, and objects in actor state. Do not create one actor per player/object/physics body.
-
-- Coordinator and data actors: use a coordinator (matchmaker/world index) to create/find data actors (rooms/chunks/matches). See [Coordinator & Data Actors](/docs/actors/design-patterns#coordinator--data-actors).
-- Lifecycle: data actors can call `c.destroy()` when empty to keep state clean.
-- Communication path: prefer direct actor actions/events for game flows, and avoid adding extra internal HTTP hops unless you need an external integration boundary.
-
-## Matchmaking Patterns
-
-| Game Classification | Matchmaking Pattern | Actor Keys Recommendation | Behavior In Example |
-| --- | --- | --- | --- |
-| `battle-royale` | Immediate routing to non-started lobbies with waiting-lobby phase. | Matchmaker: `battleRoyaleMatchmaker["main"]`<br/>Match: `battleRoyaleMatch[matchId]` | Routes players immediately to the newest non-started match. Players walk around in lobby phase until capacity is reached, then game starts. |
-| `arena` | Mode-based fixed-capacity queues (`duo`, `squad`, `ffa`) with optional team assignment. | Matchmaker: `arenaMatchmaker["main"]`<br/>Match: `arenaMatch[matchId]` | Builds only full matches per mode and pre-assigns team IDs (or no teams for FFA). |
-| `io-style` | Open-lobby routing to the fullest room below capacity. | Matchmaker: `ioStyleMatchmaker["main"]`<br/>Match: `ioStyleMatch[matchId]` | Reuses active rooms, heartbeats room counts, and auto-creates when needed. |
-| `open-world` | Coordinator-based chunk routing from world coordinates. | Index: `openWorldIndex["main"]`<br/>Chunk: `openWorldChunk[worldId,chunkX,chunkY]` | Resolves world positions into chunk keys and preloads nearby chunk windows. |
-| `party` | Host-created private party with explicit party-code joins. | Matchmaker: `partyMatchmaker["main"]`<br/>Match: `partyMatch[matchId]` | Uses party code discovery and host-gated phase transitions. |
-| `ranked` | ELO-based queue with widening search window over wait time. | Matchmaker: `rankedMatchmaker["main"]`<br/>Match: `rankedMatch[matchId]` | Pairs two players, starts at narrow ELO delta, then expands window by wait time. |
-| `turn-based` | Async invite flow plus open-pool pairing. | Matchmaker: `turnBasedMatchmaker["main"]`<br/>Match: `turnBasedMatch[matchId]` | Supports direct invites and pooled matching for long-lived asynchronous play. |
-| `idle` | No matchmaker. Per-player actor accessed directly. | World: `idleWorld[playerId]`<br/>Leaderboard: `idleLeaderboard["main"]` | Each player gets their own persistent actor. Global leaderboard actor tracks top scores. |
 
 ## Game Loop And Tick Rates
 
-### Recommended Tick Rates
-
-| Game Classification | Tick Rate In Example | Interval | Notes |
-| --- | --- | --- | --- |
-| `battle-royale` | 10 ticks/sec | `100ms` | Uses a fixed loop for zone progression and match lifecycle checks. |
-| `arena` | 20 ticks/sec | `50ms` | Uses a tighter loop for live team/FFA action snapshots. |
-| `io-style` | 10 ticks/sec | `100ms` | Uses lightweight periodic room snapshots for drop-in sessions. |
-| `open-world` | 10 ticks/sec per chunk actor | `100ms` | Each chunk actor runs independently so load scales by active chunks. |
-| `party` | No continuous tick | N/A | Event-driven lobby flow (`join`, `start`, `finish`) without realtime simulation. |
-| `ranked` | 20 ticks/sec | `50ms` | Uses fixed ticks while live for deterministic pacing and broadcast cadence. |
-| `turn-based` | No continuous tick | N/A | Turn submission drives updates; no realtime loop required. |
-| `idle` | No continuous tick | N/A | Uses `c.schedule.after(...)` for coarse production intervals. Offline catch-up calculated from elapsed wall clock time on collection. |
+Per-pattern tick rate recommendations are listed in the summary bullets at the start of each architecture pattern.
 
 ### Implementing Tick Loops
 
 | Pattern | Use When | Implementation Guidance |
 | --- | --- | --- |
-| Fixed realtime loop | `battle-royale`, `arena`, `io-style`, `open-world`, `ranked` | Run in `run` with `sleep(tickMs)` and exit on `c.aborted`. |
-| Action-driven updates | `party`, `turn-based` | Mutate and broadcast only on actions/events rather than scheduled ticks. |
+| Fixed realtime loop | Battle Royale, Arena, IO Style, Open World, Ranked | Run in `run` with `sleep(tickMs)` and exit on `c.aborted`. |
+| Action-driven updates | Party, Turn-Based | Mutate and broadcast only on actions/events rather than scheduled ticks. |
 | Coarse offline progression | Any mode with idle progression | Use `c.schedule.after(...)` with coarse windows (for example 5 to 15 minutes) and apply catch-up from elapsed wall clock time. |
 
 ## Realtime Data Model
@@ -75,36 +47,27 @@ This document uses the base reference game types from `examples/multiplayer-game
 
 ## Interest Management
 
+### Per-Player Replication Filters
+
+- Send each client only the state relevant to that player (for example by proximity, line-of-sight, team, or game phase).
+- For shooters and action games, limit replication by proximity and optional field-of-view checks.
+- Keep filtering server-side so clients never receive data they should not see.
+
 ### Sharded Worlds
 
 - Partition very large worlds across data actors (for example chunk actors keyed by `worldId:chunkX:chunkY`).
 - Clients subscribe only to nearby partitions (for example a 3x3 chunk window around the player).
 - Use this when you are confident the world is large and state-heavy (for example sandbox builders or MMOs), not as a default for small matches.
 
-### Generic Interest Management
-
-- Send each client only the state relevant to that player (for example by proximity, line-of-sight, team, or game phase).
-- For shooters and action games, limit replication by proximity and optional field-of-view checks.
-- Keep filtering server-side so clients never receive data they should not see.
-
 ## Netcode
+
+Per-pattern netcode recommendations live under each architecture pattern in `#### Netcode`.
 
 | Model | When To Use | How To Implement (Basic) |
 | --- | --- | --- |
 | Hybrid (client movement, server combat) | Latency-sensitive competitive games where movement responsiveness is critical but combat integrity matters (shooters, action sports, ranked duels). | Client owns movement locally and sends position updates at a capped rate. Server validates speed, bounds, and collision for anti-cheat. Projectiles, hits, damage, and other game entities are fully server-authoritative. Server simulates combat from its own state and broadcasts results. |
-| Server-authoritative with interpolation | Realtime games where fairness and simplicity outweigh instant local feedback (io-style, persistent worlds). | Client sends input commands. Server simulates on fixed ticks, resolves movement and collision, and publishes authoritative snapshots. Client interpolates between snapshots and extrapolates briefly on missed updates. |
+| Server-authoritative with interpolation | Realtime games where fairness and simplicity outweigh instant local feedback (IO Style, persistent worlds). | Client sends input commands. Server simulates on fixed ticks, resolves movement and collision, and publishes authoritative snapshots. Client interpolates between snapshots and extrapolates briefly on missed updates. |
 | Server-authoritative (basic logic) | Event-driven or turn-based games with no realtime simulation. | Server validates and applies discrete actions (turns, phase transitions, votes). No continuous tick loop needed. Client displays confirmed server state. |
-
-| Game Classification | Recommended Model | Client Has Authority Over | Server Has Authority Over |
-| --- | --- | --- | --- |
-| `battle-royale` | Hybrid (client movement, server combat) | Movement, camera, local prediction | Zone state, projectiles, hit resolution, eliminations, loot, final placement |
-| `arena` | Hybrid (client movement, server combat) | Movement, local prediction and smoothing | Team/FFA assignment, projectiles, hit resolution, phase transitions, scoring |
-| `io-style` | Server-authoritative with interpolation | Input intents only, interpolation of remote entities | All movement, bounds, room membership, canonical snapshot |
-| `open-world` | Hybrid or server-authoritative depending on genre | Varies by genre. Sandbox builders: client-authoritative movement with server validation. MMOs: input intents only, interpolation. | Chunk routing, persistence, visibility, canonical world state. MMOs: all movement and combat. Sandbox: building validation, anti-cheat. |
-| `party` | Server-authoritative (basic logic) | UI state, local readiness signals | Membership, host permissions, start/finish transitions |
-| `ranked` | Hybrid (client movement, server combat) | Movement, local prediction and interpolation | Projectiles, hit resolution, match result, rating updates |
-| `turn-based` | Server-authoritative (basic logic) | Drafting a move before submit | Turn ownership, committed move log, turn order, completion state |
-| `idle` | Server-authoritative (basic logic) | UI state, building placement intent | Resource totals, production rates, building validation, leaderboard scores |
 
 ## Shared Simulation Logic
 
@@ -117,27 +80,18 @@ Use this for logic shared between client and server.
 
 ## Physics And Spatial Indexing
 
-| Game Classification | Physics Intensity | Recommended Physics Strategy | Spatial Indexing Guidance |
-| --- | --- | --- | --- |
-| `battle-royale` | High | Client owns movement; server validates positions for anti-cheat. Projectiles, hits, and damage are server-authoritative. Use `@dimforge/rapier3d` for 3D worlds, or `@dimforge/rapier2d` for top-down 2D variants. | Keep broad queries for loot/nearby entities with `rbush`/`flatbush`; use `d3-quadtree` for proximity lookups. |
-| `arena` | Medium to high | Client owns movement; server validates positions. Combat and entity simulation are server-authoritative. Use Rapier when contacts or rigid-body complexity grows. | Use spatial indexing for broadphase and per-team/per-zone visibility filters. |
-| `io-style` | Low to medium | Server-authoritative kinematic movement. Escalate to a physics engine only if gameplay demands complex collision. | Add `rbush` or `d3-quadtree` once room entity count is no longer trivially small. |
-| `open-world` | Medium to high at scale | Chunk-local simulation, either server-authoritative (MMOs) or client-authoritative with server validation (sandbox builders). Escalate to Rapier when per-chunk contacts become complex. | Keep chunk-level broadphase indexes and load only nearby chunk windows per player. |
-| `party` | Low | Usually no dedicated physics in lobby phase. If mini-games are added, keep simple kinematic server checks first. | Usually minimal indexing needs unless party mode adds realtime world interactions. |
-| `ranked` | Medium to high | Client owns movement; server validates positions. Combat and hit resolution are server-authoritative. Favor deterministic simulation for replay and dispute resolution. | Apply indexing for hit checks and visibility filtering to reduce per-tick costs. |
-| `turn-based` | Very low | No continuous realtime physics; treat moves as discrete state transitions with rules validation. | Indexing is optional and usually only needed for board/query convenience at large scale. |
-| `idle` | None | No physics simulation. All state transitions are discrete (build, collect, upgrade). | No spatial indexing needed. |
+Per-pattern physics recommendations and optional spatial indexing notes are listed in the summary tables at the start of each architecture pattern.
 
-| Dimension | Primary Engine | Fallback Engines | Notes |
-| --- | --- | --- | --- |
-| 2D | `@dimforge/rapier2d` | `planck-js`, `matter-js` | Prefer custom kinematic logic first for simple games, then escalate when contacts become complex. |
-| 3D | `@dimforge/rapier3d` | `cannon-es`, `ammo.js` | For multiplayer shooters, use server-side physics for authoritative combat simulation and movement validation. |
+| Dimension | Primary Engine | Fallback Engines | Example Code | Notes |
+| --- | --- | --- | --- | --- |
+| 2D | `@dimforge/rapier2d` | `planck-js`, `matter-js` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-2d/) | Prefer custom kinematic logic first for simple games, then escalate when contacts become complex. |
+| 3D | `@dimforge/rapier3d` | `cannon-es`, `ammo.js` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-3d/) | For multiplayer shooters, use server-side physics for authoritative combat simulation and movement validation. |
 
-| Spatial Indexing Default | Recommendation |
+| Optional Spatial Indexing | Recommendation |
 | --- | --- |
-| Broadphase | Do not use naive `O(n^2)` checks once entity counts can grow. |
-| AABB index | Use `rbush` for dynamic sets or `flatbush` for static-ish sets. Insert circles/capsules as AABBs. |
-| Point index | Use `d3-quadtree` for nearest-neighbor and within-radius queries. |
+| Broadphase | Do not use naive `O(n^2)` checks once entity counts can grow. Use a proper broadphase or partitioning structure. |
+| AABB index | For non-physics queries (AOI, visibility, non-collider entities), use `rbush` for dynamic sets or `flatbush` for static-ish sets. |
+| Point index | For non-physics nearest-neighbor or within-radius queries, use `d3-quadtree`. |
 
 | Escalate To Rapier When | Why |
 | --- | --- |
@@ -147,7 +101,6 @@ Use this for logic shared between client and server.
 
 | Cross-Cutting Rule | Recommendation |
 | --- | --- |
-| Engine + indexing | Physics engines and spatial indexing are complementary. Use indexing for interest management and broad queries even with an engine. |
 | Engine exclusivity | Physics engines are mutually exclusive in practice for one simulation. Pick one engine per simulation. |
 | Backend/runtime boundary | Keep frontend-only libs out of backend simulation paths; treat server state as authoritative. |
 | Client mesh raycasts | `three-mesh-bvh` is optional and mostly for client-side fast raycasts on dense static meshes. |
@@ -161,8 +114,8 @@ Start with this baseline, then harden further for competitive or high-risk envir
 Apply this checklist to all implementations.
 
 - Identity:
-  - Use `c.conn.id` as the authoritative identity of the caller.
-  - Never accept `playerId` (or similar) from the client as the source of truth.
+  - Use `c.conn.id` as the authoritative transport identity of the caller.
+  - If you accept `playerId`/`username` in params, treat it as untrusted input and bind it through server-issued assignment/join tickets before attaching player state.
 - Authorization:
   - Validate that the caller is allowed to mutate the target entity (room membership, turn ownership, host-only actions).
 - Input validation:
@@ -195,10 +148,686 @@ Use this section to decide when SQLite is a better fit than in-memory actor stat
   - Needs queries/indexes beyond key lookups.
   - Expected to persist long-term and grow over time.
 - Matchmakers/coordinators may also use SQLite when their indexing state can grow large (room registries, matchmaking pools, large queues).
-- When using `rivetkit/db`, assume multiple actions can hit the same actor DB concurrently. Keep DB operations serialized (either by library-provided mutexing or your own).
+- When using `rivetkit/db`, assume multiple actions can hit the same actor DB concurrently. Serialize DB work through a queue.
 
-## NPCs / AI
+## Matchmaking Orchestration Primitives
 
-- Assert `OPENAI_API_KEY` is present on backend startup.
-- Limit tokens and rate limit per player.
-- Keep NPC memory minimal and bounded (short summaries), or skip long-term memory if the game does not need it.
+Use these cross-cutting primitives as a baseline before picking a specific architecture pattern.
+
+### Actor Topology Primitives
+
+| Primitive | Use When | Typical Ownership |
+| --- | --- | --- |
+| `matchmaker["main"]` + `match[matchId]` | Session-based multiplayer (battle royale, arena, ranked, party, turn-based) | Matchmaker owns discovery/assignment. Match owns lifecycle and gameplay state. |
+| `chunk[worldId,chunkX,chunkY]` | Large continuous worlds that need sharding | Each chunk owns local players, chunk state, and local simulation. |
+| `world[playerId]` | Per-player progression loops (idle/solo world state) | Per-player resources, buildings, timers, and progression. |
+| `player[username]` | Canonical profile/rating reused across matches | Durable player stats (for example rating and win/loss). |
+| `leaderboard["main"]` | Shared rankings across many matches/players | Global ordered score rows and top lists. |
+
+### Matchmaking Building Blocks
+
+- **Queue row**: A pending intent to match (mode/rating/capacity metadata).
+- **Assignment row**: Binds a connection/player to a specific `matchId`.
+- **Pending reservation**: Temporarily holds a seat until a player connects.
+- **Join token/invite code**: Server-issued proof that a connect request is allowed.
+- **Occupancy heartbeat**: Match reports connected and pending counts back to matchmaker.
+- **Close/cleanup flow**: Remove queue, assignment, and reservation rows when a match ends.
+
+### Queueing Strategy
+
+- Prefer actor queues to serialize DB mutations on shared matchmaking tables.
+- Queue matchmaker actions that can race: find/create, queue/unqueue, verify/pending-connected, update/close.
+- Keep queueing on the actor that owns the shared index tables (usually the matchmaker).
+- Let match-local actions run without queueing unless they mutate shared matchmaking indexes.
+
+## Architecture Patterns
+
+Each game type below starts with a quick summary table, then details actors and lifecycle.
+
+### Battle Royale
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | Immediate routing to the fullest non-started lobby (oldest tie-break); players wait in lobby until capacity, then the match starts. |
+| Netcode | Hybrid. Client owns movement, camera, and local prediction. Server owns zone state, projectiles, hit resolution, eliminations, loot, and final placement. |
+| Tick Rate | 10 ticks/sec (`100ms`) with a fixed loop for zone progression and lifecycle checks. |
+| Physics | Client owns movement with server anti-cheat validation; projectiles, hits, and damage are server-authoritative. Use `@dimforge/rapier3d` for 3D or `@dimforge/rapier2d` for top-down 2D. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title='matchmaker["main"]'>
+
+- **Key**: `matchmaker["main"]`
+- **Responsibility**: Finds or creates lobbies, tracks pending reservations, and maintains occupancy.
+- **Actions**
+  - `findMatch`
+  - `pendingPlayerConnected`
+  - `updateMatch`
+  - `closeMatch`
+- **Queues**
+  - `findMatch`
+  - `pendingPlayerConnected`
+  - `updateMatch`
+  - `closeMatch`
+- **State**
+  - SQLite
+  - `matches`
+  - `pending_players`
+  - `player_count` includes connected and pending players
+
+</Accordion>
+<Accordion title="match[matchId]">
+
+- **Key**: `match[matchId]`
+- **Responsibility**: Runs lobby/live/finished phases, owns player state, zone progression, and eliminations.
+- **Actions**
+  - `connect`
+  - Movement and combat actions
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `phase`
+  - `players`
+  - `zone`
+  - `eliminations`
+  - `snapshot data`
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+```mermaid
+sequenceDiagram
+	participant C as Client
+	participant MM as matchmaker
+	participant M as match
+
+	C->>MM: findMatch()
+	alt no open lobby
+		MM->>M: create(matchId)
+	end
+	MM-->>C: {matchId, playerId}
+	C->>M: connect(playerId)
+	M->>MM: pendingPlayerConnected(matchId, playerId)
+	MM-->>M: accepted
+	Note over M: lobby countdown -> live
+	M-->>C: snapshot + shoot events
+	M->>MM: closeMatch(matchId)
+```
+
+### Arena
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | Mode-based fixed-capacity queues (`duo`, `squad`, `ffa`) that build only full matches and pre-assign teams (except FFA). |
+| Netcode | Hybrid. Client owns movement plus prediction and smoothing. Server owns team or FFA assignment, projectiles, hit resolution, phase transitions, and scoring. |
+| Tick Rate | 20 ticks/sec (`50ms`) with a tighter loop for live team and FFA snapshots. |
+| Physics | Medium to high intensity; client movement with server validation and server-authoritative combat/entities. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title='matchmaker["main"]'>
+
+- **Key**: `matchmaker["main"]`
+- **Responsibility**: Runs mode queues, builds full matches, assigns teams, and publishes assignments.
+- **Actions**
+  - `queueForMatch`
+  - `unqueueForMatch`
+  - `matchCompleted`
+- **Queues**
+  - `queueForMatch`
+  - `unqueueForMatch`
+  - `matchCompleted`
+- **State**
+  - SQLite
+  - `player_pool`
+  - `matches`
+  - `assignments` keyed by connection and player
+
+</Accordion>
+<Accordion title="match[matchId]">
+
+- **Key**: `match[matchId]`
+- **Responsibility**: Runs match phases and in-match player/team state for score and win conditions.
+- **Actions**
+  - `connect`
+  - Gameplay actions
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `phase`
+  - `players`
+  - `team assignments`
+  - `score and win state`
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+```mermaid
+sequenceDiagram
+	participant C as Client
+	participant MM as matchmaker
+	participant M as match
+
+	C->>MM: queueForMatch(mode)
+	Note over MM: enqueue in player_pool
+	Note over MM: fill when capacity reached
+	MM->>M: create(matchId, assignments)
+	Note over MM: persist assignments
+	MM-->>C: assignmentReady
+	C->>M: connect(playerId)
+	Note over M: waiting -> live when all players connect
+	M->>MM: matchCompleted(matchId)
+```
+
+### IO Style
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | Open-lobby routing to the fullest room below capacity; room counts are heartbeated and new lobbies are auto-created when needed. |
+| Netcode | Server-authoritative with interpolation. Client sends input intents and interpolates. Server owns movement, bounds, room membership, and canonical snapshots. |
+| Tick Rate | 10 ticks/sec (`100ms`) with lightweight periodic room snapshots. |
+| Physics | Low to medium intensity; server-authoritative kinematic movement, escalating to a physics engine only when collisions get complex. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title='matchmaker["main"]'>
+
+- **Key**: `matchmaker["main"]`
+- **Responsibility**: Routes players into the fullest open lobby and tracks reservations and occupancy.
+- **Actions**
+  - `findLobby`
+  - `pendingPlayerConnected`
+  - `updateMatch`
+  - `closeMatch`
+- **Queues**
+  - `findLobby`
+  - `pendingPlayerConnected`
+  - `updateMatch`
+  - `closeMatch`
+- **State**
+  - SQLite
+  - `matches`
+  - `pending_players`
+  - Occupancy includes pending reservations
+
+</Accordion>
+<Accordion title="match[matchId]">
+
+- **Key**: `match[matchId]`
+- **Responsibility**: Runs per-match movement simulation and broadcasts snapshots.
+- **Actions**
+  - `connect`
+  - `setInput`
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `players`
+  - `inputs`
+  - `movement state`
+  - `snapshot cache`
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+```mermaid
+sequenceDiagram
+	participant C as Client
+	participant MM as matchmaker
+	participant M as match
+
+	C->>MM: findLobby()
+	alt no open lobby
+		MM->>M: create(matchId)
+	end
+	MM-->>C: {matchId, playerId}
+	C->>M: connect(playerId)
+	M->>MM: pendingPlayerConnected(matchId, playerId)
+	MM-->>M: accepted
+	Note over M: fixed tick simulation
+	M-->>C: snapshot events
+	M->>MM: closeMatch(matchId)
+```
+
+### Open World
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | Client-driven chunk routing from world coordinates, with nearby chunk windows preloaded via adjacent chunk connections. |
+| Netcode | Hybrid for sandbox (client movement with validation) or server-authoritative for MMO-like flows. Server owns chunk routing, persistence, and canonical world state. |
+| Tick Rate | 10 ticks/sec per chunk actor (`100ms`), so load scales with active chunks. |
+| Physics | Medium to high at scale; chunk-local simulation can be server-authoritative (MMO-like) or client movement with server validation (sandbox-like). |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title="chunk[worldId,chunkX,chunkY]">
+
+- **Key**: `chunk[worldId,chunkX,chunkY]`
+- **Responsibility**: Owns chunk-local players, blocks, movement tick, and chunk membership.
+- **Actions**
+  - `connect`
+  - `enterChunk`
+  - `addPlayer`
+  - `setInput`
+  - `leaveChunk`
+  - `removePlayer`
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `connections`
+  - `players`
+  - `blocks` scoped to one chunk key
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+```mermaid
+sequenceDiagram
+	participant C as Client
+	participant CH as chunk
+
+	Note over C: resolve chunk keys from world position
+	loop each visible chunk
+		C->>CH: connect(worldId, chunkX, chunkY, playerId)
+		Note over CH: store connection metadata
+	end
+	C->>CH: enterChunk/addPlayer
+	loop movement updates
+		C->>CH: setInput(...)
+		CH-->>C: snapshot
+	end
+	C->>CH: leaveChunk/removePlayer or disconnect
+	Note over CH: remove membership and metadata
+```
+
+### Party
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | Host-created private party flow using party codes and explicit joins. |
+| Netcode | Server-authoritative (basic logic). Server owns membership, host permissions, and phase transitions. |
+| Tick Rate | No continuous tick; updates are event-driven (`join`, `start`, `finish`). |
+| Physics | Low intensity for lobby-first flows; usually no dedicated physics or indexing unless you add realtime mini-games. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title='matchmaker["main"]'>
+
+- **Key**: `matchmaker["main"]`
+- **Responsibility**: Handles party create/join flow, validates join tickets, and tracks party size.
+- **Actions**
+  - `createParty`
+  - `joinParty`
+  - `verifyJoin`
+  - `updatePartySize`
+  - `closeParty`
+- **Queues**
+  - `createParty`
+  - `joinParty`
+  - `verifyJoin`
+  - `updatePartySize`
+  - `closeParty`
+- **State**
+  - SQLite
+  - `parties`
+  - `join_tickets` for party lookup and join validation
+
+</Accordion>
+<Accordion title="match[matchId]">
+
+- **Key**: `match[matchId]`
+- **Responsibility**: Owns party members, host role, ready flags, and phase transitions.
+- **Actions**
+  - `connect`
+  - `startGame`
+  - `finishGame`
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `members`
+  - `host`
+  - `ready state`
+  - `phase`
+  - `party events`
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+<Tabs>
+<Tab title="Host Flow">
+
+```mermaid
+sequenceDiagram
+	participant H as Host Client
+	participant MM as matchmaker
+	participant M as match
+
+	H->>MM: createParty()
+	MM-->>H: {matchId, partyCode, playerId, joinToken}
+	H->>M: connect(playerId, joinToken)
+	M->>MM: verifyJoin(...)
+	MM-->>M: allowed
+	M->>MM: updatePartySize(playerCount)
+	H->>M: startGame() / finishGame()
+	M->>MM: closeParty(matchId)
+```
+
+</Tab>
+<Tab title="Joiner Flow">
+
+```mermaid
+sequenceDiagram
+	participant J as Joiner Client
+	participant MM as matchmaker
+	participant M as match
+
+	J->>MM: joinParty(partyCode)
+	MM-->>J: {matchId, playerId, joinToken}
+	J->>M: connect(playerId, joinToken)
+	M->>MM: verifyJoin(...)
+	MM-->>M: allowed / denied
+	M->>MM: updatePartySize(playerCount)
+```
+
+</Tab>
+</Tabs>
+
+### Ranked
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | ELO-based queue pairing with a widening search window as wait time increases. |
+| Netcode | Hybrid. Client owns movement with local prediction and interpolation. Server owns projectiles, hit resolution, match results, and rating updates. |
+| Tick Rate | 20 ticks/sec (`50ms`) with fixed live ticks for deterministic pacing and broadcast cadence. |
+| Physics | Medium to high intensity; client movement with server validation and server-authoritative combat/hit resolution. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title='matchmaker["main"]'>
+
+- **Key**: `matchmaker["main"]`
+- **Responsibility**: Runs rating-based queueing, pairing, assignment persistence, and completion fanout.
+- **Actions**
+  - `queueForMatch`
+  - `unqueueForMatch`
+  - `matchCompleted`
+- **Queues**
+  - `queueForMatch`
+  - `unqueueForMatch`
+  - `matchCompleted`
+- **State**
+  - SQLite
+  - `player_pool`
+  - `matches`
+  - `assignments` with rating window and connection scoping
+
+</Accordion>
+<Accordion title="match[matchId]">
+
+- **Key**: `match[matchId]`
+- **Responsibility**: Runs ranked match phase, score, and winner reporting.
+- **Actions**
+  - `connect`
+  - Gameplay actions
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `phase`
+  - `players`
+  - `score`
+  - `winner`
+  - `completion payload`
+
+</Accordion>
+<Accordion title="player[username]">
+
+- **Key**: `player[username]`
+- **Responsibility**: Stores canonical player MMR and win/loss profile.
+- **Actions**
+  - `initialize`
+  - `getRating`
+  - `applyMatchResult`
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `rating`
+  - `wins`
+  - `losses`
+  - `match counters`
+
+</Accordion>
+<Accordion title='leaderboard["main"]'>
+
+- **Key**: `leaderboard["main"]`
+- **Responsibility**: Stores and serves top-ranked players.
+- **Actions**
+  - `updatePlayer`
+- **Queues**
+  - None
+- **State**
+  - SQLite
+  - Leaderboard score rows
+  - Top-list ordering
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+```mermaid
+sequenceDiagram
+	participant C as Client
+	participant MM as matchmaker
+	participant P as player
+	participant M as match
+	participant LB as leaderboard
+
+	C->>MM: queueForMatch(username)
+	MM->>P: initialize/getRating
+	P-->>MM: rating
+	Note over MM: store queue row + retry pairing
+	MM->>M: create(matchId, assigned players)
+	MM-->>C: assignmentReady
+	C->>M: connect(username)
+	M->>MM: matchCompleted(...)
+	MM->>P: applyMatchResult(...)
+	MM->>LB: updatePlayer(...)
+	Note over MM: remove matches + assignments rows
+```
+
+### Turn-Based
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | Async private-invite and public-queue pairing in the same pattern. |
+| Netcode | Server-authoritative (basic logic). Client can draft moves before submit. Server owns turn ownership, committed move log, turn order, and completion state. |
+| Tick Rate | No continuous tick; move submission and turn transitions drive updates. |
+| Physics | Very low intensity; no realtime physics loop, just discrete rules validation. Indexing is optional and mostly for board or query convenience at scale. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title='matchmaker["main"]'>
+
+- **Key**: `matchmaker["main"]`
+- **Responsibility**: Handles private invite and public queue pairing for async matches.
+- **Actions**
+  - `createGame`
+  - `joinByCode`
+  - `queueForMatch`
+  - `unqueueForMatch`
+  - `closeMatch`
+- **Queues**
+  - `createGame`
+  - `joinByCode`
+  - `queueForMatch`
+  - `unqueueForMatch`
+  - `closeMatch`
+- **State**
+  - SQLite
+  - `matches`
+  - `player_pool`
+  - `assignments` for invite and queue mapping
+
+</Accordion>
+<Accordion title="match[matchId]">
+
+- **Key**: `match[matchId]`
+- **Responsibility**: Owns board state, turn order, move validation, and final result.
+- **Actions**
+  - `connect`
+  - `makeMove`
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - `board`
+  - `turns`
+  - `players`
+  - `connection presence`
+  - `result`
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+<Tabs>
+<Tab title="Public Queue">
+
+```mermaid
+sequenceDiagram
+	participant A as Client A
+	participant B as Client B
+	participant MM as matchmaker
+	participant M as match
+
+	A->>MM: queueForMatch()
+	B->>MM: queueForMatch()
+	Note over MM: pair first two queued players
+	MM->>M: create(matchId) + seed X/O players
+	MM-->>A: assignment/match info
+	MM-->>B: assignment/match info
+	A->>M: connect(playerId)
+	B->>M: connect(playerId)
+	A->>M: makeMove()
+	B->>M: makeMove()
+	opt all players disconnected for timeout
+		Note over M: destroy after idle timeout
+	end
+	M->>MM: closeMatch(matchId)
+```
+
+</Tab>
+<Tab title="Private Invite">
+
+```mermaid
+sequenceDiagram
+	participant A as Client A
+	participant B as Client B
+	participant MM as matchmaker
+	participant M as match
+
+	A->>MM: createGame()
+	MM-->>A: {matchId, playerId, inviteCode}
+	B->>MM: joinByCode(inviteCode)
+	MM->>M: create(matchId) + seed X/O players
+	MM-->>A: assignment/match info
+	MM-->>B: assignment/match info
+	A->>M: connect(playerId)
+	B->>M: connect(playerId)
+	A->>M: makeMove()
+	B->>M: makeMove()
+	M->>MM: closeMatch(matchId)
+```
+
+</Tab>
+</Tabs>
+
+### Idle
+
+| Topic | Summary |
+| --- | --- |
+| Matchmaking | No matchmaker; each player uses a direct per-player actor and a shared leaderboard actor. |
+| Netcode | Server-authoritative (basic logic). Client owns UI and build intent. Server owns resources, production rates, building validation, and leaderboard totals. |
+| Tick Rate | No continuous tick; use `c.schedule.after(...)` for coarse intervals and compute offline catch-up from elapsed wall time. |
+| Physics | None for standard idle loops; transitions are discrete (`build`, `collect`, `upgrade`) and do not need spatial indexing. |
+
+**Actors**
+
+<AccordionGroup>
+<Accordion title="world[playerId]">
+
+- **Key**: `world[playerId]`
+- **Responsibility**: Owns one player's progression, buildings, production scheduling, and state updates.
+- **Actions**
+  - `initialize`
+  - `build`
+  - `collectProduction`
+- **Queues**
+  - None
+- **State**
+  - JSON
+  - Per-player buildings
+  - `resources`
+  - `timers`
+  - `progression state`
+
+</Accordion>
+<Accordion title='leaderboard["main"]'>
+
+- **Key**: `leaderboard["main"]`
+- **Responsibility**: Stores global scores and serves leaderboard updates.
+- **Actions**
+  - `updateScore`
+- **Queues**
+  - `updateScore`
+- **State**
+  - SQLite
+  - `scores` table keyed by player
+  - Current leaderboard totals
+
+</Accordion>
+</AccordionGroup>
+
+**Lifecycle**
+
+```mermaid
+sequenceDiagram
+	participant C as Client
+	participant W as world
+	participant LB as leaderboard
+
+	C->>W: getOrCreate(playerId) + initialize()
+	Note over W: seed state + schedule collection
+	W-->>C: stateUpdate
+	loop gameplay loop
+		C->>W: build() / collectProduction()
+		W->>LB: updateScore(...)
+	Note over LB: upsert scores
+	LB-->>C: leaderboardUpdate
+	W-->>C: stateUpdate
+	end
+```

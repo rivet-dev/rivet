@@ -7,7 +7,7 @@ interface PartySnapshot {
 	matchId: string;
 	partyCode: string;
 	phase: "waiting" | "playing" | "finished";
-	members: Record<string, { name: string; isHost: boolean; isReady: boolean; connected: boolean }>;
+	members: Record<string, { name: string; color: string; isHost: boolean; isReady: boolean; connected: boolean }>;
 }
 
 export function PartyGame({
@@ -20,7 +20,7 @@ export function PartyGame({
 	onLeave: () => void;
 }) {
 	const [snapshot, setSnapshot] = useState<PartySnapshot | null>(null);
-	const [nameInput, setNameInput] = useState("Player");
+	const [nameInput, setNameInput] = useState(matchInfo.playerName || "Player");
 	// biome-ignore lint/suspicious/noExplicitAny: connection handle
 	const connRef = useRef<any>(null);
 	const botsRef = useRef<PartyBot[]>([]);
@@ -34,7 +34,12 @@ export function PartyGame({
 
 	useEffect(() => {
 		const conn = client.partyMatch
-			.get([matchInfo.matchId], { params: { playerToken: matchInfo.playerToken } })
+			.get([matchInfo.matchId], {
+				params: {
+					playerId: matchInfo.playerId,
+					joinToken: matchInfo.joinToken,
+				},
+			})
 			.connect();
 		connRef.current = conn;
 
@@ -128,7 +133,7 @@ export function PartyGame({
 					</div>
 					{memberList.map(([id, member]) => (
 						<div key={id} className="party-member-row">
-							<span className="party-member-name">
+							<span className="party-member-name" style={{ color: member.color }}>
 								{member.name}
 								{id === matchInfo.playerId ? " (You)" : ""}
 							</span>

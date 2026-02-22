@@ -14,7 +14,7 @@ const { title, description, canonicalUrl } = Astro.props;
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
 	<Header variant="full-width" showDocsTabs={true} client:load />
 	<div class="w-full relative z-10 font-sans">
-		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs-no-sidebar lg:grid-cols-docs" style="--header-height: 6.5rem;">
+		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs" style="--header-height: 6.5rem;">
 			<slot />
 		</div>
 	</div>

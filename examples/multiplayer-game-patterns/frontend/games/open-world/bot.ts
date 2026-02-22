@@ -1,4 +1,5 @@
 import type { GameClient } from "../../client.ts";
+import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
 import { OpenWorldGame } from "./open-world-game.ts";
 
 export class OpenWorldBot {
@@ -11,17 +12,15 @@ export class OpenWorldBot {
 
 	private async start() {
 		try {
-			const index = this.client.openWorldIndex.getOrCreate(["main"]).connect();
-			const result = await index.send(
-				"getChunkForPosition",
-				{ x: 300, y: 300, playerName: `Bot-${Math.random().toString(36).slice(2, 6)}` },
-				{ wait: true, timeout: 10_000 },
-			);
-			index.dispose();
-			const response = (result as { response?: { chunkKey: [string, number, number]; playerId: string; playerToken: string } })?.response;
-			if (!response || this.destroyed) return;
+			const response = resolveChunkForPosition(300, 300);
+			if (this.destroyed) return;
 
-			this.game = new OpenWorldGame(null, this.client, { ...response, playerName: "Bot" }, { bot: true });
+			this.game = new OpenWorldGame(
+				null,
+				this.client,
+				{ ...response, playerName: `Bot-${Math.random().toString(36).slice(2, 6)}` },
+				{ bot: true },
+			);
 		} catch {
 			// Bot failed to join.
 		}
@@ -31,4 +30,17 @@ export class OpenWorldBot {
 		this.destroyed = true;
 		this.game?.destroy();
 	}
+}
+
+function resolveChunkForPosition(
+	x: number,
+	y: number,
+): { chunkKey: [string, number, number]; spawnX: number; spawnY: number } {
+	const chunkX = Math.floor(x / CHUNK_SIZE);
+	const chunkY = Math.floor(y / CHUNK_SIZE);
+	return {
+		chunkKey: [WORLD_ID, chunkX, chunkY],
+		spawnX: ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+		spawnY: ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+	};
 }

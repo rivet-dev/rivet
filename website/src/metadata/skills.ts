@@ -37,6 +37,7 @@ type SkillConfig = {
 	content: SkillContentSource;
 	includeReferences: boolean;
 	includeOpenApi: boolean;
+	baseSkillId?: SkillId;
 };
 
 const BASE_SKILL_CONFIGS = {
@@ -161,7 +162,7 @@ function cookbookSkillIdFromEntryId(entryId: string) {
 	if (!flattened) {
 		throw new Error(`cookbook entry id resolved to empty slug: ${entryId}`);
 	}
-	return `rivetkit-${flattened}`;
+	return flattened;
 }
 
 async function getCookbookSkillConfigs(): Promise<Map<string, SkillConfig>> {
@@ -189,8 +190,9 @@ async function getCookbookSkillConfigs(): Promise<Map<string, SkillConfig>> {
 				collection: "cookbook",
 				docId: entry.id,
 			},
-			includeReferences: false,
-			includeOpenApi: false,
+			includeReferences: true,
+			includeOpenApi: true,
+			baseSkillId: "rivetkit",
 		});
 	}
 
@@ -243,7 +245,13 @@ export async function listSkillReferences(skillId: SkillId): Promise<SkillRefere
 
 	const docs = await getDocs();
 	const skillDocs = docs.filter((entry) => entry.data.skill);
-	const references = skillDocs.map((entry) => buildReference(entry));
+	const references: SkillReference[] = skillDocs.map((entry) => buildReference(entry));
+
+	const cookbookEntries = await getCookbook();
+	for (const entry of cookbookEntries) {
+		references.push(buildCookbookReference(entry));
+	}
+
 	references.sort((a, b) => a.title.localeCompare(b.title));
 	cachedReferences.set(skillId, references);
 	return references;
@@ -274,6 +282,11 @@ export async function renderSkillFile(skillId: SkillId): Promise<string> {
 	const rivetkitVersion = await getRivetkitVersion();
 
 	let fileBody = base.replace("<!-- CONTENT -->", content);
+
+	if (base.includes("<!-- TITLE -->")) {
+		const title = await resolveContentTitle(config);
+		fileBody = fileBody.replace("<!-- TITLE -->", title);
+	}
 
 	if (base.includes("<!-- REFERENCE_INDEX -->")) {
 		if (!config.includeReferences) {
@@ -328,6 +341,39 @@ function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]
 		tags: slug.split("/").filter(Boolean),
 		markdown: convertDocToReference(body),
 	};
+}
+
+function buildCookbookReference(entry: Awaited<ReturnType<typeof getCollection>>[number]): SkillReference {
+	const rawSlug = normalizeSlug(entry.id);
+	const slug = `cookbook/${rawSlug}`;
+	const fileId = slug;
+	const canonicalUrl = `https://rivet.dev/cookbook/${rawSlug}`;
+	const body = entry.body ?? "";
+
+	return {
+		slug,
+		fileId,
+		title: entry.data.title,
+		description: entry.data.description,
+		docPath: `/cookbook/${rawSlug}`,
+		canonicalUrl,
+		sourcePath: entry.filePath ?? null,
+		tags: slug.split("/").filter(Boolean),
+		markdown: convertDocToReference(body),
+	};
+}
+
+async function resolveContentTitle(config: SkillConfig): Promise<string> {
+	const collection = config.content.collection;
+	const entries = collection === "docs" ? await getDocs() : await getCookbook();
+	const docIds = [config.content.docId, ...(config.content.fallbackDocIds ?? [])];
+	const doc = entries.find((entry) =>
+		docIds.some((docId) => entry.id === docId || (docId.includes("/") && entry.id.startsWith(`${docId}/`))),
+	);
+	if (!doc) {
+		throw new Error(`Doc ${config.content.docId} not found when resolving title.`);
+	}
+	return doc.data.title;
 }
 
 async function buildSkillContent(config: SkillConfig) {

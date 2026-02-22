@@ -10,15 +10,6 @@ const SHOT_LINE_DURATION = 150;
 const RUBBER_BAND_THRESHOLD = 40;
 const VIEWPORT_SIZE = 600;
 
-function colorFromId(id: string): string {
-	let hash = 0;
-	for (let i = 0; i < id.length; i++) {
-		hash = (hash * 31 + id.charCodeAt(i)) | 0;
-	}
-	const hue = ((hash % 360) + 360) % 360;
-	return `hsl(${hue}, 70%, 55%)`;
-}
-
 interface ShotLine {
 	fromX: number;
 	fromY: number;
@@ -36,7 +27,7 @@ export class BattleRoyaleGame {
 	private stopped = false;
 	private rafId = 0;
 	private worldSize = 1200;
-	private targets: Record<string, { x: number; y: number; hp: number; maxHp: number; alive: boolean; placement: number | null }> = {};
+	private targets: Record<string, { x: number; y: number; color: string; hp: number; maxHp: number; alive: boolean; placement: number | null }> = {};
 	private display: Record<string, { x: number; y: number }> = {};
 	private keys: Record<string, boolean> = {};
 	private phase: "lobby" | "live" | "finished" = "lobby";
@@ -62,7 +53,9 @@ export class BattleRoyaleGame {
 	) {
 		this.conn = client.battleRoyaleMatch
 			.get([matchInfo.matchId], {
-				params: { playerToken: matchInfo.playerToken },
+				params: {
+					playerId: matchInfo.playerId,
+				},
 			})
 			.connect();
 
@@ -76,7 +69,7 @@ export class BattleRoyaleGame {
 				capacity: number;
 				lobbyCountdown: number | null;
 				zone: { centerX: number; centerY: number; radius: number };
-				players: Record<string, { x: number; y: number; hp: number; maxHp: number; alive: boolean; placement: number | null }>;
+				players: Record<string, { x: number; y: number; color: string; hp: number; maxHp: number; alive: boolean; placement: number | null }>;
 			};
 			this.worldSize = snap.worldSize;
 			this.phase = snap.phase;
@@ -305,7 +298,7 @@ export class BattleRoyaleGame {
 
 			if (px < -50 || px > VIEWPORT_SIZE + 50 || py < -50 || py > VIEWPORT_SIZE + 50) continue;
 
-			const color = isMe ? "#ff4f00" : colorFromId(id);
+			const color = target.color;
 
 			// Player circle.
 			ctx.beginPath();

@@ -5,7 +5,6 @@ import { cn } from "@rivet-gg/components";
 import { motion } from "framer-motion";
 import { useCallback, useRef, useState } from "react";
 import { useEffect } from "react";
-import { Newsletter } from "./Newsletter";
 
 const HEADER_HEIGHT = remToPx(6.5);
 // const SCROLL_MARGIN = remToPx(9 /* scroll-mt-header-offset */ - HEADER_HEIGHT);
@@ -163,12 +162,10 @@ interface DocsTableOfContentsProps {
 	// biome-ignore lint/suspicious/noExplicitAny: FIXME
 	tableOfContents: any;
 	className?: string;
-	showNewsletter?: boolean;
 }
 export function DocsTableOfContents({
 	tableOfContents: providedToc,
 	className,
-	showNewsletter = true,
 }: DocsTableOfContentsProps) {
 	const tableOfContents = providedToc;
 
@@ -200,7 +197,6 @@ export function DocsTableOfContents({
 			<div className="relative">
 				<div className="relative">
 					<Tree sections={tableOfContents} isActive={isActive} />
-					{showNewsletter && <Newsletter />}
 				</div>
 			</div>
 		</div>

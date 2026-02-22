@@ -1,12 +1,28 @@
 import {
-	Badge,
 	Button,
 	cn,
 	ScrollArea,
 	TooltipProvider,
 	WithTooltip,
 } from "@rivet-gg/components";
-import { faCopy, faFile, Icon } from "@rivet-gg/icons";
+import {
+	faCode,
+	faCopy,
+	faDatabase,
+	faDocker,
+	faFile,
+	faGear,
+	faGolang,
+	faJs,
+	faPhp,
+	faPython,
+	faRust,
+	faSwift,
+	faTerminal,
+	faTypescript,
+	Icon,
+} from "@rivet-gg/icons";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import escapeHTML from "escape-html";
 import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
@@ -37,16 +53,61 @@ const languageNames: Record<string, string> = {
 	rust: "Rust",
 };
 
+const languageIcons: Record<string, IconDefinition> = {
+	js: faJs,
+	ts: faTypescript,
+	typescript: faTypescript,
+	python: faPython,
+	php: faPhp,
+	rust: faRust,
+	go: faGolang,
+	docker: faDocker,
+	dockerfile: faDocker,
+	swift: faSwift,
+	bash: faTerminal,
+	sh: faTerminal,
+	ps1: faTerminal,
+	powershell: faTerminal,
+	sql: faDatabase,
+	ini: faGear,
+};
+
 interface CodeGroupProps {
 	className?: string;
 	children: ReactNode;
+	workspace?: boolean;
 }
 
-export function CodeGroup({ children, className }: CodeGroupProps) {
+export function CodeGroup({ children, className, workspace }: CodeGroupProps) {
+	if (workspace) {
+		return (
+			<div
+				className={cn("code-group group my-4 overflow-hidden rounded-xl", className)}
+				data-code-group-container
+				data-code-group-workspace
+			>
+				<div className="flex min-h-[200px] gap-2">
+					<div
+						data-code-group-sidebar
+						className="flex flex-col w-[160px] shrink-0 py-2 overflow-y-auto"
+					>
+						{/* File tree items populated by TabsScript.astro */}
+					</div>
+					<div data-code-group-content-container className="flex-1 min-w-0">
+						{/* Content is moved here by TabsScript.astro */}
+					</div>
+				</div>
+				<div data-code-group-source className="hidden">
+					{children}
+				</div>
+			</div>
+		);
+	}
+
 	// Use Tabs-like pattern: render container with hidden source, let TabsScript create tabs
 	return (
 		<div
-			className={cn("code-group group my-4 overflow-hidden rounded-md border bg-neutral-950", className)}
+			className={cn("code-group group my-4 overflow-hidden rounded-xl border bg-neutral-950", className)}
 			data-code-group-container
 		>
 			<div className="overflow-x-auto">
@@ -57,7 +118,7 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 					{/* Tabs are populated by TabsScript.astro from data-code-group-source */}
 				</div>
 			</div>
-			<div data-code-group-content-container className="pt-2">
+			<div data-code-group-content-container>
 				{/* Content is moved here by TabsScript.astro */}
 			</div>
 			<div data-code-group-source className="hidden">
@@ -77,7 +138,53 @@ interface PreProps {
 	highlightedCode?: string;
 	flush?: boolean;
 	hide?: boolean;
+	className?: string | string[];
 }
+
+function looksLikeMermaid(code: string): boolean {
+	const firstLine = code
+		.split("\n")
+		.map((line) => line.trim())
+		.find((line) => line.length > 0);
+	if (!firstLine) return false;
+
+	return /^(sequenceDiagram|flowchart|graph|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|quadrantChart|requirementDiagram|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/.test(
+		firstLine,
+	);
+}
+
+function parseCodeMeta(meta: string | undefined) {
+	if (!meta) {
+		return { title: undefined as string | undefined, hide: false, nocheck: false };
+	}
+
+	let parsedTitle: string | undefined;
+	let parsedHide = false;
+	let parsedNocheck = false;
+
+	for (const token of meta.trim().split(/\s+/)) {
+		if (token === "@hide") {
+			parsedHide = true;
+		} else if (token === "@nocheck") {
+			parsedNocheck = true;
+		} else if (token && !token.startsWith("@")) {
+			parsedTitle = token;
+		}
+	}
+
+	return { title: parsedTitle, hide: parsedHide, nocheck: parsedNocheck };
+}
+
+function normalizeClassNames(value: unknown): string[] {
+	if (typeof value === "string") {
+		return value.split(/\s+/).filter(Boolean);
+	}
+	if (Array.isArray(value)) {
+		return value.flatMap((entry) => normalizeClassNames(entry));
+	}
+	return [];
+}
+
 export const pre = ({
 	children,
 	file,
@@ -88,59 +195,65 @@ export const pre = ({
 	highlightedCode,
 	flush,
 	hide,
+	className,
 }: PreProps) => {
+	const codeChild =
+		children && typeof children === "object" && "props" in children
+			? (children as ReactElement<{
+				metastring?: string;
+				meta?: string;
+				annotation?: string;
+				className?: string | string[];
+			  }>).props
+			: undefined;
+	const parsedMeta = parseCodeMeta(
+		codeChild?.metastring ?? codeChild?.meta ?? codeChild?.annotation,
+	);
+	const preClassNames = normalizeClassNames(className);
+	const codeClassNames = normalizeClassNames(codeChild?.className);
+	const sourceText =
+		typeof code === "string" ? code : (extractTextContent(children) ?? "");
+	const isMermaid =
+		language === "mermaid" ||
+		preClassNames.includes("mermaid") ||
+		codeClassNames.includes("mermaid") ||
+		codeClassNames.includes("language-mermaid") ||
+		looksLikeMermaid(sourceText);
+	if (isMermaid) {
+		return <pre className="mermaid">{sourceText}</pre>;
+	}
+	const resolvedTitle = title ?? parsedMeta.title;
+	const resolvedHide = hide ?? parsedMeta.hide;
+
 	// Calculate display name for tabs
-	const displayName = title || languageNames[language as keyof typeof languageNames] || "Code";
+	const displayName =
+		resolvedTitle || languageNames[language as keyof typeof languageNames] || "Code";
 	// Calculate unique identifier for tab matching
-	const tabId = file || title || language || "text";
+	const tabId = file || resolvedTitle || language || "text";
+
+	const langIcon = file ? faFile : (languageIcons[language as string] ?? faCode);
 
 	const codeBlock = (
 		<div
 			className={cn(
-				"not-prose group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none group-[.code-group]:overflow-visible",
-				flush ? "" : "my-4 overflow-hidden rounded-md border"
+				"not-prose group/code relative group-[.code-group]:my-0 group-[.code-group]:border-none group-[.code-group]:overflow-visible",
+				flush ? "" : "my-4 overflow-hidden rounded-xl border"
 			)}
 			data-code-block
 			data-code-title={displayName}
 			data-code-id={tabId}
-			data-code-hide={hide ? "true" : undefined}
+			data-code-hide={resolvedHide ? "true" : undefined}
+			data-code-lang={language || undefined}
 		>
-			<div className="bg-neutral-950 text-wrap p-2 text-sm">
-				<ScrollArea className="w-full">
-					{highlightedCode ? (
-						<span
-							className="not-prose code [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0"
-							// biome-ignore lint/security/noDangerouslySetInnerHtml: it's generated from shiki
-							dangerouslySetInnerHTML={{ __html: highlightedCode }}
-						/>
-					) : code ? (
-						<pre className="not-prose code whitespace-pre-wrap">{code}</pre>
-					) : children ? (
-						cloneElement(children, { escaped: true })
-					) : null}
-				</ScrollArea>
-			</div>
-
-			<div className="text-foreground flex items-center justify-between gap-2 border-t bg-black p-2 text-xs">
-				<div className="text-muted-foreground flex items-center gap-2">
-					{file ? (
-						<>
-							<Icon icon={faFile} className="block" />
-							<span>{file}</span>
-						</>
-					) : isInGroup ? null : (
-						(title || languageNames[language]) && language !== "text" ? (
-							<Badge variant="outline">
-								{title || languageNames[language]}
-							</Badge>
-						) : null
-					)}
-				</div>
+			<span data-code-icon className="hidden">
+				<Icon icon={langIcon} className="size-3" />
+			</span>
+			<div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover/code:opacity-100">
 				<TooltipProvider>
 					<WithTooltip
 						trigger={
 							<CopyCodeTrigger>
-								<Button size="icon-sm" variant="ghost" data-copy-code>
+								<Button size="icon-sm" variant="ghost" data-copy-code className="hover:bg-neutral-700/80">
 									<Icon icon={faCopy} />
 								</Button>
 							</CopyCodeTrigger>
@@ -148,6 +261,22 @@ export const pre = ({
 						content="Copy code"
 					/>
 				</TooltipProvider>
+			</div>
+
+			<div className="bg-neutral-950 text-sm overflow-x-auto">
+				<div className="p-4 w-fit min-w-full">
+					{highlightedCode ? (
+						<span
+							className="not-prose code [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0"
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: it's generated from shiki
+							dangerouslySetInnerHTML={{ __html: highlightedCode }}
+						/>
+					) : code ? (
+						<pre className="not-prose code whitespace-pre">{code}</pre>
+					) : children ? (
+						cloneElement(children, { escaped: true })
+					) : null}
+				</div>
 			</div>
 		</div>
 	);

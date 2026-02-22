@@ -15,7 +15,7 @@ See the [backend quickstart guide](/docs/actors/quickstart/backend) for getting 
 <CodeGroup workspace>
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>({
   endpoint: "https://my-namespace:pk_...@api.rivet.dev",
@@ -24,7 +24,7 @@ const counter = client.counter.getOrCreate(["my-counter"]);
 const count = await counter.increment(1);
 ```
 
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -179,7 +179,7 @@ Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchi
 <CodeGroup workspace>
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 
@@ -187,7 +187,7 @@ const client = createClient<typeof registry>();
 client.chatRoom.getOrCreate(["org-acme", "general"]);
 ```
 
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const chatRoom = actor({

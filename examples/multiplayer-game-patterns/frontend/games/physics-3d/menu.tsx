@@ -5,6 +5,10 @@ export interface Physics3dMatchInfo {
 	name: string;
 }
 
+function generatePlayerName(): string {
+	return `Player#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+}
+
 export function Physics3dMenu({
 	onReady,
 	onBack,
@@ -13,7 +17,7 @@ export function Physics3dMenu({
 	onReady: (info: Physics3dMatchInfo) => void;
 	onBack: () => void;
 }) {
-	const [name, setName] = useState("Player");
+	const [name, setName] = useState(generatePlayerName);
 
 	return (
 		<div className="app">
@@ -39,7 +43,7 @@ export function Physics3dMenu({
 				</div>
 				<button
 					className="btn btn-primary"
-					onClick={() => onReady({ name: name.trim() || "Player" })}
+					onClick={() => onReady({ name: name.trim() || generatePlayerName() })}
 					disabled={!name.trim()}
 				>
 					Join World

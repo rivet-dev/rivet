@@ -448,13 +448,13 @@ export function Header({
 									href="/docs"
 									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
-									Docs
+									Documentation
 								</TextNavItem>
 								<TextNavItem
 									href="/cookbook"
 									ariaCurrent={active === "cookbook" ? "page" : undefined}
 								>
-									Cookbook
+									Cookbooks
 								</TextNavItem>
 								<TextNavItem
 									href="/cloud"
@@ -529,13 +529,13 @@ export function Header({
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}
 					>
-						Docs
+						Documentation
 					</TextNavItem>
 					<TextNavItem
 						href="/cookbook"
 						ariaCurrent={active === "cookbook" ? "page" : undefined}
 					>
-						Cookbook
+						Cookbooks
 					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
@@ -571,9 +571,9 @@ function DocsMobileNavigation({ tree }) {
 	];
 
 	const mainLinks = [
-		{ href: "/docs", label: "Docs" },
+		{ href: "/docs", label: "Documentation" },
 		{ href: "/cloud", label: "Cloud" },
-		{ href: "/cookbook", label: "Cookbook" },
+		{ href: "/cookbook", label: "Cookbooks" },
 	];
 
 	const solutions = [

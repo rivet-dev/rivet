@@ -53,6 +53,18 @@ type Route =
 
 const PATTERNS: Array<{ id: PatternId; title: string; description: string; icon: LucideIcon }> = [
 	{
+		id: "physics-2d",
+		title: "Physics 2D",
+		description: "Shared Rapier 2D physics at 10 TPS with client-side prediction and network smoothing.",
+		icon: Box,
+	},
+	{
+		id: "physics-3d",
+		title: "Physics 3D",
+		description: "Shared Rapier 3D physics at 10 TPS with Three.js rendering and network smoothing.",
+		icon: Boxes,
+	},
+	{
 		id: "io-style",
 		title: "IO-Style",
 		description: "Open lobby matchmaking with server-authoritative movement at 10 tps.",
@@ -65,28 +77,16 @@ const PATTERNS: Array<{ id: PatternId; title: string; description: string; icon:
 		icon: Swords,
 	},
 	{
-		id: "party",
-		title: "Party",
-		description: "Event-driven party lobby with invite codes and host controls.",
-		icon: Users,
-	},
-	{
-		id: "turn-based",
-		title: "Turn-Based",
-		description: "Tic-tac-toe with invite codes and open matchmaking pool.",
-		icon: Grid3X3,
+		id: "battle-royale",
+		title: "Battle Royale",
+		description: "Waiting lobby into shrinking zone gameplay. Last player standing wins.",
+		icon: Skull,
 	},
 	{
 		id: "ranked",
 		title: "Ranked",
 		description: "1v1 ELO-based matchmaking with expanding rating windows. First to 5 kills.",
 		icon: Trophy,
-	},
-	{
-		id: "battle-royale",
-		title: "Battle Royale",
-		description: "Waiting lobby into shrinking zone gameplay. Last player standing wins.",
-		icon: Skull,
 	},
 	{
 		id: "open-world",
@@ -101,16 +101,16 @@ const PATTERNS: Array<{ id: PatternId; title: string; description: string; icon:
 		icon: Factory,
 	},
 	{
-		id: "physics-2d",
-		title: "Physics 2D",
-		description: "Shared Rapier 2D physics at 10 TPS with client-side prediction and network smoothing.",
-		icon: Box,
+		id: "turn-based",
+		title: "Turn-Based",
+		description: "Tic-tac-toe with invite codes and open matchmaking pool.",
+		icon: Grid3X3,
 	},
 	{
-		id: "physics-3d",
-		title: "Physics 3D",
-		description: "Shared Rapier 3D physics at 10 TPS with Three.js rendering and network smoothing.",
-		icon: Boxes,
+		id: "party",
+		title: "Party",
+		description: "Event-driven party lobby with invite codes and host controls.",
+		icon: Users,
 	},
 ];
 

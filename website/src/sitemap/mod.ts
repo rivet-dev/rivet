@@ -496,21 +496,6 @@ export const sitemap = [
 		],
 	},
 	{
-		title: "Guides",
-		href: "/guides/chat",
-		sidebar: [
-			{
-				title: "General",
-				pages: [
-					{
-						title: "Chat",
-						href: "/guides/chat",
-					},
-				],
-			},
-		],
-	},
-	{
 		title: "Self-Hosting",
 		href: "/docs/self-hosting",
 		sidebar: [

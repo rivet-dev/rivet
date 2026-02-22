@@ -19,7 +19,7 @@ See the [React quickstart guide](/docs/actors/quickstart/react) for getting star
 <CodeGroup workspace>
 ```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const { useActor } = createRivetKit<typeof registry>({
   endpoint: "https://my-namespace:pk_...@api.rivet.dev",
@@ -33,7 +33,7 @@ function Counter() {
 }
 ```
 
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -217,7 +217,7 @@ Keys uniquely identify actor instances. Use compound keys (arrays) for hierarchi
 <CodeGroup workspace>
 ```tsx ChatRoom.tsx
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const { useActor } = createRivetKit<typeof registry>();
 
@@ -227,7 +227,7 @@ function ChatRoom() {
 }
 ```
 
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const chatRoom = actor({

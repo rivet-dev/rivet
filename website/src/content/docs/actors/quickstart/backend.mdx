@@ -36,7 +36,7 @@ npm install rivetkit
 
 Create a simple counter actor:
 
-```ts registry.ts
+```ts actors.ts
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -78,7 +78,7 @@ This code can run either in your frontend or within your backend:
 <Tab title="TypeScript">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -99,7 +99,7 @@ export const registry = setup({
 
 ```ts client.ts
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
 
@@ -128,7 +128,7 @@ See the [JavaScript client documentation](/docs/clients/javascript) for more inf
 <Tab title="React">
 
 <CodeGroup workspace>
-```ts registry.ts @hide
+```ts actors.ts @hide
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
@@ -150,7 +150,7 @@ export const registry = setup({
 ```tsx Counter.tsx
 import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
-import type { registry } from "./registry";
+import type { registry } from "./actors";
 
 const { useActor } = createRivetKit<typeof registry>();
 
