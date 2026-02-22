@@ -1,0 +1,17 @@
+---
+title: "Persistence"
+description: "Choose the right persistence model for your Rivet Actors: in-memory state, KV, SQLite, or PostgreSQL."
+skill: false
+---
+
+import { faPostgresql, faSqlite } from "@rivet-gg/icons";
+
+<CardGroup cols={2}>
+<Card title="SQLite" href="/docs/actors/sqlite" icon={faSqlite} badge="Built-In">
+  Embedded per-actor SQLite with direct SQL control.
+</Card>
+<Card title="PostgreSQL" href="/docs/actors/postgres" icon={faPostgresql}>
+  Connect actors to external SQL databases like PostgreSQL.
+</Card>
+</CardGroup>
+

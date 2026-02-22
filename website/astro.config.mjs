@@ -17,13 +17,16 @@ export default defineConfig({
 	// SEO Redirects - Astro generates HTML redirect files for static builds
 	// These work in dev server and all deployment platforms (Vercel, Netlify, Cloudflare, etc.)
 	redirects: {
+		'/docs': '/docs/actors/',
 		// Documentation restructure
 		'/docs/setup': '/docs/actors/quickstart/',
-		'/docs/actors/queues': '/docs/actors/queue/',
+		'/docs/actors/queue': '/docs/actors/queues/',
 		'/docs/actors/websockets': '/docs/actors/websocket-handler/',
 		'/docs/actors/http': '/docs/actors/http-api/',
 		'/docs/actors/run': '/docs/actors/lifecycle/',
 		'/docs/actors/scheduling': '/docs/actors/schedule/',
+		'/docs/actors/external-sql': '/docs/actors/postgres/',
+		'/docs/actors/raw-sql': '/docs/actors/persistence/',
 		// Platform docs moved to clients/connect
 		'/docs/platforms/react': '/docs/clients/react/',
 		'/docs/platforms/next-js': '/docs/clients/javascript/',

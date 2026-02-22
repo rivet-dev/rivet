@@ -230,6 +230,13 @@ console.log(todos);
 ```
 </CodeGroup>
 
+## Debugging
+
+- `GET /inspector/summary` includes `isDatabaseEnabled` so you can confirm SQLite is configured.
+- `GET /inspector/traces` helps inspect slow query paths and SQL-heavy actions.
+- Keep a small read-only action for quick query verification while debugging.
+- In non-dev mode, inspector endpoints require authorization.
+
 ## Recommendations
 
 - Keep schema creation and migration steps in `onMigrate`.

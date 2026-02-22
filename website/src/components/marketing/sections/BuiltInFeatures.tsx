@@ -46,9 +46,9 @@ const features = [
   },
   {
     icon: HardDrive,
-    title: 'SQLite or JSON persistence',
+    title: 'SQLite or BYO database',
     description: 'Persistent storage that survives restarts and deploys.',
-    href: '/docs/actors/state',
+    href: '/docs/actors/persistence',
   },
   {
     icon: Infinity,
@@ -66,19 +66,19 @@ const features = [
     icon: Wifi,
     title: 'WebSockets',
     description: 'Real-time bidirectional streaming built in.',
-    href: '/docs/actors/connections',
+    href: '/docs/actors/events',
   },
   {
     icon: GitBranch,
     title: 'Workflows',
     description: 'Multi-step operations with automatic retries.',
-    href: '/docs/actors/communicating-between-actors',
+    href: '/docs/actors/workflows',
   },
   {
     icon: ListOrdered,
     title: 'Queues',
     description: 'Durable message queues for reliable async processing.',
-    href: '/docs/actors/queue',
+    href: '/docs/actors/queues',
   },
   {
     icon: Clock,

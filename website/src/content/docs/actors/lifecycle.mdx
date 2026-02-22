@@ -45,10 +45,19 @@ Actors transition through several states during their lifetime. Each transition 
 
 1. `onDisconnect`
 
-**On Inbound Invoke** (per inbound action/queue/subscribe/request/websocket)
+**On Inbound Action Invoke** (per action call)
 
-1. `canInvoke`
-2. Entry point handler executes (`action`, queue send, subscription, `onRequest`, or `onWebSocket`)
+1. Action handler executes
+
+**On Inbound Queue Publish** (per `handle.send(...)`)
+
+1. `queues.<name>.canPublish` (if defined)
+2. Queue message is enqueued
+
+**On Event Subscription Request** (per subscribe request)
+
+1. `events.<name>.canSubscribe` (if defined)
+2. Subscription is applied
 
 ## Lifecycle Hooks
 
@@ -452,46 +461,54 @@ const chatRoom = actor({
 
 Messages will not be processed for this actor until this hook succeeds. Errors thrown from this hook will cause the client to disconnect.
 
-### `canInvoke`
+### `canPublish` and `canSubscribe`
 
 [API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
-The `canInvoke` hook authorizes inbound invocations. Can be async.
+Use schema-level hooks to authorize queue publishes and event subscriptions. Both hooks can be async and must return booleans:
 
-It runs for:
+- `queues.<name>.canPublish` runs before inbound queue publishes.
+- `events.<name>.canSubscribe` runs before inbound event subscription requests.
 
-- Actions
-- Queue sends
-- Subscriptions
-- Raw request handler invocations (`onRequest`)
-- Raw WebSocket handler invocations (`onWebSocket`)
-
-Return `true` to allow and `false` to deny. This hook must return a boolean.
+For actions, enforce authorization directly inside each action handler.
 
 ```typescript
-import { actor } from "rivetkit";
+import { actor, event, queue, UserError } from "rivetkit";
+
+type ConnState = { role: "member" | "admin" };
 
 const securedActor = actor({
-  canInvoke: (c, invoke) => {
-    if (invoke.kind === "action" && invoke.name === "publicAction") {
-      return true;
-    }
+  state: {},
+  createConnState: (_c, params: { role?: ConnState["role"] }): ConnState => ({
+    role: params.role ?? "member",
+  }),
 
-    if (invoke.kind === "request") {
-      return true;
-    }
+  events: {
+    publicFeed: event<{ text: string }>(),
+    adminFeed: event<{ text: string }>({
+      canSubscribe: (c) => c.conn?.state.role === "admin",
+    }),
+  },
 
-    return false;
+  queues: {
+    jobs: queue<{ task: string }>({
+      canPublish: (c) => c.conn?.state.role === "admin",
+    }),
   },
 
   actions: {
     publicAction: () => "ok",
-    privateAction: () => "secret",
+    privateAction: (c) => {
+      if (c.conn?.state.role !== "admin") {
+        throw new UserError("Forbidden", { code: "forbidden" });
+      }
+      return "secret";
+    },
   },
 });
 ```
 
-Use this hook as fail-by-default. Add explicit allow rules, then end with `return false`. See [Access Control](/docs/actors/access-control) for full guidance.
+Use deny-by-default rules for each hook and return `false` unless explicitly allowed. See [Access Control](/docs/actors/access-control) for full guidance.
 
 ### `onDisconnect`
 

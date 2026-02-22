@@ -17,9 +17,12 @@ import {
 	faCodePullRequest,
 	faCoin,
 	faDatabase,
+	faDiagramNext,
 	faDocker,
 	faDownload,
 	faFastForward,
+	faSqlite,
+	faPostgresql,
 	faFileImport,
 	faFingerprint,
 	faFloppyDisk,
@@ -65,6 +68,9 @@ import {
     faUpload,
 	faVercel,
 	faVialCircleCheck,
+    faSquareList,
+    faGrid,
+    faGrid2,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
@@ -89,7 +95,7 @@ export const sitemap = [
 				pages: [
 					{
 						title: "Overview",
-						href: "/docs",
+						href: "/docs/actors",
 						icon: faSquareInfo,
 					},
 					{
@@ -127,32 +133,12 @@ export const sitemap = [
 				]
 			},
 			{
-				title: "Concepts",
+				title: "Features",
 				pages: [
 					{
-						title: "Crash Course",
-						href: "/docs/actors",
-						icon: faRocket,
-					},
-					{
-						title: "State",
+						title: "In-Memory State",
 						href: "/docs/actors/state",
 						icon: faFloppyDisk,
-					},
-					{
-						title: "SQLite",
-						href: "/docs/actors/sqlite",
-						icon: faDatabase,
-					},
-					{
-						title: "Queues",
-						href: "/docs/actors/queue",
-						icon: faListUl,
-					},
-					{
-						title: "Workflows",
-						href: "/docs/actors/workflows",
-						icon: faArrowsTurnRight,
 					},
 					{
 						title: "Actions",
@@ -165,13 +151,56 @@ export const sitemap = [
 						icon: faTowerBroadcast,
 					},
 					{
+						title: "Workflows",
+						href: "/docs/actors/workflows",
+						icon: faDiagramNext,
+					},
+					{
+						title: "Queues",
+						href: "/docs/actors/queues",
+						icon: faListUl,
+					},
+					{
 						title: "Schedule",
 						href: "/docs/actors/schedule",
 						icon: faClock,
 					},
 					{
-						title: "Communication",
-						icon: faArrowRightArrowLeft,
+						title: "Persistence",
+						collapsible: true,
+						icon: faDatabase,
+						pages: [
+							{
+								title: "Overview",
+								href: "/docs/actors/persistence",
+								icon: faGrid2
+							},
+							{
+								title: "SQLite",
+								badge: "Built-In",
+								href: "/docs/actors/sqlite",
+								icon: faSqlite,
+							},
+							{
+								title: "PostgreSQL",
+								href: "/docs/actors/postgres",
+								icon: faPostgresql
+							},
+						]
+					}
+				]
+			},
+			{
+				title: "Concepts",
+				pages: [
+					{
+						title: "Design Patterns",
+						// icon: faLayerGroup,
+						href: "/docs/actors/design-patterns",
+					},
+					{
+						title: "Communication & Networking",
+						// icon: faArrowRightArrowLeft,
 						collapsible: true,
 						pages: [
 							{
@@ -209,7 +238,7 @@ export const sitemap = [
 					},
 					{
 						title: "Lifecycle & Config",
-						icon: faSlidersHSquare,
+						// icon: faSlidersHSquare,
 						collapsible: true,
 						pages: [
 							{
@@ -240,33 +269,23 @@ export const sitemap = [
 						],
 					},
 					{
-						title: "Design Patterns",
-						icon: faLayerGroup,
-						href: "/docs/actors/design-patterns",
-					},
-					{
 						title: "More",
-						icon: faSitemap,
+						// icon: faSitemap,
 						collapsible: true,
 						pages: [
-						{
-							title: "Ephemeral Variables",
-							href: "/docs/actors/ephemeral-variables",
-							//icon: faMemory,
-						},
-						{
-							title: "Low-Level KV Storage",
-							href: "/docs/actors/kv"
-						},
-						{
-							title: "SQLite + Drizzle",
-							href: "/docs/actors/sqlite-drizzle",
-						},
-						{
-							title: "External SQL",
-							href: "/docs/actors/external-sql",
-							//icon: faDatabase,
-						},
+							{
+								title: "Ephemeral Variables",
+								href: "/docs/actors/ephemeral-variables",
+								//icon: faMemory,
+							},
+							{
+								title: "Low-Level KV Storage",
+								href: "/docs/actors/kv"
+							},
+							{
+								title: "SQLite + Drizzle",
+								href: "/docs/actors/sqlite-drizzle",
+							},
 							{
 								title: "Logging",
 								href: "/docs/general/logging",

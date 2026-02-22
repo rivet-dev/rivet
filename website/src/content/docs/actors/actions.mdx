@@ -1,16 +1,14 @@
 ---
 title: "Actions"
-description: "Actions are how your backend, frontend, or other actors can communicate with actors. Actions are defined as functions in the actor configuration and can be called from clients."
+description: "Actions are how your backend, frontend, or other actors can communicate with actors."
 skill: true
 ---
 
-Actions are very lightweight. They can be called thousands of times per second safely.
+Actions are very lightweight. They can be called thousands of times per second safely. Actions are executed via HTTP requests or via WebSockets if [using `.connect()`](/docs/actors/connections).
 
-Actions are executed via HTTP requests or via WebSockets if [using `.connect()`](/docs/actors/connections).
-
-<Note>
 For advanced use cases that require direct access to HTTP requests or WebSocket connections, see [raw HTTP and WebSocket handling](/docs/actors/fetch-and-websocket-handler).
-</Note>
+
+By default, actions run in parallel. If you need advanced control over concurrency, use [queues](/docs/actors/queues).
 
 ## Writing Actions
 
@@ -385,6 +383,13 @@ function incrementCount(c: ActionContextOf<typeof counter>) {
 ```
 
 See [types](/docs/actors/types) for more details on using `ActionContextOf` and other utility types.
+
+## Debugging
+
+- `GET /inspector/rpcs` lists all available actions on an actor.
+- `POST /inspector/action/:name` executes an action with JSON args and returns output.
+- `GET /inspector/traces` helps inspect action timings and failures.
+- In non-dev mode, inspector endpoints require authorization.
 
 ## API Reference
 
