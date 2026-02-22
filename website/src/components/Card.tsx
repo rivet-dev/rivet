@@ -7,6 +7,7 @@ interface CardProps extends PropsWithChildren<{ className?: string }> {
 	icon?: any;
 	href?: string;
 	target?: string;
+	badge?: string;
 }
 
 export function Card({
@@ -16,6 +17,7 @@ export function Card({
 	icon,
 	href,
 	target,
+	badge,
 }: CardProps) {
 	const hasHeader = Boolean(title || icon || href);
 	const hasBody = Boolean(children);
@@ -39,6 +41,11 @@ export function Card({
 						<div className="flex items-center gap-3">
 							{icon && <Icon icon={icon} />}
 							{title && <h3 className="font-medium">{title}</h3>}
+							{badge && (
+								<span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/10 text-white/60">
+									{badge}
+								</span>
+							)}
 						</div>
 						{href && (
 							<Icon

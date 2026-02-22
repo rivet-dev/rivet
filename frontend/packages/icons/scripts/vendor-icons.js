@@ -273,8 +273,6 @@ async function bundleWithEsbuild() {
 		"react-dom",
 		"@fortawesome/react-fontawesome",
 		"@fortawesome/fontawesome-svg-core",
-		"@fortawesome/free-solid-svg-icons",
-		"@fortawesome/free-brands-svg-icons",
 	];
 
 	try {
