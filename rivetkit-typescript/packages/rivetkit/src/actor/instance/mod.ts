@@ -5,6 +5,7 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
+import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
@@ -169,7 +170,8 @@ export class ActorInstance<
 
 	// MARK: - Variables & Database
 	#vars?: V;
-	#db!: InferDatabaseClient<DB>;
+	#db?: InferDatabaseClient<DB>;
+	#sqliteVfs?: SqliteVfs;
 
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
@@ -475,49 +477,53 @@ export class ActorInstance<
 			mode,
 		});
 
-		// Clear sleep timeout
-		if (this.#sleepTimeout) {
-			clearTimeout(this.#sleepTimeout);
-			this.#sleepTimeout = undefined;
-		}
-
-		// Abort listeners
 		try {
-			this.#abortController.abort();
-		} catch { }
+			// Clear sleep timeout
+			if (this.#sleepTimeout) {
+				clearTimeout(this.#sleepTimeout);
+				this.#sleepTimeout = undefined;
+			}
 
-		// Wait for run handler to complete
-		await this.#waitForRunHandler(this.#config.options.runStopTimeout);
+			// Abort listeners
+			try {
+				this.#abortController.abort();
+			} catch { }
 
-		// Call onStop lifecycle
-		if (mode === "sleep") {
-			await this.#callOnSleep();
-		} else if (mode === "destroy") {
-			await this.#callOnDestroy();
-		} else {
-			assertUnreachable(mode);
+			// Wait for run handler to complete
+			await this.#waitForRunHandler(this.#config.options.runStopTimeout);
+
+			// Call onStop lifecycle
+			if (mode === "sleep") {
+				await this.#callOnSleep();
+			} else if (mode === "destroy") {
+				await this.#callOnDestroy();
+			} else {
+				assertUnreachable(mode);
+			}
+
+			// Disconnect non-hibernatable connections
+			await this.#disconnectConnections();
+
+			// Wait for background tasks
+			await this.#waitBackgroundPromises(
+				this.#config.options.waitUntilTimeout,
+			);
+
+			// Clear timeouts and save state
+			this.#rLog.info({ msg: "clearing pending save timeouts" });
+			this.stateManager.clearPendingSaveTimeout();
+			this.#rLog.info({ msg: "saving state immediately" });
+			await this.stateManager.saveState({
+				immediate: true,
+				allowStoppingState: true,
+			});
+
+			// Wait for write queues
+			await this.stateManager.waitForPendingWrites();
+			await this.#scheduleManager.waitForPendingAlarmWrites();
+		} finally {
+			await this.#cleanupDatabase();
 		}
-
-		// Disconnect non-hibernatable connections
-		await this.#disconnectConnections();
-
-		// Wait for background tasks
-		await this.#waitBackgroundPromises(
-			this.#config.options.waitUntilTimeout,
-		);
-
-		// Clear timeouts and save state
-		this.#rLog.info({ msg: "clearing pending save timeouts" });
-		this.stateManager.clearPendingSaveTimeout();
-		this.#rLog.info({ msg: "saving state immediately" });
-		await this.stateManager.saveState({
-			immediate: true,
-			allowStoppingState: true,
-		});
-
-		// Wait for write queues
-		await this.stateManager.waitForPendingWrites();
-		await this.#scheduleManager.waitForPendingAlarmWrites();
 	}
 
 	// MARK: - Sleep
@@ -1401,8 +1407,14 @@ export class ActorInstance<
 			return;
 		}
 
+		let client: InferDatabaseClient<DB> | undefined;
 		try {
-			const client = await this.#config.db.createClient({
+			// Every actor gets its own SqliteVfs/wa-sqlite instance. The async
+			// wa-sqlite build is not re-entrant, and sharing one instance across
+			// actors can cause cross-actor contention and runtime corruption.
+			this.#sqliteVfs ??= this.driver.sqliteVfs;
+
+			client = await this.#config.db.createClient({
 				actorId: this.#actorId,
 				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
 					? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
@@ -1415,13 +1427,24 @@ export class ActorInstance<
 					batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
 					batchDelete: (keys) => this.driver.kvBatchDelete(this.#actorId, keys),
 				},
-				sqliteVfs: this.driver.sqliteVfs,
+				sqliteVfs: this.#sqliteVfs,
 			});
 			this.#rLog.info({ msg: "database migration starting" });
 			await this.#config.db.onMigrate?.(client);
 			this.#rLog.info({ msg: "database migration complete" });
 			this.#db = client;
 		} catch (error) {
+			if (client) {
+				try {
+					await this.#config.db.onDestroy?.(client);
+				} catch (cleanupError) {
+					this.#rLog.error({
+						msg: "database setup cleanup failed",
+						error: stringifyError(cleanupError),
+					});
+				}
+			}
+			this.#sqliteVfs = undefined;
 			if (error instanceof Error) {
 				this.#rLog.error({
 					msg: "database setup failed",
@@ -1436,6 +1459,28 @@ export class ActorInstance<
 				errorType: typeof error,
 			});
 			throw wrappedError;
+		}
+	}
+
+	async #cleanupDatabase() {
+		const client = this.#db;
+		this.#db = undefined;
+		this.#sqliteVfs = undefined;
+
+		if (!client) {
+			return;
+		}
+		if (!("db" in this.#config) || !this.#config.db) {
+			return;
+		}
+
+		try {
+			await this.#config.db.onDestroy?.(client);
+		} catch (error) {
+			this.#rLog.error({
+				msg: "database cleanup failed",
+				error: stringifyError(error),
+			});
 		}
 	}
 

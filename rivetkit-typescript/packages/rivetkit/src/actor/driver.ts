@@ -71,6 +71,9 @@ export interface ActorDriver {
 	/**
 	 * SQLite VFS instance for creating KV-backed databases.
 	 * If not provided, the database provider will need an override.
+	 *
+	 * wa-sqlite's async build is not re-entrant per module instance. Drivers
+	 * should scope this instance to a single actor when using KV-backed SQLite.
 	 */
 	sqliteVfs?: SqliteVfs;
 

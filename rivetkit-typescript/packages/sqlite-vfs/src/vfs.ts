@@ -88,7 +88,7 @@ interface SQLite3Api {
 
 /**
  * Simple async mutex for serializing database operations
- * wa-sqlite is not safe for concurrent open_v2 calls
+ * wa-sqlite calls are not safe to run concurrently on one module instance
  */
 class AsyncMutex {
 	#locked = false;
@@ -108,6 +108,15 @@ class AsyncMutex {
 			next();
 		}
 	}
+
+	async run<T>(fn: () => Promise<T>): Promise<T> {
+		await this.acquire();
+		try {
+			return await fn();
+		} finally {
+			this.release();
+		}
+	}
 }
 
 /**
@@ -118,12 +127,20 @@ export class Database {
 	readonly #handle: number;
 	readonly #fileName: string;
 	readonly #onClose: () => void;
+	readonly #sqliteMutex: AsyncMutex;
 
-	constructor(sqlite3: SQLite3Api, handle: number, fileName: string, onClose: () => void) {
+	constructor(
+		sqlite3: SQLite3Api,
+		handle: number,
+		fileName: string,
+		onClose: () => void,
+		sqliteMutex: AsyncMutex,
+	) {
 		this.#sqlite3 = sqlite3;
 		this.#handle = handle;
 		this.#fileName = fileName;
 		this.#onClose = onClose;
+		this.#sqliteMutex = sqliteMutex;
 	}
 
 	/**
@@ -132,7 +149,9 @@ export class Database {
 	 * @param callback - Called for each result row with (row, columns)
 	 */
 	async exec(sql: string, callback?: (row: unknown[], columns: string[]) => void): Promise<void> {
-		return this.#sqlite3.exec(this.#handle, sql, callback);
+		return this.#sqliteMutex.run(async () =>
+			this.#sqlite3.exec(this.#handle, sql, callback),
+		);
 	}
 
 	/**
@@ -141,7 +160,9 @@ export class Database {
 	 * @param params - Parameter values to bind
 	 */
 	async run(sql: string, params?: unknown[]): Promise<void> {
-		await this.#sqlite3.run(this.#handle, sql, params ?? null);
+		await this.#sqliteMutex.run(async () =>
+			this.#sqlite3.run(this.#handle, sql, params ?? null),
+		);
 	}
 
 	/**
@@ -151,14 +172,18 @@ export class Database {
 	 * @returns Object with rows (array of arrays) and columns (column names)
 	 */
 	async query(sql: string, params?: unknown[]): Promise<{ rows: unknown[][]; columns: string[] }> {
-		return this.#sqlite3.execWithParams(this.#handle, sql, params ?? null);
+		return this.#sqliteMutex.run(async () =>
+			this.#sqlite3.execWithParams(this.#handle, sql, params ?? null),
+		);
 	}
 
 	/**
 	 * Close the database
 	 */
 	async close(): Promise<void> {
-		await this.#sqlite3.close(this.#handle);
+		await this.#sqliteMutex.run(async () => {
+			await this.#sqlite3.close(this.#handle);
+		});
 		this.#onClose();
 	}
 
@@ -188,6 +213,7 @@ export class SqliteVfs {
 	#sqliteSystem: SqliteSystem | null = null;
 	#initPromise: Promise<void> | null = null;
 	#openMutex = new AsyncMutex();
+	#sqliteMutex = new AsyncMutex();
 	#instanceId: string;
 
 	constructor() {
@@ -206,14 +232,14 @@ export class SqliteVfs {
 
 		// Synchronously create the promise if not started
 		if (!this.#initPromise) {
-			this.#initPromise = (async () => {
+				this.#initPromise = (async () => {
 				// Load WASM binary (Node.js environment)
 				const require = createRequire(import.meta.url);
 				const wasmPath = require.resolve("wa-sqlite/dist/wa-sqlite-async.wasm");
 				const wasmBinary = readFileSync(wasmPath);
 
-				// Initialize wa-sqlite module - each instance gets its own module
-				const module = await SQLiteESMFactory({ wasmBinary });
+					// Initialize wa-sqlite module - each instance gets its own module
+					const module = await SQLiteESMFactory({ wasmBinary });
 					this.#sqlite3 = Factory(module) as unknown as SQLite3Api;
 
 				// Create and register VFS with unique name
@@ -247,15 +273,18 @@ export class SqliteVfs {
 				throw new Error("Failed to initialize SQLite");
 			}
 
-			// Register this filename with its KV options
-			this.#sqliteSystem.registerFile(fileName, options);
+				// Register this filename with its KV options
+				this.#sqliteSystem.registerFile(fileName, options);
 
-			// Open database
-			const db = await this.#sqlite3.open_v2(
-				fileName,
-				this.#sqlite3.SQLITE_OPEN_READWRITE | this.#sqlite3.SQLITE_OPEN_CREATE,
-				this.#sqliteSystem.name,
-			);
+				// Open database
+				const db = await this.#sqliteMutex.run(async () =>
+					this.#sqlite3!.open_v2(
+						fileName,
+						this.#sqlite3!.SQLITE_OPEN_READWRITE |
+							this.#sqlite3!.SQLITE_OPEN_CREATE,
+						this.#sqliteSystem!.name,
+					),
+				);
 
 			// Create cleanup callback
 			const sqliteSystem = this.#sqliteSystem;
@@ -263,10 +292,16 @@ export class SqliteVfs {
 				sqliteSystem.unregisterFile(fileName);
 			};
 
-			return new Database(this.#sqlite3, db, fileName, onClose);
-		} finally {
-			this.#openMutex.release();
-		}
+				return new Database(
+					this.#sqlite3,
+					db,
+					fileName,
+					onClose,
+					this.#sqliteMutex,
+				);
+			} finally {
+				this.#openMutex.release();
+			}
 	}
 }
 
