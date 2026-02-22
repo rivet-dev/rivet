@@ -1,6 +1,6 @@
 import type { AnyClient } from "@/client/client";
 import type { RawDatabaseClient } from "@/db/config";
-import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import type {
 	ActorDriver,
 	AnyActorInstance,
@@ -83,7 +83,10 @@ export class FileSystemActorDriver implements ActorDriver {
 
 	/** SQLite VFS instance for creating KV-backed databases */
 	get sqliteVfs(): SqliteVfs {
-		return this.#state.sqliteVfs;
+		// The async wa-sqlite build is not re-entrant per module instance.
+		// Returning a fresh SqliteVfs here gives each actor its own module,
+		// allowing actor-level parallelism without cross-actor re-entry.
+		return new SqliteVfs();
 	}
 
 	startSleep(actorId: string): void {
