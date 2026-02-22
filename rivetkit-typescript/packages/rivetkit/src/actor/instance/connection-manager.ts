@@ -391,6 +391,31 @@ export class ConnectionManager<
 		}
 	}
 
+	async cleanupPersistedHibernatableConnections(
+		reason?: string,
+	): Promise<number> {
+		const staleConnections = Array.from(this.#connections.values()).filter(
+			(conn) =>
+				conn.isHibernatable &&
+				conn[CONN_DRIVER_SYMBOL] === undefined,
+		);
+		if (staleConnections.length === 0) {
+			return 0;
+		}
+
+		this.#actor.rLog.info({
+			msg: "cleaning up persisted hibernatable connections",
+			reason: reason ?? "unknown",
+			count: staleConnections.length,
+		});
+
+		for (const conn of staleConnections) {
+			await this.connDisconnected(conn);
+		}
+
+		return staleConnections.length;
+	}
+
 	/**
 	 * Utilify function for call sites that don't need a separate prepare and connect phase.
 	 */
