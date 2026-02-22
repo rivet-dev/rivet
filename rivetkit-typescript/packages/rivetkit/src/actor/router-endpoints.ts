@@ -5,6 +5,7 @@ import { ActionContext } from "@/actor/contexts";
 import * as errors from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
+import { hasSchemaConfigKey } from "@/actor/schema";
 import {
 	HEADER_ACTOR_QUERY,
 	HEADER_CONN_PARAMS,
@@ -224,6 +225,35 @@ export async function handleQueueSend(
 	}
 
 	const actor = await actorDriver.loadActor(actorId);
+	if (!hasSchemaConfigKey(actor.config.queues, name)) {
+		actor.rLog.warn({
+			msg: "ignoring incoming queue message for undefined queue",
+			queueName: name,
+			hasQueueConfig: actor.config.queues !== undefined,
+		});
+		const ignoredResponse = serializeWithEncoding(
+			encoding,
+			{ status: "completed" as const, response: undefined },
+			HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
+			CLIENT_PROTOCOL_CURRENT_VERSION,
+			HttpQueueSendResponseSchema,
+			(value): HttpQueueSendResponseJson => ({
+				status: value.status,
+				response: value.response,
+			}),
+			(value): protocol.HttpQueueSendResponse => ({
+				status: value.status,
+				response:
+					value.response !== undefined
+						? bufferToArrayBuffer(cbor.encode(value.response))
+						: null,
+			}),
+		);
+		return c.body(ignoredResponse as Uint8Array as any, 200, {
+			"Content-Type": contentTypeForEncoding(encoding),
+		});
+	}
+
 	const conn = await actor.connectionManager.prepareAndConnectConn(
 		createHttpDriver(),
 		params,
@@ -236,10 +266,7 @@ export async function handleQueueSend(
 	};
 	try {
 		const ctx = new ActionContext(actor, conn);
-		await actor.assertCanInvoke(ctx, {
-			kind: "queue",
-			name,
-		});
+		await actor.assertCanPublish(ctx, name);
 
 		if (request.wait) {
 			result = await actor.queueManager.enqueueAndWait(

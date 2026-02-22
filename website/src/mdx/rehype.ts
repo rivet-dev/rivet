@@ -140,6 +140,14 @@ function rehypeTableOfContents() {
 		// find all headings, remove the first one (the title)
 		visit(tree, "element", (node) => {
 			if (node.tagName === "h2" || node.tagName === "h3") {
+				if (node.tagName === "h3" && headings.length === 0) {
+					const line = node.position?.start?.line;
+					const location = typeof line === "number" ? `line ${line}` : "unknown line";
+					throw new Error(
+						`[rehypeTableOfContents] Found h3 before any h2 (${location}). Use h2 for top-level sections and h3 for subsections.`
+					);
+				}
+
 				const parent =
 					node.tagName === "h2"
 						? headings

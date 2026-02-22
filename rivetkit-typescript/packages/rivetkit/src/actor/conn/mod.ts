@@ -15,6 +15,7 @@ import type { ActorInstance } from "../instance/mod";
 import { CachedSerializer } from "../protocol/serde";
 import {
 	type EventSchemaConfig,
+	hasSchemaConfigKey,
 	type InferEventArgs,
 	type InferSchemaMap,
 	type QueueSchemaConfig,
@@ -190,6 +191,17 @@ export class Conn<
 				msg: "cannot send messages to this connection type",
 				connId: this.id,
 				connType: this[CONN_DRIVER_SYMBOL]?.type,
+			});
+		}
+
+		if (
+			this.#actor.config.events !== undefined &&
+			!hasSchemaConfigKey(this.#actor.config.events, eventName)
+		) {
+			this.#actor.rLog.warn({
+				msg: "sending event not defined in actor events config",
+				eventName,
+				connId: this.id,
 			});
 		}
 

@@ -4,28 +4,26 @@ import { setupDriverTest } from "../utils";
 
 export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 	describe("access control", () => {
-		test("allows configured actions and denies others", async (c) => {
+		test("actions run without entrypoint auth gating", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.accessControlActor.getOrCreate(["actions"]);
 
 			const allowed = await handle.allowedAction("ok");
 			expect(allowed).toBe("allowed:ok");
-
-			await expect(handle.blockedAction()).rejects.toMatchObject({
-				code: "forbidden",
-			});
 		});
 
-		test("passes connection id into canInvoke context", async (c) => {
+		test("passes connection id into canPublish context", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.accessControlActor.getOrCreate(["conn-id"]);
+			const handle = client.accessControlActor.getOrCreate(["publish-ctx"]);
 
-			const connId = await handle.allowedGetLastCanInvokeConnId();
+			await handle.send("allowedQueue", { value: "one" });
+
+			const connId = await handle.allowedGetLastCanPublishConnId();
 			expect(typeof connId).toBe("string");
 			expect(connId.length).toBeGreaterThan(0);
 		});
 
-		test("allows and denies queue sends", async (c) => {
+		test("allows and denies queue sends, and ignores undefined queues", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.accessControlActor.getOrCreate(["queue"]);
 
@@ -35,12 +33,44 @@ export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 			).rejects.toMatchObject({
 				code: "forbidden",
 			});
+			await expect(
+				handle.send("missingQueue", { value: "three" }),
+			).resolves.toBeUndefined();
+			await expect(
+				handle.send(
+					"missingQueue",
+					{ value: "four" },
+					{ wait: true, timeout: 50 },
+				),
+			).resolves.toMatchObject({ status: "completed" });
 
-			const message = await handle.allowedReceiveQueue();
-			expect(message).toEqual({ value: "one" });
+			const allowedMessage = await handle.allowedReceiveQueue();
+			expect(allowedMessage).toEqual({ value: "one" });
+
+			const remainingMessage = await handle.allowedReceiveAnyQueue();
+			expect(remainingMessage).toBeNull();
 		});
 
-		test("allows and denies subscriptions", async (c) => {
+		test("ignores incoming queue sends when actor has no queues config", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.accessControlNoQueuesActor.getOrCreate([
+				"no-queues",
+			]);
+
+			await expect(
+				handle.send("anyQueue", { value: "ignored" }),
+			).resolves.toBeUndefined();
+			await expect(
+				handle.send(
+					"anyQueue",
+					{ value: "ignored-wait" },
+					{ wait: true, timeout: 50 },
+				),
+			).resolves.toMatchObject({ status: "completed" });
+			expect(await handle.readAnyQueue()).toBeNull();
+		});
+
+		test("allows and denies subscriptions with canSubscribe", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.accessControlActor.getOrCreate([
 				"subscription",
@@ -63,21 +93,47 @@ export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 				},
 			);
 
+			await conn.allowedAction("subscribe-ready");
 			await conn.allowedBroadcastAllowedEvent("hello");
 			expect(await allowedEventPromise).toEqual({ value: "hello" });
 
-			const blockedErrorPromise = new Promise<{ code: string }>(
-				(resolve) => {
-					const unsubscribe = conn.onError((error) => {
-						unsubscribe();
-						resolve(error as { code: string });
-					});
-					conn.on("blockedEvent", () => { });
-				},
-			);
+			const connId = await conn.allowedGetLastCanSubscribeConnId();
+			expect(typeof connId).toBe("string");
+			expect(connId.length).toBeGreaterThan(0);
 
-			const blockedError = await blockedErrorPromise;
-			expect(blockedError.code).toBe("forbidden");
+			await conn.dispose();
+
+			const blockedConn = handle.connect();
+			blockedConn.on("blockedEvent", () => { });
+			await expect(
+				blockedConn.allowedAction("blocked-subscribe-ready"),
+			).rejects.toMatchObject({
+				code: "forbidden",
+			});
+			await blockedConn.dispose();
+		});
+
+		test("broadcasts undefined events without failing subscriptions", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.accessControlActor.getOrCreate([
+				"undefined-event",
+			]);
+			const conn = handle.connect();
+
+			const eventPromise = new Promise<{ value: string }>((resolve, reject) => {
+				const unsubscribeError = conn.onError((error) => {
+					reject(error);
+				});
+				const unsubscribeEvent = conn.on("undefinedEvent", (payload) => {
+					unsubscribeError();
+					unsubscribeEvent();
+					resolve(payload as { value: string });
+				});
+			});
+
+			await conn.allowedAction("undefined-subscribe-ready");
+			await conn.allowedBroadcastUndefinedEvent("wildcard");
+			expect(await eventPromise).toEqual({ value: "wildcard" });
 
 			await conn.dispose();
 		});
@@ -157,20 +213,6 @@ export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 				denied = true;
 			}
 			expect(denied).toBe(true);
-		});
-
-		test("throws when canInvoke does not return boolean", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.accessControlActor.getOrCreate(
-				["invalid-return"],
-				{
-					params: { invalidCanInvokeReturn: true },
-				},
-			);
-
-			await expect(handle.allowedAction("x")).rejects.toMatchObject({
-				code: "internal_error",
-			});
 		});
 	});
 }
