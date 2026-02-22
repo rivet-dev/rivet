@@ -86,6 +86,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 		// Extract just the pathname for routing (without query params)
 		const pathOnly = normalizedPath.split("?")[0];
+		const { gatewayId, requestId } = createHibernatableRequestMetadata();
 
 		const wsHandler = await routeWebSocket(
 			fakeRequest,
@@ -96,9 +97,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			actorId,
 			encoding,
 			params,
-			undefined,
-			undefined,
-			false,
+			gatewayId,
+			requestId,
+			true,
 			false,
 		);
 		return createInlineWebSocket(wsHandler);
@@ -129,6 +130,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const normalizedPath = pathOnly.startsWith("/")
 			? pathOnly
 			: `/${pathOnly}`;
+		const { gatewayId, requestId } = createHibernatableRequestMetadata();
 		const wsHandler = await routeWebSocket(
 			// TODO: Create new request with new path
 			c.req.raw,
@@ -139,9 +141,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			actorId,
 			encoding,
 			params,
-			undefined,
-			undefined,
-			false,
+			gatewayId,
+			requestId,
+			true,
 			false,
 		);
 		return upgradeWebSocket(() => wsHandler)(c, noopNext());
@@ -280,5 +282,19 @@ function actorStateToOutput(state: schema.ActorState): ActorOutput {
 			state.connectableTs !== null ? Number(state.connectableTs) : null,
 		sleepTs: state.sleepTs !== null ? Number(state.sleepTs) : null,
 		destroyTs: state.destroyTs !== null ? Number(state.destroyTs) : null,
+	};
+}
+
+function createHibernatableRequestMetadata(): {
+	gatewayId: ArrayBuffer;
+	requestId: ArrayBuffer;
+} {
+	const gatewayId = new Uint8Array(4);
+	const requestId = new Uint8Array(4);
+	crypto.getRandomValues(gatewayId);
+	crypto.getRandomValues(requestId);
+	return {
+		gatewayId: gatewayId.buffer.slice(0),
+		requestId: requestId.buffer.slice(0),
 	};
 }

@@ -999,7 +999,14 @@ export class ActorConnRaw {
 				messageType: (message.body as any).tag,
 				actionName: (message.body as any).val?.name,
 			});
-			if (readyState === 1) {
+			if (this.#connStatus !== "connected") {
+				logger().debug({
+					msg: "websocket init pending, queueing message",
+					connStatus: this.#connStatus,
+					messageType: (message.body as any).tag,
+				});
+				queueMessage = true;
+			} else if (readyState === 1) {
 				try {
 					const messageSerialized = serializeWithEncoding(
 						this.#encoding,
