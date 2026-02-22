@@ -6,7 +6,6 @@ import type {
 	ActorContext,
 	BeforeActionResponseContext,
 	BeforeConnectContext,
-	ConnContext,
 	ConnectContext,
 	CreateConnStateContext,
 	CreateContext,
@@ -185,7 +184,6 @@ export const ActorConfigSchema = z
 		run: zRunHandler,
 		onStateChange: zFunction().optional(),
 		onBeforeConnect: zFunction().optional(),
-		canInvoke: zFunction().optional(),
 		onConnect: zFunction().optional(),
 		onDisconnect: zFunction().optional(),
 		onBeforeActionResponse: zFunction().optional(),
@@ -402,60 +400,6 @@ export interface Actions<
  */
 export type AuthIntent = "get" | "create" | "connect" | "action" | "message";
 
-type CanInvokeActionName<TActions> = keyof TActions extends never
-	? string
-	: keyof TActions & string;
-
-type CanInvokeSubscribeName<TEvents extends EventSchemaConfig> =
-	keyof TEvents extends never ? string : keyof TEvents & string;
-
-type CanInvokeQueueName<TQueues extends QueueSchemaConfig> =
-	keyof TQueues extends never ? string : keyof TQueues & string;
-
-export type CanInvokeTarget<
-	TActions,
-	TEvents extends EventSchemaConfig,
-	TQueues extends QueueSchemaConfig,
-> =
-	| {
-		kind: "action";
-		name: CanInvokeActionName<TActions>;
-	}
-	| {
-		kind: "subscribe";
-		name: CanInvokeSubscribeName<TEvents>;
-	}
-	| {
-		kind: "queue";
-		name: CanInvokeQueueName<TQueues>;
-	}
-	| {
-		kind: "request";
-	}
-	| {
-		kind: "websocket";
-	};
-
-export type AnyCanInvokeTarget =
-	| {
-		kind: "action";
-		name: string;
-	}
-	| {
-		kind: "subscribe";
-		name: string;
-	}
-	| {
-		kind: "queue";
-		name: string;
-	}
-	| {
-		kind: "request";
-	}
-	| {
-		kind: "websocket";
-	};
-
 interface BaseActorConfig<
 	TState,
 	TConnParams,
@@ -640,29 +584,6 @@ interface BaseActorConfig<
 		>,
 		params: TConnParams,
 	) => void | Promise<void>;
-
-	/**
-	 * Called before inbound invocations are processed.
-	 *
-	 * Return `true` to allow and `false` to deny.
-	 * Returning any non-boolean value throws an error.
-	 *
-	 * This hook runs for inbound actions, queue sends, subscriptions,
-	 * raw HTTP requests, and raw WebSocket connections.
-	 */
-	canInvoke?: (
-		c: ConnContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase,
-			TEvents,
-			TQueues
-		>,
-		invoke: CanInvokeTarget<TActions, TEvents, TQueues>,
-	) => boolean | Promise<boolean>;
 
 	/**
 	 * Called when a client successfully connects to the actor.
@@ -851,7 +772,6 @@ export type ActorConfig<
 	| "run"
 	| "onStateChange"
 	| "onBeforeConnect"
-	| "canInvoke"
 	| "onConnect"
 	| "onDisconnect"
 	| "onBeforeActionResponse"
@@ -958,7 +878,6 @@ export type ActorConfigInput<
 	| "run"
 	| "onStateChange"
 	| "onBeforeConnect"
-	| "canInvoke"
 	| "onConnect"
 	| "onDisconnect"
 	| "onBeforeActionResponse"
@@ -1245,28 +1164,22 @@ export const DocActorConfigSchema = z
 			.describe(
 				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits or throws, the actor crashes.",
 			),
-		onStateChange: z
-			.unknown()
-			.optional()
-			.describe(
-				"Called when the actor's state changes. State changes within this hook won't trigger recursion.",
-			),
-		onBeforeConnect: z
-			.unknown()
-			.optional()
-			.describe(
-				"Called before a client connects. Throw an error to reject the connection.",
-			),
-		canInvoke: z
-			.unknown()
-			.optional()
-			.describe(
-				"Called before inbound invocation entrypoints. Return true to allow or false to deny.",
-			),
-		onConnect: z
-			.unknown()
-			.optional()
-			.describe("Called when a client successfully connects."),
+			onStateChange: z
+				.unknown()
+				.optional()
+				.describe(
+					"Called when the actor's state changes. State changes within this hook won't trigger recursion.",
+				),
+			onBeforeConnect: z
+				.unknown()
+				.optional()
+				.describe(
+					"Called before a client connects. Throw an error to reject the connection.",
+				),
+			onConnect: z
+				.unknown()
+				.optional()
+				.describe("Called when a client successfully connects."),
 		onDisconnect: z
 			.unknown()
 			.optional()

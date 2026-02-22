@@ -1,5 +1,8 @@
 import { setup } from "rivetkit";
-import { accessControlActor } from "./access-control";
+import {
+	accessControlActor,
+	accessControlNoQueuesActor,
+} from "./access-control";
 
 import { inputActor } from "./action-inputs";
 import {
@@ -163,7 +166,8 @@ export const registry = setup({
 		dbActorDrizzle,
 		// From stateless.ts
 		statelessActor,
-		// From access-control.ts
-		accessControlActor,
-	},
-});
+			// From access-control.ts
+			accessControlActor,
+			accessControlNoQueuesActor,
+		},
+	});
