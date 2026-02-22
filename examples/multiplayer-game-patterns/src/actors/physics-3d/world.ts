@@ -1,4 +1,4 @@
-import { actor, type ActorContextOf, event } from "rivetkit";
+import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
 import RAPIER from "@dimforge/rapier3d-compat";
 import {
@@ -48,6 +48,30 @@ export const physics3dWorld = actor({
 	options: { name: "Physics 3D - World", icon: "cube" },
 	events: {
 		snapshot: event<Snapshot>(),
+	},
+	onBeforeConnect: (_c, params: { name?: string }) => {
+		const name = params?.name?.trim();
+		if (!name) {
+			throw new UserError("name required", { code: "auth_required" });
+		}
+		if (name.length > 20) {
+			throw new UserError("name too long", { code: "invalid_name" });
+		}
+	},
+	canInvoke: (c, invoke) => {
+		const isConnectedPlayer = c.vars.players[c.conn.id] !== undefined;
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "setInput" ||
+				invoke.name === "spawnBox" ||
+				invoke.name === "getSnapshot")
+		) {
+			return isConnectedPlayer;
+		}
+		if (invoke.kind === "subscribe" && invoke.name === "snapshot") {
+			return isConnectedPlayer;
+		}
+		return false;
 	},
 	state: {
 		tick: 0,

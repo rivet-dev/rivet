@@ -1,5 +1,9 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
-import { INTERNAL_TOKEN } from "../../auth.ts";
+import {
+	hasInvalidInternalToken,
+	INTERNAL_TOKEN,
+	isInternalToken,
+} from "../../auth.ts";
 import { registry } from "../index.ts";
 import { BOARD_SIZE, type CellValue, type GameResult } from "./config.ts";
 
@@ -42,6 +46,9 @@ export const turnBasedMatch = actor({
 		c,
 		params: { playerToken?: string; internalToken?: string },
 	) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
 		if (params?.internalToken === INTERNAL_TOKEN) return;
 		const playerToken = params?.playerToken?.trim();
 		if (!playerToken) {
@@ -50,6 +57,25 @@ export const turnBasedMatch = actor({
 		if (!findPlayerByToken(c.state, playerToken)) {
 			throw new UserError("invalid player token", { code: "invalid_player_token" });
 		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
+		if (invoke.kind === "action" && invoke.name === "createPlayer") {
+			return isInternal;
+		}
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "makeMove" || invoke.name === "getSnapshot")
+		) {
+			return !isInternal && isAssignedPlayer;
+		}
+		if (invoke.kind === "subscribe" && invoke.name === "gameUpdate") {
+			return !isInternal && isAssignedPlayer;
+		}
+		return false;
 	},
 	onConnect: (c, conn) => {
 		const playerToken = conn.params?.playerToken?.trim();
@@ -79,7 +105,7 @@ export const turnBasedMatch = actor({
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.turnBasedMatchmaker
-			.getOrCreate(["main"])
+			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
 			.send("closeMatch", { matchId: c.state.matchId });
 	},
 	actions: {

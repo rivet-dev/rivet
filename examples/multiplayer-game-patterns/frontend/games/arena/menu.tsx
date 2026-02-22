@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameClient } from "../../client.ts";
 import { type Mode, MODE_CONFIG } from "../../../src/actors/arena/config.ts";
-import type { ArenaAssignment } from "../../../src/actors/arena/matchmaker.ts";
 import { ArenaBot } from "./bot.ts";
 
 export interface ArenaMatchInfo {
@@ -89,15 +88,6 @@ export function ArenaMenu({
 				setQueueCount(data.counts[mode] ?? 0);
 			});
 
-			mm.on("assigned", (raw: unknown) => {
-				const data = raw as { assignments: ArenaAssignment[] };
-				if (!myPlayerId) return;
-				const mine = data.assignments.find(
-					(a) => a.playerId === myPlayerId,
-				);
-				if (mine) resolveMatch(mine);
-			});
-
 			setStatus("queued");
 
 			// Queue message completes immediately with playerId.
@@ -107,23 +97,34 @@ export function ArenaMenu({
 				{ wait: true, timeout: 120_000 },
 			);
 			const response = (
-				result as { response?: { playerId: string } }
+				result as {
+					response?: { playerId: string; registrationToken: string };
+				}
 			)?.response;
 			if (!response || abortRef.current)
 				throw new Error("Failed to queue");
 			myPlayerId = response.playerId;
+			await mm.registerPlayer({
+				playerId: myPlayerId,
+				registrationToken: response.registrationToken,
+			});
 
 			// Fetch current queue sizes since the broadcast during queue
 			// processing may have fired before the WebSocket was connected.
 			const sizes = await mm.getQueueSizes();
 			if (!abortRef.current) setQueueCount((sizes as Record<string, number>)[mode] ?? 0);
 
-			// Check if assignment was already made during queue processing.
-			if (!matched) {
+			// Poll for assignment until this connection is matched.
+			while (!matched && !abortRef.current) {
 				const existing = await mm.getAssignment({
 					playerId: myPlayerId,
+					registrationToken: response.registrationToken,
 				});
-				if (existing) resolveMatch(existing as ArenaMatchInfo);
+				if (existing) {
+					resolveMatch(existing as ArenaMatchInfo);
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 200));
 			}
 		} catch (err) {
 			if (abortRef.current) return;

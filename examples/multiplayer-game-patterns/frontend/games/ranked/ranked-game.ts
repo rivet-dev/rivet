@@ -27,6 +27,10 @@ interface ShotLine {
 	createdAt: number;
 }
 
+type RankedMatchConn = ReturnType<
+	ReturnType<GameClient["rankedMatch"]["get"]>["connect"]
+>;
+
 export class RankedGame {
 	private stopped = false;
 	private rafId = 0;
@@ -43,12 +47,7 @@ export class RankedGame {
 	private localY = 300;
 	private lastFrameTime = 0;
 	private botInterval = 0;
-	private conn: {
-		updatePosition: (i: { x: number; y: number }) => Promise<unknown>;
-		shoot: (i: { dirX: number; dirY: number }) => Promise<unknown>;
-		on: (e: string, cb: (d: unknown) => void) => void;
-		dispose: () => Promise<void>;
-	};
+	private conn: RankedMatchConn;
 
 	constructor(
 		private canvas: HTMLCanvasElement | null,
@@ -58,9 +57,9 @@ export class RankedGame {
 	) {
 		this.conn = client.rankedMatch
 			.get([matchInfo.matchId], {
-				params: { username: matchInfo.username },
+				params: { playerToken: matchInfo.playerToken },
 			})
-			.connect() as typeof this.conn;
+			.connect();
 
 		this.conn.on("snapshot", (raw: unknown) => {
 			const snap = raw as {

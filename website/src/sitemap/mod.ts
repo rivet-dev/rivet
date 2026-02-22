@@ -150,6 +150,11 @@ export const sitemap = [
 						icon: faListUl,
 					},
 					{
+						title: "Workflows",
+						href: "/docs/actors/workflows",
+						icon: faArrowsTurnRight,
+					},
+					{
 						title: "Actions",
 						href: "/docs/actors/actions",
 						icon: faBolt,

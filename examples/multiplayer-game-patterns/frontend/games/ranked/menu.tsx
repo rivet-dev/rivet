@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameClient } from "../../client.ts";
-import type { RankedAssignment } from "../../../src/actors/ranked/matchmaker.ts";
 import type { LeaderboardEntry } from "../../../src/actors/ranked/leaderboard.ts";
 import type { PlayerSnapshot } from "../../../src/actors/ranked/player.ts";
 import { RankedBot } from "./bot.ts";
@@ -31,6 +30,7 @@ export interface RankedMatchInfo {
 	matchId: string;
 	username: string;
 	rating: number;
+	playerToken: string;
 }
 
 export function RankedMenu({
@@ -137,30 +137,39 @@ export function RankedMenu({
 				setQueueCount(data.count);
 			});
 
-			mm.on("assigned", (raw: unknown) => {
-				const data = raw as { assignments: RankedAssignment[] };
-				const mine = data.assignments.find(
-					(a) => a.username === username,
-				);
-				if (mine) resolveMatch(mine);
-			});
-
 			setStatus("queued");
 
-			await mm.send(
+			const queueResult = await mm.send(
 				"queueForMatch",
 				{ username },
 				{ wait: true, timeout: 120_000 },
 			);
+			const queueResponse = (
+				queueResult as { response?: { registrationToken: string } }
+			)?.response;
+			if (!queueResponse || abortRef.current) {
+				throw new Error("Failed to queue");
+			}
+			await mm.registerPlayer({
+				username,
+				registrationToken: queueResponse.registrationToken,
+			});
 
 			if (abortRef.current) return;
 
 			const size = await mm.getQueueSize();
 			if (!abortRef.current) setQueueCount(size as number);
 
-			if (!matched) {
-				const existing = await mm.getAssignment({ username });
-				if (existing) resolveMatch(existing as RankedMatchInfo);
+			while (!matched && !abortRef.current) {
+				const existing = await mm.getAssignment({
+					username,
+					registrationToken: queueResponse.registrationToken,
+				});
+				if (existing) {
+					resolveMatch(existing as RankedMatchInfo);
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 200));
 			}
 		} catch (err) {
 			if (abortRef.current) return;

@@ -17,12 +17,21 @@ export class ArenaBot {
 			const mm = this.client.arenaMatchmaker.getOrCreate(["main"]).connect();
 			this.mm = mm;
 			const result = await mm.send("queueForMatch", { mode: this.mode }, { wait: true, timeout: 120_000 });
-			const response = (result as { response?: { playerId: string } })?.response;
+			const response = (result as {
+				response?: { playerId: string; registrationToken: string };
+			})?.response;
 			if (!response || this.destroyed) return;
+			await mm.registerPlayer({
+				playerId: response.playerId,
+				registrationToken: response.registrationToken,
+			});
 
 			// Poll for assignment until match is filled.
 			while (!this.destroyed) {
-				const assignment = await mm.getAssignment({ playerId: response.playerId });
+				const assignment = await mm.getAssignment({
+					playerId: response.playerId,
+					registrationToken: response.registrationToken,
+				});
 				if (assignment) {
 					mm.dispose();
 					this.mm = null;

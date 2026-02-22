@@ -1,4 +1,9 @@
-import { actor, type ActorContextOf, event } from "rivetkit";
+import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import {
+	hasInvalidInternalToken,
+	INTERNAL_TOKEN,
+	isInternalToken,
+} from "../../auth.ts";
 import { registry } from "../index.ts";
 import { BUILDINGS, STARTING_RESOURCES, type BuildingType } from "./config.ts";
 
@@ -38,6 +43,32 @@ export const idleWorld = actor({
 	options: { name: "Idle - World", icon: "industry" },
 	events: {
 		stateUpdate: event<IdleSnapshot>(),
+	},
+	onBeforeConnect: (_c, params: { internalToken?: string }) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "initialize" ||
+				invoke.name === "build" ||
+				invoke.name === "getState" ||
+				invoke.name === "getLeaderboard")
+		) {
+			return !isInternal;
+		}
+		if (invoke.kind === "action" && invoke.name === "collectProduction") {
+			return isInternal;
+		}
+		if (invoke.kind === "subscribe" && invoke.name === "stateUpdate") {
+			return !isInternal;
+		}
+		return false;
 	},
 	state: {
 		playerId: "",
@@ -140,7 +171,7 @@ function scheduleCollection(
 function updateLeaderboard(c: ActorContextOf<typeof idleWorld>) {
 	const client = c.client<typeof registry>();
 	client.idleLeaderboard
-		.getOrCreate(["main"])
+		.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
 		.updateScore({
 			playerId: c.state.playerId,
 			playerName: c.state.playerName,

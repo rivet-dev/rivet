@@ -1,6 +1,10 @@
 import { actor, type ActorContextOf, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { INTERNAL_TOKEN } from "../../auth.ts";
+import {
+	hasInvalidInternalToken,
+	INTERNAL_TOKEN,
+	isInternalToken,
+} from "../../auth.ts";
 import { registry } from "../index.ts";
 import {
 	LOBBY_CAPACITY,
@@ -61,6 +65,9 @@ export const battleRoyaleMatch = actor({
 		c,
 		params: { playerToken?: string; internalToken?: string },
 	) => {
+		if (hasInvalidInternalToken(params)) {
+			throw new UserError("forbidden", { code: "forbidden" });
+		}
 		if (params?.internalToken === INTERNAL_TOKEN) return;
 		const playerToken = params?.playerToken?.trim();
 		if (!playerToken) {
@@ -69,6 +76,30 @@ export const battleRoyaleMatch = actor({
 		if (!findPlayerByToken(c.state, playerToken)) {
 			throw new UserError("invalid player token", { code: "invalid_player_token" });
 		}
+	},
+	canInvoke: (c, invoke) => {
+		const isInternal = isInternalToken(
+			c.conn.params as { internalToken?: string } | undefined,
+		);
+		const isAssignedPlayer = findPlayerByConnId(c.state, c.conn.id) !== null;
+		if (invoke.kind === "action" && invoke.name === "createPlayer") {
+			return isInternal;
+		}
+		if (
+			invoke.kind === "action" &&
+			(invoke.name === "updatePosition" ||
+				invoke.name === "shoot" ||
+				invoke.name === "getSnapshot")
+		) {
+			return !isInternal && isAssignedPlayer;
+		}
+		if (
+			invoke.kind === "subscribe" &&
+			(invoke.name === "snapshot" || invoke.name === "shoot")
+		) {
+			return !isInternal && isAssignedPlayer;
+		}
+		return false;
 	},
 	onConnect: async (c, conn) => {
 		const playerToken = conn.params?.playerToken?.trim();
@@ -98,7 +129,7 @@ export const battleRoyaleMatch = actor({
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		await client.battleRoyaleMatchmaker
-			.getOrCreate(["main"])
+			.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
 			.send("closeMatch", { matchId: c.state.matchId });
 	},
 	run: async (c) => {
@@ -336,11 +367,13 @@ function randomPositionInZone(zone: { centerX: number; centerY: number; radius: 
 
 async function updateMatchmaker(c: ActorContextOf<typeof battleRoyaleMatch>) {
 	const client = c.client<typeof registry>();
-	await client.battleRoyaleMatchmaker.getOrCreate(["main"]).send("updateMatch", {
-		matchId: c.state.matchId,
-		playerCount: Object.values(c.state.players).filter((p) => p.connId !== null).length,
-		isStarted: c.state.phase !== "lobby",
-	});
+	await client.battleRoyaleMatchmaker
+		.getOrCreate(["main"], { params: { internalToken: INTERNAL_TOKEN } })
+		.send("updateMatch", {
+			matchId: c.state.matchId,
+			playerCount: Object.values(c.state.players).filter((p) => p.connId !== null).length,
+			isStarted: c.state.phase !== "lobby",
+		});
 }
 
 function countAlivePlayers(state: State): number {
