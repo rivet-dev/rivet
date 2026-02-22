@@ -147,6 +147,13 @@ export function ActorTabs({
 						</TabsTrigger>
 						<TabsTrigger
 							disabled={disabled}
+							value="database"
+							className="text-xs px-3 py-1 pb-2"
+						>
+							Database
+						</TabsTrigger>
+						<TabsTrigger
+							disabled={disabled}
 							value="metadata"
 							className="text-xs px-3 py-1 pb-2"
 						>
