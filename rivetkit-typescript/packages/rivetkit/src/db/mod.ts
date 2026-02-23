@@ -78,8 +78,8 @@ export function db({
 			let op: Promise<void> = Promise.resolve();
 
 			const serialize = async <T>(fn: () => Promise<T>): Promise<T> => {
-				// Ensure wa-sqlite calls are not concurrent. Actors can process multiple
-				// actions concurrently, and wa-sqlite is not re-entrant.
+				// Ensure @rivetkit/sqlite calls are not concurrent. Actors can process multiple
+				// actions concurrently, and @rivetkit/sqlite is not re-entrant.
 				const next = op.then(fn, fn);
 				op = next.then(
 					() => undefined,

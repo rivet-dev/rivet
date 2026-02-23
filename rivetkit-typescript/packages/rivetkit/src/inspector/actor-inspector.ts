@@ -115,7 +115,7 @@ export class ActorInspector {
 			"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'",
 		) as { name: string; type: string }[];
 
-		// Serialize all queries to avoid concurrent wa-sqlite access
+		// Serialize all queries to avoid concurrent @rivetkit/sqlite access
 		// which can cause "file is not a database" errors.
 		const tableInfos = [];
 		for (const table of tables) {

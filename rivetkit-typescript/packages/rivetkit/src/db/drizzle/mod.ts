@@ -56,8 +56,8 @@ function createActorKvStore(kv: {
 }
 
 /**
- * Mutex to serialize async operations on a wa-sqlite database handle.
- * wa-sqlite is not safe for concurrent operations on the same handle.
+ * Mutex to serialize async operations on a @rivetkit/sqlite database handle.
+ * @rivetkit/sqlite is not safe for concurrent operations on the same handle.
  */
 class DbMutex {
 	#locked = false;
@@ -89,7 +89,7 @@ class DbMutex {
 }
 
 /**
- * Create a sqlite-proxy async callback from a wa-sqlite Database
+ * Create a sqlite-proxy async callback from a @rivetkit/sqlite Database
  */
 function createProxyCallback(
 	waDb: Database,
@@ -126,7 +126,7 @@ function createProxyCallback(
 }
 
 /**
- * Run inline migrations via the wa-sqlite Database.
+ * Run inline migrations via the @rivetkit/sqlite Database.
  * Migrations use the same embedded format as drizzle-orm's durable-sqlite.
  */
 async function runInlineMigrations(
@@ -186,7 +186,7 @@ export function db<
 >(
 	config?: DatabaseFactoryConfig<TSchema>,
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
-	// Store the wa-sqlite Database instance alongside the drizzle client
+	// Store the @rivetkit/sqlite Database instance alongside the drizzle client
 	let waDbInstance: Database | null = null;
 	const mutex = new DbMutex();
 
@@ -240,7 +240,7 @@ export function db<
 								}) as TRow[];
 						}
 						// Use exec for non-parameterized queries since
-						// wa-sqlite's query() can crash on some statements.
+						// @rivetkit/sqlite's query() can crash on some statements.
 						const results: Record<string, unknown>[] = [];
 						let columnNames: string[] | null = null;
 						await waDb.exec(
