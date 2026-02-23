@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vercel dev",
+		"build": "vite build",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {},
