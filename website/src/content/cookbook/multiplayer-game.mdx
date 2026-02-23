@@ -27,106 +27,87 @@ Start with one of the working examples on [GitHub](https://github.com/rivet-dev/
 
 ### Game Loop And Tick Rates
 
-Per-pattern tick rate recommendations are listed in the summary bullets at the start of each architecture pattern.
-
-#### Implementing Tick Loops
-
 | Pattern | Use When | Implementation Guidance |
 | --- | --- | --- |
 | Fixed realtime loop | Battle Royale, Arena, IO Style, Open World, Ranked | Run in `run` with `sleep(tickMs)` and exit on `c.aborted`. |
 | Action-driven updates | Party, Turn-Based | Mutate and broadcast only on actions/events rather than scheduled ticks. |
 | Coarse offline progression | Any mode with idle progression | Use `c.schedule.after(...)` with coarse windows (for example 5 to 15 minutes) and apply catch-up from elapsed wall clock time. |
 
-### Physics And Spatial Indexing
+### Physics
 
-Per-pattern physics recommendations and optional spatial indexing notes are listed in the summary tables at the start of each architecture pattern.
+Start with custom kinematic logic for simple games. Switch to a full physics engine when you need joints, stacked bodies, high collision density, or complex shapes (rotated polygons, capsules, convex hulls, triangle meshes).
 
-| Dimension | Primary Engine | Fallback Engines | Example Code | Notes |
-| --- | --- | --- | --- | --- |
-| 2D | `@dimforge/rapier2d` | `planck-js`, `matter-js` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-2d/) | Prefer custom kinematic logic first for simple games, then escalate when contacts become complex. |
-| 3D | `@dimforge/rapier3d` | `cannon-es`, `ammo.js` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-3d/) | For multiplayer shooters, use server-side physics for authoritative combat simulation and movement validation. |
+Pick one engine per simulation. Keep frontend-only libs out of backend simulation paths and treat server state as authoritative.
 
-| Optional Spatial Indexing | Recommendation |
+| Dimension | Primary Engine | Fallback Engines | Example Code |
+| --- | --- | --- | --- |
+| 2D | `@dimforge/rapier2d` | `planck-js`, `matter-js` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-2d/) |
+| 3D | `@dimforge/rapier3d` | `cannon-es`, `ammo.js` | [GitHub](https://github.com/rivet-dev/rivet/tree/main/examples/multiplayer-game-patterns/src/actors/physics-3d/) |
+
+### Spatial Indexing
+
+For non-physics spatial queries, use a dedicated index instead of naive `O(n^2)` checks:
+
+| Index Type | Recommendation |
 | --- | --- |
-| Broadphase | Do not use naive `O(n^2)` checks once entity counts can grow. Use a proper broadphase or partitioning structure. |
-| AABB index | For non-physics queries (AOI, visibility, non-collider entities), use `rbush` for dynamic sets or `flatbush` for static-ish sets. |
-| Point index | For non-physics nearest-neighbor or within-radius queries, use `d3-quadtree`. |
-
-| Escalate To Rapier When | Why |
-| --- | --- |
-| You need joints, stacked bodies, or stable contact manifolds | These need robust rigid-body/contact solvers. |
-| You have many dynamic bodies or high collision density | Purpose-built broadphase and solvers hold up better than custom kinematic logic. |
-| You need complex shapes (rotated boxes/polygons in 2D, capsules/convex hulls/triangle meshes in 3D) | Hand-rolled collision code becomes costly and error-prone. |
-
-| Cross-Cutting Rule | Recommendation |
-| --- | --- |
-| Engine exclusivity | Physics engines are mutually exclusive in practice for one simulation. Pick one engine per simulation. |
-| Backend/runtime boundary | Keep frontend-only libs out of backend simulation paths; treat server state as authoritative. |
-| Client mesh raycasts | `three-mesh-bvh` is optional and mostly for client-side fast raycasts on dense static meshes. |
+| AABB index | For AOI, visibility, and non-collider entities, use `rbush` for dynamic sets or `flatbush` for static-ish sets. |
+| Point index | For nearest-neighbor or within-radius queries, use `d3-quadtree`. |
 
 ## Networking & State Sync
 
 ### Netcode
 
-Per-pattern netcode recommendations live under each architecture pattern in `#### Netcode`.
-
-| Model | When To Use | How To Implement (Basic) |
+| Model | When To Use | Implementation |
 | --- | --- | --- |
-| Hybrid (client movement, server combat) | Latency-sensitive competitive games where movement responsiveness is critical but combat integrity matters (shooters, action sports, ranked duels). | Client owns movement locally and sends position updates at a capped rate. Server validates speed, bounds, and collision for anti-cheat. Projectiles, hits, damage, and other game entities are fully server-authoritative. Server simulates combat from its own state and broadcasts results. |
-| Server-authoritative with interpolation | Realtime games where fairness and simplicity outweigh instant local feedback (IO Style, persistent worlds). | Client sends input commands. Server simulates on fixed ticks, resolves movement and collision, and publishes authoritative snapshots. Client interpolates between snapshots and extrapolates briefly on missed updates. |
-| Server-authoritative (basic logic) | Event-driven or turn-based games with no realtime simulation. | Server validates and applies discrete actions (turns, phase transitions, votes). No continuous tick loop needed. Client displays confirmed server state. |
+| Hybrid (client movement, server combat) | Shooters, action sports, ranked duels | Client owns movement and sends capped-rate position updates. Server validates for anti-cheat. Combat (projectiles, hits, damage) is fully server-authoritative. |
+| Server-authoritative with interpolation | IO Style, persistent worlds | Client sends input commands. Server simulates on fixed ticks and publishes authoritative snapshots. Client interpolates between snapshots. |
+| Server-authoritative (basic logic) | Turn-based, event-driven | Server validates and applies discrete actions (turns, phase transitions, votes). Client displays confirmed state. |
 
 ### Realtime Data Model
 
-- Publish game state from the server as events, using snapshots and/or diffs. In hybrid modes, this covers combat, entities, and other players. In server-authoritative modes, this covers everything including movement.
-  - Example pattern: send a full snapshot on join/resync, then send per-tick diffs for regular updates.
-- Keep events small and typed. For high-frequency updates, batch per tick.
-- Avoid using UI-framework state/hooks for high-frequency game updates. Keep simulation and render loops in engine code, and use framework state for basic UI only (menus, HUD, forms), especially with Canvas or Three.js renderers.
-- When all players should receive the same update, use `c.broadcast(...)`. When players should receive different/private data, send per-connection payloads with `conn.send(...)`.
-- Frontend bundling: place shared types, constants, and pure helpers in `src/shared/` (for example `src/shared/sim/*`). Avoid importing backend actor modules into browser bundles, since backend modules often include Node-only dependencies (`fs`, SQLite bindings, etc).
+- **Snapshots and diffs**: Publish state as events. Send a full snapshot on join/resync, then per-tick diffs for regular updates.
+- **Batch per tick**: Keep events small and typed. Batch high-frequency updates per tick.
+- **Avoid UI framework state for game updates**: Use `requestAnimationFrame` or a Canvas/Three.js loop for simulation, not React state. Reserve UI framework state for menus, HUD, and forms.
+- **Broadcast vs per-connection**: Use `c.broadcast(...)` for shared updates and `conn.send(...)` for private/per-player data.
 
 ### Shared Simulation Logic
 
-Use this for logic shared between client and server.
+Shared simulation logic runs on both the client and the server. For example, an `applyInput(state, input, dt)` function that integrates velocity and clamps to world bounds can run on the client for prediction and on the server for validation.
 
-- Keep shared logic basic and pure (movement integration, input transforms, constants).
-- Put shared code in `src/shared/`, and keep deterministic simulation helpers in `src/shared/sim/*` with no side effects.
-- Do not share actor runtime code (DB access, network calls, `c.*` context, timers).
-- In hybrid modes, the client runs shared movement logic as the primary authority and the server runs it for anti-cheat validation. In server-authoritative modes, the client uses shared logic for interpolation and prediction only.
+- **Hybrid modes**: Client runs shared movement as primary authority, server runs it for anti-cheat validation.
+- **Server-authoritative modes**: Client uses shared logic for interpolation and prediction only.
+- **Keep it pure**: Movement integration, input transforms, collision helpers, and constants only.
+- **Put shared code in `src/shared/`**: Keep deterministic helpers in `src/shared/sim/*` with no side effects.
+
 
 ### Interest Management
 
+Control what each client receives to reduce bandwidth and prevent information leaks.
+
 #### Per-Player Replication Filters
 
-- Send each client only the state relevant to that player (for example by proximity, line-of-sight, team, or game phase).
-- For shooters and action games, limit replication by proximity and optional field-of-view checks.
-- Keep filtering server-side so clients never receive data they should not see.
+- **Filter by relevance**: Send each client only state relevant to that player (proximity, line-of-sight, team, or game phase).
+- **Shooters and action games**: Limit replication by proximity and optional field-of-view checks.
+- **Server-side only**: Clients should never receive data they should not see.
 
 #### Sharded Worlds
 
-- Partition very large worlds across data actors (for example chunk actors keyed by `worldId:chunkX:chunkY`).
-- Clients subscribe only to nearby partitions (for example a 3x3 chunk window around the player).
-- Use this when you are confident the world is large and state-heavy (for example sandbox builders or MMOs), not as a default for small matches.
+- **Partition large worlds**: Use chunk actors keyed by `worldId:chunkX:chunkY`.
+- **Subscribe to nearby chunks**: Clients connect only to nearby partitions (for example a 3x3 chunk window).
+- **Use sparingly**: Only when the world is large and state-heavy (sandbox builders, MMOs), not as a default for small matches.
 
 ## Backend Infrastructure
 
 ### Persistence
 
-Use this section to decide when SQLite is a better fit than in-memory actor state.
+- **In-memory state**: Best for realtime game state that changes every tick (player positions, inputs, match phase, scores).
+- **SQLite (`rivetkit/db`)**: Better for large or table-like state that needs queries, indexes, or long-term persistence (tiles, inventory, matchmaking pools). Serialize DB work through a queue since multiple actions can hit the same actor concurrently.
 
-- Rivet Actor state is fine for small ephemeral state (rooms, short-lived matches).
-- Prefer SQLite (`rivetkit/db`) when state is:
-  - Large or table-like (tiles/blocks/buildings/inventory).
-  - Needs queries/indexes beyond key lookups.
-  - Expected to persist long-term and grow over time.
-- Matchmakers/coordinators may also use SQLite when their indexing state can grow large (room registries, matchmaking pools, large queues).
-- When using `rivetkit/db`, assume multiple actions can hit the same actor DB concurrently. Serialize DB work through a queue.
+### Matchmaking Patterns
 
-### Matchmaking Orchestration Primitives
+Common building blocks used across the architecture patterns below.
 
-Use these cross-cutting primitives as a baseline before picking a specific architecture pattern.
-
-#### Actor Topology Primitives
+#### Actor Topology
 
 | Primitive | Use When | Typical Ownership |
 | --- | --- | --- |
@@ -136,21 +117,10 @@ Use these cross-cutting primitives as a baseline before picking a specific archi
 | `player[username]` | Canonical profile/rating reused across matches | Durable player stats (for example rating and win/loss). |
 | `leaderboard["main"]` | Shared rankings across many matches/players | Global ordered score rows and top lists. |
 
-#### Matchmaking Building Blocks
-
-- **Queue row**: A pending intent to match (mode/rating/capacity metadata).
-- **Assignment row**: Binds a connection/player to a specific `matchId`.
-- **Pending reservation**: Temporarily holds a seat until a player connects.
-- **Join token/invite code**: Server-issued proof that a connect request is allowed.
-- **Occupancy heartbeat**: Match reports connected and pending counts back to matchmaker.
-- **Close/cleanup flow**: Remove queue, assignment, and reservation rows when a match ends.
-
 #### Queueing Strategy
 
-- Prefer actor queues to serialize DB mutations on shared matchmaking tables.
-- Queue matchmaker actions that can race: find/create, queue/unqueue, verify/pending-connected, update/close.
-- Keep queueing on the actor that owns the shared index tables (usually the matchmaker).
-- Let match-local actions run without queueing unless they mutate shared matchmaking indexes.
+- Multiple players can hit the matchmaker at the same time, so actions like find/create, queue/unqueue, and close need to be serialized through actor queues to avoid races.
+- Match-local actions (gameplay, scoring) do not need queueing unless they write back to the matchmaker.
 
 ## Security And Anti-Cheat
 
@@ -158,27 +128,15 @@ Start with this baseline, then harden further for competitive or high-risk envir
 
 ### Baseline Checklist
 
-Apply this checklist to all implementations.
-
-- Identity:
-  - Use `c.conn.id` as the authoritative transport identity of the caller.
-  - If you accept `playerId`/`username` in params, treat it as untrusted input and bind it through server-issued assignment/join tickets before attaching player state.
-- Authorization:
-  - Validate that the caller is allowed to mutate the target entity (room membership, turn ownership, host-only actions).
-- Input validation:
-  - Clamp sizes/lengths and validate enums.
-  - Validate usernames (length, allowed chars, avoid unbounded Unicode).
-- Rate limiting:
-  - Per-connection rate limits for spammy actions (chat, join/leave, fire, movement updates).
-- State integrity:
-  - Server recomputes derived state (scores, win conditions, placements).
-  - Avoid client-authoritative changes to inventory/currency/leaderboard totals.
+- **Identity**: Use `c.conn.id` as the authoritative transport identity. Treat `playerId`/`username` in params as untrusted input and bind through server-issued assignment/join tickets.
+- **Authorization**: Validate the caller is allowed to mutate the target entity (room membership, turn ownership, host-only actions).
+- **Input validation**: Clamp sizes/lengths, validate enums, and validate usernames (length, allowed chars, avoid unbounded Unicode).
+- **Rate limiting**: Per-connection rate limits for spammy actions (chat, join/leave, fire, movement updates).
+- **State integrity**: Server recomputes derived state (scores, win conditions, placements). Never allow client-authoritative changes to inventory/currency/leaderboard totals.
 
 ### Movement Validation
 
-Use this for any mode with client-authoritative movement (hybrid and client-authoritative flows).
-
-Clients may send position/rotation updates for smoothness, but the server must:
+For any mode with client-authoritative movement (hybrid flows), clients may send position/rotation updates for smoothness, but the server must:
 
 - Enforce max delta per update (speed cap) based on elapsed time.
 - Reject or clamp teleports.
