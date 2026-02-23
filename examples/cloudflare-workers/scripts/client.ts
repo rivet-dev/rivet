@@ -1,35 +1,47 @@
 import { createClient } from "rivetkit/client";
-import type { registry } from "../src/registry";
+import type { registry } from "../src/actors";
 
 // Create RivetKit client
-const client = createClient<typeof registry>(
-	process.env.RIVET_ENDPOINT ?? "http://localhost:8787/rivet",
-);
+const client = createClient<typeof registry>({
+	endpoint: process.env.RIVET_ENDPOINT ?? "http://localhost:8787/api/rivet",
+	disableMetadataLookup: true,
+});
 
 async function main() {
-	console.log("🚀 Cloudflare Workers Client Demo");
+	console.log("🚀 Cloudflare Workers SQLite E2E Demo");
 
 	try {
-		// Create counter instance
-		const counter = client.counter.getOrCreate("demo").connect();
+		const counterKey = "sqlite-demo";
+		const counter = client.sqliteCounter.getOrCreate(counterKey);
 
-		// Increment counter
-		console.log("Incrementing counter 'demo'...");
-		const result1 = await counter.increment(1);
-		console.log("New count:", result1);
+		const initialCount = await counter.getCount();
+		console.log("Initial count:", initialCount);
 
-		// Increment again with larger value
-		console.log("Incrementing counter 'demo' by 5...");
-		const result2 = await counter.increment(5);
-		console.log("New count:", result2);
+		const afterOne = await counter.increment(1);
+		console.log("After +1:", afterOne);
 
-		// Create another counter
-		const counter2 = client.counter.getOrCreate("another");
-		console.log("Incrementing counter 'another' by 10...");
-		const result3 = await counter2.increment(10);
-		console.log("New count:", result3);
+		const afterFive = await counter.increment(5);
+		console.log("After +5:", afterFive);
 
-		console.log("✅ Demo completed!");
+		const expected = initialCount + 6;
+		if (afterFive !== expected) {
+			throw new Error(
+				`Unexpected count after increments. Expected ${expected}, got ${afterFive}.`,
+			);
+		}
+
+		// Ensure the value persisted by re-resolving the actor handle.
+		const counterAgain = client.sqliteCounter.getOrCreate(counterKey);
+		const persistedCount = await counterAgain.getCount();
+		console.log("Persisted count:", persistedCount);
+
+		if (persistedCount !== expected) {
+			throw new Error(
+				`Persistence check failed. Expected ${expected}, got ${persistedCount}.`,
+			);
+		}
+
+		console.log("✅ SQLite E2E check passed");
 	} catch (error) {
 		console.error("❌ Error:", error);
 		process.exit(1);
