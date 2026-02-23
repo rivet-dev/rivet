@@ -1,8 +1,8 @@
-declare module "wa-sqlite" {
+declare module "@rivetkit/sqlite" {
 	export function Factory(module: any): any;
 }
 
-declare module "wa-sqlite/src/VFS.js" {
+declare module "@rivetkit/sqlite/src/VFS.js" {
 	export class Base {
 		handleAsync(fn: () => Promise<number>): number;
 	}
@@ -20,7 +20,7 @@ declare module "wa-sqlite/src/VFS.js" {
 	export const SQLITE_OPEN_READWRITE: number;
 }
 
-declare module "wa-sqlite/dist/wa-sqlite-async.mjs" {
+declare module "@rivetkit/sqlite/dist/wa-sqlite-async.mjs" {
 	const factory: (config?: { wasmBinary?: ArrayBuffer }) => Promise<any>;
 	export default factory;
 }
