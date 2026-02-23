@@ -8,10 +8,10 @@
 
 // Note: wa-sqlite VFS.Base type definitions have incorrect types for xRead/xWrite
 // The actual runtime uses Uint8Array, not the {size, value} object shown in types
-import * as VFS from "wa-sqlite/src/VFS.js";
+import * as VFS from "@rivetkit/sqlite/src/VFS.js";
 
-import SQLiteESMFactory from "wa-sqlite/dist/wa-sqlite-async.mjs";
-import { Factory } from "wa-sqlite";
+import SQLiteESMFactory from "@rivetkit/sqlite/dist/wa-sqlite-async.mjs";
+import { Factory } from "@rivetkit/sqlite";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { CHUNK_SIZE, getMetaKey, getChunkKey } from "./kv";
@@ -235,7 +235,7 @@ export class SqliteVfs {
 				this.#initPromise = (async () => {
 				// Load WASM binary (Node.js environment)
 				const require = createRequire(import.meta.url);
-				const wasmPath = require.resolve("wa-sqlite/dist/wa-sqlite-async.wasm");
+				const wasmPath = require.resolve("@rivetkit/sqlite/dist/wa-sqlite-async.wasm");
 				const wasmBinary = readFileSync(wasmPath);
 
 					// Initialize wa-sqlite module - each instance gets its own module
