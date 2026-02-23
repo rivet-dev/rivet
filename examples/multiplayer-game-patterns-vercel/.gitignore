@@ -1,0 +1,4 @@
+.actorcore
+node_modules
+dist
+.vercel

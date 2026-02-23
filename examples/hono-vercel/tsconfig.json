@@ -2,12 +2,16 @@
 	"compilerOptions": {
 		"target": "esnext",
 		"lib": [
-			"esnext"
+			"esnext",
+			"dom",
+			"dom.iterable"
 		],
+		"jsx": "react-jsx",
 		"module": "esnext",
 		"moduleResolution": "bundler",
 		"types": [
-			"node"
+			"node",
+			"vite/client"
 		],
 		"noEmit": true,
 		"strict": true,
@@ -17,6 +21,7 @@
 	},
 	"include": [
 		"src/**/*",
-		"api/**/*"
+		"api/**/*",
+		"frontend/**/*"
 	]
 }
