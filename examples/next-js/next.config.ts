@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-	/* config options here */
+	serverExternalPackages: ["@rivetkit/sqlite", "@rivetkit/sqlite-vfs"],
 };
 
 export default nextConfig;
