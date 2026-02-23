@@ -69,13 +69,16 @@ export interface ActorDriver {
 	): Promise<BaseSQLiteDatabase<any,any,any,any> | undefined>;
 
 	/**
-	 * SQLite VFS instance for creating KV-backed databases.
+	 * Returns a SQLite VFS instance for creating KV-backed databases.
 	 * If not provided, the database provider will need an override.
 	 *
-	 * wa-sqlite's async build is not re-entrant per module instance. Drivers
-	 * should scope this instance to a single actor when using KV-backed SQLite.
+	 * @rivetkit/sqlite's async build is not re-entrant per module instance. Drivers
+	 * should return a new instance per call for actor-level isolation.
+	 *
+	 * This is a method (not a property) so drivers can use dynamic imports,
+	 * keeping the core driver tree-shakeable from @rivetkit/sqlite.
 	 */
-	sqliteVfs?: SqliteVfs;
+	getSqliteVfs?(): SqliteVfs | Promise<SqliteVfs>;
 
 	/**
 	 * Requests the actor to go to sleep.

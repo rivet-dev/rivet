@@ -36,7 +36,7 @@ export interface DatabaseProviderContext {
 
 	/**
 	 * SQLite VFS instance for creating KV-backed databases.
-	 * This should be actor-scoped because wa-sqlite is not re-entrant per
+	 * This should be actor-scoped because @rivetkit/sqlite is not re-entrant per
 	 * module instance.
 	 */
 	sqliteVfs?: SqliteVfs;

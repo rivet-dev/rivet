@@ -1,6 +1,6 @@
 import type { AnyClient } from "@/client/client";
 import type { RawDatabaseClient } from "@/db/config";
-import { SqliteVfs } from "@rivetkit/sqlite-vfs";
+import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import type {
 	ActorDriver,
 	AnyActorInstance,
@@ -82,10 +82,18 @@ export class FileSystemActorDriver implements ActorDriver {
 	}
 
 	/** SQLite VFS instance for creating KV-backed databases */
-	get sqliteVfs(): SqliteVfs {
-		// The async wa-sqlite build is not re-entrant per module instance.
+	async getSqliteVfs(): Promise<SqliteVfs> {
+		// Dynamic import keeps @rivetkit/sqlite out of the main entrypoint bundle,
+		// preserving tree-shakeability for environments that don't use SQLite.
+		// The async @rivetkit/sqlite build is not re-entrant per module instance.
 		// Returning a fresh SqliteVfs here gives each actor its own module,
 		// allowing actor-level parallelism without cross-actor re-entry.
+		//
+		// The specifier is built via concatenation so that bundlers like
+		// wrangler's esbuild cannot statically analyze and attempt to
+		// bundle the module (it is never used on Cloudflare Workers).
+		const specifier = "@rivetkit/" + "sqlite-vfs";
+		const { SqliteVfs } = await import(specifier);
 		return new SqliteVfs();
 	}
 

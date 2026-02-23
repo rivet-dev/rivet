@@ -6,7 +6,7 @@
  * used concurrently with other instances.
  */
 
-// Note: wa-sqlite VFS.Base type definitions have incorrect types for xRead/xWrite
+// Note: @rivetkit/sqlite VFS.Base type definitions have incorrect types for xRead/xWrite
 // The actual runtime uses Uint8Array, not the {size, value} object shown in types
 import * as VFS from "@rivetkit/sqlite/src/VFS.js";
 
@@ -57,7 +57,7 @@ function decodeFileMeta(data: Uint8Array): number {
 
 /**
  * SQLite API interface (subset needed for VFS registration)
- * This is part of wa-sqlite but not exported in TypeScript types
+ * This is part of @rivetkit/sqlite but not exported in TypeScript types
  */
 interface SQLite3Api {
 	vfs_register: (vfs: unknown, makeDefault?: boolean) => number;
@@ -88,7 +88,7 @@ interface SQLite3Api {
 
 /**
  * Simple async mutex for serializing database operations
- * wa-sqlite calls are not safe to run concurrently on one module instance
+ * @rivetkit/sqlite calls are not safe to run concurrently on one module instance
  */
 class AsyncMutex {
 	#locked = false;
@@ -188,7 +188,7 @@ export class Database {
 	}
 
 	/**
-	 * Get the raw wa-sqlite API (for advanced usage)
+	 * Get the raw @rivetkit/sqlite API (for advanced usage)
 	 */
 	get sqlite3(): SQLite3Api {
 		return this.#sqlite3;
@@ -205,7 +205,7 @@ export class Database {
 /**
  * SQLite VFS backed by KV storage.
  *
- * Each instance is independent and has its own wa-sqlite WASM module.
+ * Each instance is independent and has its own @rivetkit/sqlite WASM module.
  * This allows multiple instances to operate concurrently without interference.
  */
 export class SqliteVfs {
@@ -222,7 +222,7 @@ export class SqliteVfs {
 	}
 
 	/**
-	 * Initialize wa-sqlite and VFS (called once per instance)
+	 * Initialize @rivetkit/sqlite and VFS (called once per instance)
 	 */
 	async #ensureInitialized(): Promise<void> {
 		// Fast path: already initialized
@@ -238,7 +238,7 @@ export class SqliteVfs {
 				const wasmPath = require.resolve("@rivetkit/sqlite/dist/wa-sqlite-async.wasm");
 				const wasmBinary = readFileSync(wasmPath);
 
-					// Initialize wa-sqlite module - each instance gets its own module
+					// Initialize @rivetkit/sqlite module - each instance gets its own module
 					const module = await SQLiteESMFactory({ wasmBinary });
 					this.#sqlite3 = Factory(module) as unknown as SQLite3Api;
 
@@ -266,7 +266,7 @@ export class SqliteVfs {
 		// Serialize all open operations within this instance
 		await this.#openMutex.acquire();
 		try {
-			// Initialize wa-sqlite and SqliteSystem on first call
+			// Initialize @rivetkit/sqlite and SqliteSystem on first call
 			await this.#ensureInitialized();
 
 			if (!this.#sqlite3 || !this.#sqliteSystem) {

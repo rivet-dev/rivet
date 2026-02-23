@@ -1409,10 +1409,12 @@ export class ActorInstance<
 
 		let client: InferDatabaseClient<DB> | undefined;
 		try {
-			// Every actor gets its own SqliteVfs/wa-sqlite instance. The async
-			// wa-sqlite build is not re-entrant, and sharing one instance across
+			// Every actor gets its own SqliteVfs/@rivetkit/sqlite instance. The async
+			// @rivetkit/sqlite build is not re-entrant, and sharing one instance across
 			// actors can cause cross-actor contention and runtime corruption.
-			this.#sqliteVfs ??= this.driver.sqliteVfs;
+			if (!this.#sqliteVfs && this.driver.getSqliteVfs) {
+				this.#sqliteVfs = await this.driver.getSqliteVfs();
+			}
 
 			client = await this.#config.db.createClient({
 				actorId: this.#actorId,
