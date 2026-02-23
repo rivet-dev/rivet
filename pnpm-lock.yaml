@@ -4413,6 +4413,9 @@ importers:
       '@rivetkit/on-change':
         specifier: ^6.0.2-rc.1
         version: 6.0.2-rc.1
+      '@rivetkit/sqlite':
+        specifier: ^0.1.1
+        version: 0.1.1
       '@rivetkit/sqlite-vfs':
         specifier: workspace:*
         version: link:../sqlite-vfs
@@ -4461,9 +4464,6 @@ importers:
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
-      wa-sqlite:
-        specifier: ^1.0.0
-        version: 1.0.0
       zod:
         specifier: ^4.1.0
         version: 4.1.13
@@ -4543,12 +4543,12 @@ importers:
       '@rivetkit/bare-ts':
         specifier: ^0.6.2
         version: 0.6.2
+      '@rivetkit/sqlite':
+        specifier: ^0.1.1
+        version: 0.1.1
       vbare:
         specifier: ^0.0.4
         version: 0.0.4
-      wa-sqlite:
-        specifier: ^1.0.0
-        version: 1.0.0
     devDependencies:
       '@bare-ts/tools':
         specifier: ^0.13.0
@@ -8842,6 +8842,9 @@ packages:
   '@rivetkit/on-change@6.0.2-rc.1':
     resolution: {integrity: sha512-5RC9Ze/wTKqSlJvopdCgr+EfyV93+iiH8Thog0QXrl8PT1unuBNw/jadXNMtwgAxrIaCJL+JLaHQH9w7rqpMDw==}
     engines: {node: '>=20'}
+
+  '@rivetkit/sqlite@0.1.1':
+    resolution: {integrity: sha512-NE7ZBy/hQhOrWzMZFjkHX9SoXxf+ILcDvVV+mNbUYPgiy/fsDzlXdK0+JDTGnko5f4Xl6/KVCoCozz9gkwkq8A==}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -16719,9 +16722,6 @@ packages:
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
 
-  wa-sqlite@1.0.0:
-    resolution: {integrity: sha512-Kyybo5/BaJp76z7gDWGk2J6Hthl4NIPsE+swgraEjy3IY6r5zIR02wAs1OJH4XtJp1y3puj3Onp5eMGS0z7nUA==}
-
   walker@1.0.8:
     resolution: {integrity: sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==}
 
@@ -21403,6 +21403,8 @@ snapshots:
   '@rivetkit/fast-json-patch@3.1.2': {}
 
   '@rivetkit/on-change@6.0.2-rc.1': {}
+
+  '@rivetkit/sqlite@0.1.1': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
@@ -31262,8 +31264,6 @@ snapshots:
       typescript: 5.9.3
 
   w3c-keyname@2.2.8: {}
-
-  wa-sqlite@1.0.0: {}
 
   walker@1.0.8:
     dependencies:

@@ -23,7 +23,7 @@ npm run dev
 
 This example demonstrates minimal Next.js integration with Rivet Actors:
 
-- **Actor Definition** ([`src/backend/registry.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/next-js/src/backend/registry.ts)): Simple counter actor integrated with Next.js App Router
+- **Actor Definition** ([`src/rivet/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/next-js/src/rivet/actors.ts)): Simple counter actor integrated with Next.js App Router
 
 ## Resources
 

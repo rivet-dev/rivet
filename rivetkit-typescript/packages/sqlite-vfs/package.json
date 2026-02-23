@@ -33,7 +33,7 @@
 	},
 	"dependencies": {
 		"@rivetkit/bare-ts": "^0.6.2",
-		"@rivetkit/sqlite": "^0.1.0",
+		"@rivetkit/sqlite": "^0.1.1",
 		"vbare": "^0.0.4"
 	},
 	"devDependencies": {

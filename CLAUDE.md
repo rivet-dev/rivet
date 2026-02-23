@@ -80,6 +80,10 @@ gt m
 ### pnpm Workspace
 - Use pnpm for all npm-related commands. We're using a pnpm workspace.
 
+### SQLite Package
+- Use `@rivetkit/sqlite` for SQLite WebAssembly support.
+- Do not use the legacy upstream package directly. `@rivetkit/sqlite` is the maintained fork used in this repository and is sourced from `rivet-dev/wa-sqlite`.
+
 ### RivetKit Package Resolutions
 The root `/package.json` contains `resolutions` that map RivetKit packages to their local workspace versions:
 

@@ -4,17 +4,36 @@
  * This module provides a SQLite API that uses a KV-backed VFS
  * for storage. Each SqliteVfs instance is independent and can be
  * used concurrently with other instances.
+ *
+ * Keep this VFS on direct VFS.Base callbacks for minimal wrapper overhead.
+ * Use @rivetkit/sqlite/src/FacadeVFS.js as the reference implementation for
+ * callback ABI and pointer/data conversion behavior.
+ * This implementation is optimized for single-writer semantics because each
+ * actor owns one SQLite database.
  */
 
-// Note: @rivetkit/sqlite VFS.Base type definitions have incorrect types for xRead/xWrite
-// The actual runtime uses Uint8Array, not the {size, value} object shown in types
 import * as VFS from "@rivetkit/sqlite/src/VFS.js";
-
-import SQLiteESMFactory from "@rivetkit/sqlite/dist/wa-sqlite-async.mjs";
-import { Factory } from "@rivetkit/sqlite";
+import {
+	Factory,
+	SQLITE_OPEN_CREATE,
+	SQLITE_OPEN_READWRITE,
+	SQLITE_ROW,
+} from "@rivetkit/sqlite";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CHUNK_SIZE, getMetaKey, getChunkKey } from "./kv";
+import {
+	CHUNK_PREFIX,
+	CHUNK_SIZE,
+	FILE_TAG_JOURNAL,
+	FILE_TAG_MAIN,
+	FILE_TAG_SHM,
+	FILE_TAG_WAL,
+	META_PREFIX,
+	SQLITE_PREFIX,
+	getMetaKey,
+	createChunkKeyFactory,
+	type SqliteFileTag,
+} from "./kv";
 import {
 	FILE_META_VERSIONED,
 	CURRENT_VERSION,
@@ -22,18 +41,81 @@ import {
 import type { FileMeta } from "../schemas/file-meta/mod";
 import type { KvVfsOptions } from "./types";
 
+type SqliteEsmFactory = (config?: { wasmBinary?: ArrayBuffer | Uint8Array }) => Promise<unknown>;
+type SQLite3Api = ReturnType<typeof Factory>;
+type SqliteBindings = Parameters<SQLite3Api["bind_collection"]>[1];
+
+interface SQLiteModule {
+	UTF8ToString: (ptr: number) => string;
+	HEAPU8: Uint8Array;
+}
+
+const TEXT_ENCODER = new TextEncoder();
+const TEXT_DECODER = new TextDecoder();
+// libvfs captures this async/sync mask at registration time. Any VFS callback
+// that returns a Promise must be listed here so SQLite uses async relays.
+const SQLITE_ASYNC_METHODS = new Set([
+	"xOpen",
+	"xClose",
+	"xRead",
+	"xWrite",
+	"xTruncate",
+	"xSync",
+	"xFileSize",
+	"xDelete",
+	"xAccess",
+]);
+
+interface LoadedSqliteRuntime {
+	sqlite3: SQLite3Api;
+	module: SQLiteModule;
+}
+
+
+/**
+ * Lazily load and instantiate the async SQLite module for this VFS instance.
+ * We do this on first open so actors that do not use SQLite do not pay module
+ * parse and wasm initialization cost at startup, and we pass wasmBinary
+ * explicitly so this works consistently in both ESM and CJS bundles.
+ */
+async function loadSqliteRuntime(): Promise<LoadedSqliteRuntime> {
+	// Keep the module specifier assembled at runtime so TypeScript declaration
+	// generation does not try to typecheck this deep dist import path.
+	const sqliteModule = await import("@rivetkit/sqlite/dist/" + "wa-sqlite-async.mjs");
+	const sqliteEsmFactory = sqliteModule.default as SqliteEsmFactory;
+	const require = createRequire(import.meta.url);
+	const wasmPath = require.resolve("@rivetkit/sqlite/dist/wa-sqlite-async.wasm");
+	const wasmBinary = readFileSync(wasmPath);
+	const module = await sqliteEsmFactory({ wasmBinary });
+	return {
+		sqlite3: Factory(module),
+		module: module as SQLiteModule,
+	};
+}
+
 /**
  * Represents an open file
  */
 interface OpenFile {
 	/** File path */
 	path: string;
+	/** Precomputed metadata key */
+	metaKey: Uint8Array;
+	/** Fast key builder that reuses encoded filename prefix */
+	chunkKeyForIndex: (chunkIndex: number) => Uint8Array;
 	/** File size in bytes */
 	size: number;
+	/** True when in-memory size has not been persisted yet */
+	metaDirty: boolean;
 	/** Open flags */
 	flags: number;
 	/** KV options for this file */
 	options: KvVfsOptions;
+}
+
+interface ResolvedFile {
+	options: KvVfsOptions;
+	fileTag: SqliteFileTag;
 }
 
 /**
@@ -53,37 +135,6 @@ function encodeFileMeta(size: number): Uint8Array {
 function decodeFileMeta(data: Uint8Array): number {
 	const meta = FILE_META_VERSIONED.deserializeWithEmbeddedVersion(data);
 	return Number(meta.size);
-}
-
-/**
- * SQLite API interface (subset needed for VFS registration)
- * This is part of @rivetkit/sqlite but not exported in TypeScript types
- */
-interface SQLite3Api {
-	vfs_register: (vfs: unknown, makeDefault?: boolean) => number;
-	open_v2: (
-		filename: string,
-		flags: number,
-		vfsName?: string,
-	) => Promise<number>;
-	close: (db: number) => Promise<void>;
-	exec: (
-		db: number,
-		sql: string,
-		callback?: (row: unknown[], columns: string[]) => void,
-	) => Promise<void>;
-	run: (
-		db: number,
-		sql: string,
-		params: unknown[] | null,
-	) => Promise<number>;
-	execWithParams: (
-		db: number,
-		sql: string,
-		params: unknown[] | null,
-	) => Promise<{ rows: unknown[][]; columns: string[] }>;
-	SQLITE_OPEN_READWRITE: number;
-	SQLITE_OPEN_CREATE: number;
 }
 
 /**
@@ -160,9 +211,16 @@ export class Database {
 	 * @param params - Parameter values to bind
 	 */
 	async run(sql: string, params?: unknown[]): Promise<void> {
-		await this.#sqliteMutex.run(async () =>
-			this.#sqlite3.run(this.#handle, sql, params ?? null),
-		);
+		await this.#sqliteMutex.run(async () => {
+			for await (const stmt of this.#sqlite3.statements(this.#handle, sql)) {
+				if (params && params.length > 0) {
+					this.#sqlite3.bind_collection(stmt, params as SqliteBindings);
+				}
+				while ((await this.#sqlite3.step(stmt)) === SQLITE_ROW) {
+					// Consume rows for statements that return results.
+				}
+			}
+		});
 	}
 
 	/**
@@ -172,9 +230,24 @@ export class Database {
 	 * @returns Object with rows (array of arrays) and columns (column names)
 	 */
 	async query(sql: string, params?: unknown[]): Promise<{ rows: unknown[][]; columns: string[] }> {
-		return this.#sqliteMutex.run(async () =>
-			this.#sqlite3.execWithParams(this.#handle, sql, params ?? null),
-		);
+		return this.#sqliteMutex.run(async () => {
+			const rows: unknown[][] = [];
+			let columns: string[] = [];
+			for await (const stmt of this.#sqlite3.statements(this.#handle, sql)) {
+				if (params && params.length > 0) {
+					this.#sqlite3.bind_collection(stmt, params as SqliteBindings);
+				}
+
+				while ((await this.#sqlite3.step(stmt)) === SQLITE_ROW) {
+					if (columns.length === 0) {
+						columns = this.#sqlite3.column_names(stmt);
+					}
+					rows.push(this.#sqlite3.row(stmt));
+				}
+			}
+
+			return { rows, columns };
+		});
 	}
 
 	/**
@@ -232,18 +305,14 @@ export class SqliteVfs {
 
 		// Synchronously create the promise if not started
 		if (!this.#initPromise) {
-				this.#initPromise = (async () => {
-				// Load WASM binary (Node.js environment)
-				const require = createRequire(import.meta.url);
-				const wasmPath = require.resolve("@rivetkit/sqlite/dist/wa-sqlite-async.wasm");
-				const wasmBinary = readFileSync(wasmPath);
-
-					// Initialize @rivetkit/sqlite module - each instance gets its own module
-					const module = await SQLiteESMFactory({ wasmBinary });
-					this.#sqlite3 = Factory(module) as unknown as SQLite3Api;
-
-				// Create and register VFS with unique name
-				this.#sqliteSystem = new SqliteSystem(this.#sqlite3, `kv-vfs-${this.#instanceId}`);
+			this.#initPromise = (async () => {
+				const { sqlite3, module } = await loadSqliteRuntime();
+				this.#sqlite3 = sqlite3;
+				this.#sqliteSystem = new SqliteSystem(
+					sqlite3,
+					module,
+					`kv-vfs-${this.#instanceId}`,
+				);
 				this.#sqliteSystem.register();
 			})();
 		}
@@ -273,15 +342,14 @@ export class SqliteVfs {
 				throw new Error("Failed to initialize SQLite");
 			}
 
-				// Register this filename with its KV options
-				this.#sqliteSystem.registerFile(fileName, options);
+			// Register this filename with its KV options
+			this.#sqliteSystem.registerFile(fileName, options);
 
-				// Open database
+			// Open database
 				const db = await this.#sqliteMutex.run(async () =>
 					this.#sqlite3!.open_v2(
 						fileName,
-						this.#sqlite3!.SQLITE_OPEN_READWRITE |
-							this.#sqlite3!.SQLITE_OPEN_CREATE,
+						SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
 						this.#sqliteSystem!.name,
 					),
 				);
@@ -292,16 +360,16 @@ export class SqliteVfs {
 				sqliteSystem.unregisterFile(fileName);
 			};
 
-				return new Database(
-					this.#sqlite3,
-					db,
-					fileName,
-					onClose,
-					this.#sqliteMutex,
-				);
-			} finally {
-				this.#openMutex.release();
-			}
+			return new Database(
+				this.#sqlite3,
+				db,
+				fileName,
+				onClose,
+				this.#sqliteMutex,
+			);
+		} finally {
+			this.#openMutex.release();
+		}
 	}
 }
 
@@ -309,15 +377,24 @@ export class SqliteVfs {
  * Internal VFS implementation
  */
 class SqliteSystem extends VFS.Base {
-	readonly name: string;
-	readonly #fileOptions: Map<string, KvVfsOptions> = new Map();
+	#mainFileName: string | null = null;
+	#mainFileOptions: KvVfsOptions | null = null;
 	readonly #openFiles: Map<number, OpenFile> = new Map();
 	readonly #sqlite3: SQLite3Api;
+	readonly #module: SQLiteModule;
+	#heapDataView: DataView;
+	#heapDataViewBuffer: ArrayBufferLike;
 
-	constructor(sqlite3: SQLite3Api, name: string) {
-		super();
+	constructor(sqlite3: SQLite3Api, module: SQLiteModule, name: string) {
+		super(name, module);
 		this.#sqlite3 = sqlite3;
-		this.name = name;
+		this.#module = module;
+		this.#heapDataViewBuffer = module.HEAPU8.buffer;
+		this.#heapDataView = new DataView(this.#heapDataViewBuffer);
+	}
+
+	hasAsyncMethod(methodName: string): boolean {
+		return SQLITE_ASYNC_METHODS.has(methodName);
 	}
 
 	/**
@@ -331,380 +408,456 @@ class SqliteSystem extends VFS.Base {
 	 * Registers a file with its KV options (before opening)
 	 */
 	registerFile(fileName: string, options: KvVfsOptions): void {
-		this.#fileOptions.set(fileName, options);
+		if (!this.#mainFileName) {
+			this.#mainFileName = fileName;
+			this.#mainFileOptions = options;
+			return;
+		}
+
+		if (this.#mainFileName !== fileName) {
+			throw new Error(
+				`SqliteSystem is actor-scoped and expects one main file. Got ${fileName}, expected ${this.#mainFileName}.`,
+			);
+		}
+
+		this.#mainFileOptions = options;
 	}
 
 	/**
 	 * Unregisters a file's KV options (after closing)
 	 */
 	unregisterFile(fileName: string): void {
-		this.#fileOptions.delete(fileName);
-	}
-
-	/**
-	 * Gets KV options for a file, handling journal/wal files by using the main database's options
-	 */
-	#getOptionsForPath(path: string): KvVfsOptions | undefined {
-		let options = this.#fileOptions.get(path);
-		if (!options) {
-			// Try to find the main database file by removing common SQLite suffixes
-			const mainDbPath = path
-				.replace(/-journal$/, "")
-				.replace(/-wal$/, "")
-				.replace(/-shm$/, "");
-
-			if (mainDbPath !== path) {
-				options = this.#fileOptions.get(mainDbPath);
-			}
+		if (this.#mainFileName === fileName) {
+			this.#mainFileName = null;
+			this.#mainFileOptions = null;
 		}
-		return options;
 	}
 
 	/**
-	 * Opens a file
+	 * Resolve file path to the actor's main DB file or known SQLite sidecars.
 	 */
-	xOpen(
-		path: string | null,
+	#resolveFile(path: string): ResolvedFile | null {
+		if (!this.#mainFileName || !this.#mainFileOptions) {
+			return null;
+		}
+
+		if (path === this.#mainFileName) {
+			return { options: this.#mainFileOptions, fileTag: FILE_TAG_MAIN };
+		}
+		if (path === `${this.#mainFileName}-journal`) {
+			return { options: this.#mainFileOptions, fileTag: FILE_TAG_JOURNAL };
+		}
+		if (path === `${this.#mainFileName}-wal`) {
+			return { options: this.#mainFileOptions, fileTag: FILE_TAG_WAL };
+		}
+		if (path === `${this.#mainFileName}-shm`) {
+			return { options: this.#mainFileOptions, fileTag: FILE_TAG_SHM };
+		}
+
+		return null;
+	}
+
+	#resolveFileOrThrow(path: string): ResolvedFile {
+		const resolved = this.#resolveFile(path);
+		if (resolved) {
+			return resolved;
+		}
+
+		if (!this.#mainFileName) {
+			throw new Error(`No KV options registered for file: ${path}`);
+		}
+
+		throw new Error(
+			`Unsupported SQLite file path ${path}. Expected one of ${this.#mainFileName}, ${this.#mainFileName}-journal, ${this.#mainFileName}-wal, ${this.#mainFileName}-shm.`,
+		);
+	}
+
+	async xOpen(
+		_pVfs: number,
+		zName: number,
 		fileId: number,
 		flags: number,
-		pOutFlags: DataView,
-	): number {
-		return this.handleAsync(async () => {
-			if (!path) {
-				return VFS.SQLITE_CANTOPEN;
+		pOutFlags: number,
+	): Promise<number> {
+		const path = this.#decodeFilename(zName, flags);
+		if (!path) {
+			return VFS.SQLITE_CANTOPEN;
+		}
+
+		// Get the registered KV options for this file
+		// For journal/wal files, use the main database's options
+		const { options, fileTag } = this.#resolveFileOrThrow(path);
+		let metaKey = getMetaKey(fileTag);
+		let chunkKeyForIndex = createChunkKeyFactory(fileTag);
+
+		// Get existing file size if the file exists
+		let sizeData = await options.get(metaKey);
+		if (!sizeData) {
+			// Backward compatibility for filename-based keys used before file tags.
+			const legacyMetaKey = getLegacyMetaKey(path);
+			const legacySizeData = await options.get(legacyMetaKey);
+			if (legacySizeData) {
+				metaKey = legacyMetaKey;
+				chunkKeyForIndex = createLegacyChunkKeyFactory(path);
+				sizeData = legacySizeData;
 			}
+		}
 
-			// Get the registered KV options for this file
-			// For journal/wal files, use the main database's options
-			const options = this.#getOptionsForPath(path);
-			if (!options) {
-				throw new Error(`No KV options registered for file: ${path}`);
-			}
+		let size: number;
 
-			// Get existing file size if the file exists
-			const metaKey = getMetaKey(path);
-			const sizeData = await options.get(metaKey);
+		if (sizeData) {
+			// File exists, use existing size
+			size = decodeFileMeta(sizeData);
+		} else if (flags & VFS.SQLITE_OPEN_CREATE) {
+			// File doesn't exist, create it
+			size = 0;
+			await options.put(metaKey, encodeFileMeta(size));
+		} else {
+			// File doesn't exist and we're not creating it
+			return VFS.SQLITE_CANTOPEN;
+		}
 
-			let size: number;
+		// Store open file info with options
+		this.#openFiles.set(fileId, {
+			path,
+			metaKey,
+			chunkKeyForIndex,
+			size,
+			metaDirty: false,
+			flags,
+			options,
+		});
 
-			if (sizeData) {
-				// File exists, use existing size
-				size = decodeFileMeta(sizeData);
-			} else if (flags & VFS.SQLITE_OPEN_CREATE) {
-				// File doesn't exist, create it
-				size = 0;
-				await options.put(metaKey, encodeFileMeta(size));
+		// Set output flags to the actual flags used.
+		this.#writeInt32(pOutFlags, flags);
+
+		return VFS.SQLITE_OK;
+	}
+
+	async xClose(fileId: number): Promise<number> {
+		const file = this.#openFiles.get(fileId);
+		if (!file) {
+			return VFS.SQLITE_OK;
+		}
+
+		if (file.metaDirty) {
+			await file.options.put(file.metaKey, encodeFileMeta(file.size));
+			file.metaDirty = false;
+		}
+
+		// Delete file if SQLITE_OPEN_DELETEONCLOSE flag was set
+		if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
+			await this.#delete(file.path);
+		}
+
+		this.#openFiles.delete(fileId);
+		return VFS.SQLITE_OK;
+	}
+
+	async xRead(
+		fileId: number,
+		pData: number,
+		iAmt: number,
+		iOffsetLo: number,
+		iOffsetHi: number,
+	): Promise<number> {
+		if (iAmt === 0) {
+			return VFS.SQLITE_OK;
+		}
+
+		const file = this.#openFiles.get(fileId);
+		if (!file) {
+			return VFS.SQLITE_IOERR_READ;
+		}
+
+		const data = this.#module.HEAPU8.subarray(pData, pData + iAmt);
+		const options = file.options;
+		const requestedLength = iAmt;
+		const iOffset = delegalize(iOffsetLo, iOffsetHi);
+		const fileSize = file.size;
+
+		// If offset is beyond file size, return short read with zeroed buffer
+		if (iOffset >= fileSize) {
+			data.fill(0);
+			return VFS.SQLITE_IOERR_SHORT_READ;
+		}
+
+		// Calculate which chunks we need to read
+		const startChunk = Math.floor(iOffset / CHUNK_SIZE);
+		const endChunk = Math.floor((iOffset + requestedLength - 1) / CHUNK_SIZE);
+
+		// Fetch all needed chunks
+		const chunkKeys: Uint8Array[] = [];
+		for (let i = startChunk; i <= endChunk; i++) {
+			chunkKeys.push(file.chunkKeyForIndex(i));
+		}
+
+		const chunks = await options.getBatch(chunkKeys);
+
+		// Copy data from chunks to output buffer
+		for (let i = startChunk; i <= endChunk; i++) {
+			const chunkData = chunks[i - startChunk];
+			const chunkOffset = i * CHUNK_SIZE;
+
+			// Calculate the range within this chunk
+			const readStart = Math.max(0, iOffset - chunkOffset);
+			const readEnd = Math.min(
+				CHUNK_SIZE,
+				iOffset + requestedLength - chunkOffset,
+			);
+
+			if (chunkData) {
+				// Copy available data
+				const sourceStart = readStart;
+				const sourceEnd = Math.min(readEnd, chunkData.length);
+				const destStart = chunkOffset + readStart - iOffset;
+
+				if (sourceEnd > sourceStart) {
+					data.set(chunkData.subarray(sourceStart, sourceEnd), destStart);
+				}
+
+				// Zero-fill if chunk is smaller than expected
+				if (sourceEnd < readEnd) {
+					const zeroStart = destStart + (sourceEnd - sourceStart);
+					const zeroEnd = destStart + (readEnd - readStart);
+					data.fill(0, zeroStart, zeroEnd);
+				}
 			} else {
-				// File doesn't exist and we're not creating it
-				return VFS.SQLITE_CANTOPEN;
+				// Chunk doesn't exist, zero-fill
+				const destStart = chunkOffset + readStart - iOffset;
+				const destEnd = destStart + (readEnd - readStart);
+				data.fill(0, destStart, destEnd);
 			}
+		}
 
-			// Store open file info with options
-			this.#openFiles.set(fileId, {
-				path,
-				size,
-				flags,
-				options,
+		// If we read less than requested (past EOF), return short read
+		const actualBytes = Math.min(requestedLength, fileSize - iOffset);
+		if (actualBytes < requestedLength) {
+			data.fill(0, actualBytes);
+			return VFS.SQLITE_IOERR_SHORT_READ;
+		}
+
+		return VFS.SQLITE_OK;
+	}
+
+	async xWrite(
+		fileId: number,
+		pData: number,
+		iAmt: number,
+		iOffsetLo: number,
+		iOffsetHi: number,
+	): Promise<number> {
+		if (iAmt === 0) {
+			return VFS.SQLITE_OK;
+		}
+
+		const file = this.#openFiles.get(fileId);
+		if (!file) {
+			return VFS.SQLITE_IOERR_WRITE;
+		}
+
+		const data = this.#module.HEAPU8.subarray(pData, pData + iAmt);
+		const iOffset = delegalize(iOffsetLo, iOffsetHi);
+		const options = file.options;
+		const writeLength = iAmt;
+
+		// Calculate which chunks we need to modify
+		const startChunk = Math.floor(iOffset / CHUNK_SIZE);
+		const endChunk = Math.floor((iOffset + writeLength - 1) / CHUNK_SIZE);
+
+		interface WritePlan {
+			chunkKey: Uint8Array;
+			chunkOffset: number;
+			writeStart: number;
+			writeEnd: number;
+			existingChunkIndex: number;
+		}
+
+		// Only fetch chunks where we must preserve existing prefix/suffix bytes.
+		const plans: WritePlan[] = [];
+		const chunkKeysToFetch: Uint8Array[] = [];
+		for (let i = startChunk; i <= endChunk; i++) {
+			const chunkOffset = i * CHUNK_SIZE;
+			const writeStart = Math.max(0, iOffset - chunkOffset);
+			const writeEnd = Math.min(
+				CHUNK_SIZE,
+				iOffset + writeLength - chunkOffset,
+			);
+			const existingBytesInChunk = Math.max(
+				0,
+				Math.min(CHUNK_SIZE, file.size - chunkOffset),
+			);
+			const needsExisting = writeStart > 0 || existingBytesInChunk > writeEnd;
+			const chunkKey = file.chunkKeyForIndex(i);
+			let existingChunkIndex = -1;
+			if (needsExisting) {
+				existingChunkIndex = chunkKeysToFetch.length;
+				chunkKeysToFetch.push(chunkKey);
+			}
+			plans.push({
+				chunkKey,
+				chunkOffset,
+				writeStart,
+				writeEnd,
+				existingChunkIndex,
 			});
+		}
 
-			// Set output flags
-			pOutFlags.setInt32(0, flags & VFS.SQLITE_OPEN_READONLY ? 1 : 0, true);
+		const existingChunks = chunkKeysToFetch.length > 0
+			? await options.getBatch(chunkKeysToFetch)
+			: [];
 
-			return VFS.SQLITE_OK;
-		});
+		// Prepare new chunk data
+		const entriesToWrite: [Uint8Array, Uint8Array][] = [];
+
+		for (const plan of plans) {
+			const existingChunk =
+				plan.existingChunkIndex >= 0
+					? existingChunks[plan.existingChunkIndex]
+					: null;
+			// Create new chunk data
+			let newChunk: Uint8Array;
+			if (existingChunk) {
+				newChunk = new Uint8Array(Math.max(existingChunk.length, plan.writeEnd));
+				newChunk.set(existingChunk);
+			} else {
+				newChunk = new Uint8Array(plan.writeEnd);
+			}
+
+			// Copy data from input buffer to chunk
+			const sourceStart = plan.chunkOffset + plan.writeStart - iOffset;
+			const sourceEnd = sourceStart + (plan.writeEnd - plan.writeStart);
+			newChunk.set(data.subarray(sourceStart, sourceEnd), plan.writeStart);
+
+			entriesToWrite.push([plan.chunkKey, newChunk]);
+		}
+
+		// Update file size if we wrote past the end
+		const previousSize = file.size;
+		const newSize = Math.max(file.size, iOffset + writeLength);
+		if (newSize !== previousSize) {
+			file.size = newSize;
+			file.metaDirty = true;
+		}
+		if (file.metaDirty) {
+			entriesToWrite.push([file.metaKey, encodeFileMeta(file.size)]);
+		}
+
+		// Write all chunks and metadata
+		await options.putBatch(entriesToWrite);
+		if (file.metaDirty) {
+			file.metaDirty = false;
+		}
+
+		return VFS.SQLITE_OK;
 	}
 
-	/**
-	 * Closes a file
-	 */
-	xClose(fileId: number): number {
-		return this.handleAsync(async () => {
-			const file = this.#openFiles.get(fileId);
-			if (!file) {
-				return VFS.SQLITE_OK;
-			}
+	async xTruncate(
+		fileId: number,
+		sizeLo: number,
+		sizeHi: number,
+	): Promise<number> {
+		const file = this.#openFiles.get(fileId);
+		if (!file) {
+			return VFS.SQLITE_IOERR_TRUNCATE;
+		}
 
-			// Delete file if SQLITE_OPEN_DELETEONCLOSE flag was set
-			if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-				await this.#delete(file.path);
-			}
+		const size = delegalize(sizeLo, sizeHi);
+		const options = file.options;
 
-			this.#openFiles.delete(fileId);
+		// If truncating to larger size, just update metadata
+		if (size >= file.size) {
+			if (size > file.size) {
+				file.size = size;
+				file.metaDirty = true;
+				await options.put(file.metaKey, encodeFileMeta(file.size));
+				file.metaDirty = false;
+			}
 			return VFS.SQLITE_OK;
-		});
+		}
+
+		// Calculate which chunks to delete
+		// Note: When size=0, lastChunkToKeep = floor(-1/4096) = -1, which means
+		// all chunks (starting from index 0) will be deleted in the loop below.
+		const lastChunkToKeep = Math.floor((size - 1) / CHUNK_SIZE);
+		const lastExistingChunk = Math.floor((file.size - 1) / CHUNK_SIZE);
+
+		// Delete chunks beyond the new size
+		const keysToDelete: Uint8Array[] = [];
+		for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
+			keysToDelete.push(file.chunkKeyForIndex(i));
+		}
+
+		if (keysToDelete.length > 0) {
+			await options.deleteBatch(keysToDelete);
+		}
+
+		// Truncate the last kept chunk if needed
+		if (size > 0 && size % CHUNK_SIZE !== 0) {
+			const lastChunkKey = file.chunkKeyForIndex(lastChunkToKeep);
+			const lastChunkData = await options.get(lastChunkKey);
+
+			if (lastChunkData && lastChunkData.length > size % CHUNK_SIZE) {
+				const truncatedChunk = lastChunkData.subarray(0, size % CHUNK_SIZE);
+				await options.put(lastChunkKey, truncatedChunk);
+			}
+		}
+
+		// Update file size
+		file.size = size;
+		file.metaDirty = true;
+		await options.put(file.metaKey, encodeFileMeta(file.size));
+		file.metaDirty = false;
+
+		return VFS.SQLITE_OK;
 	}
 
-	/**
-	 * Reads data from a file
-	 */
-	// @ts-expect-error - VFS.Base types are incorrect, runtime uses Uint8Array
-	xRead(fileId: number, pData: Uint8Array, iOffset: number): number {
-		return this.handleAsync(async () => {
-			const file = this.#openFiles.get(fileId);
-			if (!file) {
-				return VFS.SQLITE_IOERR_READ;
-			}
-
-			const options = file.options;
-			const requestedLength = pData.length;
-			const fileSize = file.size;
-
-			// If offset is beyond file size, return short read with zeroed buffer
-			if (iOffset >= fileSize) {
-				pData.fill(0);
-				return VFS.SQLITE_IOERR_SHORT_READ;
-			}
-
-			// Calculate which chunks we need to read
-			const startChunk = Math.floor(iOffset / CHUNK_SIZE);
-			const endChunk = Math.floor((iOffset + requestedLength - 1) / CHUNK_SIZE);
-
-			// Fetch all needed chunks
-			const chunkKeys: Uint8Array[] = [];
-			for (let i = startChunk; i <= endChunk; i++) {
-				chunkKeys.push(getChunkKey(file.path, i));
-			}
-
-			const chunks = await options.getBatch(chunkKeys);
-
-			// Copy data from chunks to output buffer
-			for (let i = startChunk; i <= endChunk; i++) {
-				const chunkData = chunks[i - startChunk];
-				const chunkOffset = i * CHUNK_SIZE;
-
-				// Calculate the range within this chunk
-				const readStart = Math.max(0, iOffset - chunkOffset);
-				const readEnd = Math.min(
-					CHUNK_SIZE,
-					iOffset + requestedLength - chunkOffset,
-				);
-
-				if (chunkData) {
-					// Copy available data
-					const sourceStart = readStart;
-					const sourceEnd = Math.min(readEnd, chunkData.length);
-					const destStart = chunkOffset + readStart - iOffset;
-
-					if (sourceEnd > sourceStart) {
-						pData.set(
-							chunkData.slice(sourceStart, sourceEnd),
-							destStart,
-						);
-					}
-
-					// Zero-fill if chunk is smaller than expected
-					if (sourceEnd < readEnd) {
-						const zeroStart = destStart + (sourceEnd - sourceStart);
-						const zeroEnd = destStart + (readEnd - readStart);
-						pData.fill(0, zeroStart, zeroEnd);
-					}
-				} else {
-					// Chunk doesn't exist, zero-fill
-					const destStart = chunkOffset + readStart - iOffset;
-					const destEnd = destStart + (readEnd - readStart);
-					pData.fill(0, destStart, destEnd);
-				}
-			}
-
-			// If we read less than requested (past EOF), return short read
-			const actualBytes = Math.min(requestedLength, fileSize - iOffset);
-			if (actualBytes < requestedLength) {
-				pData.fill(0, actualBytes);
-				return VFS.SQLITE_IOERR_SHORT_READ;
-			}
-
+	async xSync(fileId: number, _flags: number): Promise<number> {
+		const file = this.#openFiles.get(fileId);
+		if (!file || !file.metaDirty) {
 			return VFS.SQLITE_OK;
-		});
+		}
+
+		await file.options.put(file.metaKey, encodeFileMeta(file.size));
+		file.metaDirty = false;
+		return VFS.SQLITE_OK;
 	}
 
-	/**
-	 * Writes data to a file
-	 */
-	// @ts-expect-error - VFS.Base types are incorrect, runtime uses Uint8Array
-	xWrite(fileId: number, pData: Uint8Array, iOffset: number): number {
-		return this.handleAsync(async () => {
-			const file = this.#openFiles.get(fileId);
-			if (!file) {
-				return VFS.SQLITE_IOERR_WRITE;
-			}
+	async xFileSize(fileId: number, pSize: number): Promise<number> {
+		const file = this.#openFiles.get(fileId);
+		if (!file) {
+			return VFS.SQLITE_IOERR_FSTAT;
+		}
 
-			const options = file.options;
-			const writeLength = pData.length;
-
-			// Calculate which chunks we need to modify
-			const startChunk = Math.floor(iOffset / CHUNK_SIZE);
-			const endChunk = Math.floor((iOffset + writeLength - 1) / CHUNK_SIZE);
-
-			// Fetch existing chunks that we'll need to modify
-			const chunkKeys: Uint8Array[] = [];
-			for (let i = startChunk; i <= endChunk; i++) {
-				chunkKeys.push(getChunkKey(file.path, i));
-			}
-
-			const existingChunks = await options.getBatch(chunkKeys);
-
-			// Prepare new chunk data
-			const entriesToWrite: [Uint8Array, Uint8Array][] = [];
-
-			for (let i = startChunk; i <= endChunk; i++) {
-				const chunkOffset = i * CHUNK_SIZE;
-				const existingChunk = existingChunks[i - startChunk];
-
-				// Calculate the range within this chunk that we're writing
-				const writeStart = Math.max(0, iOffset - chunkOffset);
-				const writeEnd = Math.min(
-					CHUNK_SIZE,
-					iOffset + writeLength - chunkOffset,
-				);
-
-				// Calculate the size this chunk needs to be
-				const requiredSize = writeEnd;
-
-				// Create new chunk data
-				let newChunk: Uint8Array;
-				if (existingChunk && existingChunk.length >= requiredSize) {
-					// Use existing chunk (copy it so we can modify)
-					newChunk = new Uint8Array(Math.max(existingChunk.length, requiredSize));
-					newChunk.set(existingChunk);
-				} else if (existingChunk) {
-					// Need to expand existing chunk
-					newChunk = new Uint8Array(requiredSize);
-					newChunk.set(existingChunk);
-				} else {
-					// Create new chunk
-					newChunk = new Uint8Array(requiredSize);
-				}
-
-				// Copy data from input buffer to chunk
-				const sourceStart = chunkOffset + writeStart - iOffset;
-				const sourceEnd = sourceStart + (writeEnd - writeStart);
-				newChunk.set(pData.slice(sourceStart, sourceEnd), writeStart);
-
-				entriesToWrite.push([getChunkKey(file.path, i), newChunk]);
-			}
-
-			// Update file size if we wrote past the end
-			const newSize = Math.max(file.size, iOffset + writeLength);
-			if (newSize !== file.size) {
-				file.size = newSize;
-				entriesToWrite.push([getMetaKey(file.path), encodeFileMeta(file.size)]);
-			}
-
-			// Write all chunks and metadata
-			await options.putBatch(entriesToWrite);
-
-			return VFS.SQLITE_OK;
-		});
+		// Set size as 64-bit integer.
+		this.#writeBigInt64(pSize, BigInt(file.size));
+		return VFS.SQLITE_OK;
 	}
 
-	/**
-	 * Truncates a file
-	 */
-	xTruncate(fileId: number, size: number): number {
-		return this.handleAsync(async () => {
-			const file = this.#openFiles.get(fileId);
-			if (!file) {
-				return VFS.SQLITE_IOERR_TRUNCATE;
-			}
-
-			const options = file.options;
-
-			// If truncating to larger size, just update metadata
-			if (size >= file.size) {
-				return VFS.SQLITE_OK;
-			}
-
-			// Calculate which chunks to delete
-			// Note: When size=0, lastChunkToKeep = floor(-1/4096) = -1, which means
-			// all chunks (starting from index 0) will be deleted in the loop below.
-			const lastChunkToKeep = Math.floor((size - 1) / CHUNK_SIZE);
-			const lastExistingChunk = Math.floor((file.size - 1) / CHUNK_SIZE);
-
-			// Delete chunks beyond the new size
-			const keysToDelete: Uint8Array[] = [];
-			for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
-				keysToDelete.push(getChunkKey(file.path, i));
-			}
-
-			if (keysToDelete.length > 0) {
-				await options.deleteBatch(keysToDelete);
-			}
-
-			// Truncate the last kept chunk if needed
-			if (size > 0 && size % CHUNK_SIZE !== 0) {
-				const lastChunkKey = getChunkKey(file.path, lastChunkToKeep);
-				const lastChunkData = await options.get(lastChunkKey);
-
-				if (lastChunkData && lastChunkData.length > size % CHUNK_SIZE) {
-					const truncatedChunk = lastChunkData.slice(0, size % CHUNK_SIZE);
-					await options.put(lastChunkKey, truncatedChunk);
-				}
-			}
-
-			// Update file size
-			file.size = size;
-			await options.put(getMetaKey(file.path), encodeFileMeta(file.size));
-
-			return VFS.SQLITE_OK;
-		});
-	}
-
-	/**
-	 * Syncs file data to storage
-	 */
-	xSync(fileId: number, _flags: number): number {
-		return this.handleAsync(async () => {
-			// KV storage is immediately durable, so sync is a no-op
-			// But we should ensure size is persisted
-			const file = this.#openFiles.get(fileId);
-			if (!file) {
-				return VFS.SQLITE_OK;
-			}
-
-			const options = file.options;
-			await options.put(getMetaKey(file.path), encodeFileMeta(file.size));
-			return VFS.SQLITE_OK;
-		});
-	}
-
-	/**
-	 * Gets the file size
-	 */
-	xFileSize(fileId: number, pSize: DataView): number {
-		return this.handleAsync(async () => {
-			const file = this.#openFiles.get(fileId);
-			if (!file) {
-				return VFS.SQLITE_IOERR_FSTAT;
-			}
-
-			// Set size as 64-bit integer (low and high parts)
-			pSize.setBigInt64(0, BigInt(file.size), true);
-			return VFS.SQLITE_OK;
-		});
-	}
-
-	/**
-	 * Deletes a file
-	 */
-	xDelete(path: string, _syncDir: number): number {
-		return this.handleAsync(async () => {
-			await this.#delete(path);
-			return VFS.SQLITE_OK;
-		});
+	async xDelete(_pVfs: number, zName: number, _syncDir: number): Promise<number> {
+		await this.#delete(this.#module.UTF8ToString(zName));
+		return VFS.SQLITE_OK;
 	}
 
 	/**
 	 * Internal delete implementation
 	 */
 	async #delete(path: string): Promise<void> {
-		const options = this.#getOptionsForPath(path);
-		if (!options) {
-			throw new Error(`No KV options registered for file: ${path}`);
-		}
+		const { options, fileTag } = this.#resolveFileOrThrow(path);
+		let metaKey = getMetaKey(fileTag);
+		let chunkKeyForIndex = createChunkKeyFactory(fileTag);
 
 		// Get file size to find out how many chunks to delete
-		const metaKey = getMetaKey(path);
-		const sizeData = await options.get(metaKey);
+		let sizeData = await options.get(metaKey);
+		if (!sizeData) {
+			const legacyMetaKey = getLegacyMetaKey(path);
+			const legacySizeData = await options.get(legacyMetaKey);
+			if (legacySizeData) {
+				metaKey = legacyMetaKey;
+				chunkKeyForIndex = createLegacyChunkKeyFactory(path);
+				sizeData = legacySizeData;
+			}
+		}
 
 		if (!sizeData) {
 			// File doesn't exist, that's OK
@@ -717,30 +870,150 @@ class SqliteSystem extends VFS.Base {
 		const keysToDelete: Uint8Array[] = [metaKey];
 		const numChunks = Math.ceil(size / CHUNK_SIZE);
 		for (let i = 0; i < numChunks; i++) {
-			keysToDelete.push(getChunkKey(path, i));
+			keysToDelete.push(chunkKeyForIndex(i));
 		}
 
 		await options.deleteBatch(keysToDelete);
 	}
 
-	/**
-	 * Checks file accessibility
-	 */
-	xAccess(path: string, _flags: number, pResOut: DataView): number {
-		return this.handleAsync(async () => {
-			const options = this.#getOptionsForPath(path);
-			if (!options) {
-				// File not registered, doesn't exist
-				pResOut.setInt32(0, 0, true);
-				return VFS.SQLITE_OK;
-			}
-
-			const metaKey = getMetaKey(path);
-			const metaData = await options.get(metaKey);
-
-			// Set result: 1 if file exists, 0 otherwise
-			pResOut.setInt32(0, metaData ? 1 : 0, true);
+	async xAccess(
+		_pVfs: number,
+		zName: number,
+		_flags: number,
+		pResOut: number,
+	): Promise<number> {
+		const path = this.#module.UTF8ToString(zName);
+		const resolved = this.#resolveFile(path);
+		if (!resolved) {
+			// File not registered, doesn't exist
+			this.#writeInt32(pResOut, 0);
 			return VFS.SQLITE_OK;
-		});
+		}
+
+		const compactMetaKey = getMetaKey(resolved.fileTag);
+		const compactMetaData = await resolved.options.get(compactMetaKey);
+		const metaData = compactMetaData ??
+			await resolved.options.get(getLegacyMetaKey(path));
+
+		// Set result: 1 if file exists, 0 otherwise
+		this.#writeInt32(pResOut, metaData ? 1 : 0);
+		return VFS.SQLITE_OK;
 	}
+
+	xCheckReservedLock(_fileId: number, pResOut: number): number {
+		// This VFS is actor-scoped with one writer, so there is no external
+		// reserved lock state to report.
+		this.#writeInt32(pResOut, 0);
+		return VFS.SQLITE_OK;
+	}
+
+	xFullPathname(_pVfs: number, zName: number, nOut: number, zOut: number): number {
+		const path = this.#module.UTF8ToString(zName);
+		const bytes = TEXT_ENCODER.encode(path);
+		const out = this.#module.HEAPU8.subarray(zOut, zOut + nOut);
+		if (bytes.length >= out.length) {
+			return VFS.SQLITE_IOERR;
+		}
+		out.set(bytes, 0);
+		out[bytes.length] = 0;
+		return VFS.SQLITE_OK;
+	}
+
+	#decodeFilename(zName: number, flags: number): string | null {
+		if (!zName) {
+			return null;
+		}
+
+		if (flags & VFS.SQLITE_OPEN_URI) {
+			// Decode SQLite URI filename layout: path\0key\0value\0...\0
+			let pName = zName;
+			let state: 1 | 2 | 3 | null = 1;
+			const charCodes: number[] = [];
+			while (state) {
+				const charCode = this.#module.HEAPU8[pName++];
+				if (charCode) {
+					charCodes.push(charCode);
+					continue;
+				}
+
+				if (!this.#module.HEAPU8[pName]) {
+					state = null;
+				}
+				switch (state) {
+					case 1:
+						charCodes.push("?".charCodeAt(0));
+						state = 2;
+						break;
+					case 2:
+						charCodes.push("=".charCodeAt(0));
+						state = 3;
+						break;
+					case 3:
+						charCodes.push("&".charCodeAt(0));
+						state = 2;
+						break;
+				}
+			}
+			return TEXT_DECODER.decode(new Uint8Array(charCodes));
+		}
+
+		return this.#module.UTF8ToString(zName);
+	}
+
+	#heapView(): DataView {
+		const heapBuffer = this.#module.HEAPU8.buffer;
+		if (heapBuffer !== this.#heapDataViewBuffer) {
+			this.#heapDataViewBuffer = heapBuffer;
+			this.#heapDataView = new DataView(heapBuffer);
+		}
+		return this.#heapDataView;
+	}
+
+	#writeInt32(pointer: number, value: number): void {
+		const heapByteOffset = this.#module.HEAPU8.byteOffset + pointer;
+		this.#heapView().setInt32(heapByteOffset, value, true);
+	}
+
+	#writeBigInt64(pointer: number, value: bigint): void {
+		const heapByteOffset = this.#module.HEAPU8.byteOffset + pointer;
+		this.#heapView().setBigInt64(heapByteOffset, value, true);
+	}
+}
+
+/**
+ * Rebuild an i64 from Emscripten's legalized (lo32, hi32) pair.
+ * SQLite passes file offsets and sizes this way, so we normalize negative lo32
+ * back to unsigned low-word form to keep >32-bit chunk addressing correct.
+ */
+function delegalize(lo32: number, hi32: number): number {
+	return (hi32 * 0x100000000) + lo32 + (lo32 < 0 ? 2 ** 32 : 0);
+}
+
+function getLegacyMetaKey(fileName: string): Uint8Array {
+	const fileNameBytes = TEXT_ENCODER.encode(fileName);
+	const key = new Uint8Array(2 + fileNameBytes.length);
+	key[0] = SQLITE_PREFIX;
+	key[1] = META_PREFIX;
+	key.set(fileNameBytes, 2);
+	return key;
+}
+
+function createLegacyChunkKeyFactory(fileName: string): (chunkIndex: number) => Uint8Array {
+	const fileNameBytes = TEXT_ENCODER.encode(fileName);
+	const prefix = new Uint8Array(2 + fileNameBytes.length + 1);
+	prefix[0] = SQLITE_PREFIX;
+	prefix[1] = CHUNK_PREFIX;
+	prefix.set(fileNameBytes, 2);
+	prefix[prefix.length - 1] = 0;
+
+	return (chunkIndex: number): Uint8Array => {
+		const key = new Uint8Array(prefix.length + 4);
+		key.set(prefix, 0);
+		const offset = prefix.length;
+		key[offset + 0] = (chunkIndex >>> 24) & 0xff;
+		key[offset + 1] = (chunkIndex >>> 16) & 0xff;
+		key[offset + 2] = (chunkIndex >>> 8) & 0xff;
+		key[offset + 3] = chunkIndex & 0xff;
+		return key;
+	};
 }

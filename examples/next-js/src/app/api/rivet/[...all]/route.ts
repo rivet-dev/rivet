@@ -1,5 +1,5 @@
 import { toNextHandler } from "@rivetkit/next-js";
-import { registry } from "@/rivet/registry";
+import { registry } from "@/rivet/actors";
 
 export const maxDuration = 300;
 

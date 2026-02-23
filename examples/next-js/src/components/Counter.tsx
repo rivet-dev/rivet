@@ -2,7 +2,7 @@
 
 import { createRivetKit } from "@rivetkit/next-js/client";
 import { useEffect, useState } from "react";
-import type { registry } from "../rivet/registry";
+import type { registry } from "../rivet/actors";
 
 export const { useActor } = createRivetKit<typeof registry>({
 	endpoint: process.env.NEXT_PUBLIC_RIVET_ENDPOINT ?? "http://localhost:3000/api/rivet",
@@ -24,7 +24,9 @@ export function Counter() {
 
 	useEffect(() => {
 		if (counter.connection && isConnected) {
-			counter.connection.getCount().then(setCount);
+			counter.connection
+				.getCount()
+				.then((value) => setCount(value));
 		}
 	}, [counter.connection, isConnected]);
 
@@ -34,7 +36,8 @@ export function Counter() {
 
 	const increment = async (amount: number) => {
 		if (counter.connection) {
-			await counter.connection.increment(amount);
+			const nextCount = await counter.connection.increment(amount);
+			setCount(nextCount);
 		}
 	};
 

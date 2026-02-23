@@ -1,11 +1,12 @@
 import { getRequireFn } from "@/utils/node";
 
 type SqliteRuntimeKind = "bun" | "node" | "better-sqlite3";
+type SqliteDatabaseCtor = new (path: string) => SqliteRawDatabase;
 
 interface SqliteStatement {
 	run(...params: unknown[]): unknown;
-	get(...params: unknown[]): unknown;
-	all(...params: unknown[]): unknown[];
+	get<T = Record<string, unknown>>(...params: unknown[]): T | undefined;
+	all<T = Record<string, unknown>>(...params: unknown[]): T[];
 }
 
 interface SqliteRawDatabase {
@@ -64,14 +65,14 @@ function createPreparedDatabaseAdapter(
 			params?: readonly unknown[],
 		) => {
 			const stmt = prepare(sql);
-			return stmt.get(...normalizeParams(params)) as T | undefined;
+			return stmt.get<T>(...normalizeParams(params));
 		},
 		all: <T = Record<string, unknown>>(
 			sql: string,
 			params?: readonly unknown[],
 		) => {
 			const stmt = prepare(sql);
-			return stmt.all(...normalizeParams(params)) as T[];
+			return stmt.all<T>(...normalizeParams(params));
 		},
 		close: () => {
 			rawDb.close();
@@ -99,20 +100,17 @@ export function loadSqliteRuntime(): SqliteRuntime {
 
 	try {
 		const bunSqlite = requireFn(/* webpackIgnore: true */ "bun:sqlite") as {
-			Database: new (path: string) => SqliteRawDatabase;
+			Database?: SqliteDatabaseCtor;
 		};
-		if (typeof bunSqlite.Database === "function") {
+		const BunDatabase = bunSqlite.Database;
+		if (BunDatabase) {
 			return {
 				kind: "bun",
 				open: (path) => {
-					const rawDb = new bunSqlite.Database(path);
+					const rawDb = new BunDatabase(path);
 					configureSqliteRuntimeDatabase(rawDb, path);
-					const query = (sql: string) => {
-						if (!rawDb.query) {
-							throw new Error("bun:sqlite database missing query method");
-						}
-						return rawDb.query(sql);
-					};
+					const query = rawDb.query?.bind(rawDb);
+					if (!query) throw new Error("bun:sqlite database missing query method");
 					return createPreparedDatabaseAdapter(rawDb, query);
 				},
 			};
@@ -123,22 +121,19 @@ export function loadSqliteRuntime(): SqliteRuntime {
 
 	try {
 		const nodeSqlite = requireFn(/* webpackIgnore: true */ "node:sqlite") as {
-			DatabaseSync: new (path: string) => SqliteRawDatabase;
+			DatabaseSync?: SqliteDatabaseCtor;
 		};
-		if (typeof nodeSqlite.DatabaseSync === "function") {
+		const NodeDatabaseSync = nodeSqlite.DatabaseSync;
+		if (NodeDatabaseSync) {
 			return {
 				kind: "node",
 				open: (path) => {
-					const rawDb = new nodeSqlite.DatabaseSync(path);
+					const rawDb = new NodeDatabaseSync(path);
 					configureSqliteRuntimeDatabase(rawDb, path);
-					const prepare = (sql: string) => {
-						if (!rawDb.prepare) {
-							throw new Error(
-								"node:sqlite DatabaseSync missing prepare method",
-							);
-						}
-						return rawDb.prepare(sql);
-					};
+					const prepare = rawDb.prepare?.bind(rawDb);
+					if (!prepare) {
+						throw new Error("node:sqlite DatabaseSync missing prepare method");
+					}
 					return createPreparedDatabaseAdapter(rawDb, prepare);
 				},
 			};
@@ -150,28 +145,21 @@ export function loadSqliteRuntime(): SqliteRuntime {
 	try {
 		const betterSqlite3Module = requireFn(
 			/* webpackIgnore: true */ "better-sqlite3",
-		) as {
-			default?: new (path: string) => SqliteRawDatabase;
-		} | (new (path: string) => SqliteRawDatabase);
+		) as SqliteDatabaseCtor | { default?: SqliteDatabaseCtor };
 		const BetterSqlite3 =
 			typeof betterSqlite3Module === "function"
 				? betterSqlite3Module
 				: betterSqlite3Module.default;
-
-		if (typeof BetterSqlite3 === "function") {
+		if (BetterSqlite3) {
 			return {
 				kind: "better-sqlite3",
 				open: (path) => {
 					const rawDb = new BetterSqlite3(path);
 					configureSqliteRuntimeDatabase(rawDb, path);
-					const prepare = (sql: string) => {
-						if (!rawDb.prepare) {
-							throw new Error(
-								"better-sqlite3 database missing prepare method",
-							);
-						}
-						return rawDb.prepare(sql);
-					};
+					const prepare = rawDb.prepare?.bind(rawDb);
+					if (!prepare) {
+						throw new Error("better-sqlite3 database missing prepare method");
+					}
 					return createPreparedDatabaseAdapter(rawDb, prepare);
 				},
 			};
@@ -216,8 +204,7 @@ export function ensureUint8Array(
 		return new Uint8Array(value);
 	}
 	if (ArrayBuffer.isView(value)) {
-		const view = value as ArrayBufferView;
-		return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+		return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
 	}
 	throw new Error(`SQLite row field "${fieldName}" is not binary data`);
 }

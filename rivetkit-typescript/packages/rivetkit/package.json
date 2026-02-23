@@ -239,7 +239,7 @@
 		"tar": "^7.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
-		"@rivetkit/sqlite": "^0.1.0",
+		"@rivetkit/sqlite": "^0.1.1",
 		"zod": "^4.1.0"
 	},
 	"devDependencies": {

@@ -78,7 +78,7 @@ Replace `@rivetkit/sqlite-vfs` with a Rust-backed implementation that uses embed
   - Do not link against system SQLite to preserve feature parity.
 - Wasm:
   - Build SQLite to wasm with async host call support to allow `getBatch` and `putBatch` to be awaited.
-  - Follow the same feature set as the wa-sqlite build for compatibility.
+  - Follow the same feature set as the @rivetkit/sqlite build for compatibility.
   - The sqlite-wasm module must expose the VFS registration and open/exec APIs used today.
 
 ## API and ABI Design
@@ -186,5 +186,5 @@ Replace `@rivetkit/sqlite-vfs` with a Rust-backed implementation that uses embed
 
 ## Open Questions
 
-- Which compile-time SQLite flags are enabled in wa-sqlite. These must be mirrored in both native and wasm builds and documented here once identified.
+- Which compile-time SQLite flags are enabled in @rivetkit/sqlite. These must be mirrored in both native and wasm builds and documented here once identified.
 - Whether to expose additional debug logging flags consistent with `VFS_DEBUG`.
