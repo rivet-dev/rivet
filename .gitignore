@@ -13,6 +13,9 @@ lib/**/Cargo.lock
 # OpenSpec
 /openspec/
 
+# Local agent notes
+/.agent/notes/
+
 # Cloudflare
 .wrangler/
 

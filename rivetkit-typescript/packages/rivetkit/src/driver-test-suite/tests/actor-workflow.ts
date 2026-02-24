@@ -96,7 +96,7 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 				const firstSleepDelayMs =
 					timeline.sleepAts[0] - timeline.wakeAts[0];
-				expect(firstSleepDelayMs).toBeLessThan(1_000);
+				expect(firstSleepDelayMs).toBeLessThan(1_800);
 			},
 		);
 

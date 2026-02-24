@@ -212,6 +212,10 @@ export const queueActor = actor({
 
 export const queueLimitedActor = actor({
 	state: {},
+	queues: {
+		message: queue<number>(),
+		oversize: queue<string>(),
+	},
 	actions: {},
 	options: {
 		maxQueueSize: 1,
