@@ -10,7 +10,6 @@ export const AUTHORS = {
 		socials: {
 			twitter: "https://x.com/NathanFlurry/",
 			github: "https://github.com/nathanflurry",
-			bluesky: "https://bsky.app/profile/nathanflurry.com",
 		},
 	},
 	"nicholas-kissel": {
