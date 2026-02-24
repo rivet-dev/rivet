@@ -1,29 +1,29 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
 import {
 	Background,
 	BackgroundVariant,
 	Controls,
 	MiniMap,
-	ReactFlow,
-	ReactFlowProvider,
 	type Node,
 	type NodeMouseHandler,
+	ReactFlow,
+	ReactFlowProvider,
 } from "@xyflow/react";
+import { useCallback, useMemo, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import { faXmark, Icon } from "@rivet-gg/icons";
 import { cn, DiscreteCopyButton } from "@/components";
 import { ActorObjectInspector } from "../console/actor-inspector";
-import {
-	TYPE_COLORS,
-	TypeIcon,
-	formatDuration,
-	workflowNodeTypes,
-	type WorkflowNodeData,
-} from "./xyflow-nodes";
 import { workflowHistoryToXYFlow } from "./workflow-to-xyflow";
 import type { WorkflowHistory } from "./workflow-types";
+import {
+	formatDuration,
+	TYPE_COLORS,
+	TypeIcon,
+	type WorkflowNodeData,
+	workflowNodeTypes,
+} from "./xyflow-nodes";
 
 type MetaExtendedEntryType =
 	| "step"
@@ -79,7 +79,6 @@ export function WorkflowVisualizer({
 						nodeTypes={workflowNodeTypes}
 						fitView
 						panOnScroll
-						selectionOnDrag
 						panOnDrag={[1, 2]}
 						edgesFocusable={false}
 						onNodeClick={onNodeClick}
@@ -118,7 +117,9 @@ export function WorkflowVisualizer({
 								}}
 							>
 								<TypeIcon
-									type={selectedNode.entryType as MetaExtendedEntryType}
+									type={
+										selectedNode.entryType as MetaExtendedEntryType
+									}
 									size={18}
 								/>
 							</div>
@@ -181,7 +182,9 @@ export function WorkflowVisualizer({
 								Key
 							</div>
 							<DiscreteCopyButton
-								value={selectedNode.nodeKey ?? selectedNode.label}
+								value={
+									selectedNode.nodeKey ?? selectedNode.label
+								}
 								size="sm"
 								className="w-full text-sm text-left justify-between -mx-2"
 							>
