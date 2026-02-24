@@ -10,6 +10,11 @@
  * callback ABI and pointer/data conversion behavior.
  * This implementation is optimized for single-writer semantics because each
  * actor owns one SQLite database.
+ * SQLite invokes this VFS with byte-range file operations. This VFS maps those
+ * ranges onto fixed-size KV chunks keyed by file tag and chunk index.
+ * We intentionally rely on SQLite's pager cache for hot page reuse and do not
+ * add a second cache in this VFS. This avoids duplicate cache invalidation
+ * logic and keeps memory usage predictable for each actor.
  */
 
 import * as VFS from "@rivetkit/sqlite/src/VFS.js";
@@ -408,6 +413,9 @@ export class SqliteVfs {
 					sqliteSystem.name,
 				),
 			);
+			// TODO: Benchmark PRAGMA tuning for KV-backed SQLite after open.
+			// Start with journal_mode=PERSIST and journal_size_limit to reduce
+			// journal churn on high-latency KV without introducing WAL.
 
 			// Create cleanup callback
 			const onClose = () => {
@@ -985,6 +993,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 		_flags: number,
 		pResOut: number,
 	): Promise<number> {
+		// TODO: Measure how often xAccess runs during open and whether these
+		// existence checks add meaningful KV round-trip overhead. If they do,
+		// consider serving file existence from in-memory state.
 		const path = this.#module.UTF8ToString(zName);
 		const resolved = this.#resolveFile(path);
 		if (!resolved) {

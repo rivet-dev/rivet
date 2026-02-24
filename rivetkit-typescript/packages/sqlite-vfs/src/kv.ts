@@ -5,7 +5,13 @@
  * key-value store for SQLite file storage.
  */
 
-/** Size of each chunk stored in KV (4KB) */
+/**
+ * Size of each file chunk stored in KV.
+ *
+ * SQLite calls the VFS with byte ranges, but KV stores whole values by key.
+ * The VFS maps each byte range to one or more fixed-size chunks, then uses
+ * chunk keys to read or write those values in KV.
+ */
 export const CHUNK_SIZE = 4096;
 
 /** Top-level SQLite prefix (must match SQLITE_PREFIX in actor KV system) */
@@ -47,6 +53,13 @@ export function getMetaKey(fileTag: SqliteFileTag): Uint8Array {
 	return key;
 }
 
+/**
+ * Gets the key for one chunk of file data.
+ * Format: [SQLITE_PREFIX, CHUNK_PREFIX, file tag, chunk index (u32 big-endian)]
+ *
+ * The chunk index is derived from byte offset as floor(offset / CHUNK_SIZE),
+ * which is how SQLite byte ranges map onto KV keys.
+ */
 export function getChunkKey(
 	fileTag: SqliteFileTag,
 	chunkIndex: number,
