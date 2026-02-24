@@ -30,8 +30,8 @@ import {
 	FILE_TAG_WAL,
 	META_PREFIX,
 	SQLITE_PREFIX,
+	getChunkKey,
 	getMetaKey,
-	createChunkKeyFactory,
 	type SqliteFileTag,
 } from "./kv";
 import {
@@ -54,6 +54,15 @@ interface SQLiteModule {
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
 const SQLITE_MAX_PATHNAME_BYTES = 64;
+
+// Chunk keys encode the chunk index in 32 bits, so a file can span at most
+// 2^32 chunks. At 4 KiB/chunk this yields a hard limit of 16 TiB.
+const UINT32_SIZE = 0x100000000;
+const MAX_CHUNK_INDEX = 0xffffffff;
+const MAX_FILE_SIZE_BYTES = (MAX_CHUNK_INDEX + 1) * CHUNK_SIZE;
+const MAX_FILE_SIZE_HI32 = Math.floor(MAX_FILE_SIZE_BYTES / UINT32_SIZE);
+const MAX_FILE_SIZE_LO32 = MAX_FILE_SIZE_BYTES % UINT32_SIZE;
+
 // libvfs captures this async/sync mask at registration time. Any VFS callback
 // that returns a Promise must be listed here so SQLite uses async relays.
 const SQLITE_ASYNC_METHODS = new Set([
@@ -101,10 +110,14 @@ async function loadSqliteRuntime(): Promise<LoadedSqliteRuntime> {
 interface OpenFile {
 	/** File path */
 	path: string;
+	/** File kind tag used by compact key layout */
+	fileTag: SqliteFileTag;
+	/** Whether this file uses legacy filename-based chunk keys */
+	useLegacyChunkKeys: boolean;
+	/** Encoded filename bytes for legacy key layout */
+	legacyFileNameBytes?: Uint8Array;
 	/** Precomputed metadata key */
 	metaKey: Uint8Array;
-	/** Fast key builder that reuses encoded filename prefix */
-	chunkKeyForIndex: (chunkIndex: number) => Uint8Array;
 	/** File size in bytes */
 	size: number;
 	/** True when in-memory size has not been persisted yet */
@@ -137,6 +150,10 @@ function encodeFileMeta(size: number): Uint8Array {
 function decodeFileMeta(data: Uint8Array): number {
 	const meta = FILE_META_VERSIONED.deserializeWithEmbeddedVersion(data);
 	return Number(meta.size);
+}
+
+function isValidFileSize(size: number): boolean {
+	return Number.isSafeInteger(size) && size >= 0 && size <= MAX_FILE_SIZE_BYTES;
 }
 
 /**
@@ -290,6 +307,7 @@ export class SqliteVfs {
 	#openMutex = new AsyncMutex();
 	#sqliteMutex = new AsyncMutex();
 	#instanceId: string;
+	#destroyed = false;
 
 	constructor() {
 		// Generate unique instance ID for VFS name
@@ -300,6 +318,10 @@ export class SqliteVfs {
 	 * Initialize @rivetkit/sqlite and VFS (called once per instance)
 	 */
 	async #ensureInitialized(): Promise<void> {
+		if (this.#destroyed) {
+			throw new Error("SqliteVfs is closed");
+		}
+
 		// Fast path: already initialized
 		if (this.#sqlite3 && this.#sqliteSystem) {
 			return;
@@ -309,6 +331,9 @@ export class SqliteVfs {
 		if (!this.#initPromise) {
 			this.#initPromise = (async () => {
 				const { sqlite3, module } = await loadSqliteRuntime();
+				if (this.#destroyed) {
+					return;
+				}
 				this.#sqlite3 = sqlite3;
 				this.#sqliteSystem = new SqliteSystem(
 					sqlite3,
@@ -320,7 +345,12 @@ export class SqliteVfs {
 		}
 
 		// Wait for initialization
-		await this.#initPromise;
+		try {
+			await this.#initPromise;
+		} catch (error) {
+			this.#initPromise = null;
+			throw error;
+		}
 	}
 
 	/**
@@ -334,6 +364,10 @@ export class SqliteVfs {
 		fileName: string,
 		options: KvVfsOptions,
 	): Promise<Database> {
+		if (this.#destroyed) {
+			throw new Error("SqliteVfs is closed");
+		}
+
 		// Serialize all open operations within this instance
 		await this.#openMutex.acquire();
 		try {
@@ -373,6 +407,40 @@ export class SqliteVfs {
 			this.#openMutex.release();
 		}
 	}
+
+	/**
+	 * Tears down this VFS instance and releases internal references.
+	 */
+	async destroy(): Promise<void> {
+		if (this.#destroyed) {
+			return;
+		}
+		this.#destroyed = true;
+
+		const initPromise = this.#initPromise;
+		if (initPromise) {
+			try {
+				await initPromise;
+			} catch {
+				// Initialization failure already surfaced to caller.
+			}
+		}
+
+		if (this.#sqliteSystem) {
+			await this.#sqliteSystem.close();
+		}
+
+		this.#sqliteSystem = null;
+		this.#sqlite3 = null;
+		this.#initPromise = null;
+	}
+
+	/**
+	 * Alias for destroy to align with DB-style lifecycle naming.
+	 */
+	async close(): Promise<void> {
+		await this.destroy();
+	}
 }
 
 /**
@@ -398,7 +466,11 @@ class SqliteSystem implements SqliteVfsRegistration {
 		this.#heapDataView = new DataView(this.#heapDataViewBuffer);
 	}
 
-	close(): void {}
+	async close(): Promise<void> {
+		this.#openFiles.clear();
+		this.#mainFileName = null;
+		this.#mainFileOptions = null;
+	}
 
 	isReady(): boolean {
 		return true;
@@ -499,7 +571,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// For journal/wal files, use the main database's options
 		const { options, fileTag } = this.#resolveFileOrThrow(path);
 		let metaKey = getMetaKey(fileTag);
-		let chunkKeyForIndex = createChunkKeyFactory(fileTag);
+		let useLegacyChunkKeys = false;
+		let legacyFileNameBytes: Uint8Array | undefined;
 
 		// Get existing file size if the file exists
 		let sizeData = await options.get(metaKey);
@@ -509,7 +582,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 			const legacySizeData = await options.get(legacyMetaKey);
 			if (legacySizeData) {
 				metaKey = legacyMetaKey;
-				chunkKeyForIndex = createLegacyChunkKeyFactory(path);
+				useLegacyChunkKeys = true;
+				legacyFileNameBytes = TEXT_ENCODER.encode(path);
 				sizeData = legacySizeData;
 			}
 		}
@@ -519,6 +593,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 		if (sizeData) {
 			// File exists, use existing size
 			size = decodeFileMeta(sizeData);
+			if (!isValidFileSize(size)) {
+				return VFS.SQLITE_IOERR;
+			}
 		} else if (flags & VFS.SQLITE_OPEN_CREATE) {
 			// File doesn't exist, create it
 			size = 0;
@@ -531,8 +608,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Store open file info with options
 		this.#openFiles.set(fileId, {
 			path,
+			fileTag,
+			useLegacyChunkKeys,
+			legacyFileNameBytes,
 			metaKey,
-			chunkKeyForIndex,
 			size,
 			metaDirty: false,
 			flags,
@@ -551,14 +630,17 @@ class SqliteSystem implements SqliteVfsRegistration {
 			return VFS.SQLITE_OK;
 		}
 
+		// Delete-on-close files should skip metadata flush because the file will
+		// be removed immediately.
+		if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
+			await this.#delete(file.path);
+			this.#openFiles.delete(fileId);
+			return VFS.SQLITE_OK;
+		}
+
 		if (file.metaDirty) {
 			await file.options.put(file.metaKey, encodeFileMeta(file.size));
 			file.metaDirty = false;
-		}
-
-		// Delete file if SQLITE_OPEN_DELETEONCLOSE flag was set
-		if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-			await this.#delete(file.path);
 		}
 
 		this.#openFiles.delete(fileId);
@@ -585,6 +667,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 		const options = file.options;
 		const requestedLength = iAmt;
 		const iOffset = delegalize(iOffsetLo, iOffsetHi);
+		if (iOffset < 0) {
+			return VFS.SQLITE_IOERR_READ;
+		}
 		const fileSize = file.size;
 
 		// If offset is beyond file size, return short read with zeroed buffer
@@ -600,7 +685,11 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Fetch all needed chunks
 		const chunkKeys: Uint8Array[] = [];
 		for (let i = startChunk; i <= endChunk; i++) {
-			chunkKeys.push(file.chunkKeyForIndex(i));
+			chunkKeys.push(
+				file.useLegacyChunkKeys
+					? getLegacyChunkKey(file.legacyFileNameBytes!, i)
+					: getChunkKey(file.fileTag, i),
+			);
 		}
 
 		const chunks = await options.getBatch(chunkKeys);
@@ -669,8 +758,15 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 		const data = this.#module.HEAPU8.subarray(pData, pData + iAmt);
 		const iOffset = delegalize(iOffsetLo, iOffsetHi);
+		if (iOffset < 0) {
+			return VFS.SQLITE_IOERR_WRITE;
+		}
 		const options = file.options;
 		const writeLength = iAmt;
+		const writeEndOffset = iOffset + writeLength;
+		if (writeEndOffset > MAX_FILE_SIZE_BYTES) {
+			return VFS.SQLITE_IOERR_WRITE;
+		}
 
 		// Calculate which chunks we need to modify
 		const startChunk = Math.floor(iOffset / CHUNK_SIZE);
@@ -699,7 +795,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 				Math.min(CHUNK_SIZE, file.size - chunkOffset),
 			);
 			const needsExisting = writeStart > 0 || existingBytesInChunk > writeEnd;
-			const chunkKey = file.chunkKeyForIndex(i);
+			const chunkKey = file.useLegacyChunkKeys
+				? getLegacyChunkKey(file.legacyFileNameBytes!, i)
+				: getChunkKey(file.fileTag, i);
 			let existingChunkIndex = -1;
 			if (needsExisting) {
 				existingChunkIndex = chunkKeysToFetch.length;
@@ -745,7 +843,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 		// Update file size if we wrote past the end
 		const previousSize = file.size;
-		const newSize = Math.max(file.size, iOffset + writeLength);
+		const newSize = Math.max(file.size, writeEndOffset);
 		if (newSize !== previousSize) {
 			file.size = newSize;
 			file.metaDirty = true;
@@ -774,6 +872,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 		}
 
 		const size = delegalize(sizeLo, sizeHi);
+		if (size < 0 || size > MAX_FILE_SIZE_BYTES) {
+			return VFS.SQLITE_IOERR_TRUNCATE;
+		}
 		const options = file.options;
 
 		// If truncating to larger size, just update metadata
@@ -796,7 +897,11 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Delete chunks beyond the new size
 		const keysToDelete: Uint8Array[] = [];
 		for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
-			keysToDelete.push(file.chunkKeyForIndex(i));
+			keysToDelete.push(
+				file.useLegacyChunkKeys
+					? getLegacyChunkKey(file.legacyFileNameBytes!, i)
+					: getChunkKey(file.fileTag, i),
+			);
 		}
 
 		if (keysToDelete.length > 0) {
@@ -805,7 +910,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 		// Truncate the last kept chunk if needed
 		if (size > 0 && size % CHUNK_SIZE !== 0) {
-			const lastChunkKey = file.chunkKeyForIndex(lastChunkToKeep);
+			const lastChunkKey = file.useLegacyChunkKeys
+				? getLegacyChunkKey(file.legacyFileNameBytes!, lastChunkToKeep)
+				: getChunkKey(file.fileTag, lastChunkToKeep);
 			const lastChunkData = await options.get(lastChunkKey);
 
 			if (lastChunkData && lastChunkData.length > size % CHUNK_SIZE) {
@@ -856,7 +963,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 	async #delete(path: string): Promise<void> {
 		const { options, fileTag } = this.#resolveFileOrThrow(path);
 		let metaKey = getMetaKey(fileTag);
-		let chunkKeyForIndex = createChunkKeyFactory(fileTag);
+		let useLegacyChunkKeys = false;
+		let legacyFileNameBytes: Uint8Array | undefined;
 
 		// Get file size to find out how many chunks to delete
 		let sizeData = await options.get(metaKey);
@@ -865,7 +973,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 			const legacySizeData = await options.get(legacyMetaKey);
 			if (legacySizeData) {
 				metaKey = legacyMetaKey;
-				chunkKeyForIndex = createLegacyChunkKeyFactory(path);
+				useLegacyChunkKeys = true;
+				legacyFileNameBytes = TEXT_ENCODER.encode(path);
 				sizeData = legacySizeData;
 			}
 		}
@@ -881,7 +990,11 @@ class SqliteSystem implements SqliteVfsRegistration {
 		const keysToDelete: Uint8Array[] = [metaKey];
 		const numChunks = Math.ceil(size / CHUNK_SIZE);
 		for (let i = 0; i < numChunks; i++) {
-			keysToDelete.push(chunkKeyForIndex(i));
+			keysToDelete.push(
+				useLegacyChunkKeys
+					? getLegacyChunkKey(legacyFileNameBytes!, i)
+					: getChunkKey(fileTag, i),
+			);
 		}
 
 		await options.deleteBatch(keysToDelete);
@@ -1009,11 +1122,19 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 /**
  * Rebuild an i64 from Emscripten's legalized (lo32, hi32) pair.
- * SQLite passes file offsets and sizes this way, so we normalize negative lo32
- * back to unsigned low-word form to keep >32-bit chunk addressing correct.
+ * SQLite passes file offsets and sizes this way. We decode into unsigned words
+ * and reject values above the VFS max file size.
  */
 function delegalize(lo32: number, hi32: number): number {
-	return (hi32 * 0x100000000) + lo32 + (lo32 < 0 ? 2 ** 32 : 0);
+	const hi = hi32 >>> 0;
+	const lo = lo32 >>> 0;
+	if (hi > MAX_FILE_SIZE_HI32) {
+		return -1;
+	}
+	if (hi === MAX_FILE_SIZE_HI32 && lo > MAX_FILE_SIZE_LO32) {
+		return -1;
+	}
+	return (hi * UINT32_SIZE) + lo;
 }
 
 function getLegacyMetaKey(fileName: string): Uint8Array {
@@ -1025,22 +1146,16 @@ function getLegacyMetaKey(fileName: string): Uint8Array {
 	return key;
 }
 
-function createLegacyChunkKeyFactory(fileName: string): (chunkIndex: number) => Uint8Array {
-	const fileNameBytes = TEXT_ENCODER.encode(fileName);
-	const prefix = new Uint8Array(2 + fileNameBytes.length + 1);
-	prefix[0] = SQLITE_PREFIX;
-	prefix[1] = CHUNK_PREFIX;
-	prefix.set(fileNameBytes, 2);
-	prefix[prefix.length - 1] = 0;
-
-	return (chunkIndex: number): Uint8Array => {
-		const key = new Uint8Array(prefix.length + 4);
-		key.set(prefix, 0);
-		const offset = prefix.length;
-		key[offset + 0] = (chunkIndex >>> 24) & 0xff;
-		key[offset + 1] = (chunkIndex >>> 16) & 0xff;
-		key[offset + 2] = (chunkIndex >>> 8) & 0xff;
-		key[offset + 3] = chunkIndex & 0xff;
-		return key;
-	};
+function getLegacyChunkKey(fileNameBytes: Uint8Array, chunkIndex: number): Uint8Array {
+	const key = new Uint8Array(2 + fileNameBytes.length + 1 + 4);
+	key[0] = SQLITE_PREFIX;
+	key[1] = CHUNK_PREFIX;
+	key.set(fileNameBytes, 2);
+	const offset = 2 + fileNameBytes.length;
+	key[offset] = 0;
+	key[offset + 1] = (chunkIndex >>> 24) & 0xff;
+	key[offset + 2] = (chunkIndex >>> 16) & 0xff;
+	key[offset + 3] = (chunkIndex >>> 8) & 0xff;
+	key[offset + 4] = chunkIndex & 0xff;
+	return key;
 }

@@ -47,33 +47,17 @@ export function getMetaKey(fileTag: SqliteFileTag): Uint8Array {
 	return key;
 }
 
-/**
- * Gets the key for a file chunk
- * Format: [SQLITE_PREFIX (1 byte), CHUNK_PREFIX (1 byte), file tag (1 byte), chunk index (4 bytes, big-endian)]
- */
-export function createChunkKeyFactory(
-	fileTag: SqliteFileTag,
-): (chunkIndex: number) => Uint8Array {
-	const prefix = new Uint8Array(3);
-	prefix[0] = SQLITE_PREFIX;
-	prefix[1] = CHUNK_PREFIX;
-	prefix[2] = fileTag;
-
-	return (chunkIndex: number): Uint8Array => {
-		const key = new Uint8Array(prefix.length + 4);
-		key.set(prefix, 0);
-		const offset = prefix.length;
-		key[offset + 0] = (chunkIndex >>> 24) & 0xff;
-		key[offset + 1] = (chunkIndex >>> 16) & 0xff;
-		key[offset + 2] = (chunkIndex >>> 8) & 0xff;
-		key[offset + 3] = chunkIndex & 0xff;
-		return key;
-	};
-}
-
 export function getChunkKey(
 	fileTag: SqliteFileTag,
 	chunkIndex: number,
 ): Uint8Array {
-	return createChunkKeyFactory(fileTag)(chunkIndex);
+	const key = new Uint8Array(7);
+	key[0] = SQLITE_PREFIX;
+	key[1] = CHUNK_PREFIX;
+	key[2] = fileTag;
+	key[3] = (chunkIndex >>> 24) & 0xff;
+	key[4] = (chunkIndex >>> 16) & 0xff;
+	key[5] = (chunkIndex >>> 8) & 0xff;
+	key[6] = chunkIndex & 0xff;
+	return key;
 }

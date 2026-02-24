@@ -1412,8 +1412,8 @@ export class ActorInstance<
 			// Every actor gets its own SqliteVfs/@rivetkit/sqlite instance. The async
 			// @rivetkit/sqlite build is not re-entrant, and sharing one instance across
 			// actors can cause cross-actor contention and runtime corruption.
-			if (!this.#sqliteVfs && this.driver.getSqliteVfs) {
-				this.#sqliteVfs = await this.driver.getSqliteVfs();
+			if (!this.#sqliteVfs && this.driver.createSqliteVfs) {
+				this.#sqliteVfs = await this.driver.createSqliteVfs();
 			}
 
 			client = await this.#config.db.createClient({
@@ -1446,6 +1446,16 @@ export class ActorInstance<
 					});
 				}
 			}
+			if (this.#sqliteVfs) {
+				try {
+					await this.#sqliteVfs.destroy();
+				} catch (cleanupError) {
+					this.#rLog.error({
+						msg: "sqlite vfs teardown after setup failure failed",
+						error: stringifyError(cleanupError),
+					});
+				}
+			}
 			this.#sqliteVfs = undefined;
 			if (error instanceof Error) {
 				this.#rLog.error({
@@ -1466,23 +1476,31 @@ export class ActorInstance<
 
 	async #cleanupDatabase() {
 		const client = this.#db;
+		const sqliteVfs = this.#sqliteVfs;
+		const dbConfig = "db" in this.#config ? this.#config.db : undefined;
 		this.#db = undefined;
 		this.#sqliteVfs = undefined;
 
-		if (!client) {
-			return;
-		}
-		if (!("db" in this.#config) || !this.#config.db) {
-			return;
+		if (client && dbConfig) {
+			try {
+				await dbConfig.onDestroy?.(client);
+			} catch (error) {
+				this.#rLog.error({
+					msg: "database cleanup failed",
+					error: stringifyError(error),
+				});
+			}
 		}
 
-		try {
-			await this.#config.db.onDestroy?.(client);
-		} catch (error) {
-			this.#rLog.error({
-				msg: "database cleanup failed",
-				error: stringifyError(error),
-			});
+		if (sqliteVfs) {
+			try {
+				await sqliteVfs.destroy();
+			} catch (error) {
+				this.#rLog.error({
+					msg: "sqlite vfs cleanup failed",
+					error: stringifyError(error),
+				});
+			}
 		}
 	}
 

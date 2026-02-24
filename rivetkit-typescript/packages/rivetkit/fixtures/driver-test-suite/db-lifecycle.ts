@@ -90,7 +90,9 @@ export const dbLifecycle = actor({
 		ping: () => "pong",
 		insertValue: async (c, value: string) => {
 			await c.db.execute(
-				`INSERT INTO lifecycle_data (value, created_at) VALUES ('${value}', ${Date.now()})`,
+				"INSERT INTO lifecycle_data (value, created_at) VALUES (?, ?)",
+				value,
+				Date.now(),
 			);
 		},
 		getCount: async (c) => {

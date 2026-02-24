@@ -81,8 +81,8 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.setActorAlarm(actor.id, timestamp);
 	}
 
-	/** SQLite VFS instance for creating KV-backed databases */
-	async getSqliteVfs(): Promise<SqliteVfs> {
+	/** Creates a SQLite VFS instance for creating KV-backed databases */
+	async createSqliteVfs(): Promise<SqliteVfs> {
 		// Dynamic import keeps @rivetkit/sqlite out of the main entrypoint bundle,
 		// preserving tree-shakeability for environments that don't use SQLite.
 		// The async @rivetkit/sqlite build is not re-entrant per module instance.
