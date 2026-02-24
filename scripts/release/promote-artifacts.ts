@@ -12,22 +12,32 @@ import {
 } from "./utils";
 
 export async function promoteArtifacts(opts: ReleaseOpts) {
-	// Determine which commit to use for source artifacts
-	let sourceCommit = opts.commit;
+	// Determine the S3 source prefix for engine artifacts. When reusing a
+	// version, use the version-prefixed path (works even if that version
+	// itself reused engine from an earlier release). When reusing a commit,
+	// use the commit-prefixed path.
+	let sourcePrefix: string;
 	if (opts.reuseEngineVersion) {
-		console.log(`==> Reusing artifacts from ${opts.reuseEngineVersion}`);
-		const ref = versionOrCommitToRef(opts.reuseEngineVersion);
-		await fetchGitRef(ref);
-		const result = await $`git rev-parse ${ref}`;
-		sourceCommit = result.stdout.trim().slice(0, 7);
-		console.log(`==> Source commit: ${sourceCommit}`);
+		if (opts.reuseEngineVersion.includes(".")) {
+			sourcePrefix = opts.reuseEngineVersion;
+			console.log(`==> Reusing artifacts from version path: rivet/${sourcePrefix}/`);
+		} else {
+			console.log(`==> Reusing artifacts from commit ${opts.reuseEngineVersion}`);
+			const ref = versionOrCommitToRef(opts.reuseEngineVersion);
+			await fetchGitRef(ref);
+			const result = await $`git rev-parse ${ref}`;
+			sourcePrefix = result.stdout.trim().slice(0, 7);
+			console.log(`==> Source commit: ${sourcePrefix}`);
+		}
+	} else {
+		sourcePrefix = opts.commit;
 	}
 
 	// Promote engine artifacts (uploaded by CI in release.yaml to rivet/{commit}/engine/)
-	await promotePath(opts, sourceCommit, "engine");
+	await promotePath(opts, sourcePrefix, "engine");
 
 	// Promote devtools artifacts (uploaded by build-artifacts.ts to rivet/{commit}/devtools/)
-	await promotePath(opts, sourceCommit, "devtools");
+	await promotePath(opts, sourcePrefix, "devtools");
 
 	// Upload install scripts
 	await uploadInstallScripts(opts, opts.version);

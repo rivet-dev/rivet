@@ -15,8 +15,8 @@ export async function updateVersion(opts: ReleaseOpts) {
 	const findReplace = [
 		{
 			path: "Cargo.toml",
-			find: /\[workspace\.package\]\nversion = ".*"/,
-			replace: `[workspace.package]\nversion = "${opts.version}"`,
+			find: /([ \t]*)\[workspace\.package\]\n\1version = ".*"/,
+			replace: `$1[workspace.package]\n$1version = "${opts.version}"`,
 		},
 		{
 			path: "frontend/packages/*/package.json",

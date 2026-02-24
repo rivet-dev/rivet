@@ -16,7 +16,7 @@ import {
 } from "./git";
 import { EXCLUDED_RIVETKIT_PACKAGES, publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
-import { assert, assertEquals, assertExists, fetchGitRef, versionOrCommitToRef } from "./utils";
+import { assert, assertEquals, assertExists, fetchGitRef, listReleasesObjects, versionOrCommitToRef } from "./utils";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -105,74 +105,74 @@ async function shouldTagAsLatest(newVersion: string): Promise<boolean> {
 async function validateReuseVersion(version: string): Promise<void> {
 	console.log(`Validating that ${version} exists...`);
 
-	const ref = versionOrCommitToRef(version);
-	await fetchGitRef(ref);
+	const isVersion = version.includes(".");
 
-	// Get short commit from ref
-	let shortCommit: string;
-	try {
-		const result = await $`git rev-parse ${ref}`;
-		const fullCommit = result.stdout.trim();
-		shortCommit = fullCommit.slice(0, 7);
-		console.log(`✅ Found ${ref} (commit ${shortCommit})`);
-	} catch (error) {
-		throw new Error(
-			`${version} does not exist in git. Make sure ${ref} exists in the repository.`,
-		);
+	if (isVersion) {
+		// When reusing a version, check version-tagged Docker manifests and
+		// version-prefixed S3 paths. This works even when the referenced
+		// version itself reused engine from an earlier release.
+		console.log(`Checking version-tagged Docker manifests for ${version}...`);
+		try {
+			await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${version}`;
+			console.log("✅ Docker manifest exists");
+		} catch (error) {
+			throw new Error(
+				`Docker manifest rivetkit/engine:slim-${version} does not exist. Error: ${error}`,
+			);
+		}
+
+		console.log(`Checking S3 artifacts for version ${version}...`);
+		const s3Prefix = `rivet/${version}/`;
+		const files = await listReleasesObjects(s3Prefix);
+
+		if (!Array.isArray(files?.Contents) || files.Contents.length === 0) {
+			throw new Error(
+				`No S3 artifacts found for version ${version} under ${s3Prefix}`,
+			);
+		}
+
+		console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
+	} else {
+		// When reusing a raw commit, check per-arch Docker images and
+		// commit-prefixed S3 paths.
+		const ref = versionOrCommitToRef(version);
+		await fetchGitRef(ref);
+
+		let shortCommit: string;
+		try {
+			const result = await $`git rev-parse ${ref}`;
+			const fullCommit = result.stdout.trim();
+			shortCommit = fullCommit.slice(0, 7);
+			console.log(`✅ Found ${ref} (commit ${shortCommit})`);
+		} catch (error) {
+			throw new Error(
+				`${version} does not exist in git. Make sure ${ref} exists in the repository.`,
+			);
+		}
+
+		console.log(`Checking Docker images for ${shortCommit}...`);
+		try {
+			await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-amd64`;
+			await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-arm64`;
+			console.log("✅ Docker images exist");
+		} catch (error) {
+			throw new Error(
+				`Docker images for commit ${shortCommit} do not exist. Error: ${error}`,
+			);
+		}
+
+		console.log(`Checking S3 artifacts for ${shortCommit}...`);
+		const s3Prefix = `rivet/${shortCommit}/`;
+		const files = await listReleasesObjects(s3Prefix);
+
+		if (!Array.isArray(files?.Contents) || files.Contents.length === 0) {
+			throw new Error(
+				`No S3 artifacts found for commit ${shortCommit} under ${s3Prefix}`,
+			);
+		}
+
+		console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
 	}
-
-	// Check Docker images exist
-	console.log(`Checking Docker images for ${shortCommit}...`);
-	try {
-		await $({ stdio: "inherit" })`docker manifest inspect rivetdev/engine:slim-${shortCommit}-amd64`;
-		await $({ stdio: "inherit" })`docker manifest inspect rivetdev/engine:slim-${shortCommit}-arm64`;
-		console.log("✅ Docker images exist");
-	} catch (error) {
-		throw new Error(
-			`Docker images for version ${version} (commit ${shortCommit}) do not exist. Error: ${error}`,
-		);
-	}
-
-	// Check S3 artifacts exist
-	console.log(`Checking S3 artifacts for ${shortCommit}...`);
-	const endpointUrl =
-		"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
-
-	// Get credentials
-	let awsAccessKeyId = process.env.R2_RELEASES_ACCESS_KEY_ID;
-	if (!awsAccessKeyId) {
-		const result =
-			await $`op read "op://Engineering/rivet-releases R2 Upload/username"`;
-		awsAccessKeyId = result.stdout.trim();
-	}
-	let awsSecretAccessKey = process.env.R2_RELEASES_SECRET_ACCESS_KEY;
-	if (!awsSecretAccessKey) {
-		const result =
-			await $`op read "op://Engineering/rivet-releases R2 Upload/password"`;
-		awsSecretAccessKey = result.stdout.trim();
-	}
-
-	const awsEnv = {
-		AWS_ACCESS_KEY_ID: awsAccessKeyId,
-		AWS_SECRET_ACCESS_KEY: awsSecretAccessKey,
-		AWS_DEFAULT_REGION: "auto",
-	};
-
-	const commitPrefix = `rivet/${shortCommit}/`;
-	const listResult = await $({
-		env: awsEnv,
-		shell: true,
-		stdio: ["pipe", "pipe", "inherit"],
-	})`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
-	const files = JSON.parse(listResult.stdout);
-
-	if (!Array.isArray(files?.Contents) || files.Contents.length === 0) {
-		throw new Error(
-			`No S3 artifacts found for version ${version} (commit ${shortCommit}) under ${commitPrefix}`,
-		);
-	}
-
-	console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
 }
 
 interface BuildAndCheckOpts {
@@ -347,7 +347,7 @@ async function main() {
 			"--reuse-engine-version <version-or-commit>",
 			"Reuse artifacts and Docker images from a previous version (e.g., 2.0.33) or git revision (e.g., bb7f292)",
 		)
-		.option("--latest", "Tag version as the latest version", true)
+		.option("--latest", "Tag version as the latest version (auto-detected by default)")
 		.option("--no-latest", "Do not tag version as the latest version")
 		.option("--no-validate-git", "Skip git validation (for testing)")
 		.option(
