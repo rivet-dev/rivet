@@ -1,3 +1,5 @@
+export { createNoopTraces } from "./noop.js";
+
 // Browser stub: createTraces is server-only (uses node:async_hooks, node:crypto,
 // fdb-tuple). This module is selected via the "browser" export condition so that
 // bundlers like Vite never pull in the real implementation when resolving

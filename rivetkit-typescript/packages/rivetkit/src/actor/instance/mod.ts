@@ -1,5 +1,6 @@
 import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import {
+	createNoopTraces,
 	createTraces,
 	type SpanHandle,
 	type SpanStatusInput,
@@ -19,6 +20,7 @@ import {
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
+import { getRivetExperimentalOtel } from "@/utils/env-vars";
 import {
 	type ActorConfig,
 	getRunFunction,
@@ -996,9 +998,17 @@ export class ActorInstance<
 
 	// MARK: - Private Helper Methods
 	#initializeTraces() {
-		this.#traces = createTraces({
-			driver: new ActorTracesDriver(this.driver, this.#actorId),
-		});
+		if (getRivetExperimentalOtel()) {
+			// Experimental mode persists trace data to actor storage so inspector
+			// queries can return OTel payloads.
+			this.#traces = createTraces({
+				driver: new ActorTracesDriver(this.driver, this.#actorId),
+			});
+		} else {
+			// Keep the tracing API calls active while disabling trace persistence
+			// until the experimental flag is enabled.
+			this.#traces = createNoopTraces();
+		}
 	}
 
 	#traceAttributes(

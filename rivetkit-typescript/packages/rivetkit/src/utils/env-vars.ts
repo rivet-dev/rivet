@@ -1,7 +1,7 @@
 // This file consolidates all environment variables that affect RivetKit's behavior.
 //
 // IMPORTANT: When adding or modifying environment variables here, also update the
-// documentation at: docs/general/registry-configuration.mdx
+// documentation at: website/src/content/docs/general/environment-variables.mdx
 
 import { getEnvUniversal } from "@/utils";
 
@@ -67,3 +67,12 @@ export const getNodeEnv = (): string | undefined => getEnvUniversal("NODE_ENV");
 export const getNextPhase = (): string | undefined =>
 	getEnvUniversal("NEXT_PHASE");
 export const isDev = (): boolean => getNodeEnv() !== "production";
+
+// Experimental
+/**
+ * Enables experimental OTel tracing for Rivet Actors.
+ *
+ * When disabled, actors use an in-memory no-op traces implementation.
+ */
+export const getRivetExperimentalOtel = (): boolean =>
+	getEnvUniversal("RIVET_EXPERIMENTAL_OTEL") === "1";
