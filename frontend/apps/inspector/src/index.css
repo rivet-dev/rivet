@@ -1,4 +1,4 @@
-@import "../../../packages/components/public/theme.css";
+@import "../../../src/index.css";
 
 @tailwind base;
 @tailwind components;
@@ -42,37 +42,3 @@
 	}
 }
 
-:root {
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-color-text: theme("colors.white");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-constant: theme("colors.violet.300");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-string: theme("colors.violet.300");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-comment: theme("colors.zinc.500");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-keyword: theme("colors.sky.300");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-parameter: theme("colors.pink.300");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-function: theme("colors.violet.300");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-string-expression: theme("colors.violet.300");
-	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
-	--shiki-token-punctuation: theme("colors.zinc.200");
-
-	--spacing: 0.25rem;
-
-	::-webkit-scrollbar {
-		@apply w-2.5 h-2.5;
-	}
-
-	::-webkit-scrollbar-track {
-		@apply bg-transparent;
-	}
-
-	::-webkit-scrollbar-thumb {
-		@apply rounded-full bg-border border-[1px] border-transparent border-solid bg-clip-padding;
-	}
-}
