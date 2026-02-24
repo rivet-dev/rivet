@@ -1,0 +1,510 @@
+---
+author: nathan-flurry
+published: "2026-02-24"
+category: changelog
+keywords: ["workflows", "durable-execution", "actors", "typescript", "open-source"]
+title: "Introducing Rivet Workflows"
+description: "Durable, replayable workflows for TypeScript. Sleep, join, race, retry, rollback, and human-in-the-loop with realtime frontend integration."
+---
+
+Today we're releasing **Rivet Workflows**: a durable execution engine for TypeScript built in to [Rivet Actors](/docs/actors).
+
+- **Durable & resilient**: Progress persists across crashes, deploys, and restarts. Failed steps retry automatically.
+- **Advanced control flow**: Sleep, join, race, rollback, human-in-the-loop, and durable loops
+- **Durable agents**: Build AI agents with tool use, human-in-the-loop, and automatic checkpointing using the AI SDK
+- **React integration**: Stream workflow progress to your frontend in realtime with `useActor`
+- **Observable**: Built-in workflow inspector for debugging every run
+- **Permissive open-source**: Apache 2.0, runs anywhere: Node.js, Bun, Cloudflare Workers
+
+## Show Me The Code
+
+Wrap any multi-step process with `workflow()` and each step is checkpointed automatically. Crashes, deploys, and restarts pick up where they left off.
+
+<CodeGroup>
+```ts Basic
+import { actor } from "rivetkit";
+import { workflow } from "rivetkit/workflow";
+
+const checkout = actor({
+  state: {
+    orderId: null as string | null,
+    charged: false,
+    shipped: false,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.step("create-order", async () => {
+      ctx.state.orderId = crypto.randomUUID();
+    });
+
+    await ctx.step("charge-payment", async () => {
+      ctx.state.charged = true;
+    });
+
+    await ctx.step("ship-order", async () => {
+      ctx.state.shipped = true;
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+```ts Human-in-the-Loop
+// Pause indefinitely for approval, then continue where you left off
+import { actor } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+type ApprovalMessage = { requestId: string; approved: boolean };
+
+const approvalGate = actor({
+  state: {
+    pendingRequestId: null as string | null,
+    decision: null as "approved" | "rejected" | null,
+  },
+  run: workflow(async (ctx) => {
+    await ctx.step("request-approval", async () => {
+      ctx.state.pendingRequestId = "req-1";
+      ctx.state.decision = null;
+    });
+
+    // Pauses here until a message arrives. Could be minutes or days.
+    await ctx.loop({
+      name: "approval-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-approval");
+
+        if (!message) return Loop.continue(undefined);
+        const approval = message.body as ApprovalMessage;
+
+        await loopCtx.step("apply-decision", async () => {
+          loopCtx.state.decision = approval.approved ? "approved" : "rejected";
+        });
+
+        return Loop.break(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+```ts Loop
+// Use durable loops for long-lived workflows that process messages indefinitely
+import { actor, queue } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+const worker = actor({
+  state: {
+    processed: 0,
+    total: 0,
+  },
+  queues: {
+    orders: queue<{ amount: number }>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "order-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-order", {
+          names: ["orders"],
+        });
+
+        if (!message) return Loop.continue(undefined);
+
+        await loopCtx.step("process-order", async () => {
+          loopCtx.state.total += message.body.amount;
+          loopCtx.state.processed += 1;
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+```ts Sleep
+// Sleep for arbitrary durations without consuming compute
+import { actor, queue } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+type Reminder = { text: string; at: number };
+
+const reminderActor = actor({
+  state: { fired: [] as string[] },
+  queues: {
+    reminders: queue<Reminder>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "reminder-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-reminder", {
+          names: ["reminders"],
+        });
+
+        if (!message) return Loop.continue(undefined);
+
+        // Sleep until the scheduled time, even if it's days away
+        await loopCtx.sleepUntil("wait-until-reminder", message.body.at);
+
+        await loopCtx.step("fire-reminder", async () => {
+          loopCtx.state.fired.push(message.body.text);
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+```ts Join
+// Run independent work branches in parallel and collect results
+import { actor, queue } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+const dashboard = actor({
+  state: {
+    summary: null as null | { users: number; orders: number; revenue: number },
+  },
+  queues: {
+    refresh: queue<Record<string, never>>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "dashboard-loop",
+      run: async (loopCtx) => {
+        await loopCtx.queue.next("wait-refresh", { names: ["refresh"] });
+
+        const summary = await loopCtx.join("fetch-summary", {
+          users: {
+            run: async (branchCtx) => {
+              return await branchCtx.step("fetch-users", async () => 42);
+            },
+          },
+          orders: {
+            run: async (branchCtx) => {
+              return await branchCtx.step("fetch-orders", async () => 12);
+            },
+          },
+          revenue: {
+            run: async (branchCtx) => {
+              return await branchCtx.step("fetch-revenue", async () => 9_900);
+            },
+          },
+        });
+
+        await loopCtx.step("save-summary", async () => {
+          loopCtx.state.summary = summary;
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+```ts Race
+// Use race when you need timeout behavior or want the fastest result
+import { actor, queue } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+const raceActor = actor({
+  state: {
+    lastWinner: null as null | string,
+    lastValue: null as null | string,
+  },
+  queues: {
+    start: queue<Record<string, never>>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "race-loop",
+      run: async (loopCtx) => {
+        await loopCtx.queue.next("wait-start", { names: ["start"] });
+
+        const { winner, value } = await loopCtx.race("work-vs-timeout", [
+          {
+            name: "work",
+            run: async (branchCtx) => {
+              await branchCtx.sleep("work-delay", 75);
+              return await branchCtx.step("finish-work", async () => "done");
+            },
+          },
+          {
+            name: "timeout",
+            run: async (branchCtx) => {
+              await branchCtx.sleep("timeout-delay", 5_000);
+              return "timed-out";
+            },
+          },
+        ]);
+
+        await loopCtx.step("record-result", async () => {
+          loopCtx.state.lastWinner = winner;
+          loopCtx.state.lastValue = value;
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+```ts Rollback
+// Compensating actions run automatically when a later step fails
+import { actor, queue } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+async function reserveInventory(orderId: string): Promise<string> {
+  return `reservation-${orderId}`;
+}
+async function releaseInventory(_id: string): Promise<void> {}
+async function chargeCard(orderId: string): Promise<string> {
+  return `charge-${orderId}`;
+}
+async function refundCharge(_id: string): Promise<void> {}
+
+const checkoutSaga = actor({
+  state: {
+    lastOrderId: null as string | null,
+  },
+  queues: {
+    checkout: queue<{ orderId: string }>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "checkout-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-checkout", {
+          names: ["checkout"],
+        });
+
+        if (!message) return Loop.continue(undefined);
+
+        await loopCtx.rollbackCheckpoint("checkout-checkpoint");
+
+        const reservationId = await loopCtx.step<string>({
+          name: "reserve-inventory",
+          run: async () => await reserveInventory(message.body.orderId),
+          rollback: async (_rollbackCtx, output) => {
+            await releaseInventory(output as string);
+          },
+        });
+
+        const chargeId = await loopCtx.step<string>({
+          name: "charge-card",
+          run: async () => await chargeCard(message.body.orderId),
+          rollback: async (_rollbackCtx, output) => {
+            await refundCharge(output as string);
+          },
+        });
+
+        await loopCtx.step("mark-complete", async () => {
+          loopCtx.state.lastOrderId = message.body.orderId;
+          void reservationId;
+          void chargeId;
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+</CodeGroup>
+
+## Example: Durable Agents
+
+Combine workflows with the [AI SDK](https://ai-sdk.dev) to build AI agents that survive crashes and pick up exactly where they left off. Each tool call is checkpointed, and human-in-the-loop approval pauses the workflow until a response arrives.
+
+```ts
+import { actor } from "rivetkit";
+import { workflow } from "rivetkit/workflow";
+import { generateText, tool } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
+import { z } from "zod";
+
+const agent = actor({
+  state: {
+    response: null as string | null,
+  },
+  run: workflow(async (ctx) => {
+    const result = await ctx.step("generate", async () => {
+      return await generateText({
+        model: anthropic("claude-sonnet-4-20250514"),
+        tools: {
+          getWeather: tool({
+            description: "Get the weather for a location",
+            parameters: z.object({ location: z.string() }),
+            execute: async ({ location }) => `72°F in ${location}`,
+          }),
+        },
+        maxSteps: 5,
+        prompt: "What's the weather in San Francisco?",
+      });
+    });
+
+    await ctx.step("save", async () => {
+      ctx.state.response = result.text;
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+```
+
+## React Integration
+
+Broadcast workflow progress to your frontend in realtime. Store progress in actor state, broadcast on every step, and render it with `useActor`.
+
+<CodeGroup workspace>
+```tsx App.tsx
+import { createRivetKit } from "@rivetkit/react";
+import type { registry } from "./actors";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+function WorkflowProgress() {
+  const { connection, connStatus } = useActor({
+    name: "progressActor",
+    key: ["main"],
+  });
+  const [progress, setProgress] = useState({ stage: "idle", completed: 0, total: 0 });
+
+  useEffect(() => {
+    if (!connection) return;
+    connection.on("progressUpdated", (p: typeof progress) => setProgress(p));
+  }, [connection]);
+
+  if (connStatus !== "connected") return <div>Connecting...</div>;
+
+  return (
+    <div>
+      <p>Stage: {progress.stage}</p>
+      <p>Progress: {progress.completed} / {progress.total}</p>
+    </div>
+  );
+}
+```
+
+```ts actors.ts
+import { actor, event, queue, setup } from "rivetkit";
+import { Loop, workflow } from "rivetkit/workflow";
+
+type Progress = {
+  stage: "idle" | "running" | "completed";
+  completed: number;
+  total: number;
+};
+
+export const progressActor = actor({
+  state: {
+    progress: { stage: "idle", completed: 0, total: 0 } as Progress,
+  },
+  events: {
+    progressUpdated: event<Progress>(),
+  },
+  queues: {
+    jobs: queue<{ value: number }>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop({
+      name: "progress-loop",
+      run: async (loopCtx) => {
+        const [message] = await loopCtx.queue.next("wait-job", {
+          names: ["jobs"],
+        });
+
+        if (!message) return Loop.continue(undefined);
+
+        await loopCtx.step("mark-running", async () => {
+          loopCtx.state.progress = {
+            stage: "running",
+            completed: loopCtx.state.progress.completed,
+            total: loopCtx.state.progress.total + 1,
+          };
+          loopCtx.broadcast("progressUpdated", loopCtx.state.progress);
+        });
+
+        await loopCtx.step("complete-job", async () => {
+          loopCtx.state.progress = {
+            stage: "completed",
+            completed: loopCtx.state.progress.completed + 1,
+            total: loopCtx.state.progress.total,
+          };
+          loopCtx.broadcast("progressUpdated", loopCtx.state.progress);
+        });
+
+        return Loop.continue(undefined);
+      },
+    });
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
+
+export const registry = setup({ use: { progressActor } });
+```
+</CodeGroup>
+
+No pub/sub service, no polling, no separate WebSocket server. The actor broadcasts events directly to connected clients. The React hook handles connection lifecycle automatically.
+
+## Inspector
+
+TODO
+
+## Rivet Actors at Its Core
+
+Rivet Workflows is built directly in to [Rivet Actors](/docs/actors), a lightweight primitive for stateful workloads. Actors already provide persistent state, queues, and fault tolerance. Workflows add durable replay on top, so you get all of the Rivet Actor primitives for free:
+
+- **State with zero latency**: No database round trips. Workflow state lives on the same machine as your compute.
+- **Realtime over WebSockets**: Broadcast workflow progress to clients with `c.broadcast()`.
+- **SQLite per actor**: Structured queries alongside workflow state.
+- **Scales to zero**: Actors hibernate when idle. A workflow sleeping for a week costs nothing.
+- **Runs anywhere**: Node.js, Bun, Cloudflare Workers, Vercel, or your own infrastructure.
+
+## Permissive Open-Source License
+
+Rivet Workflows is licensed under **Apache 2.0**. Use it in production, self-host it, embed it in commercial products. No restrictions.
+
+Other durable execution engines like Inngest (SSPL) and Restate (BSL 1.1) **use restrictive licenses** that limit self-hosting and commercial use. We believe durable execution should be infrastructure you own, not a dependency you rent.
+
+## Get Started
+
+Rivet Workflows is available today in RivetKit.
+
+```bash
+npm install rivetkit
+```
+
+```ts
+import { workflow } from "rivetkit/workflow";
+```
+
+- [Workflows documentation](/docs/actors/workflows)
+- [GitHub](https://github.com/rivet-dev/rivet)
+- [Discord](https://rivet.dev/discord)

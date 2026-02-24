@@ -25,7 +25,6 @@
 		"@fortawesome/free-brands-svg-icons": "^7.1.0",
 		"@fortawesome/free-solid-svg-icons": "^7.1.0",
 		"@fortawesome/react-fontawesome": "^3.1.0",
-		"@giscus/react": "^3.1.0",
 		"@headlessui/react": "^2.2.9",
 		"@heroicons/react": "^2.2.0",
 		"@rivet-gg/api": "25.5.3",

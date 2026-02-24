@@ -7,7 +7,6 @@ import { DocsPageDropdown } from '@/components/DocsPageDropdown';
 import { Prose } from '@/components/Prose';
 import { Button } from '@rivet-gg/components';
 import { Icon, faPencil } from '@rivet-gg/icons';
-import { Comments } from '@/components/Comments';
 import { sitemap } from '@/sitemap/mod';
 import { findActiveTab } from '@/lib/sitemap';
 import { getContentParamSlug, getContentSlugPath } from '@/lib/content-path';
@@ -89,9 +88,9 @@ const breadcrumbSchema = {
 	<aside class="hidden md:block border-r">
 		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} client:load />}
 	</aside>
-	<div class="flex justify-center w-full">
-		<div class="flex gap-8 max-w-6xl w-full">
-			<main class="w-full py-8 px-8 lg:mx-0 mx-auto max-w-prose-docs lg:max-w-none">
+	<div class="flex justify-center w-full min-w-0">
+		<div class="flex gap-8 max-w-6xl w-full min-w-0">
+			<main class="w-full py-8 px-8 lg:mx-0 mx-auto max-w-prose-docs lg:max-w-none min-w-0">
 				<div class="relative flex justify-end">
 					<div class={`flex items-end md:absolute md:right-0 ${parentPage ? 'md:top-5' : 'md:top-0'}`}>
 						<DocsPageDropdown
@@ -129,8 +128,6 @@ const breadcrumbSchema = {
 						</span>
 					)}
 				</div>
-				{/* Comments intentionally disabled for now */}
-				{/* <Comments client:load /> */}
 			</main>
 			{tableOfContents.length > 0 && (
 				<aside class="hidden xl:block w-64 min-w-0 flex-shrink-0 pb-4">

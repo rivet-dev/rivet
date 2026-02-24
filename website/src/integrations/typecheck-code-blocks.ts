@@ -339,6 +339,12 @@ export function typecheckCodeBlocks(): AstroIntegration {
 		name: "typecheck-code-blocks",
 		hooks: {
 			"astro:config:setup": async ({ logger }) => {
+				// SKIP_TYPECHECK_CODE_BLOCKS should never be enabled in production. This is strictly for local testing.
+				if (process.env.SKIP_TYPECHECK_CODE_BLOCKS) {
+					logger.info("Skipping code block type checking (SKIP_TYPECHECK_CODE_BLOCKS is set)");
+					return;
+				}
+
 				logger.info("Type checking documentation code blocks...");
 
 				// Clean and create snippets directory
@@ -474,6 +480,7 @@ export function typecheckCodeBlocks(): AstroIntegration {
 						for (const err of errors) {
 							console.error(err);
 						}
+						logger.info("To skip type checking during local development, set SKIP_TYPECHECK_CODE_BLOCKS=1");
 						throw new Error(
 							`Type checking failed with ${errors.length} error(s) in documentation code blocks`
 						);

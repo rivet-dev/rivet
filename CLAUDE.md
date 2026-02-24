@@ -11,6 +11,8 @@
 
 The `rivet.gg` domain is deprecated and should never be used in this codebase.
 
+**ALWAYS use `github.com/rivet-dev/rivet` - NEVER use `rivet-dev/rivetkit` or `rivet-gg/*`**
+
 ## Commands
 
 ### Build Commands

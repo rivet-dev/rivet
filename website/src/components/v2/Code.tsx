@@ -75,51 +75,27 @@ const languageIcons: Record<string, IconDefinition> = {
 interface CodeGroupProps {
 	className?: string;
 	children: ReactNode;
+	/** Marks this code group as a workspace for type-checking multi-file examples. */
 	workspace?: boolean;
 }
 
-export function CodeGroup({ children, className, workspace }: CodeGroupProps) {
-	if (workspace) {
-		return (
-			<div
-				className={cn("code-group group my-4 overflow-hidden rounded-xl", className)}
-				data-code-group-container
-				data-code-group-workspace
-			>
-				<div className="flex min-h-[200px] gap-2">
-					<div
-						data-code-group-sidebar
-						className="flex flex-col w-[160px] shrink-0 py-2 overflow-y-auto"
-					>
-						{/* File tree items populated by TabsScript.astro */}
-					</div>
-					<div data-code-group-content-container className="flex-1 min-w-0">
-						{/* Content is moved here by TabsScript.astro */}
-					</div>
-				</div>
-				<div data-code-group-source className="hidden">
-					{children}
-				</div>
-			</div>
-		);
-	}
-
-	// Use Tabs-like pattern: render container with hidden source, let TabsScript create tabs
+export function CodeGroup({ children, className }: CodeGroupProps) {
 	return (
 		<div
-			className={cn("code-group group my-4 overflow-hidden rounded-xl border bg-neutral-950", className)}
+			className={cn("code-group group my-4 overflow-hidden rounded-xl", className)}
 			data-code-group-container
+			data-code-group-workspace
 		>
-			<div className="overflow-x-auto">
+			<div className="flex min-h-[200px] gap-2" data-code-group-body>
 				<div
-					data-code-group-tabs
-					className="inline-flex text-muted-foreground border-b border-neutral-800 w-full"
+					data-code-group-sidebar
+					className="flex flex-col w-[160px] shrink-0 py-2 overflow-y-auto"
 				>
-					{/* Tabs are populated by TabsScript.astro from data-code-group-source */}
+					{/* File tree items populated by TabsScript.astro */}
 				</div>
-			</div>
-			<div data-code-group-content-container>
-				{/* Content is moved here by TabsScript.astro */}
+				<div data-code-group-content-container className="flex-1 min-w-0">
+					{/* Content is moved here by TabsScript.astro */}
+				</div>
 			</div>
 			<div data-code-group-source className="hidden">
 				{children}

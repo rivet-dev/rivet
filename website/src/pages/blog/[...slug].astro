@@ -3,14 +3,12 @@ import { getCollection, render } from 'astro:content';
 import { Image } from 'astro:assets';
 import BlogLayout from '@/layouts/BlogLayout.astro';
 import { ArticleSocials } from '@/components/ArticleSocials';
-import { Comments } from '@/components/Comments';
 import { DocsTableOfContents } from '@/components/DocsTableOfContents';
 import { Prose } from '@/components/Prose';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
 import { AuthorAvatar } from '@/components/AuthorAvatar';
 import { Icon, faBluesky, faCalendarDay, faChevronRight, faGithub, faXTwitter } from '@rivet-gg/icons';
-import clsx from 'clsx';
 import * as mdxComponents from '@/components/mdx';
 
 type AuthorInfo = {
@@ -64,8 +62,6 @@ const tableOfContents = headings
 		return acc;
 	}, [] as any[]);
 
-const isTechnical = category.name === 'Technical' || category.name === 'Guide';
-
 // Load other articles
 const allPosts = await getCollection('posts');
 const filteredOtherPosts = allPosts
@@ -110,9 +106,7 @@ const breadcrumbSchema = {
 >
 	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 	<div
-		class={clsx('mx-auto mt-20 w-full max-w-6xl px-4 md:mt-32', {
-			'max-w-[1440px]': isTechnical,
-		})}
+		class="mx-auto mt-20 w-full md:max-w-3xl lg:max-w-4xl xl:max-w-7xl px-4 md:mt-32"
 		style="--header-height: 5rem;"
 	>
 		<ul class="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
@@ -122,8 +116,8 @@ const breadcrumbSchema = {
 			<li class="flex items-center"><Icon className="h-2.5 w-auto" icon={faChevronRight} /></li>
 			<li class="text-foreground font-semibold">{title}</li>
 		</ul>
-		<div class="flex flex-col gap-8 pb-6 lg:flex-row">
-			<aside class="order-1 mt-2 flex min-w-0 max-w-s flex-1 flex-col gap-2">
+		<div class="flex flex-col items-center gap-8 pb-6 lg:items-start lg:flex-row">
+			<aside class="hidden lg:flex mt-2 min-w-0 lg:w-[220px] lg:shrink-0 flex-col gap-2">
 				<div class="top-header sticky pt-2">
 					<p class="mb-2 text-sm font-semibold">Posted by</p>
 					<div class="mb-4 flex items-center gap-2">
@@ -168,10 +162,7 @@ const breadcrumbSchema = {
 			</aside>
 			<Prose
 				as="article"
-				className={clsx('order-3 mt-4 w-full flex-shrink-0 lg:order-2', {
-					'xl:max-w-[1000px]': isTechnical,
-					'max-w-prose': !isTechnical,
-				})}
+				className="w-full lg:flex-1 min-w-0 lg:order-2 max-w-none"
 			>
 				{image && (
 					<Image src={image} alt={title} class="rounded-xl border border-white/10" loading="eager" decoding="async" />
@@ -179,16 +170,39 @@ const breadcrumbSchema = {
 				<Content components={mdxComponents} />
 				<ArticleSocials title={title} client:load />
 			</Prose>
-			<aside class="order-2 min-w-0 max-w-xs flex-1 lg:order-3">
+			<aside class="hidden xl:block min-w-0 xl:w-[220px] xl:shrink-0 lg:order-3">
 				<DocsTableOfContents tableOfContents={tableOfContents} client:load />
 			</aside>
 		</div>
+		<div class="mt-8 border-t border-white/10 pt-6 lg:hidden">
+			<div class="flex items-center gap-3">
+				<AuthorAvatar className="size-10" name={author.name} avatarSrc={author.avatar.src} client:load />
+				<div class="flex flex-col">
+					<h3 class="text-sm font-bold">{author.name}</h3>
+					<p class="text-muted-foreground text-xs">{author.role}</p>
+				</div>
+				<div class="flex gap-2 text-xs text-muted-foreground ml-auto">
+					{(author.socials?.twitter || author.url) && (
+						<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer">
+							<Icon icon={faXTwitter} />
+						</a>
+					)}
+					{author.socials?.bluesky && (
+						<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer">
+							<Icon icon={faBluesky} />
+						</a>
+					)}
+					{author.socials?.github && (
+						<a href={author.socials.github} target="_blank" rel="noopener noreferrer">
+							<Icon icon={faGithub} />
+						</a>
+					)}
+				</div>
+			</div>
+			<div class="text-muted-foreground mt-2 flex items-center gap-2 text-sm">
+				<Icon icon={faCalendarDay} />
+				<time class="text-sm">{formatTimestamp(entry.data.published)}</time>
+			</div>
+		</div>
 	</div>
-	<Comments
-		className={clsx('mx-auto w-full mb-8', {
-			'xl:max-w-[1000px]': isTechnical,
-			'max-w-prose': !isTechnical,
-		})}
-		client:load
-	/>
 </BlogLayout>
