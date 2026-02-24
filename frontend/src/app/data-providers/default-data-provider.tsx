@@ -145,6 +145,7 @@ const defaultContext = {
 	// #region Actor Queries
 	actorQueryOptions(actorId: ActorId) {
 		return queryOptions({
+			refetchInterval: 5000,
 			queryFn: async () => {
 				return {} as Rivet.Actor;
 			},
