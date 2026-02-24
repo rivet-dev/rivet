@@ -1,6 +1,6 @@
 ---
 title: "Limits"
-description: "Size limits and constraints for Rivet Actors."
+description: "Limits and constraints for Rivet Actors."
 skill: true
 ---
 
@@ -32,8 +32,8 @@ These limits affect actions that use `.connect()` and [low-level WebSockets](/do
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Max incoming message size | 64 KB | 32 MiB | Maximum size of incoming WebSocket messages. Soft limit configurable via `maxIncomingMessageSize`. |
-| Max outgoing message size | 1 MB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`. |
+| Max incoming message size | 64 KiB | 32 MiB | Maximum size of incoming WebSocket messages. Soft limit configurable via `maxIncomingMessageSize`. |
+| Max outgoing message size | 1 MiB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`. |
 | WebSocket open timeout | — | 15 seconds | Time allowed for WebSocket connection to be established, including `onBeforeConnect` and `createConnState` hooks. Connection is closed if exceeded. |
 | Message ack timeout | — | 30 seconds | Time allowed for message acknowledgment before connection is closed. Only relevant in the case of a network issue and does not affect your application. |
 
@@ -68,7 +68,7 @@ These limits affect actions that do not use `.connect()` and [low-level HTTP req
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Max queue size | 1,000 messages | — | Maximum number of messages in the queue before new messages are rejected. Configurable via `maxQueueSize`. |
-| Max queue message size | 1 MiB | — | Maximum size of each individual queue message. Configurable via `maxQueueMessageSize`. |
+| Max queue message size | 64 KiB | 128 KiB (effective) | Maximum size of each individual queue message. Configurable via `maxQueueMessageSize`. Actual payload is slightly lower after queue serialization overhead. |
 
 ### Actor KV Storage
 
@@ -76,11 +76,11 @@ These limits apply to the low-level KV storage interface powering Rivet Actors. 
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Max key size | — | 2 KB | Maximum size of a single key. |
-| Max value size | — | 128 KB | Maximum size of a single value. |
+| Max key size | — | 2 KiB | Maximum size of a single key. |
+| Max value size | — | 128 KiB | Maximum size of a single value. |
 | Max keys per operation | — | 128 | Maximum number of keys in a single get/put/delete operation. |
-| Max batch put payload size | — | 976 KB | Maximum total size of all key-value pairs in a single batch put operation. |
-| Max storage size per actor | — | 1 GiB | Maximum total KV storage size for a single actor. |
+| Max batch put payload size | — | 976 KiB | Maximum total size of all key-value pairs in a single batch put operation. |
+| Max storage size per actor | — | 10 GiB | Maximum total KV storage size for a single actor. |
 | List default limit | — | 16,384 | Default maximum number of keys returned by a list operation. |
 
 ### Actor SQLite Storage
@@ -89,7 +89,7 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Max storage size per actor | — | 1 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
+| Max storage size per actor | — | 10 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
 
 ### Actor Input
 
@@ -98,7 +98,7 @@ See [Actor Input](/docs/actors/input) for details.
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Max actor input size | — | 4 MiB | Maximum size of the input passed when creating an actor. |
-| Max connection params size | — | 4 KB | Maximum size of connection parameters passed when connecting to an actor. |
+| Max connection params size | — | 4 KiB | Maximum size of connection parameters passed when connecting to an actor. |
 | Max actor key component size | — | 128 bytes | Maximum size of each component in an actor key array. |
 | Max actor key total size | — | 1,024 bytes | Maximum total size of the serialized actor key string. |
 | Max actor name length | — | 64 characters | Maximum length for actor and project identifiers. |
@@ -135,4 +135,3 @@ See [Actor Input](/docs/actors/input) for details.
 ## Increasing Limits
 
 These limits are sane defaults designed to protect your application from exploits and accidental runaway bugs. If you have a use case that requires different limits, [contact us](https://rivet.dev/contact) to discuss your requirements.
-
