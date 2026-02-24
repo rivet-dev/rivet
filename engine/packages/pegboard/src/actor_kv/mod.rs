@@ -13,6 +13,9 @@ mod entry;
 mod utils;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// Keep the KV validation limits below in sync with
+// rivetkit-typescript/packages/rivetkit/src/drivers/file-system/kv-limits.ts.
 const MAX_KEY_SIZE: usize = 2 * 1024;
 const MAX_VALUE_SIZE: usize = 128 * 1024;
 const MAX_KEYS: usize = 128;

@@ -83,7 +83,8 @@ pub fn validate_entries(
 	for value in values {
 		ensure!(
 			value.len() <= MAX_VALUE_SIZE,
-			"value is too large (max 128 KiB)"
+			"value is too large (max {} KiB)",
+			MAX_VALUE_SIZE / 1024
 		);
 	}
 

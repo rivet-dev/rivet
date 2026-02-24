@@ -37,6 +37,12 @@ import {
 	type SqliteRuntime,
 	type SqliteRuntimeDatabase,
 } from "./sqlite-runtime";
+import {
+	estimateKvSize,
+	validateKvEntries,
+	validateKvKey,
+	validateKvKeys,
+} from "./kv-limits";
 
 // Actor handler to track running instances
 
@@ -1322,7 +1328,10 @@ export class FileSystemGlobalState {
 				}
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
+
 			const db = this.#getOrCreateActorKvDatabase(actorId);
+			const totalSize = estimateKvSize(db);
+			validateKvEntries(entries, totalSize);
 			this.#putKvEntriesInDb(db, entries);
 		});
 	}
@@ -1343,6 +1352,8 @@ export class FileSystemGlobalState {
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
 		}
+
+		validateKvKeys(keys);
 
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const results: (Uint8Array | null)[] = [];
@@ -1372,9 +1383,11 @@ export class FileSystemGlobalState {
 				}
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
+
 			if (keys.length === 0) {
 				return;
 			}
+			validateKvKeys(keys);
 
 			const db = this.#getOrCreateActorKvDatabase(actorId);
 			db.exec("BEGIN");
@@ -1410,6 +1423,7 @@ export class FileSystemGlobalState {
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
 		}
+		validateKvKey(prefix, "prefix key");
 
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const upperBound = computePrefixUpperBound(prefix);
