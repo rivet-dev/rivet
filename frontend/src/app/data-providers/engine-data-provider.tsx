@@ -96,6 +96,18 @@ export const createGlobalContext = (opts: {
 				},
 			});
 		},
+		namespaceQueryOptions(name: string | undefined) {
+			return queryOptions({
+				queryKey: ["namespace", name] as any,
+				enabled: !!name,
+				queryFn: async () => {
+					const data = await client.namespaces.list({
+						name,
+					});
+					return data.namespaces[0];
+				},
+			});
+		},
 		createNamespaceMutationOptions(opts: {
 			onSuccess?: (data: Namespace) => void;
 		}) {
