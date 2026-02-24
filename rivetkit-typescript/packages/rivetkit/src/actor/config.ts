@@ -226,7 +226,7 @@ export const ActorConfigSchema = z
 				maxQueueMessageSize: z
 					.number()
 					.positive()
-					.default(1024 * 1024),
+					.default(64 * 1024),
 				/**
 				 * Can hibernate WebSockets for onWebSocket.
 				 *
@@ -1083,7 +1083,7 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				"Maximum size of each queue message in bytes. Default: 1048576",
+				"Maximum size of each queue message in bytes. Default: 65536",
 			),
 		canHibernateWebSocket: z
 			.boolean()

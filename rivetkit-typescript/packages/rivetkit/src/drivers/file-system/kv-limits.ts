@@ -5,7 +5,7 @@ const KV_MAX_KEY_SIZE = 2 * 1024;
 const KV_MAX_VALUE_SIZE = 128 * 1024;
 const KV_MAX_KEYS = 128;
 const KV_MAX_PUT_PAYLOAD_SIZE = 976 * 1024;
-const KV_MAX_STORAGE_SIZE = 1024 * 1024 * 1024;
+const KV_MAX_STORAGE_SIZE = 10 * 1024 * 1024 * 1024;
 const KV_KEY_WRAPPER_OVERHEAD_SIZE = 2;
 
 export function estimateKvSize(db: SqliteRuntimeDatabase): number {

@@ -10,7 +10,12 @@ import type { AnyDatabaseProvider } from "../database";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
-import { decodeQueueMessageKey, KEYS, makeQueueMessageKey } from "./keys";
+import {
+	decodeQueueMessageKey,
+	makeQueueMessageKey,
+	queueMessagesPrefix,
+	queueMetadataKey,
+} from "./keys";
 import type { ActorInstance } from "./mod";
 
 export interface QueueMessage {
@@ -47,6 +52,9 @@ const DEFAULT_METADATA: QueueMetadata = {
 	nextId: 1n,
 	size: 0,
 };
+
+const QUEUE_METADATA_KEY = queueMetadataKey();
+const QUEUE_MESSAGES_PREFIX = queueMessagesPrefix();
 
 interface PendingCompletion {
 	resolve: (result: {
@@ -89,11 +97,11 @@ export class QueueManager<
 	/** Loads queue metadata from storage and initializes internal state. */
 	async initialize(): Promise<void> {
 		const [metadataBuffer] = await this.#driver.kvBatchGet(this.#actor.id, [
-			KEYS.QUEUE_METADATA,
+			QUEUE_METADATA_KEY,
 		]);
 		if (!metadataBuffer) {
 			await this.#driver.kvBatchPut(this.#actor.id, [
-				[KEYS.QUEUE_METADATA, this.#serializeMetadata()],
+				[QUEUE_METADATA_KEY, this.#serializeMetadata()],
 			]);
 			this.#actor.inspector.updateQueueSize(this.#metadata.size);
 			return;
@@ -167,7 +175,7 @@ export class QueueManager<
 		// Batch write message and metadata together
 		await this.#driver.kvBatchPut(this.#actor.id, [
 			[messageKey, encodedMessage],
-			[KEYS.QUEUE_METADATA, encodedMetadata],
+			[QUEUE_METADATA_KEY, encodedMetadata],
 		]);
 
 		this.#actor.inspector.updateQueueSize(this.#metadata.size);
@@ -461,7 +469,7 @@ export class QueueManager<
 	async #loadQueueMessages(): Promise<QueueMessage[]> {
 		const entries = await this.#driver.kvListPrefix(
 			this.#actor.id,
-			KEYS.QUEUE_PREFIX,
+			QUEUE_MESSAGES_PREFIX,
 		);
 		const decoded: QueueMessage[] = [];
 		for (const [key, value] of entries) {
@@ -529,7 +537,7 @@ export class QueueManager<
 		// Note: kvBatchDelete doesn't support mixed operations, so we do two calls
 		await this.#driver.kvBatchDelete(this.#actor.id, keys);
 		await this.#driver.kvBatchPut(this.#actor.id, [
-			[KEYS.QUEUE_METADATA, this.#serializeMetadata()],
+			[QUEUE_METADATA_KEY, this.#serializeMetadata()],
 		]);
 
 		this.#actor.inspector.updateQueueSize(this.#metadata.size);
@@ -558,7 +566,7 @@ export class QueueManager<
 	async #rebuildMetadata(): Promise<void> {
 		const entries = await this.#driver.kvListPrefix(
 			this.#actor.id,
-			KEYS.QUEUE_PREFIX,
+			QUEUE_MESSAGES_PREFIX,
 		);
 
 		let maxId = 0n;
@@ -577,7 +585,7 @@ export class QueueManager<
 		this.#metadata.size = entries.length;
 
 		await this.#driver.kvBatchPut(this.#actor.id, [
-			[KEYS.QUEUE_METADATA, this.#serializeMetadata()],
+			[QUEUE_METADATA_KEY, this.#serializeMetadata()],
 		]);
 		this.#actor.inspector.updateQueueSize(this.#metadata.size);
 	}

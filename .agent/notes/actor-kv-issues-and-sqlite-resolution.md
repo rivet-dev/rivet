@@ -19,7 +19,7 @@ Limits used as baseline:
 - max `kv put` batch entries: 128
 - max `kv put` batch payload: 976 KiB (keys + values)
 - max value size: 128 KiB
-- max total actor KV storage: 1 GiB
+- max total actor KV storage: 10 GiB
 
 ## Confirmed Good
 
@@ -81,9 +81,10 @@ Limits used as baseline:
   - `rivetkit-typescript/packages/rivetkit/src/actor/instance/state-manager.ts:503`
   - `rivetkit-typescript/packages/rivetkit/src/actor/instance/state-manager.ts:512`
 
-7. Queue paths can violate limits and default config exceeds value cap.
+7. Queue paths can violate limits.
 - Queue delete removes all selected messages in one `kvBatchDelete(keys)`.
-- Queue message default max size is `1 MiB`, larger than actor KV `128 KiB` value cap.
+- Queue message writes are still constrained by actor KV `128 KiB` value cap.
+- Custom `maxQueueMessageSize` values above this cap will fail at KV write time.
 - Refs:
   - `rivetkit-typescript/packages/rivetkit/src/actor/instance/queue-manager.ts:520`
   - `rivetkit-typescript/packages/rivetkit/src/actor/instance/queue-manager.ts:530`
