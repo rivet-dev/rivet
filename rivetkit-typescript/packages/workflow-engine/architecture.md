@@ -203,7 +203,7 @@ This optimization reduces storage size when the same names appear many times.
 
 ```
 1. ctx.sleep() or ctx.queue.next() called
-2. Check if deadline passed or message available (in memory)
+2. Check if deadline passed or message available from messageDriver.receiveMessages()
 3. If not ready:
    a. Throw SleepError or MessageWaitError
    b. runWorkflow() catches error
@@ -211,26 +211,25 @@ This optimization reduces storage size when the same names appear many times.
    d. setAlarm() schedules wake-up (for sleep)
    e. Return { state: "sleeping", ... }
 4. External scheduler calls runWorkflow() again when ready
-5. loadStorage() loads any new messages added while yielded
+5. loadStorage() loads workflow state/history
 6. Replay proceeds, sleep/message now succeeds
 ```
 
 ### Message Delivery Model
 
-**Important**: The workflow's KV is only mutated by the workflow engine itself during execution. Messages follow a specific delivery pattern:
+**Important**: The workflow's KV is only mutated by the workflow engine itself during execution. Messages are handled exclusively by the message driver:
 
 ```
 1. External system sends message to workflow
-2. Message written directly to KV: messages/{index}
-3. External system triggers workflow wake-up (scheduler/notify)
+2. WorkflowHandle.message() forwards it to EngineDriver.messageDriver.addMessage()
+3. External system or runtime triggers workflow wake-up
 4. runWorkflow() called
-5. loadStorage() loads ALL messages from KV into memory
-6. Workflow checks storage.messages (in-memory, no polling)
-7. If message found: consume and continue
-8. If not found: yield with MessageWaitError
+5. Workflow calls messageDriver.receiveMessages() from ctx.queue.next()
+6. If message found: consume and continue
+7. If not found: yield with MessageWaitError
 ```
 
-There is no polling for messages during execution. Messages must be present in KV before `runWorkflow()` is called for them to be available.
+The workflow engine never stores queue messages in workflow KV.
 
 ## Storage Schema
 
@@ -240,20 +239,18 @@ Data is stored using binary key encoding with fdb-tuple for proper byte ordering
 Key Format (binary tuples):                  Value Format:
 [1, index]                                -> BARE (name string)
 [2, ...locationSegments]                  -> BARE+versioning (Entry)
-[3, messageId]                             -> BARE+versioning (Message)
-[4, 1]                                    -> text (WorkflowState)
-[4, 2]                                    -> CBOR (workflow output)
-[4, 3]                                    -> CBOR (WorkflowError)
-[4, 4]                                    -> text (version)
-[4, 5]                                    -> CBOR (workflow input)
-[5, entryId]                              -> BARE+versioning (EntryMetadata)
+[3, 1]                                    -> text (WorkflowState)
+[3, 2]                                    -> CBOR (workflow output)
+[3, 3]                                    -> CBOR (WorkflowError)
+[3, 4]                                    -> text (version)
+[3, 5]                                    -> CBOR (workflow input)
+[4, entryId]                              -> BARE+versioning (EntryMetadata)
 
 Key prefixes:
 1 = NAMES         - Name registry
 2 = HISTORY       - History entries
-3 = SIGNALS       - Message queue
-4 = WORKFLOW      - Workflow metadata
-5 = ENTRY_METADATA - Entry metadata
+3 = WORKFLOW      - Workflow metadata
+4 = ENTRY_METADATA - Entry metadata
 
 Location segments in keys:
 - NameIndex (number) -> encoded directly

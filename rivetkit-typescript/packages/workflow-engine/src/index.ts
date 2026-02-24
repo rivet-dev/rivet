@@ -48,9 +48,6 @@ export {
 
 // Storage utilities
 export {
-	addMessage,
-	consumeMessage,
-	consumeMessages,
 	createEntry,
 	createHistorySnapshot,
 	createStorage,
@@ -149,7 +146,6 @@ import {
 	buildWorkflowStateKey,
 } from "./keys.js";
 import {
-	createDefaultMessageDriver,
 	createHistorySnapshot,
 	flush,
 	generateId,
@@ -181,8 +177,6 @@ import { setLongTimeout } from "./utils.js";
  * - `handle.getOutput()` / `handle.getState()` - Query status
  */
 interface LiveRuntime {
-	pendingMessageNames: string[];
-	messageWaiters: Array<{ names: string[]; resolve: () => void }>;
 	sleepWaiter?: () => void;
 	isSleeping: boolean;
 }
@@ -191,80 +185,8 @@ type HistoryNotifier = (() => void) | undefined;
 
 function createLiveRuntime(): LiveRuntime {
 	return {
-		pendingMessageNames: [],
-		messageWaiters: [],
 		isSleeping: false,
 	};
-}
-
-function notifyMessage(runtime: LiveRuntime, name: string): void {
-	runtime.pendingMessageNames.push(name);
-
-	for (let i = 0; i < runtime.messageWaiters.length; i++) {
-		const waiter = runtime.messageWaiters[i];
-		const matchIndex = waiter.names.length === 0
-			? runtime.pendingMessageNames.length > 0
-				? 0
-				: -1
-			: runtime.pendingMessageNames.findIndex((pending) =>
-					waiter.names.includes(pending)
-				);
-		if (matchIndex !== -1) {
-			runtime.pendingMessageNames.splice(matchIndex, 1);
-			runtime.messageWaiters.splice(i, 1);
-			waiter.resolve();
-			break;
-		}
-	}
-}
-
-async function waitForMessage(
-	runtime: LiveRuntime,
-	names: string[],
-	abortSignal: AbortSignal,
-): Promise<void> {
-	if (abortSignal.aborted) {
-		throw new EvictedError();
-	}
-
-	const matchIndex = names.length === 0
-		? runtime.pendingMessageNames.length > 0
-			? 0
-			: -1
-		: runtime.pendingMessageNames.findIndex((pending) =>
-				names.includes(pending)
-			);
-	if (matchIndex !== -1) {
-		runtime.pendingMessageNames.splice(matchIndex, 1);
-		return;
-	}
-
-	let resolveWaiter: (() => void) | undefined;
-	const waiter = {
-		names,
-		resolve: () => {
-			resolveWaiter?.();
-		},
-	};
-
-	const waiterPromise = new Promise<void>((resolve) => {
-		resolveWaiter = resolve;
-	});
-
-	runtime.messageWaiters.push(waiter);
-
-	try {
-		await awaitWithEviction(waiterPromise, abortSignal);
-	} finally {
-		const index = runtime.messageWaiters.indexOf(waiter);
-		if (index !== -1) {
-			runtime.messageWaiters.splice(index, 1);
-		}
-	}
-
-	if (abortSignal.aborted) {
-		throw new EvictedError();
-	}
 }
 
 function createEvictionWait(signal: AbortSignal): {
@@ -535,25 +457,19 @@ async function executeLiveWorkflow<TInput, TOutput>(
 			return result;
 		}
 
-			const hasMessages = result.waitingForMessages !== undefined;
-			const hasDeadline = result.sleepUntil !== undefined;
+		const hasMessages = result.waitingForMessages !== undefined;
+		const hasDeadline = result.sleepUntil !== undefined;
 
 		if (hasMessages && hasDeadline) {
 			// Wait for EITHER a message OR the deadline (for queue.next timeout)
 			try {
-				const messagePromise = driver.waitForMessages
-					? awaitWithEviction(
-							driver.waitForMessages(
-								result.waitingForMessages!,
-								abortController.signal,
-							),
-							abortController.signal,
-						)
-					: waitForMessage(
-							runtime,
-							result.waitingForMessages!,
-							abortController.signal,
-						);
+				const messagePromise = awaitWithEviction(
+					driver.waitForMessages(
+						result.waitingForMessages!,
+						abortController.signal,
+					),
+					abortController.signal,
+				);
 				const sleepPromise = waitForSleep(
 					runtime,
 					result.sleepUntil!,
@@ -571,21 +487,13 @@ async function executeLiveWorkflow<TInput, TOutput>(
 
 		if (hasMessages) {
 			try {
-				if (driver.waitForMessages) {
-					await awaitWithEviction(
-						driver.waitForMessages(
-							result.waitingForMessages!,
-							abortController.signal,
-						),
-						abortController.signal,
-					);
-				} else {
-					await waitForMessage(
-						runtime,
+				await awaitWithEviction(
+					driver.waitForMessages(
 						result.waitingForMessages!,
 						abortController.signal,
-					);
-				}
+					),
+					abortController.signal,
+				);
 			} catch (error) {
 				if (error instanceof EvictedError) {
 					return lastResult;
@@ -622,8 +530,7 @@ export function runWorkflow<TInput, TOutput>(
 	driver: EngineDriver,
 	options: RunWorkflowOptions = {},
 ): WorkflowHandle<TOutput> {
-	const messageDriver =
-		driver.messageDriver ?? createDefaultMessageDriver(driver);
+	const messageDriver = driver.messageDriver;
 	const abortController = new AbortController();
 	const mode: WorkflowRunMode = options.mode ?? "yield";
 	const liveRuntime = mode === "live" ? createLiveRuntime() : undefined;
@@ -666,10 +573,6 @@ export function runWorkflow<TInput, TOutput>(
 				data,
 				sentAt: Date.now(),
 			});
-
-			if (liveRuntime) {
-				notifyMessage(liveRuntime, name);
-			}
 		},
 
 		async wake(): Promise<void> {
@@ -784,7 +687,7 @@ async function executeWorkflow<TInput, TOutput>(
 	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void,
 	logger?: Logger,
 ): Promise<WorkflowResult<TOutput>> {
-	const storage = await loadStorage(driver, messageDriver);
+	const storage = await loadStorage(driver);
 	const historyNotifier: HistoryNotifier = onHistoryUpdated
 		? () => onHistoryUpdated(createHistorySnapshot(storage))
 		: undefined;

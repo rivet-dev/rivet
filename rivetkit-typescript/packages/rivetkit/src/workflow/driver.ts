@@ -25,12 +25,6 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		this.#runCtx = runCtx;
 	}
 
-	async loadMessages(): Promise<Message[]> {
-		// Actor-backed workflows use receiveMessages() directly and do not
-		// mirror queue messages into workflow-engine storage.
-		return [];
-	}
-
 	async addMessage(message: Message): Promise<void> {
 		await this.#runCtx.keepAwake(
 			this.#actor.queueManager.enqueue(message.name, message.data),
@@ -69,33 +63,6 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 					}
 				: {}),
 		}));
-	}
-
-	async deleteMessages(messageIds: string[]): Promise<string[]> {
-		if (messageIds.length === 0) {
-			return [];
-		}
-
-		const ids = messageIds.map((id) => {
-			try {
-				return BigInt(id);
-			} catch {
-				return null;
-			}
-		});
-
-		const validIds = ids.filter(
-			(id): id is bigint => id !== null && id >= 0,
-		);
-		if (validIds.length === 0) {
-			return [];
-		}
-
-		const deleted = await this.#runCtx.keepAwake(
-			this.#actor.queueManager.deleteMessagesById(validIds),
-		);
-
-		return deleted.map((id) => id.toString());
 	}
 
 	async completeMessage(messageId: string, response?: unknown): Promise<void> {

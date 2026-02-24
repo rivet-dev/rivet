@@ -13,7 +13,6 @@ export type {
 	Location,
 	LoopEntry,
 	LoopIterationMarker,
-	Message,
 	MessageEntry,
 	PathSegment,
 	RaceEntry,
@@ -76,29 +75,6 @@ export const ENTRY_METADATA_VERSIONED =
 		deserializeConverters: () => [],
 		serializeConverters: () => [],
 	});
-
-// === Message Handler ===
-
-export const MESSAGE_VERSIONED = createVersionedDataHandler<v1.Message>({
-	deserializeVersion: (bytes, version) => {
-		switch (version) {
-			case 1:
-				return v1.decodeMessage(bytes);
-			default:
-				throw new Error(`Unknown Message version ${version}`);
-		}
-	},
-	serializeVersion: (data, version) => {
-		switch (version) {
-			case 1:
-				return v1.encodeMessage(data as v1.Message);
-			default:
-				throw new Error(`Unknown Message version ${version}`);
-		}
-	},
-	deserializeConverters: () => [],
-	serializeConverters: () => [],
-});
 
 // === Workflow Metadata Handler ===
 

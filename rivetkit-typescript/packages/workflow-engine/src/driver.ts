@@ -25,7 +25,8 @@ export interface KVWrite {
  * KV operations do not include workflow IDs because isolation is provided externally
  * by the host system (e.g., Cloudflare Durable Objects, dedicated actor processes).
  *
- * External systems may only write messages to the KV (via WorkflowHandle.message()).
+ * External systems may only enqueue messages through the configured message driver
+ * (via WorkflowHandle.message()).
  * See architecture.md "Isolation Model" for details.
  */
 export interface EngineDriver {
@@ -56,9 +57,9 @@ export interface EngineDriver {
 	 * List all key-value pairs with a given prefix.
 	 *
 	 * IMPORTANT: Results MUST be sorted by key in lexicographic byte order.
-	 * The workflow engine relies on this ordering for correct message FIFO
-	 * processing and name registry reconstruction. Failing to sort will
-	 * cause non-deterministic replay behavior.
+	 * The workflow engine relies on this ordering for deterministic history
+	 * replay and name registry reconstruction. Failing to sort will cause
+	 * non-deterministic replay behavior.
 	 */
 	list(prefix: Uint8Array): Promise<KVEntry[]>;
 
@@ -88,18 +89,14 @@ export interface EngineDriver {
 	 */
 	readonly workerPollInterval: number;
 
-	/**
-	 * Optional custom message driver to override the default KV-backed implementation.
-	 * If not provided, the workflow engine persists messages using the standard KV calls.
-	 */
-	readonly messageDriver?: WorkflowMessageDriver;
+	/** Queue-backed message driver used for workflow messaging. */
+	readonly messageDriver: WorkflowMessageDriver;
 
 	/**
-	 * Optional hook to wait for incoming messages when running in live mode.
+	 * Wait for incoming messages when running in live mode.
 	 * Implementations should resolve when any of the specified message names are available.
-	 * If not provided, the workflow engine falls back to in-memory runtime tracking.
 	 */
-	waitForMessages?(
+	waitForMessages(
 		messageNames: string[],
 		abortSignal: AbortSignal,
 	): Promise<void>;

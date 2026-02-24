@@ -19,7 +19,6 @@ import type {
 	EntryStatus as InternalEntryStatus,
 	Location as InternalLocation,
 	LoopIterationMarker as InternalLoopIterationMarker,
-	Message as InternalMessage,
 	PathSegment as InternalPathSegment,
 	SleepState as InternalSleepState,
 	WorkflowState as InternalWorkflowState,
@@ -28,7 +27,6 @@ import {
 	CURRENT_VERSION,
 	ENTRY_METADATA_VERSIONED,
 	ENTRY_VERSIONED,
-	MESSAGE_VERSIONED,
 	WORKFLOW_METADATA_VERSIONED,
 } from "./versioned.js";
 
@@ -502,39 +500,6 @@ export function deserializeEntryMetadata(
 	return entryMetadataFromBare(bareMetadata);
 }
 
-// === Message Conversion & Serialization ===
-
-function messageToBare(message: InternalMessage): v1.Message {
-	return {
-		id: message.id,
-		name: message.name,
-		messageData: encodeCbor(message.data),
-		sentAt: BigInt(message.sentAt),
-	};
-}
-
-function messageFromBare(bareMessage: v1.Message): InternalMessage {
-	return {
-		id: bareMessage.id,
-		name: bareMessage.name,
-		data: decodeCbor(bareMessage.messageData),
-		sentAt: Number(bareMessage.sentAt),
-	};
-}
-
-export function serializeMessage(message: InternalMessage): Uint8Array {
-	const bareMessage = messageToBare(message);
-	return MESSAGE_VERSIONED.serializeWithEmbeddedVersion(
-		bareMessage,
-		CURRENT_VERSION,
-	);
-}
-
-export function deserializeMessage(bytes: Uint8Array): InternalMessage {
-	const bareMessage = MESSAGE_VERSIONED.deserializeWithEmbeddedVersion(bytes);
-	return messageFromBare(bareMessage);
-}
-
 // === Workflow Metadata Serialization ===
 // Note: These are used for reading/writing individual workflow fields
 
@@ -600,32 +565,21 @@ export function serializeWorkflowError(
 export function deserializeWorkflowError(
 	bytes: Uint8Array,
 ): SerializedWorkflowError {
-	try {
-		const decoded = cbor.decode(bytes);
-		// Handle legacy string format
-		if (typeof decoded === "string") {
-			return { name: "Error", message: decoded };
-		}
-		assertObject(decoded, "WorkflowError");
-		// Validate required fields
-		const obj = decoded as Record<string, unknown>;
-		assertString(obj.name, "WorkflowError.name");
-		assertString(obj.message, "WorkflowError.message");
-		return {
-			name: obj.name,
-			message: obj.message,
-			stack: typeof obj.stack === "string" ? obj.stack : undefined,
-			metadata:
-				typeof obj.metadata === "object" && obj.metadata !== null
-					? (obj.metadata as Record<string, unknown>)
-					: undefined,
-		};
-	} catch {
-		// If decoding fails, try legacy text format
-		const decoder = new TextDecoder();
-		const message = decoder.decode(bytes);
-		return { name: "Error", message };
-	}
+	const decoded = cbor.decode(bytes);
+	assertObject(decoded, "WorkflowError");
+	// Validate required fields
+	const obj = decoded as Record<string, unknown>;
+	assertString(obj.name, "WorkflowError.name");
+	assertString(obj.message, "WorkflowError.message");
+	return {
+		name: obj.name,
+		message: obj.message,
+		stack: typeof obj.stack === "string" ? obj.stack : undefined,
+		metadata:
+			typeof obj.metadata === "object" && obj.metadata !== null
+				? (obj.metadata as Record<string, unknown>)
+				: undefined,
+	};
 }
 
 export function serializeWorkflowInput(input: unknown): Uint8Array {

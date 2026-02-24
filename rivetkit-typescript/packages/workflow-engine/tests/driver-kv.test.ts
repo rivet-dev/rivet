@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-	buildMessageKey,
-	buildMessagePrefix,
+	buildNameKey,
+	buildNamePrefix,
 	buildWorkflowStateKey,
-	parseMessageKey,
+	parseNameKey,
 } from "../src/keys.js";
 import { InMemoryDriver } from "../src/testing.js";
 
@@ -61,37 +61,37 @@ for (const mode of modes) {
 			});
 
 			it("should list keys by prefix", async () => {
-				await driver.set(buildMessageKey("a"), encode("one"));
-				await driver.set(buildMessageKey("b"), encode("two"));
+				await driver.set(buildNameKey(0), encode("one"));
+				await driver.set(buildNameKey(1), encode("two"));
 				await driver.set(buildWorkflowStateKey(), encode("state"));
 
-				const entries = await driver.list(buildMessagePrefix());
-				const ids = entries.map((entry) => parseMessageKey(entry.key));
+				const entries = await driver.list(buildNamePrefix());
+				const indices = entries.map((entry) => parseNameKey(entry.key));
 
-				expect(ids).toEqual(["a", "b"]);
+				expect(indices).toEqual([0, 1]);
 			});
 
 			it("should delete only keys with a prefix", async () => {
-				const messageKey = buildMessageKey("message");
+				const firstNameKey = buildNameKey(0);
 				const stateKey = buildWorkflowStateKey();
 
-				await driver.set(messageKey, encode("message"));
+				await driver.set(firstNameKey, encode("name"));
 				await driver.set(stateKey, encode("state"));
 
-				await driver.deletePrefix(buildMessagePrefix());
+				await driver.deletePrefix(buildNamePrefix());
 
-				expect(await driver.get(messageKey)).toBeNull();
+				expect(await driver.get(firstNameKey)).toBeNull();
 				expect(await driver.get(stateKey)).not.toBeNull();
 			});
 
-			it("should list messages in sorted order", async () => {
-				await driver.set(buildMessageKey("b"), encode("two"));
-				await driver.set(buildMessageKey("a"), encode("one"));
+			it("should list name keys in sorted order", async () => {
+				await driver.set(buildNameKey(1), encode("two"));
+				await driver.set(buildNameKey(0), encode("one"));
 
-				const entries = await driver.list(buildMessagePrefix());
-				const ids = entries.map((entry) => parseMessageKey(entry.key));
+				const entries = await driver.list(buildNamePrefix());
+				const indices = entries.map((entry) => parseNameKey(entry.key));
 
-				expect(ids).toEqual(["a", "b"]);
+				expect(indices).toEqual([0, 1]);
 			});
 
 			it("should batch writes", async () => {

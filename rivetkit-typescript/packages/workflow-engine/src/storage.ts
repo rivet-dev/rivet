@@ -1,14 +1,12 @@
 import {
 	deserializeEntry,
 	deserializeEntryMetadata,
-	deserializeMessage,
 	deserializeName,
 	deserializeWorkflowError,
 	deserializeWorkflowOutput,
 	deserializeWorkflowState,
 	serializeEntry,
 	serializeEntryMetadata,
-	serializeMessage,
 	serializeName,
 	serializeWorkflowError,
 	serializeWorkflowOutput,
@@ -20,8 +18,6 @@ import {
 	buildHistoryKey,
 	buildHistoryPrefix,
 	buildHistoryPrefixAll,
-	buildMessageKey,
-	buildMessagePrefix,
 	buildNameKey,
 	buildNamePrefix,
 	buildWorkflowErrorKey,
@@ -36,12 +32,10 @@ import type {
 	EntryKind,
 	EntryMetadata,
 	Location,
-	Message,
 	Storage,
 	WorkflowEntryMetadataSnapshot,
 	WorkflowHistoryEntry,
 	WorkflowHistorySnapshot,
-	WorkflowMessageDriver,
 } from "./types.js";
 
 /**
@@ -53,7 +47,6 @@ export function createStorage(): Storage {
 		flushedNameCount: 0,
 		history: { entries: new Map() },
 		entryMetadata: new Map(),
-		messages: [],
 		output: undefined,
 		state: "pending",
 		flushedState: undefined,
@@ -98,46 +91,6 @@ export function generateId(): string {
 	return crypto.randomUUID();
 }
 
-class KvMessageDriver implements WorkflowMessageDriver {
-	constructor(private readonly driver: EngineDriver) {}
-
-	async loadMessages(): Promise<Message[]> {
-		const entries = await this.driver.list(buildMessagePrefix());
-		entries.sort((a, b) => compareKeys(a.key, b.key));
-		return entries.map((entry) => deserializeMessage(entry.value));
-	}
-
-	async addMessage(message: Message): Promise<void> {
-		await this.driver.set(
-			buildMessageKey(message.id),
-			serializeMessage(message),
-		);
-	}
-
-	async deleteMessages(messageIds: string[]): Promise<string[]> {
-		const results = await Promise.allSettled(
-			messageIds.map((id) =>
-				this.driver.delete(buildMessageKey(id)),
-			),
-		);
-
-		const deleted: string[] = [];
-		for (let i = 0; i < results.length; i++) {
-			if (results[i].status === "fulfilled") {
-				deleted.push(messageIds[i]);
-			}
-		}
-
-		return deleted;
-	}
-}
-
-export function createDefaultMessageDriver(
-	driver: EngineDriver,
-): WorkflowMessageDriver {
-	return new KvMessageDriver(driver);
-}
-
 /**
  * Create a new entry.
  */
@@ -178,8 +131,6 @@ export function getOrCreateMetadata(
  */
 export async function loadStorage(
 	driver: EngineDriver,
-	messageDriver: WorkflowMessageDriver = driver.messageDriver ??
-		createDefaultMessageDriver(driver),
 ): Promise<Storage> {
 	const storage = createStorage();
 
@@ -203,10 +154,6 @@ export async function loadStorage(
 		const key = locationToKey(storage, parsed.location);
 		storage.history.entries.set(key, parsed);
 	}
-
-	// Load messages from the provided message driver
-	const messages = await messageDriver.loadMessages();
-	storage.messages.push(...messages);
 
 	// Load workflow state
 	const stateValue = await driver.get(buildWorkflowStateKey());
@@ -355,124 +302,6 @@ export async function flush(
 	if (historyUpdated && onHistoryUpdated) {
 		onHistoryUpdated();
 	}
-}
-
-/**
- * Add a message to the queue.
- */
-export async function addMessage(
-	storage: Storage,
-	messageDriver: WorkflowMessageDriver,
-	name: string,
-	data: unknown,
-): Promise<void> {
-	const message: Message = {
-		id: generateId(),
-		name,
-		data,
-		sentAt: Date.now(),
-	};
-
-	storage.messages.push(message);
-
-	// Persist immediately using the message driver
-	await messageDriver.addMessage(message);
-}
-
-/**
- * Consume a message from the queue.
- * Returns null if no matching message is found.
- * Deletes from driver first to prevent duplicates on failure.
- */
-export async function consumeMessage(
-	storage: Storage,
-	messageDriver: WorkflowMessageDriver,
-	messageName: string | string[],
-): Promise<Message | null> {
-	const messages = await consumeMessages(
-		storage,
-		messageDriver,
-		messageName,
-		1,
-	);
-	return messages[0] ?? null;
-}
-
-/**
- * Peek up to N messages from the queue without consuming them.
- */
-export function peekMessages(
-	storage: Storage,
-	messageName: string | string[],
-	limit: number,
-): Message[] {
-	const messageNameSet = new Set(
-		Array.isArray(messageName) ? messageName : [messageName],
-	);
-	const includeAll = messageNameSet.size === 0;
-	const results: Message[] = [];
-	for (const message of storage.messages) {
-		if (!includeAll && !messageNameSet.has(message.name)) {
-			continue;
-		}
-		results.push(message);
-		if (results.length >= limit) {
-			break;
-		}
-	}
-	return results;
-}
-
-/**
- * Consume up to N messages from the queue.
- *
- * Uses allSettled to handle partial failures gracefully:
- * - If all deletes succeed, messages are removed from memory
- * - If some deletes fail, only successfully deleted messages are removed
- * - On next load, failed messages will be re-read from KV
- */
-export async function consumeMessages(
-	storage: Storage,
-	messageDriver: WorkflowMessageDriver,
-	messageName: string | string[],
-	limit: number,
-): Promise<Message[]> {
-	const messageNameSet = new Set(
-		Array.isArray(messageName) ? messageName : [messageName],
-	);
-	const includeAll = messageNameSet.size === 0;
-
-	// Find all matching messages up to limit (don't modify memory yet)
-	const toConsume: { message: Message; index: number }[] = [];
-	let count = 0;
-
-	for (let i = 0; i < storage.messages.length && count < limit; i++) {
-		if (includeAll || messageNameSet.has(storage.messages[i].name)) {
-			toConsume.push({ message: storage.messages[i], index: i });
-			count++;
-		}
-	}
-
-	if (toConsume.length === 0) {
-		return [];
-	}
-
-	const messageIds = toConsume.map(({ message }) => message.id);
-	const deletedIds = await messageDriver.deleteMessages(messageIds);
-	const deletedSet = new Set(deletedIds);
-
-	// Only remove successfully deleted messages from memory
-	// Remove in reverse order to preserve indices
-	for (let i = toConsume.length - 1; i >= 0; i--) {
-		const { message, index } = toConsume[i];
-		if (deletedSet.has(message.id)) {
-			storage.messages.splice(index, 1);
-		}
-	}
-
-	return toConsume
-		.filter(({ message }) => deletedSet.has(message.id))
-		.map(({ message }) => message);
 }
 
 /**

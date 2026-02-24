@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-	buildMessageKey,
-	generateId,
 	InMemoryDriver,
 	Loop,
 	runWorkflow,
-	serializeMessage,
 	type WorkflowContextInterface,
 } from "../src/testing.js";
 
@@ -24,17 +21,6 @@ for (const mode of modes) {
 			});
 
 			it("should skip removed entries of all kinds", async () => {
-				const messageId = generateId();
-				await driver.set(
-					buildMessageKey(messageId),
-					serializeMessage({
-						id: messageId,
-						name: "old-message",
-						data: "message-data",
-						sentAt: Date.now(),
-					}),
-				);
-
 				const workflow1 = async (ctx: WorkflowContextInterface) => {
 					await ctx.step("old-step", async () => "old");
 					await ctx.loop({
@@ -47,11 +33,12 @@ for (const mode of modes) {
 							return Loop.continue({ count: state.count + 1 });
 						},
 					});
-						await ctx.sleep("old-sleep", 0);
-						await ctx.queue.next<string>("old-listen", {
-							names: ["old-message"],
-						});
-						await ctx.join("old-join", {
+					await ctx.queue.send("old-message", "message-data");
+					await ctx.sleep("old-sleep", 0);
+					await ctx.queue.next<string>("old-listen", {
+						names: ["old-message"],
+					});
+					await ctx.join("old-join", {
 						branch: {
 							run: async () => "ok",
 						},

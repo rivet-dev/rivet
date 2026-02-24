@@ -12,9 +12,8 @@ import type { Location, LoopIterationMarker, PathSegment } from "./types.js";
 export const KEY_PREFIX = {
 	NAMES: 1, // Name registry: [1, index]
 	HISTORY: 2, // History entries: [2, ...locationSegments]
-	MESSAGES: 3, // Message queue: [3, index]
-	WORKFLOW: 4, // Workflow metadata: [4, field]
-	ENTRY_METADATA: 5, // Entry metadata: [5, entryId]
+	WORKFLOW: 3, // Workflow metadata: [3, field]
+	ENTRY_METADATA: 4, // Entry metadata: [4, entryId]
 } as const;
 
 // Workflow metadata field identifiers
@@ -153,28 +152,8 @@ export function buildHistoryPrefixAll(): Uint8Array {
 }
 
 /**
- * Build a key for a message.
- * Key: [3, messageId]
- *
- * Message IDs can be either:
- * - A string UUID (for new messages added via handle.message())
- * - Used with the prefix to list all messages
- */
-export function buildMessageKey(messageId: string): Uint8Array {
-	return pack([KEY_PREFIX.MESSAGES, messageId]);
-}
-
-/**
- * Build a prefix for listing all messages.
- * Prefix: [3]
- */
-export function buildMessagePrefix(): Uint8Array {
-	return pack([KEY_PREFIX.MESSAGES]);
-}
-
-/**
  * Build a key for workflow state.
- * Key: [4, 1]
+ * Key: [3, 1]
  */
 export function buildWorkflowStateKey(): Uint8Array {
 	return pack([KEY_PREFIX.WORKFLOW, WORKFLOW_FIELD.STATE]);
@@ -182,7 +161,7 @@ export function buildWorkflowStateKey(): Uint8Array {
 
 /**
  * Build a key for workflow output.
- * Key: [4, 2]
+ * Key: [3, 2]
  */
 export function buildWorkflowOutputKey(): Uint8Array {
 	return pack([KEY_PREFIX.WORKFLOW, WORKFLOW_FIELD.OUTPUT]);
@@ -190,7 +169,7 @@ export function buildWorkflowOutputKey(): Uint8Array {
 
 /**
  * Build a key for workflow error.
- * Key: [4, 3]
+ * Key: [3, 3]
  */
 export function buildWorkflowErrorKey(): Uint8Array {
 	return pack([KEY_PREFIX.WORKFLOW, WORKFLOW_FIELD.ERROR]);
@@ -198,7 +177,7 @@ export function buildWorkflowErrorKey(): Uint8Array {
 
 /**
  * Build a key for workflow input.
- * Key: [4, 5]
+ * Key: [3, 5]
  */
 export function buildWorkflowInputKey(): Uint8Array {
 	return pack([KEY_PREFIX.WORKFLOW, WORKFLOW_FIELD.INPUT]);
@@ -206,7 +185,7 @@ export function buildWorkflowInputKey(): Uint8Array {
 
 /**
  * Build a key for entry metadata.
- * Key: [5, entryId]
+ * Key: [4, entryId]
  */
 export function buildEntryMetadataKey(entryId: string): Uint8Array {
 	return pack([KEY_PREFIX.ENTRY_METADATA, entryId]);
@@ -214,7 +193,7 @@ export function buildEntryMetadataKey(entryId: string): Uint8Array {
 
 /**
  * Build a prefix for listing all entry metadata.
- * Prefix: [5]
+ * Prefix: [4]
  */
 export function buildEntryMetadataPrefix(): Uint8Array {
 	return pack([KEY_PREFIX.ENTRY_METADATA]);
@@ -247,20 +226,8 @@ export function parseHistoryKey(key: Uint8Array): Location {
 }
 
 /**
- * Parse a message key and return the message ID.
- * Key: [3, messageId] → messageId
- */
-export function parseMessageKey(key: Uint8Array): string {
-	const elements = unpack(key);
-	if (elements.length !== 2 || elements[0] !== KEY_PREFIX.MESSAGES) {
-		throw new Error("Invalid message key");
-	}
-	return elements[1] as string;
-}
-
-/**
  * Parse an entry metadata key and return the entry ID.
- * Key: [5, entryId] → entryId
+ * Key: [4, entryId] → entryId
  */
 export function parseEntryMetadataKey(key: Uint8Array): string {
 	const elements = unpack(key);

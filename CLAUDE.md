@@ -146,6 +146,10 @@ Optional frontmatter fields:
 
 All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.
 
+## Notes Tracking
+
+- When the user asks to track something in a note, store it in `.agent/notes/` by default.
+
 ## Architecture
 
 ### Monorepo Structure

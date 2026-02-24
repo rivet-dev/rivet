@@ -190,7 +190,7 @@ export interface EntryMetadata {
  * A message in the queue.
  */
 export interface Message {
-	/** Unique message ID (used as KV key). */
+	/** Unique message ID. */
 	id: string;
 	name: string;
 	data: unknown;
@@ -293,7 +293,6 @@ export interface Storage {
 	flushedNameCount: number;
 	history: History;
 	entryMetadata: Map<string, EntryMetadata>;
-	messages: Message[];
 	output?: unknown;
 	state: WorkflowState;
 	flushedState?: WorkflowState;
@@ -306,27 +305,20 @@ export interface Storage {
  * Driver interface for workflow message persistence.
  */
 export interface WorkflowMessageDriver {
-	loadMessages(): Promise<Message[]>;
 	addMessage(message: Message): Promise<void>;
 	/**
-	 * Optionally receive messages directly from the host queue implementation.
-	 * This is used by actor-backed workflows to reuse native queue behavior.
-	 *
+	 * Receive messages directly from the host queue implementation.
 	 * The operation must be non-blocking and return immediately.
 	 */
-	receiveMessages?(opts: {
+	receiveMessages(opts: {
 		names?: readonly string[];
 		count: number;
 		completable: boolean;
 	}): Promise<Message[]>;
 	/**
-	 * Delete the specified messages and return the IDs that were successfully removed.
+	 * Complete a previously consumed message with an optional response payload.
 	 */
-	deleteMessages(messageIds: string[]): Promise<string[]>;
-	/**
-	 * Optionally complete a previously consumed message with a response payload.
-	 */
-	completeMessage?(messageId: string, response?: unknown): Promise<void>;
+	completeMessage(messageId: string, response?: unknown): Promise<void>;
 }
 
 /**
@@ -475,8 +467,8 @@ export interface WorkflowHandle<TOutput = unknown> {
 
 	/**
 	 * Send a message to the workflow.
-	 * The message is persisted and will be available on the next run.
-	 * In live mode, this also wakes the workflow if it's waiting.
+	 * The message is delegated to the runtime message driver.
+	 * In live mode, this wakes workflows waiting on queue messages.
 	 */
 	message(name: string, data: unknown): Promise<void>;
 

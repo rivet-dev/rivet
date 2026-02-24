@@ -13,3 +13,16 @@ The `*ContextOf` types exported from `packages/rivetkit/src/actor/contexts/index
 
 - `website/src/content/docs/actors/types.mdx` — public docs page
 - `website/src/content/docs/actors/index.mdx` — crash course (Context Types section)
+
+## Raw KV Limits
+
+When working with raw actor KV, always enforce engine limits:
+
+- Max key size: 2048 bytes.
+- Max batch payload size (`kv put`): 976 KiB total across keys + values.
+- Max entries per batch (`kv put`): 128 key-value pairs.
+- Max total actor KV storage: 1 GiB.
+
+All raw KV operations must be designed to handle these constraints. If an operation can exceed a per-request limit, split/chunk it into multiple KV operations instead of relying on engine-side failures.
+
+The total actor KV storage limit (1 GiB) cannot be worked around by chunking. Any KV operation can still fail due to storage limits. Always handle the error path cleanly and fail closed by default so the error surfaces to the user. Do not silently swallow, truncate, or ignore KV write failures.

@@ -24,13 +24,11 @@ import {
 	registerName,
 } from "./location.js";
 import {
-	consumeMessages,
 	createEntry,
 	deleteEntriesWithPrefix,
 	flush,
 	getOrCreateMetadata,
 	loadMetadata,
-	peekMessages,
 	setEntry,
 } from "./storage.js";
 import type {
@@ -971,9 +969,6 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			data: body,
 			sentAt: Date.now(),
 		};
-		if (!this.messageDriver.receiveMessages) {
-			this.storage.messages.push(message);
-		}
 		await this.messageDriver.addMessage(message);
 	}
 
@@ -1138,26 +1133,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		count: number,
 		completable: boolean,
 	): Promise<Message[]> {
-		if (this.messageDriver.receiveMessages) {
-			return await this.messageDriver.receiveMessages({
-				names: messageNames.length > 0 ? messageNames : undefined,
-				count,
-				completable,
-			});
-		}
-		if (completable) {
-			return peekMessages(
-				this.storage,
-				messageNames.length > 0 ? messageNames : [],
-				count,
-			);
-		}
-		return await consumeMessages(
-			this.storage,
-			this.messageDriver,
-			messageNames.length > 0 ? messageNames : [],
+		return await this.messageDriver.receiveMessages({
+			names: messageNames.length > 0 ? messageNames : undefined,
 			count,
-		);
+			completable,
+		});
 	}
 
 	private async recordQueueMessages<T>(
@@ -1326,20 +1306,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			await message.complete(response);
 			return;
 		}
-		if (this.messageDriver.completeMessage) {
-			await this.messageDriver.completeMessage(message.id, response);
-			return;
-		}
-		const deleted = await this.messageDriver.deleteMessages([message.id]);
-		if (!deleted.includes(message.id)) {
-			return;
-		}
-		const idx = this.storage.messages.findIndex((entry) =>
-			entry.id === message.id
-		);
-		if (idx !== -1) {
-			this.storage.messages.splice(idx, 1);
-		}
+		await this.messageDriver.completeMessage(message.id, response);
 	}
 
 	private toHistoryQueueMessage(
