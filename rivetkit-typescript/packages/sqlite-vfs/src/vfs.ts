@@ -44,6 +44,7 @@ import type { KvVfsOptions } from "./types";
 type SqliteEsmFactory = (config?: { wasmBinary?: ArrayBuffer | Uint8Array }) => Promise<unknown>;
 type SQLite3Api = ReturnType<typeof Factory>;
 type SqliteBindings = Parameters<SQLite3Api["bind_collection"]>[1];
+type SqliteVfsRegistration = Parameters<SQLite3Api["vfs_register"]>[0];
 
 interface SQLiteModule {
 	UTF8ToString: (ptr: number) => string;
@@ -52,6 +53,7 @@ interface SQLiteModule {
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
+const SQLITE_MAX_PATHNAME_BYTES = 64;
 // libvfs captures this async/sync mask at registration time. Any VFS callback
 // that returns a Promise must be listed here so SQLite uses async relays.
 const SQLITE_ASYNC_METHODS = new Set([
@@ -200,9 +202,9 @@ export class Database {
 	 * @param callback - Called for each result row with (row, columns)
 	 */
 	async exec(sql: string, callback?: (row: unknown[], columns: string[]) => void): Promise<void> {
-		return this.#sqliteMutex.run(async () =>
-			this.#sqlite3.exec(this.#handle, sql, callback),
-		);
+		await this.#sqliteMutex.run(async () => {
+			await this.#sqlite3.exec(this.#handle, sql, callback);
+		});
 	}
 
 	/**
@@ -376,7 +378,10 @@ export class SqliteVfs {
 /**
  * Internal VFS implementation
  */
-class SqliteSystem extends VFS.Base {
+class SqliteSystem implements SqliteVfsRegistration {
+	readonly name: string;
+	readonly mxPathName = SQLITE_MAX_PATHNAME_BYTES;
+	readonly mxPathname = SQLITE_MAX_PATHNAME_BYTES;
 	#mainFileName: string | null = null;
 	#mainFileOptions: KvVfsOptions | null = null;
 	readonly #openFiles: Map<number, OpenFile> = new Map();
@@ -386,11 +391,17 @@ class SqliteSystem extends VFS.Base {
 	#heapDataViewBuffer: ArrayBufferLike;
 
 	constructor(sqlite3: SQLite3Api, module: SQLiteModule, name: string) {
-		super(name, module);
+		this.name = name;
 		this.#sqlite3 = sqlite3;
 		this.#module = module;
 		this.#heapDataViewBuffer = module.HEAPU8.buffer;
 		this.#heapDataView = new DataView(this.#heapDataViewBuffer);
+	}
+
+	close(): void {}
+
+	isReady(): boolean {
+		return true;
 	}
 
 	hasAsyncMethod(methodName: string): boolean {
@@ -905,6 +916,22 @@ class SqliteSystem extends VFS.Base {
 		// reserved lock state to report.
 		this.#writeInt32(pResOut, 0);
 		return VFS.SQLITE_OK;
+	}
+
+	xLock(_fileId: number, _flags: number): number {
+		return VFS.SQLITE_OK;
+	}
+
+	xUnlock(_fileId: number, _flags: number): number {
+		return VFS.SQLITE_OK;
+	}
+
+	xFileControl(_fileId: number, _flags: number, _pArg: number): number {
+		return VFS.SQLITE_NOTFOUND;
+	}
+
+	xDeviceCharacteristics(_fileId: number): number {
+		return 0;
 	}
 
 	xFullPathname(_pVfs: number, zName: number, nOut: number, zOut: number): number {
