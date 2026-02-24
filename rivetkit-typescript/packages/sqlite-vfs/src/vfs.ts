@@ -22,14 +22,11 @@ import {
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import {
-	CHUNK_PREFIX,
 	CHUNK_SIZE,
 	FILE_TAG_JOURNAL,
 	FILE_TAG_MAIN,
 	FILE_TAG_SHM,
 	FILE_TAG_WAL,
-	META_PREFIX,
-	SQLITE_PREFIX,
 	getChunkKey,
 	getMetaKey,
 	type SqliteFileTag,
@@ -82,6 +79,24 @@ interface LoadedSqliteRuntime {
 	module: SQLiteModule;
 }
 
+function isSqliteEsmFactory(value: unknown): value is SqliteEsmFactory {
+	return typeof value === "function";
+}
+
+function isSQLiteModule(value: unknown): value is SQLiteModule {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const candidate = value as {
+		UTF8ToString?: unknown;
+		HEAPU8?: unknown;
+	};
+	return (
+		typeof candidate.UTF8ToString === "function" &&
+		candidate.HEAPU8 instanceof Uint8Array
+	);
+}
+
 
 /**
  * Lazily load and instantiate the async SQLite module for this VFS instance.
@@ -93,14 +108,20 @@ async function loadSqliteRuntime(): Promise<LoadedSqliteRuntime> {
 	// Keep the module specifier assembled at runtime so TypeScript declaration
 	// generation does not try to typecheck this deep dist import path.
 	const sqliteModule = await import("@rivetkit/sqlite/dist/" + "wa-sqlite-async.mjs");
-	const sqliteEsmFactory = sqliteModule.default as SqliteEsmFactory;
+	if (!isSqliteEsmFactory(sqliteModule.default)) {
+		throw new Error("Invalid SQLite ESM factory export");
+	}
+	const sqliteEsmFactory = sqliteModule.default;
 	const require = createRequire(import.meta.url);
 	const wasmPath = require.resolve("@rivetkit/sqlite/dist/wa-sqlite-async.wasm");
 	const wasmBinary = readFileSync(wasmPath);
 	const module = await sqliteEsmFactory({ wasmBinary });
+	if (!isSQLiteModule(module)) {
+		throw new Error("Invalid SQLite runtime module");
+	}
 	return {
 		sqlite3: Factory(module),
-		module: module as SQLiteModule,
+		module,
 	};
 }
 
@@ -112,10 +133,6 @@ interface OpenFile {
 	path: string;
 	/** File kind tag used by compact key layout */
 	fileTag: SqliteFileTag;
-	/** Whether this file uses legacy filename-based chunk keys */
-	useLegacyChunkKeys: boolean;
-	/** Encoded filename bytes for legacy key layout */
-	legacyFileNameBytes?: Uint8Array;
 	/** Precomputed metadata key */
 	metaKey: Uint8Array;
 	/** File size in bytes */
@@ -229,11 +246,11 @@ export class Database {
 	 * @param sql - SQL statement with ? placeholders
 	 * @param params - Parameter values to bind
 	 */
-	async run(sql: string, params?: unknown[]): Promise<void> {
+	async run(sql: string, params?: SqliteBindings): Promise<void> {
 		await this.#sqliteMutex.run(async () => {
 			for await (const stmt of this.#sqlite3.statements(this.#handle, sql)) {
-				if (params && params.length > 0) {
-					this.#sqlite3.bind_collection(stmt, params as SqliteBindings);
+				if (params) {
+					this.#sqlite3.bind_collection(stmt, params);
 				}
 				while ((await this.#sqlite3.step(stmt)) === SQLITE_ROW) {
 					// Consume rows for statements that return results.
@@ -248,13 +265,13 @@ export class Database {
 	 * @param params - Parameter values to bind
 	 * @returns Object with rows (array of arrays) and columns (column names)
 	 */
-	async query(sql: string, params?: unknown[]): Promise<{ rows: unknown[][]; columns: string[] }> {
+	async query(sql: string, params?: SqliteBindings): Promise<{ rows: unknown[][]; columns: string[] }> {
 		return this.#sqliteMutex.run(async () => {
 			const rows: unknown[][] = [];
 			let columns: string[] = [];
 			for await (const stmt of this.#sqlite3.statements(this.#handle, sql)) {
-				if (params && params.length > 0) {
-					this.#sqlite3.bind_collection(stmt, params as SqliteBindings);
+				if (params) {
+					this.#sqlite3.bind_collection(stmt, params);
 				}
 
 				while ((await this.#sqlite3.step(stmt)) === SQLITE_ROW) {
@@ -377,27 +394,28 @@ export class SqliteVfs {
 			if (!this.#sqlite3 || !this.#sqliteSystem) {
 				throw new Error("Failed to initialize SQLite");
 			}
+			const sqlite3 = this.#sqlite3;
+			const sqliteSystem = this.#sqliteSystem;
 
 			// Register this filename with its KV options
-			this.#sqliteSystem.registerFile(fileName, options);
+			sqliteSystem.registerFile(fileName, options);
 
 			// Open database
-				const db = await this.#sqliteMutex.run(async () =>
-					this.#sqlite3!.open_v2(
-						fileName,
-						SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
-						this.#sqliteSystem!.name,
-					),
-				);
+			const db = await this.#sqliteMutex.run(async () =>
+				sqlite3.open_v2(
+					fileName,
+					SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+					sqliteSystem.name,
+				),
+			);
 
 			// Create cleanup callback
-			const sqliteSystem = this.#sqliteSystem;
 			const onClose = () => {
 				sqliteSystem.unregisterFile(fileName);
 			};
 
 			return new Database(
-				this.#sqlite3,
+				sqlite3,
 				db,
 				fileName,
 				onClose,
@@ -555,6 +573,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 		);
 	}
 
+	#chunkKey(file: OpenFile, chunkIndex: number): Uint8Array {
+		return getChunkKey(file.fileTag, chunkIndex);
+	}
+
 	async xOpen(
 		_pVfs: number,
 		zName: number,
@@ -570,23 +592,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Get the registered KV options for this file
 		// For journal/wal files, use the main database's options
 		const { options, fileTag } = this.#resolveFileOrThrow(path);
-		let metaKey = getMetaKey(fileTag);
-		let useLegacyChunkKeys = false;
-		let legacyFileNameBytes: Uint8Array | undefined;
+		const metaKey = getMetaKey(fileTag);
 
 		// Get existing file size if the file exists
-		let sizeData = await options.get(metaKey);
-		if (!sizeData) {
-			// Backward compatibility for filename-based keys used before file tags.
-			const legacyMetaKey = getLegacyMetaKey(path);
-			const legacySizeData = await options.get(legacyMetaKey);
-			if (legacySizeData) {
-				metaKey = legacyMetaKey;
-				useLegacyChunkKeys = true;
-				legacyFileNameBytes = TEXT_ENCODER.encode(path);
-				sizeData = legacySizeData;
-			}
-		}
+		const sizeData = await options.get(metaKey);
 
 		let size: number;
 
@@ -609,8 +618,6 @@ class SqliteSystem implements SqliteVfsRegistration {
 		this.#openFiles.set(fileId, {
 			path,
 			fileTag,
-			useLegacyChunkKeys,
-			legacyFileNameBytes,
 			metaKey,
 			size,
 			metaDirty: false,
@@ -685,11 +692,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Fetch all needed chunks
 		const chunkKeys: Uint8Array[] = [];
 		for (let i = startChunk; i <= endChunk; i++) {
-			chunkKeys.push(
-				file.useLegacyChunkKeys
-					? getLegacyChunkKey(file.legacyFileNameBytes!, i)
-					: getChunkKey(file.fileTag, i),
-			);
+			chunkKeys.push(this.#chunkKey(file, i));
 		}
 
 		const chunks = await options.getBatch(chunkKeys);
@@ -795,9 +798,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 				Math.min(CHUNK_SIZE, file.size - chunkOffset),
 			);
 			const needsExisting = writeStart > 0 || existingBytesInChunk > writeEnd;
-			const chunkKey = file.useLegacyChunkKeys
-				? getLegacyChunkKey(file.legacyFileNameBytes!, i)
-				: getChunkKey(file.fileTag, i);
+			const chunkKey = this.#chunkKey(file, i);
 			let existingChunkIndex = -1;
 			if (needsExisting) {
 				existingChunkIndex = chunkKeysToFetch.length;
@@ -897,11 +898,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 		// Delete chunks beyond the new size
 		const keysToDelete: Uint8Array[] = [];
 		for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
-			keysToDelete.push(
-				file.useLegacyChunkKeys
-					? getLegacyChunkKey(file.legacyFileNameBytes!, i)
-					: getChunkKey(file.fileTag, i),
-			);
+			keysToDelete.push(this.#chunkKey(file, i));
 		}
 
 		if (keysToDelete.length > 0) {
@@ -910,9 +907,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 		// Truncate the last kept chunk if needed
 		if (size > 0 && size % CHUNK_SIZE !== 0) {
-			const lastChunkKey = file.useLegacyChunkKeys
-				? getLegacyChunkKey(file.legacyFileNameBytes!, lastChunkToKeep)
-				: getChunkKey(file.fileTag, lastChunkToKeep);
+			const lastChunkKey = this.#chunkKey(file, lastChunkToKeep);
 			const lastChunkData = await options.get(lastChunkKey);
 
 			if (lastChunkData && lastChunkData.length > size % CHUNK_SIZE) {
@@ -962,22 +957,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 	 */
 	async #delete(path: string): Promise<void> {
 		const { options, fileTag } = this.#resolveFileOrThrow(path);
-		let metaKey = getMetaKey(fileTag);
-		let useLegacyChunkKeys = false;
-		let legacyFileNameBytes: Uint8Array | undefined;
+		const metaKey = getMetaKey(fileTag);
 
 		// Get file size to find out how many chunks to delete
-		let sizeData = await options.get(metaKey);
-		if (!sizeData) {
-			const legacyMetaKey = getLegacyMetaKey(path);
-			const legacySizeData = await options.get(legacyMetaKey);
-			if (legacySizeData) {
-				metaKey = legacyMetaKey;
-				useLegacyChunkKeys = true;
-				legacyFileNameBytes = TEXT_ENCODER.encode(path);
-				sizeData = legacySizeData;
-			}
-		}
+		const sizeData = await options.get(metaKey);
 
 		if (!sizeData) {
 			// File doesn't exist, that's OK
@@ -990,11 +973,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 		const keysToDelete: Uint8Array[] = [metaKey];
 		const numChunks = Math.ceil(size / CHUNK_SIZE);
 		for (let i = 0; i < numChunks; i++) {
-			keysToDelete.push(
-				useLegacyChunkKeys
-					? getLegacyChunkKey(legacyFileNameBytes!, i)
-					: getChunkKey(fileTag, i),
-			);
+			keysToDelete.push(getChunkKey(fileTag, i));
 		}
 
 		await options.deleteBatch(keysToDelete);
@@ -1015,9 +994,7 @@ class SqliteSystem implements SqliteVfsRegistration {
 		}
 
 		const compactMetaKey = getMetaKey(resolved.fileTag);
-		const compactMetaData = await resolved.options.get(compactMetaKey);
-		const metaData = compactMetaData ??
-			await resolved.options.get(getLegacyMetaKey(path));
+		const metaData = await resolved.options.get(compactMetaKey);
 
 		// Set result: 1 if file exists, 0 otherwise
 		this.#writeInt32(pResOut, metaData ? 1 : 0);
@@ -1135,27 +1112,4 @@ function delegalize(lo32: number, hi32: number): number {
 		return -1;
 	}
 	return (hi * UINT32_SIZE) + lo;
-}
-
-function getLegacyMetaKey(fileName: string): Uint8Array {
-	const fileNameBytes = TEXT_ENCODER.encode(fileName);
-	const key = new Uint8Array(2 + fileNameBytes.length);
-	key[0] = SQLITE_PREFIX;
-	key[1] = META_PREFIX;
-	key.set(fileNameBytes, 2);
-	return key;
-}
-
-function getLegacyChunkKey(fileNameBytes: Uint8Array, chunkIndex: number): Uint8Array {
-	const key = new Uint8Array(2 + fileNameBytes.length + 1 + 4);
-	key[0] = SQLITE_PREFIX;
-	key[1] = CHUNK_PREFIX;
-	key.set(fileNameBytes, 2);
-	const offset = 2 + fileNameBytes.length;
-	key[offset] = 0;
-	key[offset + 1] = (chunkIndex >>> 24) & 0xff;
-	key[offset + 2] = (chunkIndex >>> 16) & 0xff;
-	key[offset + 3] = (chunkIndex >>> 8) & 0xff;
-	key[offset + 4] = chunkIndex & 0xff;
-	return key;
 }

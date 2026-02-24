@@ -4,7 +4,7 @@ import {
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
 import type { DatabaseProvider, RawAccess } from "../config";
-import type { KvVfsOptions } from "../sqlite-vfs";
+import { AsyncMutex, createActorKvStore, toSqliteBindings } from "../shared";
 
 export * from "./sqlite-core";
 
@@ -28,72 +28,11 @@ interface DatabaseFactoryConfig<
 }
 
 /**
- * Create a KV store wrapper that uses the actor driver's KV operations
- */
-function createActorKvStore(kv: {
-	batchPut: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
-	batchGet: (keys: Uint8Array[]) => Promise<(Uint8Array | null)[]>;
-	batchDelete: (keys: Uint8Array[]) => Promise<void>;
-}): KvVfsOptions {
-	return {
-		get: async (key: Uint8Array) => {
-			const results = await kv.batchGet([key]);
-			return results[0];
-		},
-		getBatch: async (keys: Uint8Array[]) => {
-			return await kv.batchGet(keys);
-		},
-		put: async (key: Uint8Array, value: Uint8Array) => {
-			await kv.batchPut([[key, value]]);
-		},
-		putBatch: async (entries: [Uint8Array, Uint8Array][]) => {
-			await kv.batchPut(entries);
-		},
-		deleteBatch: async (keys: Uint8Array[]) => {
-			await kv.batchDelete(keys);
-		},
-	};
-}
-
-/**
- * Mutex to serialize async operations on a @rivetkit/sqlite database handle.
- * @rivetkit/sqlite is not safe for concurrent operations on the same handle.
- */
-class DbMutex {
-	#locked = false;
-	#waiting: (() => void)[] = [];
-
-	async acquire(): Promise<void> {
-		while (this.#locked) {
-			await new Promise<void>((resolve) => this.#waiting.push(resolve));
-		}
-		this.#locked = true;
-	}
-
-	release(): void {
-		this.#locked = false;
-		const next = this.#waiting.shift();
-		if (next) {
-			next();
-		}
-	}
-
-	async run<T>(fn: () => Promise<T>): Promise<T> {
-		await this.acquire();
-		try {
-			return await fn();
-		} finally {
-			this.release();
-		}
-	}
-}
-
-/**
  * Create a sqlite-proxy async callback from a @rivetkit/sqlite Database
  */
 function createProxyCallback(
 	waDb: Database,
-	mutex: DbMutex,
+	mutex: AsyncMutex,
 	isClosed: () => boolean,
 ) {
 	return async (
@@ -107,12 +46,12 @@ function createProxyCallback(
 			}
 
 			if (method === "run") {
-				await waDb.run(sql, params);
+				await waDb.run(sql, toSqliteBindings(params));
 				return { rows: [] };
 			}
 
 			// For all/get/values, use parameterized query
-			const result = await waDb.query(sql, params);
+			const result = await waDb.query(sql, toSqliteBindings(params));
 
 			// drizzle's mapResultRow accesses rows by column index (positional arrays)
 			// so we return raw arrays for all methods
@@ -131,7 +70,7 @@ function createProxyCallback(
  */
 async function runInlineMigrations(
 	waDb: Database,
-	mutex: DbMutex,
+	mutex: AsyncMutex,
 	migrations: any,
 ): Promise<void> {
 	// Create migrations table
@@ -174,8 +113,9 @@ async function runInlineMigrations(
 
 		// Record migration
 		await mutex.run(() =>
-			waDb.exec(
-				`INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('${entry.tag}', ${entry.when})`,
+			waDb.run(
+				"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+				[entry.tag, entry.when],
 			),
 		);
 	}
@@ -188,7 +128,7 @@ export function db<
 ): DatabaseProvider<SqliteRemoteDatabase<TSchema> & RawAccess> {
 	// Store the @rivetkit/sqlite Database instance alongside the drizzle client
 	let waDbInstance: Database | null = null;
-	const mutex = new DbMutex();
+	const mutex = new AsyncMutex();
 
 	return {
 		createClient: async (ctx) => {
@@ -226,18 +166,17 @@ export function db<
 						ensureOpen();
 
 						if (args.length > 0) {
-							const result = await waDb.query(query, args);
+							const result = await waDb.query(
+								query,
+								toSqliteBindings(args),
+							);
 							return result.rows.map((row: unknown[]) => {
 								const obj: Record<string, unknown> = {};
-								for (
-									let i = 0;
-									i < result.columns.length;
-									i++
-									) {
-										obj[result.columns[i]] = row[i];
-									}
-									return obj;
-								}) as TRow[];
+								for (let i = 0; i < result.columns.length; i++) {
+									obj[result.columns[i]] = row[i];
+								}
+								return obj;
+							}) as TRow[];
 						}
 						// Use exec for non-parameterized queries since
 						// @rivetkit/sqlite's query() can crash on some statements.
@@ -246,17 +185,17 @@ export function db<
 						await waDb.exec(
 							query,
 							(row: unknown[], columns: string[]) => {
-									if (!columnNames) {
-										columnNames = columns;
-									}
-									const obj: Record<string, unknown> = {};
-									for (let i = 0; i < row.length; i++) {
-										obj[columnNames[i]] = row[i];
-									}
-									results.push(obj);
-								},
-							);
-							return results as TRow[];
+								if (!columnNames) {
+									columnNames = columns;
+								}
+								const obj: Record<string, unknown> = {};
+								for (let i = 0; i < row.length; i++) {
+									obj[columnNames[i]] = row[i];
+								}
+								results.push(obj);
+							},
+						);
+						return results as TRow[];
 					});
 				},
 				close: async () => {

@@ -1,38 +1,10 @@
-import type { KvVfsOptions } from "./sqlite-vfs";
 import type { DatabaseProvider, RawAccess } from "./config";
+import { AsyncMutex, createActorKvStore, toSqliteBindings } from "./shared";
 
 export type { RawAccess } from "./config";
 
 interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
-}
-
-/**
- * Create a KV store wrapper that uses the actor driver's KV operations
- */
-function createActorKvStore(kv: {
-	batchPut: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
-	batchGet: (keys: Uint8Array[]) => Promise<(Uint8Array | null)[]>;
-	batchDelete: (keys: Uint8Array[]) => Promise<void>;
-}): KvVfsOptions {
-	return {
-		get: async (key: Uint8Array) => {
-			const results = await kv.batchGet([key]);
-			return results[0];
-		},
-		getBatch: async (keys: Uint8Array[]) => {
-			return await kv.batchGet(keys);
-		},
-		put: async (key: Uint8Array, value: Uint8Array) => {
-			await kv.batchPut([[key, value]]);
-		},
-		putBatch: async (entries: [Uint8Array, Uint8Array][]) => {
-			await kv.batchPut(entries);
-		},
-		deleteBatch: async (keys: Uint8Array[]) => {
-			await kv.batchDelete(keys);
-		},
-	};
 }
 
 export function db({
@@ -70,22 +42,11 @@ export function db({
 			const kvStore = createActorKvStore(ctx.kv);
 			const db = await ctx.sqliteVfs.open(ctx.actorId, kvStore);
 			let closed = false;
+			const mutex = new AsyncMutex();
 			const ensureOpen = () => {
 				if (closed) {
 					throw new Error("database is closed");
 				}
-			};
-			let op: Promise<void> = Promise.resolve();
-
-			const serialize = async <T>(fn: () => Promise<T>): Promise<T> => {
-				// Ensure @rivetkit/sqlite calls are not concurrent. Actors can process multiple
-				// actions concurrently, and @rivetkit/sqlite is not re-entrant.
-				const next = op.then(fn, fn);
-				op = next.then(
-					() => undefined,
-					() => undefined,
-				);
-				return await next;
 			};
 
 			return {
@@ -95,7 +56,7 @@ export function db({
 					query: string,
 					...args: unknown[]
 				): Promise<TRow[]> => {
-					return await serialize(async () => {
+					return await mutex.run(async () => {
 						ensureOpen();
 
 						// `db.exec` does not support binding `?` placeholders.
@@ -104,6 +65,7 @@ export function db({
 						// Keep using `db.exec` for non-parameterized SQL because it
 						// supports multi-statement migrations.
 						if (args.length > 0) {
+							const bindings = toSqliteBindings(args);
 							const token = query.trimStart().slice(0, 16).toUpperCase();
 							const returnsRows =
 								token.startsWith("SELECT") ||
@@ -111,7 +73,7 @@ export function db({
 								token.startsWith("WITH");
 
 							if (returnsRows) {
-								const { rows, columns } = await db.query(query, args);
+								const { rows, columns } = await db.query(query, bindings);
 								return rows.map((row: unknown[]) => {
 									const rowObj: Record<string, unknown> = {};
 									for (let i = 0; i < columns.length; i++) {
@@ -121,7 +83,7 @@ export function db({
 								}) as TRow[];
 							}
 
-							await db.run(query, args);
+							await db.run(query, bindings);
 							return [] as TRow[];
 						}
 
@@ -141,7 +103,7 @@ export function db({
 					});
 				},
 				close: async () => {
-					await serialize(async () => {
+					await mutex.run(async () => {
 						if (closed) {
 							return;
 						}
