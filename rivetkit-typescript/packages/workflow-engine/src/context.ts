@@ -591,7 +591,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		nameOrConfig: string | LoopConfig<S, T>,
 		run?: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T>>,
+		) => Promise<LoopResult<undefined, T> | undefined>,
 	): Promise<T> {
 		this.assertNotInProgress();
 		this.checkEvicted();
@@ -708,7 +708,16 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const branchCtx = this.createBranch(iterationLocation);
 
 			// Execute iteration
-			const result = await config.run(branchCtx, state);
+			const iterationResult = await config.run(branchCtx, state);
+			if (iterationResult === undefined && state !== undefined) {
+				throw new Error(
+					`Loop "${config.name}" returned undefined for a stateful iteration. Return Loop.continue(state) or Loop.break(value).`,
+				);
+			}
+			const result =
+				iterationResult === undefined
+					? ({ continue: true, state } as LoopResult<S, T>)
+					: iterationResult;
 
 			// Validate branch completed cleanly
 			branchCtx.validateComplete();

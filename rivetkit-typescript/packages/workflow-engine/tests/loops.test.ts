@@ -78,6 +78,31 @@ for (const mode of modes) {
 			expect(result.output).toBe("done");
 		});
 
+		it("should treat undefined return as continue in stateless loops", async () => {
+			let iteration = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("stateless-implicit-continue", async () => {
+					iteration += 1;
+					if (iteration >= 3) {
+						return Loop.break("done");
+					}
+					return undefined;
+				});
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe("done");
+		});
+
 		it("should resume loop from saved state", async () => {
 			let iteration = 0;
 

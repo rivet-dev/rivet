@@ -357,12 +357,25 @@ export type LoopResult<S, T> =
 	| { break: true; value: T };
 
 /**
+ * Return type for a loop iteration callback.
+ *
+ * Stateless loops (state = undefined) may return undefined, which is treated as
+ * `Loop.continue(undefined)`.
+ */
+export type LoopIterationResult<S, T> = Promise<
+	LoopResult<S, T> | (S extends undefined ? undefined : never)
+>;
+
+/**
  * Configuration for a loop.
  */
 export interface LoopConfig<S, T> {
 	name: string;
 	state?: S;
-	run: (ctx: WorkflowContextInterface, state: S) => Promise<LoopResult<S, T>>;
+	run: (
+		ctx: WorkflowContextInterface,
+		state: S,
+	) => LoopIterationResult<S, T>;
 	commitInterval?: number;
 	/** Trim loop history every N iterations. Defaults to commitInterval or 20. */
 	historyEvery?: number;
@@ -397,7 +410,7 @@ export interface WorkflowContextInterface {
 		name: string,
 		run: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T>>,
+		) => LoopIterationResult<undefined, T>,
 	): Promise<T>;
 	loop<S, T>(config: LoopConfig<S, T>): Promise<T>;
 
