@@ -2,6 +2,7 @@ import pRetry from "p-retry";
 import type { ClientConfig } from "@/client/client";
 import type { MetadataResponse } from "@/common/router";
 import { stringifyError } from "@/common/utils";
+import { isLocalDev } from "@/utils/env-vars";
 import { getMetadata } from "./api-endpoints";
 import { getEndpoint } from "./api-utils";
 import { logger } from "./log";
@@ -21,6 +22,17 @@ export async function lookupMetadataCached(
 	}
 
 	// Create and store the promise immediately to prevent racing requests
+	const retryTimeouts = isLocalDev()
+		? {
+				minTimeout: 1_000,
+				maxTimeout: 1_000,
+				factor: 1,
+				randomize: false,
+		  }
+		: {
+				minTimeout: 500,
+				maxTimeout: 15_000,
+		  };
 	const metadataLookupPromise = pRetry(
 		async () => {
 			logger().debug({
@@ -40,8 +52,7 @@ export async function lookupMetadataCached(
 		},
 		{
 			forever: true,
-			minTimeout: 500,
-			maxTimeout: 15_000,
+			...retryTimeouts,
 			onFailedAttempt: (error) => {
 				// Skip logging warning on first attempt since this attempt
 				// fails if called immediately on startup. This is because the

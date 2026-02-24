@@ -67,3 +67,18 @@ export const getNodeEnv = (): string | undefined => getEnvUniversal("NODE_ENV");
 export const getNextPhase = (): string | undefined =>
 	getEnvUniversal("NEXT_PHASE");
 export const isDev = (): boolean => getNodeEnv() !== "production";
+export const isLocalDev = (): boolean => {
+	if (typeof window !== "undefined") {
+		const hostname = window?.location?.hostname;
+		if (hostname) {
+			return (
+				hostname === "localhost" ||
+				hostname === "127.0.0.1" ||
+				hostname === "::1" ||
+				hostname === "[::1]"
+			);
+		}
+	}
+
+	return isDev();
+};
