@@ -38,7 +38,7 @@ impl PutAndGetActor {
 }
 
 #[async_trait]
-impl TestActor for PutAndGetActor {
+impl Actor for PutAndGetActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "put and get actor starting");
 
@@ -116,7 +116,7 @@ impl GetNonexistentKeyActor {
 }
 
 #[async_trait]
-impl TestActor for GetNonexistentKeyActor {
+impl Actor for GetNonexistentKeyActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "get nonexistent key actor starting");
 
@@ -191,7 +191,7 @@ impl PutOverwriteActor {
 }
 
 #[async_trait]
-impl TestActor for PutOverwriteActor {
+impl Actor for PutOverwriteActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "put overwrite actor starting");
 
@@ -295,7 +295,7 @@ impl DeleteKeyActor {
 }
 
 #[async_trait]
-impl TestActor for DeleteKeyActor {
+impl Actor for DeleteKeyActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "delete key actor starting");
 
@@ -383,7 +383,7 @@ impl DeleteNonexistentKeyActor {
 }
 
 #[async_trait]
-impl TestActor for DeleteNonexistentKeyActor {
+impl Actor for DeleteNonexistentKeyActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "delete nonexistent key actor starting");
 
@@ -638,7 +638,7 @@ impl BatchPutActor {
 }
 
 #[async_trait]
-impl TestActor for BatchPutActor {
+impl Actor for BatchPutActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "batch put actor starting");
 
@@ -721,7 +721,7 @@ impl BatchGetActor {
 }
 
 #[async_trait]
-impl TestActor for BatchGetActor {
+impl Actor for BatchGetActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "batch get actor starting");
 
@@ -808,7 +808,7 @@ impl BatchDeleteActor {
 }
 
 #[async_trait]
-impl TestActor for BatchDeleteActor {
+impl Actor for BatchDeleteActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "batch delete actor starting");
 

@@ -211,6 +211,11 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - **Shared Libraries** (`shared/{language}/{package}/`) - Libraries shared between the engine and rivetkit (e.g., `shared/typescript/virtual-websocket/`)
 - **Service Infrastructure** - Distributed services communicate via NATS messaging with service discovery
 
+### Engine Runner Parity
+- Keep `engine/sdks/typescript/runner` and `engine/sdks/rust/engine-runner` at feature parity.
+- Any behavior, protocol handling, or test coverage added to one runner should be mirrored in the other runner in the same change whenever possible.
+- When parity cannot be completed in the same change, explicitly document the gap and add a follow-up task.
+
 ### Important Patterns
 
 **Error Handling**

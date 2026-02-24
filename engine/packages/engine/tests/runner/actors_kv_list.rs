@@ -39,7 +39,7 @@ impl ListAllEmptyActor {
 }
 
 #[async_trait]
-impl TestActor for ListAllEmptyActor {
+impl Actor for ListAllEmptyActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list all empty actor starting");
 
@@ -102,7 +102,7 @@ impl ListAllKeysActor {
 }
 
 #[async_trait]
-impl TestActor for ListAllKeysActor {
+impl Actor for ListAllKeysActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list all keys actor starting");
 
@@ -199,7 +199,7 @@ impl ListAllLimitActor {
 }
 
 #[async_trait]
-impl TestActor for ListAllLimitActor {
+impl Actor for ListAllLimitActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list all limit actor starting");
 
@@ -277,7 +277,7 @@ impl ListAllReverseActor {
 }
 
 #[async_trait]
-impl TestActor for ListAllReverseActor {
+impl Actor for ListAllReverseActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list all reverse actor starting");
 
@@ -368,7 +368,7 @@ impl ListRangeInclusiveActor {
 }
 
 #[async_trait]
-impl TestActor for ListRangeInclusiveActor {
+impl Actor for ListRangeInclusiveActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list range inclusive actor starting");
 
@@ -467,7 +467,7 @@ impl ListRangeExclusiveActor {
 }
 
 #[async_trait]
-impl TestActor for ListRangeExclusiveActor {
+impl Actor for ListRangeExclusiveActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list range exclusive actor starting");
 
@@ -566,7 +566,7 @@ impl ListPrefixActor {
 }
 
 #[async_trait]
-impl TestActor for ListPrefixActor {
+impl Actor for ListPrefixActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list prefix actor starting");
 
@@ -669,7 +669,7 @@ impl ListPrefixNoMatchActor {
 }
 
 #[async_trait]
-impl TestActor for ListPrefixNoMatchActor {
+impl Actor for ListPrefixNoMatchActor {
 	async fn on_start(&mut self, config: ActorConfig) -> Result<ActorStartResult> {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "list prefix no match actor starting");
 
