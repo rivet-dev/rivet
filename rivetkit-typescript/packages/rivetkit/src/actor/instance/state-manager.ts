@@ -464,7 +464,7 @@ export class StateManager<
 						this.#actor.rLog.info({
 							msg: "persisting connection",
 							connId,
-							gatewayId: idToStr(hibernatableDataRaw.requestId),
+							gatewayId: idToStr(hibernatableDataRaw.gatewayId),
 							requestId: idToStr(hibernatableDataRaw.requestId),
 							serverMessageIndex:
 								hibernatableDataRaw.serverMessageIndex,
