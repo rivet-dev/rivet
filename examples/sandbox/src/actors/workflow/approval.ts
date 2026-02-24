@@ -70,9 +70,7 @@ export const approval = actor({
 	},
 
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "approval-loop",
-			run: async (loopCtx) => {
+		await ctx.loop("approval-loop", async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
 				await loopCtx.step("init-request", async () => {
@@ -84,7 +82,7 @@ export const approval = actor({
 					c.broadcast("requestCreated", c.state);
 				});
 
-				const [decisionMessage] = await loopCtx.queue.next(
+				const [decisionMessage] = await loopCtx.queue.nextBatch(
 					"wait-decision",
 					{
 						names: [QUEUE_DECISION],
@@ -120,7 +118,6 @@ export const approval = actor({
 				});
 
 				return Loop.break(undefined);
-			},
-		});
+			});
 	}),
 });

@@ -62,9 +62,7 @@ export const payment = actor({
 	},
 
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "payment-loop",
-			run: async (loopCtx) => {
+		await ctx.loop("payment-loop", async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
 				await loopCtx.step("init-payment", async () => {
@@ -154,9 +152,7 @@ export const payment = actor({
 				});
 
 				// Step 3: Complete order
-				await loopCtx.step({
-					name: "complete-order",
-					run: async () => {
+				await loopCtx.step("complete-order", async () => {
 						c.state.status = "completing";
 						const step = c.state.steps.find((s) => s.name === "complete-order");
 						if (step) step.status = "completed";
@@ -170,11 +166,9 @@ export const payment = actor({
 						c.state.completedAt = Date.now();
 						ctx.log.info({ msg: "order completed", txId: c.state.id });
 						c.broadcast("transactionCompleted", c.state);
-					},
-				});
+					});
 
 				return Loop.break(undefined);
-			},
-		});
+			});
 	}),
 });

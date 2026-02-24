@@ -8,24 +8,24 @@ Workflows can pause until external events arrive. This enables human approvals, 
 - Messages are loaded at workflow start.
 - If a message arrives while the workflow is running, the workflow yields and picks it up on the next run.
 
-In live mode (`runWorkflow(..., { mode: "live" })`), incoming messages can also wake a workflow waiting on `ctx.queue.next()`.
+In live mode (`runWorkflow(..., { mode: "live" })`), incoming messages can also wake a workflow waiting on `ctx.queue.next()` / `ctx.queue.nextBatch()`.
 
 ## Waiting for Queue Messages
 
 ```ts
-const [approval] = await ctx.queue.next<string>("wait-approval", {
+const approval = await ctx.queue.next<string>("wait-approval", {
   names: ["approval-granted"],
 });
 ```
 
-Use `count` and `timeout` to wait for batches or apply deadlines:
+Use `nextBatch` with `count` / `timeout` to wait for batches or apply deadlines:
 
 ```ts
-const items = await ctx.queue.next("batch", {
+const items = await ctx.queue.nextBatch("batch", {
   names: ["item-added"],
   count: 10,
 });
-const result = await ctx.queue.next("approval", {
+const [result] = await ctx.queue.nextBatch("approval", {
   names: ["approval-granted"],
   timeout: 60000,
 });
@@ -36,18 +36,18 @@ const result = await ctx.queue.next("approval", {
 Use `timeout` to model approval windows:
 
 ```ts
-const [approval] = await ctx.queue.next("approval-window", {
+const [approval] = await ctx.queue.nextBatch("approval-window", {
   names: ["approval-granted"],
   timeout: 24 * 60 * 60 * 1000,
 });
 ```
 
-If the deadline passes, `ctx.queue.next(...)` returns `[]`.
+If the deadline passes, `ctx.queue.nextBatch(...)` returns `[]`.
 
 ## Human-in-the-Loop Example
 
 ```ts
-const [approval] = await ctx.queue.next("manual-approval", {
+const [approval] = await ctx.queue.nextBatch("manual-approval", {
   names: ["approval-granted"],
   timeout: 30 * 60 * 1000,
 });

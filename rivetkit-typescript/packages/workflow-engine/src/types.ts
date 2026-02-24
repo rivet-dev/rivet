@@ -212,8 +212,6 @@ export interface WorkflowQueueNextOptions {
 	 * If omitted, receives from all queue names.
 	 */
 	names?: readonly string[];
-	/** Maximum number of messages to receive. Defaults to 1. */
-	count?: number;
 	/**
 	 * Timeout in milliseconds.
 	 * Omit to wait indefinitely.
@@ -221,6 +219,16 @@ export interface WorkflowQueueNextOptions {
 	timeout?: number;
 	/** Whether returned messages must be manually completed. */
 	completable?: boolean;
+}
+
+/**
+ * Options for receiving a batch of queue messages in workflows.
+ */
+export interface WorkflowQueueNextBatchOptions
+	extends WorkflowQueueNextOptions
+{
+	/** Maximum number of messages to receive. Defaults to 1. */
+	count?: number;
 }
 
 /**
@@ -241,6 +249,10 @@ export interface WorkflowQueue {
 	next<TBody = unknown>(
 		name: string,
 		opts?: WorkflowQueueNextOptions,
+	): Promise<WorkflowQueueMessage<TBody>>;
+	nextBatch<TBody = unknown>(
+		name: string,
+		opts?: WorkflowQueueNextBatchOptions,
 	): Promise<Array<WorkflowQueueMessage<TBody>>>;
 	send(name: string, body: unknown): Promise<void>;
 }
@@ -359,11 +371,11 @@ export type LoopResult<S, T> =
 /**
  * Return type for a loop iteration callback.
  *
- * Stateless loops (state = undefined) may return undefined, which is treated as
+ * Stateless loops (state = undefined) may return void/undefined, which is treated as
  * `Loop.continue(undefined)`.
  */
 export type LoopIterationResult<S, T> = Promise<
-	LoopResult<S, T> | (S extends undefined ? undefined : never)
+	LoopResult<S, T> | (S extends undefined ? void : never)
 >;
 
 /**

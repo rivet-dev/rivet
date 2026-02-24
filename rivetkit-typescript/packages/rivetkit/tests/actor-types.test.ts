@@ -4,7 +4,14 @@ import type { ActorContext, ActorContextOf } from "@/actor/contexts";
 import type { ActorDefinition } from "@/actor/definition";
 import type { DatabaseProviderContext } from "@/db/config";
 import { db } from "@/db/mod";
-import { workflow } from "@/workflow/mod";
+import type { WorkflowContextOf as WorkflowContextOfFromRoot } from "@/mod";
+import {
+	type WorkflowBranchContextOf,
+	type WorkflowContextOf,
+	type WorkflowLoopContextOf,
+	type WorkflowStepContextOf,
+	workflow,
+} from "@/workflow/mod";
 
 describe("ActorDefinition", () => {
 	describe("schema config types", () => {
@@ -187,24 +194,24 @@ describe("ActorDefinition", () => {
 					pair: event<[number, string]>(),
 				},
 				run: workflow(async (ctx) => {
-					const [single] = await ctx.queue.next("wait-single", {
+					const single = await ctx.queue.next("wait-single", {
 						names: ["foo"] as const,
 					});
-					if (single && single.name === "foo") {
+					if (single.name === "foo") {
 						expectTypeOf(single.body).toEqualTypeOf<{
 							fooBody: string;
 						}>();
 					}
 
-					const [union] = await ctx.queue.next("wait-union", {
+					const union = await ctx.queue.next("wait-union", {
 						names: ["foo", "bar"],
 					});
-					if (union?.name === "foo") {
+					if (union.name === "foo") {
 						expectTypeOf(union.body).toEqualTypeOf<{
 							fooBody: string;
 						}>();
 					}
-					if (union?.name === "bar") {
+					if (union.name === "bar") {
 						expectTypeOf(union.body).toEqualTypeOf<{
 							barBody: number;
 						}>();
@@ -221,6 +228,41 @@ describe("ActorDefinition", () => {
 			});
 		});
 
+		it("mirrors queue name/completable typing for workflow queue.next and queue.nextBatch", () => {
+			actor({
+				state: {},
+				queues: {
+					foo: queue<{ fooBody: string }>(),
+					bar: queue<{ barBody: number }>(),
+					completable: queue<{ input: string }, { output: string }>(),
+				},
+				run: workflow(async (ctx) => {
+					const message = await ctx.queue.next("wait-completable", {
+						names: ["completable"] as const,
+						completable: true,
+					});
+					if (message.name === "completable") {
+						expectTypeOf(message.body).toEqualTypeOf<{ input: string }>();
+						type CompleteArgs = Parameters<typeof message.complete>;
+						expectTypeOf<CompleteArgs>().toEqualTypeOf<
+							[response: { output: string }]
+						>();
+					}
+
+					const batch = await ctx.queue.nextBatch("wait-batch", {
+						names: ["foo", "bar"] as const,
+						count: 2,
+					});
+					type BatchMessage = (typeof batch)[number];
+					type FooBody = Extract<BatchMessage, { name: "foo" }>["body"];
+					type BarBody = Extract<BatchMessage, { name: "bar" }>["body"];
+					expectTypeOf<FooBody>().toEqualTypeOf<{ fooBody: string }>();
+					expectTypeOf<BarBody>().toEqualTypeOf<{ barBody: number }>();
+				}),
+				actions: {},
+			});
+		});
+
 		it("does not require explicit queue.next body generic for single-queue actors", () => {
 			type Decision = { approved: boolean; approver: string };
 			actor({
@@ -229,15 +271,90 @@ describe("ActorDefinition", () => {
 					decision: queue<Decision>(),
 				},
 				run: workflow(async (ctx) => {
-					const [message] = await ctx.queue.next("wait-decision", {
+					const message = await ctx.queue.next("wait-decision", {
 						names: ["decision"],
 					});
-					if (message) {
-						expectTypeOf(message.body).toEqualTypeOf<Decision>();
-					}
+					expectTypeOf(message.body).toEqualTypeOf<Decision>();
 				}),
 				actions: {},
 			});
+		});
+
+		it("supports Workflow*ContextOf helpers for standalone workflow step functions", () => {
+			const workflowHelperActor = actor({
+				state: {
+					count: 0,
+				},
+				queues: {
+					work: queue<{ delta: number }>(),
+				},
+				run: workflow(async (ctx) => {
+					await ctx.step("root-helper", async () => {
+						applyRootHelper(ctx);
+					});
+
+					await ctx.loop("loop-helper", async (loopCtx) => {
+						const message = await loopCtx.queue.next("wait-work", {
+							names: ["work"] as const,
+						});
+						await loopCtx.step("apply-loop", async () => {
+							applyLoopHelper(loopCtx, message.body.delta);
+						});
+
+						await loopCtx.join("branch-helper", {
+							one: {
+								run: async (branchCtx) => {
+									await branchCtx.step("apply-branch", async () => {
+										applyBranchHelper(branchCtx);
+									});
+									return 1;
+								},
+							},
+						});
+
+						await loopCtx.step("apply-step", async () => {
+							applyStepHelper(loopCtx);
+						});
+					});
+				}),
+				actions: {},
+			});
+
+			function applyRootHelper(c: WorkflowContextOf<typeof workflowHelperActor>): void {
+				expectTypeOf(c.state.count).toEqualTypeOf<number>();
+			}
+
+			function applyLoopHelper(
+				c: WorkflowLoopContextOf<typeof workflowHelperActor>,
+				delta: number,
+			): void {
+				c.state.count += delta;
+			}
+
+			function applyBranchHelper(
+				c: WorkflowBranchContextOf<typeof workflowHelperActor>,
+			): void {
+				c.state.count += 1;
+			}
+
+			function applyStepHelper(
+				c: WorkflowStepContextOf<typeof workflowHelperActor>,
+			): void {
+				c.state.count += 1;
+			}
+
+			expectTypeOf<
+				WorkflowLoopContextOf<typeof workflowHelperActor>
+			>().toEqualTypeOf<WorkflowContextOf<typeof workflowHelperActor>>();
+			expectTypeOf<
+				WorkflowBranchContextOf<typeof workflowHelperActor>
+			>().toEqualTypeOf<WorkflowContextOf<typeof workflowHelperActor>>();
+			expectTypeOf<
+				WorkflowStepContextOf<typeof workflowHelperActor>
+			>().toEqualTypeOf<WorkflowContextOf<typeof workflowHelperActor>>();
+			expectTypeOf<
+				WorkflowContextOfFromRoot<typeof workflowHelperActor>
+			>().toEqualTypeOf<WorkflowContextOf<typeof workflowHelperActor>>();
 		});
 	});
 

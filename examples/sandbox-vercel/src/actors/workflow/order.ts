@@ -50,9 +50,7 @@ export const order = actor({
 	},
 
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "process-order",
-			run: async (loopCtx) => {
+		await ctx.loop("process-order", async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
 				await loopCtx.step("validate", async () => {
@@ -86,7 +84,6 @@ export const order = actor({
 				});
 
 				return Loop.break(undefined);
-			},
-		});
+			});
 	}),
 });

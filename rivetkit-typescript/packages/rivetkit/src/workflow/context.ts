@@ -1,6 +1,7 @@
 import type { RunContext } from "@/actor/contexts/run";
 import type { Client } from "@/client/client";
 import type { Registry } from "@/registry";
+import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "@/actor/database";
 import type {
 	QueueFilterName,
@@ -28,12 +29,21 @@ import { WORKFLOW_GUARD_KV_KEY } from "./constants";
 type WorkflowActorQueueNextOptions<
 	TName extends string,
 	TCompletable extends boolean,
-> = Omit<QueueNextOptions<TName, TCompletable>, "signal">;
+> = Omit<QueueNextOptions<TName, TCompletable>, "signal" | "count">;
 
 type WorkflowActorQueueNextOptionsFallback<TCompletable extends boolean> = Omit<
 	QueueNextOptions<string, TCompletable>,
-	"signal"
+	"signal" | "count"
 >;
+
+type WorkflowActorQueueNextBatchOptions<
+	TName extends string,
+	TCompletable extends boolean,
+> = Omit<QueueNextOptions<TName, TCompletable>, "signal">;
+
+type WorkflowActorQueueNextBatchOptionsFallback<
+	TCompletable extends boolean,
+> = Omit<QueueNextOptions<string, TCompletable>, "signal">;
 
 type ActorWorkflowLoopConfig<
 	S,
@@ -59,7 +69,7 @@ type ActorWorkflowLoopConfig<
 			TQueues
 		>,
 		state: S,
-	) => Promise<LoopResult<S, T>>;
+	) => Promise<LoopResult<S, T> | (S extends undefined ? void : never)>;
 };
 
 type ActorWorkflowBranchConfig<
@@ -146,10 +156,35 @@ export class ActorWorkflowContext<
 		>(
 			name: string,
 			opts?: WorkflowActorQueueNextOptions<TName, TCompletable>,
-		): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>>;
+		): Promise<QueueResultMessageForName<TQueues, TName, TCompletable>>;
 		function next<const TCompletable extends boolean = false>(
 			name: string,
 			opts?: WorkflowActorQueueNextOptionsFallback<TCompletable>,
+		): Promise<
+			QueueResultMessageForName<
+				TQueues,
+				QueueFilterName<TQueues>,
+				TCompletable
+			>
+		>;
+		async function next(
+			name: string,
+			opts?: WorkflowActorQueueNextOptions<string, boolean>,
+		): Promise<WorkflowQueueMessage<unknown>> {
+			const message = await self.#inner.queue.next(name, opts);
+			return self.#toActorQueueMessage(message);
+		}
+
+		function nextBatch<
+			const TName extends QueueFilterName<TQueues>,
+			const TCompletable extends boolean = false,
+		>(
+			name: string,
+			opts?: WorkflowActorQueueNextBatchOptions<TName, TCompletable>,
+		): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>>;
+		function nextBatch<const TCompletable extends boolean = false>(
+			name: string,
+			opts?: WorkflowActorQueueNextBatchOptionsFallback<TCompletable>,
 		): Promise<
 			Array<
 				QueueResultMessageForName<
@@ -159,11 +194,11 @@ export class ActorWorkflowContext<
 				>
 			>
 		>;
-		async function next(
+		async function nextBatch(
 			name: string,
-			opts?: WorkflowActorQueueNextOptions<string, boolean>,
+			opts?: WorkflowActorQueueNextBatchOptions<string, boolean>,
 		): Promise<Array<WorkflowQueueMessage<unknown>>> {
-			const messages = await self.#inner.queue.next(name, opts);
+			const messages = await self.#inner.queue.nextBatch(name, opts);
 			return messages.map((message) => self.#toActorQueueMessage(message));
 		}
 
@@ -181,6 +216,7 @@ export class ActorWorkflowContext<
 
 		return {
 			next,
+			nextBatch,
 			send,
 		};
 	}
@@ -218,13 +254,13 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, T>>,
+		) => Promise<LoopResult<undefined, T> | void>,
 	): Promise<T>;
 	async loop<T>(
 		name: string,
 		run: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T>>,
+		) => Promise<LoopResult<undefined, T> | void>,
 	): Promise<T>;
 	async loop<S, T>(
 		config: ActorWorkflowLoopConfig<
@@ -244,10 +280,10 @@ export class ActorWorkflowContext<
 	async loop(
 		nameOrConfig:
 			| string
-			| LoopConfig<unknown, unknown>
+			| LoopConfig<any, any>
 			| ActorWorkflowLoopConfig<
-					unknown,
-					unknown,
+					any,
+					any,
 					TState,
 					TConnParams,
 					TConnState,
@@ -268,8 +304,8 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, unknown>>,
-	): Promise<unknown> {
+		) => Promise<LoopResult<undefined, any> | void>,
+	): Promise<any> {
 		if (typeof nameOrConfig === "string") {
 			if (!run) {
 				throw new Error("Loop run function missing");
@@ -280,7 +316,7 @@ export class ActorWorkflowContext<
 				),
 			);
 		}
-		const wrapped: LoopConfig<unknown, unknown> = {
+		const wrapped: LoopConfig<any, any> = {
 			...nameOrConfig,
 			run: async (ctx, state) =>
 				nameOrConfig.run(this.#createChildContext(ctx), state),
@@ -530,3 +566,27 @@ export class ActorWorkflowContext<
 		return new ActorWorkflowContext(ctx, this.#runCtx);
 	}
 }
+
+export type WorkflowContextOf<AD extends AnyActorDefinition> =
+	AD extends ActorDefinition<
+		infer S,
+		infer CP,
+		infer CS,
+		infer V,
+		infer I,
+		infer DB extends AnyDatabaseProvider,
+		infer E extends EventSchemaConfig,
+		infer Q extends QueueSchemaConfig,
+		any
+	>
+		? ActorWorkflowContext<S, CP, CS, V, I, DB, E, Q>
+		: never;
+
+export type WorkflowLoopContextOf<AD extends AnyActorDefinition> =
+	WorkflowContextOf<AD>;
+
+export type WorkflowBranchContextOf<AD extends AnyActorDefinition> =
+	WorkflowContextOf<AD>;
+
+export type WorkflowStepContextOf<AD extends AnyActorDefinition> =
+	WorkflowContextOf<AD>;

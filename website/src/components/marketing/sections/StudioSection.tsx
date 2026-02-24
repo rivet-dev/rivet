@@ -97,18 +97,6 @@ export function StudioSection() {
               Powerful debugging and monitoring tools that work from local development to production.
             </p>
 
-            {/* Visit the Studio link */}
-            <div className='mt-3'>
-              <a
-                href='https://inspect.rivet.dev'
-                className='group/link inline-flex items-center gap-2 text-[#FF5C00] transition-colors hover:text-[#FF5C00]/80'
-                target='_blank'
-                rel='noopener noreferrer'
-              >
-                Visit The Inspector
-                <span className='transition-transform group-hover/link:translate-x-1'>→</span>
-              </a>
-            </div>
           </div>
 
           {/* Spacer with Watch Demo button */}

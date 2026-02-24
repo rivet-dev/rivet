@@ -23,33 +23,81 @@ Use this when you need a short multi-step sequence.
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, setup } from "rivetkit";
-import { workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const invoiceActor = actor({
   state: {
+    invoiceId: null as string | null,
     subtotal: 0,
     tax: 0,
     total: 0,
     status: "idle" as "idle" | "complete",
   },
   run: workflow(async (ctx) => {
-    const subtotal = await ctx.step("load-subtotal", async () => 100);
+    const subtotal = await ctx.step("load-subtotal", async () =>
+      loadSubtotal(),
+    );
 
-    const tax = await ctx.step("calculate-tax", async () => {
-      return Math.round(subtotal * 0.1);
-    });
+    const tax = await ctx.step("calculate-tax", async () =>
+      calculateTax(subtotal),
+    );
 
-    await ctx.step("save-invoice", async () => {
-      ctx.state.subtotal = subtotal;
-      ctx.state.tax = tax;
-      ctx.state.total = subtotal + tax;
-      ctx.state.status = "complete";
-    });
+    await ctx.step("save-invoice", async () =>
+      saveInvoice(ctx, subtotal, tax),
+    );
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function loadSubtotal(): Promise<number> {
+  const response = await fetch("https://api.example.com/carts/main");
+  if (!response.ok) {
+    throw new Error(`load subtotal failed: ${response.status}`);
+  }
+  const cart = (await response.json()) as { subtotal: number };
+  return cart.subtotal;
+}
+
+async function calculateTax(subtotal: number): Promise<number> {
+  const response = await fetch("https://api.example.com/tax/quote", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ subtotal }),
+  });
+  if (!response.ok) {
+    throw new Error(`tax quote failed: ${response.status}`);
+  }
+  const quote = (await response.json()) as { tax: number };
+  return quote.tax;
+}
+
+async function saveInvoice(
+  ctx: WorkflowContextOf<typeof invoiceActor>,
+  subtotal: number,
+  tax: number,
+): Promise<void> {
+  const total = subtotal + tax;
+  const response = await fetch("https://api.example.com/invoices", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ subtotal, tax, total }),
+  });
+  if (!response.ok) {
+    throw new Error(`save invoice failed: ${response.status}`);
+  }
+  const invoice = (await response.json()) as { id: string };
+  ctx.state.invoiceId = invoice.id;
+  ctx.state.subtotal = subtotal;
+  ctx.state.tax = tax;
+  ctx.state.total = total;
+  ctx.state.status = "complete";
+}
 
 export const registry = setup({ use: { invoiceActor } });
 ```
@@ -77,37 +125,54 @@ This is the recommended workflow shape for most actor workloads.
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const workflowCounter = actor({
   state: {
     value: 0,
     processed: 0,
+    lastOperationId: null as string | null,
   },
   queues: {
     counter: queue<{ delta: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "counter-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-counter-command");
+    await ctx.loop("counter-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-counter-command");
 
-        if (!message) return Loop.continue(undefined);
+        await loopCtx.step("apply-counter-command", async () =>
+          applyCounterCommand(loopCtx, message.body.delta),
+        );
 
-        await loopCtx.step("apply-counter-command", async () => {
-          loopCtx.state.value += message.body.delta;
-          loopCtx.state.processed += 1;
-        });
-
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function applyCounterCommand(
+  ctx: WorkflowLoopContextOf<typeof workflowCounter>,
+  delta: number,
+): Promise<void> {
+  const response = await fetch("https://api.example.com/counter/apply", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ delta }),
+  });
+  if (!response.ok) {
+    throw new Error(`counter apply failed: ${response.status}`);
+  }
+  const result = (await response.json()) as {
+    nextValue: number;
+    operationId: string;
+  };
+  ctx.state.value = result.nextValue;
+  ctx.state.lastOperationId = result.operationId;
+  ctx.state.processed += 1;
+}
 
 export const registry = setup({ use: { workflowCounter } });
 ```
@@ -134,7 +199,7 @@ Use this when the workflow should initialize resources, process queued commands,
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { Loop, type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type WorkMessage = { amount: number };
 type ControlMessage = { type: "stop"; reason: string };
@@ -145,33 +210,26 @@ export const setupRunTeardownActor = actor({
     total: 0,
     processed: 0,
     stopReason: null as string | null,
+    workerSessionId: null as string | null,
   },
   queues: {
     work: queue<WorkMessage>(),
     control: queue<ControlMessage>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("setup", async () => {
-      ctx.state.phase = "running";
-      ctx.state.stopReason = null;
-    });
+    await ctx.step("setup", async () => setupWorkerSession(ctx));
 
-    const stopReason = await ctx.loop({
-      name: "worker-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-command", {
+    const stopReason = await ctx.loop("worker-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-command", {
           names: ["work", "control"],
         });
 
-        if (!message) return Loop.continue(undefined);
-
         if (message.name === "work") {
           const work = message.body as WorkMessage;
-          await loopCtx.step("apply-work", async () => {
-            loopCtx.state.total += work.amount;
-            loopCtx.state.processed += 1;
-          });
-          return Loop.continue(undefined);
+          await loopCtx.step("apply-work", async () =>
+            applyWorkerMessage(loopCtx, work),
+          );
+          return;
         }
 
         const control = message.body as ControlMessage;
@@ -179,19 +237,70 @@ export const setupRunTeardownActor = actor({
           return Loop.break(control.reason);
         }
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
 
-    await ctx.step("teardown", async () => {
-      ctx.state.phase = "stopped";
-      ctx.state.stopReason = stopReason;
-    });
+    await ctx.step("teardown", async () =>
+      teardownWorkerSession(ctx, stopReason),
+    );
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function setupWorkerSession(
+  ctx: WorkflowContextOf<typeof setupRunTeardownActor>,
+): Promise<void> {
+  const response = await fetch("https://api.example.com/workers/session", {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`worker setup failed: ${response.status}`);
+  }
+  const session = (await response.json()) as { sessionId: string };
+  ctx.state.workerSessionId = session.sessionId;
+  ctx.state.phase = "running";
+  ctx.state.stopReason = null;
+}
+
+async function applyWorkerMessage(
+  ctx: WorkflowLoopContextOf<typeof setupRunTeardownActor>,
+  work: WorkMessage,
+): Promise<void> {
+  const response = await fetch("https://api.example.com/workers/process", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sessionId: ctx.state.workerSessionId,
+      amount: work.amount,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`worker process failed: ${response.status}`);
+  }
+  const result = (await response.json()) as { appliedAmount: number };
+  ctx.state.total += result.appliedAmount;
+  ctx.state.processed += 1;
+}
+
+async function teardownWorkerSession(
+  ctx: WorkflowContextOf<typeof setupRunTeardownActor>,
+  stopReason: string,
+): Promise<void> {
+  if (ctx.state.workerSessionId) {
+    const response = await fetch(
+      `https://api.example.com/workers/session/${ctx.state.workerSessionId}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      throw new Error(`worker teardown failed: ${response.status}`);
+    }
+  }
+  ctx.state.phase = "stopped";
+  ctx.state.stopReason = stopReason;
+}
 
 export const registry = setup({ use: { setupRunTeardownActor } });
 ```
@@ -227,7 +336,7 @@ Use this when the caller needs a response from queued processing.
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const requestResponseActor = actor({
   state: {
@@ -237,15 +346,12 @@ export const requestResponseActor = actor({
     requests: queue<{ value: number }, { doubled: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "request-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-request", {
-          names: ["requests"],
+    await ctx.loop("request-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-request", {
           completable: true,
         });
 
-        if (!message || !message.complete) return Loop.continue(undefined);
+        if (!message.complete) return;
 
         const doubled = await loopCtx.step("handle-request", async () => {
           loopCtx.state.handled += 1;
@@ -253,9 +359,7 @@ export const requestResponseActor = actor({
         });
 
         await message.complete({ doubled });
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
 });
 
@@ -289,7 +393,7 @@ Use queue messages as the trigger source, then sleep durably inside the workflow
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type Reminder = {
   text: string;
@@ -304,14 +408,8 @@ export const reminderActor = actor({
     reminders: queue<Reminder>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "reminder-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-reminder", {
-          names: ["reminders"],
-        });
-
-        if (!message) return Loop.continue(undefined);
+    await ctx.loop("reminder-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-reminder");
 
         const runAt = Math.max(Date.now(), message.body.at);
         await loopCtx.sleepUntil("wait-until-reminder", runAt);
@@ -320,9 +418,7 @@ export const reminderActor = actor({
           loopCtx.state.fired.push(message.body.text);
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
@@ -356,7 +452,7 @@ Use `join` when several independent tasks can run in parallel.
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const dashboardActor = actor({
   state: {
@@ -370,47 +466,43 @@ export const dashboardActor = actor({
     refresh: queue<Record<string, never>>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "dashboard-loop",
-      run: async (loopCtx) => {
-        await loopCtx.queue.next("wait-refresh", {
-          names: ["refresh"],
-        });
+    await ctx.loop("dashboard-loop", async (loopCtx) => {
+        await loopCtx.queue.next("wait-refresh");
 
         const summary = await loopCtx.join("fetch-summary", {
           users: {
             run: async (branchCtx) => {
-              return await branchCtx.step("fetch-users", async () => 42);
+              return await branchCtx.step("fetch-users", () => fetchCount("/users"));
             },
           },
           orders: {
             run: async (branchCtx) => {
-              return await branchCtx.step("fetch-orders", async () => 12);
+              return await branchCtx.step("fetch-orders", () => fetchCount("/orders"));
             },
           },
           revenue: {
             run: async (branchCtx) => {
-              return await branchCtx.step("fetch-revenue", async () => 9_900);
+              return await branchCtx.step("fetch-revenue", () => fetchCount("/revenue"));
             },
           },
         });
 
         await loopCtx.step("save-summary", async () => {
-          loopCtx.state.summary = {
-            users: summary.users,
-            orders: summary.orders,
-            revenue: summary.revenue,
-          };
+          loopCtx.state.summary = summary;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function fetchCount(path: string): Promise<number> {
+  const res = await fetch(`https://api.example.com${path}`);
+  if (!res.ok) throw new Error(`fetch ${path} failed: ${res.status}`);
+  return ((await res.json()) as { count: number }).count;
+}
 
 export const registry = setup({ use: { dashboardActor } });
 ```
@@ -434,48 +526,36 @@ Use `race` when you need first-winner behavior.
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
-export const raceActor = actor({
-  state: {
-    lastWinner: null as null | string,
-    lastValue: null as null | string,
-  },
+export const auctionActor = actor({
+  state: { result: null as "sold" | "expired" | null },
   queues: {
-    start: queue<Record<string, never>>(),
+    bids: queue<{ amount: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "race-loop",
-      run: async (loopCtx) => {
-        await loopCtx.queue.next("wait-start", {
-          names: ["start"],
-        });
+    await ctx.step("list-item", () => listItem("item-123"));
 
-        const { winner, value } = await loopCtx.race("work-vs-timeout", [
-          {
-            name: "work",
-            run: async (branchCtx) => {
-              await branchCtx.sleep("work-delay", 75);
-              return await branchCtx.step("finish-work", async () => "work-complete");
-            },
-          },
-          {
-            name: "timeout",
-            run: async (branchCtx) => {
-              await branchCtx.sleep("timeout-delay", 500);
-              return "timed-out";
-            },
-          },
-        ]);
-
-        await loopCtx.step("record-result", async () => {
-          loopCtx.state.lastWinner = winner;
-          loopCtx.state.lastValue = value;
-        });
-
-        return Loop.continue(undefined);
+    const { winner } = await ctx.race("bid-or-expire", [
+      {
+        name: "bid",
+        run: async (branchCtx) => {
+          const bid = await branchCtx.queue.next("wait-bid");
+          return bid.body.amount;
+        },
       },
+      {
+        name: "expire",
+        run: async (branchCtx) => {
+          await branchCtx.sleep("auction-timeout", 24 * 60 * 60 * 1000);
+          return 0;
+        },
+      },
+    ]);
+
+    await ctx.step("finalize", async () => {
+      await finalizeAuction("item-123", winner);
+      ctx.state.result = winner === "bid" ? "sold" : "expired";
     });
   }),
   actions: {
@@ -483,7 +563,23 @@ export const raceActor = actor({
   },
 });
 
-export const registry = setup({ use: { raceActor } });
+async function listItem(itemId: string): Promise<void> {
+  await fetch(`https://api.example.com/auctions/${itemId}`, {
+    method: "POST",
+  });
+}
+
+async function finalizeAuction(
+  itemId: string,
+  outcome: string,
+): Promise<void> {
+  await fetch(`https://api.example.com/auctions/${itemId}/finalize`, {
+    method: "POST",
+    body: JSON.stringify({ outcome }),
+  });
+}
+
+export const registry = setup({ use: { auctionActor } });
 ```
 
 ```ts client.ts
@@ -491,9 +587,9 @@ import { createClient } from "rivetkit/client";
 import type { registry } from "./actors";
 
 const client = createClient<typeof registry>();
-const handle = client.raceActor.getOrCreate(["main"]);
+const handle = client.auctionActor.getOrCreate(["item-123"]);
 
-await handle.send("start", {});
+await handle.send("bids", { amount: 100 });
 console.log(await handle.getState());
 ```
 </CodeGroup>
@@ -504,7 +600,7 @@ Use step timeouts and retries for slow or flaky dependencies.
 
 ```ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 async function chargeCard(orderId: string): Promise<string> {
   return `charge-${orderId}`;
@@ -518,14 +614,8 @@ export const timeoutActor = actor({
     charge: queue<{ orderId: string }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "charge-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-charge", {
-          names: ["charge"],
-        });
-
-        if (!message) return Loop.continue(undefined);
+    await ctx.loop("charge-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-charge");
 
         const chargeId = await loopCtx.step<string>({
           name: "charge-card",
@@ -540,9 +630,7 @@ export const timeoutActor = actor({
           loopCtx.state.lastChargeId = chargeId;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
 });
 
@@ -555,68 +643,76 @@ Use rollback checkpoints before steps that have compensating actions.
 
 ```ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
-
-async function reserveInventory(orderId: string): Promise<string> {
-  return `reservation-${orderId}`;
-}
-
-async function releaseInventory(_reservationId: string): Promise<void> {}
-
-async function chargeCard(orderId: string): Promise<string> {
-  return `charge-${orderId}`;
-}
-
-async function refundCharge(_chargeId: string): Promise<void> {}
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const checkoutActor = actor({
-  state: {
-    lastOrderId: null as string | null,
-    lastReservationId: null as string | null,
-    lastChargeId: null as string | null,
-  },
+  state: { status: "pending" as string },
   queues: {
-    checkout: queue<{ orderId: string }>(),
+    orders: queue<{ orderId: string }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "checkout-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-checkout", {
-          names: ["checkout"],
-        });
-
-        if (!message) return Loop.continue(undefined);
+    await ctx.loop("checkout-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-order");
 
         await loopCtx.rollbackCheckpoint("checkout-checkpoint");
 
-        const reservationId = await loopCtx.step<string>({
+        await loopCtx.step<string>({
           name: "reserve-inventory",
-          run: async () => await reserveInventory(message.body.orderId),
-          rollback: async (_rollbackCtx, output) => {
-            await releaseInventory(output as string);
+          run: () => reserveInventory(message.body.orderId),
+          rollback: async (_rollbackCtx, id) => {
+            await releaseInventory(id as string);
           },
         });
 
-        const chargeId = await loopCtx.step<string>({
+        await loopCtx.step<string>({
           name: "charge-card",
-          run: async () => await chargeCard(message.body.orderId),
-          rollback: async (_rollbackCtx, output) => {
-            await refundCharge(output as string);
+          run: () => chargeCard(message.body.orderId),
+          rollback: async (_rollbackCtx, chargeId) => {
+            await refundCharge(chargeId as string);
           },
         });
 
-        await loopCtx.step("mark-complete", async () => {
-          loopCtx.state.lastOrderId = message.body.orderId;
-          loopCtx.state.lastReservationId = reservationId;
-          loopCtx.state.lastChargeId = chargeId;
+        await loopCtx.step("confirm", async () => {
+          loopCtx.state.status = "confirmed";
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
+  actions: {
+    getState: (c) => c.state,
+  },
 });
+
+async function reserveInventory(orderId: string): Promise<string> {
+  const res = await fetch("https://api.example.com/inventory/reserve", {
+    method: "POST",
+    body: JSON.stringify({ orderId }),
+  });
+  return ((await res.json()) as { reservationId: string }).reservationId;
+}
+
+async function releaseInventory(reservationId: string): Promise<void> {
+  await fetch(`https://api.example.com/inventory/${reservationId}/release`, {
+    method: "POST",
+  });
+}
+
+async function chargeCard(orderId: string): Promise<string> {
+  const res = await fetch("https://api.stripe.com/v1/charges", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    body: JSON.stringify({ orderId }),
+  });
+  return ((await res.json()) as { id: string }).id;
+}
+
+async function refundCharge(chargeId: string): Promise<void> {
+  await fetch("https://api.stripe.com/v1/refunds", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    body: JSON.stringify({ charge: chargeId }),
+  });
+}
 
 export const registry = setup({ use: { checkoutActor } });
 ```
@@ -630,7 +726,7 @@ Store progress in `state` so replay and recovery always restore it. Broadcast st
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, event, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type Progress = {
   stage: "idle" | "running" | "completed";
@@ -654,42 +750,45 @@ export const progressActor = actor({
     jobs: queue<{ value: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "progress-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-job", {
-          names: ["jobs"],
-        });
+    await ctx.loop("progress-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-job");
 
-        if (!message) return Loop.continue(undefined);
+        await loopCtx.step("mark-running", async () =>
+          markProgressRunning(loopCtx),
+        );
 
-        await loopCtx.step("mark-running", async () => {
-          loopCtx.state.progress = {
-            stage: "running",
-            completed: loopCtx.state.progress.completed,
-            total: loopCtx.state.progress.total + 1,
-          };
-          loopCtx.broadcast("progressUpdated", loopCtx.state.progress);
-        });
+        await loopCtx.step("apply-job", async () =>
+          applyProgressJob(loopCtx, message.body.value),
+        );
 
-        await loopCtx.step("apply-job", async () => {
-          loopCtx.state.sum += message.body.value;
-          loopCtx.state.progress = {
-            stage: "completed",
-            completed: loopCtx.state.progress.completed + 1,
-            total: loopCtx.state.progress.total,
-          };
-          loopCtx.broadcast("progressUpdated", loopCtx.state.progress);
-        });
-
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+function markProgressRunning(ctx: WorkflowLoopContextOf<typeof progressActor>): void {
+  ctx.state.progress = {
+    stage: "running",
+    completed: ctx.state.progress.completed,
+    total: ctx.state.progress.total + 1,
+  };
+  ctx.broadcast("progressUpdated", ctx.state.progress);
+}
+
+function applyProgressJob(
+  ctx: WorkflowLoopContextOf<typeof progressActor>,
+  value: number,
+): void {
+  ctx.state.sum += value;
+  ctx.state.progress = {
+    stage: "completed",
+    completed: ctx.state.progress.completed + 1,
+    total: ctx.state.progress.total,
+  };
+  ctx.broadcast("progressUpdated", ctx.state.progress);
+}
 
 export const registry = setup({ use: { progressActor } });
 ```
@@ -720,7 +819,7 @@ Rivet scheduling triggers actions. For cron-like workflows, use a small schedule
 
 ```ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 function nextMinute(timestamp: number): number {
   const minuteMs = 60_000;
@@ -749,23 +848,15 @@ export const cronActor = actor({
     getState: (c) => c.state,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "cron-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-cron-tick", {
-          names: ["cron-tick"],
-        });
-
-        if (!message) return Loop.continue(undefined);
+    await ctx.loop("cron-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-cron-tick");
 
         await loopCtx.step("run-cron-job", async () => {
           loopCtx.state.runs += 1;
           loopCtx.state.lastRunAt = message.body.scheduledAt;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
 });
 
@@ -781,7 +872,7 @@ Use this when external systems enqueue work and the actor should process each it
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type Job = { id: string; amount: number };
 
@@ -791,14 +882,12 @@ export const queueWorkerActor = actor({
     totalAmount: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "worker-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-job", {
+    await ctx.loop("worker-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-job", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const job = message.body as Job;
 
         await loopCtx.step("process-job", async () => {
@@ -806,9 +895,7 @@ export const queueWorkerActor = actor({
           loopCtx.state.totalAmount += job.amount;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
@@ -824,7 +911,7 @@ Use this when you need one-time initialization before a long-lived loop, plus cl
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 function openResource(): string {
   return "connected";
@@ -854,16 +941,12 @@ export const setupRunTeardownActor = actor({
       ctx.state.initialized = true;
     });
 
-    await ctx.loop({
-      name: "main-loop",
-      run: async (loopCtx) => {
+    await ctx.loop("main-loop", async (loopCtx) => {
         await loopCtx.sleep("tick", 1_000);
         await loopCtx.step("tick-step", async () => {
           loopCtx.state.ticks += 1;
         });
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
@@ -878,50 +961,58 @@ export const registry = setup({ use: { setupRunTeardownActor } });
 Use this when an operation must pause for a user or system decision before continuing.
 
 ```ts
-import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
-
-type ApprovalMessage = {
-  requestId: string;
-  approved: boolean;
-};
+import { actor, queue, setup } from "rivetkit";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const approvalGateActor = actor({
-  state: {
-    pendingRequestId: null as string | null,
-    lastDecision: null as "approved" | "rejected" | null,
+  state: { status: "pending" as string },
+  queues: {
+    approval: queue<{ approved: boolean }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("request-approval", async () => {
-      ctx.state.pendingRequestId = "req-1";
-      ctx.state.lastDecision = null;
+    await ctx.step("validate-order", async () => {
+      await validateOrder("order-123");
+      ctx.state.status = "awaiting_approval";
     });
 
-    await ctx.loop({
-      name: "approval-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-approval", {
-          timeout: 30_000,
-        });
+    const decision = await ctx.queue.next("wait-approval");
 
-        if (!message) return Loop.continue(undefined);
-        const approval = message.body as ApprovalMessage;
-
-        await loopCtx.step("apply-decision", async () => {
-          loopCtx.state.pendingRequestId = approval.requestId;
-          loopCtx.state.lastDecision = approval.approved
-            ? "approved"
-            : "rejected";
-        });
-
-        return Loop.continue(undefined);
-      },
-    });
+    if (decision.body.approved) {
+      await ctx.step("fulfill-order", async () => {
+        await fulfillOrder("order-123");
+        ctx.state.status = "fulfilled";
+      });
+    } else {
+      await ctx.step("cancel-order", async () => {
+        await cancelOrder("order-123");
+        ctx.state.status = "cancelled";
+      });
+    }
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function validateOrder(orderId: string): Promise<void> {
+  const res = await fetch(
+    `https://api.example.com/orders/${orderId}/validate`,
+    { method: "POST" },
+  );
+  if (!res.ok) throw new Error("Order validation failed");
+}
+
+async function fulfillOrder(orderId: string): Promise<void> {
+  await fetch(`https://api.example.com/orders/${orderId}/fulfill`, {
+    method: "POST",
+  });
+}
+
+async function cancelOrder(orderId: string): Promise<void> {
+  await fetch(`https://api.example.com/orders/${orderId}/cancel`, {
+    method: "POST",
+  });
+}
 
 export const registry = setup({ use: { approvalGateActor } });
 ```
@@ -932,43 +1023,32 @@ Use this when independent work items can run in parallel and you need a single m
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
-
-async function loadUsers(): Promise<number> {
-  return 12;
-}
-
-async function loadOrders(): Promise<number> {
-  return 34;
-}
-
-async function loadInvoices(): Promise<number> {
-  return 56;
-}
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const fanInOutActor = actor({
   state: {
     total: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "join-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-refresh", {
+    await ctx.loop("join-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-refresh", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
 
         const joined = await loopCtx.join("parallel-work", {
           users: {
-            run: async () => await loadUsers(),
+            run: async (branchCtx) =>
+              await branchCtx.step("fetch-users", () => fetchCount("/users")),
           },
           orders: {
-            run: async () => await loadOrders(),
+            run: async (branchCtx) =>
+              await branchCtx.step("fetch-orders", () => fetchCount("/orders")),
           },
           invoices: {
-            run: async () => await loadInvoices(),
+            run: async (branchCtx) =>
+              await branchCtx.step("fetch-invoices", () => fetchCount("/invoices")),
           },
         });
 
@@ -977,14 +1057,18 @@ export const fanInOutActor = actor({
             joined.users + joined.orders + joined.invoices;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function fetchCount(path: string): Promise<number> {
+  const res = await fetch(`https://api.example.com${path}`);
+  if (!res.ok) throw new Error(`fetch ${path} failed: ${res.status}`);
+  return ((await res.json()) as { count: number }).count;
+}
 
 export const registry = setup({ use: { fanInOutActor } });
 ```
@@ -995,7 +1079,7 @@ Use this when throughput matters and handling one message at a time is too expen
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type MetricMessage = { value: number };
 
@@ -1006,10 +1090,8 @@ export const batchDrainerActor = actor({
     lastBatchTotal: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "drain-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-metric", {
+    await ctx.loop("drain-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-metric", {
           timeout: 5_000,
         });
 
@@ -1020,23 +1102,26 @@ export const batchDrainerActor = actor({
           });
         }
 
-        if (loopCtx.state.pending.length < 5) return Loop.continue(undefined);
+        if (loopCtx.state.pending.length < 5) return;
 
-        await loopCtx.step("flush-batch", async () => {
-          const total = loopCtx.state.pending.reduce((sum, value) => sum + value, 0);
-          loopCtx.state.lastBatchTotal = total;
-          loopCtx.state.flushedBatches += 1;
-          loopCtx.state.pending = [];
-        });
+        await loopCtx.step("flush-batch", async () => flushBatch(loopCtx));
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+function flushBatch(ctx: WorkflowLoopContextOf<typeof batchDrainerActor>): void {
+  const total = ctx.state.pending.reduce(
+    (sum: number, value: number) => sum + value,
+    0,
+  );
+  ctx.state.lastBatchTotal = total;
+  ctx.state.flushedBatches += 1;
+  ctx.state.pending = [];
+}
 
 export const registry = setup({ use: { batchDrainerActor } });
 ```
@@ -1047,7 +1132,7 @@ Use this when one actor orchestrates work by calling actions on other actors.
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type TaskMessage = {
   taskId: string;
@@ -1067,35 +1152,38 @@ export const coordinatorActor = actor({
     lastResult: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "orchestrator-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-task", {
+    await ctx.loop("orchestrator-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-task", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const task = message.body as TaskMessage;
 
-        const result = await loopCtx.step("dispatch-rpc", async () => {
-          const client = loopCtx.client<typeof registry>();
-          const worker = client.workerActor.getOrCreate([task.workerId]);
-          return worker.runTask(task.value);
-        });
+        const result = await loopCtx.step("dispatch-rpc", async () =>
+          dispatchTask(loopCtx, task),
+        );
 
         await loopCtx.step("record-result", async () => {
           loopCtx.state.lastTaskId = task.taskId;
           loopCtx.state.lastResult = result as number;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function dispatchTask(
+  ctx: WorkflowLoopContextOf<typeof coordinatorActor>,
+  task: TaskMessage,
+): Promise<number> {
+  const client = ctx.client();
+  const worker = client.workerActor.getOrCreate([task.workerId]);
+  return await worker.runTask(task.value);
+}
 
 export const registry = setup({ use: { coordinatorActor, workerActor } });
 ```
@@ -1107,7 +1195,7 @@ Use this when you want decoupled actor-to-actor communication with durable waits
 <CodeGroup workspace>
 ```ts actors.ts
 import { actor, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type RequestMessage = { value: number };
 
@@ -1119,15 +1207,12 @@ export const requestResponseActor = actor({
     requests: queue<RequestMessage, { doubled: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "request-response-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-request", {
-          names: ["requests"],
+    await ctx.loop("request-response-loop", async (loopCtx) => {
+        const message = await loopCtx.queue.next("wait-request", {
           completable: true,
         });
 
-        if (!message || !message.complete) return Loop.continue(undefined);
+        if (!message.complete) return;
 
         const doubled = await loopCtx.step("handle-request", async () => {
           loopCtx.state.handled += 1;
@@ -1135,9 +1220,7 @@ export const requestResponseActor = actor({
         });
 
         await message.complete({ doubled });
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
 });
 
@@ -1166,7 +1249,7 @@ Use this when multiple actors can process independent parts of a request in para
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type ScatterMessage = { input: number };
 
@@ -1181,40 +1264,32 @@ export const scatterGatherActor = actor({
     lastSum: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "scatter-gather-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-scatter", {
+    await ctx.loop("scatter-gather-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-scatter", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const scatter = message.body as ScatterMessage;
 
         const gathered = await loopCtx.join("gather", {
           shardA: {
             run: async (joinCtx) =>
-              await joinCtx.step("call-shard-a", async () => {
-                const client = joinCtx.client<typeof registry>();
-                const handle = client.shardActor.getOrCreate(["a"]);
-                return handle.compute(scatter.input);
-              }),
+              await joinCtx.step("call-shard-a", async () =>
+                callShard(joinCtx, "a", scatter.input),
+              ),
           },
           shardB: {
             run: async (joinCtx) =>
-              await joinCtx.step("call-shard-b", async () => {
-                const client = joinCtx.client<typeof registry>();
-                const handle = client.shardActor.getOrCreate(["b"]);
-                return handle.compute(scatter.input);
-              }),
+              await joinCtx.step("call-shard-b", async () =>
+                callShard(joinCtx, "b", scatter.input),
+              ),
           },
           shardC: {
             run: async (joinCtx) =>
-              await joinCtx.step("call-shard-c", async () => {
-                const client = joinCtx.client<typeof registry>();
-                const handle = client.shardActor.getOrCreate(["c"]);
-                return handle.compute(scatter.input);
-              }),
+              await joinCtx.step("call-shard-c", async () =>
+                callShard(joinCtx, "c", scatter.input),
+              ),
           },
         });
 
@@ -1222,14 +1297,22 @@ export const scatterGatherActor = actor({
           loopCtx.state.lastSum = gathered.shardA + gathered.shardB + gathered.shardC;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function callShard(
+  ctx: WorkflowLoopContextOf<typeof scatterGatherActor>,
+  shardId: "a" | "b" | "c",
+  input: number,
+): Promise<number> {
+  const client = ctx.client();
+  const handle = client.shardActor.getOrCreate([shardId]);
+  return await handle.compute(input);
+}
 
 export const registry = setup({ use: { scatterGatherActor, shardActor } });
 ```
@@ -1240,7 +1323,7 @@ Use this when a primary actor call might be slow or unavailable and you need a d
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const primaryServiceActor = actor({
   actions: {
@@ -1263,10 +1346,8 @@ export const timeoutFallbackActor = actor({
     lastValue: "",
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "timeout-loop",
-      run: async (loopCtx) => {
-        await loopCtx.queue.next("wait-request", {
+    await ctx.loop("timeout-loop", async (loopCtx) => {
+        await loopCtx.queue.nextBatch("wait-request", {
           timeout: 30_000,
         });
 
@@ -1274,11 +1355,9 @@ export const timeoutFallbackActor = actor({
           {
             name: "primary",
             run: async (raceCtx) =>
-              await raceCtx.step("call-primary", async () => {
-                const client = raceCtx.client<typeof registry>();
-                const primary = client.primaryServiceActor.getOrCreate(["main"]);
-                return primary.fetchValue();
-              }),
+              await raceCtx.step("call-primary", async () =>
+                callPrimaryValue(raceCtx),
+              ),
           },
           {
             name: "timeout",
@@ -1293,11 +1372,9 @@ export const timeoutFallbackActor = actor({
         let source: "primary" | "fallback" = "primary";
 
         if (winner.winner === "timeout") {
-          value = (await loopCtx.step("fallback-call", async () => {
-            const client = loopCtx.client<typeof registry>();
-            const fallback = client.fallbackServiceActor.getOrCreate(["main"]);
-            return fallback.fetchValue();
-          })) as string;
+          value = (await loopCtx.step("fallback-call", async () =>
+            callFallbackValue(loopCtx),
+          )) as string;
           source = "fallback";
         }
 
@@ -1306,14 +1383,28 @@ export const timeoutFallbackActor = actor({
           loopCtx.state.lastValue = value;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function callPrimaryValue(
+  ctx: WorkflowLoopContextOf<typeof timeoutFallbackActor>,
+): Promise<string> {
+  const client = ctx.client();
+  const primary = client.primaryServiceActor.getOrCreate(["main"]);
+  return await primary.fetchValue();
+}
+
+async function callFallbackValue(
+  ctx: WorkflowLoopContextOf<typeof timeoutFallbackActor>,
+): Promise<string> {
+  const client = ctx.client();
+  const fallback = client.fallbackServiceActor.getOrCreate(["main"]);
+  return await fallback.fetchValue();
+}
 
 export const registry = setup({
   use: { timeoutFallbackActor, primaryServiceActor, fallbackServiceActor },
@@ -1326,7 +1417,7 @@ Use this when a workflow spans multiple actors and each side effect may need com
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type CheckoutMessage = {
   orderId: string;
@@ -1352,60 +1443,82 @@ export const checkoutSagaActor = actor({
     completedOrders: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "checkout-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-order", {
+    await ctx.loop("checkout-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-order", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const checkout = message.body as CheckoutMessage;
 
         await loopCtx.rollbackCheckpoint("checkout-saga");
 
-        const reservationId = (await loopCtx.step({
+        await loopCtx.step({
           name: "reserve-inventory",
-          run: async () => {
-            const client = loopCtx.client<typeof registry>();
-            const inventory = client.inventoryActor.getOrCreate(["main"]);
-            return inventory.reserve(checkout.orderId);
-          },
+          run: async () => reserveInventoryForCheckout(loopCtx, checkout.orderId),
           rollback: async (_rollbackCtx, output) => {
-            const client = loopCtx.client<typeof registry>();
-            const inventory = client.inventoryActor.getOrCreate(["main"]);
-            await inventory.release(output as string);
+            await releaseInventoryForCheckout(loopCtx, output as string);
           },
-        })) as string;
-
-        const chargeId = (await loopCtx.step({
-          name: "charge-card",
-          run: async () => {
-            const client = loopCtx.client<typeof registry>();
-            const billing = client.billingActor.getOrCreate(["main"]);
-            return billing.charge(checkout.amount);
-          },
-          rollback: async (_rollbackCtx, output) => {
-            const client = loopCtx.client<typeof registry>();
-            const billing = client.billingActor.getOrCreate(["main"]);
-            await billing.refund(output as string);
-          },
-        })) as string;
-
-        await loopCtx.step("mark-complete", async () => {
-          loopCtx.state.completedOrders += 1;
-          void reservationId;
-          void chargeId;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+        await loopCtx.step({
+          name: "charge-card",
+          run: async () => chargeCheckout(loopCtx, checkout.amount),
+          rollback: async (_rollbackCtx, output) => {
+            await refundCheckout(loopCtx, output as string);
+          },
+        });
+
+        await loopCtx.step("mark-complete", async () => markOrderComplete(loopCtx));
+
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function reserveInventoryForCheckout(
+  ctx: WorkflowLoopContextOf<typeof checkoutSagaActor>,
+  orderId: string,
+): Promise<string> {
+  const client = ctx.client();
+  const inventory = client.inventoryActor.getOrCreate(["main"]);
+  return await inventory.reserve(orderId);
+}
+
+async function releaseInventoryForCheckout(
+  ctx: WorkflowLoopContextOf<typeof checkoutSagaActor>,
+  reservationId: string,
+): Promise<void> {
+  const client = ctx.client();
+  const inventory = client.inventoryActor.getOrCreate(["main"]);
+  await inventory.release(reservationId);
+}
+
+async function chargeCheckout(
+  ctx: WorkflowLoopContextOf<typeof checkoutSagaActor>,
+  amount: number,
+): Promise<string> {
+  const client = ctx.client();
+  const billing = client.billingActor.getOrCreate(["main"]);
+  return await billing.charge(amount);
+}
+
+async function refundCheckout(
+  ctx: WorkflowLoopContextOf<typeof checkoutSagaActor>,
+  chargeId: string,
+): Promise<void> {
+  const client = ctx.client();
+  const billing = client.billingActor.getOrCreate(["main"]);
+  await billing.refund(chargeId);
+}
+
+function markOrderComplete(
+  ctx: WorkflowLoopContextOf<typeof checkoutSagaActor>,
+): void {
+  ctx.state.completedOrders += 1;
+}
 
 export const registry = setup({
   use: { checkoutSagaActor, inventoryActor, billingActor },
@@ -1418,7 +1531,7 @@ Use this when workflow progress should be triggered by commands/events instead o
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type ControlSignal = { kind: "pause" | "resume" | "stop" };
 
@@ -1428,31 +1541,34 @@ export const controlLoopActor = actor({
     handledSignals: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "control-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-signal", {
+    await ctx.loop("control-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-signal", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const signal = message.body as ControlSignal;
 
-        await loopCtx.step("apply-signal", async () => {
-          loopCtx.state.handledSignals += 1;
-          if (signal.kind === "pause") loopCtx.state.mode = "paused";
-          if (signal.kind === "resume") loopCtx.state.mode = "running";
-          if (signal.kind === "stop") loopCtx.state.mode = "stopped";
-        });
+        await loopCtx.step("apply-signal", async () =>
+          applyControlSignal(loopCtx, signal.kind),
+        );
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+function applyControlSignal(
+  ctx: WorkflowLoopContextOf<typeof controlLoopActor>,
+  kind: ControlSignal["kind"],
+): void {
+  ctx.state.handledSignals += 1;
+  if (kind === "pause") ctx.state.mode = "paused";
+  if (kind === "resume") ctx.state.mode = "running";
+  if (kind === "stop") ctx.state.mode = "stopped";
+}
 
 export const registry = setup({ use: { controlLoopActor } });
 ```
@@ -1463,7 +1579,7 @@ Use this when an external dependency has variable availability and retries shoul
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 async function pollExternal(attempt: number): Promise<boolean> {
   return attempt % 3 === 0;
@@ -1476,9 +1592,7 @@ export const pollBackoffActor = actor({
     status: "unknown" as "unknown" | "healthy" | "retrying",
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "poll-loop",
-      run: async (loopCtx) => {
+    await ctx.loop("poll-loop", async (loopCtx) => {
         const success = await loopCtx.step("poll-target", async () => {
           loopCtx.state.attempts += 1;
           return pollExternal(loopCtx.state.attempts);
@@ -1490,7 +1604,7 @@ export const pollBackoffActor = actor({
             loopCtx.state.backoffMs = 100;
           });
           await loopCtx.sleep("healthy-interval", 1_000);
-          return Loop.continue(undefined);
+          return;
         }
 
         await loopCtx.step("grow-backoff", async () => {
@@ -1499,9 +1613,7 @@ export const pollBackoffActor = actor({
         });
 
         await loopCtx.sleep("retry-delay", loopCtx.state.backoffMs);
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
@@ -1517,7 +1629,7 @@ Use this when one workflow coordinates many child workers (actors or worker work
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type BatchMessage = { payload: number };
 
@@ -1532,44 +1644,34 @@ export const orchestratorActor = actor({
     lastTotal: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.step("start-children", async () => {
-      const client = ctx.client<typeof registry>();
-      await client.childWorkerActor.getOrCreate(["child-a"]).process(0);
-      await client.childWorkerActor.getOrCreate(["child-b"]).process(0);
-      await client.childWorkerActor.getOrCreate(["child-c"]).process(0);
-    });
+    await ctx.step("start-children", async () => startChildren(ctx));
 
-    await ctx.loop({
-      name: "orchestrate-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-batch", {
+    await ctx.loop("orchestrate-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-batch", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const batch = message.body as BatchMessage;
 
         const results = await loopCtx.join("collect-updates", {
           a: {
             run: async (joinCtx) =>
-              await joinCtx.step("run-child-a", async () => {
-                const client = joinCtx.client<typeof registry>();
-                return client.childWorkerActor.getOrCreate(["child-a"]).process(batch.payload);
-              }),
+              await joinCtx.step("run-child-a", async () =>
+                runChildWorker(joinCtx, "child-a", batch.payload),
+              ),
           },
           b: {
             run: async (joinCtx) =>
-              await joinCtx.step("run-child-b", async () => {
-                const client = joinCtx.client<typeof registry>();
-                return client.childWorkerActor.getOrCreate(["child-b"]).process(batch.payload);
-              }),
+              await joinCtx.step("run-child-b", async () =>
+                runChildWorker(joinCtx, "child-b", batch.payload),
+              ),
           },
           c: {
             run: async (joinCtx) =>
-              await joinCtx.step("run-child-c", async () => {
-                const client = joinCtx.client<typeof registry>();
-                return client.childWorkerActor.getOrCreate(["child-c"]).process(batch.payload);
-              }),
+              await joinCtx.step("run-child-c", async () =>
+                runChildWorker(joinCtx, "child-c", batch.payload),
+              ),
           },
         });
 
@@ -1577,14 +1679,30 @@ export const orchestratorActor = actor({
           loopCtx.state.lastTotal = results.a + results.b + results.c;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function startChildren(
+  ctx: WorkflowContextOf<typeof orchestratorActor>,
+): Promise<void> {
+  const client = ctx.client();
+  await client.childWorkerActor.getOrCreate(["child-a"]).process(0);
+  await client.childWorkerActor.getOrCreate(["child-b"]).process(0);
+  await client.childWorkerActor.getOrCreate(["child-c"]).process(0);
+}
+
+async function runChildWorker(
+  ctx: WorkflowBranchContextOf<typeof orchestratorActor>,
+  workerId: "child-a" | "child-b" | "child-c",
+  payload: number,
+): Promise<number> {
+  const client = ctx.client();
+  return await client.childWorkerActor.getOrCreate([workerId]).process(payload);
+}
 
 export const registry = setup({ use: { orchestratorActor, childWorkerActor } });
 ```
@@ -1595,7 +1713,7 @@ Use this when inbound work can spike and you need predictable per-iteration limi
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type WorkMessage = { id: string; value: number };
 
@@ -1629,41 +1747,44 @@ export const boundedDrainActor = actor({
     lastWindowTotal: 0,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "bounded-drain-loop",
-      run: async (loopCtx) => {
+    await ctx.loop("bounded-drain-loop", async (loopCtx) => {
         const window: WorkMessage[] = [];
 
         for (let i = 0; i < MAX_PER_ITERATION; i += 1) {
-          const [message] = await loopCtx.queue.next("wait-work", {
+          const [message] = await loopCtx.queue.nextBatch("wait-work", {
             timeout: i === 0 ? 30_000 : 10,
           });
           if (!message) break;
           window.push(message.body as WorkMessage);
         }
 
-        if (window.length === 0) return Loop.continue(undefined);
+        if (window.length === 0) return;
 
-        await loopCtx.step("process-window", async () => {
-          let windowTotal = 0;
-          await runWithLimit(CONCURRENCY_LIMIT, window, async (work) => {
-            const result = await processWork(work.value);
-            windowTotal += result;
-          });
+        await loopCtx.step("process-window", async () =>
+          processWindow(loopCtx, window),
+        );
 
-          loopCtx.state.processed += window.length;
-          loopCtx.state.lastWindowSize = window.length;
-          loopCtx.state.lastWindowTotal = windowTotal;
-        });
-
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function processWindow(
+  ctx: WorkflowLoopContextOf<typeof boundedDrainActor>,
+  window: WorkMessage[],
+): Promise<void> {
+  let windowTotal = 0;
+  await runWithLimit(CONCURRENCY_LIMIT, window, async (work) => {
+    const result = await processWork(work.value);
+    windowTotal += result;
+  });
+
+  ctx.state.processed += window.length;
+  ctx.state.lastWindowSize = window.length;
+  ctx.state.lastWindowTotal = windowTotal;
+}
 
 export const registry = setup({ use: { boundedDrainActor } });
 ```
@@ -1674,7 +1795,7 @@ Use this when workflow structure changes across deployments and old histories mu
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 export const versionedWorkflowActor = actor({
   state: {
@@ -1687,16 +1808,12 @@ export const versionedWorkflowActor = actor({
 
     await ctx.removed("validate-v1", "step");
 
-    await ctx.loop({
-      name: "main-loop-v2",
-      run: async (loopCtx) => {
+    await ctx.loop("main-loop-v2", async (loopCtx) => {
         await loopCtx.sleep("idle", 500);
         await loopCtx.step("heartbeat-v2", async () => {
           loopCtx.state.runs += 1;
         });
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
@@ -1712,7 +1829,7 @@ Use this when you need reliable replay and resume semantics across crashes and r
 
 ```ts
 import { actor, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowContextOf, type WorkflowLoopContextOf, type WorkflowBranchContextOf, workflow } from "rivetkit/workflow";
 
 type PaymentMessage = { id: string; amount: number };
 
@@ -1723,24 +1840,19 @@ export const checkpointFriendlyActor = actor({
     lastPaymentId: null as string | null,
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "payment-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-payment", {
+    await ctx.loop("payment-loop", async (loopCtx) => {
+        const [message] = await loopCtx.queue.nextBatch("wait-payment", {
           timeout: 30_000,
         });
 
-        if (!message) return Loop.continue(undefined);
+        if (!message) return;
         const payment = message.body as PaymentMessage;
 
         await loopCtx.rollbackCheckpoint("apply-payment-checkpoint");
 
-        const plan = (await loopCtx.step("build-plan", async () => {
-          return {
-            paymentId: payment.id,
-            amount: payment.amount,
-          };
-        })) as { paymentId: string; amount: number };
+        const plan = (await loopCtx.step("build-plan", async () =>
+          buildPaymentPlan(payment),
+        )) as { paymentId: string; amount: number };
 
         await loopCtx.step("apply-side-effects", async () => {
           loopCtx.state.appliedCount += 1;
@@ -1748,14 +1860,22 @@ export const checkpointFriendlyActor = actor({
           loopCtx.state.lastPaymentId = plan.paymentId;
         });
 
-        return Loop.continue(undefined);
-      },
-    });
+      });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+function buildPaymentPlan(payment: PaymentMessage): {
+  paymentId: string;
+  amount: number;
+} {
+  return {
+    paymentId: payment.id,
+    amount: payment.amount,
+  };
+}
 
 export const registry = setup({ use: { checkpointFriendlyActor } });
 ```

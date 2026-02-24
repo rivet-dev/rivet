@@ -82,10 +82,8 @@ console.log(metadata.tags, metadata.region);`,
 }`,
 	workflow: `const workflow = client.order.getOrCreate([orderId]);
 	await workflow.getOrder();`,
-	workflowQueueTimeout: `await ctx.loop({
-	name: "queue-timeout-loop",
-	run: async (loopCtx) => {
-		const [message] = await loopCtx.queue.next("wait-job-or-timeout", {
+	workflowQueueTimeout: `await ctx.loop("queue-timeout-loop", async (loopCtx) => {
+		const [message] = await loopCtx.queue.nextBatch("wait-job-or-timeout", {
 			names: ["workflow-timeout"],
 			timeout: 2_000,
 		});
@@ -101,8 +99,7 @@ console.log(metadata.tags, metadata.region);`,
 			/* process queue message */
 		});
 		return Loop.continue(undefined);
-	},
-});`,
+	});`,
 	rawHttp: `const response = await actor.fetch("/api/hello");
 const data = await response.json();`,
 	rawWebSocket: `const socket = actor.webSocket("/chat");

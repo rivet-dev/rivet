@@ -221,24 +221,24 @@ Wait for external events delivered via `handle.message()`.
 
 ```typescript
 // Wait for a single message
-const [data] = await ctx.queue.next<PaymentResult>("payment", {
+const data = await ctx.queue.next<PaymentResult>("payment", {
   names: ["payment-completed"],
 });
 
 // Wait for N messages
-const items = await ctx.queue.next<Item>("batch", {
+const items = await ctx.queue.nextBatch<Item>("batch", {
   names: ["item-added"],
   count: 10,
 });
 
 // Wait with timeout (returns [] on timeout)
-const result = await ctx.queue.next<Response>("api-response", {
+const [result] = await ctx.queue.nextBatch<Response>("api-response", {
   names: ["response-received"],
   timeout: 30000,
 });
 
 // Wait for up to N messages with timeout
-const timedBatch = await ctx.queue.next<Item>("batch-timeout", {
+const timedBatch = await ctx.queue.nextBatch<Item>("batch-timeout", {
   names: ["item-added"],
   count: 10,
   timeout: 60000,

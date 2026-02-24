@@ -43,7 +43,7 @@ const tableOfContents = headings
 
 const slugPath = entry.id.replace(/\/index$/, "");
 const canonicalUrl = `https://rivet.dev/cookbook/${slugPath}/`;
-const skillId = `rivetkit-${slugPath.replaceAll("/", "-")}`;
+const skillId = slugPath.replaceAll("/", "-");
 
 function resolveTemplates(names?: string[]): Array<Template & { githubUrl: string }> {
 	if (!names?.length) return [];

@@ -25,449 +25,580 @@ Wrap any multi-step process with `workflow()` and each step is checkpointed auto
 import { actor } from "rivetkit";
 import { workflow } from "rivetkit/workflow";
 
-const checkout = actor({
-  state: {
-    orderId: null as string | null,
-    charged: false,
-    shipped: false,
-  },
+const onboarding = actor({
   run: workflow(async (ctx) => {
-    await ctx.step("create-order", async () => {
-      ctx.state.orderId = crypto.randomUUID();
-    });
+    const customerId = await ctx.step("create-customer", () => createCustomer());
 
-    await ctx.step("charge-payment", async () => {
-      ctx.state.charged = true;
-    });
+    await ctx.step("send-welcome-email", () => sendWelcomeEmail(customerId));
 
-    await ctx.step("ship-order", async () => {
-      ctx.state.shipped = true;
-    });
+    await ctx.step("track-signup", () => trackSignup(customerId));
   }),
-  actions: {
-    getState: (c) => c.state,
-  },
 });
+
+async function createCustomer() {
+  const res = await fetch("https://api.stripe.com/v1/customers", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+  });
+  return ((await res.json()) as { id: string }).id;
+}
+
+async function sendWelcomeEmail(customerId: string) {
+  await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.SENDGRID_KEY}` },
+    body: JSON.stringify({ to: "user@example.com", customerId }),
+  });
+}
+
+async function trackSignup(customerId: string) {
+  await fetch("https://api.posthog.com/capture", {
+    method: "POST",
+    body: JSON.stringify({ distinct_id: customerId, event: "signup" }),
+  });
+}
 ```
 
 ```ts Human-in-the-Loop
-// Pause indefinitely for approval, then continue where you left off
-import { actor } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+// Pause indefinitely for human approval, then continue where you left off
+import { actor, queue } from "rivetkit";
+import { type WorkflowContextOf, workflow } from "rivetkit/workflow";
 
-type ApprovalMessage = { requestId: string; approved: boolean };
-
-const approvalGate = actor({
-  state: {
-    pendingRequestId: null as string | null,
-    decision: null as "approved" | "rejected" | null,
+const order = actor({
+  state: { status: "pending" as string },
+  queues: {
+    approval: queue<{ approved: boolean }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("request-approval", async () => {
-      ctx.state.pendingRequestId = "req-1";
-      ctx.state.decision = null;
-    });
+    await ctx.step("validate-order", async () => validateOrderStep(ctx, "order-123"));
 
-    // Pauses here until a message arrives. Could be minutes or days.
-    await ctx.loop({
-      name: "approval-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-approval");
+    // Pauses here until a human approves or rejects. Could be minutes or days.
+    const decision = await ctx.queue.next("wait-approval");
 
-        if (!message) return Loop.continue(undefined);
-        const approval = message.body as ApprovalMessage;
+    if (decision.body.approved) {
+      await ctx.step("fulfill-order", async () => fulfillOrderStep(ctx, "order-123"));
+    } else {
+      await ctx.step("cancel-order", async () => cancelOrderStep(ctx, "order-123"));
+    }
+  }),
+  actions: {
+    getState: (c) => c.state,
+  },
+});
 
-        await loopCtx.step("apply-decision", async () => {
-          loopCtx.state.decision = approval.approved ? "approved" : "rejected";
-        });
+async function validateOrderStep(ctx: WorkflowContextOf<typeof order>, orderId: string) {
+  await validateOrder(orderId);
+  ctx.state.status = "awaiting_approval";
+}
 
-        return Loop.break(undefined);
-      },
+async function fulfillOrderStep(ctx: WorkflowContextOf<typeof order>, orderId: string) {
+  await fulfillOrder(orderId);
+  ctx.state.status = "fulfilled";
+}
+
+async function cancelOrderStep(ctx: WorkflowContextOf<typeof order>, orderId: string) {
+  await cancelOrder(orderId);
+  ctx.state.status = "cancelled";
+}
+
+async function validateOrder(orderId: string) {
+  const res = await fetch(`https://api.example.com/orders/${orderId}/validate`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Order validation failed");
+}
+
+async function fulfillOrder(orderId: string) {
+  await fetch(`https://api.example.com/orders/${orderId}/fulfill`, {
+    method: "POST",
+  });
+}
+
+async function cancelOrder(orderId: string) {
+  await fetch(`https://api.example.com/orders/${orderId}/cancel`, {
+    method: "POST",
+  });
+}
+```
+
+```ts Request/Response
+// Respond to callers synchronously using completable queues
+import { actor, queue } from "rivetkit";
+import { type WorkflowLoopContextOf, workflow } from "rivetkit/workflow";
+
+const counter = actor({
+  state: { count: 0 },
+  queues: {
+    requests: queue<{ delta: number }, { count: number }>(),
+  },
+  run: workflow(async (ctx) => {
+    await ctx.loop("request-loop", async (loopCtx) => {
+      const message = await loopCtx.queue.next("wait-request", {
+        completable: true,
+      });
+
+      const newCount = await loopCtx.step("apply-delta", async () =>
+        applyDelta(loopCtx, message.body.delta),
+      );
+
+      // Respond to the caller with the new count
+      await message.complete({ count: newCount });
     });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function applyDelta(
+  loopCtx: WorkflowLoopContextOf<typeof counter>,
+  delta: number,
+): Promise<number> {
+  loopCtx.state.count += delta;
+  return loopCtx.state.count;
+}
 ```
 
 ```ts Loop
 // Use durable loops for long-lived workflows that process messages indefinitely
 import { actor, queue } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowLoopContextOf, workflow } from "rivetkit/workflow";
 
 const worker = actor({
-  state: {
-    processed: 0,
-    total: 0,
-  },
+  state: { processed: 0 },
   queues: {
-    orders: queue<{ amount: number }>(),
+    tasks: queue<{ url: string }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "order-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-order", {
-          names: ["orders"],
-        });
+    await ctx.loop("task-loop", async (loopCtx) => {
+      const message = await loopCtx.queue.next("wait-task");
 
-        if (!message) return Loop.continue(undefined);
-
-        await loopCtx.step("process-order", async () => {
-          loopCtx.state.total += message.body.amount;
-          loopCtx.state.processed += 1;
-        });
-
-        return Loop.continue(undefined);
-      },
+      await loopCtx.step("process-task", async () =>
+        processTaskStep(loopCtx, message.body.url),
+      );
     });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function processTaskStep(
+  loopCtx: WorkflowLoopContextOf<typeof worker>,
+  url: string,
+): Promise<void> {
+  await processTask(url);
+  loopCtx.state.processed += 1;
+}
+
+async function processTask(url: string) {
+  const res = await fetch(url, { method: "POST" });
+  if (!res.ok) throw new Error(`Task failed: ${res.status}`);
+}
 ```
 
 ```ts Sleep
 // Sleep for arbitrary durations without consuming compute
-import { actor, queue } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { actor } from "rivetkit";
+import { type WorkflowContextOf, workflow } from "rivetkit/workflow";
 
-type Reminder = { text: string; at: number };
-
-const reminderActor = actor({
-  state: { fired: [] as string[] },
-  queues: {
-    reminders: queue<Reminder>(),
-  },
+const emailDrip = actor({
+  state: { emailsSent: 0 },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "reminder-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-reminder", {
-          names: ["reminders"],
-        });
+    await ctx.step("send-welcome", async () => sendEmailStep(ctx, "welcome"));
 
-        if (!message) return Loop.continue(undefined);
+    // Sleep for 3 days without consuming compute
+    await ctx.sleep("wait-3-days", 3 * 24 * 60 * 60 * 1000);
 
-        // Sleep until the scheduled time, even if it's days away
-        await loopCtx.sleepUntil("wait-until-reminder", message.body.at);
+    await ctx.step("send-tips", async () => sendEmailStep(ctx, "tips"));
 
-        await loopCtx.step("fire-reminder", async () => {
-          loopCtx.state.fired.push(message.body.text);
-        });
+    // Sleep for 7 more days
+    await ctx.sleep("wait-7-days", 7 * 24 * 60 * 60 * 1000);
 
-        return Loop.continue(undefined);
-      },
-    });
+    await ctx.step("send-offer", async () => sendEmailStep(ctx, "offer"));
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function sendEmailStep(
+  ctx: WorkflowContextOf<typeof emailDrip>,
+  template: string,
+): Promise<void> {
+  await sendEmail(template, "user@example.com");
+  ctx.state.emailsSent += 1;
+}
+
+async function sendEmail(template: string, to: string) {
+  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.SENDGRID_KEY}` },
+    body: JSON.stringify({ to, template }),
+  });
+  if (!res.ok) throw new Error(`Email send failed: ${res.status}`);
+}
 ```
 
 ```ts Join
-// Run independent work branches in parallel and collect results
-import { actor, queue } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+// Run independent work in parallel and wait for all branches to complete
+import { actor } from "rivetkit";
+import { workflow } from "rivetkit/workflow";
 
-const dashboard = actor({
-  state: {
-    summary: null as null | { users: number; orders: number; revenue: number },
-  },
-  queues: {
-    refresh: queue<Record<string, never>>(),
-  },
+const migration = actor({
+  state: { completed: false },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "dashboard-loop",
-      run: async (loopCtx) => {
-        await loopCtx.queue.next("wait-refresh", { names: ["refresh"] });
-
-        const summary = await loopCtx.join("fetch-summary", {
-          users: {
-            run: async (branchCtx) => {
-              return await branchCtx.step("fetch-users", async () => 42);
-            },
-          },
-          orders: {
-            run: async (branchCtx) => {
-              return await branchCtx.step("fetch-orders", async () => 12);
-            },
-          },
-          revenue: {
-            run: async (branchCtx) => {
-              return await branchCtx.step("fetch-revenue", async () => 9_900);
-            },
-          },
-        });
-
-        await loopCtx.step("save-summary", async () => {
-          loopCtx.state.summary = summary;
-        });
-
-        return Loop.continue(undefined);
+    await ctx.join("update-all", {
+      users: {
+        run: async (branchCtx) => {
+          await branchCtx.step("update-users", () =>
+            migrateRecords("https://api.example.com/users/migrate"),
+          );
+        },
       },
+      orders: {
+        run: async (branchCtx) => {
+          await branchCtx.step("update-orders", () =>
+            migrateRecords("https://api.example.com/orders/migrate"),
+          );
+        },
+      },
+      products: {
+        run: async (branchCtx) => {
+          await branchCtx.step("update-products", () =>
+            migrateRecords("https://api.example.com/products/migrate"),
+          );
+        },
+      },
+    });
+
+    await ctx.step("mark-complete", async () => {
+      await fetch("https://api.example.com/migration/complete", { method: "POST" });
+      ctx.state.completed = true;
     });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function migrateRecords(url: string) {
+  const res = await fetch(url, { method: "POST" });
+  if (!res.ok) throw new Error(`Migration failed: ${res.status}`);
+}
 ```
 
 ```ts Race
-// Use race when you need timeout behavior or want the fastest result
+// Race a queue message against a timeout
 import { actor, queue } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { type WorkflowLoopContextOf, workflow } from "rivetkit/workflow";
 
-const raceActor = actor({
-  state: {
-    lastWinner: null as null | string,
-    lastValue: null as null | string,
-  },
+const auction = actor({
+  state: { result: null as "sold" | "expired" | null },
   queues: {
-    start: queue<Record<string, never>>(),
+    bids: queue<{ amount: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "race-loop",
-      run: async (loopCtx) => {
-        await loopCtx.queue.next("wait-start", { names: ["start"] });
+    await ctx.step("list-item", () => listItem("item-123"));
 
-        const { winner, value } = await loopCtx.race("work-vs-timeout", [
-          {
-            name: "work",
-            run: async (branchCtx) => {
-              await branchCtx.sleep("work-delay", 75);
-              return await branchCtx.step("finish-work", async () => "done");
-            },
-          },
-          {
-            name: "timeout",
-            run: async (branchCtx) => {
-              await branchCtx.sleep("timeout-delay", 5_000);
-              return "timed-out";
-            },
-          },
-        ]);
-
-        await loopCtx.step("record-result", async () => {
-          loopCtx.state.lastWinner = winner;
-          loopCtx.state.lastValue = value;
-        });
-
-        return Loop.continue(undefined);
+    // First bid wins, or the auction expires after 24 hours
+    const { winner } = await ctx.race("bid-or-expire", [
+      {
+        name: "bid",
+        run: async (branchCtx) => {
+          const bid = await branchCtx.queue.next("wait-bid");
+          return bid.body.amount;
+        },
       },
+      {
+        name: "expire",
+        run: async (branchCtx) => {
+          await branchCtx.sleep("auction-timeout", 24 * 60 * 60 * 1000);
+          return 0;
+        },
+      },
+    ]);
+
+    await ctx.step("finalize", async () => {
+      await finalizeAuction("item-123", winner);
+      ctx.state.result = winner === "bid" ? "sold" : "expired";
     });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function listItem(itemId: string) {
+  await fetch(`https://api.example.com/auctions/${itemId}`, { method: "POST" });
+}
+
+async function finalizeAuction(itemId: string, outcome: string) {
+  await fetch(`https://api.example.com/auctions/${itemId}/finalize`, {
+    method: "POST",
+    body: JSON.stringify({ outcome }),
+  });
+}
 ```
 
 ```ts Rollback
 // Compensating actions run automatically when a later step fails
 import { actor, queue } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { workflow } from "rivetkit/workflow";
 
-async function reserveInventory(orderId: string): Promise<string> {
-  return `reservation-${orderId}`;
-}
-async function releaseInventory(_id: string): Promise<void> {}
-async function chargeCard(orderId: string): Promise<string> {
-  return `charge-${orderId}`;
-}
-async function refundCharge(_id: string): Promise<void> {}
-
-const checkoutSaga = actor({
-  state: {
-    lastOrderId: null as string | null,
-  },
+const checkout = actor({
+  state: { status: "pending" as string },
   queues: {
-    checkout: queue<{ orderId: string }>(),
+    orders: queue<{ orderId: string }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "checkout-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-checkout", {
-          names: ["checkout"],
-        });
+    await ctx.loop("checkout-loop", async (loopCtx) => {
+      const message = await loopCtx.queue.next("wait-order");
 
-        if (!message) return Loop.continue(undefined);
+      await loopCtx.rollbackCheckpoint("checkout-checkpoint");
 
-        await loopCtx.rollbackCheckpoint("checkout-checkpoint");
+      await loopCtx.step<string>({
+        name: "reserve-inventory",
+        run: () => reserveInventory(message.body.orderId),
+        rollback: releaseInventoryRollback,
+      });
 
-        const reservationId = await loopCtx.step<string>({
-          name: "reserve-inventory",
-          run: async () => await reserveInventory(message.body.orderId),
-          rollback: async (_rollbackCtx, output) => {
-            await releaseInventory(output as string);
-          },
-        });
+      await loopCtx.step<string>({
+        name: "charge-card",
+        run: () => chargeCard(message.body.orderId),
+        rollback: refundChargeRollback,
+      });
 
-        const chargeId = await loopCtx.step<string>({
-          name: "charge-card",
-          run: async () => await chargeCard(message.body.orderId),
-          rollback: async (_rollbackCtx, output) => {
-            await refundCharge(output as string);
-          },
-        });
-
-        await loopCtx.step("mark-complete", async () => {
-          loopCtx.state.lastOrderId = message.body.orderId;
-          void reservationId;
-          void chargeId;
-        });
-
-        return Loop.continue(undefined);
-      },
+      await loopCtx.step("confirm", async () => {
+        loopCtx.state.status = "confirmed";
+      });
     });
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
+
+async function releaseInventoryRollback(
+  _ctx: WorkflowLoopContextOf<typeof checkout>,
+  reservationId: string,
+): Promise<void> {
+  await releaseInventory(reservationId);
+}
+
+async function refundChargeRollback(
+  _ctx: WorkflowLoopContextOf<typeof checkout>,
+  chargeId: string,
+): Promise<void> {
+  await refundCharge(chargeId);
+}
+
+async function reserveInventory(orderId: string): Promise<string> {
+  const res = await fetch("https://api.example.com/inventory/reserve", {
+    method: "POST",
+    body: JSON.stringify({ orderId }),
+  });
+  return ((await res.json()) as { reservationId: string }).reservationId;
+}
+
+async function releaseInventory(reservationId: string) {
+  await fetch(`https://api.example.com/inventory/${reservationId}/release`, {
+    method: "POST",
+  });
+}
+
+async function chargeCard(orderId: string): Promise<string> {
+  const res = await fetch("https://api.stripe.com/v1/charges", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    body: JSON.stringify({ orderId }),
+  });
+  return ((await res.json()) as { id: string }).id;
+}
+
+async function refundCharge(chargeId: string) {
+  await fetch("https://api.stripe.com/v1/refunds", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    body: JSON.stringify({ charge: chargeId }),
+  });
+}
 ```
 </CodeGroup>
 
 ## Example: Durable Agents
 
-Combine workflows with the [AI SDK](https://ai-sdk.dev) to build AI agents that survive crashes and pick up exactly where they left off. Each tool call is checkpointed, and human-in-the-loop approval pauses the workflow until a response arrives.
+Combine workflows with the [AI SDK](https://ai-sdk.dev) to build AI agents that survive crashes and pick up exactly where they left off. Each tool call is checkpointed, chat history is stored in SQLite, and the agent loops indefinitely waiting for new prompts via a queue.
 
 ```ts
-import { actor } from "rivetkit";
-import { workflow } from "rivetkit/workflow";
+import { actor, queue } from "rivetkit";
+import { db } from "rivetkit/db";
+import { type WorkflowLoopContextOf, workflow } from "rivetkit/workflow";
 import { generateText, tool } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
 const agent = actor({
-  state: {
-    response: null as string | null,
+  db: db({
+    onMigrate: async (db) => {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL
+        )
+      `);
+    },
+  }),
+  queues: {
+    prompts: queue<{ content: string }>(),
   },
   run: workflow(async (ctx) => {
-    const result = await ctx.step("generate", async () => {
-      return await generateText({
-        model: anthropic("claude-sonnet-4-20250514"),
-        tools: {
-          getWeather: tool({
-            description: "Get the weather for a location",
-            parameters: z.object({ location: z.string() }),
-            execute: async ({ location }) => `72°F in ${location}`,
-          }),
-        },
-        maxSteps: 5,
-        prompt: "What's the weather in San Francisco?",
-      });
-    });
+    await ctx.loop("chat-loop", async (loopCtx) => {
+      // Wait for next user message
+      const message = await loopCtx.queue.next("wait-prompt");
 
-    await ctx.step("save", async () => {
-      ctx.state.response = result.text;
+      // Save user message to SQLite
+      await loopCtx.step("save-user-message", async () =>
+        saveUserMessage(loopCtx, message.body.content),
+      );
+
+      // Load full chat history
+      const history = await loopCtx.step("load-history", async () => loadHistory(loopCtx));
+
+      // Generate AI response with tool use
+      const result = await loopCtx.step("generate", async () => generateReply(history));
+
+      // Save assistant response to SQLite
+      await loopCtx.step("save-response", async () =>
+        saveAssistantResponse(loopCtx, result.text),
+      );
     });
   }),
-  actions: {
-    getState: (c) => c.state,
-  },
 });
+
+async function saveUserMessage(
+  loopCtx: WorkflowLoopContextOf<typeof agent>,
+  content: string,
+): Promise<void> {
+  await loopCtx.db.execute(
+    "INSERT INTO messages (role, content) VALUES (?, ?)",
+    "user",
+    content,
+  );
+}
+
+async function loadHistory(
+  loopCtx: WorkflowLoopContextOf<typeof agent>,
+): Promise<Array<{ role: string; content: string }>> {
+  return await loopCtx.db.execute<{ role: string; content: string }>(
+    "SELECT role, content FROM messages ORDER BY id",
+  );
+}
+
+async function generateReply(history: Array<{ role: string; content: string }>) {
+  return await generateText({
+    model: openai("gpt-5"),
+    messages: history.map((row) => ({
+      role: row.role as "user" | "assistant",
+      content: row.content,
+    })),
+    tools: {
+      getWeather: tool({
+        description: "Get the weather for a location",
+        parameters: z.object({ location: z.string() }),
+        execute: async ({ location }) => `72°F in ${location}`,
+      }),
+    },
+    maxSteps: 5,
+  });
+}
+
+async function saveAssistantResponse(
+  loopCtx: WorkflowLoopContextOf<typeof agent>,
+  content: string,
+): Promise<void> {
+  await loopCtx.db.execute(
+    "INSERT INTO messages (role, content) VALUES (?, ?)",
+    "assistant",
+    content,
+  );
+}
 ```
 
 ## React Integration
 
-Broadcast workflow progress to your frontend in realtime. Store progress in actor state, broadcast on every step, and render it with `useActor`.
+Stream workflow progress to your frontend in realtime. Broadcast events on every step and render them with `useActor`.
 
 <CodeGroup workspace>
 ```tsx App.tsx
+import { useState, useEffect } from "react";
 import { createRivetKit } from "@rivetkit/react";
 import type { registry } from "./actors";
 
 const { useActor } = createRivetKit<typeof registry>();
 
-function WorkflowProgress() {
+function OrderProgress() {
   const { connection, connStatus } = useActor({
-    name: "progressActor",
-    key: ["main"],
+    name: "orderProcessor",
+    key: ["order-123"],
   });
-  const [progress, setProgress] = useState({ stage: "idle", completed: 0, total: 0 });
+  const [status, setStatus] = useState("pending");
 
   useEffect(() => {
     if (!connection) return;
-    connection.on("progressUpdated", (p: typeof progress) => setProgress(p));
+    connection.on("statusUpdated", (s: string) => setStatus(s));
   }, [connection]);
 
   if (connStatus !== "connected") return <div>Connecting...</div>;
 
-  return (
-    <div>
-      <p>Stage: {progress.stage}</p>
-      <p>Progress: {progress.completed} / {progress.total}</p>
-    </div>
-  );
+  return <p>Order status: {status}</p>;
 }
 ```
 
 ```ts actors.ts
-import { actor, event, queue, setup } from "rivetkit";
-import { Loop, workflow } from "rivetkit/workflow";
+import { actor, event, setup } from "rivetkit";
+import { type WorkflowContextOf, workflow } from "rivetkit/workflow";
 
-type Progress = {
-  stage: "idle" | "running" | "completed";
-  completed: number;
-  total: number;
-};
-
-export const progressActor = actor({
-  state: {
-    progress: { stage: "idle", completed: 0, total: 0 } as Progress,
-  },
+export const orderProcessor = actor({
+  state: { status: "pending" as string },
   events: {
-    progressUpdated: event<Progress>(),
-  },
-  queues: {
-    jobs: queue<{ value: number }>(),
+    statusUpdated: event<string>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.loop({
-      name: "progress-loop",
-      run: async (loopCtx) => {
-        const [message] = await loopCtx.queue.next("wait-job", {
-          names: ["jobs"],
-        });
+    await ctx.step("validate", async () => validateAndBroadcast(ctx));
 
-        if (!message) return Loop.continue(undefined);
+    await ctx.step("charge-payment", async () => chargeAndBroadcast(ctx));
 
-        await loopCtx.step("mark-running", async () => {
-          loopCtx.state.progress = {
-            stage: "running",
-            completed: loopCtx.state.progress.completed,
-            total: loopCtx.state.progress.total + 1,
-          };
-          loopCtx.broadcast("progressUpdated", loopCtx.state.progress);
-        });
-
-        await loopCtx.step("complete-job", async () => {
-          loopCtx.state.progress = {
-            stage: "completed",
-            completed: loopCtx.state.progress.completed + 1,
-            total: loopCtx.state.progress.total,
-          };
-          loopCtx.broadcast("progressUpdated", loopCtx.state.progress);
-        });
-
-        return Loop.continue(undefined);
-      },
-    });
+    await ctx.step("fulfill", async () => fulfillAndBroadcast(ctx));
   }),
   actions: {
     getState: (c) => c.state,
   },
 });
 
-export const registry = setup({ use: { progressActor } });
+async function validateAndBroadcast(ctx: WorkflowContextOf<typeof orderProcessor>): Promise<void> {
+  await fetch("https://api.example.com/orders/validate", { method: "POST" });
+  ctx.state.status = "validated";
+  ctx.broadcast("statusUpdated", ctx.state.status);
+}
+
+async function chargeAndBroadcast(ctx: WorkflowContextOf<typeof orderProcessor>): Promise<void> {
+  await fetch("https://api.stripe.com/v1/charges", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+  });
+  ctx.state.status = "charged";
+  ctx.broadcast("statusUpdated", ctx.state.status);
+}
+
+async function fulfillAndBroadcast(ctx: WorkflowContextOf<typeof orderProcessor>): Promise<void> {
+  await fetch("https://api.example.com/orders/ship", { method: "POST" });
+  ctx.state.status = "fulfilled";
+  ctx.broadcast("statusUpdated", ctx.state.status);
+}
+
+export const registry = setup({ use: { orderProcessor } });
 ```
 </CodeGroup>
 

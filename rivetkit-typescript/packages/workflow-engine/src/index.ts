@@ -99,6 +99,7 @@ export type {
 	WorkflowHandle,
 	WorkflowQueue,
 	WorkflowQueueMessage,
+	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
 	WorkflowMessageDriver,
 	WorkflowResult,

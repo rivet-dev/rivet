@@ -410,30 +410,29 @@ export const workflowHistoryFull = actor({
 
 		await ctx.queue.next("listen-order-created", {
 			names: [QUEUE_ORDER_CREATED],
-			count: 1,
 		});
-		await ctx.queue.next("listen-order-updated-timeout", {
+		await ctx.queue.nextBatch("listen-order-updated-timeout", {
 			names: [QUEUE_ORDER_UPDATED],
 			timeout: 250,
 		});
-		await ctx.queue.next("listen-batch-two", {
+		await ctx.queue.nextBatch("listen-batch-two", {
 			names: [QUEUE_ORDER_ITEM],
 			count: 2,
 		});
-		await ctx.queue.next("listen-artifacts-timeout", {
+		await ctx.queue.nextBatch("listen-artifacts-timeout", {
 			names: [QUEUE_ORDER_ARTIFACT],
 			count: 3,
 			timeout: 300,
 		});
-		await ctx.queue.next("listen-optional", {
+		await ctx.queue.nextBatch("listen-optional", {
 			names: [QUEUE_ORDER_OPTIONAL],
 			timeout: 200,
 		});
-		await ctx.queue.next("listen-until", {
+		await ctx.queue.nextBatch("listen-until", {
 			names: [QUEUE_ORDER_READY],
 			timeout: 300,
 		});
-		await ctx.queue.next("listen-batch-until", {
+		await ctx.queue.nextBatch("listen-batch-until", {
 			names: [QUEUE_ORDER_READY],
 			count: 2,
 			timeout: 400,

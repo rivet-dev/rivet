@@ -114,9 +114,7 @@ export const dashboard = actor({
 	},
 
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "refresh-loop",
-			run: async (loopCtx) => {
+		await ctx.loop("refresh-loop", async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
 				await loopCtx.queue.next("wait-refresh", {
@@ -207,7 +205,6 @@ export const dashboard = actor({
 				ctx.log.info({ msg: "dashboard refresh complete" });
 
 				return Loop.continue(undefined);
-			},
-		});
+			});
 	}),
 });

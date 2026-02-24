@@ -73,23 +73,6 @@ export const ObservabilitySection = () => {
               Powerful debugging and monitoring tools that work seamlessly from local development to production
               at scale.
             </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className='mb-12'
-            >
-              <a
-                href='https://inspect.rivet.dev'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
-              >
-                Visit The Inspector
-              </a>
-            </motion.div>
-
             {/* Feature List */}
             <div className='grid gap-px sm:grid-cols-2'>
               {features.map((feat, idx) => (

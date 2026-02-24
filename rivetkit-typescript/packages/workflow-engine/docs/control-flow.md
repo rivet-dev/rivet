@@ -74,10 +74,10 @@ const { winner, value } = await ctx.race("timeout", [
 
 ## Messages in Control Flow
 
-`ctx.queue.next()` pauses the workflow until matching messages arrive. Queue wait names are part of history, so keep them stable and unique.
+`ctx.queue.next()` pauses for one required message. `ctx.queue.nextBatch()` supports optional / batch waits. Queue wait names are part of history, so keep them stable and unique.
 
 ```ts
-const [approval] = await ctx.queue.next<string>("approval", {
+const approval = await ctx.queue.next<string>("approval", {
   names: ["approval-granted"],
 });
 ```

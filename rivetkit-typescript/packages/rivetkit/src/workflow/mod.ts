@@ -12,7 +12,13 @@ import { ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
 export { Loop } from "@rivetkit/workflow-engine";
-export { ActorWorkflowContext } from "./context";
+export {
+	ActorWorkflowContext,
+	type WorkflowBranchContextOf,
+	type WorkflowContextOf,
+	type WorkflowLoopContextOf,
+	type WorkflowStepContextOf,
+} from "./context";
 
 export function workflow<
 	TState,

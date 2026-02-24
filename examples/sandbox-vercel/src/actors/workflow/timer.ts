@@ -38,9 +38,7 @@ export const timer = actor({
 	},
 
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "timer-loop",
-			run: async (loopCtx) => {
+		await ctx.loop("timer-loop", async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
 				// Get duration inside a step since state is only available in steps
@@ -63,8 +61,7 @@ export const timer = actor({
 				});
 
 				return Loop.break(undefined);
-			},
-		});
+			});
 	}),
 
 	options: {

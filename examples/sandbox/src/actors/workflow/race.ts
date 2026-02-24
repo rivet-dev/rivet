@@ -42,9 +42,7 @@ export const race = actor({
 	},
 
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "race-loop",
-			run: async (loopCtx) => {
+		await ctx.loop("race-loop", async (loopCtx) => {
 				const c = actorCtx<State>(loopCtx);
 
 				// Get durations inside a step since state is only available in steps
@@ -110,7 +108,6 @@ export const race = actor({
 				});
 
 				return Loop.break(undefined);
-			},
-		});
+			});
 	}),
 });

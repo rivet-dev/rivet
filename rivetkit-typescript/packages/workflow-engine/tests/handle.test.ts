@@ -18,12 +18,9 @@ for (const mode of modes) {
 
 		it("should send messages via handle", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [message] = await ctx.queue.next<string>("wait", {
+				const message = await ctx.queue.next<string>("wait", {
 					names: ["message-name"],
 				});
-				if (!message) {
-					throw new Error("Expected message");
-				}
 				return message.body;
 			};
 

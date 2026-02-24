@@ -35,12 +35,9 @@ for (const mode of modes) {
 
 		it("should wait for messages", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [message] = await ctx.queue.next<string>("wait-message", {
+				const message = await ctx.queue.next<string>("wait-message", {
 					names: ["my-message"],
 				});
-				if (!message) {
-					throw new Error("Expected message");
-				}
 				return message.body;
 			};
 
@@ -63,12 +60,9 @@ for (const mode of modes) {
 
 		it("should wait for any message in a name set", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [message] = await ctx.queue.next<string>("wait-many", {
+				const message = await ctx.queue.next<string>("wait-many", {
 					names: ["first", "second"],
 				});
-				if (!message) {
-					throw new Error("Expected message");
-				}
 				return { name: message.name, body: message.body };
 			};
 
@@ -110,12 +104,9 @@ for (const mode of modes) {
 			await queueMessage(driver, "my-message", "hello");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [message] = await ctx.queue.next<string>("wait-message", {
+				const message = await ctx.queue.next<string>("wait-message", {
 					names: ["my-message"],
 				});
-				if (!message) {
-					throw new Error("Expected message");
-				}
 				return message.body;
 			};
 
@@ -186,13 +177,10 @@ for (const mode of modes) {
 			driver.messageDriver = messageDriver;
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [message] = await ctx.queue.next<string>("wait-message", {
+				const message = await ctx.queue.next<string>("wait-message", {
 					names: ["my-message"],
 					completable: true,
 				});
-				if (!message) {
-					throw new Error("Expected message");
-				}
 				if (!message.complete) {
 					throw new Error("Expected completable message");
 				}
@@ -218,11 +206,11 @@ for (const mode of modes) {
 			await queueMessage(driver, "my-message", "two", "msg-2");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [first] = await ctx.queue.next<string>("wait-first", {
+				const first = await ctx.queue.next<string>("wait-first", {
 					names: ["my-message"],
 					completable: true,
 				});
-				if (!first || !first.complete) {
+				if (!first.complete) {
 					throw new Error("Expected first completable message");
 				}
 				const completeFirst = first.complete;
@@ -233,11 +221,11 @@ for (const mode of modes) {
 
 				await ctx.sleep("between", 120);
 
-				const [second] = await ctx.queue.next<string>("wait-second", {
+				const second = await ctx.queue.next<string>("wait-second", {
 					names: ["my-message"],
 					completable: true,
 				});
-				if (!second || !second.complete) {
+				if (!second.complete) {
 					throw new Error("Expected second completable message");
 				}
 				const completeSecond = second.complete;
@@ -280,11 +268,11 @@ for (const mode of modes) {
 			await queueMessage(driver, "my-message", "two", "msg-2");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const [first] = await ctx.queue.next<string>("wait-first", {
+				const first = await ctx.queue.next<string>("wait-first", {
 					names: ["my-message"],
 					completable: true,
 				});
-				if (!first || !first.complete) {
+				if (!first.complete) {
 					throw new Error("Expected first completable message");
 				}
 
@@ -333,7 +321,7 @@ for (const mode of modes) {
 			await queueMessage(driver, "batch", "b", "2");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const messages = await ctx.queue.next<string>("batch-wait", {
+				const messages = await ctx.queue.nextBatch<string>("batch-wait", {
 					names: ["batch"],
 					count: 2,
 				});
@@ -350,7 +338,7 @@ for (const mode of modes) {
 
 		it("should time out queue.next", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const messages = await ctx.queue.next<string>("timeout", {
+				const messages = await ctx.queue.nextBatch<string>("timeout", {
 					names: ["missing"],
 					timeout: 50,
 				});
@@ -392,7 +380,7 @@ for (const mode of modes) {
 			await queueMessage(driver, "deadline", "data");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const messages = await ctx.queue.next<string>("deadline", {
+				const messages = await ctx.queue.nextBatch<string>("deadline", {
 					names: ["deadline"],
 					timeout: 1000,
 				});
@@ -409,7 +397,7 @@ for (const mode of modes) {
 
 		it("should wait for queue.next timeout messages", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const messages = await ctx.queue.next<string>("batch", {
+				const messages = await ctx.queue.nextBatch<string>("batch", {
 					names: ["batch"],
 					count: 2,
 					timeout: 5000,
@@ -451,7 +439,7 @@ for (const mode of modes) {
 			await queueMessage(driver, "fifo", "third", "3");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const messages = await ctx.queue.next<string>("fifo", {
+				const messages = await ctx.queue.nextBatch<string>("fifo", {
 					names: ["fifo"],
 					count: 2,
 					timeout: 1000,
@@ -484,12 +472,9 @@ for (const mode of modes) {
 					return "ready";
 				});
 
-				const [message] = await ctx.queue.next<string>("wait", {
+				const message = await ctx.queue.next<string>("wait", {
 					names: ["mid"],
 				});
-				if (!message) {
-					throw new Error("Expected message");
-				}
 				return message.body;
 			};
 

@@ -2,7 +2,7 @@ import { Loop } from "@rivetkit/workflow-engine";
 import { actor, queue } from "@/actor/mod";
 import { db } from "@/db/mod";
 import { WORKFLOW_GUARD_KV_KEY } from "@/workflow/constants";
-import { workflow } from "@/workflow/mod";
+import { type WorkflowLoopContextOf, workflow } from "@/workflow/mod";
 import type { registry } from "./registry";
 
 const WORKFLOW_QUEUE_NAME = "workflow-default";
@@ -14,25 +14,20 @@ export const workflowCounterActor = actor({
 		history: [] as number[],
 	},
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "counter",
-			run: async (loopCtx) => {
-				const actorLoopCtx = loopCtx as any;
+		await ctx.loop("counter", async (loopCtx) => {
 				try {
 					// Accessing state outside a step should throw.
 					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					actorLoopCtx.state;
+					loopCtx.state;
 				} catch {}
 
 				await loopCtx.step("increment", async () => {
-					actorLoopCtx.state.runCount += 1;
-					actorLoopCtx.state.history.push(actorLoopCtx.state.runCount);
+					incrementWorkflowCounter(loopCtx);
 				});
 
 				await loopCtx.sleep("idle", 25);
 				return Loop.continue(undefined);
-			},
-		});
+			});
 	}),
 	actions: {
 		getState: async (c) => {
@@ -56,25 +51,20 @@ export const workflowQueueActor = actor({
 		[WORKFLOW_QUEUE_NAME]: queue<unknown, { echo: unknown }>(),
 	},
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "queue",
-			run: async (loopCtx) => {
-				const actorLoopCtx = loopCtx as any;
-				const [message] = await loopCtx.queue.next("queue-wait", {
+		await ctx.loop("queue", async (loopCtx) => {
+				const message = await loopCtx.queue.next("queue-wait", {
 					names: [WORKFLOW_QUEUE_NAME],
 					completable: true,
 				});
-				if (!message || !message.complete) {
+				if (!message.complete) {
 					return Loop.continue(undefined);
 				}
 				const complete = message.complete;
 				await loopCtx.step("store-message", async () => {
-					actorLoopCtx.state.received.push(message.body);
-					await complete({ echo: message.body });
+					await storeWorkflowQueueMessage(loopCtx, message.body, complete);
 				});
 				return Loop.continue(undefined);
-			},
-		});
+			});
 	}),
 	actions: {
 		getMessages: (c) => c.state.received,
@@ -108,49 +98,37 @@ export const workflowAccessActor = actor({
 		insideClientAvailable: false,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "access",
-			run: async (loopCtx) => {
-				const actorLoopCtx = loopCtx as any;
+		await ctx.loop("access", async (loopCtx) => {
 				let outsideDbError: string | null = null;
 				let outsideClientError: string | null = null;
 
 				try {
 					// Accessing db outside a step should throw.
 					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					actorLoopCtx.db;
+					loopCtx.db;
 				} catch (error) {
 					outsideDbError =
 						error instanceof Error ? error.message : String(error);
 				}
 
 				try {
-					actorLoopCtx.client();
+					loopCtx.client<typeof registry>();
 				} catch (error) {
 					outsideClientError =
 						error instanceof Error ? error.message : String(error);
 				}
 
 				await loopCtx.step("access-step", async () => {
-					await loopCtx.db.execute(
-						`INSERT INTO workflow_access_log (created_at) VALUES (${Date.now()})`,
+					await updateWorkflowAccessState(
+						loopCtx,
+						outsideDbError,
+						outsideClientError,
 					);
-					const counts = await loopCtx.db.execute<{ count: number }>(
-						`SELECT COUNT(*) as count FROM workflow_access_log`,
-					);
-					const client = loopCtx.client<typeof registry>();
-
-					loopCtx.state.outsideDbError = outsideDbError;
-					loopCtx.state.outsideClientError = outsideClientError;
-					loopCtx.state.insideDbCount = counts[0]?.count ?? 0;
-					loopCtx.state.insideClientAvailable =
-						typeof client.workflowQueueActor.getForId === "function";
 				});
 
 				await loopCtx.sleep("idle", 25);
 				return Loop.continue(undefined);
-			},
-		});
+			});
 	}),
 	actions: {
 		getState: (c) => c.state,
@@ -162,17 +140,13 @@ export const workflowSleepActor = actor({
 		ticks: 0,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "sleep",
-			run: async (loopCtx) => {
-				const actorLoopCtx = loopCtx as any;
+		await ctx.loop("sleep", async (loopCtx) => {
 				await loopCtx.step("tick", async () => {
-					actorLoopCtx.state.ticks += 1;
+					incrementWorkflowSleepTick(loopCtx);
 				});
 				await loopCtx.sleep("delay", 40);
 				return Loop.continue(undefined);
-			},
-		});
+			});
 	}),
 	actions: {
 		getState: (c) => c.state,
@@ -197,15 +171,12 @@ export const workflowStopTeardownActor = actor({
 		c.state.sleepAts.push(Date.now());
 	},
 	run: workflow(async (ctx) => {
-		await ctx.loop({
-			name: "wait-forever",
-			run: async (loopCtx) => {
+		await ctx.loop("wait-forever", async (loopCtx) => {
 				await loopCtx.queue.next("wait-for-never", {
 					names: ["never"],
 				});
 				return Loop.continue(undefined);
-			},
-		});
+			});
 	}),
 	actions: {
 		getTimeline: (c) => ({
@@ -218,5 +189,47 @@ export const workflowStopTeardownActor = actor({
 		runStopTimeout: 2_000,
 	},
 });
+
+function incrementWorkflowCounter(
+	ctx: WorkflowLoopContextOf<typeof workflowCounterActor>,
+): void {
+	ctx.state.runCount += 1;
+	ctx.state.history.push(ctx.state.runCount);
+}
+
+async function storeWorkflowQueueMessage(
+	ctx: WorkflowLoopContextOf<typeof workflowQueueActor>,
+	body: unknown,
+	complete: (response: { echo: unknown }) => Promise<void>,
+): Promise<void> {
+	ctx.state.received.push(body);
+	await complete({ echo: body });
+}
+
+async function updateWorkflowAccessState(
+	ctx: WorkflowLoopContextOf<typeof workflowAccessActor>,
+	outsideDbError: string | null,
+	outsideClientError: string | null,
+): Promise<void> {
+	await ctx.db.execute(
+		`INSERT INTO workflow_access_log (created_at) VALUES (${Date.now()})`,
+	);
+	const counts = await ctx.db.execute<{ count: number }>(
+		`SELECT COUNT(*) as count FROM workflow_access_log`,
+	);
+	const client = ctx.client<typeof registry>();
+
+	ctx.state.outsideDbError = outsideDbError;
+	ctx.state.outsideClientError = outsideClientError;
+	ctx.state.insideDbCount = counts[0]?.count ?? 0;
+	ctx.state.insideClientAvailable =
+		typeof client.workflowQueueActor.getForId === "function";
+}
+
+function incrementWorkflowSleepTick(
+	ctx: WorkflowLoopContextOf<typeof workflowSleepActor>,
+): void {
+	ctx.state.ticks += 1;
+}
 
 export { WORKFLOW_QUEUE_NAME };

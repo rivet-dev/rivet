@@ -40,6 +40,7 @@ import type {
 	EntryMetadata,
 	Location,
 	LoopConfig,
+	LoopIterationResult,
 	LoopResult,
 	Message,
 	RollbackContextInterface,
@@ -48,6 +49,7 @@ import type {
 	WorkflowContextInterface,
 	WorkflowQueue,
 	WorkflowQueueMessage,
+	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
 	WorkflowMessageDriver,
 } from "./types.js";
@@ -145,6 +147,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	get queue(): WorkflowQueue {
 		return {
 			next: async (name, opts) => await this.queueNext(name, opts),
+			nextBatch: async (name, opts) => await this.queueNextBatch(name, opts),
 			send: async (name, body) => await this.queueSend(name, body),
 		};
 	}
@@ -591,7 +594,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		nameOrConfig: string | LoopConfig<S, T>,
 		run?: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T> | undefined>,
+		) => LoopIterationResult<undefined, T>,
 	): Promise<T> {
 		this.assertNotInProgress();
 		this.checkEvicted();
@@ -984,21 +987,38 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private async queueNext<T>(
 		name: string,
 		opts?: WorkflowQueueNextOptions,
+	): Promise<WorkflowQueueMessage<T>> {
+		const messages = await this.queueNextBatch<T>(name, {
+			...(opts ?? {}),
+			count: 1,
+		});
+		const message = messages[0];
+		if (!message) {
+			throw new Error(
+				`queue.next("${name}") timed out before receiving a message. Use queue.nextBatch(...) for optional/time-limited reads.`,
+			);
+		}
+		return message;
+	}
+
+	private async queueNextBatch<T>(
+		name: string,
+		opts?: WorkflowQueueNextBatchOptions,
 	): Promise<Array<WorkflowQueueMessage<T>>> {
 		this.assertNotInProgress();
 		this.checkEvicted();
 
 		this.entryInProgress = true;
 		try {
-			return await this.executeQueueNext<T>(name, opts);
+			return await this.executeQueueNextBatch<T>(name, opts);
 		} finally {
 			this.entryInProgress = false;
 		}
 	}
 
-	private async executeQueueNext<T>(
+	private async executeQueueNextBatch<T>(
 		name: string,
-		opts?: WorkflowQueueNextOptions,
+		opts?: WorkflowQueueNextBatchOptions,
 	): Promise<Array<WorkflowQueueMessage<T>>> {
 		if (this.pendingCompletableMessageIds.size > 0) {
 			throw new Error(
