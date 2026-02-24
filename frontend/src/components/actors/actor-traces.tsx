@@ -9,7 +9,7 @@ import type {
 import { readRangeWireToOtlp } from "@rivetkit/traces/otlp";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { type ReactElement, useMemo, useState } from "react";
+import { type ReactElement, useMemo, useRef, useState } from "react";
 import type { DateRange } from "../datepicker";
 import { RangeDatePicker } from "../datepicker";
 import { cn } from "../lib/utils";
@@ -26,7 +26,7 @@ import { ActorObjectInspector } from "./console/actor-inspector";
 import type { ActorId } from "./queries";
 import { SpanSidebar } from "./traces/span-sidebar";
 import { TimelineView } from "./traces/traces-timeline";
-import type { SpanNode } from "./traces/types";
+import type { SpanNode, TraceItem } from "./traces/types";
 
 const PRESET_OPTIONS = [
 	{ label: "5 min", ms: 5 * 60 * 1000 },
@@ -256,21 +256,20 @@ export function ActorTraces({ actorId }: { actorId: ActorId }) {
 				</div>
 			) : (
 				<div className="flex min-h-0 flex-1">
-					<SpanSidebar spans={traceTree} />
+					<SpanSidebar
+						spans={traceTree}
+						selectedSpanId={null}
+						selectedEventIndex={null}
+						onSelectSpan={() => {}}
+						onSelectEvent={() => {}}
+					/>
 					<div className="flex-1 flex flex-col min-w-0">
 						<TimelineView
 							spans={traceTree}
 							selectedSpanId={null}
 							selectedEventIndex={null}
-							onSelectSpan={(spanId: string | null): void => {
-								throw new Error("Function not implemented.");
-							}}
-							onSelectEvent={(
-								spanId: string,
-								eventIndex: number,
-							): void => {
-								throw new Error("Function not implemented.");
-							}}
+							onSelectSpan={() => {}}
+							onSelectEvent={() => {}}
 						/>
 					</div>
 				</div>
@@ -483,6 +482,11 @@ function buildSpanTree(spans: OtlpSpan[]): SpanNode[] {
 	for (const span of spans) {
 		byId.set(span.spanId, {
 			span,
+			timeUnixNano: BigInt(span.startTimeUnixNano),
+			spanId: span.spanId,
+			endTimeUnixNano: span.endTimeUnixNano,
+			startTimeUnixNano: span.startTimeUnixNano,
+			name: span.name,
 			startNs: BigInt(span.startTimeUnixNano),
 			endNs: span.endTimeUnixNano ? BigInt(span.endTimeUnixNano) : null,
 			children: [],

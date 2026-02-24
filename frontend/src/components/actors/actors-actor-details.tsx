@@ -9,6 +9,8 @@ import {
 	TabsTrigger,
 } from "@/components";
 import { ActorConfigTab } from "./actor-config-tab";
+import { ActorDatabaseTab } from "./actor-db-tab";
+import { ActorQueueTab } from "./actor-queue-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorLogsTab } from "./actor-logs-tab";
@@ -23,6 +25,7 @@ import {
 } from "./guard-connectable-inspector";
 import type { ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
+import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
 
 interface ActorsActorDetailsProps {
 	tab?: string;

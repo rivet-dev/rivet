@@ -989,12 +989,11 @@ const createMessageHandler =
 			})
 			.with({ tag: "WorkflowHistoryResponse" }, (body) => {
 				const { rid } = body.val;
+				const transformed = body.val.history
+					? transformWorkflowHistoryFromInspector(body.val.history)
+					: null;
 				actionsManager.current.resolve(Number(rid), {
-					history: body.val.history
-						? transformWorkflowHistoryFromInspector(
-								body.val.history,
-							)
-						: null,
+					history: transformed?.history ?? null,
 					isEnabled: body.val.isWorkflowEnabled,
 				});
 			})
