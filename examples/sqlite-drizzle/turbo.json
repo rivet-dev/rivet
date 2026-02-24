@@ -3,7 +3,7 @@
 	"extends": ["//"],
 	"tasks": {
 		"build": {
-			"dependsOn": ["@rivetkit/db#build", "rivetkit#build"]
+			"dependsOn": ["rivetkit#build"]
 		}
 	}
 }

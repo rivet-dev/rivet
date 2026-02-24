@@ -1,6 +1,41 @@
 import { actor } from "rivetkit";
 import { db } from "rivetkit/db";
 
+function firstRowValue(row: Record<string, unknown> | undefined): unknown {
+	if (!row) {
+		return undefined;
+	}
+
+	const values = Object.values(row);
+	return values.length > 0 ? values[0] : undefined;
+}
+
+function toSafeInteger(value: unknown): number {
+	if (typeof value === "bigint") {
+		return Number(value);
+	}
+	if (typeof value === "number") {
+		return Number.isFinite(value) ? Math.trunc(value) : 0;
+	}
+	if (typeof value === "string") {
+		const parsed = Number.parseInt(value, 10);
+		return Number.isFinite(parsed) ? parsed : 0;
+	}
+	return 0;
+}
+
+function normalizeRowIds(rowIds: number[]): number[] {
+	const normalized = rowIds
+		.map((id) => Math.trunc(id))
+		.filter((id) => Number.isFinite(id) && id > 0);
+	return Array.from(new Set(normalized));
+}
+
+function makePayload(size: number): string {
+	const normalizedSize = Math.max(0, Math.trunc(size));
+	return "x".repeat(normalizedSize);
+}
+
 export const dbActorRaw = actor({
 	state: {
 		disconnectInsertEnabled: false,
@@ -136,6 +171,85 @@ export const dbActorRaw = actor({
 				`SELECT length(payload) as size FROM test_data WHERE id = ${id}`,
 			);
 			return results[0]?.size ?? 0;
+		},
+		insertPayloadRows: async (c, count: number, payloadSize: number) => {
+			const normalizedCount = Math.max(0, Math.trunc(count));
+			if (normalizedCount === 0) {
+				return { count: 0 };
+			}
+
+			const payload = makePayload(payloadSize);
+			const now = Date.now();
+			for (let i = 0; i < normalizedCount; i++) {
+				await c.db.execute(
+					`INSERT INTO test_data (value, payload, created_at) VALUES ('bulk-${i}', '${payload}', ${now})`,
+				);
+			}
+
+			return { count: normalizedCount };
+		},
+		roundRobinUpdateValues: async (
+			c,
+			rowIds: number[],
+			iterations: number,
+		) => {
+			const normalizedRowIds = normalizeRowIds(rowIds);
+			const normalizedIterations = Math.max(0, Math.trunc(iterations));
+			if (normalizedRowIds.length === 0 || normalizedIterations === 0) {
+				const emptyRows: Array<{ id: number; value: string }> = [];
+				return emptyRows;
+			}
+
+			for (let i = 0; i < normalizedIterations; i++) {
+				const rowId = normalizedRowIds[i % normalizedRowIds.length] ?? 0;
+				await c.db.execute(
+					`UPDATE test_data SET value = 'v-${i}' WHERE id = ${rowId}`,
+				);
+			}
+
+			return await c.db.execute<{ id: number; value: string }>(
+				`SELECT id, value FROM test_data WHERE id IN (${normalizedRowIds.join(",")}) ORDER BY id`,
+			);
+		},
+		getPageCount: async (c) => {
+			const rows = await c.db.execute<Record<string, unknown>>(
+				"PRAGMA page_count",
+			);
+			return toSafeInteger(firstRowValue(rows[0]));
+		},
+		vacuum: async (c) => {
+			await c.db.execute("VACUUM");
+		},
+		integrityCheck: async (c) => {
+			const rows = await c.db.execute<Record<string, unknown>>(
+				"PRAGMA integrity_check",
+			);
+			const value = firstRowValue(rows[0]);
+			return String(value ?? "");
+		},
+		runMixedWorkload: async (c, seedCount: number, churnCount: number) => {
+			const normalizedSeedCount = Math.max(1, Math.trunc(seedCount));
+			const normalizedChurnCount = Math.max(0, Math.trunc(churnCount));
+			const now = Date.now();
+
+			for (let i = 0; i < normalizedSeedCount; i++) {
+				const payload = makePayload(1024 + (i % 5) * 128);
+				await c.db.execute(
+					`INSERT OR REPLACE INTO test_data (id, value, payload, created_at) VALUES (${i + 1}, 'seed-${i}', '${payload}', ${now})`,
+				);
+			}
+
+			for (let i = 0; i < normalizedChurnCount; i++) {
+				const id = (i % normalizedSeedCount) + 1;
+				if (i % 9 === 0) {
+					await c.db.execute(`DELETE FROM test_data WHERE id = ${id}`);
+				} else {
+					const payload = makePayload(768 + (i % 7) * 96);
+					await c.db.execute(
+						`INSERT OR REPLACE INTO test_data (id, value, payload, created_at) VALUES (${id}, 'upd-${i}', '${payload}', ${now + i})`,
+					);
+				}
+			}
 		},
 		repeatUpdate: async (c, id: number, count: number) => {
 			let value = "";

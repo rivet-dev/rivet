@@ -10,6 +10,25 @@ const HIGH_VOLUME_COUNT = 1000;
 const SLEEP_WAIT_MS = 150;
 const LIFECYCLE_POLL_INTERVAL_MS = 25;
 const LIFECYCLE_POLL_ATTEMPTS = 40;
+const CHUNK_BOUNDARY_SIZES = [
+	CHUNK_SIZE - 1,
+	CHUNK_SIZE,
+	CHUNK_SIZE + 1,
+	2 * CHUNK_SIZE - 1,
+	2 * CHUNK_SIZE,
+	2 * CHUNK_SIZE + 1,
+	4 * CHUNK_SIZE - 1,
+	4 * CHUNK_SIZE,
+	4 * CHUNK_SIZE + 1,
+];
+const SHRINK_GROW_INITIAL_ROWS = 16;
+const SHRINK_GROW_REGROW_ROWS = 10;
+const SHRINK_GROW_INITIAL_PAYLOAD = 4096;
+const SHRINK_GROW_REGROW_PAYLOAD = 6144;
+const HOT_ROW_COUNT = 10;
+const HOT_ROW_UPDATES = 240;
+const INTEGRITY_SEED_COUNT = 64;
+const INTEGRITY_CHURN_COUNT = 120;
 
 function getDbActor(
 	client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
@@ -127,8 +146,7 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				]);
 
 				await actor.reset();
-				const sizes = [CHUNK_SIZE - 1, CHUNK_SIZE, CHUNK_SIZE + 1];
-				for (const size of sizes) {
+				for (const size of CHUNK_BOUNDARY_SIZES) {
 					const { id } = await actor.insertPayloadOfSize(size);
 					const storedSize = await actor.getPayloadSize(id);
 					expect(storedSize).toBe(size);
@@ -147,6 +165,37 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				expect(storedSize).toBe(LARGE_PAYLOAD_SIZE);
 			});
 
+			test("supports shrink and regrow workloads with vacuum", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = getDbActor(client, variant).getOrCreate([
+					`db-${variant}-shrink-regrow-${crypto.randomUUID()}`,
+				]);
+
+				await actor.reset();
+				await actor.vacuum();
+				const baselinePages = await actor.getPageCount();
+
+				await actor.insertPayloadRows(
+					SHRINK_GROW_INITIAL_ROWS,
+					SHRINK_GROW_INITIAL_PAYLOAD,
+				);
+				const grownPages = await actor.getPageCount();
+
+				await actor.reset();
+				await actor.vacuum();
+				const shrunkPages = await actor.getPageCount();
+
+				await actor.insertPayloadRows(
+					SHRINK_GROW_REGROW_ROWS,
+					SHRINK_GROW_REGROW_PAYLOAD,
+				);
+				const regrownPages = await actor.getPageCount();
+
+				expect(grownPages).toBeGreaterThanOrEqual(baselinePages);
+				expect(shrunkPages).toBeLessThanOrEqual(grownPages);
+				expect(regrownPages).toBeGreaterThan(shrunkPages);
+			});
+
 			test("handles repeated updates to the same row", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const actor = getDbActor(client, variant).getOrCreate([
@@ -159,6 +208,39 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 				expect(result.value).toBe("Updated 49");
 				const value = await actor.getValue(id);
 				expect(value).toBe("Updated 49");
+
+				const hotRowIds: number[] = [];
+				for (let i = 0; i < HOT_ROW_COUNT; i++) {
+					const row = await actor.insertValue(`init-${i}`);
+					hotRowIds.push(row.id);
+				}
+
+				const updatedRows = await actor.roundRobinUpdateValues(
+					hotRowIds,
+					HOT_ROW_UPDATES,
+				);
+				expect(updatedRows).toHaveLength(HOT_ROW_COUNT);
+				for (const row of updatedRows) {
+					expect(row.value).toMatch(/^v-\d+$/);
+				}
+			});
+
+			test("passes integrity checks after mixed workload and sleep", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = getDbActor(client, variant).getOrCreate([
+					`db-${variant}-integrity-${crypto.randomUUID()}`,
+				]);
+
+				await actor.reset();
+				await actor.runMixedWorkload(
+					INTEGRITY_SEED_COUNT,
+					INTEGRITY_CHURN_COUNT,
+				);
+				expect((await actor.integrityCheck()).toLowerCase()).toBe("ok");
+
+				await actor.triggerSleep();
+				await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
+				expect((await actor.integrityCheck()).toLowerCase()).toBe("ok");
 			});
 			});
 		}

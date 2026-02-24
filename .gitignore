@@ -69,3 +69,12 @@ website/.playwright-mcp/
 website/scripts/typecheck-staging/snippets/
 website/scripts/typecheck-staging/node_modules/
 .vercel
+
+# Examples
+# Most example `public/` directories are build artifacts.
+examples/*/public/
+# Keep the checked-in static assets for multiplayer game patterns.
+!examples/multiplayer-game-patterns/public/
+!examples/multiplayer-game-patterns/public/**
+!examples/multiplayer-game-patterns-vercel/public/
+!examples/multiplayer-game-patterns-vercel/public/**
