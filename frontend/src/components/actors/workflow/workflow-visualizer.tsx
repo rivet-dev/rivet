@@ -79,10 +79,14 @@ export function WorkflowVisualizer({
 						nodeTypes={workflowNodeTypes}
 						fitView
 						panOnScroll
-						panOnDrag={[1, 2]}
+						panOnDrag
 						edgesFocusable={false}
+						panActivationKeyCode={null}
 						onNodeClick={onNodeClick}
 						onPaneClick={onPaneClick}
+						nodesDraggable={false}
+						nodesConnectable={false}
+						edgesReconnectable={false}
 						proOptions={{ hideAttribution: true }}
 					>
 						<Background

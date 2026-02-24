@@ -1,17 +1,4 @@
 import type { Edge, Node } from "@xyflow/react";
-import {
-	LOOP_HEADER_HEIGHT,
-	LOOP_PADDING_BOTTOM,
-	LOOP_PADDING_X,
-	NODE_HEIGHT,
-	NODE_WIDTH,
-	TERMINATION_NODE_SIZE,
-	type BranchGroupNodeData,
-	type LoopGroupNodeData,
-	type TerminationNodeData,
-	type WorkflowNodeData,
-	formatDuration,
-} from "./xyflow-nodes";
 import type {
 	EntryKindType,
 	EntryStatus,
@@ -27,6 +14,19 @@ import type {
 	StepEntry,
 	WorkflowHistory,
 } from "./workflow-types";
+import {
+	type BranchGroupNodeData,
+	formatDuration,
+	LOOP_HEADER_HEIGHT,
+	LOOP_PADDING_BOTTOM,
+	LOOP_PADDING_X,
+	type LoopGroupNodeData,
+	NODE_HEIGHT,
+	NODE_WIDTH,
+	TERMINATION_NODE_SIZE,
+	type TerminationNodeData,
+	type WorkflowNodeData,
+} from "./xyflow-nodes";
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -40,7 +40,11 @@ type XYNode = Node<WorkflowNodeData, "workflow">;
 type XYLoopGroupNode = Node<LoopGroupNodeData, "loopGroup">;
 type XYBranchGroupNode = Node<BranchGroupNodeData, "branchGroup">;
 type XYTerminationNode = Node<TerminationNodeData, "termination">;
-type AnyXYNode = XYNode | XYLoopGroupNode | XYBranchGroupNode | XYTerminationNode;
+type AnyXYNode =
+	| XYNode
+	| XYLoopGroupNode
+	| XYBranchGroupNode
+	| XYTerminationNode;
 
 export interface LayoutResult {
 	nodes: AnyXYNode[];
@@ -100,10 +104,19 @@ function getEntrySummary(type: ExtendedEntryType, data: unknown): string {
 
 /** Extract common node properties from a HistoryItem. */
 function itemToNodeData(item: HistoryItem) {
-	const { startedAt, completedAt, kind, status: rawStatus, retryCount, error } = item.entry;
-	const duration = startedAt && completedAt ? completedAt - startedAt : undefined;
+	const {
+		startedAt,
+		completedAt,
+		kind,
+		status: rawStatus,
+		retryCount,
+		error,
+	} = item.entry;
+	const duration =
+		startedAt && completedAt ? completedAt - startedAt : undefined;
 	const status: EntryStatus =
-		rawStatus || (completedAt ? "completed" : startedAt ? "running" : "pending");
+		rawStatus ||
+		(completedAt ? "completed" : startedAt ? "running" : "completed");
 	return {
 		name: getDisplayName(item.key),
 		summary: getEntrySummary(kind.type, kind.data),
@@ -144,7 +157,10 @@ function makeNode(
 	id: string,
 	x: number,
 	y: number,
-	data: Omit<WorkflowNodeData, "label" | "summary" | "entryType" | "status"> & {
+	data: Omit<
+		WorkflowNodeData,
+		"label" | "summary" | "entryType" | "status"
+	> & {
 		label?: string;
 		summary?: string;
 		entryType: EntryKindType | "input" | "output";
@@ -222,7 +238,9 @@ export function workflowHistoryToXYFlow(
 	function connectTo(targetId: string, targetStartedAt?: number) {
 		if (prevNodeId) {
 			const gap =
-				prevCompletedAt && targetStartedAt && targetStartedAt > prevCompletedAt
+				prevCompletedAt &&
+					targetStartedAt &&
+					targetStartedAt > prevCompletedAt
 					? formatDuration(targetStartedAt - prevCompletedAt)
 					: undefined;
 			edges.push({
@@ -232,8 +250,14 @@ export function workflowHistoryToXYFlow(
 				...(gap && {
 					label: gap,
 					style: { stroke: "hsl(var(--muted-foreground))" },
-					labelStyle: { fill: "hsl(var(--muted-foreground))", fontSize: 10 },
-					labelBgStyle: { fill: "hsl(var(--background))", fillOpacity: 0.8 },
+					labelStyle: {
+						fill: "hsl(var(--muted-foreground))",
+						fontSize: 10,
+					},
+					labelBgStyle: {
+						fill: "hsl(var(--background))",
+						fillOpacity: 0.8,
+					},
 				}),
 			});
 		}
@@ -248,7 +272,11 @@ export function workflowHistoryToXYFlow(
 	}
 
 	/** Place a sequential node, connect it, and advance the cursor. */
-	function addSequentialNode(id: string, data: Parameters<typeof makeNode>[3], startedAt?: number) {
+	function addSequentialNode(
+		id: string,
+		data: Parameters<typeof makeNode>[3],
+		startedAt?: number,
+	) {
 		nodes.push(makeNode(id, 0, currentY, data));
 		connectTo(id, startedAt);
 		prevNodeId = id;
@@ -271,7 +299,11 @@ export function workflowHistoryToXYFlow(
 			nodes.push(makeChildNode(id, parentId, y, { ...d, label: d.name }));
 
 			if (lastId) {
-				edges.push({ id: `e-${lastId}-${id}`, source: lastId, target: id });
+				edges.push({
+					id: `e-${lastId}-${id}`,
+					source: lastId,
+					target: id,
+				});
 			}
 			lastId = id;
 			y += NODE_HEIGHT + NODE_GAP_Y;
@@ -301,7 +333,9 @@ export function workflowHistoryToXYFlow(
 
 		if (entryType === "loop") {
 			const loopId = `loop-${item.entry.id}`;
-			const children = collectLoopChildren(nestedByParent.get(item.key) ?? []);
+			const children = collectLoopChildren(
+				nestedByParent.get(item.key) ?? [],
+			);
 			const height = groupHeight(children.length);
 
 			nodes.push({
@@ -315,7 +349,11 @@ export function workflowHistoryToXYFlow(
 
 			connectTo(loopId, d.startedAt);
 
-			const { lastChildId } = addChildChain(children, loopId, LOOP_HEADER_HEIGHT);
+			const { lastChildId } = addChildChain(
+				children,
+				loopId,
+				LOOP_HEADER_HEIGHT,
+			);
 
 			currentY += height + NODE_GAP_Y;
 			prevNodeId = lastChildId ?? loopId;
@@ -333,7 +371,9 @@ export function workflowHistoryToXYFlow(
 			const TERMINATION_GAP = 24;
 
 			const branches = branchNames.map((name) => {
-				const branchItems = nested.filter((ni) => ni.key.includes(`/${name}/`));
+				const branchItems = nested.filter((ni) =>
+					ni.key.includes(`/${name}/`),
+				);
 				sortByLocation(branchItems);
 				const status = branchData.branches[name].status;
 				const isFailed = status === "failed" || status === "cancelled";
@@ -348,7 +388,8 @@ export function workflowHistoryToXYFlow(
 
 			const maxHeight = Math.max(...branches.map((b) => b.height));
 			const totalWidth =
-				branches.length * GROUP_WIDTH + (branches.length - 1) * BRANCH_GAP_X;
+				branches.length * GROUP_WIDTH +
+				(branches.length - 1) * BRANCH_GAP_X;
 			const startX = -totalWidth / 2 + GROUP_WIDTH / 2 - LOOP_PADDING_X;
 			const branchStartY = currentY;
 			const branchGroupIds: string[] = [];
@@ -395,13 +436,17 @@ export function workflowHistoryToXYFlow(
 				const branchX = startX + i * (GROUP_WIDTH + BRANCH_GAP_X);
 				const groupId = `branchgroup-${item.entry.id}-${branch.name}`;
 				const termId = `term-${item.entry.id}-${branch.name}`;
-				const termX = branchX + GROUP_WIDTH / 2 - TERMINATION_NODE_SIZE / 2;
+				const termX =
+					branchX + GROUP_WIDTH / 2 - TERMINATION_NODE_SIZE / 2;
 
 				nodes.push({
 					id: termId,
 					type: "termination",
 					position: { x: termX, y: termY },
-					measured: { width: TERMINATION_NODE_SIZE, height: TERMINATION_NODE_SIZE },
+					measured: {
+						width: TERMINATION_NODE_SIZE,
+						height: TERMINATION_NODE_SIZE,
+					},
 					data: {},
 				} as XYTerminationNode);
 
@@ -427,14 +472,16 @@ export function workflowHistoryToXYFlow(
 
 	if (history.output !== undefined && history.state === "completed") {
 		const id = "meta-output";
-		nodes.push(makeNode(id, 0, currentY, {
-			label: "Output",
-			summary: getEntrySummary("output", { value: history.output }),
-			entryType: "output",
-			status: "completed",
-			nodeKey: "output",
-			rawData: { value: history.output },
-		}));
+		nodes.push(
+			makeNode(id, 0, currentY, {
+				label: "Output",
+				summary: getEntrySummary("output", { value: history.output }),
+				entryType: "output",
+				status: "completed",
+				nodeKey: "output",
+				rawData: { value: history.output },
+			}),
+		);
 		connectTo(id);
 	}
 
