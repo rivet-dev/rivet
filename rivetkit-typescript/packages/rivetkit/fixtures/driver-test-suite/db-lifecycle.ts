@@ -25,6 +25,14 @@ function getCounts(actorId: string): LifecycleCounts {
 	};
 }
 
+function getTotalCleanupCount(): number {
+	let total = 0;
+	for (const count of cleanupCounts.values()) {
+		total += count;
+	}
+	return total;
+}
+
 const baseProvider = db({
 	onMigrate: async (dbHandle) => {
 		await dbHandle.execute(`
@@ -124,6 +132,9 @@ export const dbLifecycleObserver = actor({
 	actions: {
 		getCounts: (_c, actorId: string) => {
 			return getCounts(actorId);
+		},
+		getTotalCleanupCount: () => {
+			return getTotalCleanupCount();
 		},
 	},
 });

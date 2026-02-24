@@ -275,6 +275,7 @@ export const dbActorDrizzle = actor({
 		},
 	},
 	options: {
+		actionTimeout: 120_000,
 		sleepTimeout: 100,
 	},
 });

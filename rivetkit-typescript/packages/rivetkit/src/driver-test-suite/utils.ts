@@ -26,10 +26,6 @@ export async function setupDriverTest(
 	// Build drivers
 	const { endpoint, namespace, runnerName, cleanup } =
 		await driverTestConfig.start();
-	c.onTestFinished(() => {
-		logger().info("cleaning up test");
-		cleanup();
-	});
 
 	let client: Client<typeof registry>;
 	if (driverTestConfig.clientType === "http") {
@@ -56,10 +52,14 @@ export async function setupDriverTest(
 		assertUnreachable(driverTestConfig.clientType);
 	}
 
-	// Cleanup client
-	if (!driverTestConfig.HACK_skipCleanupNet) {
-		c.onTestFinished(async () => await client.dispose());
-	}
+	c.onTestFinished(async () => {
+		if (!driverTestConfig.HACK_skipCleanupNet) {
+			await client.dispose();
+		}
+
+		logger().info("cleaning up test");
+		await cleanup();
+	});
 
 	return {
 		client,

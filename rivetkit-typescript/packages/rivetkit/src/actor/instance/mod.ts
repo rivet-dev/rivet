@@ -486,7 +486,10 @@ export class ActorInstance<
 				this.#sleepTimeout = undefined;
 			}
 
-			// Abort listeners
+			// Abort listeners in the canonical stop path.
+			// This must run for all stop modes, including sleep and remote stop.
+			// Destroy may have already triggered an early abort, but repeating abort
+			// is intentional and safe.
 			try {
 				this.#abortController.abort();
 			} catch { }
@@ -573,6 +576,14 @@ export class ActorInstance<
 			return;
 		}
 		this.#destroyCalled = true;
+
+		// Abort immediately so in flight waits can exit before the driver stop
+		// handshake completes.
+		// The onStop path will call abort again as a safety net for all stop
+		// modes.
+		try {
+			this.#abortController.abort();
+		} catch {}
 
 		const destroy = this.driver.startDestroy.bind(
 			this.driver,
@@ -958,7 +969,7 @@ export class ActorInstance<
 	 * Errors are propagated to the caller.
 	 */
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
-		this.assertReady();
+		this.assertReady(true);
 
 		this.#activeKeepAwakeCount++;
 		this.resetSleepTimer();

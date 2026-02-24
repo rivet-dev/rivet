@@ -281,6 +281,7 @@ export const dbActorRaw = actor({
 		},
 	},
 	options: {
+		actionTimeout: 120_000,
 		sleepTimeout: 100,
 	},
 });

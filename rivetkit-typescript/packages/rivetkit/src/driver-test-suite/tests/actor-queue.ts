@@ -182,15 +182,16 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			}
 		});
 
-		test("wait send returns completion response", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate(["wait-complete"]);
+			test("wait send returns completion response", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const handle = client.queueActor.getOrCreate(["wait-complete"]);
+				const waitTimeout = driverTestConfig.useRealTimers ? 5_000 : 1_000;
 
-			const actionPromise = handle.receiveAndComplete("tasks");
-			const result = await handle.send("tasks", 
-				{ value: 123 },
-				{ wait: true, timeout: 1_000 },
-			);
+				const actionPromise = handle.receiveAndComplete("tasks");
+				const result = await handle.send("tasks", 
+					{ value: 123 },
+					{ wait: true, timeout: waitTimeout },
+				);
 
 			await actionPromise;
 			expect(result).toEqual({
