@@ -20,11 +20,10 @@ import {
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
 import { inspectorLogger } from "@/inspector/log";
-import { timingSafeEqual } from "@/utils/crypto";
-import { getNodeEnv } from "@/utils/env-vars";
-
 import type { RegistryConfig } from "@/registry/config";
 import { type GetUpgradeWebSocket, VERSION } from "@/utils";
+import { timingSafeEqual } from "@/utils/crypto";
+import { isDev } from "@/utils/env-vars";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
@@ -167,14 +166,16 @@ export function createActorRouter(
 	if (config.inspector.enabled) {
 		// Auth middleware for inspector routes
 		const inspectorAuth = async (c: any): Promise<Response | undefined> => {
-			if (getNodeEnv() === "development" && !config.inspector.token()) {
+			if (isDev() && !config.inspector.token()) {
 				inspectorLogger().warn({
 					msg: "RIVET_INSPECTOR_TOKEN is not set, skipping inspector auth in development mode",
 				});
 				return undefined;
 			}
 
-			const userToken = c.req.header("Authorization")?.replace("Bearer ", "");
+			const userToken = c.req
+				.header("Authorization")
+				?.replace("Bearer ", "");
 			if (!userToken) {
 				return c.text("Unauthorized", 401);
 			}
@@ -197,7 +198,9 @@ export function createActorRouter(
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
 			const isStateEnabled = actor.inspector.isStateEnabled();
-			const state = isStateEnabled ? actor.inspector.getStateJson() : undefined;
+			const state = isStateEnabled
+				? actor.inspector.getStateJson()
+				: undefined;
 			return c.json({ state, isStateEnabled });
 		});
 

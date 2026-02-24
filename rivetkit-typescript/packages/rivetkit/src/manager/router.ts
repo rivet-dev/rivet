@@ -40,7 +40,7 @@ import {
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
 import { timingSafeEqual } from "@/utils/crypto";
-import { getNodeEnv } from "@/utils/env-vars";
+import { isDev } from "@/utils/env-vars";
 import {
 	buildOpenApiRequestBody,
 	buildOpenApiResponses,
@@ -319,13 +319,13 @@ export function buildManagerRouter(
 			});
 
 			router.openapi(route, async (c) => {
-				if (getNodeEnv() === "development" && !config.token) {
+				if (isDev() && !config.token) {
 					logger().warn({
 						msg: "RIVET_TOKEN is not set, skipping KV store access checks in development mode. This endpoint will be disabled in production, unless you set the token.",
 					});
 				}
 
-				if (getNodeEnv() !== "development") {
+				if (!isDev()) {
 					if (!config.token) {
 						throw new RestrictedFeature("KV store access");
 					}
