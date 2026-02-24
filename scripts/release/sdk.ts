@@ -76,7 +76,17 @@ export async function publishSdk(opts: ReleaseOpts) {
 		await $({
 			stdio: "inherit",
 			cwd: opts.root,
-		})`pnpm build --force -F rivetkit -F @rivetkit/* ${excludeFilters}`;
+		})`pnpm build -F rivetkit -F @rivetkit/* ${excludeFilters}`;
+
+		// Pack the inspector UI tarball into rivetkit's dist.
+		// This is separate from `build` because build:pack-inspector depends on
+		// @rivetkit/engine-frontend#build:inspector which is in the exclusion
+		// list. Turbo resolves dependsOn transitively regardless of filters.
+		await $({
+			stdio: "inherit",
+			cwd: opts.root,
+		})`npx turbo build:pack-inspector -F rivetkit`;
+
 		console.log("✅ Rivetkit packages built");
 	} catch (err) {
 		console.error("❌ Failed to build rivetkit packages");

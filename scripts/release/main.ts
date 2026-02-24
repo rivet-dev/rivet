@@ -193,16 +193,22 @@ async function runBuildAndChecks(opts: ReleaseOpts, { ci }: BuildAndCheckOpts) {
 	// Type check
 	console.log("Checking types...");
 	try {
-		// Build rivetkit packages first since some examples depend on them
+		// Build rivetkit packages first since some examples depend on them.
 		console.log("Building rivetkit packages...");
 		await $({
 			stdio: "inherit",
 			cwd: opts.root,
-		})`pnpm build --force -F rivetkit -F @rivetkit/* ${excludeFilters}`;
+		})`pnpm build -F rivetkit -F @rivetkit/* ${excludeFilters}`;
+
+		// Pack the inspector UI tarball into rivetkit's dist.
+		await $({
+			stdio: "inherit",
+			cwd: opts.root,
+		})`npx turbo build:pack-inspector -F rivetkit`;
+
 		console.log("✅ Rivetkit packages built");
 
-		// --force to skip cache in case of Turborepo bugs
-		await $({ stdio: "inherit", cwd: opts.root })`pnpm check-types --force ${excludeFilters}`;
+		await $({ stdio: "inherit", cwd: opts.root })`pnpm check-types ${excludeFilters}`;
 		console.log("✅ Type check passed");
 	} catch (err) {
 		console.error("❌ Type check failed");
