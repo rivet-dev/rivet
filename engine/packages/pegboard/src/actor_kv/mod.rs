@@ -20,7 +20,7 @@ const MAX_KEY_SIZE: usize = 2 * 1024;
 const MAX_VALUE_SIZE: usize = 128 * 1024;
 const MAX_KEYS: usize = 128;
 const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
-const MAX_STORAGE_SIZE: usize = 1024 * 1024 * 1024; // 1 GiB
+const MAX_STORAGE_SIZE: usize = 10 * 1024 * 1024 * 1024; // 10 GiB
 const VALUE_CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.github.io/foundationdb/blob.html
 
 // Namespace and name are used for metrics

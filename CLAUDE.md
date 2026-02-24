@@ -117,6 +117,7 @@ If you need to add a new `@rivetkit/*` package that isn't already in the root re
 
 - If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at https://docs.rs/serde/
 - When adding new docs pages, update `website/src/sitemap/mod.ts` so the page appears in the sidebar.
+- When changing actor/runtime limits or behavior that affects documented limits (for example KV, queue, SQLite, WebSocket, HTTP, or timeouts), update `website/src/content/docs/actors/limits.mdx` in the same change.
 
 ## Content Frontmatter
 
