@@ -21,8 +21,7 @@ export const WORKFLOW_FIELD = {
 	STATE: 1,
 	OUTPUT: 2,
 	ERROR: 3,
-	VERSION: 4,
-	INPUT: 5,
+	INPUT: 4,
 } as const;
 
 // === Type Definitions ===
@@ -177,7 +176,7 @@ export function buildWorkflowErrorKey(): Uint8Array {
 
 /**
  * Build a key for workflow input.
- * Key: [3, 5]
+ * Key: [3, 4]
  */
 export function buildWorkflowInputKey(): Uint8Array {
 	return pack([KEY_PREFIX.WORKFLOW, WORKFLOW_FIELD.INPUT]);

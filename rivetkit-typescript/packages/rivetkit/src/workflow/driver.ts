@@ -1,6 +1,6 @@
 import type { RunContext } from "@/actor/contexts/run";
 import type { AnyActorInstance } from "@/actor/instance/mod";
-import { KEYS, makeWorkflowKey } from "@/actor/instance/keys";
+import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/instance/keys";
 import type {
 	EngineDriver,
 	KVEntry,
@@ -9,8 +9,10 @@ import type {
 	WorkflowMessageDriver,
 } from "@rivetkit/workflow-engine";
 
+const WORKFLOW_STORAGE_PREFIX = workflowStoragePrefix();
+
 function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
-	return prefixed.slice(KEYS.WORKFLOW_PREFIX.length);
+	return prefixed.slice(WORKFLOW_STORAGE_PREFIX.length);
 }
 
 class ActorWorkflowMessageDriver implements WorkflowMessageDriver {

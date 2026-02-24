@@ -1,6 +1,6 @@
 import type { TracesDriver } from "@rivetkit/traces";
 import type { ActorDriver } from "../driver";
-import { KEYS } from "./keys";
+import { tracesStoragePrefix } from "./keys";
 
 function concatPrefix(prefix: Uint8Array, key: Uint8Array): Uint8Array {
 	const merged = new Uint8Array(prefix.length + key.length);
@@ -31,7 +31,7 @@ export class ActorTracesDriver implements TracesDriver {
 	constructor(driver: ActorDriver, actorId: string) {
 		this.#driver = driver;
 		this.#actorId = actorId;
-		this.#prefix = KEYS.TRACES_PREFIX;
+		this.#prefix = tracesStoragePrefix();
 	}
 
 	async get(key: Uint8Array): Promise<Uint8Array | null> {

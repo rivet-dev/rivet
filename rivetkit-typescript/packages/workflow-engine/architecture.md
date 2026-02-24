@@ -41,7 +41,7 @@ Key guarantees:
 
 2. **Single Writer** - A workflow instance is the **only** reader and writer of its KV namespace during execution. There is no concurrent access from other workflow instances.
 
-3. **Message Delivery** - Messages are written to the workflow's isolated KV by external systems (via `WorkflowHandle.message()`), then read by the workflow on its next execution. Since each workflow has its own KV, messages are inherently workflow-scoped.
+3. **Message Delivery** - Messages are delegated to the runtime message driver (via `WorkflowHandle.message()`), then read with `messageDriver.receiveMessages()` during execution.
 
 4. **External Mutation** - The only external mutations to a workflow's KV are:
    - Message delivery (appending to message queue)
@@ -242,8 +242,7 @@ Key Format (binary tuples):                  Value Format:
 [3, 1]                                    -> text (WorkflowState)
 [3, 2]                                    -> CBOR (workflow output)
 [3, 3]                                    -> CBOR (WorkflowError)
-[3, 4]                                    -> text (version)
-[3, 5]                                    -> CBOR (workflow input)
+[3, 4]                                    -> CBOR (workflow input)
 [4, entryId]                              -> BARE+versioning (EntryMetadata)
 
 Key prefixes:

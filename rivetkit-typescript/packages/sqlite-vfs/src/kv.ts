@@ -15,12 +15,15 @@
 export const CHUNK_SIZE = 4096;
 
 /** Top-level SQLite prefix (must match SQLITE_PREFIX in actor KV system) */
-export const SQLITE_PREFIX = 9;
+export const SQLITE_PREFIX = 8;
 
-/** Key prefix byte for file metadata (after SQLITE_PREFIX) */
+/** Schema version namespace byte after SQLITE_PREFIX */
+export const SQLITE_SCHEMA_VERSION = 1;
+
+/** Key prefix byte for file metadata (after SQLITE_PREFIX + version) */
 export const META_PREFIX = 0;
 
-/** Key prefix byte for file chunks (after SQLITE_PREFIX) */
+/** Key prefix byte for file chunks (after SQLITE_PREFIX + version) */
 export const CHUNK_PREFIX = 1;
 
 /** File kind tag for the actor's main database file */
@@ -43,13 +46,14 @@ export type SqliteFileTag =
 
 /**
  * Gets the key for file metadata
- * Format: [SQLITE_PREFIX (1 byte), META_PREFIX (1 byte), file tag (1 byte)]
+ * Format: [SQLITE_PREFIX (1 byte), version (1 byte), META_PREFIX (1 byte), file tag (1 byte)]
  */
 export function getMetaKey(fileTag: SqliteFileTag): Uint8Array {
-	const key = new Uint8Array(3);
+	const key = new Uint8Array(4);
 	key[0] = SQLITE_PREFIX;
-	key[1] = META_PREFIX;
-	key[2] = fileTag;
+	key[1] = SQLITE_SCHEMA_VERSION;
+	key[2] = META_PREFIX;
+	key[3] = fileTag;
 	return key;
 }
 
@@ -64,13 +68,14 @@ export function getChunkKey(
 	fileTag: SqliteFileTag,
 	chunkIndex: number,
 ): Uint8Array {
-	const key = new Uint8Array(7);
+	const key = new Uint8Array(8);
 	key[0] = SQLITE_PREFIX;
-	key[1] = CHUNK_PREFIX;
-	key[2] = fileTag;
-	key[3] = (chunkIndex >>> 24) & 0xff;
-	key[4] = (chunkIndex >>> 16) & 0xff;
-	key[5] = (chunkIndex >>> 8) & 0xff;
-	key[6] = chunkIndex & 0xff;
+	key[1] = SQLITE_SCHEMA_VERSION;
+	key[2] = CHUNK_PREFIX;
+	key[3] = fileTag;
+	key[4] = (chunkIndex >>> 24) & 0xff;
+	key[5] = (chunkIndex >>> 16) & 0xff;
+	key[6] = (chunkIndex >>> 8) & 0xff;
+	key[7] = chunkIndex & 0xff;
 	return key;
 }
