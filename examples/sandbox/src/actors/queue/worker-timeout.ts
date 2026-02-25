@@ -36,7 +36,7 @@ export const workerTimeout = actor({
 		c.state.status = "running";
 
 		while (!c.aborted) {
-			const [message] = await c.queue.next({
+			const message = await c.queue.next({
 				names: ["jobs"],
 				timeout: c.state.timeoutMs,
 			});

@@ -69,6 +69,21 @@ export interface QueueNextOptions<
 > {
 	/** Queue names to receive from. If omitted, reads from all queue names. */
 	names?: readonly TName[];
+	/** Timeout in milliseconds. Omit to wait indefinitely. */
+	timeout?: number;
+	/** Optional abort signal for this receive call. */
+	signal?: AbortSignal;
+	/** Whether to return completable messages. */
+	completable?: TCompletable;
+}
+
+/** Options for receiving queue message batches. */
+export interface QueueNextBatchOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	/** Queue names to receive from. If omitted, reads from all queue names. */
+	names?: readonly TName[];
 	/** Maximum number of messages to receive. Defaults to 1. */
 	count?: number;
 	/** Timeout in milliseconds. Omit to wait indefinitely. */
@@ -81,6 +96,17 @@ export interface QueueNextOptions<
 
 /** Options for non-blocking queue reads. */
 export interface QueueTryNextOptions<
+	TName extends string = string,
+	TCompletable extends boolean = boolean,
+> {
+	/** Queue names to receive from. If omitted, reads from all queue names. */
+	names?: readonly TName[];
+	/** Whether to return completable messages. */
+	completable?: TCompletable;
+}
+
+/** Options for non-blocking queue batch reads. */
+export interface QueueTryNextBatchOptions<
 	TName extends string = string,
 	TCompletable extends boolean = boolean,
 > {
@@ -133,8 +159,25 @@ export class ActorQueue<
 		const TCompletable extends boolean = false,
 	>(
 		opts?: QueueNextOptions<TName, TCompletable>,
-	): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>> {
+	): Promise<QueueResultMessageForName<TQueues, TName, TCompletable> | undefined> {
 		const resolvedOpts = (opts ?? {}) as QueueNextOptions<
+			TName,
+			TCompletable
+		>;
+		const messages = await this.nextBatch<TName, TCompletable>({
+			...(resolvedOpts as QueueNextBatchOptions<TName, TCompletable>),
+			count: 1,
+		});
+		return messages[0];
+	}
+
+	async nextBatch<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueNextBatchOptions<TName, TCompletable>,
+	): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>> {
+		const resolvedOpts = (opts ?? {}) as QueueNextBatchOptions<
 			TName,
 			TCompletable
 		>;
@@ -174,20 +217,37 @@ export class ActorQueue<
 		const TCompletable extends boolean = false,
 	>(
 		opts?: QueueTryNextOptions<TName, TCompletable>,
-	): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>> {
+	): Promise<QueueResultMessageForName<TQueues, TName, TCompletable> | undefined> {
 		const resolvedOpts = (opts ?? {}) as QueueTryNextOptions<
 			TName,
 			TCompletable
 		>;
+		const messages = await this.tryNextBatch<TName, TCompletable>({
+			...(resolvedOpts as QueueTryNextBatchOptions<TName, TCompletable>),
+			count: 1,
+		});
+		return messages[0];
+	}
+
+	async tryNextBatch<
+		const TName extends QueueFilterName<TQueues>,
+		const TCompletable extends boolean = false,
+	>(
+		opts?: QueueTryNextBatchOptions<TName, TCompletable>,
+	): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>> {
+		const resolvedOpts = (opts ?? {}) as QueueTryNextBatchOptions<
+			TName,
+			TCompletable
+		>;
 		if (resolvedOpts.completable === true) {
-			return (await this.next<TName, true>({
+			return (await this.nextBatch<TName, true>({
 				names: resolvedOpts.names,
 				count: resolvedOpts.count,
 				timeout: 0,
 				completable: true,
 			})) as Array<QueueResultMessageForName<TQueues, TName, TCompletable>>;
 		}
-		return (await this.next<TName, false>({
+		return (await this.nextBatch<TName, false>({
 			names: resolvedOpts.names,
 			count: resolvedOpts.count,
 			timeout: 0,
@@ -208,22 +268,20 @@ export class ActorQueue<
 		>;
 		while (!this.#abortSignal.aborted) {
 			try {
-				const messages = resolvedOpts.completable === true
+				const message = resolvedOpts.completable === true
 					? await this.next<TName, true>({
 							names: resolvedOpts.names,
-							count: 1,
 							signal: resolvedOpts.signal,
 							completable: true,
 						})
 					: await this.next<TName, false>({
 							names: resolvedOpts.names,
-							count: 1,
 							signal: resolvedOpts.signal,
 						});
-				if (messages.length === 0) {
+				if (!message) {
 					continue;
 				}
-				yield messages[0] as QueueResultMessageForName<
+				yield message as QueueResultMessageForName<
 					TQueues,
 					TName,
 					TCompletable

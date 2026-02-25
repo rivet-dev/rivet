@@ -28,7 +28,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			expect(message).toEqual({ name: "self", body: { value: 42 } });
 		});
 
-		test("next supports name arrays and counts", async (c) => {
+		test("nextBatch supports name arrays and counts", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["receive-array"]);
 
@@ -43,7 +43,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			]);
 		});
 
-		test("next supports request objects", async (c) => {
+		test("nextBatch supports request objects", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["receive-request"]);
 
@@ -60,7 +60,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			]);
 		});
 
-		test("next defaults to all names when names is omitted", async (c) => {
+		test("nextBatch defaults to all names when names is omitted", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate([
 				"receive-request-all",
@@ -86,7 +86,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			expect(messages).toEqual([]);
 		});
 
-		test("tryNext does not wait and returns empty array", async (c) => {
+		test("tryNextBatch does not wait and returns empty array", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["try-next-empty"]);
 

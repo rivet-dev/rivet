@@ -75,13 +75,13 @@ export const accessControlActor = actor({
 			return c.state.lastCanSubscribeConnId;
 		},
 		allowedReceiveQueue: async (c) => {
-			const [message] = await c.queue.tryNext({
+			const message = await c.queue.tryNext({
 				names: ["allowedQueue"],
 			});
 			return message?.body ?? null;
 		},
 		allowedReceiveAnyQueue: async (c) => {
-			const [message] = await c.queue.tryNext();
+			const message = await c.queue.tryNext();
 			return message?.body ?? null;
 		},
 		allowedBroadcastAllowedEvent: (c, value: string) => {
@@ -100,7 +100,7 @@ export const accessControlNoQueuesActor = actor({
 	state: {},
 	actions: {
 		readAnyQueue: async (c) => {
-			const [message] = await c.queue.tryNext();
+			const message = await c.queue.tryNext();
 			return message?.body ?? null;
 		},
 	},

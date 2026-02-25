@@ -98,7 +98,7 @@ export const rankedMatchmaker = actor({
 		c.waitUntil(runQueueUpdateTicker(c));
 
 		while (!c.aborted) {
-			const [message] = await c.queue.next({
+			const message = await c.queue.next({
 				timeout: PAIRING_RETRY_TICK_MS,
 			});
 			if (!message) {

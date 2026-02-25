@@ -5,6 +5,7 @@ import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "@/actor/database";
 import type {
 	QueueFilterName,
+	QueueNextBatchOptions,
 	QueueNextOptions,
 	QueueResultMessageForName,
 } from "@/actor/instance/queue";
@@ -29,21 +30,21 @@ import { WORKFLOW_GUARD_KV_KEY } from "./constants";
 type WorkflowActorQueueNextOptions<
 	TName extends string,
 	TCompletable extends boolean,
-> = Omit<QueueNextOptions<TName, TCompletable>, "signal" | "count">;
+> = Omit<QueueNextOptions<TName, TCompletable>, "signal">;
 
 type WorkflowActorQueueNextOptionsFallback<TCompletable extends boolean> = Omit<
 	QueueNextOptions<string, TCompletable>,
-	"signal" | "count"
+	"signal"
 >;
 
 type WorkflowActorQueueNextBatchOptions<
 	TName extends string,
 	TCompletable extends boolean,
-> = Omit<QueueNextOptions<TName, TCompletable>, "signal">;
+> = Omit<QueueNextBatchOptions<TName, TCompletable>, "signal">;
 
 type WorkflowActorQueueNextBatchOptionsFallback<
 	TCompletable extends boolean,
-> = Omit<QueueNextOptions<string, TCompletable>, "signal">;
+> = Omit<QueueNextBatchOptions<string, TCompletable>, "signal">;
 
 type ActorWorkflowLoopConfig<
 	S,

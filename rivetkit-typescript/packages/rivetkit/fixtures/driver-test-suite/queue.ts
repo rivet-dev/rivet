@@ -26,14 +26,12 @@ export const queueActor = actor({
 		receiveOne: async (
 			c,
 			name: QueueName,
-			opts?: { count?: number; timeout?: number },
+			opts?: { timeout?: number },
 		) => {
-			const messages = await c.queue.next({
+			const message = await c.queue.next({
 				names: [name],
-				count: opts?.count,
 				timeout: opts?.timeout,
 			});
-			const message = messages[0];
 			if (!message) {
 				return null;
 			}
@@ -44,7 +42,7 @@ export const queueActor = actor({
 			names: QueueName[],
 			opts?: { count?: number; timeout?: number },
 		) => {
-			const messages = await c.queue.next({
+			const messages = await c.queue.nextBatch({
 				names,
 				count: opts?.count,
 				timeout: opts?.timeout,
@@ -62,7 +60,7 @@ export const queueActor = actor({
 				timeout?: number;
 			},
 		) => {
-			const messages = await c.queue.next(request);
+			const messages = await c.queue.nextBatch(request);
 			return messages.map((message) => ({
 				name: message.name,
 				body: message.body,
@@ -75,7 +73,7 @@ export const queueActor = actor({
 				count?: number;
 			},
 		) => {
-			const messages = await c.queue.tryNext(request);
+			const messages = await c.queue.tryNextBatch(request);
 			return messages.map((message) => ({
 				name: message.name,
 				body: message.body,
@@ -150,8 +148,10 @@ export const queueActor = actor({
 			return { ok: true };
 		},
 		receiveAndComplete: async (c, name: "tasks") => {
-			const messages = await c.queue.next({ names: [name], completable: true });
-			const message = messages[0];
+			const message = await c.queue.next({
+				names: [name],
+				completable: true,
+			});
 			if (!message) {
 				return null;
 			}
@@ -159,16 +159,20 @@ export const queueActor = actor({
 			return { name: message.name, body: message.body };
 		},
 		receiveWithoutComplete: async (c, name: "tasks") => {
-			const messages = await c.queue.next({ names: [name], completable: true });
-			const message = messages[0];
+			const message = await c.queue.next({
+				names: [name],
+				completable: true,
+			});
 			if (!message) {
 				return null;
 			}
 			return { name: message.name, body: message.body };
 		},
 		receiveManualThenNextWithoutComplete: async (c, name: "tasks") => {
-			const messages = await c.queue.next({ names: [name], completable: true });
-			const message = messages[0];
+			const message = await c.queue.next({
+				names: [name],
+				completable: true,
+			});
 			if (!message) {
 				return { ok: false, reason: "no_message" };
 			}
@@ -184,8 +188,10 @@ export const queueActor = actor({
 			}
 		},
 		receiveAndCompleteTwice: async (c, name: "twice") => {
-			const messages = await c.queue.next({ names: [name], completable: true });
-			const message = messages[0];
+			const message = await c.queue.next({
+				names: [name],
+				completable: true,
+			});
 			if (!message) {
 				return null;
 			}
@@ -199,8 +205,10 @@ export const queueActor = actor({
 			}
 		},
 		receiveWithoutCompleteMethod: async (c, name: "nowait") => {
-			const messages = await c.queue.next({ names: [name], completable: true });
-			const message = messages[0];
+			const message = await c.queue.next({
+				names: [name],
+				completable: true,
+			});
 			return {
 				hasComplete:
 					message !== undefined &&

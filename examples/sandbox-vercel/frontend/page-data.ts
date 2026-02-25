@@ -68,7 +68,7 @@ console.log(metadata.tags, metadata.region);`,
 	queue: `await actor.send("work", { id: "task-1" });
 	const message = await actor.receiveOne("work");`,
 	queueTimeout: `while (!c.aborted) {
-	const [message] = await c.queue.next({
+	const message = await c.queue.next({
 		names: ["jobs"],
 		timeout: 2_000,
 	});

@@ -209,7 +209,7 @@ const agent = actor({
       // Race: watch for stop messages while generating
       c.queue
         .next({ names: ["stop"], signal: runSignal })
-        .then(([stopMessage]) => {
+        .then((stopMessage) => {
           if (stopMessage) stopController.abort();
         })
         .catch(() => {});
@@ -261,7 +261,7 @@ const worker = actor({
       );
 
       try {
-        const [message] = await c.queue.next({ signal });
+        const message = await c.queue.next({ signal });
         if (!message) continue;
         console.log("Processing job", message.body.id);
       } catch (error) {
@@ -388,7 +388,7 @@ const agent = actor({
       // Cancel generation if a stop message arrives
       c.queue
         .next({ names: ["stop"], signal: runSignal })
-        .then(([stopMessage]) => {
+        .then((stopMessage) => {
           if (stopMessage) stopController.abort();
         })
         .catch(() => {});

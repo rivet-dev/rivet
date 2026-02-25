@@ -316,8 +316,7 @@ const queueConsumer = actor({
 
     while (!c.aborted) {
       // Wait for next message with timeout.
-      const messages = await c.queue.next({ names: ["tasks"], timeout: 1000 });
-      const message = messages[0];
+      const message = await c.queue.next({ names: ["tasks"], timeout: 1000 });
 
       if (message) {
         c.log.info({ msg: "processing message", body: message.body });

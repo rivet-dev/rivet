@@ -66,8 +66,7 @@ export const runWithQueueConsumer = actor({
 		c.log.info("run handler started, waiting for messages");
 
 		while (!c.aborted) {
-			const messages = await c.queue.next({ names: ["messages"] });
-			const message = messages[0];
+			const message = await c.queue.next({ names: ["messages"] });
 			if (message) {
 				c.log.info({ msg: "received message", body: message.body });
 				c.state.messagesReceived.push({

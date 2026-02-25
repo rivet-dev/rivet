@@ -122,7 +122,7 @@ describe("ActorDefinition", () => {
 		type QueueTypeContext = ActorContextOf<typeof queueTypeActor>;
 
 		async function receiveFooBar(c: QueueTypeContext) {
-			return await c.queue.next({
+			return await c.queue.nextBatch({
 				names: ["foo", "bar"] as const,
 			});
 		}
@@ -152,9 +152,9 @@ describe("ActorDefinition", () => {
 		});
 
 		it("completable queue messages expose correctly typed complete()", () => {
-			type ManualMessage = Awaited<
-				ReturnType<typeof receiveCompletableManual>
-			>[number];
+			type ManualMessage = NonNullable<
+				Awaited<ReturnType<typeof receiveCompletableManual>>
+			>;
 			type CompleteArgs = ManualMessage extends {
 				complete: (...args: infer TArgs) => Promise<void>;
 			}
