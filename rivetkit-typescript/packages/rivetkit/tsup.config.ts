@@ -19,6 +19,8 @@ export default defineConfig({
 			"@rivetkit/traces/encoding",
 			"@rivetkit/traces/otlp",
 			"@rivetkit/workflow-engine",
+			"@rivetkit/sqlite",
+			"@rivetkit/sqlite-vfs",
 		];
 	},
 	define: {

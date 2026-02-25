@@ -112,7 +112,11 @@ function isSQLiteModule(value: unknown): value is SQLiteModule {
 async function loadSqliteRuntime(): Promise<LoadedSqliteRuntime> {
 	// Keep the module specifier assembled at runtime so TypeScript declaration
 	// generation does not try to typecheck this deep dist import path.
-	const sqliteModule = await import("@rivetkit/sqlite/dist/" + "wa-sqlite-async.mjs");
+	// Uses Array.join() instead of string concatenation to prevent esbuild/tsup
+	// from constant-folding the expression at build time, which would allow
+	// Turbopack to trace into the WASM package.
+	const specifier = ["@rivetkit/sqlite", "dist", "wa-sqlite-async.mjs"].join("/");
+	const sqliteModule = await import(specifier);
 	if (!isSqliteEsmFactory(sqliteModule.default)) {
 		throw new Error("Invalid SQLite ESM factory export");
 	}

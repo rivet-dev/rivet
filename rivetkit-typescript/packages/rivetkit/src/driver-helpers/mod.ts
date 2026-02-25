@@ -30,4 +30,4 @@ export type {
 	ManagerDriver,
 } from "@/manager/driver";
 export { buildManagerRouter } from "@/manager/router";
-export { getInitialActorKvState } from "./utils";
+export { getInitialActorKvState, importSqliteVfs } from "./utils";

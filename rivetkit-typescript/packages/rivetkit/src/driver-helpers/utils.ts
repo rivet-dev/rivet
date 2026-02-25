@@ -7,6 +7,7 @@ import {
 } from "@/schemas/actor-persist/versioned";
 import { bufferToArrayBuffer } from "@/utils";
 import type { ActorDriver } from "./mod";
+import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
 
 function serializeEmptyPersistData(input: unknown | undefined): Uint8Array {
 	const persistData: persistSchema.Actor = {
@@ -33,4 +34,21 @@ export function getInitialActorKvState(
 ): [Uint8Array, Uint8Array][] {
 	const persistData = serializeEmptyPersistData(input);
 	return [[KEYS.PERSIST_DATA, persistData]];
+}
+
+/**
+ * Dynamically import @rivetkit/sqlite-vfs and return a fresh SqliteVfs instance.
+ *
+ * The module specifier is built with Array.join() so that bundlers (esbuild, tsup,
+ * Turbopack) cannot statically analyze or constant-fold the import path. This
+ * prevents them from tracing into the WASM dependency tree, which would cause
+ * errors in environments that don't support .wasm imports (e.g. Turbopack).
+ *
+ * Each call returns a new instance so that actors get independent SQLite modules,
+ * avoiding cross-actor re-entry on the non-reentrant async build.
+ */
+export async function importSqliteVfs(): Promise<SqliteVfs> {
+	const specifier = ["@rivetkit", "sqlite-vfs"].join("/");
+	const { SqliteVfs } = await import(specifier);
+	return new SqliteVfs();
 }
