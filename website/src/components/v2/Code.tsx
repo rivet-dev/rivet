@@ -134,9 +134,9 @@ function parseCodeMeta(meta: string | undefined) {
 		return { title: undefined as string | undefined, hide: false, nocheck: false };
 	}
 
-	let parsedTitle: string | undefined;
 	let parsedHide = false;
 	let parsedNocheck = false;
+	const titleParts: string[] = [];
 
 	for (const token of meta.trim().split(/\s+/)) {
 		if (token === "@hide") {
@@ -144,9 +144,11 @@ function parseCodeMeta(meta: string | undefined) {
 		} else if (token === "@nocheck") {
 			parsedNocheck = true;
 		} else if (token && !token.startsWith("@")) {
-			parsedTitle = token;
+			titleParts.push(token);
 		}
 	}
+
+	const parsedTitle = titleParts.length > 0 ? titleParts.join(" ") : undefined;
 
 	return { title: parsedTitle, hide: parsedHide, nocheck: parsedNocheck };
 }

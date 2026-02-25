@@ -71,6 +71,7 @@ import {
     faSquareList,
     faGrid,
     faGrid2,
+    faMailbox,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
@@ -158,7 +159,7 @@ export const sitemap = [
 					{
 						title: "Queues",
 						href: "/docs/actors/queues",
-						icon: faListUl,
+						icon: faMailbox,
 					},
 					{
 						title: "Schedule",

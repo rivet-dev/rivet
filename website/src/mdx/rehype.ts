@@ -33,6 +33,11 @@ function rehypeParseCodeBlocks() {
 							meta?: unknown;
 							metastring?: unknown;
 							metaString?: unknown;
+							hProperties?: {
+								meta?: unknown;
+								metastring?: unknown;
+								metaString?: unknown;
+							};
 						  })
 						: null;
 				if (nodeData) {
@@ -40,6 +45,9 @@ function rehypeParseCodeBlocks() {
 						nodeData.meta,
 						nodeData.metastring,
 						nodeData.metaString,
+						nodeData.hProperties?.meta,
+						nodeData.hProperties?.metastring,
+						nodeData.hProperties?.metaString,
 					);
 				}
 				const info = infoCandidates.find(
@@ -65,6 +73,7 @@ function rehypeParseCodeBlocks() {
 					// New format: space-separated tokens with @flags
 					// Format: {title}? @nocheck? @hide?
 					const tokens = trimmed.split(/\s+/);
+					const titleParts: string[] = [];
 
 					for (const token of tokens) {
 						if (token === "@nocheck") {
@@ -72,9 +81,12 @@ function rehypeParseCodeBlocks() {
 						} else if (token === "@hide") {
 							parentNode.properties.hide = true;
 						} else if (token && !token.startsWith("@")) {
-							// Non-flag token is the title
-							parentNode.properties.title = token;
+							titleParts.push(token);
 						}
+					}
+
+					if (titleParts.length > 0) {
+						parentNode.properties.title = titleParts.join(" ");
 					}
 				}
 			}
