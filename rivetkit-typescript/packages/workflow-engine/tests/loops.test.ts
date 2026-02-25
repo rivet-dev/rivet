@@ -103,6 +103,41 @@ for (const mode of modes) {
 			expect(result.output).toBe("done");
 		});
 
+		it("should replay void loop output on restart", async () => {
+			let callCount = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("void-output", async () => {
+					callCount++;
+					return Loop.break(undefined);
+				});
+			};
+
+			const result1 = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result1.state).toBe("completed");
+			expect(result1.output).toBeUndefined();
+			expect(callCount).toBe(1);
+
+			const result2 = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result2.state).toBe("completed");
+			expect(result2.output).toBeUndefined();
+			expect(callCount).toBe(1);
+		});
+
 		it("should resume loop from saved state", async () => {
 			let iteration = 0;
 

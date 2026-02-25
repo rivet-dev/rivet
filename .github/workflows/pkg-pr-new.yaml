@@ -14,5 +14,5 @@ jobs:
         with:
           node-version: '22'
       - run: pnpm install
-      - run: npx turbo build:publish -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/example-registry' -F '!@rivetkit/mcp-hub'
+      - run: npx turbo build:publish -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/mcp-hub'
       - run: pnpm dlx pkg-pr-new publish 'shared/typescript/*' 'engine/sdks/typescript/runner/' 'engine/sdks/typescript/runner-protocol/' 'rivetkit-typescript/packages/*' --packageManager pnpm --template './examples/*'

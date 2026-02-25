@@ -384,18 +384,18 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 			const stepData = existing.kind.data;
 
-			// Replay successful result
-			if (stepData.output !== undefined) {
-				this.log("debug", { msg: "replaying step from history", step: config.name, key });
-				return stepData.output as T;
-			}
-
-			// Check if we should retry
 			const metadata = await loadMetadata(
 				this.storage,
 				this.driver,
 				existing.id,
 			);
+
+			// Replay successful result (including void steps).
+			if (metadata.status === "completed" || stepData.output !== undefined) {
+				return stepData.output as T;
+			}
+
+			// Check if we should retry
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
 			if (metadata.attempts >= maxRetries) {
@@ -628,6 +628,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		this.markVisited(key);
 
 		let entry: Entry;
+		let metadata: EntryMetadata | undefined;
 		let state: S;
 		let iteration: number;
 		let rollbackSingleIteration = false;
@@ -643,6 +644,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 
 			const loopData = existing.kind.data;
+			metadata = await loadMetadata(this.storage, this.driver, existing.id);
 
 			if (rollbackMode) {
 				if (loopData.output !== undefined) {
@@ -651,6 +653,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				rollbackSingleIteration = true;
 				rollbackIterationRan = false;
 				rollbackOutput = undefined;
+			}
+
+			if (metadata.status === "completed") {
+				return loopData.output as T;
 			}
 
 			// Loop already completed
@@ -677,6 +683,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				data: { state, iteration },
 			});
 			setEntry(this.storage, location, entry);
+			metadata = getOrCreateMetadata(this.storage, entry.id);
+		}
+
+		if (metadata) {
+			metadata.status = "running";
+			metadata.error = undefined;
+			metadata.dirty = true;
 		}
 
 		// TODO: Add validation for commitInterval (must be > 0)
@@ -733,6 +746,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					entry.kind.data.iteration = iteration;
 				}
 				entry.dirty = true;
+				if (metadata) {
+					metadata.status = "completed";
+					metadata.completedAt = Date.now();
+					metadata.dirty = true;
+				}
 
 				await this.flushStorage();
 				await this.forgetOldIterations(
