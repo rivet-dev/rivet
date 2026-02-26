@@ -70,6 +70,10 @@ app.get("/has-actor", async (c) => {
 	return c.text("ok");
 });
 
+app.get("/health", (c) => {
+	return c.text("ok");
+});
+
 app.get("/shutdown", async (c) => {
 	await runner?.shutdown(true);
 	return c.text("ok");

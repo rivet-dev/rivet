@@ -636,6 +636,8 @@ pub(crate) struct AllocatePendingActorsInput {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct AllocatePendingActorsOutput {
 	pub allocations: Vec<ActorAllocation>,
+	#[serde(default)]
+	pub attempted: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -697,6 +699,7 @@ pub(crate) async fn allocate_pending_actors(
 	// Shuffle for good measure
 	pending_actors.shuffle(&mut rand::thread_rng());
 
+	let attempted = pending_actors.len();
 	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
 	let actor_allocation_candidate_sample_size = ctx
 		.config()
@@ -875,7 +878,10 @@ pub(crate) async fn allocate_pending_actors(
 		.collect()
 		.await;
 
-	Ok(AllocatePendingActorsOutput { allocations })
+	Ok(AllocatePendingActorsOutput {
+		allocations,
+		attempted,
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
