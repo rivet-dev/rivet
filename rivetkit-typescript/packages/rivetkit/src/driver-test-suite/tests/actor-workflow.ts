@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	WORKFLOW_BATCH_QUEUE_NAME,
 	WORKFLOW_QUEUE_NAME,
 } from "../../../fixtures/driver-test-suite/workflow";
 import type { DriverTestConfig } from "../mod";
@@ -109,6 +110,54 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				expect(firstSleepDelayMs).toBeLessThan(1_800);
 			},
 		);
+
+		test("join fans out rows in parallel inside loop", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowBatchJoinActor.getOrCreate([
+				"workflow-batch-join",
+			]);
+
+			await actor.send(WORKFLOW_BATCH_QUEUE_NAME, {
+				rowIds: [1, 2, 3, 4],
+			});
+
+			let state = await actor.getState();
+			for (let i = 0; i < 50; i++) {
+				if (state.requestsCompleted >= 1) break;
+				await waitFor(driverTestConfig, 100);
+				state = await actor.getState();
+			}
+
+			expect(state.requestsCompleted).toBe(1);
+			expect(state.processedRows.sort()).toEqual([1, 2, 3, 4]);
+			expect(state.processedCells.length).toBe(12);
+		});
+
+		test("join handles sequential queue requests", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowBatchJoinActor.getOrCreate([
+				"workflow-batch-join-sequential",
+			]);
+
+			await actor.send(WORKFLOW_BATCH_QUEUE_NAME, {
+				rowIds: [1, 2],
+			});
+			await actor.send(WORKFLOW_BATCH_QUEUE_NAME, {
+				rowIds: [3, 4],
+			});
+
+			let state = await actor.getState();
+			for (let i = 0; i < 50; i++) {
+				if (state.requestsCompleted >= 2) break;
+				await waitFor(driverTestConfig, 100);
+				state = await actor.getState();
+			}
+
+			expect(state.requestsCompleted).toBeGreaterThanOrEqual(2);
+			expect(state.processedRows).toEqual(
+				expect.arrayContaining([1, 2, 3, 4]),
+			);
+		});
 
 		// NOTE: Test for workflow persistence across actor sleep is complex because
 		// calling c.sleep() during a workflow prevents clean shutdown. The workflow

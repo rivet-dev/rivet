@@ -70,6 +70,7 @@ import {
 } from "./vars";
 import {
 	workflowAccessActor,
+	workflowBatchJoinActor,
 	workflowCounterActor,
 	workflowQueueActor,
 	workflowSleepActor,
@@ -166,6 +167,7 @@ export const registry = setup({
 		workflowAccessActor,
 		workflowSleepActor,
 		workflowStopTeardownActor,
+		workflowBatchJoinActor,
 		// From actor-db-raw.ts
 		dbActorRaw,
 		// From actor-db-drizzle.ts

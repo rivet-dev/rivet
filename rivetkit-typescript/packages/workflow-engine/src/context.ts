@@ -210,6 +210,31 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	}
 
 	/**
+	 * Merge visited keys from a child branch context into this context.
+	 * This ensures that entries validated by nested branches are also
+	 * recognized as visited by the parent scope's validateComplete.
+	 */
+	mergeVisitedKeys(child: WorkflowContextImpl): void {
+		for (const key of child.visitedKeys) {
+			this.visitedKeys.add(key);
+		}
+	}
+
+	/**
+	 * Mark all history entries under a location prefix as visited.
+	 * Used when replaying completed branches that are skipped during
+	 * re-execution so their child entries don't trigger validateComplete errors.
+	 */
+	private markAllEntriesVisited(location: Location): void {
+		const prefix = locationToKey(this.storage, location);
+		for (const key of this.storage.history.entries.keys()) {
+			if (key.startsWith(prefix + "/") || key === prefix) {
+				this.visitedKeys.add(key);
+			}
+		}
+	}
+
+	/**
 	 * Check if a name has already been used at the current location in this execution.
 	 * Throws HistoryDivergedError if duplicate detected.
 	 */
@@ -737,6 +762,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 			// Validate branch completed cleanly
 			branchCtx.validateComplete();
+			this.mergeVisitedKeys(branchCtx);
 
 			if ("break" in result && result.break) {
 				// Loop complete
@@ -1490,24 +1516,27 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			async ([branchName, config]) => {
 				const branchStatus = joinData.branches[branchName];
 
+				const branchLocation = appendName(
+					this.storage,
+					location,
+					branchName,
+				);
+
 				// Already completed
 				if (branchStatus.status === "completed") {
+					this.markAllEntriesVisited(branchLocation);
 					results[branchName] = branchStatus.output;
 					return;
 				}
 
 				// Already failed
 				if (branchStatus.status === "failed") {
+					this.markAllEntriesVisited(branchLocation);
 					errors[branchName] = new Error(branchStatus.error);
 					return;
 				}
 
 				// Execute branch
-				const branchLocation = appendName(
-					this.storage,
-					location,
-					branchName,
-				);
 				const branchCtx = this.createBranch(branchLocation);
 
 				branchStatus.status = "running";
@@ -1516,6 +1545,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				try {
 					const output = await config.run(branchCtx);
 					branchCtx.validateComplete();
+					this.mergeVisitedKeys(branchCtx);
 
 					branchStatus.status = "completed";
 					branchStatus.output = output;
@@ -1705,6 +1735,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					winnerValue = output;
 
 					branchCtx.validateComplete();
+					this.mergeVisitedKeys(branchCtx);
 
 					branchStatus.status = "completed";
 					branchStatus.output = output;
