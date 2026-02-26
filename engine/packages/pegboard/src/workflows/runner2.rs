@@ -115,6 +115,7 @@ pub async fn pegboard_runner2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()
 						let expired = ctx
 							.activity(CheckExpiredInput {
 								runner_id: input.runner_id,
+								draining: state.draining,
 							})
 							.await?;
 
@@ -596,6 +597,8 @@ async fn fetch_remaining_actors(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct CheckExpiredInput {
 	runner_id: Id,
+	#[serde(default)]
+	draining: bool,
 }
 
 #[activity(CheckExpired)]
@@ -618,6 +621,67 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 
 			if expired {
 				tx.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
+			}
+			// TODO: remove this branch once runner alloc race bug is fixed
+			else if !input.draining {
+				let namespace_id_key = keys::runner::NamespaceIdKey::new(input.runner_id);
+				let name_key = keys::runner::NameKey::new(input.runner_id);
+				let version_key = keys::runner::VersionKey::new(input.runner_id);
+				let remaining_slots_key =
+					keys::runner::RemainingSlotsKey::new(input.runner_id);
+				let total_slots_key = keys::runner::TotalSlotsKey::new(input.runner_id);
+				let last_ping_ts_key = keys::runner::LastPingTsKey::new(input.runner_id);
+
+				let (
+					namespace_id_entry,
+					name_entry,
+					version_entry,
+					remaining_slots_entry,
+					total_slots_entry,
+					protocol_version_entry,
+					last_ping_ts_entry,
+				) = tokio::try_join!(
+					tx.read_opt(&namespace_id_key, Snapshot),
+					tx.read_opt(&name_key, Snapshot),
+					tx.read_opt(&version_key, Snapshot),
+					tx.read_opt(&remaining_slots_key, Snapshot),
+					tx.read_opt(&total_slots_key, Snapshot),
+					tx.read_opt(&last_ping_ts_key, Snapshot),
+				)?;
+
+				let (
+					Some(namespace_id),
+					Some(name),
+					Some(version),
+					Some(remaining_slots),
+					Some(total_slots),
+					Some(old_last_ping_ts),
+				) = (
+					namespace_id_entry,
+					name_entry,
+					version_entry,
+					remaining_slots_entry,
+					total_slots_entry,
+					last_ping_ts_entry,
+				)
+				else {
+					tracing::debug!(runner_id=?input.runner_id, "runner has not initiated yet");
+					return Ok(expired);
+				};
+
+				let remaining_millislots = (remaining_slots * 1000) / total_slots;
+				let old_alloc_key = keys::ns::RunnerAllocIdxKey::new(
+					namespace_id,
+					name.clone(),
+					version,
+					remaining_millislots,
+					old_last_ping_ts,
+					input.runner_id,
+				);
+
+				if !tx.exists(&old_alloc_key, Snapshot).await? {
+					tracing::warn!(runner_id=?input.runner_id, "runner has no alloc idx entry yet is not expired nor draining");
+				}
 			}
 
 			Ok(expired)
