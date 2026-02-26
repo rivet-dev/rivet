@@ -1201,7 +1201,7 @@
           "minimum": 0.0
         },
         "load_shedding_curve": {
-          "description": "Determine load shedding ratio based on linear mapping on cpu usage. We will gradually pull less workflows as the cpu usage increases. Units are in (permilli overall cpu usage, permilli) Default: |     .   . 100% | _____   . |     .\\  . % wfs |     . \\ . |     .  \\. 5% |     .   \\_____ |_____.___.______ 0    60% 80% avg cpu usage",
+          "description": "Determine load shedding ratio based on linear mapping on cpu usage. We will gradually pull less workflows as the cpu usage increases. Units are in (permilli overall cpu usage, permilli) Default: |     .   . 100% | _____   . |     .\\  . % wfs |     . \\ . |     .  \\. 5% |     .   \\_____ |_____.___.______ 0    70% 90% avg cpu usage",
           "type": [
             "array",
             "null"

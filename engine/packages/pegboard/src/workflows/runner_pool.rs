@@ -47,121 +47,124 @@ pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Resul
 		.dispatch()
 		.await?;
 
-	ctx.loope(LifecycleState::default(), |ctx, state| {
-		let input = input.clone();
-		async move {
-			// Get desired count -> drain and start counts
-			let ReadDesiredOutput::Desired {
-				desired_count,
-				details_hash,
-			} = ctx.activity(ReadDesiredInput {
-				namespace_id: input.namespace_id,
-				runner_name: input.runner_name.clone(),
-			})
-			.await?
-			else {
-				// Drain all
-				for runner in &state.runners {
+	ctx.lupe()
+		.commit_interval(5)
+		.with_state(LifecycleState::default())
+		.run(|ctx, state| {
+			let input = input.clone();
+			async move {
+				// Get desired count -> drain and start counts
+				let ReadDesiredOutput::Desired {
+					desired_count,
+					details_hash,
+				} = ctx.activity(ReadDesiredInput {
+					namespace_id: input.namespace_id,
+					runner_name: input.runner_name.clone(),
+				})
+				.await?
+				else {
+					// Drain all
+					for runner in &state.runners {
+						ctx.signal(serverless::receiver::Drain {})
+							.to_workflow_id(runner.receiver_wf_id)
+							.send()
+							.await?;
+					}
+
+					return Ok(Loop::Break(()));
+				};
+
+				// Remove runners that have an outdated hash. This is done outside of the below draining mechanism
+				// because we drain specific runners, not just a number of runners
+				let (new, outdated) = std::mem::take(&mut state.runners)
+					.into_iter()
+					.partition::<Vec<_>, _>(|r| r.details_hash == details_hash);
+				state.runners = new;
+
+				for runner in outdated {
+					// TODO: Spawn sub wf to process these so this is not blocking the loop
 					ctx.signal(serverless::receiver::Drain {})
 						.to_workflow_id(runner.receiver_wf_id)
 						.send()
 						.await?;
 				}
 
-				return Ok(Loop::Break(()));
-			};
+				let drain_count = state.runners.len().saturating_sub(desired_count);
+				let start_count = desired_count.saturating_sub(state.runners.len());
 
-			// Remove runners that have an outdated hash. This is done outside of the below draining mechanism
-			// because we drain specific runners, not just a number of runners
-			let (new, outdated) = std::mem::take(&mut state.runners)
-				.into_iter()
-				.partition::<Vec<_>, _>(|r| r.details_hash == details_hash);
-			state.runners = new;
+				// Drain unnecessary runners
+				if drain_count != 0 {
+					// TODO: Implement smart logic of draining runners with the lowest allocated actors
+					let draining_runners =
+						state.runners.iter().take(drain_count).collect::<Vec<_>>();
 
-			for runner in outdated {
-				// TODO: Spawn sub wf to process these so this is not blocking the loop
-				ctx.signal(serverless::receiver::Drain {})
-					.to_workflow_id(runner.receiver_wf_id)
-					.send()
-					.await?;
-			}
-
-			let drain_count = state.runners.len().saturating_sub(desired_count);
-			let start_count = desired_count.saturating_sub(state.runners.len());
-
-			// Drain unnecessary runners
-			if drain_count != 0 {
-				// TODO: Implement smart logic of draining runners with the lowest allocated actors
-				let draining_runners = state.runners.iter().take(drain_count).collect::<Vec<_>>();
-
-				// TODO: Spawn sub wf to process these so this is not blocking the loop
-				for runner in draining_runners {
-					ctx.signal(serverless::receiver::Drain {})
-						.to_workflow_id(runner.receiver_wf_id)
-						.send()
-						.await?;
+					// TODO: Spawn sub wf to process these so this is not blocking the loop
+					for runner in draining_runners {
+						ctx.signal(serverless::receiver::Drain {})
+							.to_workflow_id(runner.receiver_wf_id)
+							.send()
+							.await?;
+					}
 				}
-			}
 
-			// Dispatch new runner workflows
-			if start_count != 0 {
-				// TODO: Spawn sub wf to process these so this is not blocking the loop
-				for _ in 0..start_count {
-					let receiver_wf_id = ctx
-						.workflow(serverless::receiver::Input {
-							pool_wf_id: ctx.workflow_id(),
-							namespace_id: input.namespace_id,
-							runner_name: input.runner_name.clone(),
-						})
-						.tag("namespace_id", input.namespace_id)
-						.tag("runner_name", input.runner_name.clone())
-						.dispatch()
-						.await?;
+				// Dispatch new runner workflows
+				if start_count != 0 {
+					// TODO: Spawn sub wf to process these so this is not blocking the loop
+					for _ in 0..start_count {
+						let receiver_wf_id = ctx
+							.workflow(serverless::receiver::Input {
+								pool_wf_id: ctx.workflow_id(),
+								namespace_id: input.namespace_id,
+								runner_name: input.runner_name.clone(),
+							})
+							.tag("namespace_id", input.namespace_id)
+							.tag("runner_name", input.runner_name.clone())
+							.dispatch()
+							.await?;
 
-					state.runners.push(RunnerState {
-						receiver_wf_id,
-						details_hash,
-					});
+						state.runners.push(RunnerState {
+							receiver_wf_id,
+							details_hash,
+						});
+					}
 				}
-			}
 
-			// Wait for Bump or serverless signals until we tick again
-			for sig in ctx.listen_n::<Main>(512).await? {
-				match sig {
-					Main::OutboundConnDrainStarted(sig) => {
-						let (new, drain_started) =
-							std::mem::take(&mut state.runners)
+				// Wait for Bump or serverless signals until we tick again
+				for sig in ctx.listen_n::<Main>(256).await? {
+					match sig {
+						Main::OutboundConnDrainStarted(sig) => {
+							let (new, drain_started) = std::mem::take(&mut state.runners)
 								.into_iter()
 								.partition::<Vec<_>, _>(|r| r.receiver_wf_id != sig.receiver_wf_id);
-						state.runners = new;
+							state.runners = new;
 
-						for runner in drain_started {
-							// TODO: Spawn sub wf to process these so this is not blocking the loop
-							ctx.signal(serverless::receiver::Drain {})
-								.to_workflow_id(runner.receiver_wf_id)
-								.send()
-								.await?;
+							for runner in drain_started {
+								// TODO: Spawn sub wf to process these so this is not blocking the loop
+								ctx.signal(serverless::receiver::Drain {})
+									.to_workflow_id(runner.receiver_wf_id)
+									.send()
+									.await?;
+							}
 						}
-					}
-					Main::Bump(bump) => {
-						if bump.endpoint_config_changed {
-							// Forward to metadata poller to trigger immediate metadata fetch
-							ctx.signal(runner_pool_metadata_poller::EndpointConfigChanged {})
-								.to_workflow::<runner_pool_metadata_poller::Workflow>()
-								.tag("namespace_id", input.namespace_id)
-								.tag("runner_name", &input.runner_name)
-								.send()
-								.await?;
+						Main::Bump(bump) => {
+							if bump.endpoint_config_changed {
+								// Forward to metadata poller to trigger immediate metadata fetch
+								ctx.signal(runner_pool_metadata_poller::EndpointConfigChanged {})
+									.to_workflow::<runner_pool_metadata_poller::Workflow>()
+									.tag("namespace_id", input.namespace_id)
+									.tag("runner_name", &input.runner_name)
+									.send()
+									.await?;
+							}
 						}
 					}
 				}
-			}
 
-			Ok(Loop::Continue)
-		}
-		.boxed()
-	})
-	.await?;
+				Ok(Loop::Continue)
+			}
+			.boxed()
+		})
+		.await?;
 
 	Ok(())
 }

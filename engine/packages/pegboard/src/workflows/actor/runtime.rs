@@ -883,6 +883,31 @@ pub async fn spawn_actor(
 						})
 						.await?;
 					}
+					// Bump the pool so it can scale down
+					else if allocate_res.serverless {
+						let res = ctx
+							.v(2)
+							.signal(crate::workflows::runner_pool::Bump::default())
+							.to_workflow::<crate::workflows::runner_pool::Workflow>()
+							.tag("namespace_id", input.namespace_id)
+							.tag("runner_name", input.runner_name_selector.clone())
+							.send()
+							.await;
+
+						if let Some(WorkflowError::WorkflowNotFound) = res
+							.as_ref()
+							.err()
+							.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+						{
+							tracing::warn!(
+								namespace_id=%input.namespace_id,
+								runner_name=%input.runner_name_selector,
+								"serverless pool workflow not found, respective runner config likely deleted"
+							);
+						} else {
+							res?;
+						}
+					}
 
 					Ok(SpawnActorOutput::Destroy)
 				}
@@ -969,6 +994,31 @@ pub async fn spawn_actor(
 							runner_protocol_version,
 						})
 					} else {
+						// Bump the pool so it can scale down
+						if allocate_res.serverless {
+							let res = ctx
+								.v(2)
+								.signal(crate::workflows::runner_pool::Bump::default())
+								.to_workflow::<crate::workflows::runner_pool::Workflow>()
+								.tag("namespace_id", input.namespace_id)
+								.tag("runner_name", input.runner_name_selector.clone())
+								.send()
+								.await;
+
+							if let Some(WorkflowError::WorkflowNotFound) =
+								res.as_ref().err().and_then(|x| {
+									x.chain().find_map(|x| x.downcast_ref::<WorkflowError>())
+								}) {
+								tracing::warn!(
+									namespace_id=%input.namespace_id,
+									runner_name=%input.runner_name_selector,
+									"serverless pool workflow not found, respective runner config likely deleted"
+								);
+							} else {
+								res?;
+							}
+						}
+
 						Ok(SpawnActorOutput::Sleep)
 					}
 				}
@@ -1078,18 +1128,18 @@ pub async fn clear_pending_allocation(
 	let cleared = ctx
 		.udb()?
 		.run(|tx| async move {
-			let pending_alloc_key =
-				keys::subspace().pack(&keys::ns::PendingActorByRunnerNameSelectorKey::new(
-					input.namespace_id,
-					input.runner_name_selector.clone(),
-					input.pending_allocation_ts,
-					input.actor_id,
-				));
+			let tx = tx.with_subspace(keys::subspace());
 
-			let exists = tx.get(&pending_alloc_key, Serializable).await?.is_some();
+			let pending_alloc_key = keys::ns::PendingActorByRunnerNameSelectorKey::new(
+				input.namespace_id,
+				input.runner_name_selector.clone(),
+				input.pending_allocation_ts,
+				input.actor_id,
+			);
+			let exists = tx.exists(&pending_alloc_key, Serializable).await?;
 
 			if exists {
-				tx.clear(&pending_alloc_key);
+				tx.delete(&pending_alloc_key);
 
 				// If the pending actor key still exists, we must clear its desired slot because after this
 				// activity the actor will go to sleep or be destroyed. We don't clear the slot if the key

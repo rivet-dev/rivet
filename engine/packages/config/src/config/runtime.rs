@@ -56,7 +56,7 @@ pub struct Worker {
 	///       |     .  \.
 	///    5% |     .   \_____
 	///       |_____.___.______
-	///       0    60% 80%
+	///       0    70% 90%
 	///         avg cpu usage
 	load_shedding_curve: Option<[(u64, u64); 2]>,
 	/// Time (in seconds) to allow for the gasoline worker engine to stop gracefully after receiving SIGTERM.
@@ -66,7 +66,7 @@ pub struct Worker {
 
 impl Worker {
 	pub fn load_shedding_curve(&self) -> [(u64, u64); 2] {
-		self.load_shedding_curve.unwrap_or([(600, 1000), (800, 50)])
+		self.load_shedding_curve.unwrap_or([(700, 1000), (900, 50)])
 	}
 
 	pub fn shutdown_duration(&self) -> Duration {
