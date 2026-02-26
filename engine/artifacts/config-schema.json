@@ -415,51 +415,6 @@
           ],
           "format": "uint16",
           "minimum": 0.0
-        },
-        "proxy_state_cache_ttl_ms": {
-          "description": "Proxy state cache TTL in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "route_cache_ttl_ms": {
-          "description": "Route cache TTL in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "websocket_close_linger_ms": {
-          "description": "Time to keep TCP connection open after WebSocket close, in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "websocket_max_message_size": {
-          "description": "Max incoming WebSocket message size in bytes.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "websocket_max_outgoing_message_size": {
-          "description": "Max outgoing WebSocket message size in bytes.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -572,7 +527,7 @@
       "type": "object",
       "properties": {
         "actor_allocation_candidate_sample_size": {
-          "description": "Amount of runners to query from the allocation queue and choose at random when allocating an actor.\n\n**Experimental**",
+          "description": "Amount of runners to query from the allocation queue and choose at random when allocating an actor.",
           "type": [
             "integer",
             "null"
@@ -581,7 +536,7 @@
           "minimum": 0.0
         },
         "actor_start_threshold": {
-          "description": "How long to wait after creating and not receiving a starting state before setting actor as lost.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long to wait after creating and not receiving a starting state before setting actor as lost.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -589,69 +544,15 @@
           "format": "int64"
         },
         "actor_stop_threshold": {
-          "description": "How long to wait after stopping and not receiving a stop state before setting actor as lost.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long to wait after stopping and not receiving a stop state before setting actor as lost.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
           ],
           "format": "int64"
         },
-        "api_max_http_request_body_size": {
-          "description": "Max HTTP request body size in bytes for API traffic.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "api_max_in_flight": {
-          "description": "Maximum concurrent in-flight requests for API traffic.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "api_rate_limit_period_secs": {
-          "description": "Rate limit for API traffic: period in seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "api_rate_limit_requests": {
-          "description": "Rate limit for API traffic: number of requests allowed per period.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "api_retry_initial_interval_ms": {
-          "description": "Initial retry interval for API traffic in milliseconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "api_retry_max_attempts": {
-          "description": "Maximum retry attempts for API traffic.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "base_retry_timeout": {
-          "description": "Time to delay an actor from rescheduling after a rescheduling failure.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "Time to delay an actor from rescheduling after a rescheduling failure.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -660,25 +561,7 @@
           "minimum": 0.0
         },
         "default_metadata_poll_interval": {
-          "description": "Default metadata poll interval for serverless runners when not specified in runner config.\n\nUnit is in milliseconds.\n\n**Experimental**",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_actor_request_timeout_secs": {
-          "description": "HTTP request timeout in seconds for actor traffic.\n\nThis is the outer timeout for the entire request lifecycle. Should be slightly longer than `gateway_response_start_timeout_ms` to provide a grace period.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_api_request_timeout_secs": {
-          "description": "HTTP request timeout in seconds for API traffic (api-public).",
+          "description": "Default metadata poll interval for serverless runners when not specified in runner config.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -696,7 +579,7 @@
           "minimum": 0.0
         },
         "gateway_http_max_request_body_size": {
-          "description": "Max HTTP request body size in bytes for requests to actors.\n\nNote: guard-core also enforces a larger limit (default 256 MiB) as a first line of defense. See `Guard::http_max_request_body_size`.",
+          "description": "Max HTTP request body size in bytes for requests to actors.",
           "type": [
             "integer",
             "null"
@@ -722,33 +605,6 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "gateway_max_in_flight": {
-          "description": "Maximum concurrent in-flight requests per actor per IP.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "gateway_rate_limit_period_secs": {
-          "description": "Rate limit: period in seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_rate_limit_requests": {
-          "description": "Rate limit: number of requests allowed per period.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
         "gateway_response_start_timeout_ms": {
           "description": "Timeout for response to start in milliseconds.",
           "type": [
@@ -756,24 +612,6 @@
             "null"
           ],
           "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_retry_initial_interval_ms": {
-          "description": "Initial retry interval in milliseconds (doubles with each attempt).",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_retry_max_attempts": {
-          "description": "Maximum retry attempts for failed requests.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
           "minimum": 0.0
         },
         "gateway_tunnel_ping_timeout_ms": {
@@ -802,44 +640,8 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "gateway_ws_connect_timeout_secs": {
-          "description": "WebSocket connection attempt timeout in seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_ws_flush_timeout_secs": {
-          "description": "WebSocket flush timeout in seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_ws_proxy_timeout_secs": {
-          "description": "WebSocket proxy task timeout in seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "gateway_ws_send_timeout_secs": {
-          "description": "WebSocket send message timeout in seconds.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
         "hibernating_request_eligible_threshold": {
-          "description": "How long after last ping before considering a hibernating request disconnected.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long after last ping before considering a hibernating request disconnected.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -847,7 +649,7 @@
           "format": "int64"
         },
         "min_metadata_poll_interval": {
-          "description": "Minimum metadata poll interval for serverless runners.\n\nThe actual poll interval will be the maximum of this value and the runner config's `metadata_poll_interval` setting. This prevents excessive polling even if the runner config specifies a very short interval.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "Minimum metadata poll interval for serverless runners.\n\nThe actual poll interval will be the maximum of this value and the runner config's `metadata_poll_interval` setting. This prevents excessive polling even if the runner config specifies a very short interval.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -865,7 +667,7 @@
           "minimum": 0.0
         },
         "reschedule_backoff_max_exponent": {
-          "description": "Maximum exponent for the reschedule backoff calculation.\n\nThis controls the maximum backoff duration when rescheduling actors.\n\n**Experimental**",
+          "description": "Maximum exponent for the reschedule backoff calculation.\n\nThis controls the maximum backoff duration when rescheduling actors.",
           "type": [
             "integer",
             "null"
@@ -874,7 +676,7 @@
           "minimum": 0.0
         },
         "retry_reset_duration": {
-          "description": "How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -882,7 +684,7 @@
           "format": "int64"
         },
         "runner_eligible_threshold": {
-          "description": "How long after last ping before considering a runner ineligible for allocation.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long after last ping before considering a runner ineligible for allocation.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -917,7 +719,7 @@
           "minimum": 0.0
         },
         "runner_lost_threshold": {
-          "description": "How long to wait after last ping before forcibly removing a runner from the database and deleting its workflow, evicting all actors.\n\nNote that the runner may still be running and can reconnect.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long to wait after last ping before forcibly removing a runner from the database and deleting its workflow, evicting all actors.\n\nNote that the runner may still be running and can reconnect.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -925,7 +727,7 @@
           "format": "int64"
         },
         "runner_pool_consecutive_successes_to_clear_error": {
-          "description": "Number of consecutive successes required to clear an active runner pool error.\n\nThis prevents a single success from clearing an error during flapping conditions. Higher values provide more stability but slower recovery from transient errors.\n\n**Experimental**",
+          "description": "Number of consecutive successes required to clear an active runner pool error.\n\nThis prevents a single success from clearing an error during flapping conditions. Higher values provide more stability but slower recovery from transient errors.",
           "type": [
             "integer",
             "null"
@@ -943,7 +745,7 @@
           "minimum": 0.0
         },
         "serverless_backoff_max_exponent": {
-          "description": "Maximum exponent for the serverless backoff calculation.\n\nThis controls the maximum backoff duration when serverlessly connecting to runners.\n\n**Experimental**",
+          "description": "Maximum exponent for the serverless backoff calculation.\n\nThis controls the maximum backoff duration when serverlessly connecting to runners.",
           "type": [
             "integer",
             "null"
@@ -952,7 +754,7 @@
           "minimum": 0.0
         },
         "serverless_base_retry_timeout": {
-          "description": "Time to delay a serverless runner from attempting a new outbound connection after a connection failure.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "Time to delay a serverless runner from attempting a new outbound connection after a connection failure.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -961,7 +763,7 @@
           "minimum": 0.0
         },
         "serverless_drain_grace_period": {
-          "description": "Drain grace period for serverless runners.\n\nThis time is subtracted from the configured request duration. Once `duration - grace` is reached, the runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full duration is reached) the runner websocket is forcibly closed.\n\nDefault is 10 seconds.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "Drain grace period for serverless runners.\n\nThis time is subtracted from the configured request duration. Once `duration - grace` is reached, the runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full duration is reached) the runner websocket is forcibly closed.\n\nDefault is 10 seconds.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"
@@ -970,7 +772,7 @@
           "minimum": 0.0
         },
         "serverless_retry_reset_duration": {
-          "description": "How long a serverless runner goes without connection failures before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.\n\n**Experimental**",
+          "description": "How long a serverless runner goes without connection failures before it's retry count is reset to 0, effectively resetting its backoff to 0.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"

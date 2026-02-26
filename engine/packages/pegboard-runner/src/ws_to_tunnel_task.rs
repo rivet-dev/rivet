@@ -787,7 +787,12 @@ async fn handle_tunnel_message_mk2(
 	let inner_data_len = tunnel_message_inner_data_len_mk2(&msg.message_kind);
 
 	// Enforce incoming payload size
-	if inner_data_len > ctx.config().pegboard().runner_http_max_response_body_size() {
+	if inner_data_len
+		> ctx
+			.config()
+			.pegboard()
+			.runner_max_response_payload_body_size()
+	{
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
@@ -835,7 +840,12 @@ async fn handle_tunnel_message_mk1(
 	let inner_data_len = tunnel_message_inner_data_len_mk1(&msg.message_kind);
 
 	// Enforce incoming payload size
-	if inner_data_len > ctx.config().pegboard().runner_http_max_response_body_size() {
+	if inner_data_len
+		> ctx
+			.config()
+			.pegboard()
+			.runner_max_response_payload_body_size()
+	{
 		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 

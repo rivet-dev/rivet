@@ -40,7 +40,6 @@ use crate::{
 
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
-pub const MAX_BODY_SIZE: usize = rivet_util::size::mebibytes(20) as usize;
 
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
 const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(100); // Keep TCP connection open briefly after WebSocket close
@@ -724,11 +723,12 @@ impl ProxyService {
 			ResolveRouteOutput::Target(mut target) => {
 				// Read the request body before proceeding with retries
 				let (req_parts, body) = req.into_parts();
-				let req_body = Limited::new(body, MAX_BODY_SIZE)
-					.collect()
-					.await
-					.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
-					.to_bytes();
+				let req_body =
+					Limited::new(body, self.state.config.guard().http_max_request_body_size())
+						.collect()
+						.await
+						.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
+						.to_bytes();
 
 				// Use a value-returning loop to handle both errors and successful responses
 				let mut attempts = 0;
@@ -800,13 +800,16 @@ impl ProxyService {
 								return Ok(Response::from_parts(parts, streaming_body));
 							} else {
 								// For non-streaming responses, buffer as before
-								let body_bytes = Limited::new(body, MAX_BODY_SIZE)
-									.collect()
-									.await
-									.map_err(|err| {
-										errors::InvalidResponseBody(err.to_string()).build()
-									})?
-									.to_bytes();
+								let body_bytes = Limited::new(
+									body,
+									self.state.config.guard().http_max_request_body_size(),
+								)
+								.collect()
+								.await
+								.map_err(|err| {
+									errors::InvalidResponseBody(err.to_string()).build()
+								})?
+								.to_bytes();
 
 								let full_body = ResponseBody::Full(Full::new(body_bytes));
 								return Ok(Response::from_parts(parts, full_body));
@@ -860,11 +863,12 @@ impl ProxyService {
 			ResolveRouteOutput::CustomServe(mut handler) => {
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
-				let req_body = Limited::new(body, MAX_BODY_SIZE)
-					.collect()
-					.await
-					.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
-					.to_bytes();
+				let req_body =
+					Limited::new(body, self.state.config.guard().http_max_request_body_size())
+						.collect()
+						.await
+						.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
+						.to_bytes();
 				let req_collected =
 					hyper::Request::from_parts(req_parts, Full::<Bytes>::new(req_body));
 

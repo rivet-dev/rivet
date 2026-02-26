@@ -1,7 +1,7 @@
 import type { Logger } from "pino";
 import { VirtualWebSocket, type UniversalWebSocket, type RivetMessageEvent } from "@rivetkit/virtual-websocket";
 import type { Tunnel } from "./tunnel";
-import { MAX_BODY_SIZE, wrappingAddU16, wrappingLteU16, wrappingSubU16 } from "./utils";
+import { MAX_PAYLOAD_SIZE, wrappingAddU16, wrappingLteU16, wrappingSubU16 } from "./utils";
 
 export const HIBERNATABLE_SYMBOL = Symbol("hibernatable");
 
@@ -71,18 +71,18 @@ export class WebSocketTunnelAdapter {
 
 		if (typeof data === "string") {
 			const encoder = new TextEncoder();
-			if (encoder.encode(data).byteLength > MAX_BODY_SIZE) {
+			if (encoder.encode(data).byteLength > MAX_PAYLOAD_SIZE) {
 				throw new Error("WebSocket message too large");
 			}
 
 			messageData = data;
 		} else if (data instanceof ArrayBuffer) {
-			if (data.byteLength > MAX_BODY_SIZE) throw new Error("WebSocket message too large");
+			if (data.byteLength > MAX_PAYLOAD_SIZE) throw new Error("WebSocket message too large");
 
 			isBinary = true;
 			messageData = data;
 		} else if (ArrayBuffer.isView(data)) {
-			if (data.byteLength > MAX_BODY_SIZE) throw new Error("WebSocket message too large");
+			if (data.byteLength > MAX_PAYLOAD_SIZE) throw new Error("WebSocket message too large");
 
 			isBinary = true;
 			const view = data;

@@ -15,7 +15,7 @@ import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import { arraysEqual, idToStr, MAX_BODY_SIZE, stringifyError, unreachable } from "./utils";
+import { arraysEqual, idToStr, MAX_PAYLOAD_SIZE, stringifyError, unreachable } from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,
@@ -855,7 +855,7 @@ export class Tunnel {
 		// Read the body first to get the actual content
 		const body = response.body ? await response.arrayBuffer() : null;
 
-		if (body && body.byteLength > MAX_BODY_SIZE) {
+		if (body && body.byteLength > MAX_PAYLOAD_SIZE) {
 			throw new Error("Response body too large");
 		}
 

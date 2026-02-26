@@ -127,15 +127,3 @@ pub struct WebSocketServiceTimeout;
 	"WebSocket target changed, retry not possible."
 )]
 pub struct WebSocketTargetChanged;
-
-#[derive(RivetError, Serialize, Deserialize)]
-#[error(
-	"guard",
-	"request_body_too_large",
-	"Request body too large.",
-	"Request body size {size} bytes exceeds maximum allowed {max_size} bytes."
-)]
-pub struct RequestBodyTooLarge {
-	pub size: usize,
-	pub max_size: usize,
-}

@@ -9,7 +9,7 @@ use rivet_error::*;
 use rivet_guard_core::{
 	ResponseBody, WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
-	errors::{RequestBodyTooLarge, ServiceUnavailable, WebSocketServiceUnavailable},
+	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
 	request_context::{CorsConfig, RequestContext},
 	utils::is_ws_hibernate,
 	websocket_handle::WebSocketReceiver,
@@ -161,20 +161,6 @@ impl PegboardGateway {
 			.await
 			.context("failed to read body")?
 			.to_bytes();
-
-		// Check request body size limit for requests to actors
-		let max_request_body_size = self
-			.ctx
-			.config()
-			.pegboard()
-			.gateway_http_max_request_body_size();
-		if body_bytes.len() > max_request_body_size {
-			return Err(RequestBodyTooLarge {
-				size: body_bytes.len(),
-				max_size: max_request_body_size,
-			}
-			.build());
-		}
 
 		let (mut stopped_sub, runner_protocol_version) = tokio::try_join!(
 			ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", self.actor_id)),
