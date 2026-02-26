@@ -1,8 +1,7 @@
 use anyhow::Result;
-use pegboard_actor_kv as kv;
-use rivet_runner_protocol as rp;
-use rivet_util_id::Id;
-use uuid::Uuid;
+use gas::prelude::*;
+use pegboard::actor_kv as kv;
+use rivet_runner_protocol::mk2 as rp;
 
 #[tokio::test]
 async fn test_list_edge_cases() -> Result<()> {
@@ -37,18 +36,23 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	let db = &test_deps.pools.udb()?;
 	let actor_id = Id::new_v1(dc_label);
+	let recipient = kv::Recipient {
+		actor_id,
+		namespace_id: Id::new_v1(dc_label),
+		name: "default".to_string(),
+	};
 
 	// Test 1: List when empty
 	tracing::info!("test 1: list when empty");
 	let (empty_keys, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(empty_keys.len(), 0, "should return empty list");
 
 	// Test 2: Prefix that matches nothing
 	tracing::info!("test 2: prefix that matches nothing");
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![b"foo".to_vec(), b"bar".to_vec()],
 		vec![b"1".to_vec(), b"2".to_vec()],
 	)
@@ -56,7 +60,7 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	let (no_match, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
 			key: b"xyz".to_vec(),
 		}),
@@ -74,7 +78,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	tracing::info!("test 3: range where start > end");
 	let (backwards_range, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
 			start: b"z".to_vec(),
 			end: b"a".to_vec(),
@@ -94,7 +98,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	tracing::info!("test 4: range where start == end");
 	let (same_inclusive, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
 			start: b"foo".to_vec(),
 			end: b"foo".to_vec(),
@@ -112,7 +116,7 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	let (same_exclusive, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
 			start: b"foo".to_vec(),
 			end: b"foo".to_vec(),
@@ -128,27 +132,27 @@ async fn test_list_edge_cases() -> Result<()> {
 		"same key exclusive range should return 0"
 	);
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 5: Keys with null bytes (0x00)
 	tracing::info!("test 5: keys with null bytes");
 	let null_key = vec![b'a', 0x00, b'b'];
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![null_key.clone(), b"abc".to_vec()],
 		vec![b"null_value".to_vec(), b"normal_value".to_vec()],
 	)
 	.await?;
 
-	let (null_keys, null_values, _) = kv::get(db, actor_id, vec![null_key.clone()]).await?;
+	let (null_keys, null_values, _) = kv::get(db, &recipient, vec![null_key.clone()]).await?;
 	assert_eq!(null_keys.len(), 1, "should retrieve key with null byte");
 	assert_eq!(null_values[0], b"null_value");
 
 	// Prefix query should work with null bytes
 	let (null_prefix, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
 			key: vec![b'a', 0x00],
 		}),
@@ -163,29 +167,29 @@ async fn test_list_edge_cases() -> Result<()> {
 	);
 	assert_eq!(null_prefix[0], null_key);
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 6: Keys with 0xFF bytes
 	tracing::info!("test 6: keys with 0xFF bytes");
 	let ff_key = vec![b'a', 0xFF, b'b'];
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![ff_key.clone()],
 		vec![b"ff_value".to_vec()],
 	)
 	.await?;
 
-	let (ff_keys, _, _) = kv::get(db, actor_id, vec![ff_key.clone()]).await?;
+	let (ff_keys, _, _) = kv::get(db, &recipient, vec![ff_key.clone()]).await?;
 	assert_eq!(ff_keys.len(), 1, "should retrieve key with 0xFF byte");
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 7: Empty prefix (should match all keys)
 	tracing::info!("test 7: empty prefix");
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec()],
 		vec![b"1".to_vec(), b"2".to_vec(), b"3".to_vec()],
 	)
@@ -193,7 +197,7 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	let (empty_prefix, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery { key: vec![] }),
 		false,
 		None,
@@ -201,15 +205,15 @@ async fn test_list_edge_cases() -> Result<()> {
 	.await?;
 	assert_eq!(empty_prefix.len(), 3, "empty prefix should match all keys");
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 8: Prefix longer than any stored key
 	tracing::info!("test 8: prefix longer than stored keys");
-	kv::put(db, actor_id, vec![b"ab".to_vec()], vec![b"val".to_vec()]).await?;
+	kv::put(db, &recipient, vec![b"ab".to_vec()], vec![b"val".to_vec()]).await?;
 
 	let (long_prefix, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
 			key: b"abcdefghijk".to_vec(),
 		}),
@@ -223,7 +227,7 @@ async fn test_list_edge_cases() -> Result<()> {
 		"prefix longer than keys should return empty"
 	);
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 9: Keys that differ only in last byte
 	tracing::info!("test 9: keys differing only in last byte");
@@ -239,11 +243,11 @@ async fn test_list_edge_cases() -> Result<()> {
 		b"v2".to_vec(),
 		b"vFF".to_vec(),
 	];
-	kv::put(db, actor_id, keys.clone(), values.clone()).await?;
+	kv::put(db, &recipient, keys.clone(), values.clone()).await?;
 
 	let (prefix_match, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
 			key: b"key".to_vec(),
 		}),
@@ -266,7 +270,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	// Range from key\x00 to key\x02 inclusive should get 3 keys
 	let (byte_range, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
 			start: b"key\x00".to_vec(),
 			end: b"key\x02".to_vec(),
@@ -278,13 +282,13 @@ async fn test_list_edge_cases() -> Result<()> {
 	.await?;
 	assert_eq!(byte_range.len(), 3, "byte range should get 3 keys");
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 10: Limit of 0
 	tracing::info!("test 10: limit of 0");
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![b"a".to_vec(), b"b".to_vec()],
 		vec![b"1".to_vec(), b"2".to_vec()],
 	)
@@ -292,7 +296,7 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	let (zero_limit, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListAllQuery,
 		false,
 		Some(0),
@@ -304,7 +308,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	tracing::info!("test 11: limit of 1");
 	let (one_limit, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListAllQuery,
 		false,
 		Some(1),
@@ -316,7 +320,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	tracing::info!("test 12: limit larger than total");
 	let (large_limit, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListAllQuery,
 		false,
 		Some(1000),
@@ -328,20 +332,26 @@ async fn test_list_edge_cases() -> Result<()> {
 		"should return all keys when limit > total"
 	);
 
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Test 13: Reverse with limit
 	tracing::info!("test 13: reverse with limit");
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec()],
 		vec![b"1".to_vec(), b"2".to_vec(), b"3".to_vec(), b"4".to_vec()],
 	)
 	.await?;
 
-	let (reverse_limited, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, true, Some(2)).await?;
+	let (reverse_limited, _, _) = kv::list(
+		db,
+		&recipient,
+		rp::KvListQuery::KvListAllQuery,
+		true,
+		Some(2),
+	)
+	.await?;
 	assert_eq!(
 		reverse_limited.len(),
 		2,
@@ -355,7 +365,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	tracing::info!("test 14: prefix with reverse");
 	let (prefix_reverse, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery { key: vec![] }),
 		true,
 		None,

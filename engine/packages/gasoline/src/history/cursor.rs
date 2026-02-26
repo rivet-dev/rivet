@@ -683,12 +683,12 @@ mod tests {
 				Event {
 					coordinate: coord![2, 1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![4],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 			],
 		)]
@@ -722,12 +722,12 @@ mod tests {
 				Event {
 					coordinate: coord![2, 1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![3],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 			],
 		)]
@@ -755,12 +755,12 @@ mod tests {
 				Event {
 					coordinate: coord![2, 1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![2, 2],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 			],
 		)]
@@ -783,12 +783,12 @@ mod tests {
 				Event {
 					coordinate: coord![2, 1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![2, 1, 1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 			],
 		)]
@@ -810,17 +810,17 @@ mod tests {
 				Event {
 					coordinate: coord![1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![3],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![6],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 			],
 		)]
@@ -852,17 +852,17 @@ mod tests {
 				Event {
 					coordinate: coord![1],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![3],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 				Event {
 					coordinate: coord![6],
 					version: 1,
-					data: EventData::VersionCheck,
+					data: EventData::Branch,
 				},
 			],
 		)]

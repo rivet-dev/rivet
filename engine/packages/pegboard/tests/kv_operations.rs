@@ -1,8 +1,7 @@
 use anyhow::Result;
-use pegboard_actor_kv as kv;
-use rivet_runner_protocol as rp;
-use rivet_util_id::Id;
-use uuid::Uuid;
+use gas::prelude::*;
+use pegboard::actor_kv as kv;
+use rivet_runner_protocol::mk2 as rp;
 
 #[tokio::test]
 async fn test_kv_operations() -> Result<()> {
@@ -38,6 +37,11 @@ async fn test_kv_operations() -> Result<()> {
 
 	let db = &test_deps.pools.udb()?;
 	let actor_id = Id::new_v1(dc_label);
+	let recipient = kv::Recipient {
+		actor_id,
+		namespace_id: Id::new_v1(dc_label),
+		name: "default".to_string(),
+	};
 
 	tracing::info!(?actor_id, "starting kv operations test");
 
@@ -58,12 +62,12 @@ async fn test_kv_operations() -> Result<()> {
 		b"other_value".to_vec(),
 	];
 
-	kv::put(db, actor_id, keys.clone(), values.clone()).await?;
+	kv::put(db, &recipient, keys.clone(), values.clone()).await?;
 	tracing::info!("successfully put {} keys", keys.len());
 
 	// Test 2: Get the keys back
 	tracing::info!("test 2: getting keys");
-	let (got_keys, got_values, got_metadata) = kv::get(db, actor_id, keys.clone()).await?;
+	let (got_keys, got_values, got_metadata) = kv::get(db, &recipient, keys.clone()).await?;
 
 	assert_eq!(got_keys.len(), 5, "should get 5 keys back");
 	assert_eq!(got_values.len(), 5, "should get 5 values back");
@@ -85,7 +89,7 @@ async fn test_kv_operations() -> Result<()> {
 			"metadata should have version"
 		);
 		assert!(
-			got_metadata[got_idx].create_ts > 0,
+			got_metadata[got_idx].update_ts > 0,
 			"metadata should have timestamp"
 		);
 	}
@@ -94,7 +98,7 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 3: List all keys
 	tracing::info!("test 3: listing all keys");
 	let (list_keys, list_values, list_metadata) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
 
 	assert_eq!(list_keys.len(), 5, "should list 5 keys");
 	assert_eq!(list_values.len(), 5, "should list 5 values");
@@ -105,7 +109,7 @@ async fn test_kv_operations() -> Result<()> {
 	tracing::info!("test 4: listing with limit");
 	let (limited_keys, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListAllQuery,
 		false,
 		Some(2),
@@ -118,9 +122,9 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 5: List with reverse
 	tracing::info!("test 5: listing in reverse");
 	let (forward_keys, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
 	let (reverse_keys, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, true, None).await?;
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, true, None).await?;
 
 	assert_eq!(forward_keys.len(), reverse_keys.len());
 	// Keys should be in opposite order
@@ -151,12 +155,12 @@ async fn test_kv_operations() -> Result<()> {
 		b"Post 2".to_vec(),
 		b"Comment 100".to_vec(),
 	];
-	kv::put(db, actor_id, prefix_keys.clone(), prefix_values.clone()).await?;
+	kv::put(db, &recipient, prefix_keys.clone(), prefix_values.clone()).await?;
 
 	// Query with "users:" prefix
 	let (users_keys, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
 			key: b"users:".to_vec(),
 		}),
@@ -172,7 +176,7 @@ async fn test_kv_operations() -> Result<()> {
 	// Query with "posts:" prefix
 	let (posts_keys, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
 			key: b"posts:".to_vec(),
 		}),
@@ -188,13 +192,13 @@ async fn test_kv_operations() -> Result<()> {
 	tracing::info!("successfully listed keys with prefix");
 
 	// Clean up the prefix test keys
-	kv::delete(db, actor_id, prefix_keys).await?;
+	kv::delete(db, &recipient, prefix_keys).await?;
 
 	// Test 7: List with range
 	tracing::info!("test 7: listing with range");
 	let (range_keys, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
 			start: b"key1".to_vec(),
 			end: b"key2".to_vec(),
@@ -218,7 +222,7 @@ async fn test_kv_operations() -> Result<()> {
 	tracing::info!("test 8: listing with exclusive range");
 	let (exclusive_range_keys, _, _) = kv::list(
 		db,
-		actor_id,
+		&recipient,
 		rp::KvListQuery::KvListRangeQuery(rp::KvListRangeQuery {
 			start: b"key1".to_vec(),
 			end: b"key2".to_vec(),
@@ -237,11 +241,11 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 9: Delete specific keys
 	tracing::info!("test 9: deleting specific keys");
 	let keys_to_delete = vec![b"key1".to_vec(), b"key2".to_vec()];
-	kv::delete(db, actor_id, keys_to_delete.clone()).await?;
+	kv::delete(db, &recipient, keys_to_delete.clone()).await?;
 
 	// Verify keys are deleted
 	let (remaining_keys, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(remaining_keys.len(), 3, "should have 3 keys remaining");
 	assert!(!remaining_keys.contains(&b"key1".to_vec()));
 	assert!(!remaining_keys.contains(&b"key2".to_vec()));
@@ -249,18 +253,20 @@ async fn test_kv_operations() -> Result<()> {
 
 	// Test 10: Delete all keys
 	tracing::info!("test 10: deleting all keys");
-	kv::delete_all(db, actor_id).await?;
+	kv::delete_all(db, &recipient).await?;
 
 	// Verify all keys are deleted
 	let (all_keys, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, None).await?;
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
 	assert_eq!(all_keys.len(), 0, "should have no keys remaining");
 	tracing::info!("successfully deleted all keys");
 
 	// Test 11: Test storage size
 	tracing::info!("test 11: testing storage size");
-	let subspace = pegboard::keys::actor_kv_subspace().subspace(&actor_id);
-	let size = kv::get_subspace_size(db, &subspace).await?;
+	let size = db
+		.run(|tx| async move { kv::estimate_kv_size(&tx, actor_id).await })
+		.await
+		.unwrap();
 	assert_eq!(size, 0, "storage size should be 0 after delete_all");
 	tracing::info!("successfully verified storage size");
 
@@ -269,13 +275,14 @@ async fn test_kv_operations() -> Result<()> {
 	let large_value = vec![42u8; 50_000]; // 50 KB, will be split into chunks
 	kv::put(
 		db,
-		actor_id,
+		&recipient,
 		vec![b"large_key".to_vec()],
 		vec![large_value.clone()],
 	)
 	.await?;
 
-	let (large_keys, large_values, _) = kv::get(db, actor_id, vec![b"large_key".to_vec()]).await?;
+	let (large_keys, large_values, _) =
+		kv::get(db, &recipient, vec![b"large_key".to_vec()]).await?;
 	assert_eq!(large_keys.len(), 1);
 	assert_eq!(large_values[0], large_value, "large value should match");
 	tracing::info!("successfully stored and retrieved large value");
@@ -283,7 +290,10 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 13: Verify storage size increased
 	// Note: Storage size estimation may not be accurate on all backends (e.g., FileSystem)
 	tracing::info!("test 13: verifying storage size with data");
-	let size_with_data = kv::get_subspace_size(db, &subspace).await?;
+	let size_with_data = db
+		.run(|tx| async move { kv::estimate_kv_size(&tx, actor_id).await })
+		.await
+		.unwrap();
 	tracing::info!(
 		?size_with_data,
 		"storage size with data (may be 0 on some backends)"
