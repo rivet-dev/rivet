@@ -6,7 +6,6 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::actor_kv;
 use pegboard::pubsub_subjects::GatewayReceiverSubject;
-use rivet_guard_core::proxy_service::MAX_BODY_SIZE;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK2_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};

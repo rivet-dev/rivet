@@ -638,7 +638,6 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 					version_entry,
 					remaining_slots_entry,
 					total_slots_entry,
-					protocol_version_entry,
 					last_ping_ts_entry,
 				) = tokio::try_join!(
 					tx.read_opt(&namespace_id_key, Snapshot),

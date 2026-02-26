@@ -1,5 +1,5 @@
 use rivet_error::*;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 #[derive(RivetError, Debug)]
 #[error("ws")]

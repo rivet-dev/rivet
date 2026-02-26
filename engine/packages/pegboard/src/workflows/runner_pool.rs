@@ -3,6 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_types::{keys, runner_configs::RunnerConfigKind};
+use universaldb::prelude::*;
 
 use super::{runner_pool_error_tracker, runner_pool_metadata_poller, serverless};
 
@@ -202,7 +203,7 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 						namespace_id: input.namespace_id,
 						runner_name: input.runner_name.clone(),
 					},
-					universaldb::utils::IsolationLevel::Serializable,
+					Serializable,
 				)
 				.await?;
 

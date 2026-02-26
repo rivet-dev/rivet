@@ -7,7 +7,7 @@ use clap::{Parser, ValueEnum};
 use futures_util::TryStreamExt;
 use rivet_pools::UdbPool;
 use rivet_term::console::style;
-use universaldb::{options::StreamingMode, utils::IsolationLevel::*};
+use universaldb::prelude::*;
 
 use crate::util::{
 	format::indent_string,
@@ -46,7 +46,7 @@ pub enum SubCommand {
 		#[arg(short = 'd', long, default_value_t = 1)]
 		max_depth: usize,
 		/// Whether or not to hide subspace keys which are past the max depth.
-		#[arg(short = 'u', long, default_value_t = false)]
+		#[arg(short = 'u', long)]
 		hide_subspaces: bool,
 		/// Print style
 		#[arg(short = 's', long, default_value = "tree")]
@@ -98,15 +98,31 @@ pub enum SubCommand {
 		key: Option<String>,
 
 		/// Clears the entire subspace range instead of just the key.
-		#[arg(short = 'r', long = "range", default_value_t = false)]
+		#[arg(short = 'r', long = "range")]
 		clear_range: bool,
 		/// Disable confirmation prompt.
-		#[arg(short = 'y', long, default_value_t = false)]
+		#[arg(short = 'y', long)]
 		yes: bool,
 	},
 
 	#[command(name = "exit")]
 	Exit,
+
+	Oneoff {
+		#[clap(subcommand)]
+		command: OneoffSubCommand,
+	},
+}
+
+#[derive(Parser)]
+pub enum OneoffSubCommand {
+	#[command(name = "reapply-lost-serverless")]
+	ReapplyLostServerless {
+		#[arg(short = 'f')]
+		flip: bool,
+		#[arg(long)]
+		dry_run: bool,
+	},
 }
 
 impl SubCommand {
@@ -584,6 +600,68 @@ impl SubCommand {
 				}
 			}
 			SubCommand::Exit => return CommandResult::Exit,
+			SubCommand::Oneoff { command } => {
+				match command {
+					OneoffSubCommand::ReapplyLostServerless { flip, dry_run } => {
+						let fut = pool.run(|tx| async move {
+							// NOTE: The lost data has no subspace
+							let lost_serverless_desired_slots_subspace = universaldb::Subspace::all().subspace(
+								&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::entire_subspace(),
+							);
+
+							let mut stream = tx.get_ranges_keyvalues(
+								universaldb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&lost_serverless_desired_slots_subspace).into()
+								},
+								Serializable,
+							);
+
+							loop {
+								let Some(entry) = stream.try_next().await? else {
+									break;
+								};
+
+								let (lost_serverless_desired_slots_key, slots) =
+									tx.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
+
+								if dry_run {
+									tracing::info!(
+										namespace_id=?lost_serverless_desired_slots_key.namespace_id,
+										runner_name=?lost_serverless_desired_slots_key.runner_name,
+										slots,
+										"found lost slots",
+									);
+								} else {
+									tracing::info!(
+										namespace_id=?lost_serverless_desired_slots_key.namespace_id,
+										runner_name=?lost_serverless_desired_slots_key.runner_name,
+										slots,
+										"applying lost slots",
+									);
+
+									let slots = if flip { slots * -1 } else { slots };
+
+									// NOTE: The subspace has changed
+									tx.with_subspace(pegboard::keys::subspace()).atomic_op(
+										&lost_serverless_desired_slots_key,
+										&slots.to_le_bytes(),
+										MutationType::Add,
+									);
+								}
+							}
+
+							Ok(())
+						});
+
+						match tokio::time::timeout(Duration::from_secs(5), fut).await {
+							Ok(Ok(_)) => {}
+							Ok(Err(err)) => println!("txn error: {err:#}"),
+							Err(_) => println!("txn timed out"),
+						}
+					}
+				}
+			}
 		}
 
 		CommandResult::Ok
