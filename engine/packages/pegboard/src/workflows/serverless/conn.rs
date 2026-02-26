@@ -347,16 +347,13 @@ async fn outbound_req_inner(
 				Err(sse::Error::StreamEnded) => {
 					tracing::debug!("outbound req stopped early");
 
-					// If stream ended before runner init, report error
-					if runner_id.is_none() {
-						report_error(
-							ctx,
-							input.namespace_id,
-							&input.runner_name,
-							RunnerPoolError::ServerlessStreamEndedEarly,
-						)
-						.await;
-					}
+					report_error(
+						ctx,
+						input.namespace_id,
+						&input.runner_name,
+						RunnerPoolError::ServerlessStreamEndedEarly,
+					)
+					.await;
 
 					return Ok(());
 				}

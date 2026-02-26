@@ -709,15 +709,6 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "runner_http_max_response_body_size": {
-          "description": "Max HTTP response body size in bytes from actors.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0.0
-        },
         "runner_lost_threshold": {
           "description": "How long to wait after last ping before forcibly removing a runner from the database and deleting its workflow, evicting all actors.\n\nNote that the runner may still be running and can reconnect.\n\nUnit is in milliseconds.",
           "type": [
@@ -725,6 +716,15 @@
             "null"
           ],
           "format": "int64"
+        },
+        "runner_max_response_payload_body_size": {
+          "description": "Max response payload size in bytes from actors.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
         },
         "runner_pool_consecutive_successes_to_clear_error": {
           "description": "Number of consecutive successes required to clear an active runner pool error.\n\nThis prevents a single success from clearing an error during flapping conditions. Higher values provide more stability but slower recovery from transient errors.",
@@ -763,7 +763,7 @@
           "minimum": 0.0
         },
         "serverless_drain_grace_period": {
-          "description": "Drain grace period for serverless runners.\n\nThis time is subtracted from the configured request duration. Once `duration - grace` is reached, the runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full duration is reached) the runner websocket is forcibly closed.\n\nDefault is 10 seconds.\n\nUnit is in milliseconds.",
+          "description": "Drain grace period for serverless runners.\n\nThis time is subtracted from the configured request duration. Once `duration - grace` is reached, the runner is sent stop commands for all of its actors. After the grace period is over (i.e. the full duration is reached) the runner websocket is forcibly closed.\n\nUnit is in milliseconds.",
           "type": [
             "integer",
             "null"

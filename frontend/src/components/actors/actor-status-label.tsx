@@ -165,7 +165,7 @@ export function RunnerPoolError({ error }: { error: RivetActorError }) {
 					<p>Internal error occurred in runner pool</p>
 				))
 				.with("serverless_stream_ended_early", () => (
-					<p>Connection terminated unexpectedly</p>
+					<p>Connection terminated before runner stopped. Ensure that the Rivet provider request lifespan is configured to match the max duration of your serverless provider.</p>
 				))
 				.otherwise(() => <p>Unknown runner pool error</p>),
 		)
