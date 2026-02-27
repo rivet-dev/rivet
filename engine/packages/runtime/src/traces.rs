@@ -118,6 +118,7 @@ fn build_filter_from_spec(filter_spec: &str) -> anyhow::Result<EnvFilter> {
 		.add_directive("info".parse()?)
 		// Disable verbose logs
 		.add_directive("tokio_cron_scheduler=warn".parse()?)
+		.add_directive("async_nats=warn".parse()?)
 		.add_directive("tokio=warn".parse()?)
 		.add_directive("hyper=warn".parse()?)
 		.add_directive("h2=warn".parse()?);

@@ -33,6 +33,8 @@ pub async fn pegboard_serverless_receiver(ctx: &mut WorkflowCtx, input: &Input) 
 			namespace_id: input.namespace_id,
 			runner_name: input.runner_name.clone(),
 		})
+		.tag("namespace_id", input.namespace_id)
+		.tag("runner_name", input.runner_name.clone())
 		.dispatch()
 		.await?;
 

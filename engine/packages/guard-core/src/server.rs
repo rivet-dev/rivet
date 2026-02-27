@@ -112,7 +112,7 @@ pub async fn run_server(
 		tokio::spawn(
 			async move {
 				if let Err(err) = conn.await {
-					tracing::error!("{} connection error: {}", port_type_str, err);
+					tracing::warn!("{} connection error: {}", port_type_str, err);
 				}
 				tracing::debug!("{} connection dropped: {}", port_type_str, remote_addr);
 

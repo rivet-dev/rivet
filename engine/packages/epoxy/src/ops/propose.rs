@@ -356,6 +356,7 @@ async fn purge_optimistic_cache(ctx: OperationCtx, keys: Vec<String>) -> Result<
 			.workflow(crate::workflows::purger::Input {
 				replica_id: dc.datacenter_label as u64,
 			})
+			.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 			.tag("replica_id", dc.datacenter_label as u64)
 			.unique()
 			.dispatch()
