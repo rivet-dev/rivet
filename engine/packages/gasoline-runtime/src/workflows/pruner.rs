@@ -13,7 +13,7 @@ pub async fn gasoline_pruner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		async move {
 			ctx.activity(PruneInput {}).await?;
 
-			ctx.sleep(ctx.config().runtime.gasoline.prune_interval_duration())
+			ctx.sleep(ctx.config().runtime.gasoline_prune_interval_duration())
 				.await?;
 
 			Ok(Loop::<()>::Continue)
@@ -41,7 +41,7 @@ async fn prune(ctx: &ActivityCtx, _input: &PruneInput) -> Result<PruneOutput> {
 
 	// Check if pruning is enabled
 	let Some(prune_eligibility_duration) =
-		ctx.config().runtime.gasoline.prune_eligibility_duration()
+		ctx.config().runtime.gasoline_prune_eligibility_duration()
 	else {
 		return Ok(PruneOutput { prune_count: 0 });
 	};
