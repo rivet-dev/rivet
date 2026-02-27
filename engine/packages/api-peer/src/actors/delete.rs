@@ -18,13 +18,21 @@ use rivet_util::Id;
 )]
 #[tracing::instrument(skip_all)]
 pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
-	// Get the actor first to verify it exists
-	let actors_res = ctx
-		.op(pegboard::ops::actor::get::Input {
+	// Subscribe before fetching actor data
+	let mut destroy_sub = ctx
+		.subscribe::<pegboard::workflows::actor::DestroyComplete>(("actor_id", path.actor_id))
+		.await?;
+
+	let (actors_res, namespace_res) = tokio::try_join!(
+		// Get the actor to verify it exists
+		ctx.op(pegboard::ops::actor::get::Input {
 			actor_ids: vec![path.actor_id],
 			fetch_error: false,
-		})
-		.await?;
+		}),
+		ctx.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace,
+		}),
+	)?;
 
 	let actor = actors_res
 		.actors
@@ -32,14 +40,14 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		.next()
 		.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
 
-	// Verify the actor belongs to the specified namespace
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
-			name: query.namespace,
-		})
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+	// Already destroyed
+	if actor.destroy_ts.is_some() {
+		return Err(pegboard::errors::Actor::NotFound.build());
+	}
 
+	let namespace = namespace_res.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	// Verify the actor belongs to the specified namespace
 	if actor.namespace_id != namespace.namespace_id {
 		return Err(pegboard::errors::Actor::NotFound.build());
 	}
@@ -56,6 +64,8 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 			actor_id=?path.actor_id,
 			"actor workflow not found, likely already stopped"
 		);
+	} else {
+		destroy_sub.next().await?;
 	}
 
 	Ok(DeleteResponse {})
