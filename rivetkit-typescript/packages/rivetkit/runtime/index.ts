@@ -6,7 +6,7 @@ import { ENGINE_PORT, ensureEngineProcess } from "@/engine-process/mod";
 import { getInspectorUrl } from "@/inspector/utils";
 import { buildManagerRouter } from "@/manager/router";
 import { configureServerlessRunner } from "@/serverless/configure";
-import type { GetUpgradeWebSocket } from "@/utils";
+import { detectRuntime, type GetUpgradeWebSocket } from "@/utils";
 import pkg from "../package.json" with { type: "json" };
 import {
 	type DriverConfig,
@@ -14,7 +14,10 @@ import {
 	type RegistryConfig,
 } from "@/registry/config";
 import { logger } from "../src/registry/log";
-import { crossPlatformServe, findFreePort } from "@/registry/serve";
+import {
+	crossPlatformServe,
+	findFreePort,
+} from "@/utils/serve";
 import { ManagerDriver } from "@/manager/driver";
 import { buildServerlessRouter } from "@/serverless/router";
 import type { Registry } from "@/registry";
@@ -123,6 +126,7 @@ export class Runtime<A extends RegistryActors> {
 			});
 		} else if (config.serveManager) {
 			const configuredManagerPort = config.managerPort;
+			const serveRuntime = detectRuntime();
 			let upgradeWebSocket: any;
 			const getUpgradeWebSocket: GetUpgradeWebSocket = () =>
 				upgradeWebSocket;
@@ -132,6 +136,7 @@ export class Runtime<A extends RegistryActors> {
 				config,
 				managerDriver,
 				getUpgradeWebSocket,
+				serveRuntime,
 			);
 
 			managerPort = await findFreePort(config.managerPort);
@@ -160,6 +165,7 @@ export class Runtime<A extends RegistryActors> {
 				config,
 				managerPort,
 				managerRouter,
+				serveRuntime,
 			);
 			upgradeWebSocket = out.upgradeWebSocket;
 		}

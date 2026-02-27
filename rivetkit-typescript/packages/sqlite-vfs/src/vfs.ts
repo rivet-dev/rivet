@@ -122,7 +122,8 @@ async function loadSqliteRuntime(): Promise<LoadedSqliteRuntime> {
 	}
 	const sqliteEsmFactory = sqliteModule.default;
 	const require = createRequire(import.meta.url);
-	const wasmPath = require.resolve("@rivetkit/sqlite/dist/wa-sqlite-async.wasm");
+	const sqliteDistPath = "@rivetkit/sqlite/dist/";
+	const wasmPath = require.resolve(sqliteDistPath + "wa-sqlite-async.wasm");
 	const wasmBinary = readFileSync(wasmPath);
 	const module = await sqliteEsmFactory({ wasmBinary });
 	if (!isSQLiteModule(module)) {

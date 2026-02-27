@@ -3,6 +3,7 @@ import type {
 	RunnerConfig as EngineRunnerConfig,
 	HibernatingWebSocketMetadata,
 } from "@rivetkit/engine-runner";
+import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import { idToStr, Runner } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
@@ -51,6 +52,7 @@ import {
 import { logger } from "./log";
 
 const RUNNER_SSE_PING_INTERVAL = 1000;
+const RUNNER_STOP_WAIT_MS = 15_000;
 
 // Message ack deadline is 30s on the gateway, but we will ack more frequently
 // in order to minimize the message buffer size on the gateway and to give
@@ -69,6 +71,7 @@ const CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
 interface ActorHandler {
 	actor?: AnyActorInstance;
 	actorStartPromise?: ReturnType<typeof promiseWithResolvers<void>>;
+	actorStartError?: Error;
 	alarmTimeout?: LongTimeoutHandle;
 }
 
@@ -153,7 +156,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => {},
+			onDisconnected: (_code, _reason) => { },
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -189,6 +192,7 @@ export class EngineActorDriver implements ActorDriver {
 		if (!handler)
 			throw new Error(`Actor handler does not exist ${actorId}`);
 		if (handler.actorStartPromise) await handler.actorStartPromise.promise;
+		if (handler.actorStartError) throw handler.actorStartError;
 		if (!handler.actor) throw new Error("Actor should be loaded");
 		return handler;
 	}
@@ -283,6 +287,16 @@ export class EngineActorDriver implements ActorDriver {
 		return result;
 	}
 
+	/** Creates a SQLite VFS instance for creating KV-backed databases */
+	async createSqliteVfs(): Promise<SqliteVfs> {
+		// Dynamic import keeps @rivetkit/sqlite out of the main entrypoint bundle.
+		// Returning a fresh SqliteVfs gives each actor an isolated sqlite module
+		// instance, avoiding async re-entrancy across actors.
+		const specifier = "@rivetkit/" + "sqlite-vfs";
+		const { SqliteVfs } = await import(specifier);
+		return new SqliteVfs();
+	}
+
 	// MARK: - Actor Lifecycle
 	async loadActor(actorId: string): Promise<AnyActorInstance> {
 		const handler = await this.#loadActorHandler(actorId);
@@ -350,13 +364,38 @@ export class EngineActorDriver implements ActorDriver {
 		await Promise.all(stopPromises);
 		logger().debug({ msg: "all actors stopped" });
 
-		await this.#runner.shutdown(immediate);
+		try {
+			await this.#runner.shutdown(immediate);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (message.includes("WebSocket connection closed during shutdown")) {
+				logger().debug({
+					msg: "ignoring shutdown websocket close race",
+					error: message,
+				});
+			} else {
+				throw error;
+			}
+		}
+
+		const stopped = await Promise.race([
+			this.#runnerStopped.promise.then(() => true),
+			new Promise<false>((resolve) =>
+				setTimeout(() => resolve(false), RUNNER_STOP_WAIT_MS),
+			),
+		]);
+		if (!stopped) {
+			logger().warn({
+				msg: "timed out waiting for runner shutdown",
+				waitMs: RUNNER_STOP_WAIT_MS,
+			});
+		}
 	}
 
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => {});
+			stream.onAbort(() => { });
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
@@ -430,6 +469,7 @@ export class EngineActorDriver implements ActorDriver {
 			};
 			this.#actors.set(actorId, handler);
 		}
+		handler.actorStartError = undefined;
 
 		const name = actorConfig.name as string;
 		invariant(actorConfig.key, "actor should have a key");
@@ -457,7 +497,27 @@ export class EngineActorDriver implements ActorDriver {
 
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
+
 			handler.actor = await definition.instantiate();
+
+			// Apply protocol limits as per-instance overrides without mutating the shared definition
+			const protocolMetadata = this.#runner.getProtocolMetadata();
+			if (protocolMetadata) {
+				logger().debug({
+					msg: "applying config limits from protocol",
+					protocolMetadata,
+				});
+
+				const stopThresholdMax = Math.max(Number(protocolMetadata.actorStopThreshold) - 1000, 0);
+				handler.actor.overrides.onSleepTimeout = stopThresholdMax;
+				handler.actor.overrides.onDestroyTimeout = stopThresholdMax;
+
+				if (protocolMetadata.serverlessDrainGracePeriod) {
+					const drainMax = Math.max(Number(protocolMetadata.serverlessDrainGracePeriod) - 1000, 0);
+					handler.actor.overrides.runStopTimeout = drainMax;
+					handler.actor.overrides.waitUntilTimeout = drainMax;
+				}
+			}
 
 			// Start actor
 			await handler.actor.start(
@@ -471,13 +531,34 @@ export class EngineActorDriver implements ActorDriver {
 
 			logger().debug({ msg: "runner actor started", actorId, name, key });
 		} catch (innerError) {
-			const error = new Error(
-				`Failed to start actor ${actorId}: ${innerError}`,
-				{ cause: innerError },
-			);
+			const error =
+				innerError instanceof Error
+					? new Error(
+						`Failed to start actor ${actorId}: ${innerError.message}`,
+						{ cause: innerError },
+					)
+					: new Error(`Failed to start actor ${actorId}: ${String(innerError)}`);
+			handler.actor = undefined;
+			handler.actorStartError = error;
 			handler.actorStartPromise?.reject(error);
 			handler.actorStartPromise = undefined;
-			throw error;
+			logger().error({
+				msg: "runner actor failed to start",
+				actorId,
+				name,
+				key,
+				err: stringifyError(error),
+			});
+
+			try {
+				this.#runner.stopActor(actorId);
+			} catch (stopError) {
+				logger().debug({
+					msg: "failed to stop actor after start failure",
+					actorId,
+					err: stringifyError(stopError),
+				});
+			}
 		}
 	}
 
@@ -498,7 +579,26 @@ export class EngineActorDriver implements ActorDriver {
 		this.#actorStopIntent.delete(actorId);
 
 		const handler = this.#actors.get(actorId);
-		if (handler?.actor) {
+		if (!handler) {
+			logger().debug({ msg: "no runner actor handler to stop", actorId, reason });
+			return;
+		}
+
+		if (handler.actorStartPromise) {
+			try {
+				logger().debug({ msg: "runner actor stopping before it started, waiting", actorId, generation });
+				await handler.actorStartPromise.promise;
+			} catch (err) {
+				// Start failed, but we still want to clean up the handler
+				logger().debug({
+					msg: "actor start failed during stop, cleaning up handler",
+					actorId,
+					err: stringifyError(err),
+				});
+			}
+		}
+
+		if (handler.actor) {
 			try {
 				await handler.actor.onStop(reason);
 			} catch (err) {
@@ -507,8 +607,9 @@ export class EngineActorDriver implements ActorDriver {
 					err: stringifyError(err),
 				});
 			}
-			this.#actors.delete(actorId);
 		}
+
+		this.#actors.delete(actorId);
 
 		logger().debug({ msg: "runner actor stopped", actorId, reason });
 	}
@@ -693,7 +794,7 @@ export class EngineActorDriver implements ActorDriver {
 						entry.bufferedMessageSize >=
 						CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD
 					) {
-						// Reset buffered message size immeidatley (instead
+						// Reset buffered message size immediately (instead
 						// of waiting for onAfterPersistConn) since we may
 						// receive more messages before onAfterPersistConn
 						// is called, which would called saveState
@@ -872,6 +973,7 @@ export class EngineActorDriver implements ActorDriver {
 		// Resolve promise if waiting
 		const handler = this.#actors.get(actor.id);
 		invariant(handler, "missing actor handler in onBeforeActorReady");
+		handler.actorStartError = undefined;
 		handler.actorStartPromise?.resolve();
 		handler.actorStartPromise = undefined;
 

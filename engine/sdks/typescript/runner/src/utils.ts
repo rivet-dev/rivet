@@ -1,5 +1,8 @@
 import { logger } from "./log";
 
+// 20MiB. Keep in sync with runner_max_response_payload_body_size from engine/packages/config/src/config/pegboard.rs
+export const MAX_PAYLOAD_SIZE = 20 * 1024 * 1024;
+
 export function unreachable(x: never): never {
 	throw `Unreachable: ${x}`;
 }

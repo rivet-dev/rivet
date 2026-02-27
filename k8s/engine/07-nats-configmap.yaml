@@ -9,6 +9,10 @@ data:
 
     # Clustering configuration
     cluster {
+      # Static cluster name. Must be identical across all pods; without it NATS
+      # generates a random name on every startup and pods reject each other.
+      name: rivet-engine
+
       # Cluster port for peer-to-peer communication
       port: 6222
 

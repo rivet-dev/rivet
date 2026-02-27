@@ -163,7 +163,10 @@ export class ActorWorkflowDriver implements EngineDriver {
 					this.#actor.id,
 					writes.map(({ key, value }) => [makeWorkflowKey(key), value]),
 				),
-				this.#actor.stateManager.saveState({ immediate: true }),
+				this.#actor.stateManager.saveState({
+					immediate: true,
+					allowStoppingState: true,
+				}),
 			]),
 		);
 	}

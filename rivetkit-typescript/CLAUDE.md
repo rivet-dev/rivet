@@ -28,3 +28,7 @@ All raw KV operations must be designed to handle these constraints. If an operat
 The total actor KV storage limit (10 GiB) cannot be worked around by chunking. Any KV operation can still fail due to storage limits. Always handle the error path cleanly and fail closed by default so the error surfaces to the user. Do not silently swallow, truncate, or ignore KV write failures.
 
 When changing KV, queue, workflow persistence, SQLite-over-KV, or any limit-related actor behavior, update `website/src/content/docs/actors/limits.mdx` in the same change so docs stay in sync with effective hard and soft limits.
+
+## Workflow Context Actor Access Guards
+
+In `ActorWorkflowContext` (`packages/rivetkit/src/workflow/context.ts`), all side-effectful `#runCtx` access must be guarded by `#ensureActorAccess` so that side effects only run inside workflow steps and are not replayed outside of them. Read-only properties (e.g., `actorId`, `log`) do not need guards. When adding new methods or properties to the workflow context that delegate to `#runCtx`, apply the guard if the operation has side effects.

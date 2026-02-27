@@ -13,7 +13,7 @@ export function CommunitySection() {
       label: 'X'
     },
     {
-      href: 'https://bsky.app/profile/rivet.dev',
+      href: 'https://bsky.app/profile/rivet.gg',
       icon: faBluesky,
       label: 'Bluesky'
     },

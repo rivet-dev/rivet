@@ -6,13 +6,13 @@ use std::{
 use anyhow::Context;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_guard_core::WebSocketHandle;
 use rivet_runner_protocol::{self as protocol, versioned};
+use rivet_types::runner_configs::RunnerConfigKind;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
@@ -280,9 +280,13 @@ pub async fn handle_init(
 			)
 		})?;
 
-	let missed_commands = ctx
-		.udb()?
-		.run(|tx| {
+	let udb = ctx.udb()?;
+	let (runner_config_res, missed_commands) = tokio::try_join!(
+		ctx.op(pegboard::ops::runner_config::get::Input {
+			runners: vec![(conn.namespace_id, conn.runner_name.clone())],
+			bypass_cache: false,
+		}),
+		udb.run(|tx| {
 			let init = init.clone();
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
@@ -367,15 +371,23 @@ pub async fn handle_init(
 				.await
 			}
 		})
-		.custom_instrument(tracing::info_span!("runner_process_init_tx"))
-		.await?;
+		.custom_instrument(tracing::info_span!("runner_process_init_tx")),
+	)?;
+
+	let is_serverless = runner_config_res.first().map_or(false, |c| {
+		matches!(c.config.kind, RunnerConfigKind::Serverless { .. })
+	});
+	let pb = ctx.config().pegboard();
 
 	// Send init packet
 	let init_msg = versioned::ToClientMk2::wrap_latest(protocol::mk2::ToClient::ToClientInit(
 		protocol::mk2::ToClientInit {
 			runner_id: conn.runner_id.to_string(),
 			metadata: protocol::mk2::ProtocolMetadata {
-				runner_lost_threshold: ctx.config().pegboard().runner_lost_threshold(),
+				runner_lost_threshold: pb.runner_lost_threshold(),
+				actor_stop_threshold: pb.actor_stop_threshold(),
+				serverless_drain_grace_period: is_serverless
+					.then(|| pb.serverless_drain_grace_period() as i64),
 			},
 		},
 	));

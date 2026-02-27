@@ -99,6 +99,25 @@ for (const mode of modes) {
 			expect(callCount).toBe(1);
 		});
 
+		it("should replay void step on restart", async () => {
+			let callCount = 0;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const result = await ctx.step("void-step", async () => {
+					callCount++;
+				});
+				return result;
+			};
+
+			await runWorkflow("wf-1", workflow, undefined, driver, { mode })
+				.result;
+			expect(callCount).toBe(1);
+
+			await runWorkflow("wf-1", workflow, undefined, driver, { mode })
+				.result;
+			expect(callCount).toBe(1);
+		});
+
 		it("should execute multiple steps in sequence", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
 				const a = await ctx.step("step-a", async () => 1);

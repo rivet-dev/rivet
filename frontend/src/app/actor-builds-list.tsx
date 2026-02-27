@@ -2,10 +2,10 @@ import * as allIcons from "@rivet-gg/icons";
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, useMemo } from "react";
+import { Fragment } from "react";
 import { match } from "ts-pattern";
 import { Button, cn, Skeleton } from "@/components";
-import { useDataProvider } from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { RECORDS_PER_PAGE } from "./data-providers/default-data-provider";
 
@@ -53,7 +53,7 @@ function getActorIcon(iconValue: string | null) {
 
 export function ActorBuildsList() {
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
-		useInfiniteQuery(useDataProvider().buildsQueryOptions());
+		useInfiniteQuery(useEngineCompatDataProvider().buildsQueryOptions());
 
 	const navigate = useNavigate();
 
@@ -88,7 +88,7 @@ export function ActorBuildsList() {
 							variant={"ghost"}
 							size="sm"
 							onClick={() => {
-								navigate({
+								return navigate({
 									to: match(__APP_TYPE__)
 										.with("engine", () => "/ns/$namespace")
 										.with(

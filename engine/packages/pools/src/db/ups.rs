@@ -44,13 +44,19 @@ pub async fn setup(config: &Config, client_name: &str) -> Result<UpsPool> {
 									tracing::debug!(?server_addrs, "nats reconnected");
 								}
 								async_nats::Event::Disconnected => {
-									tracing::error!(?server_addrs, "nats disconnected");
+									tracing::warn!(?server_addrs, "nats disconnected");
 								}
 								async_nats::Event::LameDuckMode => {
 									tracing::warn!(?server_addrs, "nats lame duck mode");
 								}
-								async_nats::Event::SlowConsumer(_) => {
-									tracing::warn!(?server_addrs, "nats slow consumer");
+								async_nats::Event::Draining => {
+									tracing::warn!(?server_addrs, "nats draining");
+								}
+								async_nats::Event::Closed => {
+									tracing::error!(?server_addrs, "nats closed");
+								}
+								async_nats::Event::SlowConsumer(sid) => {
+									tracing::warn!(?server_addrs, ?sid, "nats slow consumer");
 								}
 								async_nats::Event::ServerError(err) => {
 									tracing::error!(?server_addrs, ?err, "nats server error");

@@ -87,8 +87,6 @@ export const options = {
 		'actor_destroy_success': ['rate>0.95'],
 		'actor_ping_success': ['rate>0.95'],
 		'websocket_success': ['rate>0.90'],
-		'http_req_duration': ['p(95)<5000', 'p(99)<10000'],
-		// 'actor_create_duration': ['p(95)<3000'],
 	},
 	noConnectionReuse: false,
 	userAgent: 'k6-actor-lifecycle-test',

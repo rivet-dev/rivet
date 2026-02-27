@@ -260,8 +260,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					ctx.listen_n::<Main>(256).await?
 				};
 
-				let now = util::timestamp::now();
-
 				for sig in signals {
 					match sig {
 						// NOTE: This is only received when allocated to mk1 runner
@@ -584,6 +582,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						Main::Wake(sig) => {
 							// Clear alarm
 							if let Some(alarm_ts) = state.alarm_ts {
+								let now = ctx.v(3).activity(GetTsInput {}).await?;
+
 								if now >= alarm_ts {
 									state.alarm_ts = None;
 								}
@@ -1223,6 +1223,14 @@ async fn handle_stopped(
 	ctx.removed::<Activity<runtime::CheckRunnersStub>>().await?;
 
 	Ok(StoppedResult::Continue)
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct GetTsInput {}
+
+#[activity(GetTs)]
+async fn get_ts(ctx: &ActivityCtx, input: &GetTsInput) -> Result<i64> {
+	Ok(util::timestamp::now())
 }
 
 #[message("pegboard_actor_create_complete")]

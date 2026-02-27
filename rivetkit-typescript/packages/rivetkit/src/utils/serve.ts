@@ -1,12 +1,16 @@
 import type { Hono } from "hono";
-import { detectRuntime, stringifyError } from "../utils";
-import { logger } from "./log";
-import { RegistryConfig } from "./config";
+import { detectRuntime, stringifyError, type Runtime } from "../utils";
+import { RegistryConfig } from "@/registry/config";
+import { logger } from "@/registry/log";
 
 // TODO: Go back to dynamic import for this
 import getPort from "get-port";
 
 const DEFAULT_PORT = 6420;
+export type ServeStatic =
+	typeof import("@hono/node-server/serve-static").serveStatic;
+const serveStaticLoaderPromises: Partial<Record<Runtime, Promise<ServeStatic>>> =
+	{};
 
 /**
  * Finds a free port starting from the given port.
@@ -34,8 +38,8 @@ export async function crossPlatformServe(
 	config: RegistryConfig,
 	managerPort: number,
 	app: Hono<any>,
+	runtime: Runtime = detectRuntime(),
 ): Promise<{ upgradeWebSocket: any }> {
-	const runtime = detectRuntime();
 	logger().debug({ msg: "detected runtime for serve", runtime });
 
 	switch (runtime) {
@@ -48,6 +52,36 @@ export async function crossPlatformServe(
 		default:
 			return serveNode(config, managerPort, app);
 	}
+}
+
+export async function loadRuntimeServeStatic(
+	runtime: Runtime,
+): Promise<ServeStatic> {
+	if (!serveStaticLoaderPromises[runtime]) {
+		if (runtime === "node") {
+			const nodeServeStaticModule = "@hono/node-server/serve-static";
+			serveStaticLoaderPromises[runtime] = import(
+				/* webpackIgnore: true */
+				nodeServeStaticModule
+			).then((x) => x.serveStatic);
+		} else if (runtime === "bun") {
+			const bunModule = "hono/bun";
+			serveStaticLoaderPromises[runtime] = import(
+				/* webpackIgnore: true */
+				bunModule
+			).then((x) => x.serveStatic as ServeStatic);
+		} else if (runtime === "deno") {
+			const denoModule = "hono/deno";
+			serveStaticLoaderPromises[runtime] = import(
+				/* webpackIgnore: true */
+				denoModule
+			).then((x) => x.serveStatic as ServeStatic);
+		} else {
+			throw new Error(`unsupported runtime: ${runtime}`);
+		}
+	}
+
+	return await serveStaticLoaderPromises[runtime]!;
 }
 
 async function serveNode(

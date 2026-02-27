@@ -159,17 +159,19 @@ const Sidebar = ({
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />
 						<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-							<Ping
-								className="relative -right-1"
-								data-changelog-ping
-							/>
 							<HeaderButton asChild>
 								<a
 									href="https://www.rivet.dev/changelog"
 									target="_blank"
 									rel="noopener"
 								>
-									Whats new?
+									<span className="relative">
+										Whats new?
+										<Ping
+											className="-right-4"
+											data-changelog-ping
+										/>
+									</span>
 								</a>
 							</HeaderButton>
 							<HeaderButton

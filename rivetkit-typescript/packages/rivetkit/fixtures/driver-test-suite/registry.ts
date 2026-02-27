@@ -75,6 +75,8 @@ import {
 	workflowSleepActor,
 	workflowStopTeardownActor,
 } from "./workflow";
+import { startStopRaceActor, lifecycleObserver } from "./start-stop-race";
+import { connErrorSerializationActor } from "./conn-error-serialization";
 
 // Consolidated setup with all actors
 export const registry = setup({
@@ -177,5 +179,10 @@ export const registry = setup({
 		// From access-control.ts
 		accessControlActor,
 		accessControlNoQueuesActor,
+		// From start-stop-race.ts
+		startStopRaceActor,
+		lifecycleObserver,
+		// From conn-error-serialization.ts
+		connErrorSerializationActor,
 	},
 });

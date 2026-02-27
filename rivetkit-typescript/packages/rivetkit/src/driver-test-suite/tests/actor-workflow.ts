@@ -13,8 +13,18 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 				"workflow-basic",
 			]);
 
-			await waitFor(driverTestConfig, 1000);
-			const state = await actor.getState();
+			let state = await actor.getState();
+			for (let i = 0; i < 50; i++) {
+				if (
+					state.runCount > 0 &&
+					state.history.length > 0 &&
+					state.guardTriggered
+				) {
+					break;
+				}
+				await waitFor(driverTestConfig, 100);
+				state = await actor.getState();
+			}
 			expect(state.runCount).toBeGreaterThan(0);
 			expect(state.history.length).toBeGreaterThan(0);
 			expect(state.guardTriggered).toBe(true);

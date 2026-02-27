@@ -275,7 +275,7 @@ export function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeType>) {
 							className="text-[9px] font-medium"
 							style={{ color: isFailed ? "#ef4444" : "#f59e0b" }}
 						>
-							x{data.retryCount}
+							x{data.retryCount + 1}
 						</span>
 					</div>
 				)}

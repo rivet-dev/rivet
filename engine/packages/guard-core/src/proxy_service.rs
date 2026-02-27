@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Full, Limited};
 use hyper::{
 	Request, Response, StatusCode,
 	body::Incoming as BodyIncoming,
@@ -723,13 +723,12 @@ impl ProxyService {
 			ResolveRouteOutput::Target(mut target) => {
 				// Read the request body before proceeding with retries
 				let (req_parts, body) = req.into_parts();
-				let req_body = match http_body_util::BodyExt::collect(body).await {
-					Ok(collected) => collected.to_bytes(),
-					Err(err) => {
-						tracing::debug!(?err, "Failed to read request body");
-						Bytes::new()
-					}
-				};
+				let req_body =
+					Limited::new(body, self.state.config.guard().http_max_request_body_size())
+						.collect()
+						.await
+						.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
+						.to_bytes();
 
 				// Use a value-returning loop to handle both errors and successful responses
 				let mut attempts = 0;
@@ -742,7 +741,8 @@ impl ProxyService {
 
 					// Create the final request with body
 					let proxied_req = builder
-						.body(Full::<Bytes>::new(req_body.clone()))
+						// NOTE: the `Bytes` type is cheaply cloneable, this is not resource intensive
+						.body(Full::new(req_body.clone()))
 						.map_err(|err| errors::RequestBuildError(err.to_string()).build())?;
 
 					// Send the request with timeout
@@ -800,10 +800,16 @@ impl ProxyService {
 								return Ok(Response::from_parts(parts, streaming_body));
 							} else {
 								// For non-streaming responses, buffer as before
-								let body_bytes = match BodyExt::collect(body).await {
-									Ok(collected) => collected.to_bytes(),
-									Err(_) => Bytes::new(),
-								};
+								let body_bytes = Limited::new(
+									body,
+									self.state.config.guard().http_max_request_body_size(),
+								)
+								.collect()
+								.await
+								.map_err(|err| {
+									errors::InvalidResponseBody(err.to_string()).build()
+								})?
+								.to_bytes();
 
 								let full_body = ResponseBody::Full(Full::new(body_bytes));
 								return Ok(Response::from_parts(parts, full_body));
@@ -857,15 +863,14 @@ impl ProxyService {
 			ResolveRouteOutput::CustomServe(mut handler) => {
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
-				let collected_body = match http_body_util::BodyExt::collect(body).await {
-					Ok(collected) => collected.to_bytes(),
-					Err(err) => {
-						tracing::debug!(?err, "Failed to read request body");
-						Bytes::new()
-					}
-				};
+				let req_body =
+					Limited::new(body, self.state.config.guard().http_max_request_body_size())
+						.collect()
+						.await
+						.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
+						.to_bytes();
 				let req_collected =
-					hyper::Request::from_parts(req_parts, Full::<Bytes>::new(collected_body));
+					hyper::Request::from_parts(req_parts, Full::<Bytes>::new(req_body));
 
 				// Attempt request
 				let mut attempts = 0;

@@ -94,6 +94,19 @@ impl TestCtx {
 		&*self.debug_db
 	}
 
+	pub fn standalone(&self) -> Result<StandaloneCtx> {
+		StandaloneCtx::new(
+			self.db.clone(),
+			self.config.clone(),
+			self.pools.clone(),
+			self.cache.clone(),
+			&self.name,
+			self.ray_id,
+			Id::new_v1(self.config.dc_label()),
+		)
+		.map_err(Into::into)
+	}
+
 	pub async fn shutdown(&mut self) -> Result<()> {
 		if let Some(worker_handle) = self.worker_handle.take() {
 			tracing::info!("stopping workflow worker");

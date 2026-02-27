@@ -110,6 +110,17 @@ impl ChunkTracker {
 	}
 }
 
+/// Returns the number of bytes needed to encode `n` as a BARE unsigned integer (LEB128).
+fn bare_uint_len(n: usize) -> usize {
+	let mut len = 1;
+	let mut v = n >> 7;
+	while v > 0 {
+		len += 1;
+		v >>= 7;
+	}
+	len
+}
+
 /// Splits a payload into chunks that fit within message size limits.
 ///
 /// This function handles chunking by accounting for different overhead
@@ -160,9 +171,21 @@ pub fn split_payload_into_chunks(
 		.serialize_with_embedded_version(PROTOCOL_VERSION)?
 		.len();
 
-	// Calculate max payload sizes
-	let first_chunk_max_payload = max_message_size.saturating_sub(start_overhead);
-	let other_chunk_max_payload = max_message_size.saturating_sub(chunk_overhead);
+	// Calculate max payload sizes, correcting for the variable-length encoding of the
+	// data length prefix. The overhead above was computed with an empty payload
+	// (uint(0) = 1 byte). For payloads >= 128 bytes the length prefix grows (LEB128
+	// encoding), so we subtract those extra bytes to ensure every encoded chunk fits
+	// within max_message_size.
+	let first_chunk_max_payload = {
+		let raw = max_message_size.saturating_sub(start_overhead);
+		let extra = bare_uint_len(raw).saturating_sub(1);
+		raw.saturating_sub(extra)
+	};
+	let other_chunk_max_payload = {
+		let raw = max_message_size.saturating_sub(chunk_overhead);
+		let extra = bare_uint_len(raw).saturating_sub(1);
+		raw.saturating_sub(extra)
+	};
 
 	if first_chunk_max_payload == 0 || other_chunk_max_payload == 0 {
 		bail!("message overhead exceeds max message size");

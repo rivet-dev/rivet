@@ -1,17 +1,5 @@
 use rivet_error::*;
-use serde::{Deserialize, Serialize};
-
-#[derive(RivetError, Serialize, Deserialize)]
-#[error(
-	"guard",
-	"response_body_too_large",
-	"Response body too large.",
-	"Response body size {size} bytes exceeds maximum allowed {max_size} bytes."
-)]
-pub struct ResponseBodyTooLarge {
-	pub size: usize,
-	pub max_size: usize,
-}
+use serde::Serialize;
 
 #[derive(RivetError, Debug)]
 #[error("ws")]

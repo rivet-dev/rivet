@@ -27,7 +27,11 @@ import {
 	PopoverTrigger,
 	Skeleton,
 } from "@/components";
-import { useCloudDataProvider } from "@/components/actors";
+import {
+	useCloudDataProvider,
+	useEngineCompatDataProvider,
+	useEngineDataProvider,
+} from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
@@ -42,7 +46,9 @@ export function ContextSwitcher({ inline }: { inline?: boolean }) {
 	return (
 		<ContextSwitcherInner
 			inline={inline}
-			organization={match.organization}
+			organization={
+				"organization" in match ? match.organization : undefined
+			}
 		/>
 	);
 }
@@ -51,15 +57,20 @@ function ContextSwitcherInner({
 	organization,
 	inline,
 }: {
-	organization: string;
+	organization?: string;
 	inline?: boolean;
 }) {
 	const [isOpen, setIsOpen] = useState(false);
-	usePrefetchInfiniteQuery({
-		...useCloudDataProvider().projectsQueryOptions({
-			organization,
-		}),
-	});
+
+	if (__APP_TYPE__ === "cloud") {
+		// biome-ignore lint/correctness/useHookAtTopLevel: guaranteed by build condition
+		usePrefetchInfiniteQuery({
+			// biome-ignore lint/correctness/useHookAtTopLevel: guaranteed by build condition
+			...useCloudDataProvider().projectsQueryOptions({
+				organization: organization!,
+			}),
+		});
+	}
 
 	return (
 		<Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -92,6 +103,7 @@ const useContextSwitcherMatch = ():
 			organization: string;
 	  }
 	| { organization: string; project: string }
+	| { namespace: string }
 	| false => {
 	const match = useMatchRoute();
 
@@ -111,6 +123,15 @@ const useContextSwitcherMatch = ():
 
 	if (matchProject) {
 		return matchProject;
+	}
+
+	const matchEngineNamespace = match({
+		to: "/ns/$namespace",
+		fuzzy: true,
+	});
+
+	if (matchEngineNamespace) {
+		return matchEngineNamespace;
 	}
 
 	return false;
@@ -156,10 +177,15 @@ function Breadcrumbs({ inline }: { inline?: boolean }) {
 	}
 
 	if (match && "project" in match) {
+		return <ProjectBreadcrumb project={match.project} />;
+	}
+
+	if (match && "namespace" in match) {
 		return (
-			<>
-				<ProjectBreadcrumb project={match.project} />
-			</>
+			<EngineNamespaceBreadcrumb
+				className="text-left truncate block"
+				namespace={match.namespace}
+			/>
 		);
 	}
 
@@ -204,6 +230,27 @@ function NamespaceBreadcrumb({
 	);
 	if (isLoading) {
 		return <Skeleton className="h-5 w-32" />;
+	}
+
+	return (
+		<span className={className}>
+			{data?.displayName || "Unknown Namespace"}
+		</span>
+	);
+}
+
+function EngineNamespaceBreadcrumb({
+	namespace,
+	className,
+}: {
+	namespace: string;
+	className?: string;
+}) {
+	const { isLoading, data } = useQuery(
+		useEngineCompatDataProvider().namespaceQueryOptions(namespace),
+	);
+	if (isLoading) {
+		return <Skeleton className={cn("h-5 w-32", className)} />;
 	}
 
 	return (

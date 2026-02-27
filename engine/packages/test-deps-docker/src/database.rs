@@ -89,48 +89,56 @@ impl TestDatabase {
 		}
 	}
 
-	/// Wait for Postgres to be ready to accept connections
-	pub async fn wait_for_postgres_ready(port: u16, max_attempts: u32) -> Result<()> {
-		use std::str::FromStr;
-		use tokio_postgres::Config;
+	pub async fn wait_for_ready(&self, docker_config: &DockerRunConfig) -> Result<()> {
+		match self {
+			TestDatabase::Postgres => {
+				wait_for_postgres_ready(docker_config.port_mapping.0, 10).await
+			}
+			TestDatabase::FileSystem => Ok(()),
+		}
+	}
+}
 
-		let connection_string =
-			format!("postgres://postgres:test_password@127.0.0.1:{port}/test_db");
+/// Wait for Postgres to be ready to accept connections
+async fn wait_for_postgres_ready(port: u16, max_attempts: u32) -> Result<()> {
+	use std::str::FromStr;
+	use tokio_postgres::Config;
 
-		for attempt in 1..=max_attempts {
-			tracing::debug!(attempt, max_attempts, "Checking if Postgres is ready");
+	let connection_string = format!("postgres://postgres:test_password@127.0.0.1:{port}/test_db");
 
-			match Config::from_str(&connection_string)?
-				.connect(tokio_postgres::NoTls)
-				.await
-			{
-				std::result::Result::Ok((client, connection)) => {
-					// Spawn connection handler
-					tokio::spawn(async move {
-						if let Err(e) = connection.await {
-							tracing::debug!(error = ?e, "Connection error");
-						}
-					});
+	for attempt in 1..=max_attempts {
+		tracing::debug!(attempt, max_attempts, "Checking if Postgres is ready");
 
-					// Try a simple query
-					if client.simple_query("SELECT 1").await.is_ok() {
-						tracing::debug!("Postgres is ready");
-						return Ok(());
+		match Config::from_str(&connection_string)?
+			.connect(tokio_postgres::NoTls)
+			.await
+		{
+			std::result::Result::Ok((client, connection)) => {
+				// Spawn connection handler
+				tokio::spawn(async move {
+					if let Err(e) = connection.await {
+						tracing::debug!(error = ?e, "Connection error");
 					}
-				}
-				Err(e) => {
-					tracing::debug!(error = ?e, attempt, "Postgres not ready yet");
+				});
+
+				// Try a simple query
+				if client.simple_query("SELECT 1").await.is_ok() {
+					tracing::debug!("Postgres is ready");
+					return Ok(());
 				}
 			}
-
-			if attempt < max_attempts {
-				sleep(Duration::from_millis(500)).await;
+			Err(e) => {
+				tracing::debug!(error = ?e, attempt, "Postgres not ready yet");
 			}
 		}
 
-		anyhow::bail!(
-			"Postgres failed to become ready after {} attempts",
-			max_attempts
-		)
+		if attempt < max_attempts {
+			sleep(Duration::from_millis(500)).await;
+		}
 	}
+
+	anyhow::bail!(
+		"Postgres failed to become ready after {} attempts",
+		max_attempts
+	)
 }

@@ -37,14 +37,13 @@ pub async fn setup_single_datacenter(
 		let was_started = docker_config.start().await?;
 		container_names.push(docker_config.container_name.clone());
 
-		// If Postgres was just started, wait for it to be ready
-		if was_started && test_database == TestDatabase::Postgres {
+		if was_started {
 			tracing::info!(
 				dc = dc.datacenter_label,
 				port = docker_config.port_mapping.0,
-				"waiting for Postgres to be ready"
+				"waiting for database to be ready"
 			);
-			TestDatabase::wait_for_postgres_ready(docker_config.port_mapping.0, 10).await?;
+			test_database.wait_for_ready(&docker_config).await?;
 		}
 	}
 

@@ -212,6 +212,7 @@ export class ActorWorkflowContext<
 			body: unknown,
 		): Promise<void>;
 		async function send(name: string, body: unknown): Promise<void> {
+			self.#ensureActorAccess("queue.send");
 			await self.#runCtx.queue.send(name as never, body as never);
 		}
 
@@ -445,10 +446,12 @@ export class ActorWorkflowContext<
 	}
 
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
+		this.#ensureActorAccess("keepAwake");
 		return this.#runCtx.keepAwake(promise);
 	}
 
 	waitUntil(promise: Promise<void>): void {
+		this.#ensureActorAccess("waitUntil");
 		this.#runCtx.waitUntil(promise);
 	}
 
@@ -465,6 +468,7 @@ export class ActorWorkflowContext<
 		...args: Array<unknown>
 	): void;
 	broadcast(name: string, ...args: Array<unknown>): void {
+		this.#ensureActorAccess("broadcast");
 		this.#runCtx.broadcast(
 			name as never,
 			...((args as unknown[]) as never[]),

@@ -96,13 +96,12 @@ const defaultContext = {
 				return undefined;
 			},
 			select: (data) => {
+				// Flatten the paginated responses into a single list of builds
 				return data.pages.flatMap((page) =>
-					Array.from(
-						Object.entries(page.names).map(([id, name]) => ({
-							id,
-							name,
-						})),
-					),
+					Object.entries(page.names).map(([id, name]) => ({
+						id,
+						name,
+					})),
 				);
 			},
 		});
@@ -146,6 +145,7 @@ const defaultContext = {
 	// #region Actor Queries
 	actorQueryOptions(actorId: ActorId) {
 		return queryOptions({
+			refetchInterval: 5000,
 			queryFn: async () => {
 				return {} as Rivet.Actor;
 			},

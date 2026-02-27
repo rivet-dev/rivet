@@ -783,29 +783,20 @@ async fn handle_tunnel_message_mk2(
 	ctx: &StandaloneCtx,
 	msg: protocol::mk2::ToServerTunnelMessage,
 ) -> Result<()> {
-	// Check response body size limit for HTTP responses
-	if let protocol::mk2::ToServerTunnelMessageKind::ToServerResponseStart(ref resp) =
-		msg.message_kind
+	// Extract inner data length before consuming msg
+	let inner_data_len = tunnel_message_inner_data_len_mk2(&msg.message_kind);
+
+	// Enforce incoming payload size
+	if inner_data_len
+		> ctx
+			.config()
+			.pegboard()
+			.runner_max_response_payload_body_size()
 	{
-		if let Some(ref body) = resp.body {
-			let max_response_body_size =
-				ctx.config().pegboard().runner_http_max_response_body_size();
-			if body.len() > max_response_body_size {
-				return Err(errors::ResponseBodyTooLarge {
-					size: body.len(),
-					max_size: max_response_body_size,
-				}
-				.build());
-			}
-		}
+		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
-	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
-
-	// Extract inner data length before consuming msg
-	let inner_data_len = tunnel_message_inner_data_len(&msg.message_kind);
-
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::mk2::ToGateway::ToServerTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
@@ -817,6 +808,7 @@ async fn handle_tunnel_message_mk2(
 		"publishing tunnel message to gateway"
 	);
 
+	// Publish message to UPS
 	ctx.ups()
 		.context("failed to get UPS instance for tunnel message")?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
@@ -829,22 +821,6 @@ async fn handle_tunnel_message_mk2(
 		})?;
 
 	Ok(())
-}
-
-/// Returns the length of the inner data payload for a tunnel message kind.
-fn tunnel_message_inner_data_len(kind: &protocol::mk2::ToServerTunnelMessageKind) -> usize {
-	use protocol::mk2::ToServerTunnelMessageKind;
-	match kind {
-		ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
-			resp.body.as_ref().map_or(0, |b| b.len())
-		}
-		ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.body.len(),
-		ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => msg.data.len(),
-		ToServerTunnelMessageKind::ToServerResponseAbort
-		| ToServerTunnelMessageKind::ToServerWebSocketOpen(_)
-		| ToServerTunnelMessageKind::ToServerWebSocketMessageAck(_)
-		| ToServerTunnelMessageKind::ToServerWebSocketClose(_) => 0,
-	}
 }
 
 #[tracing::instrument(skip_all)]
@@ -860,24 +836,22 @@ async fn handle_tunnel_message_mk1(
 		return Ok(());
 	}
 
-	// Check response body size limit for HTTP responses
-	if let protocol::ToServerTunnelMessageKind::ToServerResponseStart(ref resp) = msg.message_kind {
-		if let Some(ref body) = resp.body {
-			let max_response_body_size =
-				ctx.config().pegboard().runner_http_max_response_body_size();
-			if body.len() > max_response_body_size {
-				return Err(errors::ResponseBodyTooLarge {
-					size: body.len(),
-					max_size: max_response_body_size,
-				}
-				.build());
-			}
-		}
+	// Extract inner data length before consuming msg
+	let inner_data_len = tunnel_message_inner_data_len_mk1(&msg.message_kind);
+
+	// Enforce incoming payload size
+	if inner_data_len
+		> ctx
+			.config()
+			.pegboard()
+			.runner_max_response_payload_body_size()
+	{
+		return Err(errors::WsError::InvalidPacket("payload too large".to_string()).build());
 	}
 
 	// Publish message to UPS
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
-	let msg_serialized = versioned::ToGateway::v3_to_v4(versioned::ToGateway::V3(
+	let msg_serialized = versioned::ToGateway::v3_to_v6(versioned::ToGateway::V3(
 		protocol::ToGateway::ToServerTunnelMessage(msg),
 	))?
 	.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
@@ -894,6 +868,39 @@ async fn handle_tunnel_message_mk1(
 		})?;
 
 	Ok(())
+}
+
+/// Returns the length of the inner data payload for a tunnel message kind.
+fn tunnel_message_inner_data_len_mk2(kind: &protocol::mk2::ToServerTunnelMessageKind) -> usize {
+	use protocol::mk2::ToServerTunnelMessageKind;
+	match kind {
+		ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			resp.body.as_ref().map_or(0, |b| b.len())
+		}
+		ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.body.len(),
+		ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => msg.data.len(),
+		ToServerTunnelMessageKind::ToServerResponseAbort
+		| ToServerTunnelMessageKind::ToServerWebSocketOpen(_)
+		| ToServerTunnelMessageKind::ToServerWebSocketMessageAck(_)
+		| ToServerTunnelMessageKind::ToServerWebSocketClose(_) => 0,
+	}
+}
+
+/// Returns the length of the inner data payload for a tunnel message kind.
+fn tunnel_message_inner_data_len_mk1(kind: &protocol::ToServerTunnelMessageKind) -> usize {
+	use protocol::ToServerTunnelMessageKind;
+	match kind {
+		ToServerTunnelMessageKind::ToServerResponseStart(resp) => {
+			resp.body.as_ref().map_or(0, |b| b.len())
+		}
+		ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.body.len(),
+		ToServerTunnelMessageKind::ToServerWebSocketMessage(msg) => msg.data.len(),
+		ToServerTunnelMessageKind::ToServerResponseAbort
+		| ToServerTunnelMessageKind::ToServerWebSocketOpen(_)
+		| ToServerTunnelMessageKind::ToServerWebSocketMessageAck(_)
+		| ToServerTunnelMessageKind::ToServerWebSocketClose(_)
+		| ToServerTunnelMessageKind::DeprecatedTunnelAck => 0,
+	}
 }
 
 /// Send ack message for deprecated tunnel versions.

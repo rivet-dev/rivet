@@ -195,6 +195,19 @@ export class ActorInstance<
 	// MARK: - Tracing
 	#traces!: Traces<OtlpExportTraceServiceRequestJson>;
 
+	// MARK: - Driver Overrides
+	/**
+	 * Per-instance config option overrides applied by the driver after creation.
+	 * When set, the effective option value is the minimum of the base config
+	 * value and the override value.
+	 */
+	overrides: {
+		onSleepTimeout?: number;
+		onDestroyTimeout?: number;
+		runStopTimeout?: number;
+		waitUntilTimeout?: number;
+	} = {};
+
 	// MARK: - Constructor
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {
 		this.#config = config;
@@ -486,13 +499,16 @@ export class ActorInstance<
 				this.#sleepTimeout = undefined;
 			}
 
-			// Abort listeners
+			// Abort listeners in the canonical stop path.
+			// This must run for all stop modes, including sleep and remote stop.
+			// Destroy may have already triggered an early abort, but repeating abort
+			// is intentional and safe.
 			try {
 				this.#abortController.abort();
 			} catch { }
 
 			// Wait for run handler to complete
-			await this.#waitForRunHandler(this.#config.options.runStopTimeout);
+			await this.#waitForRunHandler(this.overrides.runStopTimeout !== undefined ? Math.min(this.#config.options.runStopTimeout, this.overrides.runStopTimeout) : this.#config.options.runStopTimeout);
 
 			// Call onStop lifecycle
 			if (mode === "sleep") {
@@ -508,7 +524,7 @@ export class ActorInstance<
 
 			// Wait for background tasks
 			await this.#waitBackgroundPromises(
-				this.#config.options.waitUntilTimeout,
+				this.overrides.waitUntilTimeout !== undefined ? Math.min(this.#config.options.waitUntilTimeout, this.overrides.waitUntilTimeout) : this.#config.options.waitUntilTimeout,
 			);
 
 			// Clear timeouts and save state
@@ -573,6 +589,14 @@ export class ActorInstance<
 			return;
 		}
 		this.#destroyCalled = true;
+
+		// Abort immediately so in flight waits can exit before the driver stop
+		// handshake completes.
+		// The onStop path will call abort again as a safety net for all stop
+		// modes.
+		try {
+			this.#abortController.abort();
+		} catch {}
 
 		const destroy = this.driver.startDestroy.bind(
 			this.driver,
@@ -958,7 +982,7 @@ export class ActorInstance<
 	 * Errors are propagated to the caller.
 	 */
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
-		this.assertReady();
+		this.assertReady(true);
 
 		this.#activeKeepAwakeCount++;
 		this.resetSleepTimer();
@@ -1254,7 +1278,7 @@ export class ActorInstance<
 						if (result instanceof Promise) {
 							await deadline(
 								result,
-								this.#config.options.onSleepTimeout,
+								this.overrides.onSleepTimeout !== undefined ? Math.min(this.#config.options.onSleepTimeout, this.overrides.onSleepTimeout) : this.#config.options.onSleepTimeout,
 							);
 						}
 					},
@@ -1286,7 +1310,7 @@ export class ActorInstance<
 						if (result instanceof Promise) {
 							await deadline(
 								result,
-								this.#config.options.onDestroyTimeout,
+								this.overrides.onDestroyTimeout !== undefined ? Math.min(this.#config.options.onDestroyTimeout, this.overrides.onDestroyTimeout) : this.#config.options.onDestroyTimeout,
 							);
 						}
 					},
