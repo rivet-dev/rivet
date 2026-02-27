@@ -152,7 +152,7 @@ async function autoConfigureServerless() {
 				datacenters: {
 					default: {
 						serverless: {
-							url: `http://localhost:${INTERNAL_SERVER_PORT}`,
+							url: `http://localhost:${INTERNAL_SERVER_PORT}/api/rivet`,
 							max_runners: 10000,
 							slots_per_runner: 1,
 							request_lifespan: 300,
