@@ -331,6 +331,10 @@ export const sitemap = [
 								title: "Limits",
 								href: "/docs/actors/limits",
 							},
+							{
+								title: "Troubleshooting",
+								href: "/docs/general/troubleshooting",
+							},
 						],
 					},
 				],
