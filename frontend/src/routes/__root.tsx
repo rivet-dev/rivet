@@ -1,12 +1,12 @@
 import type { Clerk } from "@clerk/clerk-js";
 import type { QueryClient } from "@tanstack/react-query";
 import {
-	Outlet,
 	createRootRouteWithContext,
+	Outlet,
 	useNavigate,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { type PropsWithChildren, Suspense, lazy } from "react";
+import { lazy, type PropsWithChildren, Suspense } from "react";
 import { match } from "ts-pattern";
 import type {
 	CloudContext,
@@ -16,6 +16,7 @@ import type {
 	OrganizationContext,
 	ProjectContext,
 } from "@/app/data-providers/cache";
+import { DevToolbar } from "@/app/dev-toolbar";
 import { FullscreenLoading } from "@/components";
 import { clerkPromise } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
@@ -24,6 +25,7 @@ function RootRoute() {
 	return (
 		<>
 			<Outlet />
+			<DevToolbar />
 			{import.meta.env.DEV ? (
 				<TanStackRouterDevtools position="bottom-right" />
 			) : null}
@@ -37,15 +39,24 @@ const LazyClerkProvider = lazy(() =>
 		import("@clerk/themes"),
 		clerkPromise,
 	]).then(([{ ClerkProvider }, { dark }, clerk]) => ({
-		default: ({ children, navigatePush, navigateReplace }: PropsWithChildren<{ navigatePush: (to: string) => void; navigateReplace: (to: string) => void }>) => (
+		default: ({
+			children,
+			navigatePush,
+			navigateReplace,
+		}: PropsWithChildren<{
+			navigatePush: (to: string) => void;
+			navigateReplace: (to: string) => void;
+		}>) => (
 			<ClerkProvider
 				Clerk={clerk}
 				appearance={{
 					baseTheme: dark,
 					variables: {
 						colorPrimary: "hsl(var(--primary))",
-						colorPrimaryForeground: "hsl(var(--primary-foreground))",
-						colorTextOnPrimaryBackground: "hsl(var(--primary-foreground))",
+						colorPrimaryForeground:
+							"hsl(var(--primary-foreground))",
+						colorTextOnPrimaryBackground:
+							"hsl(var(--primary-foreground))",
 						colorBackground: "hsl(var(--background))",
 						colorInput: "hsl(var(--input))",
 						colorText: "hsl(var(--text))",
@@ -80,6 +91,7 @@ function CloudRoute() {
 				navigateReplace={(to) => navigate({ to, replace: true })}
 			>
 				<Outlet />
+				<DevToolbar />
 				{import.meta.env.DEV ? (
 					<TanStackRouterDevtools position="bottom-right" />
 				) : null}
