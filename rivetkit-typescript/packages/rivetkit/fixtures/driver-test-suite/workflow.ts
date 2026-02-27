@@ -226,10 +226,64 @@ async function updateWorkflowAccessState(
 		typeof client.workflowQueueActor.getForId === "function";
 }
 
+const WORKFLOW_BATCH_QUEUE_NAME = "batch-requests";
+
+export const workflowBatchJoinActor = actor({
+	state: {
+		processedRows: [] as number[],
+		processedCells: [] as string[],
+		requestsCompleted: 0,
+	},
+	queues: {
+		[WORKFLOW_BATCH_QUEUE_NAME]: queue<{ rowIds: number[] }>(),
+	},
+	run: workflow(async (ctx) => {
+		await ctx.loop("request-loop", async (loopCtx) => {
+			const request = await loopCtx.queue.next("wait-request", {
+				names: [WORKFLOW_BATCH_QUEUE_NAME],
+			});
+
+			const rowIds = request.body.rowIds;
+
+			// Fan out all rows in a single join.
+			const branches = Object.fromEntries(
+				rowIds.map((rowId, i) => [
+					`row-${i}`,
+					{
+						run: async (branchCtx: WorkflowLoopContextOf<typeof workflowBatchJoinActor>) => {
+							await branchCtx.step(`cell-a-${rowId}`, async () => {
+								branchCtx.state.processedCells.push(`a-${rowId}`);
+							});
+							await branchCtx.step(`cell-b-${rowId}`, async () => {
+								branchCtx.state.processedCells.push(`b-${rowId}`);
+							});
+							await branchCtx.step(`cell-c-${rowId}`, async () => {
+								branchCtx.state.processedRows.push(rowId);
+								branchCtx.state.processedCells.push(`c-${rowId}`);
+							});
+						},
+					},
+				]),
+			);
+
+			await loopCtx.join("process-rows", branches);
+
+			await loopCtx.step("request-done", async () => {
+				loopCtx.state.requestsCompleted += 1;
+			});
+
+			return Loop.continue(undefined);
+		});
+	}),
+	actions: {
+		getState: (c) => c.state,
+	},
+});
+
 function incrementWorkflowSleepTick(
 	ctx: WorkflowLoopContextOf<typeof workflowSleepActor>,
 ): void {
 	ctx.state.ticks += 1;
 }
 
-export { WORKFLOW_QUEUE_NAME };
+export { WORKFLOW_QUEUE_NAME, WORKFLOW_BATCH_QUEUE_NAME };
