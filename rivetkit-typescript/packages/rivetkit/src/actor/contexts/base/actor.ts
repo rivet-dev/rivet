@@ -8,8 +8,8 @@ import type { ActorDefinition, AnyActorDefinition } from "../../definition";
 import * as errors from "../../errors";
 import { ActorKv } from "../../instance/kv";
 import type {
-	ActorInstance,
-	AnyActorInstance,
+	StaticActorInstance,
+	AnyStaticActorInstance,
 	SaveStateOptions,
 } from "../../instance/mod";
 import { ActorQueue } from "../../instance/queue";
@@ -40,8 +40,8 @@ export class ActorContext<
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
-	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyActorInstance;
-	#actor: ActorInstance<
+	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyStaticActorInstance;
+	#actor: StaticActorInstance<
 		TState,
 		TConnParams,
 		TConnState,
@@ -66,7 +66,7 @@ export class ActorContext<
 		| undefined;
 
 	constructor(
-		actor: ActorInstance<
+		actor: StaticActorInstance<
 			TState,
 			TConnParams,
 			TConnState,
@@ -78,7 +78,7 @@ export class ActorContext<
 		>,
 	) {
 		this.#actor = actor;
-		this[ACTOR_CONTEXT_INTERNAL_SYMBOL] = actor as AnyActorInstance;
+		this[ACTOR_CONTEXT_INTERNAL_SYMBOL] = actor as AnyStaticActorInstance;
 	}
 
 	/**

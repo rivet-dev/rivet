@@ -87,7 +87,29 @@ enum CanSleep {
 	ActiveRun,
 }
 
-/** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
+/**
+ * Minimal lifecycle contract shared by static and dynamic actor instances.
+ *
+ * Runtime internals (connections, inspector, queue manager, etc) are exposed
+ * only on `StaticActorInstance`.
+ */
+export interface ActorInstance<
+	S = any,
+	CP = any,
+	CS = any,
+	V = any,
+	I = any,
+	DB extends AnyDatabaseProvider = AnyDatabaseProvider,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
+> {
+	readonly id: string;
+	readonly isStopping: boolean;
+	onStop(mode: "sleep" | "destroy"): Promise<void>;
+	onAlarm(): Promise<void>;
+}
+
+/** Actor type alias with all `any` types. */
 export type AnyActorInstance = ActorInstance<
 	any,
 	any,
@@ -99,23 +121,68 @@ export type AnyActorInstance = ActorInstance<
 	any
 >;
 
+/** Static actor type alias with all `any` types. */
+export type AnyStaticActorInstance = StaticActorInstance<
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any
+>;
+
+export function isStaticActorInstance(
+	actor: AnyActorInstance,
+): actor is AnyStaticActorInstance {
+	return actor instanceof StaticActorInstance;
+}
+
 export type ExtractActorState<A extends AnyActorInstance> =
-	A extends ActorInstance<infer State, any, any, any, any, any, any, any>
+	A extends StaticActorInstance<
+		infer State,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any
+	>
 		? State
 		: never;
 
 export type ExtractActorConnParams<A extends AnyActorInstance> =
-	A extends ActorInstance<any, infer ConnParams, any, any, any, any, any, any>
+	A extends StaticActorInstance<
+		any,
+		infer ConnParams,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any
+	>
 		? ConnParams
 		: never;
 
 export type ExtractActorConnState<A extends AnyActorInstance> =
-	A extends ActorInstance<any, any, infer ConnState, any, any, any, any, any>
+	A extends StaticActorInstance<
+		any,
+		any,
+		infer ConnState,
+		any,
+		any,
+		any,
+		any,
+		any
+	>
 		? ConnState
 		: never;
 
-// MARK: - Main ActorInstance Class
-export class ActorInstance<
+// MARK: - Main Static ActorInstance Class
+export class StaticActorInstance<
 	S,
 	CP,
 	CS,
@@ -124,7 +191,7 @@ export class ActorInstance<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-> {
+> implements ActorInstance<S, CP, CS, V, I, DB, E, Q> {
 	// MARK: - Core Properties
 	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
@@ -1450,7 +1517,7 @@ export class ActorInstance<
 				this.#sqliteVfs = await this.driver.createSqliteVfs();
 			}
 
-			client = await this.#config.db.createClient({
+				client = await this.#config.db.createClient({
 				actorId: this.#actorId,
 				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
 					? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
@@ -1458,11 +1525,14 @@ export class ActorInstance<
 				overrideDrizzleDatabaseClient: this.driver.overrideDrizzleDatabaseClient
 					? () => this.driver.overrideDrizzleDatabaseClient!(this.#actorId)
 					: undefined,
-				kv: {
-					batchPut: (entries) => this.driver.kvBatchPut(this.#actorId, entries),
-					batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
-					batchDelete: (keys) => this.driver.kvBatchDelete(this.#actorId, keys),
-				},
+					kv: {
+						batchPut: (entries: [Uint8Array, Uint8Array][]) =>
+							this.driver.kvBatchPut(this.#actorId, entries),
+						batchGet: (keys: Uint8Array[]) =>
+							this.driver.kvBatchGet(this.#actorId, keys),
+						batchDelete: (keys: Uint8Array[]) =>
+							this.driver.kvBatchDelete(this.#actorId, keys),
+					},
 				sqliteVfs: this.#sqliteVfs,
 			});
 			this.#rLog.info({ msg: "database migration starting" });

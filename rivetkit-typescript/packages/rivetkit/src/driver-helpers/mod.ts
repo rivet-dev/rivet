@@ -1,6 +1,11 @@
 export type { ActorDriver } from "@/actor/driver";
 export { KEYS, makeConnKey } from "@/actor/instance/keys";
-export type { ActorInstance, AnyActorInstance } from "@/actor/instance/mod";
+export type {
+	ActorInstance,
+	AnyActorInstance,
+	AnyStaticActorInstance,
+	StaticActorInstance,
+} from "@/actor/instance/mod";
 export {
 	ALLOWED_PUBLIC_HEADERS,
 	HEADER_ACTOR_ID,

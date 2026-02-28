@@ -20,8 +20,8 @@ import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { AnyClient } from "@/client/client";
 import {
 	createDynamicActorLoaderContext,
+	type DynamicActorLoader,
 	type DynamicActorLoadResult,
-	type DynamicActorMetadata,
 } from "./internal";
 
 const DYNAMIC_RUNTIME_ROOT = path.join(
@@ -126,6 +126,11 @@ interface WebSocketOpenEnvelopeInput {
 	path: string;
 	encoding: Encoding;
 	params: unknown;
+	headers?: Record<string, string>;
+	gatewayIdBase64?: string;
+	requestIdBase64?: string;
+	isHibernatable?: boolean;
+	isRestoringHibernatable?: boolean;
 }
 
 interface WebSocketSendEnvelopeInput {
@@ -133,6 +138,7 @@ interface WebSocketSendEnvelopeInput {
 	kind: "text" | "binary";
 	text?: string;
 	dataBase64?: string;
+	rivetMessageIndex?: number;
 }
 
 interface WebSocketCloseEnvelopeInput {
@@ -152,6 +158,7 @@ type IsolateDispatchPayload =
 			kind: "text" | "binary";
 			text?: string;
 			dataBase64?: string;
+			rivetMessageIndex?: number;
 	  }
 	| {
 			type: "close";
@@ -183,9 +190,26 @@ interface DynamicActorHostRuntimeConfig {
 	actorKey: ActorKey;
 	input: unknown;
 	region: string;
-	metadata: DynamicActorMetadata;
+	loader: DynamicActorLoader;
 	actorDriver: ActorDriver;
 	inlineClient: AnyClient;
+}
+
+export interface DynamicWebSocketOpenOptions {
+	headers?: Record<string, string>;
+	gatewayId?: ArrayBuffer;
+	requestId?: ArrayBuffer;
+	isHibernatable?: boolean;
+	isRestoringHibernatable?: boolean;
+}
+
+export interface DynamicHibernatingWebSocketMetadata {
+	gatewayId: ArrayBuffer;
+	requestId: ArrayBuffer;
+	serverMessageIndex: number;
+	clientMessageIndex: number;
+	path: string;
+	headers: Record<string, string>;
 }
 
 export class DynamicActorHostRuntime {
@@ -207,12 +231,18 @@ export class DynamicActorHostRuntime {
 	#closeWebSocketRef:
 		| ReferenceLike<(input: WebSocketCloseEnvelopeInput) => Promise<boolean>>
 		| undefined;
+	#getHibernatingWebSocketsRef:
+		| ReferenceLike<
+				() => Promise<Array<DynamicHibernatingWebSocketMetadata>>
+		  >
+		| undefined;
 	#disposeRef: ReferenceLike<() => Promise<boolean>> | undefined;
 	#startSleepRef: ReferenceLike<(actorId: string) => void> | undefined;
 	#startDestroyRef: ReferenceLike<(actorId: string) => void> | undefined;
 
 	#referenceHandles: Array<{ release?: () => void }> = [];
 	#webSocketSessions = new Map<number, HostWebSocketSession>();
+	#sessionIdsByWebSocket = new WeakMap<UniversalWebSocket, number>();
 	#nextWebSocketSessionId = 1;
 	#started = false;
 	#disposed = false;
@@ -238,7 +268,7 @@ export class DynamicActorHostRuntime {
 			actorId: this.#config.actorId,
 		});
 
-		const loadResult = await this.#config.metadata.loader(
+		const loadResult = await this.#config.loader(
 			createDynamicActorLoaderContext(
 				this.#config.inlineClient,
 				this.#config.actorId,
@@ -368,6 +398,7 @@ export class DynamicActorHostRuntime {
 		pathValue: string,
 		encoding: Encoding,
 		params: unknown,
+		options: DynamicWebSocketOpenOptions = {},
 	): Promise<UniversalWebSocket> {
 		if (!this.#openWebSocketRef || !this.#sendWebSocketRef || !this.#closeWebSocketRef) {
 			throw new Error("dynamic runtime websocket bridge is not started");
@@ -394,18 +425,31 @@ export class DynamicActorHostRuntime {
 			pendingMessages: [],
 		};
 		this.#webSocketSessions.set(session.id, session);
+		this.#sessionIdsByWebSocket.set(session.websocket, session.id);
 
 		try {
+			const gatewayIdBase64 = options.gatewayId
+				? Buffer.from(new Uint8Array(options.gatewayId)).toString("base64")
+				: undefined;
+			const requestIdBase64 = options.requestId
+				? Buffer.from(new Uint8Array(options.requestId)).toString("base64")
+				: undefined;
+
 			await this.#openWebSocketRef.apply(
 				undefined,
 				[
 					{
 						sessionId,
-						path: pathValue,
-						encoding,
-						params,
-					} satisfies WebSocketOpenEnvelopeInput,
-				],
+							path: pathValue,
+							encoding,
+							params,
+							headers: options.headers,
+							gatewayIdBase64,
+							requestIdBase64,
+							isHibernatable: options.isHibernatable,
+							isRestoringHibernatable: options.isRestoringHibernatable,
+						} satisfies WebSocketOpenEnvelopeInput,
+					],
 				{
 					arguments: {
 						copy: true,
@@ -440,6 +484,37 @@ export class DynamicActorHostRuntime {
 				promise: true,
 			},
 		});
+	}
+
+	async getHibernatingWebSockets(): Promise<
+		Array<DynamicHibernatingWebSocketMetadata>
+	> {
+		if (!this.#getHibernatingWebSocketsRef) {
+			return [];
+		}
+		const entries = await this.#getHibernatingWebSocketsRef.apply(
+			undefined,
+			[],
+			{
+				result: {
+					copy: true,
+					promise: true,
+				},
+			},
+		);
+		return entries as Array<DynamicHibernatingWebSocketMetadata>;
+	}
+
+	async forwardIncomingWebSocketMessage(
+		websocket: UniversalWebSocket,
+		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
+	): Promise<void> {
+		const sessionId = this.#sessionIdsByWebSocket.get(websocket);
+		if (!sessionId) {
+			throw new Error("dynamic runtime websocket session not found");
+		}
+		await this.#sendWebSocketMessage(sessionId, data, rivetMessageIndex);
 	}
 
 	async stop(mode: "sleep" | "destroy"): Promise<void> {
@@ -514,6 +589,7 @@ export class DynamicActorHostRuntime {
 		this.#openWebSocketRef = undefined;
 		this.#sendWebSocketRef = undefined;
 		this.#closeWebSocketRef = undefined;
+		this.#getHibernatingWebSocketsRef = undefined;
 		this.#disposeRef = undefined;
 		this.#startSleepRef = undefined;
 		this.#startDestroyRef = undefined;
@@ -523,6 +599,7 @@ export class DynamicActorHostRuntime {
 	async #sendWebSocketMessage(
 		sessionId: number,
 		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
 	): Promise<void> {
 		if (!this.#sendWebSocketRef) return;
 
@@ -530,12 +607,13 @@ export class DynamicActorHostRuntime {
 			await this.#sendWebSocketRef.apply(
 				undefined,
 				[
-					{
-						sessionId,
-						kind: "text",
-						text: data,
-					} satisfies WebSocketSendEnvelopeInput,
-				],
+						{
+							sessionId,
+							kind: "text",
+							text: data,
+							rivetMessageIndex,
+						} satisfies WebSocketSendEnvelopeInput,
+					],
 				{
 					arguments: { copy: true },
 					result: { copy: true, promise: true },
@@ -548,12 +626,13 @@ export class DynamicActorHostRuntime {
 		await this.#sendWebSocketRef.apply(
 			undefined,
 			[
-				{
-					sessionId,
-					kind: "binary",
-					dataBase64: Buffer.from(binary).toString("base64"),
-				} satisfies WebSocketSendEnvelopeInput,
-			],
+					{
+						sessionId,
+						kind: "binary",
+						dataBase64: Buffer.from(binary).toString("base64"),
+						rivetMessageIndex,
+					} satisfies WebSocketSendEnvelopeInput,
+				],
 			{
 				arguments: { copy: true },
 				result: { copy: true, promise: true },
@@ -715,11 +794,12 @@ export class DynamicActorHostRuntime {
 				globalThis.__dynamicFetchEnvelope = bootstrap.dynamicFetchEnvelope;
 				globalThis.__dynamicDispatchAlarmEnvelope = bootstrap.dynamicDispatchAlarmEnvelope;
 				globalThis.__dynamicStopEnvelope = bootstrap.dynamicStopEnvelope;
-				globalThis.__dynamicOpenWebSocketEnvelope = bootstrap.dynamicOpenWebSocketEnvelope;
-				globalThis.__dynamicWebSocketSendEnvelope = bootstrap.dynamicWebSocketSendEnvelope;
-				globalThis.__dynamicWebSocketCloseEnvelope = bootstrap.dynamicWebSocketCloseEnvelope;
-				globalThis.__dynamicDisposeEnvelope = bootstrap.dynamicDisposeEnvelope;
-			`,
+					globalThis.__dynamicOpenWebSocketEnvelope = bootstrap.dynamicOpenWebSocketEnvelope;
+					globalThis.__dynamicWebSocketSendEnvelope = bootstrap.dynamicWebSocketSendEnvelope;
+					globalThis.__dynamicWebSocketCloseEnvelope = bootstrap.dynamicWebSocketCloseEnvelope;
+					globalThis.__dynamicGetHibernatingWebSocketsEnvelope = bootstrap.dynamicGetHibernatingWebSocketsEnvelope;
+					globalThis.__dynamicDisposeEnvelope = bootstrap.dynamicDisposeEnvelope;
+				`,
 			{
 				filename: path.join(this.#runtimeDir, "dynamic-bootstrap-entry.cjs"),
 			},
@@ -759,6 +839,9 @@ export class DynamicActorHostRuntime {
 		this.#sendWebSocketRef = await getRef("__dynamicWebSocketSendEnvelope");
 		this.#closeWebSocketRef = await getRef(
 			"__dynamicWebSocketCloseEnvelope",
+		);
+		this.#getHibernatingWebSocketsRef = await getRef(
+			"__dynamicGetHibernatingWebSocketsEnvelope",
 		);
 		this.#disposeRef = await getRef("__dynamicDisposeEnvelope");
 	}
@@ -854,13 +937,19 @@ export class DynamicActorHostRuntime {
 		payload: Extract<IsolateDispatchPayload, { type: "message" }>,
 	): void {
 		if (payload.kind === "text") {
-			session.websocket.triggerMessage(payload.text ?? "");
+			(session.websocket as any).triggerMessage(
+				payload.text ?? "",
+				payload.rivetMessageIndex,
+			);
 			return;
 		}
 		const bytes = payload.dataBase64
 			? Buffer.from(payload.dataBase64, "base64")
 			: Buffer.alloc(0);
-		session.websocket.triggerMessage(bytes);
+		(session.websocket as any).triggerMessage(
+			bytes,
+			payload.rivetMessageIndex,
+		);
 	}
 }
 
@@ -908,12 +997,14 @@ function resolveRivetkitPackageRoot(): string {
 	let current = path.dirname(entryPath);
 
 	while (true) {
-		const candidate = path.join(current, "package.json");
-		try {
-			const packageJsonRaw = requireJsonSync(candidate);
-			if (packageJsonRaw?.name === "rivetkit") {
-				return current;
-			}
+			const candidate = path.join(current, "package.json");
+			try {
+				const packageJsonRaw = requireJsonSync(candidate) as {
+					name?: string;
+				};
+				if (packageJsonRaw?.name === "rivetkit") {
+					return current;
+				}
 		} catch {
 			// Continue walking up until package root is found.
 		}
@@ -1507,13 +1598,23 @@ function resolveSecureExecPackageDir(distEntryPath: string): string {
 }
 
 async function nativeDynamicImport<T>(specifier: string): Promise<T> {
-	// Vite SSR rewrites import() and cannot resolve file:// paths outside the
-	// project graph. Using Function() forces the runtime's native loader.
-	const importer = new Function(
-		"moduleSpecifier",
-		"return import(moduleSpecifier);",
-	) as (moduleSpecifier: string) => Promise<T>;
-	return await importer(specifier);
+	// Try direct dynamic import first because VM-backed test runners may reject
+	// import() from Function() with ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING.
+	try {
+		return (await import(specifier)) as T;
+	} catch (directError) {
+		// Vite SSR can rewrite import() and fail to resolve file:// specifiers
+		// outside the project graph. Function() forces the runtime native loader.
+		const importer = new Function(
+			"moduleSpecifier",
+			"return import(moduleSpecifier);",
+		) as (moduleSpecifier: string) => Promise<T>;
+		try {
+			return await importer(specifier);
+		} catch {
+			throw directError;
+		}
+	}
 }
 
 function buildLockedDownPermissions(rootPath: string): {
@@ -1578,8 +1679,15 @@ let setup;
 let createActorRouter;
 let routeWebSocket;
 let InlineWebSocketAdapter;
+let CONN_STATE_MANAGER_SYMBOL;
 try {
-	({ setup, createActorRouter, routeWebSocket, InlineWebSocketAdapter } = require("rivetkit"));
+	({
+		setup,
+		createActorRouter,
+		routeWebSocket,
+		InlineWebSocketAdapter,
+		CONN_STATE_MANAGER_SYMBOL,
+	} = require("rivetkit"));
 } catch (error) {
 	const details = error && error.stack ? error.stack : String(error);
 	throw new Error(\`dynamic runtime failed to require rivetkit: \${details}\`);
@@ -1651,6 +1759,14 @@ function toBase64(buffer) {
 
 function fromBase64(value) {
 	return new Uint8Array(Buffer.from(value, "base64"));
+}
+
+function fromBase64ToArrayBuffer(value) {
+	const buffer = Buffer.from(value, "base64");
+	return buffer.buffer.slice(
+		buffer.byteOffset,
+		buffer.byteOffset + buffer.byteLength,
+	);
 }
 
 function responseHeadersToEntries(headers) {
@@ -1881,13 +1997,19 @@ async function dynamicStopEnvelope(mode) {
 }
 
 async function dynamicOpenWebSocketEnvelope(input) {
-	const headers = {};
+	const headers = input.headers || {};
 	const requestPath = input.path || "/connect";
 	const pathOnly = requestPath.split("?")[0];
 	const request = new Request(
 		requestPath.startsWith("http") ? requestPath : \`http://actor\${requestPath}\`,
 		{ method: "GET", headers },
 	);
+	const gatewayId = input.gatewayIdBase64
+		? fromBase64ToArrayBuffer(input.gatewayIdBase64)
+		: undefined;
+	const requestId = input.requestIdBase64
+		? fromBase64ToArrayBuffer(input.requestIdBase64)
+		: undefined;
 	const handler = await routeWebSocket(
 		request,
 		pathOnly,
@@ -1897,14 +2019,14 @@ async function dynamicOpenWebSocketEnvelope(input) {
 		actorId,
 		input.encoding,
 		input.params,
-		undefined,
-		undefined,
-		false,
-		false,
+		gatewayId,
+		requestId,
+		!!input.isHibernatable,
+		!!input.isRestoringHibernatable,
 	);
 	const adapter = new InlineWebSocketAdapter(handler);
 	const ws = adapter.clientWebSocket;
-	webSocketSessions.set(input.sessionId, ws);
+	webSocketSessions.set(input.sessionId, { ws, adapter });
 
 	ws.addEventListener("open", () => {
 		bridgeCallSync(globalThis.__dynamicHostDispatch, [{
@@ -1920,6 +2042,7 @@ async function dynamicOpenWebSocketEnvelope(input) {
 				sessionId: input.sessionId,
 				kind: "text",
 				text: data,
+				rivetMessageIndex: event.rivetMessageIndex,
 			}]);
 			return;
 		}
@@ -1931,6 +2054,7 @@ async function dynamicOpenWebSocketEnvelope(input) {
 						sessionId: input.sessionId,
 						kind: "binary",
 						dataBase64: Buffer.from(new Uint8Array(buffer)).toString("base64"),
+						rivetMessageIndex: event.rivetMessageIndex,
 					}]);
 				})
 				.catch((error) => {
@@ -1948,6 +2072,7 @@ async function dynamicOpenWebSocketEnvelope(input) {
 				sessionId: input.sessionId,
 				kind: "binary",
 				dataBase64: Buffer.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)).toString("base64"),
+				rivetMessageIndex: event.rivetMessageIndex,
 			}]);
 			return;
 		}
@@ -1957,6 +2082,7 @@ async function dynamicOpenWebSocketEnvelope(input) {
 				sessionId: input.sessionId,
 				kind: "binary",
 				dataBase64: Buffer.from(new Uint8Array(data)).toString("base64"),
+				rivetMessageIndex: event.rivetMessageIndex,
 			}]);
 		}
 	});
@@ -1981,30 +2107,64 @@ async function dynamicOpenWebSocketEnvelope(input) {
 }
 
 async function dynamicWebSocketSendEnvelope(input) {
-	const ws = webSocketSessions.get(input.sessionId);
-	if (!ws) return false;
-	if (input.kind === "text") {
-		ws.send(input.text || "");
-		return true;
-	}
-	if (!input.dataBase64) {
+	const session = webSocketSessions.get(input.sessionId);
+	if (!session) return false;
+	const payload =
+		input.kind === "text"
+			? input.text || ""
+			: input.dataBase64
+				? Buffer.from(input.dataBase64, "base64")
+				: undefined;
+	if (payload === undefined) {
 		return false;
 	}
-	ws.send(Buffer.from(input.dataBase64, "base64"));
+	if (
+		typeof session.adapter.dispatchClientMessageWithMetadata === "function"
+	) {
+		session.adapter.dispatchClientMessageWithMetadata(
+			payload,
+			input.rivetMessageIndex,
+		);
+		return true;
+	}
+	if (input.kind === "text") {
+		session.ws.send(input.text || "");
+		return true;
+	}
+	session.ws.send(Buffer.from(input.dataBase64, "base64"));
 	return true;
 }
 
 async function dynamicWebSocketCloseEnvelope(input) {
-	const ws = webSocketSessions.get(input.sessionId);
-	if (!ws) return false;
-	ws.close(input.code, input.reason);
+	const session = webSocketSessions.get(input.sessionId);
+	if (!session) return false;
+	session.ws.close(input.code, input.reason);
 	return true;
 }
 
+async function dynamicGetHibernatingWebSocketsEnvelope() {
+	const actor = await loadActor(actorId);
+	return Array.from(actor.conns.values())
+		.map((conn) => {
+			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+			const hibernatable = connStateManager?.hibernatableData;
+			if (!hibernatable) return undefined;
+			return {
+				gatewayId: hibernatable.gatewayId,
+				requestId: hibernatable.requestId,
+				serverMessageIndex: hibernatable.serverMessageIndex,
+				clientMessageIndex: hibernatable.clientMessageIndex,
+				path: hibernatable.requestPath,
+				headers: hibernatable.requestHeaders,
+			};
+		})
+		.filter((entry) => entry !== undefined);
+}
+
 async function dynamicDisposeEnvelope() {
-	for (const ws of webSocketSessions.values()) {
+	for (const session of webSocketSessions.values()) {
 		try {
-			ws.close(1001, "dynamic.runtime.disposed");
+			session.ws.close(1001, "dynamic.runtime.disposed");
 		} catch {}
 	}
 	webSocketSessions.clear();
@@ -2018,6 +2178,7 @@ module.exports = {
 	dynamicOpenWebSocketEnvelope,
 	dynamicWebSocketSendEnvelope,
 	dynamicWebSocketCloseEnvelope,
+	dynamicGetHibernatingWebSocketsEnvelope,
 	dynamicDisposeEnvelope,
 };
 `;

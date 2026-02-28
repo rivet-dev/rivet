@@ -11,7 +11,7 @@ import {
 import { bufferToArrayBuffer } from "@/utils";
 import type { AnyDatabaseProvider } from "../database";
 import { EventPayloadInvalid, InternalError } from "../errors";
-import type { ActorInstance } from "../instance/mod";
+import type { StaticActorInstance } from "../instance/mod";
 import { CachedSerializer } from "../protocol/serde";
 import {
 	type EventSchemaConfig,
@@ -52,9 +52,9 @@ export class Conn<
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
 > {
-	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>;
 
-	get [CONN_ACTOR_SYMBOL](): ActorInstance<S, CP, CS, V, I, DB, E, Q> {
+	get [CONN_ACTOR_SYMBOL](): StaticActorInstance<S, CP, CS, V, I, DB, E, Q> {
 		return this.#actor;
 	}
 
@@ -139,7 +139,7 @@ export class Conn<
 	 * @protected
 	 */
 	constructor(
-		actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
+		actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>,
 		data: ConnDataInput<CP, CS>,
 	) {
 		this.#actor = actor;

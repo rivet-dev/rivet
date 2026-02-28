@@ -12,8 +12,13 @@ import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { lookupInRegistry } from "@/actor/definition";
+import {
+	isStaticActorInstance,
+	type AnyStaticActorInstance,
+} from "@/actor/instance/mod";
 import { KEYS } from "@/actor/instance/keys";
 import { deserializeActorKey } from "@/actor/keys";
+import type { Encoding } from "@/actor/protocol/serde";
 import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
@@ -40,6 +45,9 @@ import {
 	getInitialActorKvState,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
+import { DynamicActorInstance } from "@/dynamic/instance";
+import { DynamicActorHostRuntime } from "@/dynamic/host-runtime";
+import { isDynamicActorDefinition } from "@/dynamic/internal";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
@@ -83,6 +91,7 @@ export class EngineActorDriver implements ActorDriver {
 	#inlineClient: Client<any>;
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
+	#dynamicRuntimes = new Map<string, DynamicActorHostRuntime>();
 	#actorRouter: ActorRouter;
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled runner started promise rejection", reason }));
@@ -199,6 +208,18 @@ export class EngineActorDriver implements ActorDriver {
 
 	getContext(actorId: string): DriverContext {
 		return {};
+	}
+
+	#isDynamicActor(actorId: string): boolean {
+		return this.#dynamicRuntimes.has(actorId);
+	}
+
+	#requireDynamicRuntime(actorId: string): DynamicActorHostRuntime {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime missing for actor ${actorId}`);
+		}
+		return runtime;
 	}
 
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {
@@ -350,18 +371,20 @@ export class EngineActorDriver implements ActorDriver {
 		});
 		const stopPromises: Promise<void>[] = [];
 		for (const [_actorId, handler] of this.#actors.entries()) {
-			if (handler.actor) {
-				stopPromises.push(
-					handler.actor.onStop("sleep").catch((err) => {
-						handler.actor?.rLog.error({
-							msg: "onStop errored",
-							error: stringifyError(err),
-						});
-					}),
-				);
-			}
+				if (handler.actor) {
+					stopPromises.push(
+						handler.actor.onStop("sleep").catch((err) => {
+							logger().error({
+								msg: "onStop errored",
+								actorId: _actorId,
+								error: stringifyError(err),
+							});
+						}),
+					);
+				}
 		}
 		await Promise.all(stopPromises);
+		this.#dynamicRuntimes.clear();
 		logger().debug({ msg: "all actors stopped" });
 
 		try {
@@ -497,40 +520,82 @@ export class EngineActorDriver implements ActorDriver {
 
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
-
-			handler.actor = await definition.instantiate();
-
-			// Apply protocol limits as per-instance overrides without mutating the shared definition
-			const protocolMetadata = this.#runner.getProtocolMetadata();
-			if (protocolMetadata) {
-				logger().debug({
-					msg: "applying config limits from protocol",
-					protocolMetadata,
-				});
-
-				const stopThresholdMax = Math.max(Number(protocolMetadata.actorStopThreshold) - 1000, 0);
-				handler.actor.overrides.onSleepTimeout = stopThresholdMax;
-				handler.actor.overrides.onDestroyTimeout = stopThresholdMax;
-
-				if (protocolMetadata.serverlessDrainGracePeriod) {
-					const drainMax = Math.max(Number(protocolMetadata.serverlessDrainGracePeriod) - 1000, 0);
-					handler.actor.overrides.runStopTimeout = drainMax;
-					handler.actor.overrides.waitUntilTimeout = drainMax;
+			if (isDynamicActorDefinition(definition)) {
+				let runtime = this.#dynamicRuntimes.get(actorId);
+				if (!runtime) {
+					runtime = new DynamicActorHostRuntime({
+						actorId,
+						actorName: name,
+						actorKey: key,
+						input,
+						region: "unknown",
+						loader: definition.loader,
+						actorDriver: this,
+						inlineClient: this.#inlineClient,
+					});
+					await runtime.start();
+					this.#dynamicRuntimes.set(actorId, runtime);
 				}
-			}
 
-			// Start actor
-			await handler.actor.start(
-				this,
-				this.#inlineClient,
-				actorId,
-				name,
-				key,
-				"unknown", // TODO: Add regions
-			);
+				const dynamicActor = new DynamicActorInstance(actorId, runtime);
+				handler.actor = dynamicActor;
+
+				handler.actorStartError = undefined;
+				handler.actorStartPromise?.resolve();
+				handler.actorStartPromise = undefined;
+
+				const metaEntries = await dynamicActor.getHibernatingWebSockets();
+				await this.#runner.restoreHibernatingRequests(actorId, metaEntries);
+			} else {
+				const staticActor =
+					(await definition.instantiate()) as AnyStaticActorInstance;
+				handler.actor = staticActor;
+
+				// Apply protocol limits as per-instance overrides without mutating the shared definition
+				const protocolMetadata = this.#runner.getProtocolMetadata();
+				if (protocolMetadata) {
+					logger().debug({
+						msg: "applying config limits from protocol",
+						protocolMetadata,
+					});
+
+					const stopThresholdMax = Math.max(
+						Number(protocolMetadata.actorStopThreshold) - 1000,
+						0,
+					);
+					staticActor.overrides.onSleepTimeout = stopThresholdMax;
+					staticActor.overrides.onDestroyTimeout = stopThresholdMax;
+
+					if (protocolMetadata.serverlessDrainGracePeriod) {
+						const drainMax = Math.max(
+							Number(protocolMetadata.serverlessDrainGracePeriod) - 1000,
+							0,
+						);
+						staticActor.overrides.runStopTimeout = drainMax;
+						staticActor.overrides.waitUntilTimeout = drainMax;
+					}
+				}
+
+				// Start actor
+				await staticActor.start(
+					this,
+					this.#inlineClient,
+					actorId,
+					name,
+					key,
+					"unknown", // TODO: Add regions
+				);
+			}
 
 			logger().debug({ msg: "runner actor started", actorId, name, key });
 		} catch (innerError) {
+			const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
+			if (dynamicRuntime) {
+				try {
+					await dynamicRuntime.dispose();
+				} catch {}
+				this.#dynamicRuntimes.delete(actorId);
+			}
 			const error =
 				innerError instanceof Error
 					? new Error(
@@ -608,6 +673,7 @@ export class EngineActorDriver implements ActorDriver {
 				});
 			}
 		}
+		this.#dynamicRuntimes.delete(actorId);
 
 		this.#actors.delete(actorId);
 
@@ -628,6 +694,9 @@ export class EngineActorDriver implements ActorDriver {
 			url: request.url,
 			method: request.method,
 		});
+		if (this.#isDynamicActor(actorId)) {
+			return await this.#requireDynamicRuntime(actorId).fetch(request);
+		}
 		return await this.#actorRouter.fetch(request, { actorId });
 	}
 
@@ -667,6 +736,22 @@ export class EngineActorDriver implements ActorDriver {
 		// Parse configuration from Sec-WebSocket-Protocol header (optional for path-based routing)
 		const protocols = request.headers.get("sec-websocket-protocol");
 		const { encoding, connParams } = parseWebSocketProtocols(protocols);
+
+		if (this.#isDynamicActor(actorId)) {
+			await this.#runnerDynamicWebSocket(
+				actorId,
+				websocket,
+				gatewayIdBuf,
+				requestIdBuf,
+				requestPath,
+				requestHeaders,
+				encoding,
+				connParams,
+				isHibernatable,
+				isRestoringHibernatable,
+			);
+			return;
+		}
 
 		// Fetch WS handler
 		//
@@ -851,6 +936,165 @@ export class EngineActorDriver implements ActorDriver {
 		}
 	}
 
+	async #runnerDynamicWebSocket(
+		actorId: string,
+		websocket: UniversalWebSocket,
+		gatewayIdBuf: ArrayBuffer,
+		requestIdBuf: ArrayBuffer,
+		requestPath: string,
+		requestHeaders: Record<string, string>,
+		encoding: Encoding,
+		connParams: unknown,
+		isHibernatable: boolean,
+		isRestoringHibernatable: boolean,
+	): Promise<void> {
+		let runtime: DynamicActorHostRuntime;
+		try {
+			runtime = this.#requireDynamicRuntime(actorId);
+		} catch (error) {
+			logger().error({
+				msg: "dynamic runtime missing for websocket",
+				actorId,
+				error: stringifyError(error),
+			});
+			websocket.close(1011, "dynamic.runtime_missing");
+			return;
+		}
+
+		let proxyToActorWs: UniversalWebSocket;
+		try {
+			proxyToActorWs = await runtime.openWebSocket(
+				requestPath,
+				encoding,
+				connParams,
+				{
+					headers: requestHeaders,
+					gatewayId: gatewayIdBuf,
+					requestId: requestIdBuf,
+					isHibernatable,
+					isRestoringHibernatable,
+				},
+			);
+		} catch (error) {
+			logger().error({
+				msg: "failed to open dynamic websocket",
+				actorId,
+				error: stringifyError(error),
+			});
+			websocket.close(1011, "dynamic.websocket_open_failed");
+			return;
+		}
+
+		let actorWebSocketReady = proxyToActorWs.readyState === proxyToActorWs.OPEN;
+		const pendingMessages: Array<{
+			data: string | ArrayBufferLike | Blob | ArrayBufferView;
+			rivetMessageIndex?: number;
+		}> = [];
+
+		const flushPendingMessages = async (): Promise<void> => {
+			if (!actorWebSocketReady || pendingMessages.length === 0) {
+				return;
+			}
+			while (pendingMessages.length > 0) {
+				const next = pendingMessages.shift();
+				if (!next) {
+					continue;
+				}
+				await runtime.forwardIncomingWebSocketMessage(
+					proxyToActorWs,
+					next.data,
+					next.rivetMessageIndex,
+				);
+				if (
+					isHibernatable &&
+					typeof next.rivetMessageIndex === "number"
+				) {
+					this.#runner.sendHibernatableWebSocketMessageAck(
+						gatewayIdBuf,
+						requestIdBuf,
+						next.rivetMessageIndex,
+					);
+				}
+			}
+		};
+
+		proxyToActorWs.addEventListener("open", () => {
+			actorWebSocketReady = true;
+			void flushPendingMessages();
+		});
+
+		proxyToActorWs.addEventListener("message", (event: RivetMessageEvent) => {
+			if (websocket.readyState !== websocket.OPEN) {
+				return;
+			}
+			websocket.send(event.data as any);
+		});
+
+		proxyToActorWs.addEventListener("close", (event) => {
+			if (websocket.readyState !== websocket.CLOSED) {
+				websocket.close(event.code, event.reason);
+			}
+		});
+
+		proxyToActorWs.addEventListener("error", (_event) => {
+			if (websocket.readyState !== websocket.CLOSED) {
+				websocket.close(1011, "dynamic.websocket_error");
+			}
+		});
+
+		websocket.addEventListener("message", (event: RivetMessageEvent) => {
+			const actorHandler = this.#actors.get(actorId);
+			if (actorHandler?.actor?.isStopping) {
+				return;
+			}
+			if (!actorWebSocketReady) {
+				pendingMessages.push({
+					data: event.data as any,
+					rivetMessageIndex: event.rivetMessageIndex,
+				});
+				return;
+			}
+			void runtime
+				.forwardIncomingWebSocketMessage(
+					proxyToActorWs,
+					event.data as any,
+					event.rivetMessageIndex,
+				)
+				.then(() => {
+					if (
+						isHibernatable &&
+						typeof event.rivetMessageIndex === "number"
+					) {
+						this.#runner.sendHibernatableWebSocketMessageAck(
+							gatewayIdBuf,
+							requestIdBuf,
+							event.rivetMessageIndex,
+						);
+					}
+				})
+				.catch((error) => {
+					logger().error({
+						msg: "failed forwarding websocket message to dynamic actor",
+						actorId,
+						error: stringifyError(error),
+					});
+					websocket.close(1011, "dynamic.websocket_forward_failed");
+				});
+		});
+
+		websocket.addEventListener("close", (event) => {
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(event.code, event.reason);
+			}
+		});
+
+		websocket.addEventListener("error", () => {
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(1011, "dynamic.gateway_error");
+			}
+		});
+	}
+
 	// MARK: - Hibernating WebSockets
 	#hwsCanHibernate(
 		actorId: string,
@@ -950,6 +1194,21 @@ export class EngineActorDriver implements ActorDriver {
 		actorId: string,
 	): Promise<HibernatingWebSocketMetadata[]> {
 		const actor = await this.loadActor(actorId);
+		if (!isStaticActorInstance(actor)) {
+			const runtime = this.#dynamicRuntimes.get(actorId);
+			if (!runtime) {
+				return [];
+			}
+			const entries = await runtime.getHibernatingWebSockets();
+			return entries.map((entry) => ({
+				gatewayId: entry.gatewayId,
+				requestId: entry.requestId,
+				serverMessageIndex: entry.serverMessageIndex,
+				clientMessageIndex: entry.clientMessageIndex,
+				path: entry.path,
+				headers: entry.headers,
+			}));
+		}
 		return actor.conns
 			.values()
 			.map((conn) => {
@@ -969,7 +1228,7 @@ export class EngineActorDriver implements ActorDriver {
 			.toArray();
 	}
 
-	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
+	async onBeforeActorStart(actor: AnyStaticActorInstance): Promise<void> {
 		// Resolve promise if waiting
 		const handler = this.#actors.get(actor.id);
 		invariant(handler, "missing actor handler in onBeforeActorReady");

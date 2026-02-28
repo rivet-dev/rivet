@@ -28,7 +28,7 @@ import {
 } from "../../utils";
 import { CONN_SEND_MESSAGE_SYMBOL, type Conn } from "../conn/mod";
 import { ActionContext } from "../contexts";
-import type { ActorInstance } from "../instance/mod";
+import type { StaticActorInstance } from "../instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 
 interface MessageEventOpts {
@@ -179,7 +179,7 @@ export async function processMessage<
 					val: { eventName: string; subscribe: boolean };
 			  };
 	},
-	actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
+	actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>,
 	conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	handler: ProcessMessageHandler<S, CP, CS, V, I, DB, E, Q>,
 ) {
