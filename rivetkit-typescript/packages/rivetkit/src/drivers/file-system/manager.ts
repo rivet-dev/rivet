@@ -22,6 +22,7 @@ import type { Encoding, UniversalWebSocket } from "@/mod";
 import type { DriverConfig, RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import type { GetUpgradeWebSocket } from "@/utils";
+import { createTestWebSocketProxy } from "@/manager/gateway";
 import type { FileSystemGlobalState } from "./global-state";
 import { logger } from "./log";
 import { generateActorId } from "./utils";
@@ -64,6 +65,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		actorId: string,
 		actorRequest: Request,
 	): Promise<Response> {
+		if (await this.#state.isDynamicActor(this.#config, actorId)) {
+			await this.#actorDriver.loadActor(actorId);
+			return await this.#state.dynamicFetch(actorId, actorRequest);
+		}
+
 		return await this.#actorRouter.fetch(actorRequest, {
 			actorId,
 		});
@@ -75,6 +81,16 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<UniversalWebSocket> {
+		if (await this.#state.isDynamicActor(this.#config, actorId)) {
+			await this.#actorDriver.loadActor(actorId);
+			return await this.#state.dynamicOpenWebSocket(
+				actorId,
+				path,
+				encoding,
+				params,
+			);
+		}
+
 		// Normalize the path (add leading slash if needed) but preserve query params
 		const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -110,6 +126,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
+		if (await this.#state.isDynamicActor(this.#config, actorId)) {
+			await this.#actorDriver.loadActor(actorId);
+			return await this.#state.dynamicFetch(actorId, actorRequest);
+		}
+
 		return await this.#actorRouter.fetch(actorRequest, {
 			actorId,
 		});
@@ -124,6 +145,20 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	): Promise<Response> {
 		const upgradeWebSocket = this.#getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
+
+		if (await this.#state.isDynamicActor(this.#config, actorId)) {
+			await this.#actorDriver.loadActor(actorId);
+			const proxyToActorWsPromise = this.#state.dynamicOpenWebSocket(
+				actorId,
+				path,
+				encoding,
+				params,
+			);
+			const wsHandler = await createTestWebSocketProxy(
+				proxyToActorWsPromise,
+			);
+			return upgradeWebSocket(() => wsHandler)(c, noopNext());
+		}
 
 		// Handle raw WebSocket paths
 		const pathOnly = path.split("?")[0];
