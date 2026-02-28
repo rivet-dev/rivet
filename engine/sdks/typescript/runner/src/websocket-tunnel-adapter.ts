@@ -5,6 +5,8 @@ import { MAX_PAYLOAD_SIZE, wrappingAddU16, wrappingLteU16, wrappingSubU16 } from
 
 export const HIBERNATABLE_SYMBOL = Symbol("hibernatable");
 
+export type OpenReplayAction = "ignored" | "advanced" | "reset";
+
 export class WebSocketTunnelAdapter {
 	#readyState: 0 | 1 | 2 | 3 = 0;
 	#binaryType: "nodebuffer" | "arraybuffer" | "blob" = "nodebuffer";
@@ -102,6 +104,24 @@ export class WebSocketTunnelAdapter {
 		if (this.#readyState !== 0) return;
 		this.#readyState = 1;
 		this.#ws.dispatchEvent({ type: "open", rivetRequestId: requestId, target: this.#ws });
+	}
+
+	_handleOpenReplay(serverMessageIndex: number): OpenReplayAction {
+		if (!this.#hibernatable) {
+			return "ignored";
+		}
+		if (
+			serverMessageIndex === 0 &&
+			this.#serverMessageIndex !== 0
+		) {
+			this.#serverMessageIndex = 0;
+			return "reset";
+		}
+		if (wrappingLteU16(serverMessageIndex, this.#serverMessageIndex)) {
+			return "ignored";
+		}
+		this.#serverMessageIndex = serverMessageIndex;
+		return "advanced";
 	}
 
 	// Called by Tunnel when message is received

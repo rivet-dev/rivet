@@ -43,6 +43,16 @@
 				"default": "./dist/tsup/workflow/mod.cjs"
 			}
 		},
+		"./dynamic": {
+			"import": {
+				"types": "./dist/tsup/dynamic/mod.d.ts",
+				"default": "./dist/tsup/dynamic/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/dynamic/mod.d.cts",
+				"default": "./dist/tsup/dynamic/mod.cjs"
+			}
+		},
 		"./client": {
 			"import": {
 				"browser": {
@@ -312,10 +322,12 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/serve-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts src/workflow/mod.ts src/dynamic/mod.ts src/db/mod.ts src/db/drizzle/mod.ts src/sandbox/index.ts src/sandbox/client.ts src/sandbox/providers/docker.ts src/sandbox/providers/e2b.ts src/sandbox/providers/daytona.ts src/sandbox/providers/local.ts src/sandbox/providers/vercel.ts src/sandbox/providers/modal.ts src/sandbox/providers/computesdk.ts src/sandbox/providers/sprites.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build:dynamic-isolate-runtime": "tsup --config tsup.dynamic-isolate-runtime.config.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"build:schema": "./scripts/compile-all-bare.ts",
 		"check-types": "tsc --noEmit",
+		"check-types:dynamic-isolate-runtime": "tsc --noEmit -p dynamic-isolate-runtime/tsconfig.json",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format .",

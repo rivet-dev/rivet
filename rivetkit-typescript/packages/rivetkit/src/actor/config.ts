@@ -190,6 +190,85 @@ export function getRunInspectorConfig(
 // We don't use Zod generics with `z.custom` because:
 // (a) there seems to be a weird bug in either Zod, tsup, or TSC that causese external packages to have different types from `z.infer` than from within the same package and
 // (b) it makes the type definitions incredibly difficult to read as opposed to vanilla TypeScript.
+const GlobalActorOptionsBaseSchema = z
+	.object({
+		/** Display name for the actor in the Inspector UI. */
+		name: z.string().optional(),
+		/** Icon for the actor in the Inspector UI. Can be an emoji or FontAwesome icon name. */
+		icon: z.string().optional(),
+		/**
+		 * Can hibernate WebSockets for onWebSocket.
+		 *
+		 * WebSockets using actions/events are hibernatable by default.
+		 *
+		 * @experimental
+		 **/
+		canHibernateWebSocket: z
+			.union([z.boolean(), zFunction<(request: Request) => boolean>()])
+			.default(false),
+	})
+	.strict();
+
+export const GlobalActorOptionsSchema = GlobalActorOptionsBaseSchema.prefault(
+	() => ({}),
+);
+
+export type GlobalActorOptions = z.infer<typeof GlobalActorOptionsSchema>;
+export type GlobalActorOptionsInput = z.input<typeof GlobalActorOptionsSchema>;
+
+const InstanceActorOptionsBaseSchema = z
+	.object({
+		createVarsTimeout: z.number().positive().default(5000),
+		createConnStateTimeout: z.number().positive().default(5000),
+		onConnectTimeout: z.number().positive().default(5000),
+		sleepGracePeriod: z.number().positive().optional(),
+		onSleepTimeout: z
+			.number()
+			.positive()
+			.default(DEFAULT_ON_SLEEP_TIMEOUT),
+		onDestroyTimeout: z.number().positive().default(5000),
+		stateSaveInterval: z.number().positive().default(1_000),
+		actionTimeout: z.number().positive().default(60_000),
+		// Deprecated timeout for legacy background shutdown tasks
+		waitUntilTimeout: z
+			.number()
+			.positive()
+			.default(DEFAULT_WAIT_UNTIL_TIMEOUT),
+		// Max time to wait for run handler to stop during shutdown
+		runStopTimeout: z.number().positive().default(15_000),
+		connectionLivenessTimeout: z.number().positive().default(2500),
+		connectionLivenessInterval: z.number().positive().default(5000),
+		/** @deprecated Use `c.setPreventSleep(true)` for bounded delays or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
+		noSleep: z.boolean().default(false),
+		sleepTimeout: z.number().positive().default(30_000),
+		maxQueueSize: z.number().positive().default(1000),
+		maxQueueMessageSize: z.number().positive().default(64 * 1024),
+		/** Override RivetKit's SQLite preload budget for this actor. Set to 0 to disable SQLite preloading. */
+		preloadMaxSqliteBytes: z.number().nonnegative().optional(),
+		/** Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading. */
+		preloadMaxWorkflowBytes: z.number().nonnegative().optional(),
+		/** Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading. */
+		preloadMaxConnectionsBytes: z.number().nonnegative().optional(),
+	})
+	.strict();
+
+export const InstanceActorOptionsSchema =
+	InstanceActorOptionsBaseSchema.prefault(() => ({}));
+
+export type InstanceActorOptions = z.infer<typeof InstanceActorOptionsSchema>;
+export type InstanceActorOptionsInput = z.input<
+	typeof InstanceActorOptionsSchema
+>;
+
+export const ActorOptionsSchema = GlobalActorOptionsBaseSchema.extend(
+	InstanceActorOptionsBaseSchema.shape,
+)
+	.strict()
+	.prefault(() => ({}));
+
+export type ActorOptions = z.infer<typeof ActorOptionsSchema>;
+export type ActorOptionsInput = z.input<typeof ActorOptionsSchema>;
+
 export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
@@ -214,62 +293,7 @@ export const ActorConfigSchema = z
 		vars: z.any().optional(),
 		db: z.any().optional(),
 		createVars: zFunction().optional(),
-		options: z
-			.object({
-				/** Display name for the actor in the Inspector UI. */
-				name: z.string().optional(),
-				/** Icon for the actor in the Inspector UI. Can be an emoji or FontAwesome icon name. */
-				icon: z.string().optional(),
-				createVarsTimeout: z.number().positive().default(5000),
-				createConnStateTimeout: z.number().positive().default(5000),
-				onConnectTimeout: z.number().positive().default(5000),
-				sleepGracePeriod: z.number().positive().optional(),
-				onSleepTimeout: z
-					.number()
-					.positive()
-					.default(DEFAULT_ON_SLEEP_TIMEOUT),
-				onDestroyTimeout: z.number().positive().default(5000),
-				stateSaveInterval: z.number().positive().default(1_000),
-				actionTimeout: z.number().positive().default(60_000),
-				// Deprecated timeout for legacy background shutdown tasks
-				waitUntilTimeout: z
-					.number()
-					.positive()
-					.default(DEFAULT_WAIT_UNTIL_TIMEOUT),
-				// Max time to wait for run handler to stop during shutdown
-				runStopTimeout: z.number().positive().default(15_000),
-				connectionLivenessTimeout: z.number().positive().default(2500),
-				connectionLivenessInterval: z.number().positive().default(5000),
-				/** @deprecated Use `c.setPreventSleep(true)` for bounded delays or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
-				noSleep: z.boolean().default(false),
-				sleepTimeout: z.number().positive().default(30_000),
-				maxQueueSize: z.number().positive().default(1000),
-				maxQueueMessageSize: z
-					.number()
-					.positive()
-					.default(64 * 1024),
-				/**
-				 * Can hibernate WebSockets for onWebSocket.
-				 *
-				 * WebSockets using actions/events are hibernatable by default.
-				 *
-				 * @experimental
-				 **/
-				canHibernateWebSocket: z
-					.union([
-						z.boolean(),
-						zFunction<(request: Request) => boolean>(),
-					])
-					.default(false),
-				/** Override RivetKit's SQLite preload budget for this actor. Set to 0 to disable SQLite preloading. */
-				preloadMaxSqliteBytes: z.number().nonnegative().optional(),
-				/** Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading. */
-				preloadMaxWorkflowBytes: z.number().nonnegative().optional(),
-				/** Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading. */
-				preloadMaxConnectionsBytes: z.number().nonnegative().optional(),
-			})
-			.strict()
-			.prefault(() => ({})),
+		options: ActorOptionsSchema,
 	})
 	.strict()
 	.refine(

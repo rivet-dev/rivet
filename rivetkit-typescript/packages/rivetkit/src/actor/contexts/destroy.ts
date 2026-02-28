@@ -1,5 +1,5 @@
 import type { AnyDatabaseProvider } from "../database";
-import type { ActorDefinition, AnyActorDefinition } from "../definition";
+import type { BaseActorDefinition, AnyActorDefinition } from "../definition";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { ActorContext } from "./base/actor";
 
@@ -27,7 +27,7 @@ export class DestroyContext<
 > {}
 
 export type DestroyContextOf<AD extends AnyActorDefinition> =
-	AD extends ActorDefinition<
+	AD extends BaseActorDefinition<
 		infer S,
 		infer CP,
 		infer CS,

@@ -29,6 +29,7 @@ import { runActorKvTests } from "./tests/actor-kv";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
 import { runActorQueueTests } from "./tests/actor-queue";
+import { runDynamicReloadTests } from "./tests/dynamic-reload";
 import { runActorRunTests } from "./tests/actor-run";
 import { runActorSandboxTests } from "./tests/actor-sandbox";
 import { runActorStatelessTests } from "./tests/actor-stateless";
@@ -44,6 +45,7 @@ import { runActorDbPragmaMigrationTests } from "./tests/actor-db-pragma-migratio
 import { runActorStateZodCoercionTests } from "./tests/actor-state-zod-coercion";
 import { runActorAgentOsTests } from "./tests/actor-agent-os";
 import { runGatewayQueryUrlTests } from "./tests/gateway-query-url";
+import { runHibernatableWebSocketProtocolTests } from "./tests/hibernatable-websocket-protocol";
 import { runRequestAccessTests } from "./tests/request-access";
 
 export interface SkipTests {
@@ -53,6 +55,10 @@ export interface SkipTests {
 	inline?: boolean;
 	sandbox?: boolean;
 	agentOs?: boolean;
+}
+
+export interface DriverTestFeatures {
+	hibernatableWebSocketProtocol?: boolean;
 }
 
 export interface DriverTestConfig {
@@ -70,7 +76,11 @@ export interface DriverTestConfig {
 
 	skip?: SkipTests;
 
+	features?: DriverTestFeatures;
+
 	encoding?: Encoding;
+
+	isDynamic?: boolean;
 
 	clientType: ClientType;
 
@@ -152,6 +162,8 @@ export function runDriverTests(
 
 						runActorSandboxTests(driverTestConfig);
 
+						runDynamicReloadTests(driverTestConfig);
+
 						runActorInlineClientTests(driverTestConfig);
 
 						runActorKvTests(driverTestConfig);
@@ -165,6 +177,7 @@ export function runDriverTests(
 						runRawHttpRequestPropertiesTests(driverTestConfig);
 
 						runRawWebSocketTests(driverTestConfig);
+						runHibernatableWebSocketProtocolTests(driverTestConfig);
 
 						// TODO: re-expose this once we can have actor queries on the gateway
 						// runRawHttpDirectRegistryTests(driverTestConfig);

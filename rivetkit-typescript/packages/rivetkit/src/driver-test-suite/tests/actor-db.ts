@@ -87,10 +87,14 @@ export function runActorDbTests(driverTestConfig: DriverTestConfig) {
 					const values = await actor.getValues();
 					expect(values.length).toBeGreaterThanOrEqual(2);
 					expect(
-						values.some((row) => row.value === "alpha"),
+						values.some(
+							(row: { value: string }) => row.value === "alpha",
+						),
 					).toBeTruthy();
 					expect(
-						values.some((row) => row.value === "beta"),
+						values.some(
+							(row: { value: string }) => row.value === "beta",
+						),
 					).toBeTruthy();
 
 					await actor.updateValue(first.id, "alpha-updated");

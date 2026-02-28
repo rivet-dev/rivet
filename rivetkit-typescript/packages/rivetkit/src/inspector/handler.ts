@@ -1,7 +1,8 @@
 import type { WSContext } from "hono/ws";
 import type { Unsubscribe } from "nanoevents";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
-import type { AnyActorInstance, RivetMessageEvent } from "@/mod";
+import type { RivetMessageEvent } from "@/mod";
 import type { ToClient } from "@/schemas/actor-inspector/mod";
 import { encodeReadRangeWire } from "@rivetkit/traces/encoding";
 import {
@@ -15,7 +16,7 @@ import { inspectorLogger } from "./log";
 export async function handleWebSocketInspectorConnect({
 	actor,
 }: {
-	actor: AnyActorInstance;
+	actor: AnyStaticActorInstance;
 }): Promise<UpgradeWebSocketArgs> {
 	const inspector = actor.inspector;
 	const maxQueueStatusLimit = 200;

@@ -624,6 +624,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							)).await?;
 						}
 						Main::Wake(sig) => {
+							tracing::debug!(
+								actor_id = ?input.actor_id,
+								sleeping = state.sleeping,
+								runner_id = ?state.runner_id,
+								will_wake = state.will_wake,
+								"received wake signal"
+							);
+
 							// Clear alarm
 							if let Some(alarm_ts) = state.alarm_ts {
 								let now = ctx.v(3).activity(GetTsInput {}).await?;
