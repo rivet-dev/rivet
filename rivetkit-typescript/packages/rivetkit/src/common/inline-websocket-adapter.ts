@@ -31,17 +31,7 @@ export class InlineWebSocketAdapter {
 		// Actor's send() -> Client's message event
 		this.#clientWs = new VirtualWebSocket({
 			getReadyState: () => this.#readyState,
-			onSend: (data) => {
-				try {
-					// Call handler.onMessage for protocol-based connections (RPC)
-					this.#handler.onMessage({ data }, this.#wsContext);
-					// Also trigger message event on actor's websocket for raw websocket handlers
-					this.#actorWs.triggerMessage(data);
-				} catch (err) {
-					this.#handleError(err);
-					this.#close(1011, "Internal error processing message");
-				}
-			},
+			onSend: (data) => this.dispatchClientMessageWithMetadata(data),
 			onClose: (code, reason) => this.#close(code, reason),
 		});
 
@@ -79,6 +69,25 @@ export class InlineWebSocketAdapter {
 	/** Get the actor-side WebSocket (passed to actor via wsContext.raw) */
 	get actorWebSocket(): UniversalWebSocket {
 		return this.#actorWs;
+	}
+
+	/**
+	 * Dispatch a client->actor message with optional transport metadata.
+	 *
+	 * This is used by dynamic actor host bridges to preserve
+	 * `rivetMessageIndex` on hibernatable engine websocket paths.
+	 */
+	dispatchClientMessageWithMetadata(
+		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
+	): void {
+		try {
+			this.#handler.onMessage({ data, rivetMessageIndex }, this.#wsContext);
+			(this.#actorWs as any).triggerMessage(data, rivetMessageIndex);
+		} catch (err) {
+			this.#handleError(err);
+			this.#close(1011, "Internal error processing message");
+		}
 	}
 
 	async #initialize(): Promise<void> {

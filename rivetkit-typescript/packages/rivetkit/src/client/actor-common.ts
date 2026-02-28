@@ -1,4 +1,4 @@
-import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import type { BaseActorDefinition, AnyActorDefinition } from "@/actor/definition";
 
 /**
  * Action function returned by Actor connections and handles.
@@ -21,7 +21,7 @@ export type ActorActionFunction<
  */
 export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends ActorDefinition<any, any, any, any, any, any, any, any, infer R>
+	AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, infer R>
 		? {
 				[K in keyof R]: R[K] extends (
 					...args: infer Args

@@ -1,5 +1,5 @@
 import type { AnyConn } from "@/actor/conn/mod";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
@@ -26,7 +26,7 @@ export function createRawWebSocketDriver(
 		// handle messages from the RivetKit protocol
 
 		disconnect: async (
-			_actor: AnyActorInstance,
+			_actor: AnyStaticActorInstance,
 			_conn: AnyConn,
 			reason?: string,
 		) => {
@@ -49,7 +49,7 @@ export function createRawWebSocketDriver(
 		},
 
 		getConnectionReadyState: (
-			_actor: AnyActorInstance,
+			_actor: AnyStaticActorInstance,
 			_conn: AnyConn,
 		): DriverReadyState | undefined => {
 			return websocket?.readyState ?? DriverReadyState.CONNECTING;

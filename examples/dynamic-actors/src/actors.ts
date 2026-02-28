@@ -35,7 +35,7 @@ const sourceCode = actor({
 	},
 });
 
-const userGeneratedActor = dynamicActor(async (c: any) => {
+const dynamicWorkflow = dynamicActor(async (c: any) => {
 	const sourceState = await c
 		.client()
 		.sourceCode.getOrCreate(["main"])
@@ -53,7 +53,7 @@ const userGeneratedActor = dynamicActor(async (c: any) => {
 export const registry = setup({
 	use: {
 		sourceCode,
-		userGeneratedActor,
+		dynamicWorkflow,
 	},
 });
 
@@ -62,7 +62,7 @@ export const registry = setup({
 // import { actor, setup } from "rivetkit";
 // import { dynamicActor } from "rivetkit/dynamic";
 //
-// const userGeneratedActor = dynamicActor(async (c: any) => {
+// const dynamicWorkflow = dynamicActor(async (c: any) => {
 // 	// Load actor code from external source based on actor key
 // 	const source = await fetch(/* ... */);
 //
@@ -77,6 +77,6 @@ export const registry = setup({
 //
 // export const registry = setup({
 // 	use: {
-// 		userGeneratedActor
+// 		dynamicWorkflow
 // 	},
 // });

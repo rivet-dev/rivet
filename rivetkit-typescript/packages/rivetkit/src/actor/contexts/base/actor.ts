@@ -4,12 +4,12 @@ import type { Logger } from "@/common/log";
 import type { Registry } from "@/registry";
 import type { Conn, ConnId } from "../../conn/mod";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../../database";
-import type { ActorDefinition, AnyActorDefinition } from "../../definition";
+import type { BaseActorDefinition, AnyActorDefinition } from "../../definition";
 import * as errors from "../../errors";
 import { ActorKv } from "../../instance/kv";
 import type {
 	ActorInstance,
-	AnyActorInstance,
+	AnyStaticActorInstance,
 	SaveStateOptions,
 } from "../../instance/mod";
 import { ActorQueue } from "../../instance/queue";
@@ -40,7 +40,7 @@ export class ActorContext<
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
-	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyActorInstance;
+	[ACTOR_CONTEXT_INTERNAL_SYMBOL]!: AnyStaticActorInstance;
 	#actor: ActorInstance<
 		TState,
 		TConnParams,
@@ -78,7 +78,7 @@ export class ActorContext<
 		>,
 	) {
 		this.#actor = actor;
-		this[ACTOR_CONTEXT_INTERNAL_SYMBOL] = actor as AnyActorInstance;
+		this[ACTOR_CONTEXT_INTERNAL_SYMBOL] = actor as AnyStaticActorInstance;
 	}
 
 	/**
@@ -332,7 +332,7 @@ export class ActorContext<
 }
 
 export type ActorContextOf<AD extends AnyActorDefinition> =
-	AD extends ActorDefinition<
+	AD extends BaseActorDefinition<
 		infer S,
 		infer CP,
 		infer CS,

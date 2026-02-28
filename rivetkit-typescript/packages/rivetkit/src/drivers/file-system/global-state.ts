@@ -1,14 +1,24 @@
 import invariant from "invariant";
-import { lookupInRegistry } from "@/actor/definition";
+import {
+	isStaticActorDefinition,
+	lookupInRegistry,
+} from "@/actor/definition";
 import { ActorDuplicateKey } from "@/actor/errors";
 import type { Encoding } from "@/actor/protocol/serde";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type {
+	AnyActorInstance,
+	AnyStaticActorInstance,
+} from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
-import { getDynamicActorMetadata } from "@/dynamic/internal";
-import { DynamicActorHostRuntime } from "@/dynamic/host-runtime";
+import { DynamicActorInstance } from "@/dynamic/instance";
+import {
+	DynamicActorIsolateRuntime,
+	type DynamicWebSocketOpenOptions,
+} from "@/dynamic/isolate-runtime";
+import { isDynamicActorDefinition } from "@/dynamic/internal";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
@@ -87,36 +97,6 @@ interface ActorEntry {
 	generation: string;
 }
 
-class DynamicActorInstanceAdapter {
-	#actorId: string;
-	#runtime: DynamicActorHostRuntime;
-	#isStopping = false;
-
-	constructor(actorId: string, runtime: DynamicActorHostRuntime) {
-		this.#actorId = actorId;
-		this.#runtime = runtime;
-	}
-
-	get id(): string {
-		return this.#actorId;
-	}
-
-	get isStopping(): boolean {
-		return this.#isStopping;
-	}
-
-	async onStop(mode: "sleep" | "destroy"): Promise<void> {
-		if (this.#isStopping) return;
-		this.#isStopping = true;
-		await this.#runtime.stop(mode);
-		await this.#runtime.dispose();
-	}
-
-	async onAlarm(): Promise<void> {
-		await this.#runtime.dispatchAlarm();
-	}
-}
-
 export interface FileSystemDriverOptions {
 	/** Whether to persist data to disk */
 	persist?: boolean;
@@ -138,7 +118,7 @@ export class FileSystemGlobalState {
 	#persist: boolean;
 	#sqliteRuntime: SqliteRuntime;
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
-	#dynamicRuntimes = new Map<string, DynamicActorHostRuntime>();
+	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
 	#actorInitialInputs = new Map<string, unknown>();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
@@ -1118,40 +1098,45 @@ export class FileSystemGlobalState {
 		try {
 			// Create actor
 			const definition = lookupInRegistry(config, entry.state.name);
-			const dynamicMetadata = getDynamicActorMetadata(definition);
-			if (dynamicMetadata) {
+			if (isDynamicActorDefinition(definition)) {
 				let runtime = this.#dynamicRuntimes.get(actorId);
 				if (!runtime) {
-					runtime = new DynamicActorHostRuntime({
+					runtime = new DynamicActorIsolateRuntime({
 						actorId,
 						actorName: entry.state.name,
 						actorKey: entry.state.key as string[],
 						input: this.#actorInitialInputs.get(actorId),
 						region: "unknown",
-						metadata: dynamicMetadata,
+						loader: definition.loader,
 						actorDriver,
 						inlineClient,
 					});
 					await runtime.start();
 					this.#dynamicRuntimes.set(actorId, runtime);
 				}
-				entry.actor = new DynamicActorInstanceAdapter(
+				entry.actor = new DynamicActorInstance(
 					actorId,
 					runtime,
-				) as unknown as AnyActorInstance;
+				);
 				entry.lifecycleState = ActorLifecycleState.AWAKE;
-			} else {
-				entry.actor = await definition.instantiate();
+			} else if (isStaticActorDefinition(definition)) {
+				const staticActor =
+					(await definition.instantiate()) as AnyStaticActorInstance;
+				entry.actor = staticActor;
 				entry.lifecycleState = ActorLifecycleState.AWAKE;
 
 				// Start actor
-				await entry.actor.start(
-					actorDriver,
-					inlineClient,
-					actorId,
-					entry.state.name,
-					entry.state.key as string[],
-					"unknown",
+					await staticActor.start(
+						actorDriver,
+						inlineClient,
+						actorId,
+						entry.state.name,
+						entry.state.key as string[],
+						"unknown",
+					);
+			} else {
+				throw new Error(
+					`actor definition for ${entry.state.name} is not instantiable`,
 				);
 			}
 
@@ -1213,7 +1198,7 @@ export class FileSystemGlobalState {
 	): Promise<boolean> {
 		const state = await this.loadActorStateOrError(actorId);
 		const definition = lookupInRegistry(config, state.name);
-		return getDynamicActorMetadata(definition) !== undefined;
+		return isDynamicActorDefinition(definition);
 	}
 
 	async dynamicFetch(actorId: string, request: Request): Promise<Response> {
@@ -1229,12 +1214,13 @@ export class FileSystemGlobalState {
 		path: string,
 		encoding: Encoding,
 		params: unknown,
+		options: DynamicWebSocketOpenOptions = {},
 	): Promise<UniversalWebSocket> {
 		const runtime = this.#dynamicRuntimes.get(actorId);
 		if (!runtime) {
 			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
 		}
-		return await runtime.openWebSocket(path, encoding, params);
+		return await runtime.openWebSocket(path, encoding, params, options);
 	}
 
 	async createDatabase(actorId: string): Promise<string | undefined> {
