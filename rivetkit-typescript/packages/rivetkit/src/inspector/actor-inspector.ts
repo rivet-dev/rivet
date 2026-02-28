@@ -9,7 +9,7 @@ import {
 import { getRunInspectorConfig } from "@/actor/config";
 import { ActionContext } from "@/actor/contexts/action";
 import * as actorErrors from "@/actor/errors";
-import type { AnyActorInstance } from "@/mod";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import type * as schema from "@/schemas/actor-inspector/mod";
 import { bufferToArrayBuffer } from "@/utils";
 import { serializeWorkflowHistoryForJson } from "./workflow-history-json";
@@ -37,7 +37,7 @@ export class ActorInspector {
 		ReturnType<typeof getRunInspectorConfig>
 	>["workflow"];
 
-	constructor(private readonly actor: AnyActorInstance) {
+	constructor(private readonly actor: AnyStaticActorInstance) {
 		this.#lastQueueSize = actor.queueManager?.size ?? 0;
 		const runInspector = getRunInspectorConfig(actor.config.run, actor);
 		this.#workflowInspector = runInspector?.workflow;

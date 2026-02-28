@@ -323,7 +323,8 @@ async fn handle_actor_v2(
 ) -> Result<RoutingOutput> {
 	// Wake actor if sleeping
 	if actor.sleeping {
-		tracing::debug!(?actor_id, "actor sleeping, waking");
+		// Route attempts wake sleeping actors up front so the ready wait below has a chance to complete.
+		tracing::debug!(?actor_id, "actor sleeping, sending wake signal");
 
 		ctx.signal(pegboard::workflows::actor2::Wake {})
 			.to_workflow_id(actor.workflow_id)
@@ -334,8 +335,6 @@ async fn handle_actor_v2(
 	let envoy_key = if let (Some(envoy_key), true) = (actor.envoy_key, actor.connectable) {
 		envoy_key
 	} else {
-		tracing::debug!(?actor_id, "waiting for actor to become ready");
-
 		let mut wake_retries = 0;
 
 		// Create pool error check future
@@ -353,7 +352,9 @@ async fn handle_actor_v2(
 				res = stopped_sub.next() => {
 					res?;
 
-					if wake_retries < 8 {
+					// Actors may stop again before they finish waking up, so resend a limited number of
+					// wake signals while we keep waiting for the ready event.
+					if wake_retries < 16 {
 						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
 						wake_retries += 1;
 
@@ -366,7 +367,7 @@ async fn handle_actor_v2(
 						if res.is_none() {
 							tracing::warn!(
 								?actor_id,
-								"actor workflow not found for rewake"
+								"actor workflow not found while sending another wake signal"
 							);
 							return Err(pegboard::errors::Actor::NotFound.build());
 						}

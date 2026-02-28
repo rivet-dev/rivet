@@ -313,8 +313,8 @@ impl PegboardGateway {
 		);
 
 		// If we are reconnecting after hibernation, don't send an open message
-		let can_hibernate = if after_hibernation {
-			true
+		let (can_hibernate, buffered_runner_messages) = if after_hibernation {
+			(true, Vec::new())
 		} else {
 			// Send WebSocket open message
 			let open_message = protocol::mk2::ToClientTunnelMessageKind::ToClientWebSocketOpen(
@@ -333,22 +333,28 @@ impl PegboardGateway {
 
 			// Wait for WebSocket open acknowledgment
 			let fut = async {
+				// The runner can emit frames or acks before the open ack arrives, so hold them until the WS pump starts.
+				let mut buffered_runner_messages = Vec::new();
+
 				loop {
 					tokio::select! {
-						res = msg_rx.recv() => {
-							if let Some(msg) = res {
-								match msg {
-									protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg) => {
-										return anyhow::Ok(msg);
-									}
+							res = msg_rx.recv() => {
+								if let Some(msg) = res {
+									match msg {
+										protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg) => {
+											tracing::trace!(can_hibernate = msg.can_hibernate, "received websocket open acknowledgement from runner");
+											return anyhow::Ok((msg, buffered_runner_messages));
+										}
 									protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 										tracing::warn!(?close, "websocket closed before opening");
 										return Err(WebSocketServiceUnavailable.build());
 									}
-									_ => {
-										tracing::warn!(
-											"received unexpected message while waiting for websocket open"
+									other => {
+										tracing::debug!(
+											?other,
+											"buffering runner websocket message while waiting for websocket open"
 										);
+										buffered_runner_messages.push(other);
 									}
 								}
 							} else {
@@ -360,6 +366,26 @@ impl PegboardGateway {
 							}
 						}
 						_ = stopped_sub.next() => {
+							let actor_state = self
+								.ctx
+								.op(pegboard::ops::actor::get_for_gateway::Input {
+									actor_id: self.actor_id,
+								})
+								.await?;
+
+							let stale_stopped_message = actor_state.as_ref().is_some_and(|actor| {
+								actor.connectable && actor.runner_id == Some(self.runner_id)
+							});
+							// A stale Stopped event from the previous lifecycle can race with reconnect/open.
+							if stale_stopped_message {
+								tracing::debug!(
+									actor_id = ?self.actor_id,
+									runner_id = ?self.runner_id,
+									"ignoring stale actor stopped message while waiting for websocket open"
+								);
+								continue;
+							}
+
 							tracing::debug!("actor stopped while waiting for websocket open");
 							return Err(WebSocketServiceUnavailable.build());
 						}
@@ -379,19 +405,20 @@ impl PegboardGateway {
 					.pegboard()
 					.gateway_websocket_open_timeout_ms(),
 			);
-			let open_msg = tokio::time::timeout(websocket_open_timeout, fut)
-				.await
-				.map_err(|_| {
-					tracing::warn!("timed out waiting for websocket open from runner");
+			let (open_msg, buffered_runner_messages) =
+				tokio::time::timeout(websocket_open_timeout, fut)
+					.await
+					.map_err(|_| {
+						tracing::warn!("timed out waiting for websocket open from runner");
 
-					WebSocketServiceUnavailable.build()
-				})??;
+						WebSocketServiceUnavailable.build()
+					})??;
 
 			self.shared_state
 				.toggle_hibernation(request_id, open_msg.can_hibernate)
 				.await?;
 
-			open_msg.can_hibernate
+			(open_msg.can_hibernate, buffered_runner_messages)
 		};
 
 		let ingress_bytes = Arc::new(AtomicU64::new(0));
@@ -411,11 +438,15 @@ impl PegboardGateway {
 		let (metrics_abort_tx, metrics_abort_rx) = watch::channel(());
 
 		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
+			self.ctx.clone(),
 			self.shared_state.clone(),
 			client_ws,
 			request_id,
+			self.actor_id,
+			self.runner_id,
 			stopped_sub,
 			msg_rx,
+			buffered_runner_messages,
 			drop_rx,
 			can_hibernate,
 			egress_bytes.clone(),

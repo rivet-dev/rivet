@@ -322,6 +322,23 @@ export class ActorHandleRaw {
 			getGatewayTarget(this.#actorResolutionState),
 		);
 	}
+
+	async reload(): Promise<void> {
+		const target = getGatewayTarget(this.#actorResolutionState);
+		const request = new Request("http://actor/dynamic/reload", {
+			method: "PUT",
+		});
+		const response = await this.#driver.sendRequest(target, request);
+		if (!response.ok) {
+			const body = await response.text().catch(() => "");
+			throw new ActorError(
+				"actor",
+				"reload_failed",
+				`reload failed with status ${response.status}: ${body}`,
+				{},
+			);
+		}
+	}
 }
 
 /**

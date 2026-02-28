@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getRunMetadata } from "@/actor/config";
-import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
+import type { BaseActorDefinition, AnyActorDefinition } from "@/actor/definition";
 import {
 	KEYS,
 	queueMetadataKey,
@@ -28,7 +28,7 @@ export { DriverConfigSchema, type DriverConfig };
 
 export const ActorsSchema = z.record(
 	z.string(),
-	z.custom<ActorDefinition<any, any, any, any, any, any, any, any, any>>(),
+	z.custom<BaseActorDefinition<any, any, any, any, any, any, any, any, any>>(),
 );
 export type RegistryActors = z.infer<typeof ActorsSchema>;
 
