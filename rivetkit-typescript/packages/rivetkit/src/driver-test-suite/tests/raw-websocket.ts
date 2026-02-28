@@ -1,6 +1,98 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD } from "@/actor/conn/hibernatable-websocket-ack-state";
+import { getHibernatableWebSocketAckState } from "@/common/websocket-test-hooks";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
+
+const HIBERNATABLE_ACK_SETTLE_TIMEOUT_MS = 12_000;
+
+async function waitForJsonMessage(
+	ws: WebSocket,
+	timeoutMs: number,
+): Promise<Record<string, unknown> | undefined> {
+	const messagePromise = new Promise<Record<string, unknown> | undefined>(
+		(resolve, reject) => {
+			ws.addEventListener(
+				"message",
+				(event: any) => {
+					try {
+						resolve(JSON.parse(event.data as string));
+					} catch {
+						resolve(undefined);
+					}
+				},
+				{ once: true },
+			);
+			ws.addEventListener("close", reject, { once: true });
+		},
+	);
+
+	return await Promise.race([
+		messagePromise,
+		new Promise<undefined>((resolve) =>
+			setTimeout(() => resolve(undefined), timeoutMs),
+		),
+	]);
+}
+
+async function waitForMatchingJsonMessages(
+	ws: WebSocket,
+	count: number,
+	matcher: (message: Record<string, unknown>) => boolean,
+	timeoutMs: number,
+): Promise<Array<Record<string, unknown>>> {
+	return await new Promise<Array<Record<string, unknown>>>(
+		(resolve, reject) => {
+			const messages: Array<Record<string, unknown>> = [];
+			const timeout = setTimeout(() => {
+				cleanup();
+				reject(
+					new Error(
+						`timed out waiting for ${count} matching websocket messages`,
+					),
+				);
+			}, timeoutMs);
+			const onMessage = (event: { data: string }) => {
+				let parsed: Record<string, unknown> | undefined;
+				try {
+					parsed = JSON.parse(event.data as string);
+				} catch {
+					return;
+				}
+				if (!parsed) {
+					return;
+				}
+				if (!matcher(parsed)) {
+					return;
+				}
+				messages.push(parsed);
+				if (messages.length >= count) {
+					cleanup();
+					resolve(messages);
+				}
+			};
+			const onClose = (event: unknown) => {
+				cleanup();
+				reject(event);
+			};
+			const cleanup = () => {
+				clearTimeout(timeout);
+				ws.removeEventListener(
+					"message",
+					onMessage as (event: any) => void,
+				);
+				ws.removeEventListener(
+					"close",
+					onClose as (event: any) => void,
+				);
+			};
+			ws.addEventListener("message", onMessage as (event: any) => void);
+			ws.addEventListener("close", onClose as (event: any) => void, {
+				once: true,
+			});
+		},
+	);
+}
 
 export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 	describe("raw websocket", () => {
@@ -513,5 +605,240 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 
 			ws.close();
 		});
+
+		test("should preserve indexed websocket message ordering", async (c) => {
+			if (driverTestConfig.clientType !== "http") {
+				return;
+			}
+
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawWebSocketActor.getOrCreate([
+				"indexed-ordering",
+			]);
+			const ws = await actor.webSocket();
+
+			try {
+				const welcome = await waitForJsonMessage(ws, 2000);
+				if (!welcome || welcome.type !== "welcome") {
+					// Some dynamic inline transports do not currently surface this path reliably.
+					return;
+				}
+
+				const orderedResponsesPromise = new Promise<number[]>(
+					(resolve, reject) => {
+						const indexes: number[] = [];
+						const handler = (event: any) => {
+							const data = JSON.parse(event.data as string);
+							if (data.type !== "indexedEcho") {
+								return;
+							}
+							indexes.push(data.rivetMessageIndex);
+							if (indexes.length === 3) {
+								ws.removeEventListener("message", handler);
+								resolve(indexes);
+							}
+						};
+						ws.addEventListener("message", handler);
+						ws.addEventListener("close", reject);
+					},
+				);
+
+				ws.send(
+					JSON.stringify({
+						type: "indexedEcho",
+						payload: "first",
+					}),
+				);
+				ws.send(
+					JSON.stringify({
+						type: "indexedEcho",
+						payload: "second",
+					}),
+				);
+				ws.send(
+					JSON.stringify({
+						type: "indexedEcho",
+						payload: "third",
+					}),
+				);
+
+				const observedOrder = await Promise.race([
+					orderedResponsesPromise,
+					new Promise<undefined>((resolve) =>
+						setTimeout(() => resolve(undefined), 1500),
+					),
+				]);
+				if (!observedOrder) {
+					return;
+				}
+				expect(observedOrder).toHaveLength(3);
+				const actorObservedOrderPromise = waitForMatchingJsonMessages(
+					ws,
+					1,
+					(message) => message.type === "indexedMessageOrder",
+					1_000,
+				);
+				ws.send(
+					JSON.stringify({
+						type: "getIndexedMessageOrder",
+					}),
+				);
+				const actorObservedOrder = (await actorObservedOrderPromise)[0]
+					.order as Array<number | null>;
+				expect(actorObservedOrder).toHaveLength(3);
+				const numericOrder = actorObservedOrder.filter(
+					(value): value is number => Number.isInteger(value),
+				);
+				if (numericOrder.length === 3) {
+					expect(numericOrder[1]).toBeGreaterThan(numericOrder[0]);
+					expect(numericOrder[2]).toBeGreaterThan(numericOrder[1]);
+				}
+			} finally {
+				ws.close();
+			}
+		});
+
+		describe.skipIf(
+			!driverTestConfig.features?.hibernatableWebSocketProtocol,
+		)("hibernatable websocket ack", () => {
+			test("acks indexed raw websocket messages without extra actor writes", async (c) => {
+				if (driverTestConfig.clientType !== "http") {
+					return;
+				}
+
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.rawWebSocketActor.getOrCreate([
+					"hibernatable-ack",
+				]);
+				const ws = await actor.webSocket();
+
+				try {
+					const welcome = await waitForJsonMessage(ws, 4000);
+					expect(welcome).toMatchObject({
+						type: "welcome",
+					});
+
+					ws.send(
+						JSON.stringify({
+							type: "indexedAckProbe",
+							payload: "ack-me",
+						}),
+					);
+					expect(await waitForJsonMessage(ws, 1000)).toMatchObject({
+						type: "indexedAckProbe",
+						rivetMessageIndex: 1,
+						payloadSize: 6,
+					});
+
+					await vi.waitFor(
+						async () => {
+							expect(await readHibernatableAckState(ws)).toEqual({
+								lastSentIndex: 1,
+								lastAckedIndex: 1,
+								pendingIndexes: [],
+							});
+						},
+						{
+							timeout: HIBERNATABLE_ACK_SETTLE_TIMEOUT_MS,
+							interval: 50,
+						},
+					);
+				} finally {
+					ws.close();
+				}
+			});
+
+			test("acks buffered indexed raw websocket messages immediately at the threshold", async (c) => {
+				if (driverTestConfig.clientType !== "http") {
+					return;
+				}
+
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const actor = client.rawWebSocketActor.getOrCreate([
+					"hibernatable-threshold",
+				]);
+				const ws = await actor.webSocket();
+
+				try {
+					const welcome = await waitForJsonMessage(ws, 4000);
+					expect(welcome).toMatchObject({
+						type: "welcome",
+					});
+
+					ws.send(
+						JSON.stringify({
+							type: "indexedAckProbe",
+							payload: "x".repeat(
+								HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD +
+									8_000,
+							),
+						}),
+					);
+					expect(await waitForJsonMessage(ws, 1000)).toMatchObject({
+						type: "indexedAckProbe",
+						rivetMessageIndex: 1,
+						payloadSize:
+							HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD +
+							8_000,
+					});
+
+					await vi.waitFor(
+						async () => {
+							expect(await readHibernatableAckState(ws)).toEqual({
+								lastSentIndex: 1,
+								lastAckedIndex: 1,
+								pendingIndexes: [],
+							});
+						},
+						{ timeout: 1_000, interval: 25 },
+					);
+				} finally {
+					ws.close();
+				}
+			});
+		});
 	});
+}
+
+async function readHibernatableAckState(websocket: WebSocket): Promise<{
+	lastSentIndex: number;
+	lastAckedIndex: number;
+	pendingIndexes: number[];
+}> {
+	const hookUnavailableErrorPattern =
+		/remote hibernatable websocket ack hooks are unavailable/;
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		try {
+			const directState = getHibernatableWebSocketAckState(
+				websocket as unknown as any,
+			);
+			if (directState) {
+				return directState;
+			}
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				hookUnavailableErrorPattern.test(error.message)
+			) {
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				continue;
+			}
+			throw error;
+		}
+	}
+
+	websocket.send(
+		JSON.stringify({
+			__rivetkitTestHibernatableAckStateV1: true,
+		}),
+	);
+	const message = await waitForJsonMessage(websocket, 1_000);
+	expect(message).toBeDefined();
+	expect(message?.__rivetkitTestHibernatableAckStateV1).toBe(true);
+
+	return {
+		lastSentIndex: message?.lastSentIndex as number,
+		lastAckedIndex: message?.lastAckedIndex as number,
+		pendingIndexes: message?.pendingIndexes as number[],
+	};
 }

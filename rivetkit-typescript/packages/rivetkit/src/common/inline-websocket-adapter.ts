@@ -19,29 +19,30 @@ export class InlineWebSocketAdapter {
 	#handler: UpgradeWebSocketArgs;
 	#wsContext: WSContext;
 	#readyState: 0 | 1 | 2 | 3 = 0;
+	#restoring: boolean;
+	#pendingClientMessages: Array<{
+		data: string | ArrayBufferLike | Blob | ArrayBufferView;
+		rivetMessageIndex?: number;
+	}> = [];
 
 	#clientWs: VirtualWebSocket;
 	#actorWs: VirtualWebSocket;
 
-	constructor(handler: UpgradeWebSocketArgs) {
+	constructor(
+		handler: UpgradeWebSocketArgs,
+		options: {
+			restoring?: boolean;
+		} = {},
+	) {
 		this.#handler = handler;
+		this.#restoring = options.restoring ?? false;
 
 		// Create linked WebSocket pair
 		// Client's send() -> handler.onMessage (for RPC) + Actor's message event (for raw WS)
 		// Actor's send() -> Client's message event
 		this.#clientWs = new VirtualWebSocket({
 			getReadyState: () => this.#readyState,
-			onSend: (data) => {
-				try {
-					// Call handler.onMessage for protocol-based connections (RPC)
-					this.#handler.onMessage({ data }, this.#wsContext);
-					// Also trigger message event on actor's websocket for raw websocket handlers
-					this.#actorWs.triggerMessage(data);
-				} catch (err) {
-					this.#handleError(err);
-					this.#close(1011, "Internal error processing message");
-				}
-			},
+			onSend: (data) => this.dispatchClientMessageWithMetadata(data),
 			onClose: (code, reason) => this.#close(code, reason),
 		});
 
@@ -81,18 +82,76 @@ export class InlineWebSocketAdapter {
 		return this.#actorWs;
 	}
 
+	/**
+	 * Dispatch a client->actor message with optional transport metadata.
+	 *
+	 * This is used by dynamic actor host bridges to preserve
+	 * `rivetMessageIndex` on hibernatable engine websocket paths.
+	 */
+	dispatchClientMessageWithMetadata(
+		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
+	): void {
+		if (this.#readyState === this.#clientWs.CONNECTING) {
+			this.#pendingClientMessages.push({ data, rivetMessageIndex });
+			return;
+		}
+		if (
+			this.#readyState === this.#clientWs.CLOSING ||
+			this.#readyState === this.#clientWs.CLOSED
+		) {
+			return;
+		}
+		this.#dispatchClientMessage(data, rivetMessageIndex);
+	}
+
+	#dispatchClientMessage(
+		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
+	): void {
+		try {
+			this.#handler.onMessage(
+				{ data, rivetMessageIndex },
+				this.#wsContext,
+			);
+			(this.#actorWs as any).triggerMessage(data, rivetMessageIndex);
+		} catch (err) {
+			this.#handleError(err);
+			this.#close(1011, "Internal error processing message");
+		}
+	}
+
 	async #initialize(): Promise<void> {
 		try {
 			logger().debug({ msg: "websocket initializing" });
 
 			this.#readyState = 1; // OPEN
 
-			logger().debug({ msg: "calling handler.onOpen with WSContext" });
-			this.#handler.onOpen(undefined, this.#wsContext);
+			if (this.#restoring && this.#handler.onRestore) {
+				logger().debug({
+					msg: "calling handler.onRestore with WSContext",
+				});
+				this.#handler.onRestore(this.#wsContext);
+			} else {
+				logger().debug({
+					msg: "calling handler.onOpen with WSContext",
+				});
+				this.#handler.onOpen(undefined, this.#wsContext);
+			}
 
 			// Fire open event to both sides
 			this.#clientWs.triggerOpen();
 			this.#actorWs.triggerOpen();
+			while (this.#pendingClientMessages.length > 0) {
+				const next = this.#pendingClientMessages.shift();
+				if (!next) {
+					continue;
+				}
+				this.#dispatchClientMessage(
+					next.data,
+					next.rivetMessageIndex,
+				);
+			}
 		} catch (err) {
 			this.#handleError(err);
 			this.#close(1011, "Internal error during initialization");
@@ -100,6 +159,7 @@ export class InlineWebSocketAdapter {
 	}
 
 	#handleError(err: unknown): void {
+		console.error("INLINE_WEBSOCKET_ADAPTER_ERROR", err);
 		logger().error({
 			msg: "error in websocket",
 			error: err,

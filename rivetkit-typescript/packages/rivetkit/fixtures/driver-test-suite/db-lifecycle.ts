@@ -1,5 +1,6 @@
 import { actor } from "rivetkit";
 import { db } from "rivetkit/db";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 type LifecycleCounts = {
 	create: number;
@@ -118,7 +119,7 @@ export const dbLifecycle = actor({
 			return results[0]?.count ?? 0;
 		},
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 		triggerDestroy: (c) => {
 			c.destroy();

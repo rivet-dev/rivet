@@ -1,10 +1,10 @@
 # examples/CLAUDE.md
 
-Guidelines for creating and maintaining examples in this repository.
+- Follow these guidelines when creating and maintaining examples in this repository.
 
 ## README Format
 
-All example READMEs must follow the template defined in `.claude/resources/EXAMPLE_TEMPLATE.md`. Key requirements:
+- All example READMEs must follow `.claude/resources/EXAMPLE_TEMPLATE.md` and meet the key requirements below.
 - Use exact section headings: `## Getting Started`, `## Features`, `## Implementation`, `## Resources`, `## License`
 - Include `## Prerequisites` only for non-obvious dependencies (API keys, external services)
 - Focus features on RivetKit concepts demonstrated, not just app functionality
@@ -14,17 +14,17 @@ All example READMEs must follow the template defined in `.claude/resources/EXAMP
 
 ### Directory Layout
 
-Examples with frontend:
+- Use this layout for examples with frontend (using `vite-plugin-srvx`):
 ```
 example-name/
 ├── src/
-│   └── index.ts        # Actor definitions, registry setup, and registry.start()
+│   ├── actors.ts       # Actor definitions and registry setup
+│   └── server.ts       # Server entry point
 ├── frontend/
 │   ├── App.tsx         # Main React component
 │   └── main.tsx        # React entry point
 ├── tests/
 │   └── *.test.ts       # Vitest tests
-├── public/             # Vite build output (gitignored)
 ├── index.html          # HTML entry point (for Vite)
 ├── package.json
 ├── tsconfig.json
@@ -34,11 +34,30 @@ example-name/
 └── README.md
 ```
 
-Backend-only examples:
+- Use this layout for examples with separate frontend and backend dev servers:
 ```
 example-name/
 ├── src/
-│   └── index.ts        # Actor definitions, registry setup, and registry.start()
+│   ├── actors.ts       # Actor definitions and registry setup
+│   └── server.ts       # Server entry point
+├── frontend/
+│   ├── App.tsx
+│   └── main.tsx
+├── package.json
+├── tsconfig.json
+├── tsup.config.ts      # For backend bundling
+├── vite.config.ts
+├── vitest.config.ts    # Only if tests exist
+├── turbo.json
+└── README.md
+```
+
+- Use this layout for backend-only examples:
+```
+example-name/
+├── src/
+│   ├── actors.ts       # Actor definitions and registry setup
+│   └── server.ts       # Server entry point
 ├── package.json
 ├── tsconfig.json
 ├── turbo.json
@@ -47,7 +66,8 @@ example-name/
 
 ### Naming Conventions
 
-- Actor definitions and server setup go in `src/index.ts` (single entry point)
+- Actor definitions go in `src/actors.ts`
+- Server entry point is always `src/server.ts`
 - Frontend entry is `frontend/main.tsx` with main component in `frontend/App.tsx`
 - Test files use `.test.ts` extension in `tests/` directory
 
@@ -55,27 +75,44 @@ example-name/
 
 ### Required Scripts
 
-For examples with frontend:
+- Use these scripts for examples with frontend (using `vite-plugin-srvx`):
 ```json
 {
   "scripts": {
-    "dev": "concurrently -n server,vite \"tsx --watch src/index.ts\" \"vite\"",
-    "dev:server": "tsx --watch src/index.ts",
+    "dev": "vite",
     "check-types": "tsc --noEmit",
     "test": "vitest run",
-    "build": "vite build",
-    "start": "tsx src/index.ts"
+    "build": "vite build && vite build --mode server",
+    "start": "srvx --static=public/ dist/server.js"
   }
 }
 ```
 
-For backend-only examples:
+- Use these scripts for examples with separate frontend and backend dev servers:
 ```json
 {
   "scripts": {
-    "dev": "tsx --watch src/index.ts",
+    "dev:backend": "srvx --import tsx src/server.ts",
+    "dev:frontend": "vite",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "check-types": "tsc --noEmit",
-    "start": "tsx src/index.ts"
+    "test": "vitest run",
+    "build:frontend": "vite build",
+    "build:backend": "tsup",
+    "build": "npm run build:backend && npm run build:frontend",
+    "start": "srvx --static=../frontend/dist dist/server.js"
+  }
+}
+```
+
+- Use these scripts for backend-only examples:
+```json
+{
+  "scripts": {
+    "dev": "npx srvx --import tsx src/server.ts",
+    "start": "npx srvx --import tsx src/server.ts",
+    "check-types": "tsc --noEmit",
+    "build": "tsup"
   }
 }
 ```
@@ -104,12 +141,18 @@ For backend-only examples:
 - Use `"rivetkit": "*"` for the main RivetKit package
 - Use `"@rivetkit/react": "*"` for React integration
 - Common dev dependencies:
-  - `tsx` for running TypeScript in development and production
-  - `typescript` for type checking
-  - `vite` and `@vitejs/plugin-react` for frontend (only for examples with frontend)
-  - `concurrently` for parallel dev servers (only for examples with frontend)
-  - `vitest` for testing
-- `@hono/node-server` and `@hono/node-ws` are bundled in rivetkit and do not need to be added as direct dependencies
+- `tsx` for running TypeScript in development
+- `typescript` for type checking
+- `vite` and `@vitejs/plugin-react` for frontend
+- `vite-plugin-srvx` for unified dev server (when using vite-plugin-srvx pattern)
+- `vitest` for testing
+- `tsup` for bundling (only for separate frontend/backend examples)
+- `concurrently` for parallel dev servers (only for separate frontend/backend examples)
+- Common production dependencies:
+- `hono` for the server framework (required for Vercel detection)
+- `srvx` for serving in production (used by `start` script)
+- `@hono/node-server` for Node.js HTTP server adapter
+- `@hono/node-ws` for Node.js WebSocket support
 
 ## Configuration Files
 
@@ -134,33 +177,61 @@ For backend-only examples:
 }
 ```
 
-Notes:
+- Notes:
 - Include `"dom"` in lib for frontend examples
 - Include `"vite/client"` in types when using Vite
 - Omit `"frontend/**/*"` and `"tests/**/*"` from include if they don't exist
 - `allowImportingTsExtensions` and `rewriteRelativeImportExtensions` enable ESM-compliant `.ts` imports
 
+### tsup.config.ts
+
+- Use `tsup.config.ts` only for examples with separate frontend and backend dev servers (not using `vite-plugin-srvx`).
+
+```typescript
+import { defineConfig } from "tsup";
+
+export default defineConfig({
+  entry: {
+    server: "src/server.ts",
+  },
+  format: ["esm"],
+  outDir: "dist",
+  bundle: true,
+  splitting: false,
+  shims: true,
+});
+```
+
 ### vite.config.ts
 
-Only needed for examples with a frontend:
-
+- Use this `vite.config.ts` for examples using `vite-plugin-srvx` (unified dev):
 ```typescript
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import srvx from "vite-plugin-srvx";
+
+export default defineConfig({
+  plugins: [react(), ...srvx({ entry: "src/server.ts" })],
+});
+```
+
+- Use this `vite.config.ts` for examples with separate dev servers:
+```typescript
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
-  publicDir: false,
+  root: "frontend",
   build: {
-    outDir: "public",
+    outDir: "dist",
     emptyOutDir: true,
   },
   server: {
-    clearScreen: false,
+    host: "0.0.0.0",
+    port: 5173,
     proxy: {
-      "/actors": { target: "http://localhost:6420", ws: true },
-      "/metadata": { target: "http://localhost:6420" },
-      "/health": { target: "http://localhost:6420" },
+      "/api/rivet/": "http://localhost:3000",
     },
   },
 });
@@ -183,7 +254,7 @@ export default defineConfig({
 
 ### vercel.json
 
-Vercel auto-detects Vite when it sees a `vite.config.ts` and ignores Hono. We must explicitly set the framework to Hono:
+- Vercel auto-detects Vite when it sees `vite.config.ts` and ignores Hono, so explicitly set the framework to Hono:
 
 ```json
 {
@@ -193,7 +264,7 @@ Vercel auto-detects Vite when it sees a `vite.config.ts` and ignores Hono. We mu
 
 ### turbo.json
 
-All examples should extend the root turbo config:
+- Extend the root turbo config in all examples:
 ```json
 {
   "$schema": "https://turbo.build/schema.json",
@@ -206,14 +277,13 @@ All examples should extend the root turbo config:
 ```
 .actorcore
 node_modules
-public
 ```
 
 ## Source Code Patterns
 
 ### Actor File Structure
 
-Actor definitions (`export const myActor = actor({...})`) must appear at the top of the file, before any helper functions. Helper functions, type definitions used only by helpers, and utilities go after the actor definition. This keeps the actor's public API front-and-center.
+- Put actor definitions (`export const myActor = actor({...})`) at the top of the file before helper functions, and place helper-only types and utilities after the actor definition.
 
 ```typescript
 // Good
@@ -233,11 +303,9 @@ function helperFunction(...) { ... }
 export const myActor = actor({...});
 ```
 
-Shared types/interfaces used by both the actor definition and helpers (e.g. `State`, `PlayerEntry`) should go above the actor since the actor definition depends on them.
+- Put shared types and interfaces used by both actor definitions and helpers (for example `State` and `PlayerEntry`) above the actor definition.
 
-### Entry Point (src/index.ts)
-
-The entry point defines actors, sets up the registry, and starts the server. The registry must be exported for client type inference.
+### Actor Definitions (src/actors.ts)
 
 ```typescript
 import { actor, setup } from "rivetkit";
@@ -266,20 +334,45 @@ export const chatRoom = actor({
 export const registry = setup({
   use: { chatRoom },
 });
+```
 
-// Start the server on port 6420
-registry.start();
+### Server Entry Point (src/server.ts)
+
+- Explicitly import from `"hono"` so Vercel can detect the framework.
+
+- Include at least:
+
+```typescript
+import { Hono } from "hono";
+import { registry } from "./actors.ts";
+
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+export default app;
+```
+
+- Use this pattern with additional routes:
+
+```typescript
+import { Hono } from "hono";
+import { registry } from "./actors.ts";
+
+const app = new Hono();
+
+app.get("/api/foo", (c) => c.text("bar"));
+
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+export default app;
 ```
 
 ### React Frontend (frontend/App.tsx)
 
-RivetKit runs on port 6420 by default. Pass the endpoint explicitly to the client.
-
 ```typescript
 import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "../src/index.ts";
+import type { registry } from "../src/actors.ts";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
+const { useActor } = createRivetKit<typeof registry>(`${location.origin}/api/rivet`);
 
 export function App() {
   const actor = useActor({
@@ -314,7 +407,7 @@ createRoot(root).render(
 ```typescript
 import { setupTest } from "rivetkit/test";
 import { expect, test } from "vitest";
-import { registry } from "../src/index.ts";
+import { registry } from "../src/actors.ts";
 
 test("Description of test", async (ctx) => {
   const { client } = await setupTest(ctx, registry);
@@ -328,7 +421,7 @@ test("Description of test", async (ctx) => {
 
 ## HTML Entry Point
 
-For Vite-based examples:
+- Use this HTML pattern for Vite-based examples:
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -349,7 +442,7 @@ For Vite-based examples:
 
 ## ESM Import Requirements
 
-All imports must be ESM-compliant with explicit `.ts` extensions for relative imports:
+- Keep all imports ESM-compliant with explicit `.ts` extensions for relative imports:
 
 ```typescript
 // Correct
@@ -361,7 +454,7 @@ import { registry } from "./actors";
 import { someUtil } from "../utils/helper";
 ```
 
-This is enforced by the tsconfig options `allowImportingTsExtensions` and `rewriteRelativeImportExtensions`.
+- This is enforced by `allowImportingTsExtensions` and `rewriteRelativeImportExtensions` in `tsconfig`.
 
 ## Best Practices
 
@@ -375,7 +468,7 @@ This is enforced by the tsconfig options `allowImportingTsExtensions` and `rewri
 
 ## Vercel Examples
 
-Vercel-optimized versions of examples are automatically generated using the script at `scripts/vercel-examples/generate-vercel-examples.ts`. These examples use the `hono/vercel` adapter and are configured specifically for Vercel serverless deployment.
+- Generate Vercel-optimized example variants with `scripts/vercel-examples/generate-vercel-examples.ts`; these variants use `hono/vercel` and Vercel-focused serverless config.
 
 ### Generation Script
 
@@ -395,13 +488,13 @@ npx tsx scripts/vercel-examples/generate-vercel-examples.ts --dry-run
 
 ### Naming Convention
 
-Vercel examples are placed at `examples/{original-name}-vercel/`. For example:
+- Place generated Vercel examples at `examples/{original-name}-vercel/`, for example:
 - `hello-world` → `hello-world-vercel`
 - `chat-room` → `chat-room-vercel`
 
 ### Directory Layout
 
-Vercel examples with frontend:
+- Use this layout for Vercel examples with frontend:
 ```
 example-name-vercel/
 ├── api/
@@ -421,7 +514,7 @@ example-name-vercel/
 └── README.md           # With Vercel-specific note and deploy button
 ```
 
-Vercel examples without frontend (API-only):
+- Use this layout for Vercel examples without frontend (API-only):
 ```
 example-name-vercel/
 ├── api/
@@ -440,7 +533,7 @@ example-name-vercel/
 
 #### api/index.ts
 
-The API entry point uses the Hono Vercel adapter (built into the `hono` package):
+- Use the Hono Vercel adapter (built into `hono`) in the API entry point:
 
 ```typescript
 import app from "../src/server.ts";
@@ -450,7 +543,7 @@ export default app;
 
 #### vercel.json
 
-For examples with frontend:
+- Use this `vercel.json` for examples with frontend:
 ```json
 {
   "framework": "vite",
@@ -460,7 +553,7 @@ For examples with frontend:
 }
 ```
 
-For API-only examples:
+- Use this `vercel.json` for API-only examples:
 ```json
 {
   "rewrites": [
@@ -471,7 +564,7 @@ For API-only examples:
 
 #### package.json
 
-Key differences from origin examples:
+- Apply these key differences from origin examples:
 - Removes `srvx` and `vite-plugin-srvx`
 - Uses `vercel dev` for development
 - Simplified build scripts
@@ -479,11 +572,11 @@ Key differences from origin examples:
 
 #### README.md
 
-Each Vercel example README includes:
+- Include the following in each Vercel example README:
 - A note explaining it's the Vercel-optimized version with a link back to the origin
 - A "Deploy with Vercel" button for one-click deployment
 
-Example header:
+- Use this example header:
 ```markdown
 > **Note:** This is the Vercel-optimized version of the [hello-world](../hello-world) example.
 > It uses the `hono/vercel` adapter and is configured for Vercel deployment.
@@ -493,11 +586,11 @@ Example header:
 
 ### Skipped Examples
 
-The following example types are not converted to Vercel:
+- Do not convert these example types to Vercel:
 - **Next.js examples** (`*-next-js`): Next.js has its own Vercel integration
 - **Cloudflare examples** (`*-cloudflare*`): Different runtime environment
 - **Deno examples**: Different runtime environment
-- **Examples without `src/index.ts`**: Cannot be converted
+- **Examples without `src/server.ts`**: Cannot be converted
 
 ### Workflow
 
@@ -508,7 +601,7 @@ The following example types are not converted to Vercel:
 
 ## Frontend Style Guide
 
-Examples should follow these design conventions:
+- Follow these design conventions in examples:
 
 **Color Palette (Dark Theme)**
 - Primary accent: `#ff4f00` (orange) for interactive elements and highlights
@@ -564,7 +657,7 @@ Examples should follow these design conventions:
 
 **Component Patterns**
 
-*Buttons*
+- Buttons:
 - Primary: `#ff4f00` background, white text
 - Secondary: `#2c2c2e` background, white text
 - Ghost: transparent background, `#ff4f00` text
@@ -572,7 +665,7 @@ Examples should follow these design conventions:
 - Success: `#30d158` background, white text
 - Disabled: 50% opacity, `cursor: not-allowed`
 
-*Form Inputs*
+- Form Inputs:
 - Background: `#2c2c2e`
 - Border: 1px solid `#3a3a3c`
 - Border radius: 8px
@@ -580,21 +673,21 @@ Examples should follow these design conventions:
 - Focus: border-color `#ff4f00`, box-shadow `0 0 0 3px rgba(255, 79, 0, 0.2)`
 - Placeholder text: `#6e6e73`
 
-*Cards/Containers*
+- Cards and containers:
 - Background: `#1c1c1e`
 - Border: 1px solid `#2c2c2e`
 - Border radius: 8px
 - Padding: 20px
 - Box shadow: `0 1px 3px rgba(0, 0, 0, 0.3)`
 - Header style (when applicable):
-  - Background: `#2c2c2e`
-  - Padding: 16px 20px
-  - Font size: 18px, weight 600
-  - Border bottom: 1px solid `#2c2c2e`
-  - Border radius: 8px 8px 0 0 (top corners only)
-  - Negative margin to align with card edges: `-20px -20px 20px -20px`
+- Background: `#2c2c2e`
+- Padding: 16px 20px
+- Font size: 18px, weight 600
+- Border bottom: 1px solid `#2c2c2e`
+- Border radius: 8px 8px 0 0 (top corners only)
+- Negative margin to align with card edges: `-20px -20px 20px -20px`
 
-*Modals/Overlays*
+- Modals and overlays:
 - Backdrop: `rgba(0, 0, 0, 0.75)`
 - Modal background: `#1c1c1e`
 - Border radius: 8px
@@ -602,19 +695,19 @@ Examples should follow these design conventions:
 - Padding: 24px
 - Close button: top-right, 8px from edges
 
-*Lists*
+- Lists:
 - Item padding: 12px 16px
 - Dividers: 1px solid `#2c2c2e`
 - Hover background: `#2c2c2e`
 - Selected/active background: `rgba(255, 79, 0, 0.15)`
 
-*Badges/Tags*
+- Badges and tags:
 - Padding: 4px 8px
 - Border radius: 6px
 - Font size: 12px
 - Font weight: 500
 
-*Tabs*
+- Tabs:
 - Container: `border-bottom: 1px solid #2c2c2e`, flex-wrap for overflow
 - Tab: `padding: 12px 16px`, no background, `border-radius: 0`
 - Tab border: `border-bottom: 2px solid transparent`, `margin-bottom: -1px`
@@ -625,33 +718,32 @@ Examples should follow these design conventions:
 
 **UI States**
 
-*Loading States*
+- Loading states:
 - Spinner: 20px for inline, 32px for page-level
 - Skeleton placeholders: `#2c2c2e` background with subtle pulse animation
 - Loading text: "Loading..." in muted color
 - Button loading: show spinner, disable interaction, keep button width stable
 
-*Empty States*
+- Empty states:
 - Center content vertically and horizontally
 - Icon: 48px, muted color (`#6e6e73`)
 - Heading: 18px, primary text color
 - Description: 14px, muted color
 - Optional action button below description
 
-*Error States*
+- Error states:
 - Inline errors: `#ff3b30` text below input, 12px font size
 - Error banners: `#ff3b30` left border (4px), `rgba(255, 59, 48, 0.1)` background
 - Form validation: highlight input border in `#ff3b30`
 - Error icon: Lucide `AlertCircle` or `XCircle`
 
-*Disabled States*
+- Disabled states:
 - Opacity: 50%
 - Cursor: `not-allowed`
 - No hover/focus effects
 - Preserve layout (don't collapse or hide)
 
-*Success States*
+- Success states:
 - Color: `#30d158`
 - Icon: Lucide `CheckCircle` or `Check`
 - Toast/banner: `rgba(48, 209, 88, 0.1)` background with green left border
-

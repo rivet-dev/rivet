@@ -1,11 +1,25 @@
 import invariant from "invariant";
-import { lookupInRegistry } from "@/actor/definition";
+import {
+	isStaticActorDefinition,
+	lookupInRegistry,
+} from "@/actor/definition";
 import { ActorDuplicateKey, ActorError, ActorNotFound } from "@/actor/errors";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type { Encoding } from "@/actor/protocol/serde";
+import type {
+	AnyActorInstance,
+	AnyStaticActorInstance,
+} from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
 import type { NativeSqliteConfig } from "@/db/config";
+import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
+import { DynamicActorInstance } from "@/dynamic/instance";
+import {
+	DynamicActorIsolateRuntime,
+	type DynamicWebSocketOpenOptions,
+} from "@/dynamic/isolate-runtime";
+import { isDynamicActorDefinition } from "@/dynamic/internal";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
@@ -96,6 +110,10 @@ interface ActorEntry {
 	generation: string;
 }
 
+interface HibernatableWebSocketAckObserver {
+	onAck: (serverMessageIndex: number) => void;
+}
+
 export interface FileSystemDriverOptions {
 	/** Whether to persist data to disk */
 	persist?: boolean;
@@ -117,6 +135,13 @@ export class FileSystemGlobalState {
 	#persist: boolean;
 	#sqliteRuntime: SqliteRuntime;
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
+	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
+	#actorInitialInputs = new Map<string, unknown>();
+	#hibernatableWebSocketAckObservers = new Map<
+		string,
+		HibernatableWebSocketAckObserver
+	>();
+	#hibernatableWebSocketRestoreIntents = new Map<string, number>();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
 	// conditions since the actor generation will cease to be tracked
@@ -225,6 +250,28 @@ export class FileSystemGlobalState {
 
 	getActorAlarmPath(actorId: string): string {
 		return getNodePath().join(this.#alarmsDir, actorId);
+	}
+
+	beginHibernatableWebSocketRestore(actorId: string): void {
+		const count =
+			this.#hibernatableWebSocketRestoreIntents.get(actorId) ?? 0;
+		this.#hibernatableWebSocketRestoreIntents.set(actorId, count + 1);
+	}
+
+	endHibernatableWebSocketRestore(actorId: string): void {
+		const count =
+			this.#hibernatableWebSocketRestoreIntents.get(actorId) ?? 0;
+		if (count <= 1) {
+			this.#hibernatableWebSocketRestoreIntents.delete(actorId);
+			return;
+		}
+		this.#hibernatableWebSocketRestoreIntents.set(actorId, count - 1);
+	}
+
+	isRestoringHibernatableWebSocket(actorId: string): boolean {
+		return (
+			(this.#hibernatableWebSocketRestoreIntents.get(actorId) ?? 0) > 0
+		);
 	}
 
 	#getActorKvDatabasePath(actorId: string): string {
@@ -463,6 +510,7 @@ export class FileSystemGlobalState {
 
 		// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
 		const initialKvState = getInitialActorKvState(input);
+		this.#actorInitialInputs.set(actorId, input);
 
 		// Initialize metadata
 		await this.#withActorWrite(actorId, async (lockedEntry) => {
@@ -587,6 +635,7 @@ export class FileSystemGlobalState {
 
 			// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
 			const initialKvState = getInitialActorKvState(input);
+			this.#actorInitialInputs.set(actorId, input);
 
 			await this.#withActorWrite(actorId, async (lockedEntry) => {
 				lockedEntry.state = {
@@ -672,6 +721,7 @@ export class FileSystemGlobalState {
 			// Ensure any pending KV writes finish before removing the entry.
 			await this.#withActorWrite(actorId, async () => {});
 			this.#closeActorKvDatabase(actorId);
+			this.#dynamicRuntimes.delete(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
 
@@ -727,6 +777,8 @@ export class FileSystemGlobalState {
 			if (actor.actor) {
 				await actor.actor.onStop("destroy");
 			}
+			this.#dynamicRuntimes.delete(actorId);
+			this.#actorInitialInputs.delete(actorId);
 
 			// Ensure any pending KV writes finish before deleting files.
 			await this.#withActorWrite(actorId, async () => {});
@@ -993,7 +1045,14 @@ export class FileSystemGlobalState {
 				try {
 					const fs = getNodeFs();
 					await fs.unlink(tempPath);
-				} catch {}
+				} catch (cleanupError) {
+					logger().debug({
+						msg: "failed to cleanup temp alarm file after write failure",
+						actorId,
+						tempPath,
+						error: stringifyError(cleanupError),
+					});
+				}
 				logger().error({
 					msg: "failed to write alarm",
 					actorId,
@@ -1151,18 +1210,47 @@ export class FileSystemGlobalState {
 		try {
 			// Create actor
 			const definition = lookupInRegistry(config, entry.state.name);
-			entry.actor = await definition.instantiate();
-			entry.lifecycleState = ActorLifecycleState.AWAKE;
+			if (isDynamicActorDefinition(definition)) {
+				let runtime = this.#dynamicRuntimes.get(actorId);
+				if (!runtime) {
+					runtime = new DynamicActorIsolateRuntime({
+						actorId,
+						actorName: entry.state.name,
+						actorKey: entry.state.key as string[],
+						input: this.#actorInitialInputs.get(actorId),
+						region: "unknown",
+						loader: definition.loader,
+						actorDriver,
+						inlineClient,
+					});
+					await runtime.start();
+					this.#dynamicRuntimes.set(actorId, runtime);
+				}
+				entry.actor = new DynamicActorInstance(
+					actorId,
+					runtime,
+				);
+				entry.lifecycleState = ActorLifecycleState.AWAKE;
+			} else if (isStaticActorDefinition(definition)) {
+				const staticActor =
+					(await definition.instantiate()) as AnyStaticActorInstance;
+				entry.actor = staticActor;
+				entry.lifecycleState = ActorLifecycleState.AWAKE;
 
-			// Start actor
-			await entry.actor.start(
-				actorDriver,
-				inlineClient,
-				actorId,
-				entry.state.name,
-				entry.state.key as string[],
-				"unknown",
-			);
+				// Start actor
+					await staticActor.start(
+						actorDriver,
+						inlineClient,
+						actorId,
+						entry.state.name,
+						entry.state.key as string[],
+						"unknown",
+					);
+			} else {
+				throw new Error(
+					`actor definition for ${entry.state.name} is not instantiable`,
+				);
+			}
 
 			// Update state with start timestamp
 			// NOTE: connectableTs is always in sync with startTs since actors become connectable immediately after starting
@@ -1187,6 +1275,12 @@ export class FileSystemGlobalState {
 			});
 
 			// Finish
+			if (!this.isRestoringHibernatableWebSocket(actorId)) {
+				await entry.actor.cleanupPersistedConnections?.(
+					"file-system-driver.start",
+				);
+			}
+
 			entry.startPromise.resolve();
 			entry.startPromise = undefined;
 
@@ -1198,10 +1292,29 @@ export class FileSystemGlobalState {
 				throw innerError;
 			}
 
-			const error = new Error(
-				`Failed to start actor ${actorId}: ${innerError}`,
-				{ cause: innerError },
-			);
+			const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
+			if (dynamicRuntime) {
+				try {
+					await dynamicRuntime.dispose();
+				} catch (disposeError) {
+					logger().debug({
+						msg: "failed to dispose dynamic runtime after actor start failure",
+						actorId,
+						error: stringifyError(disposeError),
+					});
+				}
+				this.#dynamicRuntimes.delete(actorId);
+			}
+
+			const error =
+				innerError instanceof Error
+					? new Error(
+							`Failed to start actor ${actorId}: ${innerError.message}`,
+							{ cause: innerError },
+						)
+					: new Error(
+							`Failed to start actor ${actorId}: ${String(innerError)}`,
+						);
 			entry.startPromise?.reject(error);
 			entry.startPromise = undefined;
 			throw error;
@@ -1220,8 +1333,88 @@ export class FileSystemGlobalState {
 		return entry;
 	}
 
+	#getDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(
+				`dynamic runtime is not loaded for actor ${actorId}`,
+			);
+		}
+		return runtime;
+	}
+
+	async isDynamicActor(
+		config: RegistryConfig,
+		actorId: string,
+	): Promise<boolean> {
+		const state = await this.loadActorStateOrError(actorId);
+		const definition = lookupInRegistry(config, state.name);
+		return isDynamicActorDefinition(definition);
+	}
+
+	async dynamicFetch(actorId: string, request: Request): Promise<Response> {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
+		}
+		return await runtime.fetch(request);
+	}
+
+	async dynamicOpenWebSocket(
+		actorId: string,
+		path: string,
+		encoding: Encoding,
+		params: unknown,
+		options: DynamicWebSocketOpenOptions = {},
+	): Promise<UniversalWebSocket> {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
+		}
+		return await runtime.openWebSocket(path, encoding, params, options);
+	}
+
+	registerHibernatableWebSocketAckObserver(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		observer: HibernatableWebSocketAckObserver,
+	): void {
+		this.#hibernatableWebSocketAckObservers.set(
+			this.#hibernatableWebSocketAckKey(gatewayId, requestId),
+			observer,
+		);
+	}
+
+	unregisterHibernatableWebSocketAckObserver(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): void {
+		this.#hibernatableWebSocketAckObservers.delete(
+			this.#hibernatableWebSocketAckKey(gatewayId, requestId),
+		);
+	}
+
+	ackHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void {
+		this.#hibernatableWebSocketAckObservers
+			.get(this.#hibernatableWebSocketAckKey(gatewayId, requestId))
+			?.onAck(serverMessageIndex);
+	}
+
 	async createDatabase(actorId: string): Promise<string | undefined> {
 		return this.getActorDbPath(actorId);
+	}
+
+	#hibernatableWebSocketAckKey(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+	): string {
+		const gateway = Buffer.from(gatewayId).toString("base64");
+		const request = Buffer.from(requestId).toString("base64");
+		return `${gateway}:${request}`;
 	}
 
 	/**

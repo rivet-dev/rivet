@@ -1,4 +1,5 @@
 import { actor } from "rivetkit";
+import { scheduleActorSleep } from "./schedule-sleep";
 
 export const fileSystemHibernationCleanupActor = actor({
 	state: {
@@ -22,7 +23,7 @@ export const fileSystemHibernationCleanupActor = actor({
 	actions: {
 		ping: () => "pong",
 		triggerSleep: (c) => {
-			c.sleep();
+			scheduleActorSleep(c);
 		},
 		getCounts: (c) => ({
 			wakeCount: c.state.wakeCount,

@@ -1,5 +1,5 @@
 import type { AnyConn } from "@/actor/conn/mod";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer } from "@/actor/protocol/serde";
 
 export enum DriverReadyState {
@@ -24,7 +24,7 @@ export interface ConnDriver {
 	rivetKitProtocol?: {
 		/** Sends a RivetKit client message. */
 		sendMessage(
-			actor: AnyActorInstance,
+			actor: AnyStaticActorInstance,
 			conn: AnyConn,
 			message: CachedSerializer<any, any, any>,
 		): void;
@@ -42,20 +42,20 @@ export interface ConnDriver {
 	 * This returns a promise since we commonly disconnect at the end of a program, and not waiting will cause the socket to not close cleanly.
 	 */
 	disconnect(
-		actor: AnyActorInstance,
+		actor: AnyStaticActorInstance,
 		conn: AnyConn,
 		reason?: string,
 	): Promise<void>;
 
 	/** Terminates the connection without graceful handling. */
-	terminate?(actor: AnyActorInstance, conn: AnyConn): void;
+	terminate?(actor: AnyStaticActorInstance, conn: AnyConn): void;
 
 	/**
 	 * Returns the ready state of the connection.
 	 * This is used to determine if the connection is ready to send messages, or if the connection is stale.
 	 */
 	getConnectionReadyState(
-		actor: AnyActorInstance,
+		actor: AnyStaticActorInstance,
 		conn: AnyConn,
 	): DriverReadyState | undefined;
 }
