@@ -11,9 +11,18 @@ import { streamSSE } from "hono/streaming";
 import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
 import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
-import { lookupInRegistry } from "@/actor/definition";
+import { HibernatableWebSocketAckState } from "@/actor/conn/hibernatable-websocket-ack-state";
+import {
+	isStaticActorDefinition,
+	lookupInRegistry,
+} from "@/actor/definition";
+import {
+	isStaticActorInstance,
+	type AnyStaticActorInstance,
+} from "@/actor/instance/mod";
 import { KEYS } from "@/actor/instance/keys";
 import { deserializeActorKey } from "@/actor/keys";
+import type { Encoding } from "@/actor/protocol/serde";
 import { getValueLength } from "@/actor/protocol/old";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
@@ -40,6 +49,9 @@ import {
 	getInitialActorKvState,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
+import { DynamicActorInstance } from "@/dynamic/instance";
+import { DynamicActorIsolateRuntime } from "@/dynamic/isolate-runtime";
+import { isDynamicActorDefinition } from "@/dynamic/internal";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
@@ -83,6 +95,7 @@ export class EngineActorDriver implements ActorDriver {
 	#inlineClient: Client<any>;
 	#runner: Runner;
 	#actors: Map<string, ActorHandler> = new Map();
+	#dynamicRuntimes = new Map<string, DynamicActorIsolateRuntime>();
 	#actorRouter: ActorRouter;
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
@@ -106,27 +119,8 @@ export class EngineActorDriver implements ActorDriver {
 	// protocol is updated to send the intent directly (see RVT-5284)
 	#actorStopIntent: Map<string, "sleep" | "destroy"> = new Map();
 
-	// Map of conn IDs to message index waiting to be persisted before sending
-	// an ack
-	//
-	// serverMessageIndex is updated and pendingAck is flagged in needed in
-	// onBeforePersistConnect, then the HWS ack message is sent in
-	// onAfterPersistConn. This allows us to track what's about to be written
-	// to storage to prevent race conditions with the serverMessageIndex being
-	// updated while writing the existing state.
-	//
-	// bufferedMessageSize tracks the total bytes received since last persist
-	// to force a saveState when threshold is reached. This is the amount of
-	// data currently buffered on the gateway.
-	#hwsMessageIndex = new Map<
-		string,
-		{
-			serverMessageIndex: number;
-			bufferedMessageSize: number;
-			pendingAckFromMessageIndex: boolean;
-			pendingAckFromBufferSize: boolean;
-		}
-	>();
+	// Tracks per-connection hibernatable websocket ack state.
+	#hwsAckState = new HibernatableWebSocketAckState();
 
 	constructor(
 		config: RegistryConfig,
@@ -211,6 +205,18 @@ export class EngineActorDriver implements ActorDriver {
 
 	getContext(actorId: string): DriverContext {
 		return {};
+	}
+
+	#isDynamicActor(actorId: string): boolean {
+		return this.#dynamicRuntimes.has(actorId);
+	}
+
+	#requireDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime missing for actor ${actorId}`);
+		}
+		return runtime;
 	}
 
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {
@@ -333,6 +339,18 @@ export class EngineActorDriver implements ActorDriver {
 		);
 	}
 
+	ackHibernatableWebSocketMessage(
+		gatewayId: ArrayBuffer,
+		requestId: ArrayBuffer,
+		serverMessageIndex: number,
+	): void {
+		this.#runner.sendHibernatableWebSocketMessageAck(
+			gatewayId,
+			requestId,
+			serverMessageIndex,
+		);
+	}
+
 	/** Creates a SQLite VFS instance for creating KV-backed databases */
 	async createSqliteVfs(): Promise<SqliteVfs> {
 		// Dynamic import keeps @rivetkit/sqlite out of the main entrypoint bundle.
@@ -396,18 +414,20 @@ export class EngineActorDriver implements ActorDriver {
 		});
 		const stopPromises: Promise<void>[] = [];
 		for (const [_actorId, handler] of this.#actors.entries()) {
-			if (handler.actor) {
-				stopPromises.push(
-					handler.actor.onStop("sleep").catch((err) => {
-						handler.actor?.rLog.error({
-							msg: "onStop errored",
-							error: stringifyError(err),
-						});
-					}),
-				);
-			}
+				if (handler.actor) {
+					stopPromises.push(
+						handler.actor.onStop("sleep").catch((err) => {
+							logger().error({
+								msg: "onStop errored",
+								actorId: _actorId,
+								error: stringifyError(err),
+							});
+						}),
+					);
+				}
 		}
 		await Promise.all(stopPromises);
+		this.#dynamicRuntimes.clear();
 		logger().debug({ msg: "all actors stopped" });
 
 		try {
@@ -551,47 +571,86 @@ export class EngineActorDriver implements ActorDriver {
 
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
+			if (isDynamicActorDefinition(definition)) {
+				let runtime = this.#dynamicRuntimes.get(actorId);
+				if (!runtime) {
+					runtime = new DynamicActorIsolateRuntime({
+						actorId,
+						actorName: name,
+						actorKey: key,
+						input,
+						region: "unknown",
+						loader: definition.loader,
+						actorDriver: this,
+						inlineClient: this.#inlineClient,
+					});
+					await runtime.start();
+					this.#dynamicRuntimes.set(actorId, runtime);
+				}
 
-			handler.actor = await definition.instantiate();
+				const dynamicActor = new DynamicActorInstance(actorId, runtime);
+				handler.actor = dynamicActor;
 
-			// Apply protocol limits as per-instance overrides without mutating the shared definition
-			const protocolMetadata = this.#runner.getProtocolMetadata();
-			if (protocolMetadata) {
-				logger().debug({
-					msg: "applying config limits from protocol",
-					protocolMetadata,
-				});
+				handler.actorStartError = undefined;
+				handler.actorStartPromise?.resolve();
+				handler.actorStartPromise = undefined;
 
-				const stopThresholdMax = Math.max(
-					Number(protocolMetadata.actorStopThreshold) - 1000,
-					0,
-				);
-				handler.actor.overrides.onSleepTimeout = stopThresholdMax;
-				handler.actor.overrides.onDestroyTimeout = stopThresholdMax;
+				const metaEntries = await dynamicActor.getHibernatingWebSockets();
+				await this.#runner.restoreHibernatingRequests(actorId, metaEntries);
+			} else if (isStaticActorDefinition(definition)) {
+				const staticActor =
+					(await definition.instantiate()) as AnyStaticActorInstance;
+				handler.actor = staticActor;
 
-				if (protocolMetadata.serverlessDrainGracePeriod) {
-					const drainMax = Math.max(
-						Number(protocolMetadata.serverlessDrainGracePeriod) -
-							1000,
+				// Apply protocol limits as per-instance overrides without mutating the shared definition
+				const protocolMetadata = this.#runner.getProtocolMetadata();
+				if (protocolMetadata) {
+					logger().debug({
+						msg: "applying config limits from protocol",
+						protocolMetadata,
+					});
+
+					const stopThresholdMax = Math.max(
+						Number(protocolMetadata.actorStopThreshold) - 1000,
 						0,
 					);
-					handler.actor.overrides.runStopTimeout = drainMax;
-					handler.actor.overrides.waitUntilTimeout = drainMax;
-				}
-			}
+					staticActor.overrides.onSleepTimeout = stopThresholdMax;
+					staticActor.overrides.onDestroyTimeout = stopThresholdMax;
 
-			// Start actor
-			await handler.actor.start(
-				this,
-				this.#inlineClient,
-				actorId,
-				name,
-				key,
-				"unknown", // TODO: Add regions
-			);
+					if (protocolMetadata.serverlessDrainGracePeriod) {
+						const drainMax = Math.max(
+							Number(protocolMetadata.serverlessDrainGracePeriod) - 1000,
+							0,
+						);
+						staticActor.overrides.runStopTimeout = drainMax;
+						staticActor.overrides.waitUntilTimeout = drainMax;
+					}
+				}
+
+				// Start actor
+				await staticActor.start(
+					this,
+					this.#inlineClient,
+					actorId,
+					name,
+					key,
+					"unknown", // TODO: Add regions
+				);
+			} else {
+				throw new Error(
+					`actor definition for ${actorConfig.name} is not instantiable`,
+				);
+			}
 
 			logger().debug({ msg: "runner actor started", actorId, name, key });
 		} catch (innerError) {
+			const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
+			if (dynamicRuntime) {
+				try {
+					await dynamicRuntime.dispose();
+				} catch {}
+				this.#dynamicRuntimes.delete(actorId);
+			}
 			const error =
 				innerError instanceof Error
 					? new Error(
@@ -679,6 +738,7 @@ export class EngineActorDriver implements ActorDriver {
 				});
 			}
 		}
+		this.#dynamicRuntimes.delete(actorId);
 
 		this.#actors.delete(actorId);
 
@@ -699,6 +759,9 @@ export class EngineActorDriver implements ActorDriver {
 			url: request.url,
 			method: request.method,
 		});
+		if (this.#isDynamicActor(actorId)) {
+			return await this.#requireDynamicRuntime(actorId).fetch(request);
+		}
 		return await this.#actorRouter.fetch(request, { actorId });
 	}
 
@@ -738,6 +801,22 @@ export class EngineActorDriver implements ActorDriver {
 		// Parse configuration from Sec-WebSocket-Protocol header (optional for path-based routing)
 		const protocols = request.headers.get("sec-websocket-protocol");
 		const { encoding, connParams } = parseWebSocketProtocols(protocols);
+
+		if (this.#isDynamicActor(actorId)) {
+			await this.#runnerDynamicWebSocket(
+				actorId,
+				websocket,
+				gatewayIdBuf,
+				requestIdBuf,
+				requestPath,
+				requestHeaders,
+				encoding,
+				connParams,
+				isHibernatable,
+				isRestoringHibernatable,
+			);
+			return;
+		}
 
 		// Fetch WS handler
 		//
@@ -854,36 +933,19 @@ export class EngineActorDriver implements ActorDriver {
 					newMsgIndex: event.rivetMessageIndex,
 				});
 
-				// Calculate message size and track cumulative size
-				const entry = this.#hwsMessageIndex.get(conn.id);
-				if (entry) {
-					// Track message length
+				if (this.#hwsAckState.hasConnEntry(conn.id)) {
 					const messageLength = getValueLength(event.data);
-					entry.bufferedMessageSize += messageLength;
-
-					if (
-						entry.bufferedMessageSize >=
-						CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD
-					) {
-						// Reset buffered message size immediately (instead
-						// of waiting for onAfterPersistConn) since we may
-						// receive more messages before onAfterPersistConn
-						// is called, which would called saveState
-						// immediate multiple times
-						entry.bufferedMessageSize = 0;
-						entry.pendingAckFromBufferSize = true;
-
-						// Save state immediately if approaching buffer threshold
+					const shouldPersistImmediately =
+						this.#hwsAckState.recordBufferedMessage(
+							conn.id,
+							messageLength,
+							CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD,
+						);
+					if (shouldPersistImmediately) {
 						actor.stateManager.saveState({
 							immediate: true,
 						});
 					} else {
-						// Save message index. The maxWait is set to the ack deadline
-						// since we ack the message immediately after persisting the index.
-						// If cumulative size exceeds threshold, force immediate persist.
-						//
-						// This will call EngineActorDriver.onAfterPersistConn after
-						// persist to send the ack to the gateway.
 						actor.stateManager.saveState({
 							maxWait: CONN_MESSAGE_ACK_DEADLINE,
 						});
@@ -920,6 +982,143 @@ export class EngineActorDriver implements ActorDriver {
 				hasMessageListener: !!websocket.addEventListener,
 			});
 		}
+	}
+
+	async #runnerDynamicWebSocket(
+		actorId: string,
+		websocket: UniversalWebSocket,
+		gatewayIdBuf: ArrayBuffer,
+		requestIdBuf: ArrayBuffer,
+		requestPath: string,
+		requestHeaders: Record<string, string>,
+		encoding: Encoding,
+		connParams: unknown,
+		isHibernatable: boolean,
+		isRestoringHibernatable: boolean,
+	): Promise<void> {
+		let runtime: DynamicActorIsolateRuntime;
+		try {
+			runtime = this.#requireDynamicRuntime(actorId);
+		} catch (error) {
+			logger().error({
+				msg: "dynamic runtime missing for websocket",
+				actorId,
+				error: stringifyError(error),
+			});
+			websocket.close(1011, "dynamic.runtime_missing");
+			return;
+		}
+
+		let proxyToActorWs: UniversalWebSocket;
+		try {
+			proxyToActorWs = await runtime.openWebSocket(
+				requestPath,
+				encoding,
+				connParams,
+				{
+					headers: requestHeaders,
+					gatewayId: gatewayIdBuf,
+					requestId: requestIdBuf,
+					isHibernatable,
+					isRestoringHibernatable,
+				},
+			);
+		} catch (error) {
+			logger().error({
+				msg: "failed to open dynamic websocket",
+				actorId,
+				error: stringifyError(error),
+			});
+			websocket.close(1011, "dynamic.websocket_open_failed");
+			return;
+		}
+
+		let actorWebSocketReady = proxyToActorWs.readyState === proxyToActorWs.OPEN;
+		const pendingMessages: Array<{
+			data: string | ArrayBufferLike | Blob | ArrayBufferView;
+			rivetMessageIndex?: number;
+		}> = [];
+
+		const flushPendingMessages = async (): Promise<void> => {
+			if (!actorWebSocketReady || pendingMessages.length === 0) {
+				return;
+			}
+			while (pendingMessages.length > 0) {
+				const next = pendingMessages.shift();
+				if (!next) {
+					continue;
+				}
+				await runtime.forwardIncomingWebSocketMessage(
+					proxyToActorWs,
+					next.data,
+					next.rivetMessageIndex,
+				);
+			}
+		};
+
+		proxyToActorWs.addEventListener("open", () => {
+			actorWebSocketReady = true;
+			void flushPendingMessages();
+		});
+
+		proxyToActorWs.addEventListener("message", (event: RivetMessageEvent) => {
+			if (websocket.readyState !== websocket.OPEN) {
+				return;
+			}
+			websocket.send(event.data as any);
+		});
+
+		proxyToActorWs.addEventListener("close", (event) => {
+			if (websocket.readyState !== websocket.CLOSED) {
+				websocket.close(event.code, event.reason);
+			}
+		});
+
+		proxyToActorWs.addEventListener("error", (_event) => {
+			if (websocket.readyState !== websocket.CLOSED) {
+				websocket.close(1011, "dynamic.websocket_error");
+			}
+		});
+
+		websocket.addEventListener("message", (event: RivetMessageEvent) => {
+			const actorHandler = this.#actors.get(actorId);
+			if (actorHandler?.actor?.isStopping) {
+				return;
+			}
+			if (!actorWebSocketReady) {
+				pendingMessages.push({
+					data: event.data as any,
+					rivetMessageIndex: event.rivetMessageIndex,
+				});
+				return;
+			}
+			void runtime
+				.forwardIncomingWebSocketMessage(
+					proxyToActorWs,
+					event.data as any,
+					event.rivetMessageIndex,
+				)
+				.catch((error) => {
+					logger().error({
+						msg: "failed forwarding websocket message to dynamic actor",
+						actorId,
+						error: stringifyError(error),
+					});
+					websocket.close(1011, "dynamic.websocket_forward_failed");
+				});
+		});
+
+		websocket.addEventListener("close", (event) => {
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(event.code, event.reason);
+			}
+		});
+
+		websocket.addEventListener("error", () => {
+			if (proxyToActorWs.readyState !== proxyToActorWs.CLOSED) {
+				proxyToActorWs.close(1011, "dynamic.gateway_error");
+			}
+		});
 	}
 
 	// MARK: - Hibernating WebSockets
@@ -1021,6 +1220,21 @@ export class EngineActorDriver implements ActorDriver {
 		actorId: string,
 	): Promise<HibernatingWebSocketMetadata[]> {
 		const actor = await this.loadActor(actorId);
+		if (!isStaticActorInstance(actor)) {
+			const runtime = this.#dynamicRuntimes.get(actorId);
+			if (!runtime) {
+				return [];
+			}
+			const entries = await runtime.getHibernatingWebSockets();
+			return entries.map((entry) => ({
+				gatewayId: entry.gatewayId,
+				requestId: entry.requestId,
+				serverMessageIndex: entry.serverMessageIndex,
+				clientMessageIndex: entry.clientMessageIndex,
+				path: entry.path,
+				headers: entry.headers,
+			}));
+		}
 		return actor.conns
 			.values()
 			.map((conn) => {
@@ -1040,7 +1254,7 @@ export class EngineActorDriver implements ActorDriver {
 			.toArray();
 	}
 
-	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
+	async onBeforeActorStart(actor: AnyStaticActorInstance): Promise<void> {
 		// Resolve promise if waiting
 		const handler = this.#actors.get(actor.id);
 		invariant(handler, "missing actor handler in onBeforeActorReady");
@@ -1057,25 +1271,23 @@ export class EngineActorDriver implements ActorDriver {
 		const hibernatable = conn[CONN_STATE_MANAGER_SYMBOL].hibernatableData;
 		if (!hibernatable) return;
 
-		this.#hwsMessageIndex.set(conn.id, {
-			serverMessageIndex: hibernatable.serverMessageIndex,
-			bufferedMessageSize: 0,
-			pendingAckFromMessageIndex: false,
-			pendingAckFromBufferSize: false,
-		});
+		this.#hwsAckState.createConnEntry(
+			conn.id,
+			hibernatable.serverMessageIndex,
+		);
 
 		logger().debug({
-			msg: "created #hwsMessageIndex entry",
+			msg: "created hibernatable websocket ack entry",
 			connId: conn.id,
 			serverMessageIndex: hibernatable.serverMessageIndex,
 		});
 	}
 
 	onDestroyConn(conn: AnyConn) {
-		this.#hwsMessageIndex.delete(conn.id);
+		this.#hwsAckState.deleteConnEntry(conn.id);
 
 		logger().debug({
-			msg: "removed #hwsMessageIndex entry",
+			msg: "removed hibernatable websocket ack entry",
 			connId: conn.id,
 		});
 	}
@@ -1084,47 +1296,37 @@ export class EngineActorDriver implements ActorDriver {
 		const stateManager = conn[CONN_STATE_MANAGER_SYMBOL];
 		const hibernatable = stateManager.hibernatableDataOrError();
 
-		const entry = this.#hwsMessageIndex.get(conn.id);
-		if (!entry) {
+		if (
+			!this.#hwsAckState.onBeforePersist(
+				conn.id,
+				hibernatable.serverMessageIndex,
+			)
+		) {
 			logger().warn({
-				msg: "missing EngineActorDriver.#hwsMessageIndex entry for conn",
+				msg: "missing hibernatable websocket ack entry for conn",
 				connId: conn.id,
 			});
-			return;
 		}
-
-		// There is a newer message index
-		entry.pendingAckFromMessageIndex =
-			hibernatable.serverMessageIndex > entry.serverMessageIndex;
-		entry.serverMessageIndex = hibernatable.serverMessageIndex;
 	}
 
 	onAfterPersistConn(conn: AnyConn) {
 		const stateManager = conn[CONN_STATE_MANAGER_SYMBOL];
 		const hibernatable = stateManager.hibernatableDataOrError();
-
-		const entry = this.#hwsMessageIndex.get(conn.id);
-		if (!entry) {
+		if (!this.#hwsAckState.hasConnEntry(conn.id)) {
 			logger().warn({
-				msg: "missing EngineActorDriver.#hwsMessageIndex entry for conn",
+				msg: "missing hibernatable websocket ack entry for conn",
 				connId: conn.id,
 			});
 			return;
 		}
 
-		// Ack entry
-		if (
-			entry.pendingAckFromMessageIndex ||
-			entry.pendingAckFromBufferSize
-		) {
-			this.#runner.sendHibernatableWebSocketMessageAck(
-				hibernatable.gatewayId,
-				hibernatable.requestId,
-				entry.serverMessageIndex,
-			);
-			entry.pendingAckFromMessageIndex = false;
-			entry.pendingAckFromBufferSize = false;
-			entry.bufferedMessageSize = 0;
-		}
+		const ackServerMessageIndex = this.#hwsAckState.consumeAck(conn.id);
+		if (ackServerMessageIndex === undefined) return;
+
+		this.ackHibernatableWebSocketMessage(
+			hibernatable.gatewayId,
+			hibernatable.requestId,
+			ackServerMessageIndex,
+		);
 	}
 }

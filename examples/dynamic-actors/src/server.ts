@@ -3,7 +3,7 @@ import { createClient } from "rivetkit/client";
 import { DEFAULT_DYNAMIC_ACTOR_SOURCE, registry } from "./actors.ts";
 
 const app = new Hono();
-const client = createClient({ encoding: "json" }) as any;
+const client = createClient<typeof registry>({ encoding: "json" });
 
 function sourceActorHandle() {
 	return client.sourceCode.getOrCreate(["main"], {

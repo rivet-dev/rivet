@@ -5,6 +5,7 @@ import {
 	importSqliteVfs,
 	type ActorDriver,
 	type AnyActorInstance,
+	type AnyStaticActorInstance,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
 import type { FileSystemGlobalState } from "./global-state";
@@ -120,7 +121,7 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.destroyActor(actorId);
 	}
 
-	async onBeforeActorStart(actor: AnyActorInstance): Promise<void> {
+	async onBeforeActorStart(actor: AnyStaticActorInstance): Promise<void> {
 		await actor.cleanupPersistedConnections("file-system-driver.start");
 	}
 }

@@ -8,12 +8,12 @@ import {
 } from "@rivetkit/traces";
 import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import invariant from "invariant";
-import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
 import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor-inspector";
+import type { ActorKey } from "@/manager/protocol/query";
 import type { Registry } from "@/mod";
 import {
 	ACTOR_VERSIONED,
@@ -21,7 +21,13 @@ import {
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
-import { type ActorConfig, getRunFunction } from "../config";
+import {
+	type Actions,
+	type ActorConfig,
+	type ActorConfigInput,
+	ActorConfigSchema,
+	getRunFunction,
+} from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -42,6 +48,7 @@ import {
 } from "../contexts";
 
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
+import { ActorDefinition } from "../definition";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
@@ -73,6 +80,70 @@ import { ActorTracesDriver } from "./traces-driver";
 
 export type { SaveStateOptions };
 
+export function actor<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+	TActions extends Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> = Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>,
+>(
+	input: ActorConfigInput<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues,
+		TActions
+	>,
+): ActorDefinition<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues,
+	TActions
+> {
+	const config = ActorConfigSchema.parse(input) as ActorConfig<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>;
+	return new ActorDefinition(config);
+}
+
 enum CanSleep {
 	Yes,
 	NotReady,
@@ -84,8 +155,30 @@ enum CanSleep {
 	ActiveRun,
 }
 
-/** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
-export type AnyActorInstance = ActorInstance<
+/**
+ * Minimal lifecycle contract shared by static and dynamic actor instances.
+ *
+ * Runtime internals (connections, inspector, queue manager, etc) are exposed
+ * only on `ActorInstance`.
+ */
+export interface BaseActorInstance<
+	S = any,
+	CP = any,
+	CS = any,
+	V = any,
+	I = any,
+	DB extends AnyDatabaseProvider = AnyDatabaseProvider,
+	E extends EventSchemaConfig = Record<never, never>,
+	Q extends QueueSchemaConfig = Record<never, never>,
+> {
+	readonly id: string;
+	readonly isStopping: boolean;
+	onStop(mode: "sleep" | "destroy"): Promise<void>;
+	onAlarm(): Promise<void>;
+}
+
+/** Actor type alias with all `any` types. */
+export type AnyActorInstance = BaseActorInstance<
 	any,
 	any,
 	any,
@@ -96,18 +189,78 @@ export type AnyActorInstance = ActorInstance<
 	any
 >;
 
+/** Static actor type alias with all `any` types. */
+export type AnyStaticActorInstance = ActorInstance<
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any
+>;
+
+export function isStaticActorInstance(
+	actor: AnyActorInstance,
+): actor is AnyStaticActorInstance {
+	if (actor instanceof ActorInstance) {
+		return true;
+	}
+
+	if (!actor || typeof actor !== "object") {
+		return false;
+	}
+
+	const candidate = actor as Partial<AnyStaticActorInstance>;
+	return (
+		typeof candidate.executeAction === "function" &&
+		typeof candidate.beginHonoHttpRequest === "function" &&
+		typeof candidate.endHonoHttpRequest === "function" &&
+		typeof candidate.connectionManager === "object" &&
+		candidate.connectionManager !== null
+	);
+}
+
 export type ExtractActorState<A extends AnyActorInstance> =
-	A extends ActorInstance<infer State, any, any, any, any, any, any, any>
-		? State
+	A extends ActorInstance<
+		infer State,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any
+	>
+	? State
 		: never;
 
 export type ExtractActorConnParams<A extends AnyActorInstance> =
-	A extends ActorInstance<any, infer ConnParams, any, any, any, any, any, any>
-		? ConnParams
+	A extends ActorInstance<
+		any,
+		infer ConnParams,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any
+	>
+	? ConnParams
 		: never;
 
 export type ExtractActorConnState<A extends AnyActorInstance> =
-	A extends ActorInstance<any, any, infer ConnState, any, any, any, any, any>
+	A extends ActorInstance<
+		any,
+		any,
+		infer ConnState,
+		any,
+		any,
+		any,
+		any,
+		any
+	>
 		? ConnState
 		: never;
 
@@ -121,7 +274,7 @@ export class ActorInstance<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-> {
+> implements BaseActorInstance<S, CP, CS, V, I, DB, E, Q> {
 	// MARK: - Core Properties
 	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
@@ -1473,7 +1626,7 @@ export class ActorInstance<
 				this.#sqliteVfs = await this.driver.createSqliteVfs();
 			}
 
-			client = await this.#config.db.createClient({
+				client = await this.#config.db.createClient({
 				actorId: this.#actorId,
 				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
 					? () =>
@@ -1489,11 +1642,11 @@ export class ActorInstance<
 							)
 					: undefined,
 				kv: {
-					batchPut: (entries) =>
+					batchPut: (entries: [Uint8Array, Uint8Array][]) =>
 						this.driver.kvBatchPut(this.#actorId, entries),
-					batchGet: (keys) =>
+					batchGet: (keys: Uint8Array[]) =>
 						this.driver.kvBatchGet(this.#actorId, keys),
-					batchDelete: (keys) =>
+					batchDelete: (keys: Uint8Array[]) =>
 						this.driver.kvBatchDelete(this.#actorId, keys),
 				},
 				sqliteVfs: this.#sqliteVfs,

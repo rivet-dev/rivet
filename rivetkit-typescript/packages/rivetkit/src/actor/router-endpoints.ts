@@ -3,7 +3,10 @@ import type { Context as HonoContext, HonoRequest } from "hono";
 import type { AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts";
 import * as errors from "@/actor/errors";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import {
+	type AnyStaticActorInstance,
+	isStaticActorInstance,
+} from "@/actor/instance/mod";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import { hasSchemaConfigKey } from "@/actor/schema";
 import {
@@ -43,6 +46,19 @@ import { createHttpDriver } from "./conn/drivers/http";
 import { createRawRequestDriver } from "./conn/drivers/raw-request";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
+
+async function loadStaticActor(
+	actorDriver: ActorDriver,
+	actorId: string,
+): Promise<AnyStaticActorInstance> {
+	const actor = await actorDriver.loadActor(actorId);
+	if (!isStaticActorInstance(actor)) {
+		throw new errors.InternalError(
+			"dynamic actor cannot be handled by static actor router endpoints",
+		);
+	}
+	return actor;
+}
 
 export interface ActionOpts {
 	req?: HonoRequest;
@@ -116,10 +132,10 @@ export async function handleAction(
 	let outputReady = false;
 	const maxAttempts = 3;
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		let actor: AnyActorInstance | undefined;
+		let actor: AnyStaticActorInstance | undefined;
 		let conn: AnyConn | undefined;
 		try {
-			actor = await actorDriver.loadActor(actorId);
+			actor = await loadStaticActor(actorDriver, actorId);
 
 			actor.rLog.debug({ msg: "handling action", actionName, encoding });
 
@@ -224,7 +240,7 @@ export async function handleQueueSend(
 		throw new errors.InvalidRequest("missing queue name");
 	}
 
-	const actor = await actorDriver.loadActor(actorId);
+	const actor = await loadStaticActor(actorDriver, actorId);
 	if (!hasSchemaConfigKey(actor.config.queues, name)) {
 		actor.rLog.warn({
 			msg: "ignoring incoming queue message for undefined queue",
@@ -311,7 +327,7 @@ export async function handleRawRequest(
 	actorDriver: ActorDriver,
 	actorId: string,
 ): Promise<Response> {
-	const actor = await actorDriver.loadActor(actorId);
+	const actor = await loadStaticActor(actorDriver, actorId);
 	const parameters = getRequestConnParams(c.req);
 
 	// Track connection outside of scope for cleanup

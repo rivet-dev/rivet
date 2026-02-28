@@ -1,4 +1,6 @@
 import { setup } from "rivetkit";
+// This registry remains the canonical type anchor for driver fixtures.
+// Driver runtime tests execute through registry-static.ts and registry-dynamic.ts.
 import {
 	accessControlActor,
 	accessControlNoQueuesActor,
