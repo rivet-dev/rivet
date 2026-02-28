@@ -1,10 +1,14 @@
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
 import { ActorDuplicateKey } from "@/actor/errors";
+import type { Encoding } from "@/actor/protocol/serde";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { AnyClient } from "@/client/client";
+import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
+import { getDynamicActorMetadata } from "@/dynamic/internal";
+import { DynamicActorHostRuntime } from "@/dynamic/host-runtime";
 import type { RegistryConfig } from "@/registry/config";
 import type * as schema from "@/schemas/file-system-driver/mod";
 import {
@@ -95,6 +99,36 @@ interface ActorEntry {
 	generation: string;
 }
 
+class DynamicActorInstanceAdapter {
+	#actorId: string;
+	#runtime: DynamicActorHostRuntime;
+	#isStopping = false;
+
+	constructor(actorId: string, runtime: DynamicActorHostRuntime) {
+		this.#actorId = actorId;
+		this.#runtime = runtime;
+	}
+
+	get id(): string {
+		return this.#actorId;
+	}
+
+	get isStopping(): boolean {
+		return this.#isStopping;
+	}
+
+	async onStop(mode: "sleep" | "destroy"): Promise<void> {
+		if (this.#isStopping) return;
+		this.#isStopping = true;
+		await this.#runtime.stop(mode);
+		await this.#runtime.dispose();
+	}
+
+	async onAlarm(): Promise<void> {
+		await this.#runtime.dispatchAlarm();
+	}
+}
+
 export interface FileSystemDriverOptions {
 	/** Whether to persist data to disk */
 	persist?: boolean;
@@ -116,6 +150,8 @@ export class FileSystemGlobalState {
 	#persist: boolean;
 	#sqliteRuntime: SqliteRuntime;
 	#actorKvDatabases = new Map<string, SqliteRuntimeDatabase>();
+	#dynamicRuntimes = new Map<string, DynamicActorHostRuntime>();
+	#actorInitialInputs = new Map<string, unknown>();
 
 	// IMPORTANT: Never delete from this map. Doing so will result in race
 	// conditions since the actor generation will cease to be tracked
@@ -453,6 +489,7 @@ export class FileSystemGlobalState {
 
 		// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
 		const initialKvState = getInitialActorKvState(input);
+		this.#actorInitialInputs.set(actorId, input);
 
 		// Initialize metadata
 		await this.#withActorWrite(actorId, async (lockedEntry) => {
@@ -577,6 +614,7 @@ export class FileSystemGlobalState {
 
 			// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
 			const initialKvState = getInitialActorKvState(input);
+			this.#actorInitialInputs.set(actorId, input);
 
 			await this.#withActorWrite(actorId, async (lockedEntry) => {
 				lockedEntry.state = {
@@ -661,6 +699,7 @@ export class FileSystemGlobalState {
 			// Ensure any pending KV writes finish before removing the entry.
 			await this.#withActorWrite(actorId, async () => { });
 			this.#closeActorKvDatabase(actorId);
+			this.#dynamicRuntimes.delete(actorId);
 			actor.stopPromise?.resolve();
 			actor.stopPromise = undefined;
 
@@ -716,6 +755,8 @@ export class FileSystemGlobalState {
 			if (actor.actor) {
 				await actor.actor.onStop("destroy");
 			}
+			this.#dynamicRuntimes.delete(actorId);
+			this.#actorInitialInputs.delete(actorId);
 
 			// Ensure any pending KV writes finish before deleting files.
 			await this.#withActorWrite(actorId, async () => { });
@@ -1109,18 +1150,42 @@ export class FileSystemGlobalState {
 		try {
 			// Create actor
 			const definition = lookupInRegistry(config, entry.state.name);
-			entry.actor = await definition.instantiate();
-			entry.lifecycleState = ActorLifecycleState.AWAKE;
+			const dynamicMetadata = getDynamicActorMetadata(definition);
+			if (dynamicMetadata) {
+				let runtime = this.#dynamicRuntimes.get(actorId);
+				if (!runtime) {
+					runtime = new DynamicActorHostRuntime({
+						actorId,
+						actorName: entry.state.name,
+						actorKey: entry.state.key as string[],
+						input: this.#actorInitialInputs.get(actorId),
+						region: "unknown",
+						metadata: dynamicMetadata,
+						actorDriver,
+						inlineClient,
+					});
+					await runtime.start();
+					this.#dynamicRuntimes.set(actorId, runtime);
+				}
+				entry.actor = new DynamicActorInstanceAdapter(
+					actorId,
+					runtime,
+				) as unknown as AnyActorInstance;
+				entry.lifecycleState = ActorLifecycleState.AWAKE;
+			} else {
+				entry.actor = await definition.instantiate();
+				entry.lifecycleState = ActorLifecycleState.AWAKE;
 
-			// Start actor
-			await entry.actor.start(
-				actorDriver,
-				inlineClient,
-				actorId,
-				entry.state.name,
-				entry.state.key as string[],
-				"unknown",
-			);
+				// Start actor
+				await entry.actor.start(
+					actorDriver,
+					inlineClient,
+					actorId,
+					entry.state.name,
+					entry.state.key as string[],
+					"unknown",
+				);
+			}
 
 			// Update state with start timestamp
 			// NOTE: connectableTs is always in sync with startTs since actors become connectable immediately after starting
@@ -1172,6 +1237,36 @@ export class FileSystemGlobalState {
 		const entry = this.#actors.get(actorId);
 		if (!entry) throw new Error(`No entry for actor: ${actorId}`);
 		return entry;
+	}
+
+	async isDynamicActor(
+		config: RegistryConfig,
+		actorId: string,
+	): Promise<boolean> {
+		const state = await this.loadActorStateOrError(actorId);
+		const definition = lookupInRegistry(config, state.name);
+		return getDynamicActorMetadata(definition) !== undefined;
+	}
+
+	async dynamicFetch(actorId: string, request: Request): Promise<Response> {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
+		}
+		return await runtime.fetch(request);
+	}
+
+	async dynamicOpenWebSocket(
+		actorId: string,
+		path: string,
+		encoding: Encoding,
+		params: unknown,
+	): Promise<UniversalWebSocket> {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
+		}
+		return await runtime.openWebSocket(path, encoding, params);
 	}
 
 	async createDatabase(actorId: string): Promise<string | undefined> {

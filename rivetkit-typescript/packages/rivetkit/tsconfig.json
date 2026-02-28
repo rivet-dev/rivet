@@ -14,6 +14,7 @@
 			"@rivetkit/sqlite-vfs/wasm": ["../sqlite-vfs/src/wasm.ts"],
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
+			"rivetkit/dynamic": ["./src/dynamic/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"],
 			"rivetkit/sandbox": ["./src/sandbox/index.ts"],
 			"rivetkit/db": ["./src/db/mod.ts"],
