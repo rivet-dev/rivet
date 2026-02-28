@@ -1,7 +1,7 @@
 import { ACTOR_CONTEXT_INTERNAL_SYMBOL } from "@/actor/contexts/base/actor";
 import type { RunContext } from "@/actor/contexts/run";
 import type { AnyDatabaseProvider } from "@/actor/database";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import { RUN_FUNCTION_CONFIG_SYMBOL } from "@/actor/config";
 import { stringifyError } from "@/utils";
@@ -143,7 +143,7 @@ export function workflow<
 	): Promise<void> {
 		const actor = (
 			runCtx as unknown as {
-				[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: AnyActorInstance;
+				[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: AnyStaticActorInstance;
 			}
 		)[ACTOR_CONTEXT_INTERNAL_SYMBOL];
 		invariant(actor, "workflow() requires an actor instance");

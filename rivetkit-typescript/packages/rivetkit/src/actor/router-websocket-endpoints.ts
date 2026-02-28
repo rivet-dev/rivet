@@ -1,7 +1,10 @@
 import type { WSContext } from "hono/ws";
 import invariant from "invariant";
 import type { AnyConn } from "@/actor/conn/mod";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import {
+	type AnyStaticActorInstance,
+	isStaticActorInstance,
+} from "@/actor/instance/mod";
 import type { InputData } from "@/actor/protocol/serde";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import {
@@ -33,7 +36,7 @@ import { getRequestExposeInternalError } from "./router-endpoints";
 // TODO: Merge with ConnectWebSocketOutput interface
 export interface UpgradeWebSocketArgs {
 	conn?: AnyConn;
-	actor?: AnyActorInstance;
+	actor?: AnyStaticActorInstance;
 	onRestore?: (ws: WSContext) => void;
 	onOpen: (event: any, ws: WSContext) => void;
 	onMessage: (event: any, ws: WSContext) => void;
@@ -45,7 +48,7 @@ interface WebSocketHandlerOpts {
 	config: RegistryConfig;
 	request: Request | undefined;
 	encoding: Encoding;
-	actor: AnyActorInstance;
+	actor: AnyStaticActorInstance;
 	closePromiseResolvers: ReturnType<typeof promiseWithResolvers<void>>;
 	conn: AnyConn;
 	exposeInternalError: boolean;
@@ -55,6 +58,19 @@ interface WebSocketHandlerOpts {
 type WebSocketHandler = (
 	opts: WebSocketHandlerOpts,
 ) => Promise<UpgradeWebSocketArgs>;
+
+async function loadStaticActor(
+	actorDriver: ActorDriver,
+	actorId: string,
+): Promise<AnyStaticActorInstance> {
+	const actor = await actorDriver.loadActor(actorId);
+	if (!isStaticActorInstance(actor)) {
+		throw new Error(
+			"dynamic actor cannot be handled by static websocket router",
+		);
+	}
+	return actor;
+}
 
 export async function routeWebSocket(
 	request: Request | undefined,
@@ -76,7 +92,7 @@ export async function routeWebSocket(
 
 	let createdConn: AnyConn | undefined;
 	try {
-		const actor = await actorDriver.loadActor(actorId);
+		const actor = await loadStaticActor(actorDriver, actorId);
 
 		actor.rLog.debug({
 			msg: "new websocket connection",

@@ -1,6 +1,6 @@
 import type { Conn } from "../conn/mod";
 import type { AnyDatabaseProvider } from "../database";
-import type { ActorDefinition, AnyActorDefinition } from "../definition";
+import type { BaseActorDefinition, AnyActorDefinition } from "../definition";
 import type { ActorInstance } from "../instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { ConnContext } from "./base/conn";
@@ -65,7 +65,7 @@ export class RequestContext<
 }
 
 export type RequestContextOf<AD extends AnyActorDefinition> =
-	AD extends ActorDefinition<
+	AD extends BaseActorDefinition<
 		infer S,
 		infer CP,
 		infer CS,

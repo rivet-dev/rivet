@@ -1,5 +1,5 @@
 import type { AnyDatabaseProvider } from "../database";
-import type { ActorDefinition, AnyActorDefinition } from "../definition";
+import type { BaseActorDefinition, AnyActorDefinition } from "../definition";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
 import { ConnInitContext } from "./base/conn-init";
 
@@ -16,7 +16,7 @@ export class BeforeConnectContext<
 > extends ConnInitContext<TState, TVars, TInput, TDatabase, TEvents, TQueues> {}
 
 export type BeforeConnectContextOf<AD extends AnyActorDefinition> =
-	AD extends ActorDefinition<
+	AD extends BaseActorDefinition<
 		infer S,
 		any,
 		any,

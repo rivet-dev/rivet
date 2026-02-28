@@ -26,6 +26,7 @@ import { timingSafeEqual } from "@/utils/crypto";
 import { isDev } from "@/utils/env-vars";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
+import { isStaticActorInstance } from "./instance/mod";
 import { loggerWithoutContext } from "./log";
 import {
 	parseWebSocketProtocols,
@@ -45,6 +46,14 @@ export interface MetadataResponse {
 	version: string;
 	/** "local" for development, "deployed" for production */
 	type: "local" | "deployed";
+}
+
+async function loadStaticActor(actorDriver: ActorDriver, actorId: string) {
+	const actor = await actorDriver.loadActor(actorId);
+	if (!isStaticActorInstance(actor)) {
+		throw new Error("dynamic actor cannot be handled by static actor router");
+	}
+	return actor;
 }
 
 /**
@@ -69,7 +78,7 @@ export function createActorRouter(
 
 	// Track all HTTP requests to prevent actor from sleeping during active requests
 	router.use("*", async (c, next) => {
-		const actor = await actorDriver.loadActor(c.env.actorId);
+		const actor = await loadStaticActor(actorDriver, c.env.actorId);
 		actor.beginHonoHttpRequest();
 		try {
 			await next();
@@ -105,7 +114,7 @@ export function createActorRouter(
 				return c.text("Missing conn query parameter", 400);
 			}
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const conn = actor.connectionManager.getConnForId(connId);
 
 			if (!conn) {
@@ -199,7 +208,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const isStateEnabled = actor.inspector.isStateEnabled();
 			const state = isStateEnabled
 				? actor.inspector.getStateJson()
@@ -211,7 +220,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const body = await c.req.json<{ state: unknown }>();
 			await actor.inspector.setStateJson(body.state);
 			return c.json({ ok: true });
@@ -221,7 +230,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const connections = actor.inspector.getConnectionsJson();
 			return c.json({ connections });
 		});
@@ -230,7 +239,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const rpcs = actor.inspector.getRpcs();
 			return c.json({ rpcs });
 		});
@@ -239,7 +248,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const name = c.req.param("name");
 			const body = await c.req.json<{ args: unknown[] }>();
 			const output = await actor.inspector.executeActionJson(
@@ -253,7 +262,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const limit = parseInt(c.req.query("limit") ?? "50", 10);
 			const status = await actor.inspector.getQueueStatusJson(limit);
 			return c.json(status);
@@ -263,7 +272,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const startMs = parseInt(c.req.query("startMs") ?? "0", 10);
 			const endMs = parseInt(
 				c.req.query("endMs") ?? String(Date.now()),
@@ -284,7 +293,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 			const result = actor.inspector.getWorkflowHistoryJson();
 			return c.json(result);
 		});
@@ -293,7 +302,7 @@ export function createActorRouter(
 			const authResponse = await inspectorAuth(c);
 			if (authResponse) return authResponse;
 
-			const actor = await actorDriver.loadActor(c.env.actorId);
+			const actor = await loadStaticActor(actorDriver, c.env.actorId);
 
 			const isStateEnabled = actor.inspector.isStateEnabled();
 			const isDatabaseEnabled = actor.inspector.isDatabaseEnabled();

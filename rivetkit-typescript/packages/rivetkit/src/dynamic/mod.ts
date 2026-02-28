@@ -1,29 +1,25 @@
-import { actor } from "@/actor/mod";
-import type { AnyActorDefinition } from "@/actor/definition";
 import {
-	attachDynamicActorMetadata,
+	DynamicActorDefinition,
+	type DynamicActorConfigInput,
 	type DynamicActorLoader,
 	type DynamicActorLoaderContext,
 	type DynamicActorLoadResult,
 	type DynamicNodeProcessConfig,
 } from "./internal";
+import type { DynamicSourceFormat } from "./runtime-bridge";
 
-export function dynamicActor(loader: DynamicActorLoader): AnyActorDefinition {
-	const definition = actor({
-		// Keep the host-side placeholder actor awake. Sleep/wake semantics
-		// are handled by the evaluated actor inside the isolate runtime.
-		options: {
-			noSleep: true,
-		},
-	}) as AnyActorDefinition;
-
-	attachDynamicActorMetadata(definition, { loader });
-	return definition;
+export function dynamicActor<TInput = unknown>(
+	loader: DynamicActorLoader<TInput>,
+	config: DynamicActorConfigInput = {},
+): DynamicActorDefinition<TInput> {
+	return new DynamicActorDefinition(loader, config);
 }
 
 export type {
+	DynamicActorConfigInput,
 	DynamicActorLoader,
 	DynamicActorLoaderContext,
 	DynamicActorLoadResult,
 	DynamicNodeProcessConfig,
+	DynamicSourceFormat,
 };
