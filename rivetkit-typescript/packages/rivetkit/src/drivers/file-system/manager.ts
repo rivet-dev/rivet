@@ -83,11 +83,18 @@ export class FileSystemManagerDriver implements ManagerDriver {
 	): Promise<UniversalWebSocket> {
 		if (await this.#state.isDynamicActor(this.#config, actorId)) {
 			await this.#actorDriver.loadActor(actorId);
+			const { gatewayId, requestId } = createHibernatableRequestMetadata();
 			return await this.#state.dynamicOpenWebSocket(
 				actorId,
 				path,
 				encoding,
 				params,
+				{
+					gatewayId,
+					requestId,
+					isHibernatable: true,
+					isRestoringHibernatable: false,
+				},
 			);
 		}
 
@@ -148,11 +155,19 @@ export class FileSystemManagerDriver implements ManagerDriver {
 
 		if (await this.#state.isDynamicActor(this.#config, actorId)) {
 			await this.#actorDriver.loadActor(actorId);
+			const { gatewayId, requestId } = createHibernatableRequestMetadata();
 			const proxyToActorWsPromise = this.#state.dynamicOpenWebSocket(
 				actorId,
 				path,
 				encoding,
 				params,
+				{
+					headers: c.req.header(),
+					gatewayId,
+					requestId,
+					isHibernatable: true,
+					isRestoringHibernatable: false,
+				},
 			);
 			const wsHandler = await createTestWebSocketProxy(
 				proxyToActorWsPromise,

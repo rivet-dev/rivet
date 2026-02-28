@@ -1,7 +1,18 @@
 import type { ActorKey } from "@/actor/mod";
-import type { AnyActorDefinition } from "@/actor/definition";
+import type {
+	ActorConfig,
+	GlobalActorOptionsInput,
+} from "@/actor/config";
+import { ActorConfigSchema } from "@/actor/config";
+import type {
+	AnyActorDefinition,
+	BaseActorDefinition,
+} from "@/actor/definition";
+import type { AnyDatabaseProvider } from "@/actor/database";
+import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import type { AnyClient, Client } from "@/client/client";
 import type { Registry } from "@/registry";
+import type { DynamicSourceFormat } from "./runtime-bridge";
 
 export interface DynamicNodeProcessConfig {
 	memoryLimit?: number;
@@ -9,7 +20,14 @@ export interface DynamicNodeProcessConfig {
 }
 
 export interface DynamicActorLoadResult {
+	/** Actor module source text returned by the dynamic loader. */
 	source: string;
+	/**
+	 * Source format for `source`.
+	 *
+	 * Defaults to `typescript` for backward compatibility.
+	 */
+	sourceFormat?: DynamicSourceFormat;
 	nodeProcess?: DynamicNodeProcessConfig;
 }
 
@@ -26,39 +44,75 @@ export type DynamicActorLoader = (
 	context: DynamicActorLoaderContext,
 ) => Promise<DynamicActorLoadResult> | DynamicActorLoadResult;
 
-export interface DynamicActorMetadata {
-	loader: DynamicActorLoader;
+export interface DynamicActorConfigInput {
+	options?: GlobalActorOptionsInput;
 }
 
-export const DYNAMIC_ACTOR_METADATA_SYMBOL = Symbol.for(
-	"rivetkit.dynamic_actor.metadata",
-);
+export class DynamicActorDefinition
+	implements
+		BaseActorDefinition<
+			any,
+			any,
+			any,
+			any,
+			any,
+			AnyDatabaseProvider,
+			EventSchemaConfig,
+			QueueSchemaConfig,
+			Record<string, (...args: any[]) => unknown>
+		>
+{
+	#loader: DynamicActorLoader;
+	#config: ActorConfig<
+		any,
+		any,
+		any,
+		any,
+		any,
+		AnyDatabaseProvider,
+		EventSchemaConfig,
+		QueueSchemaConfig
+	>;
 
-export function attachDynamicActorMetadata(
-	definition: AnyActorDefinition,
-	metadata: DynamicActorMetadata,
-): void {
-	(
-		definition as AnyActorDefinition & {
-			[DYNAMIC_ACTOR_METADATA_SYMBOL]?: DynamicActorMetadata;
-		}
-	)[DYNAMIC_ACTOR_METADATA_SYMBOL] = metadata;
-}
+	constructor(loader: DynamicActorLoader, input: DynamicActorConfigInput = {}) {
+		this.#loader = loader;
+		this.#config = ActorConfigSchema.parse({
+			actions: {},
+			options: input.options ?? {},
+		}) as ActorConfig<
+			any,
+			any,
+			any,
+			any,
+			any,
+			AnyDatabaseProvider,
+			EventSchemaConfig,
+			QueueSchemaConfig
+		>;
+	}
 
-export function getDynamicActorMetadata(
-	definition: AnyActorDefinition,
-): DynamicActorMetadata | undefined {
-	return (
-		definition as AnyActorDefinition & {
-			[DYNAMIC_ACTOR_METADATA_SYMBOL]?: DynamicActorMetadata;
-		}
-	)[DYNAMIC_ACTOR_METADATA_SYMBOL];
+	get loader(): DynamicActorLoader {
+		return this.#loader;
+	}
+
+	get config(): ActorConfig<
+		any,
+		any,
+		any,
+		any,
+		any,
+		AnyDatabaseProvider,
+		EventSchemaConfig,
+		QueueSchemaConfig
+	> {
+		return this.#config;
+	}
 }
 
 export function isDynamicActorDefinition(
 	definition: AnyActorDefinition,
-): boolean {
-	return getDynamicActorMetadata(definition) !== undefined;
+): definition is DynamicActorDefinition {
+	return definition instanceof DynamicActorDefinition;
 }
 
 export function createDynamicActorLoaderContext(

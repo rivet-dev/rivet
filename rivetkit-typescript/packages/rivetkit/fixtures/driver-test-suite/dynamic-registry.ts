@@ -69,6 +69,13 @@ export default actor({
 				alarmCount: c.state.alarmCount,
 			};
 		},
+			getSourceCodeLength: async (c) => {
+				const source = (await c
+					.client()
+					.sourceCode.getOrCreate(["dynamic-source"])
+					.getCode());
+				return source.length;
+			},
 		putText: async (c, key, value) => {
 			await c.kv.put(key, value);
 			return true;
@@ -122,6 +129,7 @@ const dynamicFromUrl = dynamicActor(async () => {
 
 	return {
 		source: await response.text(),
+		sourceFormat: "esm-js" as const,
 		nodeProcess: {
 			memoryLimit: 256,
 			cpuTimeLimitMs: 10_000,
@@ -130,12 +138,13 @@ const dynamicFromUrl = dynamicActor(async () => {
 });
 
 const dynamicFromActor = dynamicActor(async (c) => {
-	const source = await c
+	const source = (await c
 		.client<any>()
 		.sourceCode.getOrCreate(["dynamic-source"])
-		.getCode();
+		.getCode()) as string;
 	return {
 		source,
+		sourceFormat: "esm-js" as const,
 		nodeProcess: {
 			memoryLimit: 256,
 			cpuTimeLimitMs: 10_000,

@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import {
 	cp,
 	mkdir,
+	rename,
 	readdir,
 	readFile,
 	rm,
@@ -19,14 +20,31 @@ import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { AnyClient } from "@/client/client";
 import {
+	DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
+	DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS,
+	DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS,
+	type DynamicClientCallInput,
+	type DynamicHibernatingWebSocketMetadata,
+	type DynamicBootstrapExportName,
+	type DynamicSourceFormat,
+	type FetchEnvelopeInput,
+	type FetchEnvelopeOutput,
+	type IsolateDispatchPayload,
+	type WebSocketCloseEnvelopeInput,
+	type WebSocketOpenEnvelopeInput,
+	type WebSocketSendEnvelopeInput,
+} from "./runtime-bridge";
+import {
 	createDynamicActorLoaderContext,
+	type DynamicActorLoader,
 	type DynamicActorLoadResult,
-	type DynamicActorMetadata,
 } from "./internal";
+
+export type { DynamicHibernatingWebSocketMetadata } from "./runtime-bridge";
 
 const DYNAMIC_RUNTIME_ROOT = path.join(
 	process.env.TMPDIR ?? "/tmp",
-	"rivetkit-dynamic-actors",
+	`rivetkit-dynamic-actors-${process.pid}`,
 );
 const DYNAMIC_RUNTIME_ACTORS_ROOT = path.join(DYNAMIC_RUNTIME_ROOT, "actors");
 const DYNAMIC_RUNTIME_NODE_MODULES = path.join(
@@ -50,6 +68,9 @@ interface SecureExecModule {
 
 interface IsolatedVmModule {
 	Reference: new <T>(value: T) => ReferenceLike<T>;
+	ExternalCopy: new <T>(value: T) => {
+		copy(): T;
+	};
 }
 
 interface SecureExecFsAccessRequest {
@@ -108,64 +129,6 @@ interface ContextLike {
 	release(): void;
 }
 
-interface FetchEnvelopeInput {
-	url: string;
-	method: string;
-	headers: Record<string, string>;
-	bodyBase64?: string;
-}
-
-interface FetchEnvelopeOutput {
-	status: number;
-	headers: Array<[string, string]>;
-	bodyBase64: string;
-}
-
-interface WebSocketOpenEnvelopeInput {
-	sessionId: number;
-	path: string;
-	encoding: Encoding;
-	params: unknown;
-}
-
-interface WebSocketSendEnvelopeInput {
-	sessionId: number;
-	kind: "text" | "binary";
-	text?: string;
-	dataBase64?: string;
-}
-
-interface WebSocketCloseEnvelopeInput {
-	sessionId: number;
-	code?: number;
-	reason?: string;
-}
-
-type IsolateDispatchPayload =
-	| {
-			type: "open";
-			sessionId: number;
-	  }
-	| {
-			type: "message";
-			sessionId: number;
-			kind: "text" | "binary";
-			text?: string;
-			dataBase64?: string;
-	  }
-	| {
-			type: "close";
-			sessionId: number;
-			code?: number;
-			reason?: string;
-			wasClean?: boolean;
-	  }
-	| {
-			type: "error";
-			sessionId: number;
-			message?: string;
-	  };
-
 interface HostWebSocketSession {
 	id: number;
 	readyState: 0 | 1 | 2 | 3;
@@ -177,49 +140,88 @@ interface HostWebSocketSession {
 	>;
 }
 
-interface DynamicActorHostRuntimeConfig {
+interface DynamicActorIsolateRuntimeConfig {
 	actorId: string;
 	actorName: string;
 	actorKey: ActorKey;
 	input: unknown;
 	region: string;
-	metadata: DynamicActorMetadata;
+	loader: DynamicActorLoader;
 	actorDriver: ActorDriver;
 	inlineClient: AnyClient;
 }
 
-export class DynamicActorHostRuntime {
-	#config: DynamicActorHostRuntimeConfig;
+interface DynamicRuntimeRefs {
+	fetch: ReferenceLike<
+		(input: FetchEnvelopeInput) => Promise<FetchEnvelopeOutput>
+	>;
+	dispatchAlarm: ReferenceLike<() => Promise<boolean>>;
+	stop: ReferenceLike<(mode: "sleep" | "destroy") => Promise<boolean>>;
+	openWebSocket: ReferenceLike<
+		(input: WebSocketOpenEnvelopeInput) => Promise<boolean>
+	>;
+	sendWebSocket: ReferenceLike<
+		(input: WebSocketSendEnvelopeInput) => Promise<boolean>
+	>;
+	closeWebSocket: ReferenceLike<
+		(input: WebSocketCloseEnvelopeInput) => Promise<boolean>
+	>;
+	getHibernatingWebSockets: ReferenceLike<
+		() => Promise<Array<DynamicHibernatingWebSocketMetadata>>
+	>;
+	dispose: ReferenceLike<() => Promise<boolean>>;
+}
+
+interface NormalizedDynamicActorLoadResult extends DynamicActorLoadResult {
+	sourceFormat: DynamicSourceFormat;
+}
+
+interface MaterializedDynamicSource {
+	sourcePath: string;
+	sourceEntry: string;
+	sourceFormat: DynamicSourceFormat;
+}
+
+export interface DynamicWebSocketOpenOptions {
+	headers?: Record<string, string>;
+	gatewayId?: ArrayBuffer;
+	requestId?: ArrayBuffer;
+	isHibernatable?: boolean;
+	isRestoringHibernatable?: boolean;
+}
+
+/**
+ * Manages one long lived dynamic actor isolate for a single actor id.
+ *
+ * The host owns isolate creation, bridge wiring, request forwarding, websocket
+ * session mapping, and final disposal. The isolate lifetime matches actor
+ * lifetime and survives across fetch and websocket calls until sleep or destroy.
+ */
+export class DynamicActorIsolateRuntime {
+	#config: DynamicActorIsolateRuntimeConfig;
 	#runtimeDir: string;
 
 	#nodeProcess: NodeProcessLike | undefined;
 	#context: ContextLike | undefined;
-
-	#fetchRef: ReferenceLike<(input: FetchEnvelopeInput) => Promise<FetchEnvelopeOutput>> | undefined;
-	#dispatchAlarmRef: ReferenceLike<() => Promise<boolean>> | undefined;
-	#stopRef: ReferenceLike<(mode: "sleep" | "destroy") => Promise<boolean>> | undefined;
-	#openWebSocketRef:
-		| ReferenceLike<(input: WebSocketOpenEnvelopeInput) => Promise<boolean>>
-		| undefined;
-	#sendWebSocketRef:
-		| ReferenceLike<(input: WebSocketSendEnvelopeInput) => Promise<boolean>>
-		| undefined;
-	#closeWebSocketRef:
-		| ReferenceLike<(input: WebSocketCloseEnvelopeInput) => Promise<boolean>>
-		| undefined;
-	#disposeRef: ReferenceLike<() => Promise<boolean>> | undefined;
-	#startSleepRef: ReferenceLike<(actorId: string) => void> | undefined;
-	#startDestroyRef: ReferenceLike<(actorId: string) => void> | undefined;
+	#refs: DynamicRuntimeRefs | undefined;
 
 	#referenceHandles: Array<{ release?: () => void }> = [];
 	#webSocketSessions = new Map<number, HostWebSocketSession>();
+	#sessionIdsByWebSocket = new WeakMap<UniversalWebSocket, number>();
 	#nextWebSocketSessionId = 1;
 	#started = false;
 	#disposed = false;
 
-	constructor(config: DynamicActorHostRuntimeConfig) {
+	constructor(config: DynamicActorIsolateRuntimeConfig) {
 		this.#config = config;
 		this.#runtimeDir = path.join(DYNAMIC_RUNTIME_ACTORS_ROOT, config.actorId);
+	}
+
+	get #runtimeRefs(): DynamicRuntimeRefs {
+		if (!this.#refs) {
+			throw new Error("dynamic runtime refs are not initialized");
+		}
+		return this.#refs;
 	}
 
 	async start(): Promise<void> {
@@ -238,7 +240,7 @@ export class DynamicActorHostRuntime {
 			actorId: this.#config.actorId,
 		});
 
-		const loadResult = await this.#config.metadata.loader(
+		const loadResult = await this.#config.loader(
 			createDynamicActorLoaderContext(
 				this.#config.inlineClient,
 				this.#config.actorId,
@@ -257,28 +259,25 @@ export class DynamicActorHostRuntime {
 		await rm(this.#runtimeDir, { recursive: true, force: true });
 		await mkdir(this.#runtimeDir, { recursive: true });
 
-		const sourceCode = await transpileDynamicSource(normalizedLoadResult.source);
-		const sourcePath = path.join(this.#runtimeDir, "dynamic-source.cjs");
-		await writeFile(sourcePath, sourceCode, "utf8");
+		const materializedSource = await materializeDynamicSource(
+			this.#runtimeDir,
+			normalizedLoadResult,
+		);
 		logger().debug({
-			msg: "dynamic runtime source transpiled",
+			msg: "dynamic runtime source written",
 			actorId: this.#config.actorId,
-			sourcePath,
+			sourcePath: materializedSource.sourcePath,
+			sourceEntry: materializedSource.sourceEntry,
+			sourceFormat: materializedSource.sourceFormat,
 		});
 
+		const bootstrapSourcePath = await resolveDynamicIsolateRuntimeBootstrapEntryPath();
 		const bootstrapPath = path.join(this.#runtimeDir, "dynamic-bootstrap.cjs");
-		await writeFile(
-			bootstrapPath,
-			buildIsolateBootstrapSource({
-				actorId: this.#config.actorId,
-				actorName: this.#config.actorName,
-				actorKey: this.#config.actorKey,
-			}),
-			"utf8",
-		);
+		await cp(bootstrapSourcePath, bootstrapPath);
 		logger().debug({
 			msg: "dynamic runtime bootstrap written",
 			actorId: this.#config.actorId,
+			bootstrapSourcePath,
 			bootstrapPath,
 		});
 
@@ -324,7 +323,7 @@ export class DynamicActorHostRuntime {
 			actorId: this.#config.actorId,
 		});
 
-		await this.#setIsolateBridge(ivm);
+		await this.#setIsolateBridge(ivm, materializedSource);
 		logger().debug({
 			msg: "dynamic runtime isolate bridge set",
 			actorId: this.#config.actorId,
@@ -348,11 +347,9 @@ export class DynamicActorHostRuntime {
 	}
 
 	async fetch(request: Request): Promise<Response> {
-		if (!this.#fetchRef) {
-			throw new Error("dynamic runtime is not started");
-		}
+		const refs = this.#runtimeRefs;
 		const input = await requestToEnvelope(request);
-		const envelope = (await this.#fetchRef.apply(undefined, [input], {
+		const envelope = (await refs.fetch.apply(undefined, [input], {
 			arguments: {
 				copy: true,
 			},
@@ -368,10 +365,9 @@ export class DynamicActorHostRuntime {
 		pathValue: string,
 		encoding: Encoding,
 		params: unknown,
+		options: DynamicWebSocketOpenOptions = {},
 	): Promise<UniversalWebSocket> {
-		if (!this.#openWebSocketRef || !this.#sendWebSocketRef || !this.#closeWebSocketRef) {
-			throw new Error("dynamic runtime websocket bridge is not started");
-		}
+		const refs = this.#runtimeRefs;
 
 		const sessionId = this.#nextWebSocketSessionId;
 		this.#nextWebSocketSessionId += 1;
@@ -394,9 +390,10 @@ export class DynamicActorHostRuntime {
 			pendingMessages: [],
 		};
 		this.#webSocketSessions.set(session.id, session);
+		this.#sessionIdsByWebSocket.set(session.websocket, session.id);
 
 		try {
-			await this.#openWebSocketRef.apply(
+			await refs.openWebSocket.apply(
 				undefined,
 				[
 					{
@@ -404,6 +401,11 @@ export class DynamicActorHostRuntime {
 						path: pathValue,
 						encoding,
 						params,
+						headers: options.headers,
+						gatewayId: options.gatewayId,
+						requestId: options.requestId,
+						isHibernatable: options.isHibernatable,
+						isRestoringHibernatable: options.isRestoringHibernatable,
 					} satisfies WebSocketOpenEnvelopeInput,
 				],
 				{
@@ -433,8 +435,8 @@ export class DynamicActorHostRuntime {
 	}
 
 	async dispatchAlarm(): Promise<void> {
-		if (!this.#dispatchAlarmRef) return;
-		await this.#dispatchAlarmRef.apply(undefined, [], {
+		const refs = this.#runtimeRefs;
+		await refs.dispatchAlarm.apply(undefined, [], {
 			result: {
 				copy: true,
 				promise: true,
@@ -442,26 +444,46 @@ export class DynamicActorHostRuntime {
 		});
 	}
 
-	async stop(mode: "sleep" | "destroy"): Promise<void> {
-		if (!this.#stopRef) return;
-		try {
-			await this.#stopRef.apply(undefined, [mode], {
-				arguments: {
-					copy: true,
-				},
+	async getHibernatingWebSockets(): Promise<
+		Array<DynamicHibernatingWebSocketMetadata>
+	> {
+		const refs = this.#runtimeRefs;
+		const entries = await refs.getHibernatingWebSockets.apply(
+			undefined,
+			[],
+			{
 				result: {
 					copy: true,
 					promise: true,
 				},
-			});
-		} catch (error) {
-			logger().warn({
-				msg: "failed to stop dynamic runtime actor",
-				actorId: this.#config.actorId,
-				mode,
-				error: stringifyError(error),
-			});
+			},
+		);
+		return entries as Array<DynamicHibernatingWebSocketMetadata>;
+	}
+
+	async forwardIncomingWebSocketMessage(
+		websocket: UniversalWebSocket,
+		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
+	): Promise<void> {
+		const sessionId = this.#sessionIdsByWebSocket.get(websocket);
+		if (!sessionId) {
+			throw new Error("dynamic runtime websocket session not found");
 		}
+		await this.#sendWebSocketMessage(sessionId, data, rivetMessageIndex);
+	}
+
+	async stop(mode: "sleep" | "destroy"): Promise<void> {
+		const refs = this.#runtimeRefs;
+		await refs.stop.apply(undefined, [mode], {
+			arguments: {
+				copy: true,
+			},
+			result: {
+				copy: true,
+				promise: true,
+			},
+		});
 	}
 
 	async dispose(): Promise<void> {
@@ -474,9 +496,9 @@ export class DynamicActorHostRuntime {
 		}
 		this.#webSocketSessions.clear();
 
-		if (this.#disposeRef) {
+		if (this.#refs) {
 			try {
-				await this.#disposeRef.apply(undefined, [], {
+				await this.#refs.dispose.apply(undefined, [], {
 					result: {
 						copy: true,
 						promise: true,
@@ -508,32 +530,26 @@ export class DynamicActorHostRuntime {
 		} catch {}
 		this.#nodeProcess = undefined;
 
-		this.#fetchRef = undefined;
-		this.#dispatchAlarmRef = undefined;
-		this.#stopRef = undefined;
-		this.#openWebSocketRef = undefined;
-		this.#sendWebSocketRef = undefined;
-		this.#closeWebSocketRef = undefined;
-		this.#disposeRef = undefined;
-		this.#startSleepRef = undefined;
-		this.#startDestroyRef = undefined;
+		this.#refs = undefined;
 		this.#started = false;
 	}
 
 	async #sendWebSocketMessage(
 		sessionId: number,
 		data: string | ArrayBufferLike | Blob | ArrayBufferView,
+		rivetMessageIndex?: number,
 	): Promise<void> {
-		if (!this.#sendWebSocketRef) return;
+		const refs = this.#runtimeRefs;
 
 		if (typeof data === "string") {
-			await this.#sendWebSocketRef.apply(
+			await refs.sendWebSocket.apply(
 				undefined,
 				[
 					{
 						sessionId,
 						kind: "text",
 						text: data,
+						rivetMessageIndex,
 					} satisfies WebSocketSendEnvelopeInput,
 				],
 				{
@@ -545,13 +561,14 @@ export class DynamicActorHostRuntime {
 		}
 
 		const binary = await normalizeBinaryPayload(data);
-		await this.#sendWebSocketRef.apply(
+		await refs.sendWebSocket.apply(
 			undefined,
 			[
 				{
 					sessionId,
 					kind: "binary",
-					dataBase64: Buffer.from(binary).toString("base64"),
+					data: copyUint8ArrayToArrayBuffer(binary),
+					rivetMessageIndex,
 				} satisfies WebSocketSendEnvelopeInput,
 			],
 			{
@@ -566,8 +583,8 @@ export class DynamicActorHostRuntime {
 		code: number,
 		reason: string,
 	): Promise<void> {
-		if (!this.#closeWebSocketRef) return;
-		await this.#closeWebSocketRef.apply(
+		const refs = this.#runtimeRefs;
+		await refs.closeWebSocket.apply(
 			undefined,
 			[
 				{
@@ -583,28 +600,37 @@ export class DynamicActorHostRuntime {
 		);
 	}
 
-	async #setIsolateBridge(ivm: IsolatedVmModule): Promise<void> {
+	async #setIsolateBridge(
+		ivm: IsolatedVmModule,
+		source: MaterializedDynamicSource,
+	): Promise<void> {
 		if (!this.#context) {
 			throw new Error("missing isolate context");
 		}
 
+		// Wire isolate to host callbacks. Every callback here is required for
+		// dynamic actor parity and must fail by default if the driver cannot
+		// satisfy it.
 		const context = this.#context;
 		const makeRef = <T>(value: T): ReferenceLike<T> => {
 			const ref = new ivm.Reference(value);
 			this.#referenceHandles.push(ref as { release?: () => void });
 			return ref;
 		};
+		const makeExternalCopy = <T>(value: T): { copy(): T } => {
+			return new ivm.ExternalCopy(value);
+		};
 
 		const kvBatchPutRef = makeRef(
 			async (
 				actorId: string,
-				entries: Array<[string, string]>,
+				entries: Array<[ArrayBuffer, ArrayBuffer]>,
 			): Promise<void> => {
 				const decodedEntries = entries.map(
 					([key, value]) =>
 						[
-							new Uint8Array(Buffer.from(key, "base64")),
-							new Uint8Array(Buffer.from(value, "base64")),
+							new Uint8Array(key),
+							new Uint8Array(value),
 						] as [Uint8Array, Uint8Array],
 				);
 				await this.#config.actorDriver.kvBatchPut(actorId, decodedEntries);
@@ -613,44 +639,42 @@ export class DynamicActorHostRuntime {
 		const kvBatchGetRef = makeRef(
 			async (
 				actorId: string,
-				keys: string[],
-			): Promise<string> => {
-				const decodedKeys = keys.map(
-					(key) => new Uint8Array(Buffer.from(key, "base64")),
-				);
+				keys: ArrayBuffer[],
+			): Promise<{ copy(): Array<ArrayBuffer | null> }> => {
+				const decodedKeys = keys.map((key) => new Uint8Array(key));
 				const values = await this.#config.actorDriver.kvBatchGet(
 					actorId,
 					decodedKeys,
 				);
-				return JSON.stringify(values.map((value) =>
-					value ? Buffer.from(value).toString("base64") : null,
-				));
+				return makeExternalCopy(
+					values.map((value) =>
+					value ? copyUint8ArrayToArrayBuffer(value) : null
+					),
+				);
 			},
 		);
 		const kvBatchDeleteRef = makeRef(
-			async (actorId: string, keys: string[]): Promise<void> => {
-				const decodedKeys = keys.map(
-					(key) => new Uint8Array(Buffer.from(key, "base64")),
-				);
+			async (actorId: string, keys: ArrayBuffer[]): Promise<void> => {
+				const decodedKeys = keys.map((key) => new Uint8Array(key));
 				await this.#config.actorDriver.kvBatchDelete(actorId, decodedKeys);
 			},
 		);
 		const kvListPrefixRef = makeRef(
 			async (
 				actorId: string,
-				prefix: string,
-			): Promise<string> => {
-				const decodedPrefix = new Uint8Array(
-					Buffer.from(prefix, "base64"),
-				);
+				prefix: ArrayBuffer,
+			): Promise<{ copy(): Array<[ArrayBuffer, ArrayBuffer]> }> => {
+				const decodedPrefix = new Uint8Array(prefix);
 				const entries = await this.#config.actorDriver.kvListPrefix(
 					actorId,
 					decodedPrefix,
 				);
-				return JSON.stringify(entries.map(([key, value]) => [
-					Buffer.from(key).toString("base64"),
-					Buffer.from(value).toString("base64"),
-				]));
+				return makeExternalCopy(
+					entries.map(([key, value]) => [
+						copyUint8ArrayToArrayBuffer(key),
+						copyUint8ArrayToArrayBuffer(value),
+					]),
+				);
 			},
 		);
 		const setAlarmRef = makeRef(
@@ -661,8 +685,74 @@ export class DynamicActorHostRuntime {
 				);
 			},
 		);
+		const clientCallRef = makeRef(
+			async (
+				input: DynamicClientCallInput,
+			): Promise<{ copy(): unknown }> => {
+				const accessor = (this.#config.inlineClient as Record<string, any>)[
+					input.actorName
+				];
+				if (!accessor) {
+					throw new Error(
+						`dynamic client actor accessor not found: ${input.actorName}`,
+					);
+				}
+
+				const accessorFn = accessor[input.accessorMethod];
+				if (typeof accessorFn !== "function") {
+					throw new Error(
+						`dynamic client accessor method not found: ${input.actorName}.${input.accessorMethod}`,
+					);
+				}
+
+				let handle = accessorFn.apply(
+					accessor,
+					input.accessorArgs ?? [],
+				);
+				if (handle && typeof handle.then === "function") {
+					handle = await handle;
+				}
+
+				const operationFn = handle?.[input.operation];
+				if (typeof operationFn !== "function") {
+					throw new Error(
+						`dynamic client operation not found: ${input.actorName}.${input.accessorMethod}(...).${input.operation}`,
+					);
+				}
+
+				const result = await operationFn.apply(
+					handle,
+					input.operationArgs ?? [],
+				);
+				return makeExternalCopy(result);
+			},
+		);
+		const ackHibernatableWebSocketMessageRef = makeRef(
+			(
+				gatewayId: ArrayBuffer,
+				requestId: ArrayBuffer,
+				serverMessageIndex: number,
+			): void => {
+				if (
+					typeof this.#config.actorDriver.ackHibernatableWebSocketMessage !==
+					"function"
+				) {
+					throw new Error(
+						"driver does not implement ackHibernatableWebSocketMessage",
+					);
+				}
+				this.#config.actorDriver.ackHibernatableWebSocketMessage(
+					gatewayId,
+					requestId,
+					serverMessageIndex,
+				);
+			},
+		);
 		const startSleepRef = makeRef((actorId: string): void => {
-			this.#config.actorDriver.startSleep?.(actorId);
+			if (typeof this.#config.actorDriver.startSleep !== "function") {
+				throw new Error("driver does not implement startSleep");
+			}
+			this.#config.actorDriver.startSleep(actorId);
 		});
 		const startDestroyRef = makeRef((actorId: string): void => {
 			void this.#config.actorDriver.startDestroy(actorId);
@@ -686,17 +776,60 @@ export class DynamicActorHostRuntime {
 			});
 		});
 
-		await context.global.set("__dynamicHostKvBatchPut", kvBatchPutRef);
-		await context.global.set("__dynamicHostKvBatchGet", kvBatchGetRef);
-		await context.global.set("__dynamicHostKvBatchDelete", kvBatchDeleteRef);
-		await context.global.set("__dynamicHostKvListPrefix", kvListPrefixRef);
-		await context.global.set("__dynamicHostSetAlarm", setAlarmRef);
-		await context.global.set("__dynamicHostStartSleep", startSleepRef);
-		await context.global.set("__dynamicHostStartDestroy", startDestroyRef);
-		await context.global.set("__dynamicHostDispatch", dispatchRef);
-		await context.global.set("__dynamicHostLog", logRef);
-		this.#startSleepRef = startSleepRef;
-		this.#startDestroyRef = startDestroyRef;
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvBatchPut,
+			kvBatchPutRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvBatchGet,
+			kvBatchGetRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvBatchDelete,
+			kvBatchDeleteRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.kvListPrefix,
+			kvListPrefixRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.setAlarm,
+			setAlarmRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.clientCall,
+			clientCallRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.ackHibernatableWebSocketMessage,
+			ackHibernatableWebSocketMessageRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.startSleep,
+			startSleepRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.startDestroy,
+			startDestroyRef,
+		);
+		await context.global.set(
+			DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.dispatch,
+			dispatchRef,
+		);
+		await context.global.set(DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS.log, logRef);
+		await context.global.set(
+			DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
+			{
+				actorId: this.#config.actorId,
+				actorName: this.#config.actorName,
+				actorKey: this.#config.actorKey,
+				sourceEntry: source.sourceEntry,
+				sourceFormat: source.sourceFormat,
+			},
+			{
+				copy: true,
+			},
+		);
 	}
 
 	async #loadBootstrap(bootstrapPath: string): Promise<void> {
@@ -704,6 +837,12 @@ export class DynamicActorHostRuntime {
 			throw new Error("missing isolate bootstrap dependencies");
 		}
 
+		// Execute the isolate bootstrap module and copy each required exported
+		// envelope function onto known isolate globals so the host can capture
+		// references by stable key names.
+		const isolateExportGlobalKeys = JSON.stringify(
+			DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS,
+		);
 		logger().debug({
 			msg: "dynamic runtime bootstrap compile begin",
 			actorId: this.#config.actorId,
@@ -712,14 +851,15 @@ export class DynamicActorHostRuntime {
 		const bootstrapScript = await this.#nodeProcess.__unsafeIsoalte.compileScript(
 			`
 				const bootstrap = require(${JSON.stringify(bootstrapPath)});
-				globalThis.__dynamicFetchEnvelope = bootstrap.dynamicFetchEnvelope;
-				globalThis.__dynamicDispatchAlarmEnvelope = bootstrap.dynamicDispatchAlarmEnvelope;
-				globalThis.__dynamicStopEnvelope = bootstrap.dynamicStopEnvelope;
-				globalThis.__dynamicOpenWebSocketEnvelope = bootstrap.dynamicOpenWebSocketEnvelope;
-				globalThis.__dynamicWebSocketSendEnvelope = bootstrap.dynamicWebSocketSendEnvelope;
-				globalThis.__dynamicWebSocketCloseEnvelope = bootstrap.dynamicWebSocketCloseEnvelope;
-				globalThis.__dynamicDisposeEnvelope = bootstrap.dynamicDisposeEnvelope;
-			`,
+				const isolateExportGlobalKeys = ${isolateExportGlobalKeys};
+				for (const [exportName, globalKey] of Object.entries(isolateExportGlobalKeys)) {
+					const value = bootstrap[exportName];
+					if (typeof value !== "function") {
+						throw new Error(\`dynamic bootstrap is missing export: \${exportName}\`);
+					}
+					globalThis[globalKey] = value;
+				}
+				`,
 			{
 				filename: path.join(this.#runtimeDir, "dynamic-bootstrap-entry.cjs"),
 			},
@@ -744,6 +884,8 @@ export class DynamicActorHostRuntime {
 			throw new Error("missing isolate context");
 		}
 
+		// Capture all envelope handlers from isolate globals once at startup.
+		// Later request and websocket operations call these references directly.
 		const getRef = async <T>(name: string): Promise<ReferenceLike<T>> => {
 			const ref = (await this.#context!.global.get(name, {
 				reference: true,
@@ -752,15 +894,24 @@ export class DynamicActorHostRuntime {
 			return ref;
 		};
 
-		this.#fetchRef = await getRef("__dynamicFetchEnvelope");
-		this.#dispatchAlarmRef = await getRef("__dynamicDispatchAlarmEnvelope");
-		this.#stopRef = await getRef("__dynamicStopEnvelope");
-		this.#openWebSocketRef = await getRef("__dynamicOpenWebSocketEnvelope");
-		this.#sendWebSocketRef = await getRef("__dynamicWebSocketSendEnvelope");
-		this.#closeWebSocketRef = await getRef(
-			"__dynamicWebSocketCloseEnvelope",
-		);
-		this.#disposeRef = await getRef("__dynamicDisposeEnvelope");
+		const getExportRef = async <T>(
+			exportName: DynamicBootstrapExportName,
+		): Promise<ReferenceLike<T>> => {
+			return await getRef<T>(DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS[exportName]);
+		};
+
+		this.#refs = {
+			fetch: await getExportRef("dynamicFetchEnvelope"),
+			dispatchAlarm: await getExportRef("dynamicDispatchAlarmEnvelope"),
+			stop: await getExportRef("dynamicStopEnvelope"),
+			openWebSocket: await getExportRef("dynamicOpenWebSocketEnvelope"),
+			sendWebSocket: await getExportRef("dynamicWebSocketSendEnvelope"),
+			closeWebSocket: await getExportRef("dynamicWebSocketCloseEnvelope"),
+			getHibernatingWebSockets: await getExportRef(
+				"dynamicGetHibernatingWebSocketsEnvelope",
+			),
+			dispose: await getExportRef("dynamicDisposeEnvelope"),
+		};
 	}
 
 	#handleIsolateDispatch(payload: IsolateDispatchPayload): void {
@@ -854,36 +1005,59 @@ export class DynamicActorHostRuntime {
 		payload: Extract<IsolateDispatchPayload, { type: "message" }>,
 	): void {
 		if (payload.kind === "text") {
-			session.websocket.triggerMessage(payload.text ?? "");
+			(session.websocket as any).triggerMessage(
+				payload.text ?? "",
+				payload.rivetMessageIndex,
+			);
 			return;
 		}
-		const bytes = payload.dataBase64
-			? Buffer.from(payload.dataBase64, "base64")
+		const bytes = payload.data
+			? Buffer.from(new Uint8Array(payload.data))
 			: Buffer.alloc(0);
-		session.websocket.triggerMessage(bytes);
+		(session.websocket as any).triggerMessage(
+			bytes,
+			payload.rivetMessageIndex,
+		);
 	}
 }
 
-function normalizeLoadResult(loadResult: DynamicActorLoadResult): DynamicActorLoadResult {
+function normalizeLoadResult(
+	loadResult: DynamicActorLoadResult,
+): NormalizedDynamicActorLoadResult {
 	if (!loadResult || typeof loadResult.source !== "string") {
 		throw new Error(
 			"dynamic actor loader must return an object with a string `source` property",
 		);
 	}
-	return loadResult;
+
+	const sourceFormat = loadResult.sourceFormat ?? "typescript";
+	if (
+		sourceFormat !== "typescript" &&
+		sourceFormat !== "commonjs-js" &&
+		sourceFormat !== "esm-js"
+	) {
+		throw new Error(
+			"dynamic actor loader returned unsupported `sourceFormat`. Expected `typescript`, `commonjs-js`, or `esm-js`.",
+		);
+	}
+
+	return {
+		...loadResult,
+		sourceFormat,
+	};
 }
 
 async function requestToEnvelope(request: Request): Promise<FetchEnvelopeInput> {
 	const headers: Record<string, string> = {};
-	for (const [key, value] of request.headers.entries()) {
+	request.headers.forEach((value, key) => {
 		headers[key] = value;
-	}
+	});
 
-	let bodyBase64: string | undefined;
+	let body: ArrayBuffer | undefined;
 	if (request.method !== "GET" && request.method !== "HEAD") {
-		const body = await request.arrayBuffer();
-		if (body.byteLength > 0) {
-			bodyBase64 = Buffer.from(new Uint8Array(body)).toString("base64");
+		const requestBody = await request.arrayBuffer();
+		if (requestBody.byteLength > 0) {
+			body = requestBody.slice(0);
 		}
 	}
 
@@ -891,12 +1065,12 @@ async function requestToEnvelope(request: Request): Promise<FetchEnvelopeInput> 
 		url: request.url,
 		method: request.method,
 		headers,
-		bodyBase64,
+		body,
 	};
 }
 
 function envelopeToResponse(envelope: FetchEnvelopeOutput): Response {
-	return new Response(Buffer.from(envelope.bodyBase64, "base64"), {
+	return new Response(new Uint8Array(envelope.body), {
 		status: envelope.status,
 		headers: new Headers(envelope.headers),
 	});
@@ -908,12 +1082,14 @@ function resolveRivetkitPackageRoot(): string {
 	let current = path.dirname(entryPath);
 
 	while (true) {
-		const candidate = path.join(current, "package.json");
-		try {
-			const packageJsonRaw = requireJsonSync(candidate);
-			if (packageJsonRaw?.name === "rivetkit") {
-				return current;
-			}
+			const candidate = path.join(current, "package.json");
+			try {
+				const packageJsonRaw = requireJsonSync(candidate) as {
+					name?: string;
+				};
+				if (packageJsonRaw?.name === "rivetkit") {
+					return current;
+				}
 		} catch {
 			// Continue walking up until package root is found.
 		}
@@ -926,23 +1102,43 @@ function resolveRivetkitPackageRoot(): string {
 	}
 }
 
+async function resolveDynamicIsolateRuntimeBootstrapEntryPath(): Promise<string> {
+	const packageRoot = resolveRivetkitPackageRoot();
+	const bootstrapEntryPath = path.join(
+		packageRoot,
+		"dist",
+		"dynamic-isolate-runtime",
+		"index.cjs",
+	);
+
+	try {
+		await stat(bootstrapEntryPath);
+	} catch {
+		throw new Error(
+			"dynamic actor runtime bootstrap is not built. Run `pnpm --filter rivetkit build:dynamic-isolate-runtime` before using dynamicActor.",
+		);
+	}
+
+	return bootstrapEntryPath;
+}
+
+/**
+ * Prepares a dedicated runtime node_modules tree for dynamic actor isolates.
+ *
+ * This is currently a temporary compatibility layer while secure-exec still
+ * has CJS and ESM interop gaps for some RivetKit transitive dependencies. We
+ * copy RivetKit and its dependency closure into a runtime directory, then patch
+ * a subset of packages to CJS safe artifacts.
+ *
+ * TODO: Remove this materialization and patching path once secure-exec can
+ * load the required packages directly without source rewriting.
+ */
 async function ensureDynamicRuntimeNodeModules(): Promise<void> {
 	if (!dynamicRuntimeSetupPromise) {
 		dynamicRuntimeSetupPromise = (async () => {
 			await mkdir(DYNAMIC_RUNTIME_ACTORS_ROOT, { recursive: true });
 			const packageRoot = resolveRivetkitPackageRoot();
-			const sourceNodeModules = await resolveDynamicNodeModulesSource(
-				packageRoot,
-			);
 			const sourceDistEntry = path.join(packageRoot, "dist", "tsup", "mod.js");
-
-			try {
-				await stat(sourceNodeModules);
-			} catch {
-				throw new Error(
-					`dynamic actor runtime requires node_modules at ${sourceNodeModules}`,
-				);
-			}
 
 			try {
 				await stat(sourceDistEntry);
@@ -954,34 +1150,62 @@ async function ensureDynamicRuntimeNodeModules(): Promise<void> {
 			const sourceDistStat = await stat(sourceDistEntry);
 			void sourceDistStat;
 
-			// TODO: Temporary approach. Copy the workspace node_modules tree into a
-			// shared dynamic runtime directory. Replace this with package allowlisting.
-			await rm(DYNAMIC_RUNTIME_NODE_MODULES, {
+			const stagingNodeModulesPath = `${DYNAMIC_RUNTIME_NODE_MODULES}.tmp.${process.pid}.${Date.now()}`;
+			await rm(stagingNodeModulesPath, {
 				recursive: true,
 				force: true,
 			});
-			await cp(sourceNodeModules, DYNAMIC_RUNTIME_NODE_MODULES, {
-				recursive: true,
-				dereference: true,
-			});
+			await mkdir(stagingNodeModulesPath, { recursive: true });
+			try {
+				// Materialize only rivetkit and its transitive dependency closure into
+				// an isolated runtime node_modules tree.
+				await materializeRuntimeRivetkitPackage(
+					packageRoot,
+					stagingNodeModulesPath,
+				);
+				await materializeRuntimeDependencyClosure(
+					packageRoot,
+					stagingNodeModulesPath,
+				);
+				await patchRuntimeOnChangePackageToCommonJs(
+					stagingNodeModulesPath,
+				);
+				await patchRuntimeNanoeventsPackageToCommonJs(
+					stagingNodeModulesPath,
+				);
+				await patchRuntimePRetryPackageToCommonJs(
+					stagingNodeModulesPath,
+				);
+				await patchRuntimeIsNetworkErrorPackageToCommonJs(
+					stagingNodeModulesPath,
+				);
+				await patchRuntimeGetPortPackageToCommonJs(
+					stagingNodeModulesPath,
+				);
+				await patchRuntimeTracesPackageToNoop(stagingNodeModulesPath);
 
-			// Always materialize a local rivetkit package for dynamic actor module
-			// resolution, even if the source node_modules tree does not include one.
-			await materializeRuntimeRivetkitPackage(packageRoot);
-			await materializeRuntimeDependencyClosure(packageRoot);
-			await patchRuntimeOnChangePackageToCommonJs();
-			await patchRuntimeNanoeventsPackageToCommonJs();
-			await patchRuntimePRetryPackageToCommonJs();
-			await patchRuntimeIsNetworkErrorPackageToCommonJs();
-			await patchRuntimeGetPortPackageToCommonJs();
-			await patchRuntimeTracesPackageToNoop();
+				await rm(DYNAMIC_RUNTIME_NODE_MODULES, {
+					recursive: true,
+					force: true,
+				});
+				await rename(stagingNodeModulesPath, DYNAMIC_RUNTIME_NODE_MODULES);
+			} catch (error) {
+				await rm(stagingNodeModulesPath, {
+					recursive: true,
+					force: true,
+				});
+				throw error;
+			}
 		})();
 	}
 	return dynamicRuntimeSetupPromise;
 }
 
-async function materializeRuntimeRivetkitPackage(packageRoot: string): Promise<void> {
-	const runtimeRivetkitRoot = path.join(DYNAMIC_RUNTIME_NODE_MODULES, "rivetkit");
+async function materializeRuntimeRivetkitPackage(
+	packageRoot: string,
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
+	const runtimeRivetkitRoot = path.join(runtimeNodeModulesRoot, "rivetkit");
 	await rm(runtimeRivetkitRoot, { recursive: true, force: true });
 	await mkdir(runtimeRivetkitRoot, { recursive: true });
 
@@ -998,37 +1222,62 @@ async function materializeRuntimeRivetkitPackage(packageRoot: string): Promise<v
 }
 
 async function patchRivetkitCjsArtifacts(runtimeRivetkitRoot: string): Promise<void> {
-	const chunkPath = path.join(
-		runtimeRivetkitRoot,
-		"dist",
-		"tsup",
-		"chunk-WGO75ZTR.cjs",
-	);
+	const tsupDistDir = path.join(runtimeRivetkitRoot, "dist", "tsup");
 
-	let sourceText: string;
-	try {
-		sourceText = await readFile(chunkPath, "utf8");
-	} catch {
-		return;
-	}
+	const cjsFiles: string[] = [];
+	const walk = async (currentDir: string): Promise<void> => {
+		let entries: string[];
+		try {
+			entries = await readdir(currentDir);
+		} catch {
+			return;
+		}
 
-	const patchedText = sourceText
-		.replace(
-			"createRequire.call(void 0, import.meta.url)",
-			"createRequire.call(void 0, __filename)",
-		)
-		.replace(
-			"url.fileURLToPath(import.meta.url)",
-			"__filename",
-		);
+		for (const entry of entries) {
+			const entryPath = path.join(currentDir, entry);
+			let entryStat;
+			try {
+				entryStat = await stat(entryPath);
+			} catch {
+				continue;
+			}
 
-	if (patchedText !== sourceText) {
-		await writeFile(chunkPath, patchedText, "utf8");
+			if (entryStat.isDirectory()) {
+				await walk(entryPath);
+				continue;
+			}
+
+			if (entryStat.isFile() && entryPath.endsWith(".cjs")) {
+				cjsFiles.push(entryPath);
+			}
+		}
+	};
+
+	await walk(tsupDistDir);
+
+	for (const filePath of cjsFiles) {
+		let sourceText: string;
+		try {
+			sourceText = await readFile(filePath, "utf8");
+		} catch {
+			continue;
+		}
+
+		const patchedText = sourceText
+			.replaceAll("import.meta.url", "__filename")
+			.replaceAll("url.fileURLToPath(__filename)", "__filename")
+			.replaceAll("fileURLToPath(__filename)", "__filename")
+			.replaceAll("fileURLToPath.call(void 0, __filename)", "__filename");
+
+		if (patchedText !== sourceText) {
+			await writeFile(filePath, patchedText, "utf8");
+		}
 	}
 }
 
 async function materializeRuntimeDependencyClosure(
 	packageRoot: string,
+	runtimeNodeModulesRoot: string,
 ): Promise<void> {
 	const queue: Array<{ name: string; issuerPackageRoot: string }> = [];
 	const visited = new Set<string>();
@@ -1061,7 +1310,11 @@ async function materializeRuntimeDependencyClosure(
 		visited.add(visitKey);
 
 		if (current.name !== "rivetkit") {
-			await materializeRuntimePackageIfMissing(current.name, sourcePackageRoot);
+			await materializeRuntimePackageIfMissing(
+				current.name,
+				sourcePackageRoot,
+				runtimeNodeModulesRoot,
+			);
 		}
 
 		for (const nestedDependencyName of getPackageDependencyNames(
@@ -1075,20 +1328,22 @@ async function materializeRuntimeDependencyClosure(
 	}
 }
 
-async function patchRuntimeOnChangePackageToCommonJs(): Promise<void> {
-	const packageSourceRoot = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+async function patchRuntimeOnChangePackageToCommonJs(
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
+	const packageRoot = path.join(
+		runtimeNodeModulesRoot,
 		"@rivetkit",
 		"on-change",
-		"source",
 	);
+	const packageSourceRoot = path.join(packageRoot, "source");
 	try {
 		await stat(packageSourceRoot);
 	} catch {
 		return;
 	}
 
-	// TODO: Temporary compatibility patch until sandboxed-node can safely load
+	// TODO: Temporary compatibility patch until secure-exec can safely load
 	// ESM modules from CJS require calls without deadlocking.
 	const sourceFiles = await collectJavaScriptFiles(packageSourceRoot);
 	for (const sourceFilePath of sourceFiles) {
@@ -1099,11 +1354,35 @@ async function patchRuntimeOnChangePackageToCommonJs(): Promise<void> {
 		);
 		await writeFile(sourceFilePath, transpiledText, "utf8");
 	}
+
+	const packageIndexPath = path.join(packageSourceRoot, "index.js");
+	try {
+		const indexSourceText = await readFile(packageIndexPath, "utf8");
+		if (indexSourceText.includes("exports.default = onChange;")) {
+			const interopShim = `
+module.exports = onChange;
+module.exports.default = onChange;
+module.exports.target = onChange.target;
+module.exports.unsubscribe = onChange.unsubscribe;
+`;
+			await writeFile(
+				packageIndexPath,
+				`${indexSourceText.trimEnd()}\n${interopShim}`,
+				"utf8",
+			);
+		}
+	} catch {
+		// Ignore missing source index in staged dependencies.
+	}
+
+	await patchPackageTypeToCommonJs(packageRoot);
 }
 
-async function patchRuntimeNanoeventsPackageToCommonJs(): Promise<void> {
+async function patchRuntimeNanoeventsPackageToCommonJs(
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
 	const packageSourceRoot = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+		runtimeNodeModulesRoot,
 		"nanoevents",
 	);
 	try {
@@ -1112,7 +1391,7 @@ async function patchRuntimeNanoeventsPackageToCommonJs(): Promise<void> {
 		return;
 	}
 
-	// TODO: Temporary compatibility patch until sandboxed-node can safely load
+	// TODO: Temporary compatibility patch until secure-exec can safely load
 	// ESM package entrypoints from CJS require calls.
 	const sourceFiles = await collectJavaScriptFiles(packageSourceRoot);
 	for (const sourceFilePath of sourceFiles) {
@@ -1123,11 +1402,14 @@ async function patchRuntimeNanoeventsPackageToCommonJs(): Promise<void> {
 		);
 		await writeFile(sourceFilePath, transpiledText, "utf8");
 	}
+	await patchPackageTypeToCommonJs(packageSourceRoot);
 }
 
-async function patchRuntimePRetryPackageToCommonJs(): Promise<void> {
+async function patchRuntimePRetryPackageToCommonJs(
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
 	const packageSourceRoot = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+		runtimeNodeModulesRoot,
 		"p-retry",
 	);
 	try {
@@ -1136,7 +1418,7 @@ async function patchRuntimePRetryPackageToCommonJs(): Promise<void> {
 		return;
 	}
 
-	// TODO: Temporary compatibility patch until sandboxed-node can safely load
+	// TODO: Temporary compatibility patch until secure-exec can safely load
 	// ESM package entrypoints from CJS require calls.
 	const sourceFiles = await collectJavaScriptFiles(packageSourceRoot);
 	for (const sourceFilePath of sourceFiles) {
@@ -1147,11 +1429,14 @@ async function patchRuntimePRetryPackageToCommonJs(): Promise<void> {
 		);
 		await writeFile(sourceFilePath, transpiledText, "utf8");
 	}
+	await patchPackageTypeToCommonJs(packageSourceRoot);
 }
 
-async function patchRuntimeIsNetworkErrorPackageToCommonJs(): Promise<void> {
+async function patchRuntimeIsNetworkErrorPackageToCommonJs(
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
 	const packageSourceRoot = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+		runtimeNodeModulesRoot,
 		"is-network-error",
 	);
 	try {
@@ -1160,7 +1445,7 @@ async function patchRuntimeIsNetworkErrorPackageToCommonJs(): Promise<void> {
 		return;
 	}
 
-	// TODO: Temporary compatibility patch until sandboxed-node can safely load
+	// TODO: Temporary compatibility patch until secure-exec can safely load
 	// ESM package entrypoints from CJS require calls.
 	const sourceFiles = await collectJavaScriptFiles(packageSourceRoot);
 	for (const sourceFilePath of sourceFiles) {
@@ -1171,11 +1456,14 @@ async function patchRuntimeIsNetworkErrorPackageToCommonJs(): Promise<void> {
 		);
 		await writeFile(sourceFilePath, transpiledText, "utf8");
 	}
+	await patchPackageTypeToCommonJs(packageSourceRoot);
 }
 
-async function patchRuntimeGetPortPackageToCommonJs(): Promise<void> {
+async function patchRuntimeGetPortPackageToCommonJs(
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
 	const packageSourceRoot = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+		runtimeNodeModulesRoot,
 		"get-port",
 	);
 	try {
@@ -1184,7 +1472,7 @@ async function patchRuntimeGetPortPackageToCommonJs(): Promise<void> {
 		return;
 	}
 
-	// TODO: Temporary compatibility patch until sandboxed-node can safely load
+	// TODO: Temporary compatibility patch until secure-exec can safely load
 	// ESM package entrypoints from CJS require calls.
 	const sourceFiles = await collectJavaScriptFiles(packageSourceRoot);
 	for (const sourceFilePath of sourceFiles) {
@@ -1195,11 +1483,32 @@ async function patchRuntimeGetPortPackageToCommonJs(): Promise<void> {
 		);
 		await writeFile(sourceFilePath, transpiledText, "utf8");
 	}
+	await patchPackageTypeToCommonJs(packageSourceRoot);
 }
 
-async function patchRuntimeTracesPackageToNoop(): Promise<void> {
+async function patchPackageTypeToCommonJs(
+	packageRoot: string,
+): Promise<void> {
+	const packageJsonPath = path.join(packageRoot, "package.json");
+	try {
+		const packageJsonText = await readFile(packageJsonPath, "utf8");
+		const packageJson = JSON.parse(packageJsonText) as Record<string, unknown>;
+		packageJson.type = "commonjs";
+		await writeFile(
+			packageJsonPath,
+			`${JSON.stringify(packageJson, null, 2)}\n`,
+			"utf8",
+		);
+	} catch {
+		// Ignore missing or invalid package metadata in staged dependencies.
+	}
+}
+
+async function patchRuntimeTracesPackageToNoop(
+	runtimeNodeModulesRoot: string,
+): Promise<void> {
 	const tracesIndexPath = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+		runtimeNodeModulesRoot,
 		"@rivetkit",
 		"traces",
 		"dist",
@@ -1212,7 +1521,7 @@ async function patchRuntimeTracesPackageToNoop(): Promise<void> {
 		return;
 	}
 
-	// TODO: Temporary compatibility patch until sandboxed-node can load the full
+	// TODO: Temporary compatibility patch until secure-exec can load the full
 	// traces package (including async_hooks and ESM transitive dependencies)
 	// reliably from CJS entrypoints in dynamic actor isolates.
 	await writeFile(
@@ -1294,9 +1603,10 @@ async function collectJavaScriptFiles(rootDir: string): Promise<string[]> {
 async function materializeRuntimePackageIfMissing(
 	dependencyName: string,
 	sourcePackageRoot: string,
+	runtimeNodeModulesRoot: string,
 ): Promise<void> {
 	const runtimeDependencyRoot = path.join(
-		DYNAMIC_RUNTIME_NODE_MODULES,
+		runtimeNodeModulesRoot,
 		dependencyName,
 	);
 	try {
@@ -1332,7 +1642,10 @@ function resolveDependencyPackageRoot(
 		}
 	}
 
-	return findNearestPackageRoot(resolvedPath);
+	return (
+		findPackageRootForDependency(resolvedPath, dependencyName) ??
+		findNearestPackageRoot(resolvedPath)
+	);
 }
 
 function findNearestPackageRoot(entryPath: string): string | undefined {
@@ -1349,6 +1662,36 @@ function findNearestPackageRoot(entryPath: string): string | undefined {
 		const parent = path.dirname(current);
 		if (parent === current) {
 			return undefined;
+		}
+		current = parent;
+	}
+}
+
+function findPackageRootForDependency(
+	entryPath: string,
+	dependencyName: string,
+): string | undefined {
+	let current = path.dirname(entryPath);
+	let fallback: string | undefined;
+	while (true) {
+		const candidatePackageJson = path.join(current, "package.json");
+		try {
+			const packageJson = requireJsonSync(candidatePackageJson) as {
+				name?: string;
+			};
+			if (!fallback) {
+				fallback = current;
+			}
+			if (packageJson?.name === dependencyName) {
+				return current;
+			}
+		} catch {
+			// Continue walking upward.
+		}
+
+		const parent = path.dirname(current);
+		if (parent === current) {
+			return fallback;
 		}
 		current = parent;
 	}
@@ -1373,47 +1716,6 @@ function getPackageDependencyNames(packageRoot: string): string[] {
 	}
 }
 
-async function resolveDynamicNodeModulesSource(
-	packageRoot: string,
-): Promise<string> {
-	const dependencyNames = getRivetkitDependencyNames(packageRoot);
-	let bestCandidatePath: string | undefined;
-	let bestCoverageScore = -1;
-
-	let current = packageRoot;
-	while (true) {
-		const candidate = path.join(current, "node_modules");
-		try {
-			await stat(candidate);
-			const coverageScore = await scoreNodeModulesCoverage(
-				candidate,
-				dependencyNames,
-			);
-			if (coverageScore > bestCoverageScore) {
-				bestCoverageScore = coverageScore;
-				bestCandidatePath = candidate;
-			}
-
-			if (
-				dependencyNames.length > 0 &&
-				coverageScore >= dependencyNames.length
-			) {
-				return candidate;
-			}
-		} catch {
-			// node_modules missing at this level, continue searching.
-		}
-
-		const parent = path.dirname(current);
-		if (parent === current) {
-			break;
-		}
-		current = parent;
-	}
-
-	return bestCandidatePath ?? path.join(packageRoot, "node_modules");
-}
-
 function getRivetkitDependencyNames(packageRoot: string): string[] {
 	try {
 		const packageJson = requireJsonSync(
@@ -1425,22 +1727,6 @@ function getRivetkitDependencyNames(packageRoot: string): string[] {
 	} catch {
 		return [];
 	}
-}
-
-async function scoreNodeModulesCoverage(
-	nodeModulesPath: string,
-	dependencyNames: string[],
-): Promise<number> {
-	let score = 0;
-	for (const dependencyName of dependencyNames) {
-		try {
-			await stat(path.join(nodeModulesPath, dependencyName));
-			score += 1;
-		} catch {
-			// Dependency is not present in this node_modules candidate.
-		}
-	}
-	return score;
 }
 
 function createRuntimeRequire(): NodeJS.Require {
@@ -1469,7 +1755,10 @@ async function loadIsolatedVmModule(): Promise<IsolatedVmModule> {
 			const entryPath = resolveSecureExecEntryPath();
 			const packageDir = resolveSecureExecPackageDir(entryPath);
 			const secureExecRequire = createRequire(path.join(packageDir, "package.json"));
-			return secureExecRequire("isolated-vm") as IsolatedVmModule;
+			// Mirror the sqlite dynamic import pattern by constructing the specifier
+			// from parts to avoid static analyzer constant folding.
+			const isolatedVmSpecifier = ["isolated", "vm"].join("-");
+			return secureExecRequire(isolatedVmSpecifier) as IsolatedVmModule;
 		})();
 	}
 	return isolatedVmModulePromise;
@@ -1492,14 +1781,42 @@ function resolveSecureExecEntryPath(): string {
 		}
 	}
 
-	try {
-		return resolver.resolve("sandboxed-node");
-	} catch {
-		return path.join(
+	const packageSpecifiers = [
+		["secure", "exec"].join("-"),
+		["sandboxed", "node"].join("-"),
+	];
+	for (const packageSpecifier of packageSpecifiers) {
+		try {
+			return resolver.resolve(packageSpecifier);
+		} catch {}
+	}
+
+	const localDistCandidates = [
+		path.join(
+			process.env.HOME ?? "",
+			"secure-exec-rivet/packages/secure-exec/dist/index.js",
+		),
+		path.join(
 			process.env.HOME ?? "",
 			"secure-exec-rivet/packages/sandboxed-node/dist/index.js",
-		);
+		),
+	];
+	for (const candidatePath of localDistCandidates) {
+		try {
+			const candidatePackagePath = path.resolve(
+				candidatePath,
+				"..",
+				"..",
+				"package.json",
+			);
+			if (requireJsonSync(candidatePackagePath)) {
+				return candidatePath;
+			}
+		} catch {}
 	}
+
+	// Preserve a deterministic fallback for downstream error reporting.
+	return localDistCandidates[0];
 }
 
 function resolveSecureExecPackageDir(distEntryPath: string): string {
@@ -1507,13 +1824,23 @@ function resolveSecureExecPackageDir(distEntryPath: string): string {
 }
 
 async function nativeDynamicImport<T>(specifier: string): Promise<T> {
-	// Vite SSR rewrites import() and cannot resolve file:// paths outside the
-	// project graph. Using Function() forces the runtime's native loader.
-	const importer = new Function(
-		"moduleSpecifier",
-		"return import(moduleSpecifier);",
-	) as (moduleSpecifier: string) => Promise<T>;
-	return await importer(specifier);
+	// Try direct dynamic import first because VM-backed test runners may reject
+	// import() from Function() with ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING.
+	try {
+		return (await import(specifier)) as T;
+	} catch (directError) {
+		// Vite SSR can rewrite import() and fail to resolve file:// specifiers
+		// outside the project graph. Function() forces the runtime native loader.
+		const importer = new Function(
+			"moduleSpecifier",
+			"return import(moduleSpecifier);",
+		) as (moduleSpecifier: string) => Promise<T>;
+		try {
+			return await importer(specifier);
+		} catch {
+			throw directError;
+		}
+	}
 }
 
 function buildLockedDownPermissions(rootPath: string): {
@@ -1568,461 +1895,6 @@ function buildLockedDownSandboxDriver(
 	};
 }
 
-function buildIsolateBootstrapSource(input: {
-	actorId: string;
-	actorName: string;
-	actorKey: ActorKey;
-}): string {
-	return `
-let setup;
-let createActorRouter;
-let routeWebSocket;
-let InlineWebSocketAdapter;
-try {
-	({ setup, createActorRouter, routeWebSocket, InlineWebSocketAdapter } = require("rivetkit"));
-} catch (error) {
-	const details = error && error.stack ? error.stack : String(error);
-	throw new Error(\`dynamic runtime failed to require rivetkit: \${details}\`);
-}
-
-let actorModule;
-try {
-	actorModule = require("./dynamic-source.cjs");
-} catch (error) {
-	const details = error && error.stack ? error.stack : String(error);
-	throw new Error(\`dynamic runtime failed to require source module: \${details}\`);
-}
-const actorDefinition = actorModule.default ?? actorModule;
-if (!actorDefinition || typeof actorDefinition.instantiate !== "function") {
-	throw new Error("dynamic source module must default-export an ActorDefinition");
-}
-
-const actorId = ${JSON.stringify(input.actorId)};
-const actorName = ${JSON.stringify(input.actorName)};
-const actorKey = ${JSON.stringify(input.actorKey)};
-
-const registry = setup({
-	use: {
-		[actorName]: actorDefinition,
-	},
-	serveManager: false,
-	noWelcome: true,
-	test: { enabled: false },
-});
-const config = registry.parseConfig();
-
-let loadedActor = undefined;
-let loadingActorPromise = undefined;
-const webSocketSessions = new Map();
-
-const inlineClient = new Proxy({}, {
-	get() {
-		throw new Error("dynamic actor sandbox does not support c.client() yet");
-	},
-});
-
-function dynamicHostLog(level, message) {
-	try {
-		if (globalThis.__dynamicHostLog) {
-			globalThis.__dynamicHostLog.applySync(undefined, [level, String(message)]);
-		}
-	} catch {}
-}
-
-function bridgeCall(ref, args) {
-	return ref.applySyncPromise(undefined, args, {
-		arguments: {
-			copy: true,
-		},
-	});
-}
-
-function bridgeCallSync(ref, args) {
-	return ref.applySync(undefined, args, {
-		arguments: {
-			copy: true,
-		},
-	});
-}
-
-function toBase64(buffer) {
-	return Buffer.from(buffer).toString("base64");
-}
-
-function fromBase64(value) {
-	return new Uint8Array(Buffer.from(value, "base64"));
-}
-
-function responseHeadersToEntries(headers) {
-	if (!headers) {
-		return [];
-	}
-	if (typeof headers.entries === "function") {
-		return Array.from(headers.entries());
-	}
-	return Object.entries(headers).map(([key, value]) => [
-		String(key),
-		String(value),
-	]);
-}
-
-async function responseBodyToBase64(response) {
-	if (!response) {
-		return "";
-	}
-	if (typeof response.arrayBuffer === "function") {
-		const body = new Uint8Array(await response.arrayBuffer());
-		return Buffer.from(body).toString("base64");
-	}
-	if (typeof response.text === "function") {
-		const text = await response.text();
-		return Buffer.from(text, "utf8").toString("base64");
-	}
-
-	const bodyValue = response.body;
-	if (bodyValue === undefined || bodyValue === null) {
-		return "";
-	}
-	if (typeof bodyValue.getReader === "function") {
-		const reader = bodyValue.getReader();
-		const chunks = [];
-		let totalLength = 0;
-		while (true) {
-			const result = await reader.read();
-			if (result.done) {
-				break;
-			}
-			const chunk = result.value instanceof Uint8Array
-				? result.value
-				: new Uint8Array(result.value);
-			chunks.push(chunk);
-			totalLength += chunk.byteLength;
-		}
-		const merged = new Uint8Array(totalLength);
-		let offset = 0;
-		for (const chunk of chunks) {
-			merged.set(chunk, offset);
-			offset += chunk.byteLength;
-		}
-		return Buffer.from(merged).toString("base64");
-	}
-	if (typeof bodyValue === "string") {
-		return Buffer.from(bodyValue, "utf8").toString("base64");
-	}
-	if (Array.isArray(bodyValue)) {
-		return Buffer.from(bodyValue).toString("base64");
-	}
-	if (bodyValue instanceof Uint8Array) {
-		return Buffer.from(bodyValue).toString("base64");
-	}
-	if (ArrayBuffer.isView(bodyValue)) {
-		const view = new Uint8Array(
-			bodyValue.buffer,
-			bodyValue.byteOffset,
-			bodyValue.byteLength,
-		);
-		return Buffer.from(view).toString("base64");
-	}
-	if (bodyValue instanceof ArrayBuffer) {
-		return Buffer.from(new Uint8Array(bodyValue)).toString("base64");
-	}
-	return Buffer.from(String(bodyValue), "utf8").toString("base64");
-}
-
-async function loadActor(requestActorId) {
-	if (requestActorId !== actorId) {
-		throw new Error("dynamic actor runtime received unexpected actor id");
-	}
-
-	if (loadedActor && !loadedActor.isStopping) {
-		return loadedActor;
-	}
-	if (loadingActorPromise) {
-		await loadingActorPromise;
-		if (loadedActor) return loadedActor;
-	}
-
-	loadingActorPromise = (async () => {
-		const actor = actorDefinition.instantiate();
-		try {
-			await actor.start(actorDriver, inlineClient, actorId, actorName, actorKey, "unknown");
-			loadedActor = actor;
-		} catch (error) {
-			dynamicHostLog(
-				"warn",
-				"actor.start failed: " +
-					(error && error.stack ? error.stack : String(error)),
-			);
-			throw error;
-		}
-	})();
-	await loadingActorPromise;
-	loadingActorPromise = undefined;
-	if (!loadedActor) {
-		throw new Error("failed to load actor");
-	}
-	return loadedActor;
-}
-
-const actorDriver = {
-	async loadActor(requestActorId) {
-		return await loadActor(requestActorId);
-	},
-	getContext() {
-		return {};
-	},
-	async kvBatchPut(actorIdValue, entries) {
-		const encoded = entries.map(([key, value]) => [toBase64(key), toBase64(value)]);
-		await bridgeCall(globalThis.__dynamicHostKvBatchPut, [actorIdValue, encoded]);
-	},
-	async kvBatchGet(actorIdValue, keys) {
-		const encodedKeys = keys.map((key) => toBase64(key));
-		const valuesJson = await bridgeCall(globalThis.__dynamicHostKvBatchGet, [actorIdValue, encodedKeys]);
-		const values = JSON.parse(valuesJson);
-		return values.map((value) => (value === null ? null : fromBase64(value)));
-	},
-	async kvBatchDelete(actorIdValue, keys) {
-		const encodedKeys = keys.map((key) => toBase64(key));
-		await bridgeCall(globalThis.__dynamicHostKvBatchDelete, [actorIdValue, encodedKeys]);
-	},
-	async kvListPrefix(actorIdValue, prefix) {
-		const encodedPrefix = toBase64(prefix);
-		const valuesJson = await bridgeCall(globalThis.__dynamicHostKvListPrefix, [actorIdValue, encodedPrefix]);
-		const values = JSON.parse(valuesJson);
-		return values.map(([key, value]) => [fromBase64(key), fromBase64(value)]);
-	},
-	async setAlarm(actor, timestamp) {
-		await bridgeCall(globalThis.__dynamicHostSetAlarm, [actor.id, timestamp]);
-	},
-	startSleep(requestActorId) {
-		bridgeCallSync(globalThis.__dynamicHostStartSleep, [requestActorId]);
-	},
-	startDestroy(requestActorId) {
-		bridgeCallSync(globalThis.__dynamicHostStartDestroy, [requestActorId]);
-	},
-};
-
-const actorRouter = createActorRouter(config, actorDriver, undefined, false);
-
-async function dynamicHandleActionRequest(input, pathName) {
-	const actor = await loadActor(actorId);
-	const actionName = decodeURIComponent(pathName.slice("/action/".length));
-	const encoding = input.headers?.["x-rivet-encoding"] || "json";
-	if (encoding !== "json") {
-		throw new Error(
-			"dynamic action handler currently supports json encoding only",
-		);
-	}
-
-	const bodyText = input.bodyBase64
-		? Buffer.from(input.bodyBase64, "base64").toString("utf8")
-		: "";
-	let args = [];
-	if (bodyText) {
-		const parsed = JSON.parse(bodyText);
-		if (Array.isArray(parsed?.args)) {
-			args = parsed.args;
-		}
-	}
-
-	const output = await actor.inspector.executeActionJson(actionName, args);
-	return new Response(JSON.stringify({ output }), {
-		status: 200,
-		headers: {
-			"content-type": "application/json",
-		},
-	});
-}
-
-async function dynamicFetchEnvelope(input) {
-	const request = new Request(input.url, {
-		method: input.method,
-		headers: input.headers,
-		body: input.bodyBase64 ? Buffer.from(input.bodyBase64, "base64") : undefined,
-		duplex: "half",
-	});
-	const requestUrl = new URL(request.url);
-	const response =
-		request.method === "POST" && requestUrl.pathname.startsWith("/action/")
-			? await dynamicHandleActionRequest(input, requestUrl.pathname)
-			: await actorRouter.fetch(request, { actorId });
-	const status = typeof response.status === "number" ? response.status : 200;
-	const bodyBase64 = await responseBodyToBase64(response);
-	if (status >= 500) {
-		const preview = Buffer.from(bodyBase64, "base64").toString("utf8");
-		dynamicHostLog(
-			"warn",
-			"fetch status >= 500: status=" +
-				status +
-				" url=" +
-				request.url +
-				" bodyPreview=" +
-				preview,
-		);
-	}
-	return {
-		status,
-		headers: responseHeadersToEntries(response.headers),
-		bodyBase64,
-	};
-}
-
-async function dynamicDispatchAlarmEnvelope() {
-	const actor = await loadActor(actorId);
-	await actor.onAlarm();
-	return true;
-}
-
-async function dynamicStopEnvelope(mode) {
-	if (!loadedActor) return true;
-	await loadedActor.onStop(mode);
-	loadedActor = undefined;
-	return true;
-}
-
-async function dynamicOpenWebSocketEnvelope(input) {
-	const headers = {};
-	const requestPath = input.path || "/connect";
-	const pathOnly = requestPath.split("?")[0];
-	const request = new Request(
-		requestPath.startsWith("http") ? requestPath : \`http://actor\${requestPath}\`,
-		{ method: "GET", headers },
-	);
-	const handler = await routeWebSocket(
-		request,
-		pathOnly,
-		headers,
-		config,
-		actorDriver,
-		actorId,
-		input.encoding,
-		input.params,
-		undefined,
-		undefined,
-		false,
-		false,
-	);
-	const adapter = new InlineWebSocketAdapter(handler);
-	const ws = adapter.clientWebSocket;
-	webSocketSessions.set(input.sessionId, ws);
-
-	ws.addEventListener("open", () => {
-		bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-			type: "open",
-			sessionId: input.sessionId,
-		}]);
-	});
-	ws.addEventListener("message", (event) => {
-		const data = event.data;
-		if (typeof data === "string") {
-			bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-				type: "message",
-				sessionId: input.sessionId,
-				kind: "text",
-				text: data,
-			}]);
-			return;
-		}
-		if (data instanceof Blob) {
-			data.arrayBuffer()
-				.then((buffer) => {
-					bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-						type: "message",
-						sessionId: input.sessionId,
-						kind: "binary",
-						dataBase64: Buffer.from(new Uint8Array(buffer)).toString("base64"),
-					}]);
-				})
-				.catch((error) => {
-					bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-						type: "error",
-						sessionId: input.sessionId,
-						message: error instanceof Error ? error.message : String(error),
-					}]);
-				});
-			return;
-		}
-		if (ArrayBuffer.isView(data)) {
-			bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-				type: "message",
-				sessionId: input.sessionId,
-				kind: "binary",
-				dataBase64: Buffer.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)).toString("base64"),
-			}]);
-			return;
-		}
-		if (data instanceof ArrayBuffer) {
-			bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-				type: "message",
-				sessionId: input.sessionId,
-				kind: "binary",
-				dataBase64: Buffer.from(new Uint8Array(data)).toString("base64"),
-			}]);
-		}
-	});
-	ws.addEventListener("close", (event) => {
-		webSocketSessions.delete(input.sessionId);
-		bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-			type: "close",
-			sessionId: input.sessionId,
-			code: event.code,
-			reason: event.reason,
-			wasClean: event.wasClean,
-		}]);
-	});
-	ws.addEventListener("error", (event) => {
-		bridgeCallSync(globalThis.__dynamicHostDispatch, [{
-			type: "error",
-			sessionId: input.sessionId,
-			message: event?.message || "dynamic websocket error",
-		}]);
-	});
-	return true;
-}
-
-async function dynamicWebSocketSendEnvelope(input) {
-	const ws = webSocketSessions.get(input.sessionId);
-	if (!ws) return false;
-	if (input.kind === "text") {
-		ws.send(input.text || "");
-		return true;
-	}
-	if (!input.dataBase64) {
-		return false;
-	}
-	ws.send(Buffer.from(input.dataBase64, "base64"));
-	return true;
-}
-
-async function dynamicWebSocketCloseEnvelope(input) {
-	const ws = webSocketSessions.get(input.sessionId);
-	if (!ws) return false;
-	ws.close(input.code, input.reason);
-	return true;
-}
-
-async function dynamicDisposeEnvelope() {
-	for (const ws of webSocketSessions.values()) {
-		try {
-			ws.close(1001, "dynamic.runtime.disposed");
-		} catch {}
-	}
-	webSocketSessions.clear();
-	return true;
-}
-
-module.exports = {
-	dynamicFetchEnvelope,
-	dynamicDispatchAlarmEnvelope,
-	dynamicStopEnvelope,
-	dynamicOpenWebSocketEnvelope,
-	dynamicWebSocketSendEnvelope,
-	dynamicWebSocketCloseEnvelope,
-	dynamicDisposeEnvelope,
-};
-`;
-}
-
 async function normalizeBinaryPayload(
 	data: ArrayBufferLike | Blob | ArrayBufferView,
 ): Promise<Uint8Array> {
@@ -2035,8 +1907,53 @@ async function normalizeBinaryPayload(
 	return new Uint8Array(data);
 }
 
-async function transpileDynamicSource(source: string): Promise<string> {
-	return await transpileToCommonJs(source, "dynamic-source.ts");
+function copyUint8ArrayToArrayBuffer(value: Uint8Array): ArrayBuffer {
+	return value.buffer.slice(
+		value.byteOffset,
+		value.byteOffset + value.byteLength,
+	) as ArrayBuffer;
+}
+
+async function materializeDynamicSource(
+	runtimeDir: string,
+	loadResult: NormalizedDynamicActorLoadResult,
+): Promise<MaterializedDynamicSource> {
+	switch (loadResult.sourceFormat) {
+		case "esm-js": {
+			const sourceEntry = "dynamic-source.mjs";
+			const sourcePath = path.join(runtimeDir, sourceEntry);
+			await writeFile(sourcePath, loadResult.source, "utf8");
+			return {
+				sourcePath,
+				sourceEntry,
+				sourceFormat: loadResult.sourceFormat,
+			};
+		}
+		case "commonjs-js": {
+			const sourceEntry = "dynamic-source.cjs";
+			const sourcePath = path.join(runtimeDir, sourceEntry);
+			await writeFile(sourcePath, loadResult.source, "utf8");
+			return {
+				sourcePath,
+				sourceEntry,
+				sourceFormat: loadResult.sourceFormat,
+			};
+		}
+		default: {
+			const sourceEntry = "dynamic-source.cjs";
+			const sourcePath = path.join(runtimeDir, sourceEntry);
+			const sourceCode = await transpileToCommonJs(
+				loadResult.source,
+				"dynamic-source.ts",
+			);
+			await writeFile(sourcePath, sourceCode, "utf8");
+			return {
+				sourcePath,
+				sourceEntry,
+				sourceFormat: loadResult.sourceFormat,
+			};
+		}
+	}
 }
 
 async function transpileToCommonJs(

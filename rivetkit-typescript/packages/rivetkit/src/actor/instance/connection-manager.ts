@@ -198,7 +198,7 @@ export class ConnectionManager<
 
 		// Notify driver about new connection BEFORE marking as changed
 		//
-		// This ensures the driver can set up any necessary state (like #hwsMessageIndex)
+		// This ensures the driver can set up any necessary connection ack state.
 		// before saveState is triggered by markConnWithPersistChanged
 		if (this.#actor.driver.onCreateConn) {
 			this.#actor.driver.onCreateConn(conn);
