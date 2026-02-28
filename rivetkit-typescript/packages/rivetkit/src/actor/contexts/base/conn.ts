@@ -1,7 +1,7 @@
 import type { Conn } from "../../conn/mod";
 import type { AnyDatabaseProvider } from "../../database";
 import type { ActorDefinition, AnyActorDefinition } from "../../definition";
-import type { ActorInstance } from "../../instance/mod";
+import type { StaticActorInstance } from "../../instance/mod";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../../schema";
 import { ActorContext } from "./actor";
 
@@ -32,7 +32,7 @@ export abstract class ConnContext<
 	 * @internal
 	 */
 	constructor(
-		actor: ActorInstance<
+		actor: StaticActorInstance<
 			TState,
 			TConnParams,
 			TConnState,

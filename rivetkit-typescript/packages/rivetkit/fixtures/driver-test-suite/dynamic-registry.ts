@@ -130,10 +130,10 @@ const dynamicFromUrl = dynamicActor(async () => {
 });
 
 const dynamicFromActor = dynamicActor(async (c) => {
-	const source = await c
+	const source = (await c
 		.client<any>()
 		.sourceCode.getOrCreate(["dynamic-source"])
-		.getCode();
+		.getCode()) as string;
 	return {
 		source,
 		nodeProcess: {

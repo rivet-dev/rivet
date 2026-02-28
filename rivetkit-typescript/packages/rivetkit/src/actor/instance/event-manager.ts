@@ -19,7 +19,7 @@ import type { AnyDatabaseProvider } from "../database";
 import * as errors from "../errors";
 import { CachedSerializer } from "../protocol/serde";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
-import type { ActorInstance } from "./mod";
+import type { StaticActorInstance } from "./mod";
 
 /**
  * Manages event subscriptions and broadcasting for actor instances.
@@ -35,13 +35,13 @@ export class EventManager<
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
 > {
-	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#subscriptionIndex = new Map<
 		string,
 		Set<Conn<S, CP, CS, V, I, DB, E, Q>>
 	>();
 
-	constructor(actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>) {
+	constructor(actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>) {
 		this.#actor = actor;
 	}
 

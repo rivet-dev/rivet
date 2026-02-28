@@ -6,7 +6,10 @@ import {
 	ActorTypes,
 } from "./config";
 import type { AnyDatabaseProvider } from "./database";
-import { ActorDefinition } from "./definition";
+import {
+	type ActorDefinition,
+	StaticActorDefinition,
+} from "./definition";
 import { event as schemaEvent, queue as schemaQueue } from "./schema";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
@@ -71,7 +74,7 @@ export function actor<
 		TEvents,
 		TQueues
 	>;
-	return new ActorDefinition(config);
+	return new StaticActorDefinition(config);
 }
 export type { Encoding } from "@/actor/protocol/serde";
 export {
@@ -93,13 +96,16 @@ export type {
 } from "@/common/websocket-interface";
 export type { ActorKey } from "@/manager/protocol/query";
 export type * from "./config";
+export { CONN_STATE_MANAGER_SYMBOL } from "./conn/mod";
 export type { AnyConn, Conn } from "./conn/mod";
 export type { ActorDefinition, AnyActorDefinition } from "./definition";
+export { StaticActorDefinition } from "./definition";
 export { lookupInRegistry } from "./definition";
 export { UserError, type UserErrorOptions } from "./errors";
 export { KEYS as KV_KEYS } from "./instance/keys";
 export { ActorKv } from "./instance/kv";
 export type { AnyActorInstance } from "./instance/mod";
+export { StaticActorInstance } from "./instance/mod";
 export {
 	type ActorRouter,
 	createActorRouter,

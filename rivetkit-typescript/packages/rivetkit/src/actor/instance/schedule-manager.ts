@@ -7,7 +7,7 @@ import {
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDriver } from "../driver";
 import type { EventSchemaConfig, QueueSchemaConfig } from "../schema";
-import type { ActorInstance } from "./mod";
+import type { StaticActorInstance } from "./mod";
 import type { PersistedScheduleEvent } from "./persisted";
 
 /**
@@ -24,14 +24,14 @@ export class ScheduleManager<
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
 > {
-	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#actorDriver: ActorDriver;
 	#alarmWriteQueue = new SinglePromiseQueue();
 	#config: any; // ActorConfig type
 	#persist: any; // Reference to PersistedActor
 
 	constructor(
-		actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
+		actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>,
 		actorDriver: ActorDriver,
 		config: any,
 	) {

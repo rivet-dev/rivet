@@ -1,9 +1,9 @@
-import type { AnyActorInstance } from "./instance/mod";
+import type { AnyStaticActorInstance } from "./instance/mod";
 
 export class Schedule {
-	#actor: AnyActorInstance;
+	#actor: AnyStaticActorInstance;
 
-	constructor(actor: AnyActorInstance) {
+	constructor(actor: AnyStaticActorInstance) {
 		this.#actor = actor;
 	}
 

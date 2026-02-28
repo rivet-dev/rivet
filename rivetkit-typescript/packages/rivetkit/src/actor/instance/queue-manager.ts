@@ -16,7 +16,7 @@ import {
 	queueMessagesPrefix,
 	queueMetadataKey,
 } from "./keys";
-import type { ActorInstance } from "./mod";
+import type { StaticActorInstance } from "./mod";
 
 export interface QueueMessage {
 	id: bigint;
@@ -74,7 +74,7 @@ export class QueueManager<
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
 > {
-	#actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>;
+	#actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>;
 	#driver: ActorDriver;
 	#waiters = new Map<string, QueueWaiter>();
 	#metadata: QueueMetadata = { ...DEFAULT_METADATA };
@@ -82,7 +82,7 @@ export class QueueManager<
 	#pendingCompletions = new Map<string, PendingCompletion>();
 
 	constructor(
-		actor: ActorInstance<S, CP, CS, V, I, DB, E, Q>,
+		actor: StaticActorInstance<S, CP, CS, V, I, DB, E, Q>,
 		driver: ActorDriver,
 	) {
 		this.#actor = actor;
