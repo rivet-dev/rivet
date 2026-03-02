@@ -1,5 +1,5 @@
 import type { RunContext } from "@/actor/contexts/run";
-import type { AnyActorInstance } from "@/actor/instance/mod";
+import type { AnyStaticActorInstance } from "@/actor/instance/mod";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/instance/keys";
 import type {
 	EngineDriver,
@@ -16,11 +16,11 @@ function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
 }
 
 class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
-	#actor: AnyActorInstance;
+	#actor: AnyStaticActorInstance;
 	#runCtx: RunContext<any, any, any, any, any, any, any, any>;
 
 	constructor(
-		actor: AnyActorInstance,
+		actor: AnyStaticActorInstance,
 		runCtx: RunContext<any, any, any, any, any, any, any, any>,
 	) {
 		this.#actor = actor;
@@ -84,11 +84,11 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 export class ActorWorkflowDriver implements EngineDriver {
 	readonly workerPollInterval = 100;
 	readonly messageDriver: WorkflowMessageDriver;
-	#actor: AnyActorInstance;
+	#actor: AnyStaticActorInstance;
 	#runCtx: RunContext<any, any, any, any, any, any, any, any>;
 
 	constructor(
-		actor: AnyActorInstance,
+		actor: AnyStaticActorInstance,
 		runCtx: RunContext<any, any, any, any, any, any, any, any>,
 	) {
 		this.#actor = actor;

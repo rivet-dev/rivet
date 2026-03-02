@@ -1,0 +1,12 @@
+{
+	"extends": "../../../../tsconfig.base.json",
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "CommonJS",
+		"moduleResolution": "Node",
+		"types": ["node"],
+		"lib": ["ES2022", "DOM"],
+		"resolveJsonModule": true
+	},
+	"include": ["src/**/*.ts", "src/**/*.cts", "../src/dynamic/runtime-bridge.ts"]
+}

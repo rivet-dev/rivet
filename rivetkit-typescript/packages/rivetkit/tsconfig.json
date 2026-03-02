@@ -5,15 +5,9 @@
 		"resolveJsonModule": true,
 		"paths": {
 			"@/*": ["./src/*"],
-			"@rivetkit/workflow-engine": ["../workflow-engine/src/index.ts"],
-			"@rivetkit/traces": ["../traces/src/index.ts"],
-			"@rivetkit/traces/encoding": ["../traces/src/encoding.ts"],
-			"@rivetkit/traces/otlp": ["../traces/src/otlp-entry.ts"],
-			"@rivetkit/sqlite-vfs": ["../sqlite-vfs/src/index.ts"],
-			"@rivetkit/sqlite-vfs/native": ["../sqlite-vfs/src/native.ts"],
-			"@rivetkit/sqlite-vfs/wasm": ["../sqlite-vfs/src/wasm.ts"],
 			// Used for test fixtures
 			"rivetkit": ["./src/mod.ts"],
+			"rivetkit/dynamic": ["./src/dynamic/mod.ts"],
 			"rivetkit/utils": ["./src/utils.ts"],
 			"rivetkit/db": ["./src/db/mod.ts"],
 			"rivetkit/db/drizzle": ["./src/db/drizzle/mod.ts"]
