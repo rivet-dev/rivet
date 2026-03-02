@@ -131,6 +131,7 @@ git commit -m "chore(my-pkg): foo bar"
 - Do not use optional chaining for required lifecycle and bridge operations (for example sleep, destroy, alarm dispatch, ack, and websocket dispatch paths).
 - If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
 - Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
+- Do not use empty `catch {}` blocks; if a catch intentionally continues, log at least debug-level context with the error.
 
 ### Rust Dependencies
 

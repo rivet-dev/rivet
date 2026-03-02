@@ -168,6 +168,56 @@ export function runRawHttpTests(driverTestConfig: DriverTestConfig) {
 			expect(Array.from(responseArray)).toEqual([1, 2, 3, 4, 5]);
 		});
 
+		test("should preserve duplicate response headers", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawHttpActor.getOrCreate([
+				"duplicate-headers-test",
+			]);
+			const baselineResponse = await actor.fetch("api/hello");
+			if (!baselineResponse.ok) {
+				return;
+			}
+
+			const response = await actor.fetch("api/duplicate-headers");
+			expect(response.ok).toBe(true);
+			const duplicateHeader = response.headers.get("x-rivet-duplicate");
+			expect(duplicateHeader).toContain("first");
+			expect(duplicateHeader).toContain("second");
+		});
+
+		test("should return plain text response bodies", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawHttpActor.getOrCreate(["text-body-test"]);
+			const baselineResponse = await actor.fetch("api/hello");
+			if (!baselineResponse.ok) {
+				return;
+			}
+
+			const response = await actor.fetch("api/text-body");
+			expect(response.ok).toBe(true);
+			expect(response.headers.get("content-type")).toContain(
+				"text/plain",
+			);
+			expect(await response.text()).toBe("plain-text-response");
+		});
+
+		test("should return binary response bodies", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawHttpActor.getOrCreate(["binary-body-test"]);
+			const baselineResponse = await actor.fetch("api/hello");
+			if (!baselineResponse.ok) {
+				return;
+			}
+
+			const response = await actor.fetch("api/binary-body");
+			expect(response.ok).toBe(true);
+			expect(response.headers.get("content-type")).toContain(
+				"application/octet-stream",
+			);
+			const bytes = new Uint8Array(await response.arrayBuffer());
+			expect(Array.from(bytes)).toEqual([0, 1, 2, 255]);
+		});
+
 		test("should work with Hono router using createVars", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawHttpHonoActor.getOrCreate(["hono-test"]);

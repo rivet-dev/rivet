@@ -15,6 +15,7 @@ import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
 import { DynamicActorInstance } from "@/dynamic/instance";
 import {
+	buildDynamicRuntimeConfigBridge,
 	DynamicActorIsolateRuntime,
 	type DynamicWebSocketOpenOptions,
 } from "@/dynamic/isolate-runtime";
@@ -964,14 +965,21 @@ export class FileSystemGlobalState {
 				}
 
 				await fs.rename(tempPath, alarmPath);
-			} catch (error) {
-				try {
-					const fs = getNodeFs();
-					await fs.unlink(tempPath);
-				} catch {}
-				logger().error({
-					msg: "failed to write alarm",
-					actorId,
+				} catch (error) {
+					try {
+						const fs = getNodeFs();
+						await fs.unlink(tempPath);
+					} catch (cleanupError) {
+						logger().debug({
+							msg: "failed to cleanup temp alarm file after write failure",
+							actorId,
+							tempPath,
+							error: stringifyError(cleanupError),
+						});
+					}
+					logger().error({
+						msg: "failed to write alarm",
+						actorId,
 					error,
 				});
 				throw new Error(`Failed to write alarm: ${error}`);
@@ -1131,21 +1139,25 @@ export class FileSystemGlobalState {
 			// Create actor
 			const definition = lookupInRegistry(config, entry.state.name);
 			if (isDynamicActorDefinition(definition)) {
-				let runtime = this.#dynamicRuntimes.get(actorId);
-				if (!runtime) {
-					runtime = new DynamicActorIsolateRuntime({
-						actorId,
-						actorName: entry.state.name,
-						actorKey: entry.state.key as string[],
-						input: this.#actorInitialInputs.get(actorId),
-						region: "unknown",
-						loader: definition.loader,
-						actorDriver,
-						inlineClient,
-					});
-					await runtime.start();
-					this.#dynamicRuntimes.set(actorId, runtime);
+				if (this.#dynamicRuntimes.has(actorId)) {
+					throw new Error(
+						`dynamic runtime unexpectedly already loaded before actor start for ${actorId}`,
+					);
 				}
+				const runtime = new DynamicActorIsolateRuntime({
+					actorId,
+					actorName: entry.state.name,
+					actorKey: entry.state.key as string[],
+					runtimeConfig: buildDynamicRuntimeConfigBridge(config),
+					input: this.#actorInitialInputs.get(actorId),
+					region: "unknown",
+					loader: definition.loader,
+					actorDriver,
+					inlineClient,
+				});
+				await runtime.start();
+				this.#dynamicRuntimes.set(actorId, runtime);
+				await runtime.ensureStarted();
 				entry.actor = new DynamicActorInstance(
 					actorId,
 					runtime,
@@ -1158,14 +1170,14 @@ export class FileSystemGlobalState {
 				entry.lifecycleState = ActorLifecycleState.AWAKE;
 
 				// Start actor
-					await staticActor.start(
-						actorDriver,
-						inlineClient,
-						actorId,
-						entry.state.name,
-						entry.state.key as string[],
-						"unknown",
-					);
+				await staticActor.start(
+					actorDriver,
+					inlineClient,
+					actorId,
+					entry.state.name,
+					entry.state.key as string[],
+					"unknown",
+				);
 			} else {
 				throw new Error(
 					`actor definition for ${entry.state.name} is not instantiable`,
@@ -1202,10 +1214,27 @@ export class FileSystemGlobalState {
 
 			return entry.actor;
 		} catch (innerError) {
-			const error = new Error(
-				`Failed to start actor ${actorId}: ${innerError}`,
-				{ cause: innerError },
-			);
+			const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
+			if (dynamicRuntime) {
+				try {
+					await dynamicRuntime.dispose();
+				} catch (disposeError) {
+					logger().debug({
+						msg: "failed to dispose dynamic runtime after actor start failure",
+						actorId,
+						error: stringifyError(disposeError),
+					});
+				}
+				this.#dynamicRuntimes.delete(actorId);
+			}
+
+			const error =
+				innerError instanceof Error
+					? new Error(
+						`Failed to start actor ${actorId}: ${innerError.message}`,
+						{ cause: innerError },
+					)
+					: new Error(`Failed to start actor ${actorId}: ${String(innerError)}`);
 			entry.startPromise?.reject(error);
 			entry.startPromise = undefined;
 			throw error;
@@ -1224,6 +1253,14 @@ export class FileSystemGlobalState {
 		return entry;
 	}
 
+	#getDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
+		const runtime = this.#dynamicRuntimes.get(actorId);
+		if (!runtime) {
+			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
+		}
+		return runtime;
+	}
+
 	async isDynamicActor(
 		config: RegistryConfig,
 		actorId: string,
@@ -1234,10 +1271,7 @@ export class FileSystemGlobalState {
 	}
 
 	async dynamicFetch(actorId: string, request: Request): Promise<Response> {
-		const runtime = this.#dynamicRuntimes.get(actorId);
-		if (!runtime) {
-			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
-		}
+		const runtime = this.#getDynamicRuntime(actorId);
 		return await runtime.fetch(request);
 	}
 
@@ -1248,10 +1282,7 @@ export class FileSystemGlobalState {
 		params: unknown,
 		options: DynamicWebSocketOpenOptions = {},
 	): Promise<UniversalWebSocket> {
-		const runtime = this.#dynamicRuntimes.get(actorId);
-		if (!runtime) {
-			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
-		}
+		const runtime = this.#getDynamicRuntime(actorId);
 		return await runtime.openWebSocket(path, encoding, params, options);
 	}
 

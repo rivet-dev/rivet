@@ -23,6 +23,7 @@ export function runActorErrorHandlingTests(driverTestConfig: DriverTestConfig) {
 				} catch (error: any) {
 					// Verify the error properties
 					expect(error.message).toBe("Simple error message");
+					expect(error.group).toBe("user");
 					// Default code is "user_error" when not specified
 					expect(error.code).toBe("user_error");
 					// No metadata by default
@@ -43,6 +44,7 @@ export function runActorErrorHandlingTests(driverTestConfig: DriverTestConfig) {
 				} catch (error: any) {
 					// Verify the error properties
 					expect(error.message).toBe("Detailed error message");
+					expect(error.group).toBe("user");
 					expect(error.code).toBe("detailed_error");
 					expect(error.metadata).toBeDefined();
 					expect(error.metadata.reason).toBe("test");
@@ -66,6 +68,21 @@ export function runActorErrorHandlingTests(driverTestConfig: DriverTestConfig) {
 					// Verify the error is converted to a safe format
 					expect(error.code).toBe(INTERNAL_ERROR_CODE);
 					// Original error details should not be exposed
+					expect(error.message).toBe(INTERNAL_ERROR_DESCRIPTION);
+				}
+			});
+
+			test("should convert onWake startup errors to safe format", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const handle = client.throwOnWakeActor.getOrCreate([
+					`throw-on-wake-${crypto.randomUUID()}`,
+				]);
+
+				try {
+					await handle.ping();
+					expect.fail("expected startup throw to fail");
+				} catch (error: any) {
+					expect(error.code).toBe(INTERNAL_ERROR_CODE);
 					expect(error.message).toBe(INTERNAL_ERROR_DESCRIPTION);
 				}
 			});

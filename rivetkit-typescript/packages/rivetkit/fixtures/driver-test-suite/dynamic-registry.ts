@@ -152,10 +152,23 @@ const dynamicFromActor = dynamicActor(async (c) => {
 	};
 });
 
+const dynamicLoaderThrows = dynamicActor(async () => {
+	throw new Error("dynamic.loader_failed_for_test");
+});
+
+const dynamicInvalidSource = dynamicActor(async () => {
+	return {
+		source: "export default 42;",
+		sourceFormat: "esm-js" as const,
+	};
+});
+
 export const registry = setup({
 	use: {
 		sourceCode,
 		dynamicFromUrl,
 		dynamicFromActor,
+		dynamicLoaderThrows,
+		dynamicInvalidSource,
 	},
 });
