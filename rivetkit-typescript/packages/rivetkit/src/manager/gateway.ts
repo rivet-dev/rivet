@@ -14,6 +14,7 @@ import {
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_TARGET,
 } from "@/common/actor-router-consts";
+import { getIndexedWebSocketTestSender } from "@/common/websocket-test-hooks";
 import type { UniversalWebSocket } from "@/mod";
 import type { RegistryConfig } from "@/registry/config";
 import { type GetUpgradeWebSocket, promiseWithResolvers } from "@/utils";
@@ -122,7 +123,6 @@ export async function actorGateway(
 	c: HonoContext,
 	next: Next,
 ) {
-
 	// Skip test routes - let them be handled by their specific handlers
 	if (c.req.path.startsWith("/.test/")) {
 		return next();
@@ -425,7 +425,12 @@ export async function createTestWebSocketProxy(
 		promise: clientToProxyWsPromise,
 		resolve: clientToProxyWsResolve,
 		reject: clientToProxyWsReject,
-	} = promiseWithResolvers<WSContext>((reason) => logger().warn({ msg: "unhandled client websocket promise rejection", reason }));
+	} = promiseWithResolvers<WSContext>((reason) =>
+		logger().warn({
+			msg: "unhandled client websocket promise rejection",
+			reason,
+		}),
+	);
 	try {
 		// Resolve the client WebSocket promise
 		logger().debug({ msg: "awaiting client websocket promise" });
@@ -438,6 +443,11 @@ export async function createTestWebSocketProxy(
 		// Wait for ws to open
 		await new Promise<void>((resolve, reject) => {
 			invariant(proxyToActorWs, "missing proxyToActorWs");
+
+			if (proxyToActorWs.readyState === proxyToActorWs.OPEN) {
+				resolve();
+				return;
+			}
 
 			const onOpen = () => {
 				logger().debug({
@@ -573,6 +583,8 @@ export async function createTestWebSocketProxy(
 			clientToProxyWsResolve(clientToProxyWs);
 		},
 		onMessage: (evt: { data: any }) => {
+			const indexedFrame = parseIndexedWebSocketTestEnvelope(evt.data);
+
 			logger().debug({
 				msg: "received message from server",
 				dataType: typeof evt.data,
@@ -588,8 +600,18 @@ export async function createTestWebSocketProxy(
 			// Forward messages from server websocket to client websocket
 			if (proxyToActorWs.readyState === 1) {
 				// OPEN
-				// Handle Blob data
-				if (evt.data instanceof Blob) {
+				if (indexedFrame) {
+					void dispatchIndexedMessageFrame(
+						proxyToActorWs,
+						indexedFrame,
+					).catch((error) => {
+						logger().error({
+							msg: "failed to dispatch indexed websocket test frame",
+							error,
+						});
+					});
+				} else if (evt.data instanceof Blob) {
+					// Handle Blob data
 					evt.data
 						.arrayBuffer()
 						.then((buffer) => {
@@ -665,4 +687,65 @@ export async function createTestWebSocketProxy(
 			clientToProxyWsReject();
 		},
 	};
+}
+
+interface IndexedWebSocketTestEnvelope {
+	__rivetkitTestIndexedFrameV1: true;
+	data: string;
+	rivetMessageIndex: number;
+}
+
+function parseIndexedWebSocketTestEnvelope(
+	rawData: unknown,
+): IndexedWebSocketTestEnvelope | undefined {
+	if (typeof rawData !== "string") {
+		return undefined;
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(rawData);
+	} catch {
+		return undefined;
+	}
+
+	if (!parsed || typeof parsed !== "object") {
+		return undefined;
+	}
+
+	const candidate = parsed as Partial<IndexedWebSocketTestEnvelope>;
+	if (candidate.__rivetkitTestIndexedFrameV1 !== true) {
+		return undefined;
+	}
+	if (
+		typeof candidate.data !== "string" ||
+		typeof candidate.rivetMessageIndex !== "number"
+	) {
+		return undefined;
+	}
+
+	return {
+		__rivetkitTestIndexedFrameV1: true,
+		data: candidate.data,
+		rivetMessageIndex: candidate.rivetMessageIndex,
+	};
+}
+
+async function dispatchIndexedMessageFrame(
+	websocket: UniversalWebSocket,
+	frame: IndexedWebSocketTestEnvelope,
+): Promise<void> {
+	const sender = getIndexedWebSocketTestSender(websocket);
+
+	if (!sender) {
+		logger().warn({
+			msg: "indexed websocket test frame is unsupported on this websocket transport",
+			rivetMessageIndex: frame.rivetMessageIndex,
+			websocketType: websocket.constructor?.name,
+		});
+		websocket.send(frame.data);
+		return;
+	}
+
+	await sender(frame.data, frame.rivetMessageIndex);
 }

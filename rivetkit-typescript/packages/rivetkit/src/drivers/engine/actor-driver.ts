@@ -50,7 +50,10 @@ import {
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
 import { DynamicActorInstance } from "@/dynamic/instance";
-import { DynamicActorIsolateRuntime } from "@/dynamic/isolate-runtime";
+import {
+	buildDynamicRuntimeConfigBridge,
+	DynamicActorIsolateRuntime,
+} from "@/dynamic/isolate-runtime";
 import { isDynamicActorDefinition } from "@/dynamic/internal";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
@@ -199,10 +202,10 @@ export class EngineActorDriver implements ActorDriver {
 		return this.#dynamicRuntimes.has(actorId);
 	}
 
-	#requireDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
+	#getDynamicRuntime(actorId: string): DynamicActorIsolateRuntime {
 		const runtime = this.#dynamicRuntimes.get(actorId);
 		if (!runtime) {
-			throw new Error(`dynamic runtime missing for actor ${actorId}`);
+			throw new Error(`dynamic runtime is not loaded for actor ${actorId}`);
 		}
 		return runtime;
 	}
@@ -518,21 +521,25 @@ export class EngineActorDriver implements ActorDriver {
 			// Create actor instance
 			const definition = lookupInRegistry(this.#config, actorConfig.name);
 			if (isDynamicActorDefinition(definition)) {
-				let runtime = this.#dynamicRuntimes.get(actorId);
-				if (!runtime) {
-					runtime = new DynamicActorIsolateRuntime({
-						actorId,
-						actorName: name,
-						actorKey: key,
-						input,
-						region: "unknown",
-						loader: definition.loader,
-						actorDriver: this,
-						inlineClient: this.#inlineClient,
-					});
-					await runtime.start();
-					this.#dynamicRuntimes.set(actorId, runtime);
+				if (this.#dynamicRuntimes.has(actorId)) {
+					throw new Error(
+						`dynamic runtime unexpectedly already loaded before actor start for ${actorId}`,
+					);
 				}
+				const runtime = new DynamicActorIsolateRuntime({
+					actorId,
+					actorName: name,
+					actorKey: key,
+					runtimeConfig: buildDynamicRuntimeConfigBridge(this.#config),
+					input,
+					region: "unknown",
+					loader: definition.loader,
+					actorDriver: this,
+					inlineClient: this.#inlineClient,
+				});
+				await runtime.start();
+				this.#dynamicRuntimes.set(actorId, runtime);
+				await runtime.ensureStarted();
 
 				const dynamicActor = new DynamicActorInstance(actorId, runtime);
 				handler.actor = dynamicActor;
@@ -589,14 +596,20 @@ export class EngineActorDriver implements ActorDriver {
 			}
 
 			logger().debug({ msg: "runner actor started", actorId, name, key });
-		} catch (innerError) {
-			const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
-			if (dynamicRuntime) {
-				try {
-					await dynamicRuntime.dispose();
-				} catch {}
-				this.#dynamicRuntimes.delete(actorId);
-			}
+			} catch (innerError) {
+				const dynamicRuntime = this.#dynamicRuntimes.get(actorId);
+				if (dynamicRuntime) {
+					try {
+						await dynamicRuntime.dispose();
+					} catch (disposeError) {
+						logger().debug({
+							msg: "failed to dispose dynamic runtime after actor start failure",
+							actorId,
+							err: stringifyError(disposeError),
+						});
+					}
+					this.#dynamicRuntimes.delete(actorId);
+				}
 			const error =
 				innerError instanceof Error
 					? new Error(
@@ -696,7 +709,7 @@ export class EngineActorDriver implements ActorDriver {
 			method: request.method,
 		});
 		if (this.#isDynamicActor(actorId)) {
-			return await this.#requireDynamicRuntime(actorId).fetch(request);
+			return await this.#getDynamicRuntime(actorId).fetch(request);
 		}
 		return await this.#actorRouter.fetch(request, { actorId });
 	}
@@ -934,7 +947,7 @@ export class EngineActorDriver implements ActorDriver {
 	): Promise<void> {
 		let runtime: DynamicActorIsolateRuntime;
 		try {
-			runtime = this.#requireDynamicRuntime(actorId);
+			runtime = this.#getDynamicRuntime(actorId);
 		} catch (error) {
 			logger().error({
 				msg: "dynamic runtime missing for websocket",

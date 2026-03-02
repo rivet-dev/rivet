@@ -358,14 +358,16 @@ export function createActorRouter(
 		// Strip the /http prefix from the URL to get the original path
 		const url = new URL(c.req.url);
 		const originalPath = url.pathname.replace(/^\/request/, "") || "/";
+		const method = c.req.method.toUpperCase();
+		const allowBody = method !== "GET" && method !== "HEAD";
 
 		// Create a new request with the corrected URL
 		const correctedUrl = new URL(originalPath + url.search, url.origin);
 		const correctedRequest = new Request(correctedUrl, {
-			method: c.req.method,
+			method: method,
 			headers: c.req.raw.headers,
-			body: c.req.raw.body,
-			duplex: "half",
+			body: allowBody ? c.req.raw.body : undefined,
+			...(allowBody ? ({ duplex: "half" } as const) : {}),
 		} as RequestInit);
 
 		loggerWithoutContext().debug({

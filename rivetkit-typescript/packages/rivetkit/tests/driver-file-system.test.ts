@@ -6,6 +6,10 @@ import {
 } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+	INTERNAL_ERROR_CODE,
+	INTERNAL_ERROR_DESCRIPTION,
+} from "@/actor/errors";
 import { createClient } from "@/client/mod";
 import { createTestRuntime, runDriverTests } from "@/driver-test-suite/mod";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
@@ -277,6 +281,64 @@ describe.skipIf(!hasSecureExecDist)("file-system dynamic actor runtime", () => {
 			);
 		} finally {
 			ws?.close();
+			await client.dispose();
+			await runtime.cleanup();
+		}
+	}, 180_000);
+
+	test("surfaces loader throws as internal actor errors", async () => {
+		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
+			SECURE_EXEC_DIST_PATH,
+		).href;
+
+		const runtime = await createDynamicRuntime();
+		const client = createClient<typeof dynamicRegistry>({
+			endpoint: runtime.endpoint,
+			namespace: runtime.namespace,
+			runnerName: runtime.runnerName,
+			encoding: "json",
+			disableMetadataLookup: true,
+		});
+
+		try {
+			const actor = client.dynamicLoaderThrows.getOrCreate([
+				"loader-throws",
+			]) as unknown as { ping: () => Promise<string> };
+			await actor.ping();
+			expect.fail("expected loader throw to fail actor calls");
+		} catch (error: any) {
+			expect(error.code).toBe(INTERNAL_ERROR_CODE);
+			expect(error.message).toBe(INTERNAL_ERROR_DESCRIPTION);
+		} finally {
+			await client.dispose();
+			await runtime.cleanup();
+		}
+	}, 180_000);
+
+	test("surfaces invalid dynamic source as internal actor errors", async () => {
+		process.env.RIVETKIT_DYNAMIC_SECURE_EXEC_SPECIFIER = pathToFileURL(
+			SECURE_EXEC_DIST_PATH,
+		).href;
+
+		const runtime = await createDynamicRuntime();
+		const client = createClient<typeof dynamicRegistry>({
+			endpoint: runtime.endpoint,
+			namespace: runtime.namespace,
+			runnerName: runtime.runnerName,
+			encoding: "json",
+			disableMetadataLookup: true,
+		});
+
+		try {
+			const actor = client.dynamicInvalidSource.getOrCreate([
+				"invalid-source",
+			]) as unknown as { ping: () => Promise<string> };
+			await actor.ping();
+			expect.fail("expected invalid source to fail actor calls");
+		} catch (error: any) {
+			expect(error.code).toBe(INTERNAL_ERROR_CODE);
+			expect(error.message).toBe(INTERNAL_ERROR_DESCRIPTION);
+		} finally {
 			await client.dispose();
 			await runtime.cleanup();
 		}

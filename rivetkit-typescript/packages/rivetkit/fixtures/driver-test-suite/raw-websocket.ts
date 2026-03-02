@@ -4,6 +4,7 @@ export const rawWebSocketActor = actor({
 	state: {
 		connectionCount: 0,
 		messageCount: 0,
+		indexedMessageOrder: [] as Array<number | null>,
 	},
 	onWebSocket(ctx, websocket) {
 		ctx.state.connectionCount = ctx.state.connectionCount + 1;
@@ -62,6 +63,19 @@ export const rawWebSocketActor = actor({
 								search: urlObj.search,
 							}),
 						);
+					} else if (parsed.type === "indexedEcho") {
+						const rivetMessageIndex =
+							typeof event.rivetMessageIndex === "number"
+								? event.rivetMessageIndex
+								: null;
+						ctx.state.indexedMessageOrder.push(rivetMessageIndex);
+						websocket.send(
+							JSON.stringify({
+								type: "indexedEcho",
+								payload: parsed.payload ?? null,
+								rivetMessageIndex,
+							}),
+						);
 					} else {
 						// Echo back
 						websocket.send(data);
@@ -90,6 +104,9 @@ export const rawWebSocketActor = actor({
 				connectionCount: ctx.state.connectionCount,
 				messageCount: ctx.state.messageCount,
 			};
+		},
+		getIndexedMessageOrder(ctx: any) {
+			return ctx.state.indexedMessageOrder;
 		},
 	},
 });

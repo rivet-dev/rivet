@@ -197,13 +197,21 @@ function readBootstrapConfig(): DynamicBootstrapConfig {
 	}
 
 	const configValue = value as Partial<DynamicBootstrapConfig>;
+	const runtimeConfig = configValue.runtimeConfig;
 	if (
 		typeof configValue.actorId !== "string" ||
 		typeof configValue.actorName !== "string" ||
 		!Array.isArray(configValue.actorKey) ||
 		typeof configValue.sourceEntry !== "string" ||
 		(configValue.sourceFormat !== "commonjs-js" &&
-			configValue.sourceFormat !== "esm-js")
+			configValue.sourceFormat !== "esm-js") ||
+		!runtimeConfig ||
+		typeof runtimeConfig !== "object" ||
+		typeof runtimeConfig.testEnabled !== "boolean" ||
+		typeof runtimeConfig.maxIncomingMessageSize !== "number" ||
+		typeof runtimeConfig.maxOutgoingMessageSize !== "number" ||
+		typeof runtimeConfig.inspectorEnabled !== "boolean" ||
+		typeof runtimeConfig.inspectorToken !== "string"
 	) {
 		throw new Error("dynamic runtime bootstrap config is invalid");
 	}
@@ -214,6 +222,7 @@ function readBootstrapConfig(): DynamicBootstrapConfig {
 		actorKey: configValue.actorKey,
 		sourceEntry: configValue.sourceEntry,
 		sourceFormat: configValue.sourceFormat,
+		runtimeConfig,
 	};
 }
 
@@ -321,13 +330,21 @@ async function getRuntimeState(): Promise<DynamicRuntimeState> {
 				},
 				serveManager: false,
 				noWelcome: true,
-				test: { enabled: false },
+				test: { enabled: bootstrapConfig.runtimeConfig.testEnabled },
+				maxIncomingMessageSize:
+					bootstrapConfig.runtimeConfig.maxIncomingMessageSize,
+				maxOutgoingMessageSize:
+					bootstrapConfig.runtimeConfig.maxOutgoingMessageSize,
+				inspector: {
+					enabled: bootstrapConfig.runtimeConfig.inspectorEnabled,
+					token: () => bootstrapConfig.runtimeConfig.inspectorToken,
+				},
 			});
 			const actorRouter = createActorRouter(
 				config,
 				actorDriver,
 				undefined,
-				false,
+				bootstrapConfig.runtimeConfig.testEnabled,
 			);
 			return {
 				actorDefinition,
@@ -1055,6 +1072,11 @@ async function dynamicGetHibernatingWebSocketsEnvelope(): Promise<
 		});
 }
 
+async function dynamicEnsureStartedEnvelope(): Promise<boolean> {
+	await loadActor(bootstrapConfig.actorId);
+	return true;
+}
+
 async function dynamicDisposeEnvelope(): Promise<boolean> {
 	for (const session of webSocketSessions.values()) {
 		try {
@@ -1075,6 +1097,7 @@ const bootstrapExports: DynamicBootstrapExports = {
 	dynamicWebSocketSendEnvelope,
 	dynamicWebSocketCloseEnvelope,
 	dynamicGetHibernatingWebSocketsEnvelope,
+	dynamicEnsureStartedEnvelope,
 	dynamicDisposeEnvelope,
 };
 

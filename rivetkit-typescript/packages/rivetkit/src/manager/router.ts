@@ -403,7 +403,7 @@ export function buildManagerRouter(
 					)(...args);
 					response = { ok: output };
 				} catch (rawErr) {
-					const err = deconstructError(rawErr, logger(), {}, true);
+					const err = deconstructError(rawErr, logger(), {}, false);
 					response = { err };
 				}
 
@@ -524,7 +524,7 @@ export function buildManagerRouter(
 					});
 
 					// Return error response
-					const err = deconstructError(error, logger(), {}, true);
+					const err = deconstructError(error, logger(), {}, false);
 					return c.json(
 						{
 							error: {

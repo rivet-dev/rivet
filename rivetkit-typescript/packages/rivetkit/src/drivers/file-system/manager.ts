@@ -111,9 +111,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const pathOnly = normalizedPath.split("?")[0];
 		const { gatewayId, requestId } = createHibernatableRequestMetadata();
 
-		const wsHandler = await routeWebSocket(
-			fakeRequest,
-			pathOnly,
+			const wsHandler = await routeWebSocket(
+				fakeRequest,
+				pathOnly,
 			{},
 			this.#config,
 			this.#actorDriver,
@@ -122,10 +122,10 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			params,
 			gatewayId,
 			requestId,
-			true,
-			false,
-		);
-		return createInlineWebSocket(wsHandler);
+				true,
+				false,
+			);
+		return createInlineWebSocket(wsHandler, this.#config);
 	}
 
 	async proxyRequest(

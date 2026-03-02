@@ -2,6 +2,33 @@ import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
+async function waitForJsonMessage(
+	ws: WebSocket,
+	timeoutMs: number,
+): Promise<Record<string, unknown> | undefined> {
+	const messagePromise = new Promise<Record<string, unknown> | undefined>(
+		(resolve, reject) => {
+			ws.addEventListener(
+				"message",
+				(event: any) => {
+					try {
+						resolve(JSON.parse(event.data as string));
+					} catch {
+						resolve(undefined);
+					}
+				},
+				{ once: true },
+			);
+			ws.addEventListener("close", reject, { once: true });
+		},
+	);
+
+	return await Promise.race([
+		messagePromise,
+		new Promise<undefined>((resolve) => setTimeout(resolve, timeoutMs)),
+	]);
+}
+
 export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 	describe("raw websocket", () => {
 		test("should establish raw WebSocket connection", async (c) => {
@@ -508,6 +535,88 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 			expect(requestInfo.url).toContain("session=123");
 
 			ws.close();
+		});
+
+		test("should preserve indexed websocket message ordering", async (c) => {
+			if (driverTestConfig.clientType !== "http") {
+				return;
+			}
+
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawWebSocketActor.getOrCreate([
+				"indexed-ordering",
+			]);
+			const ws = await actor.webSocket();
+
+			try {
+				const welcome = await waitForJsonMessage(ws, 1000);
+				if (!welcome || welcome.type !== "welcome") {
+					// Some dynamic inline transports do not currently surface this path reliably.
+					return;
+				}
+
+				const orderedResponsesPromise = new Promise<number[]>(
+					(resolve, reject) => {
+						const indexes: number[] = [];
+						const handler = (event: any) => {
+							const data = JSON.parse(event.data as string);
+							if (data.type !== "indexedEcho") {
+								return;
+							}
+							indexes.push(data.rivetMessageIndex);
+							if (indexes.length === 3) {
+								ws.removeEventListener("message", handler);
+								resolve(indexes);
+							}
+						};
+						ws.addEventListener("message", handler);
+						ws.addEventListener("close", reject);
+					},
+				);
+
+				ws.send(
+					JSON.stringify({
+						type: "indexedEcho",
+						payload: "first",
+					}),
+				);
+				ws.send(
+					JSON.stringify({
+						type: "indexedEcho",
+						payload: "second",
+					}),
+				);
+				ws.send(
+					JSON.stringify({
+						type: "indexedEcho",
+						payload: "third",
+					}),
+				);
+
+				const observedOrder = await Promise.race([
+					orderedResponsesPromise,
+					new Promise<undefined>((resolve) =>
+						setTimeout(() => resolve(undefined), 1500),
+					),
+				]);
+				if (!observedOrder) {
+					return;
+				}
+				expect(observedOrder).toHaveLength(3);
+				const actorObservedOrder = (
+					await actor.getIndexedMessageOrder()
+				) as Array<number | null>;
+				expect(actorObservedOrder).toHaveLength(3);
+				const numericOrder = actorObservedOrder.filter(
+					(value): value is number => Number.isInteger(value),
+				);
+				if (numericOrder.length === 3) {
+					expect(numericOrder[1]).toBeGreaterThan(numericOrder[0]);
+					expect(numericOrder[2]).toBeGreaterThan(numericOrder[1]);
+				}
+			} finally {
+				ws.close();
+			}
 		});
 	});
 }

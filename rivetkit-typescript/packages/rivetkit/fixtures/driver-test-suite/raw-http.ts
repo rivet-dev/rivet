@@ -52,6 +52,28 @@ export const rawHttpActor = actor({
 			});
 		}
 
+		if (url.pathname === "/api/duplicate-headers") {
+			const headers = new Headers();
+			headers.append("x-rivet-duplicate", "first");
+			headers.append("x-rivet-duplicate", "second");
+			headers.set("content-type", "text/plain");
+			return new Response("duplicate-headers", {
+				headers,
+			});
+		}
+
+		if (url.pathname === "/api/text-body") {
+			return new Response("plain-text-response", {
+				headers: { "content-type": "text/plain" },
+			});
+		}
+
+		if (url.pathname === "/api/binary-body") {
+			return new Response(new Uint8Array([0, 1, 2, 255]), {
+				headers: { "content-type": "application/octet-stream" },
+			});
+		}
+
 		// Return 404 for unhandled paths
 		return new Response("Not Found", { status: 404 });
 	},

@@ -53,11 +53,31 @@ export const DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS = {
 	dynamicWebSocketCloseEnvelope: "__rivetkitDynamicWebSocketCloseEnvelope",
 	dynamicGetHibernatingWebSocketsEnvelope:
 		"__rivetkitDynamicGetHibernatingWebSocketsEnvelope",
+	dynamicEnsureStartedEnvelope: "__rivetkitDynamicEnsureStartedEnvelope",
 	dynamicDisposeEnvelope: "__rivetkitDynamicDisposeEnvelope",
 } as const;
 
 export type DynamicBootstrapExportName =
 	keyof typeof DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS;
+
+/**
+ * Runtime configuration values copied from host RegistryConfig into isolate.
+ *
+ * Only scalar values are bridged so bootstrap config remains structured-clone
+ * safe when injected into isolated-vm globals.
+ */
+export interface DynamicRuntimeConfigBridge {
+	/** Mirrors `config.test.enabled` for test-only routes and behavior. */
+	testEnabled: boolean;
+	/** Mirrors protocol input size limit. */
+	maxIncomingMessageSize: number;
+	/** Mirrors protocol output size limit. */
+	maxOutgoingMessageSize: number;
+	/** Mirrors inspector route enablement. */
+	inspectorEnabled: boolean;
+	/** Snapshot of inspector token at runtime startup. */
+	inspectorToken: string;
+}
 
 export interface DynamicBootstrapConfig {
 	/** Concrete actor id for the isolate instance. */
@@ -70,6 +90,8 @@ export interface DynamicBootstrapConfig {
 	sourceEntry: string;
 	/** Module format for the runtime source file entrypoint. */
 	sourceFormat: DynamicSourceFormat;
+	/** Serialized runtime config values required by isolate router/actor startup. */
+	runtimeConfig: DynamicRuntimeConfigBridge;
 }
 
 /** Serialized HTTP request envelope crossing host<->isolate boundary. */
@@ -191,5 +213,6 @@ export interface DynamicBootstrapExports {
 	dynamicGetHibernatingWebSocketsEnvelope: () => Promise<
 		Array<DynamicHibernatingWebSocketMetadata>
 	>;
+	dynamicEnsureStartedEnvelope: () => Promise<boolean>;
 	dynamicDisposeEnvelope: () => Promise<boolean>;
 }

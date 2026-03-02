@@ -1,6 +1,8 @@
 import { WSContext } from "hono/ws";
 import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
+import { setIndexedWebSocketTestSender } from "@/common/websocket-test-hooks";
+import type { RegistryConfig } from "@/registry/config";
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { getLogger } from "./log";
 
@@ -157,7 +159,16 @@ export class InlineWebSocketAdapter {
  */
 export function createInlineWebSocket(
 	handler: UpgradeWebSocketArgs,
+	config: RegistryConfig,
 ): UniversalWebSocket {
 	const adapter = new InlineWebSocketAdapter(handler);
-	return adapter.clientWebSocket;
+	const ws = adapter.clientWebSocket;
+	setIndexedWebSocketTestSender(
+		ws,
+		(data, rivetMessageIndex) => {
+			adapter.dispatchClientMessageWithMetadata(data, rivetMessageIndex);
+		},
+		config.test.enabled,
+	);
+	return ws;
 }

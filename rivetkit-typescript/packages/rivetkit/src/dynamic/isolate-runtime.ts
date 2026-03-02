@@ -13,11 +13,14 @@ import type { Encoding } from "@/actor/protocol/serde";
 import { getLogger } from "@/common/log";
 import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
+import { setIndexedWebSocketTestSender } from "@/common/websocket-test-hooks";
 import type { AnyClient } from "@/client/client";
+import type { RegistryConfig } from "@/registry/config";
 import {
 	DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
 	DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS,
 	DYNAMIC_ISOLATE_EXPORT_GLOBAL_KEYS,
+	type DynamicRuntimeConfigBridge,
 	type DynamicClientCallInput,
 	type DynamicHibernatingWebSocketMetadata,
 	type DynamicBootstrapExportName,
@@ -35,7 +38,10 @@ import {
 	type DynamicActorLoadResult,
 } from "./internal";
 
-export type { DynamicHibernatingWebSocketMetadata } from "./runtime-bridge";
+export type {
+	DynamicHibernatingWebSocketMetadata,
+	DynamicRuntimeConfigBridge,
+} from "./runtime-bridge";
 
 const DYNAMIC_SANDBOX_APP_ROOT = "/root";
 const DYNAMIC_SANDBOX_TMP_ROOT = "/tmp";
@@ -139,6 +145,7 @@ interface DynamicActorIsolateRuntimeConfig {
 	actorId: string;
 	actorName: string;
 	actorKey: ActorKey;
+	runtimeConfig: DynamicRuntimeConfigBridge;
 	input: unknown;
 	region: string;
 	loader: DynamicActorLoader;
@@ -164,6 +171,7 @@ interface DynamicRuntimeRefs {
 	getHibernatingWebSockets: ReferenceLike<
 		() => Promise<Array<DynamicHibernatingWebSocketMetadata>>
 	>;
+	ensureStarted: ReferenceLike<() => Promise<boolean>>;
 	dispose: ReferenceLike<() => Promise<boolean>>;
 }
 
@@ -184,6 +192,22 @@ export interface DynamicWebSocketOpenOptions {
 	requestId?: ArrayBuffer;
 	isHibernatable?: boolean;
 	isRestoringHibernatable?: boolean;
+}
+
+export function buildDynamicRuntimeConfigBridge(
+	config: RegistryConfig,
+): DynamicRuntimeConfigBridge {
+	const inspectorEnabled =
+		typeof config.inspector.enabled === "boolean"
+			? config.inspector.enabled
+			: config.inspector.enabled.actor;
+	return {
+		testEnabled: config.test.enabled,
+		maxIncomingMessageSize: config.maxIncomingMessageSize,
+		maxOutgoingMessageSize: config.maxOutgoingMessageSize,
+		inspectorEnabled,
+		inspectorToken: config.inspector.token(),
+	};
 }
 
 /**
@@ -291,16 +315,15 @@ export class DynamicActorIsolateRuntime {
 				cwd: moduleAccessCwd,
 			},
 			permissions,
-			processConfig: {
-				cwd: DYNAMIC_SANDBOX_APP_ROOT,
-				env: {
-					HOME: DYNAMIC_SANDBOX_APP_ROOT,
-					XDG_DATA_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.local/share`,
-					XDG_CACHE_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.cache`,
-					TMPDIR: DYNAMIC_SANDBOX_TMP_ROOT,
-					RIVET_EXPOSE_ERRORS: "1",
+				processConfig: {
+					cwd: DYNAMIC_SANDBOX_APP_ROOT,
+					env: {
+						HOME: DYNAMIC_SANDBOX_APP_ROOT,
+						XDG_DATA_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.local/share`,
+						XDG_CACHE_HOME: `${DYNAMIC_SANDBOX_APP_ROOT}/.cache`,
+						TMPDIR: DYNAMIC_SANDBOX_TMP_ROOT,
+					},
 				},
-			},
 			osConfig: {
 				homedir: DYNAMIC_SANDBOX_APP_ROOT,
 				tmpdir: DYNAMIC_SANDBOX_TMP_ROOT,
@@ -356,6 +379,16 @@ export class DynamicActorIsolateRuntime {
 		return envelopeToResponse(envelope);
 	}
 
+	async ensureStarted(): Promise<void> {
+		const refs = this.#runtimeRefs;
+		await refs.ensureStarted.apply(undefined, [], {
+			result: {
+				copy: true,
+				promise: true,
+			},
+		});
+	}
+
 	async openWebSocket(
 		pathValue: string,
 		encoding: Encoding,
@@ -367,7 +400,7 @@ export class DynamicActorIsolateRuntime {
 		const sessionId = this.#nextWebSocketSessionId;
 		this.#nextWebSocketSessionId += 1;
 
-		const session: HostWebSocketSession = {
+			const session: HostWebSocketSession = {
 			id: sessionId,
 			readyState: 0,
 			websocket: new VirtualWebSocket({
@@ -381,9 +414,15 @@ export class DynamicActorIsolateRuntime {
 				},
 			}),
 			dispatchReady: false,
-			pendingDispatches: [],
-			pendingMessages: [],
-		};
+				pendingDispatches: [],
+				pendingMessages: [],
+			};
+		setIndexedWebSocketTestSender(
+			session.websocket,
+			(data, rivetMessageIndex) =>
+				this.#sendWebSocketMessage(session.id, data, rivetMessageIndex),
+			this.#config.runtimeConfig.testEnabled,
+		);
 		this.#webSocketSessions.set(session.id, session);
 		this.#sessionIdsByWebSocket.set(session.websocket, session.id);
 
@@ -820,6 +859,7 @@ export class DynamicActorIsolateRuntime {
 				actorKey: this.#config.actorKey,
 				sourceEntry: source.sourceEntry,
 				sourceFormat: source.sourceFormat,
+				runtimeConfig: this.#config.runtimeConfig,
 			},
 			{
 				copy: true,
@@ -905,6 +945,7 @@ export class DynamicActorIsolateRuntime {
 			getHibernatingWebSockets: await getExportRef(
 				"dynamicGetHibernatingWebSocketsEnvelope",
 			),
+			ensureStarted: await getExportRef("dynamicEnsureStartedEnvelope"),
 			dispose: await getExportRef("dynamicDisposeEnvelope"),
 		};
 	}
