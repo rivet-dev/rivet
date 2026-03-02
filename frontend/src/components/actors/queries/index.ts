@@ -34,6 +34,17 @@ export function getActorStatus(
 		error,
 	} = actor;
 
+	// Running takes priority over all other statuses.
+	if (createTs && connectableTs && !destroyTs) {
+		return "running";
+	}
+
+	if (createTs && connectableTs && destroyTs) {
+		return "stopped";
+	}
+
+	// Error only shows if the actor is not running, but takes priority over
+	// pending and other non-running statuses.
 	if (error) {
 		return "crashed";
 	}
@@ -52,14 +63,6 @@ export function getActorStatus(
 
 	if (createTs && !connectableTs && !destroyTs) {
 		return "starting";
-	}
-
-	if (createTs && connectableTs && !destroyTs) {
-		return "running";
-	}
-
-	if (createTs && connectableTs && destroyTs) {
-		return "stopped";
 	}
 
 	if (createTs && !connectableTs && destroyTs) {

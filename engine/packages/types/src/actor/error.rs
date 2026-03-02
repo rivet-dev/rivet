@@ -1,6 +1,8 @@
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 
+/// Keep in sync with `website/src/content/docs/actors/troubleshooting.mdx` and
+/// `frontend/src/components/actors/actor-status-label.tsx`.
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerPoolError {
@@ -23,6 +25,8 @@ pub enum RunnerPoolError {
 	InternalError,
 }
 
+/// Keep in sync with `website/src/content/docs/actors/troubleshooting.mdx` and
+/// `frontend/src/components/actors/actor-status-label.tsx`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActorError {

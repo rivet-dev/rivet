@@ -267,6 +267,10 @@ export const sitemap = [
 								href: "/docs/actors/destroy",
 								//icon: faTag,
 							},
+							{
+								title: "Statuses",
+								href: "/docs/actors/statuses",
+							},
 						],
 					},
 					{
@@ -379,6 +383,10 @@ export const sitemap = [
 					// 	href: "/docs/general/studio",
 					// 	icon: faPalette,
 					// },
+					{
+						title: "Troubleshooting",
+						href: "/docs/actors/troubleshooting",
+					},
 					{
 						title: "Configuration",
 						collapsible: true,

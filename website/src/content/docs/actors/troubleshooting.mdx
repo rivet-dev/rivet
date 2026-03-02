@@ -1,0 +1,96 @@
+---
+title: "Troubleshooting"
+description: "Common issues with Rivet Actors and how to resolve them."
+skill: true
+---
+
+## Common Steps
+
+Before diving into specific errors, try these general troubleshooting steps:
+
+- Check your server logs for `level=ERROR` or `level=WARN` messages.
+- Check if any of your backend processes have crashed or restarted unexpectedly.
+- If you need more diagnostics, set `RIVET_LOG_LEVEL=DEBUG` for verbose logging. See [Logging](/docs/general/logging) for more options.
+
+## Reporting Issues
+
+If you're stuck, reach out on [Discord](https://rivet.dev/discord) or file an issue on [GitHub](https://github.com/rivet-dev/rivet/issues).
+
+When reporting, please include:
+
+- **Symptoms**
+  - Whether this is happening in local dev, deployed, or both
+  - The error you're seeing (screenshot or error message)
+  - Relevant source code related to the issue
+- **What you've tried to solve it**
+- **Environment**
+  - RivetKit version
+  - Runtime (Node, Bun, etc.) including version
+  - If applicable, provider in use (e.g. Vercel, Railway, Cloudflare)
+  - If applicable, HTTP router in use (e.g. Hono, Express, Elysia)
+
+## Actor status is crashed
+
+See [Actor Statuses](/docs/actors/statuses) for more about this status.
+
+The dashboard will show the specific failure reason. Common errors include:
+
+### `crashed`
+
+The actor's `run` handler threw an unhandled exception or exited unexpectedly. Check your actor logs for the error message and stack trace.
+
+### `no_capacity`
+
+No server was available to run your actor. See [Actor status is pending](#actor-status-is-pending) for details on how to resolve this based on your runtime mode.
+
+### `runner_no_response`
+
+The server running your actor did not respond in time. This can happen if your server is overloaded or experienced a network issue. Try restarting your server or checking its health.
+
+### `runner_connection_lost`
+
+The server running your actor lost its connection to Rivet. This is usually caused by a network interruption or your server restarting.
+
+### `runner_draining_timeout`
+
+Your server is shutting down and the actor did not finish in time. Consider handling graceful shutdown in your actor or increasing your shutdown timeout.
+
+### `serverless_http_error`
+
+Your serverless endpoint returned an HTTP error. Common causes:
+
+- Your backend is returning an error before the actor can start. Check your server logs.
+- Your endpoint is behind authentication or a firewall that is blocking Rivet's requests.
+- Your serverless function crashed during startup. Check your platform's function logs (e.g. Vercel, Cloudflare).
+
+### `serverless_connection_error`
+
+Rivet was unable to connect to your serverless endpoint. Check that:
+
+- Your backend is deployed and the endpoint URL is correct.
+- Your server is publicly reachable from the internet.
+- There are no DNS or firewall issues blocking the connection.
+
+### `serverless_stream_ended_early`
+
+The connection to your serverless endpoint was terminated before the actor finished. This usually means your serverless function hit its execution time limit. Ensure that your Rivet provider's request lifespan is configured to match the max duration of your serverless platform.
+
+### `serverless_invalid_sse_payload`
+
+Rivet received an unexpected response from your serverless endpoint. This typically means something is intercepting or modifying the request before it reaches your RivetKit handler. Check that:
+
+- Your server routes requests to `registry.serve()` or `registry.handler()` correctly.
+- No middleware is modifying the request or response body.
+
+### `internal_error`
+
+An unexpected error occurred within Rivet. If this persists, please [contact support](https://rivet.dev/docs).
+
+## Actor status is pending
+
+See [Actor Statuses](/docs/actors/statuses) for more about this status.
+
+The cause depends on your [runtime mode](/docs/general/runtime-modes):
+
+- **Serverless**: Your serverless endpoint may not be responding. Check that your backend is deployed and the endpoint is reachable.
+- **Runners**: Your runners may be at capacity. Scale up your infrastructure or add more runner instances.
