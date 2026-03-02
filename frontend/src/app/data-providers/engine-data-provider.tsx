@@ -424,6 +424,7 @@ export const createNamespaceContext = ({
 	};
 
 	return {
+		...parent,
 		engineNamespace: namespace,
 		engineToken: parent.engineToken,
 		...dataProvider,

@@ -1,4 +1,5 @@
 import { memo, type ReactNode, Suspense, useRef, useState } from "react";
+import { TEST_IDS } from "@/utils/test-ids";
 import { cn } from "../lib/utils";
 import {
 	type ImperativePanelHandle,
@@ -72,6 +73,7 @@ export const ActorsListPreview = memo(
 								onExpand={() => setIsDetailsColCollapsed(false)}
 								ref={detailsColRef}
 								className="flex"
+								data-testid={TEST_IDS.Actors.DetailsPanel}
 							>
 								<div
 									className={cn(

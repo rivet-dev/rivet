@@ -40,6 +40,7 @@ import { useDataProvider, useDataProviderCheck } from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
+import { TEST_IDS } from "@/utils/test-ids";
 import { ActorBuildsList } from "./actor-builds-list";
 import { BillingLimitAlert } from "./billing/billing-limit-alert";
 import { BillingPlanBadge } from "./billing/billing-plan-badge";
@@ -64,7 +65,10 @@ const Main = ({
 }: RootProps & { ref?: RefObject<ImperativePanelHandle> }) => {
 	return (
 		<ResizablePanel ref={ref} minSize={50}>
-			<main className="bg-background flex flex-1 flex-col h-full min-h-0 min-w-0 relative">
+			<main
+				className="bg-background flex flex-1 flex-col h-full min-h-0 min-w-0 relative"
+				data-testid={TEST_IDS.Layout.Main}
+			>
 				{children}
 			</main>
 		</ResizablePanel>
@@ -159,7 +163,10 @@ const Sidebar = ({
 				collapsible
 				{...props}
 			>
-				<div className="flex-col gap-2 size-full flex">
+				<div
+					className="flex-col gap-2 size-full flex"
+					data-testid={TEST_IDS.Layout.Sidebar}
+				>
 					<Logo />
 					<div className="flex flex-1 flex-col gap-2 px-2 min-h-0">
 						{match(__APP_TYPE__)
@@ -528,7 +535,6 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 		</Button>
 	);
 }
-
 
 function CloudSidebar(): ReactNode {
 	return (
