@@ -1,7 +1,7 @@
 import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test as setup } from "@playwright/test";
 
-const authFile = ".auth/user.json";
+const authFile = ".auth/cloud/user.json";
 
 setup("authenticate", async ({ page }) => {
 	// Inject Clerk testing token to bypass bot detection
