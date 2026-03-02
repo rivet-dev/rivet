@@ -1,6 +1,6 @@
 import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { test as base, expect, type Page } from "@playwright/test";
-import { TEST_IDS } from "../../src/utils/test-ids";
+import { TEST_IDS } from "../../../src/utils/test-ids";
 import { OnboardingIntegrationPage } from "./onboarding-integration-page";
 import { OnboardingPage } from "./onboarding-page";
 

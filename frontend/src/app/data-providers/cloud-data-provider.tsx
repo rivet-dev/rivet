@@ -171,9 +171,9 @@ export const createOrganizationContext = ({
 		namespace: string;
 		organization: string;
 		project: string;
-	}) => {
+	}): UseQueryOptions<Rivet.NamespacesGetResponse.Namespace> => {
 		return queryOptions({
-			queryKey: [opts, "namespace"],
+			queryKey: [opts, "namespace"] as QueryKey,
 			queryFn: async () => {
 				const data = await client.namespaces.get(
 					opts.project,
@@ -184,7 +184,7 @@ export const createOrganizationContext = ({
 				);
 				return data.namespace;
 			},
-			...no404Retry(),
+			...(no404Retry() as any),
 		});
 	};
 
@@ -756,10 +756,17 @@ export const createNamespaceContext = ({
 			client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
 				token,
 			}),
+			namespacesQueryOptions() {
+				return parent.currentProjectNamespaceQueryOptions({
+					namespace,
+				});
+			},
+			namespaceQueryOptions() {
+				return parent.currentProjectNamespaceQueryOptions({
+					namespace,
+				});
+			},
 		}),
-		namespaceQueryOptions() {
-			return parent.currentProjectNamespaceQueryOptions({ namespace });
-		},
 		currentNamespaceAccessTokenQueryOptions() {
 			return parent.accessTokenQueryOptions({ namespace });
 		},

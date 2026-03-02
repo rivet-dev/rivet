@@ -1,3 +1,4 @@
+
 export const TEST_IDS = {
 	Onboarding: {
 		PathSelection: "onboarding-path-selection",
@@ -12,4 +13,18 @@ export const TEST_IDS = {
 		IntegrationProviderOption: (providerName: string) =>
 			`integration-provider-option-${providerName}`,
 	},
+
+	Engine: {
+		AdminTokenForm: "engine-admin-token-modal",
+	},
+
+	Layout: {
+		Sidebar: "layout-sidebar",
+		Main: "layout-main",
+	},
+
+	Actors: {
+		DetailsPanel: "actors-details-panel",
+	}
+
 };

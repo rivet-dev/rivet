@@ -8,6 +8,7 @@ import {
 	toast,
 } from "@/components";
 import { queryClient } from "@/queries/global";
+import { TEST_IDS } from "@/utils/test-ids";
 import { createClient } from "../data-providers/engine-data-provider";
 
 interface ProvideEngineCredentialsDialogContentProps
@@ -18,6 +19,7 @@ export default function ProvideEngineCredentialsDialogContent({
 }: ProvideEngineCredentialsDialogContentProps) {
 	return (
 		<EngineCredentialsForm.Form
+			data-testid={TEST_IDS.Engine.AdminTokenForm}
 			defaultValues={{ token: "" }}
 			errors={
 				ls.engineCredentials.get(getConfig().apiUrl)
