@@ -757,9 +757,7 @@ export const createNamespaceContext = ({
 				token,
 			}),
 			namespacesQueryOptions() {
-				return parent.currentProjectNamespaceQueryOptions({
-					namespace,
-				});
+				return parent.currentProjectNamespacesQueryOptions();
 			},
 			namespaceQueryOptions() {
 				return parent.currentProjectNamespaceQueryOptions({
