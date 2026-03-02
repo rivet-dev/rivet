@@ -112,6 +112,9 @@ pub enum WorkflowError {
 	#[error("failed to flush pubsub: {0}")]
 	FlushPubsub(#[source] anyhow::Error),
 
+	#[error("failed to publish message: {0}")]
+	PublishMessage(#[source] anyhow::Error),
+
 	#[error("subscription unsubscribed")]
 	SubscriptionUnsubscribed,
 

@@ -1,5 +1,6 @@
 use std::{
-	fmt::{self, Debug},
+	borrow::Cow,
+	fmt::{self, Debug, Display},
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -8,7 +9,7 @@ use rivet_pools::UpsPool;
 use rivet_util::Id;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::Instrument;
-use universalpubsub::{NextOutput, Subscriber};
+use universalpubsub::{NextOutput, Subject, Subscriber};
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
@@ -61,7 +62,7 @@ impl MessageCtx {
 		let client = self.clone();
 		let topic = topic.to_string();
 
-		let spawn_res = tokio::task::Builder::new()
+		tokio::task::Builder::new()
 			.name("gasoline::message_async")
 			.spawn(
 				async move {
@@ -73,13 +74,9 @@ impl MessageCtx {
 					}
 				}
 				.instrument(tracing::info_span!("message_bg")),
-			);
-
-		if let Err(err) = spawn_res {
-			tracing::error!(?err, "failed to spawn message_async task");
-		}
-
-		Ok(())
+			)
+			.map_err(|err| WorkflowError::PublishMessage(err.into()))
+			.map(|_| ())
 	}
 
 	/// Same as `message` but waits for the message to successfully publish.
@@ -92,7 +89,10 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let subject = format!("{}:{topic}", M::subject());
+		let subject = MsgSubject {
+			topic,
+			msg_marker: PhantomData::<M>,
+		};
 		let duration_since_epoch = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
 			.unwrap_or_else(|err| unreachable!("time is broken: {}", err));
@@ -126,15 +126,14 @@ impl MessageCtx {
 		// It's important to write to the stream as fast as possible in order to
 		// ensure messages are handled quickly.
 		let message_buf = Arc::new(message_buf);
-		self.message_publish_pubsub::<M>(&subject, message_buf)
-			.await;
+		self.message_publish_pubsub::<M>(subject, message_buf).await;
 
 		Ok(())
 	}
 
 	/// Publishes the message to pubsub.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn message_publish_pubsub<M>(&self, subject: &str, message_buf: Arc<Vec<u8>>)
+	async fn message_publish_pubsub<M>(&self, subject: MsgSubject<'_, M>, message_buf: Arc<Vec<u8>>)
 	where
 		M: Message,
 	{
@@ -144,8 +143,6 @@ impl MessageCtx {
 			// Ignore for infinite backoff
 			backoff.tick().await;
 
-			let subject = subject.to_owned();
-
 			tracing::trace!(
 				%subject,
 				message_len = message_buf.len(),
@@ -154,7 +151,7 @@ impl MessageCtx {
 			if let Err(err) = self
 				.pubsub
 				.publish(
-					&subject,
+					subject.clone(),
 					&(*message_buf),
 					universalpubsub::PublishOpts::broadcast(),
 				)
@@ -330,5 +327,32 @@ where
 			}
 			.in_current_span()
 		})
+	}
+}
+
+// Helper struct
+struct MsgSubject<'a, M: Message> {
+	topic: &'a str,
+	msg_marker: PhantomData<M>,
+}
+
+impl<M: Message> Clone for MsgSubject<'_, M> {
+	fn clone(&self) -> Self {
+		MsgSubject {
+			topic: self.topic,
+			msg_marker: PhantomData::<M>,
+		}
+	}
+}
+
+impl<M: Message> Display for MsgSubject<'_, M> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}:{}", M::subject(), self.topic)
+	}
+}
+
+impl<M: Message> Subject for MsgSubject<'_, M> {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Owned(M::subject()))
 	}
 }

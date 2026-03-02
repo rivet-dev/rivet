@@ -13,6 +13,7 @@ use rivet_util::backoff::Backoff;
 use crate::chunking::{ChunkTracker, encode_chunk, split_payload_into_chunks};
 use crate::driver::{PubSubDriverHandle, PublishOpts, SubscriberDriverHandle};
 use crate::metrics;
+use crate::subject::Subject;
 
 const GC_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -82,9 +83,11 @@ impl PubSub {
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
-	pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
+	pub async fn subscribe(&self, subject: impl Subject) -> Result<Subscriber> {
+		let subject = subject.as_cow();
+
 		// Underlying driver subscription
-		let driver = self.driver.subscribe(subject).await?;
+		let driver = self.driver.subscribe(&subject).await?;
 
 		if !self.memory_optimization {
 			return Ok(Subscriber::new(driver, self.clone(), None));
@@ -117,46 +120,33 @@ impl PubSub {
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
-	pub async fn publish(&self, subject: &str, payload: &[u8], opts: PublishOpts) -> Result<()> {
-		let message_id = *Uuid::new_v4().as_bytes();
-		let chunks =
-			split_payload_into_chunks(payload, self.driver.max_message_size(), message_id, None)?;
-		let chunk_count = chunks.len() as u32;
-
-		let use_local = self
-			.should_use_local_subscriber(subject, opts.behavior)
-			.await;
-
-		for (chunk_idx, chunk_payload) in chunks.into_iter().enumerate() {
-			let encoded = encode_chunk(
-				chunk_payload,
-				chunk_idx as u32,
-				chunk_count,
-				message_id,
-				None,
-			)?;
-
-			if use_local {
-				if let Some(sender) = self.local_subscribers.get_async(subject).await {
-					let _ = sender.send(encoded);
-				} else {
-					tracing::warn!(%subject, "local subscriber disappeared");
-					break;
-				}
-			} else {
-				// Use backoff when publishing through the driver
-				self.publish_with_backoff(subject, &encoded).await?;
-			}
-		}
-		Ok(())
+	pub async fn publish(
+		&self,
+		subject: impl Subject,
+		payload: &[u8],
+		opts: PublishOpts,
+	) -> Result<()> {
+		self.publish_inner(subject, payload, None::<&str>, opts)
+			.await
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject, %reply_subject))]
 	pub async fn publish_with_reply(
 		&self,
-		subject: &str,
+		subject: impl Subject,
 		payload: &[u8],
-		reply_subject: &str,
+		reply_subject: impl Subject,
+		opts: PublishOpts,
+	) -> Result<()> {
+		self.publish_inner(subject, payload, Some(reply_subject), opts)
+			.await
+	}
+
+	async fn publish_inner(
+		&self,
+		subject: impl Subject,
+		payload: &[u8],
+		reply_subject: Option<impl Subject>,
 		opts: PublishOpts,
 	) -> Result<()> {
 		let message_id = *Uuid::new_v4().as_bytes();
@@ -164,13 +154,15 @@ impl PubSub {
 			payload,
 			self.driver.max_message_size(),
 			message_id,
-			Some(reply_subject),
+			reply_subject.as_ref().map(|x| x.as_cow()).as_deref(),
 		)?;
 		let chunk_count = chunks.len() as u32;
 
 		let use_local = self
-			.should_use_local_subscriber(subject, opts.behavior)
+			.should_use_local_subscriber(&subject, opts.behavior)
 			.await;
+
+		let subject_cow = subject.as_cow();
 
 		for (chunk_idx, chunk_payload) in chunks.into_iter().enumerate() {
 			let encoded = encode_chunk(
@@ -178,11 +170,11 @@ impl PubSub {
 				chunk_idx as u32,
 				chunk_count,
 				message_id,
-				Some(reply_subject.to_string()),
+				reply_subject.as_ref().map(|x| x.to_string()),
 			)?;
 
 			if use_local {
-				if let Some(sender) = self.local_subscribers.get_async(subject).await {
+				if let Some(sender) = self.local_subscribers.get_async(&*subject_cow).await {
 					let _ = sender.send(encoded);
 				} else {
 					tracing::warn!(%subject, "local subscriber disappeared");
@@ -190,17 +182,19 @@ impl PubSub {
 				}
 			} else {
 				// Use backoff when publishing through the driver
-				self.publish_with_backoff(subject, &encoded).await?;
+				self.publish_with_backoff(&subject, &encoded).await?;
 			}
 		}
 		Ok(())
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
-	async fn publish_with_backoff(&self, subject: &str, encoded: &[u8]) -> Result<()> {
+	async fn publish_with_backoff(&self, subject: &impl Subject, encoded: &[u8]) -> Result<()> {
+		let subject = subject.as_cow();
+
 		let mut backoff = Backoff::default();
 		loop {
-			match self.driver.publish(subject, encoded).await {
+			match self.driver.publish(&subject, encoded).await {
 				Result::Ok(_) => break,
 				Err(err) if !backoff.tick().await => {
 					tracing::warn!(?err, "error publishing, cannot retry again");
@@ -221,7 +215,7 @@ impl PubSub {
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
-	pub async fn request(&self, subject: &str, payload: &[u8]) -> Result<Response> {
+	pub async fn request(&self, subject: impl Subject, payload: &[u8]) -> Result<Response> {
 		self.request_with_timeout(subject, payload, Duration::from_secs(30))
 			.await
 	}
@@ -229,7 +223,7 @@ impl PubSub {
 	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn request_with_timeout(
 		&self,
-		subject: &str,
+		subject: impl Subject,
 		payload: &[u8],
 		timeout: Duration,
 	) -> Result<Response> {
@@ -299,7 +293,7 @@ impl PubSub {
 	#[tracing::instrument(skip_all, fields(%subject))]
 	async fn should_use_local_subscriber(
 		&self,
-		subject: &str,
+		subject: &impl Subject,
 		behavior: crate::driver::PublishBehavior,
 	) -> bool {
 		// Local fast-path for one-subscriber behavior:
@@ -317,7 +311,7 @@ impl PubSub {
 		if !matches!(behavior, crate::driver::PublishBehavior::OneSubscriber) {
 			return false;
 		}
-		if let Some(sender) = self.local_subscribers.get_async(subject).await {
+		if let Some(sender) = self.local_subscribers.get_async(&*subject.as_cow()).await {
 			sender.receiver_count() > 0
 		} else {
 			false
