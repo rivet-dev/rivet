@@ -70,12 +70,11 @@ function RouteComponent() {
 							>
 								<CreateProjectFrameContent
 									organization={params.organization}
-									onSuccess={(data) => {
+									onSuccess={(data, vars) => {
 										return navigate({
 											to: "/orgs/$organization/projects/$project",
 											params: {
-												organization:
-													params.organization ?? "",
+												organization: vars.organization,
 												project: data.project.name,
 											},
 											search: {
