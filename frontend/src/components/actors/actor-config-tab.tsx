@@ -19,7 +19,7 @@ export function ActorConfigTab(props: ActorConfigTabProps) {
 					asChild
 				>
 					<a
-						href="https://rivet.dev/docs/config"
+						href="https://rivet.dev/docs/actors/"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
