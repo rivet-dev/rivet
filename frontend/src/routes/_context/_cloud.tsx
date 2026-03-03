@@ -64,7 +64,6 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									organization: undefined,
 								}),
 							});
 						}
@@ -264,8 +263,6 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									dc: undefined,
-									config: undefined,
 								}),
 							});
 						}
@@ -284,7 +281,6 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									config: undefined,
 								}),
 							});
 						}
@@ -302,7 +298,6 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									displayName: undefined,
 								}),
 							});
 						}
@@ -320,7 +315,6 @@ function CloudModals() {
 								search: (old) => ({
 									...old,
 									modal: undefined,
-									displayName: undefined,
 								}),
 							});
 						}
