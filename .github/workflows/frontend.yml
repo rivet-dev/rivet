@@ -90,5 +90,29 @@ jobs:
   #     - run: pnpm build
   #     - run: pnpm check-types
   #       working-directory: ./website
-
-    
+  dashboard-engine-e2e:
+    name: Dashboard / Engine / E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: ./frontend
+      - name: Build engine dashboard
+        run: pnpm build:engine
+        working-directory: ./frontend
+      - name: Run Playwright tests
+        run: pnpm exec playwright test --project=engine --reporter=list
+        working-directory: ./frontend
+        continue-on-error: true
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7

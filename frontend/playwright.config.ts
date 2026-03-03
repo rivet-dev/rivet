@@ -23,21 +23,35 @@ export default defineConfig({
 	globalSetup: "./e2e/global.setup.ts",
 	projects: [
 		{
-			name: "setup",
+			name: "cloud:setup",
 			testMatch: /auth\.setup\.ts/,
 		},
 		{
-			name: "chromium",
+			name: "cloud",
 			use: {
 				...devices["Desktop Chrome"],
-				storageState: ".auth/user.json",
+				storageState: ".auth/cloud/user.json",
 			},
-			dependencies: ["setup"],
+			dependencies: ["cloud:setup"],
+			testDir: "./e2e/cloud",
+		},
+		{
+			name: "engine",
+			use: {
+				...devices["Desktop Chrome"],
+			},
+			testDir: "./e2e/engine",
 		},
 	],
-	webServer: {
+	webServer: [{
+		name: "Cloud",
 		command: "pnpm dev:cloud",
 		url: "http://localhost:43710",
 		reuseExistingServer: !process.env.CI,
-	},
+	}, {
+		name: "Engine",
+		command: "pnpm dev:engine",
+		url: "http://localhost:43708",
+		reuseExistingServer: !process.env.CI,
+	}],
 });
