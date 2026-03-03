@@ -1,4 +1,5 @@
 "use client";
+import { usePathname } from "@/hooks/usePathname";
 import { ActiveLink } from "@/components/ActiveLink";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
@@ -549,7 +550,9 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation({ tree, pathname = "" }) {
+function DocsMobileNavigation({ tree, pathname: initialPathname = "" }) {
+	const dynamicPathname = usePathname();
+	const pathname = dynamicPathname || initialPathname;
 	const isDocsPage = pathname.startsWith("/docs");
 
 	// Determine current section based on pathname

@@ -12,7 +12,9 @@ const { title, description, canonicalUrl } = Astro.props;
 ---
 
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
-	<Header variant="full-width" showDocsTabs={true} pathname={Astro.url.pathname} client:load />
+	<div transition:persist="docs-header">
+		<Header variant="full-width" showDocsTabs={true} pathname={Astro.url.pathname} client:load />
+	</div>
 	<div class="w-full relative z-10 font-sans">
 		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs" style="--header-height: 6.5rem;">
 			<slot />

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "@/hooks/usePathname";
 import { findPageForHref } from "@/lib/sitemap";
 import { sitemap } from "@/sitemap/mod";
 import { cn } from "@rivet-gg/components";
@@ -8,7 +9,9 @@ interface DocsTabsProps {
 	pathname: string;
 }
 
-export function DocsTabs({ pathname }: DocsTabsProps) {
+export function DocsTabs({ pathname: initialPathname }: DocsTabsProps) {
+	const dynamicPathname = usePathname();
+	const pathname = dynamicPathname || initialPathname;
 	const normalizedPath = (pathname || "").replace(/\/$/, "");
 
 	return (
