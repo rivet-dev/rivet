@@ -1,14 +1,15 @@
 "use client";
 
-import { usePathname } from "@/hooks/usePathname";
 import { findPageForHref } from "@/lib/sitemap";
 import { sitemap } from "@/sitemap/mod";
 import { cn } from "@rivet-gg/components";
 
-export function DocsTabs() {
-	const pathname = usePathname() || "";
-	// Remove trailing slash for consistency
-	const normalizedPath = pathname.replace(/\/$/, "");
+interface DocsTabsProps {
+	pathname: string;
+}
+
+export function DocsTabs({ pathname }: DocsTabsProps) {
+	const normalizedPath = (pathname || "").replace(/\/$/, "");
 
 	return (
 		<div className="hidden h-14 items-center empty:hidden md:flex gap-4 pt-2">
