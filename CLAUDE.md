@@ -282,6 +282,8 @@ When making changes to the engine or RivetKit, ensure the corresponding document
 - **Limits changes** (e.g., max message sizes, timeouts): Update `website/src/content/docs/actors/limits.mdx`
 - **Config changes** (e.g., new config options in `engine/packages/config/`): Update `website/src/content/docs/self-hosting/configuration.mdx`
 - **RivetKit config changes** (e.g., `rivetkit-typescript/packages/rivetkit/src/registry/config/index.ts` or `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`): Update `website/src/content/docs/actors/limits.mdx` if they affect limits/timeouts
+- **Actor error changes**: When adding, removing, or modifying variants in `ActorError` (`engine/packages/types/src/actor/error.rs`) or `RunnerPoolError`, update `website/src/content/docs/actors/troubleshooting.mdx` to keep the Error Reference in sync. Each error should document the dashboard message (from `frontend/src/components/actors/actor-status-label.tsx`) and the API JSON shape.
+- **Actor status changes**: When modifying status derivation logic in `frontend/src/components/actors/queries/index.ts` or adding new statuses, update `website/src/content/docs/actors/statuses.mdx` and the corresponding tests in `frontend/src/components/actors/queries/index.test.ts`.
 
 ### Comments
 
