@@ -238,8 +238,9 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5 }}
               className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
             >
-              The primitive for <br />
-              software that thinks.
+              Today's web was built for request &amp; response.
+              <br />
+              <span className='text-zinc-500'>AI needs to hold state, run for a long time, and realtime.</span>
             </motion.h1>
 
             <motion.p
