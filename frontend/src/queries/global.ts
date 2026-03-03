@@ -54,6 +54,7 @@ const queryCache = new QueryCache({
 });
 
 const mutationCache = new MutationCache({
+
 	onError(error, variables, context, mutation) {
 		console.error(error);
 		if (mutation.meta?.hideErrorToast) {
@@ -93,6 +94,9 @@ export const queryClient = new QueryClient({
 			refetchOnWindowFocus: true,
 			refetchOnReconnect: false,
 		},
+		mutations: {
+			retry: 0,
+		}
 	},
 	queryCache,
 	mutationCache,

@@ -36,7 +36,10 @@ function createClient({ clerk }: { clerk: Clerk }) {
 			});
 			return await fetcher(
 				// @ts-expect-error
-				args,
+				{
+					...args,
+					maxRetries: 1,
+				},
 			);
 		},
 	});

@@ -39,7 +39,7 @@ export default function CreateProjectFrameContent({
 	const { mutateAsync } = useMutation({
 		...provider.createProjectMutationOptions(),
 		onSuccess: async (data, vars) => {
-			await queryClient.invalidateQueries(
+			await queryClient.refetchQueries(
 				provider.currentOrgProjectsQueryOptions(),
 			);
 

@@ -47,7 +47,7 @@ const useCreateNamespace = () => {
 		dataProivder.createNamespaceMutationOptions({
 			onSuccess: async (data) => {
 				// Invalidate all queries to ensure fresh data
-				await queryClient.invalidateQueries(
+				await queryClient.refetchQueries(
 					dataProivder.namespacesQueryOptions(),
 				);
 

@@ -124,7 +124,7 @@ function ApiTokenRow({ apiToken }: ApiTokenRowProps) {
 	const { mutate: revoke, isPending } = useMutation(
 		dataProvider.revokeApiTokenMutationOptions({
 			onSuccess: async () => {
-				await queryClient.invalidateQueries(
+				await queryClient.refetchQueries(
 					dataProvider.apiTokensQueryOptions(),
 				);
 			},
