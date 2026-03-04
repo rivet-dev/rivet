@@ -1,27 +1,23 @@
 "use client";
 
-import { usePostHog } from "posthog-js/react";
 import { useState } from "react";
 
 export function TalkToAnEngineerForm() {
-	const posthog = usePostHog();
 	const [isSubmitted, setIsSubmitted] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (isSubmitting) return;
 
 		setIsSubmitting(true);
 
 		const formData = new FormData(event.currentTarget);
-
 		const data = Object.fromEntries(formData.entries().toArray());
 
-		console.log(data);
-
 		try {
-			posthog?.capture("survey sent", {
+			const { default: posthog } = await import("posthog-js");
+			posthog.capture("survey sent", {
 				$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
 				...data,
 			});
