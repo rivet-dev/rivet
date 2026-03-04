@@ -10,6 +10,7 @@ import { rehypePlugins } from './src/mdx/rehype';
 import { generateRoutes } from './src/integrations/generate-routes';
 import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
 import { skillVersion } from './src/integrations/skill-version';
+import { styleRedirects } from './src/integrations/style-redirects';
 
 
 export default defineConfig({
@@ -79,6 +80,7 @@ export default defineConfig({
       		org: "rivet-gaming",
 			authToken: process.env.SENTRY_AUTH_TOKEN,
 		}),
+		styleRedirects(),
 	],
 	vite: {
 		ssr: {
