@@ -47,6 +47,7 @@ import {
 	faPalette,
     faPuzzlePiece,
     faRailway,
+    faRender,
 	faReact,
 	faRecycle,
 	faRocket,
@@ -549,12 +550,16 @@ export const sitemap = [
 						href: "/docs/self-hosting/docker-compose",
 					},
 					{
-						title: "Kubernetes",
-						href: "/docs/self-hosting/kubernetes",
-					},
-					{
 						title: "Railway",
 						href: "/docs/self-hosting/railway",
+					},
+					{
+						title: "Render",
+						href: "/docs/self-hosting/render",
+					},
+					{
+						title: "Kubernetes",
+						href: "/docs/self-hosting/kubernetes",
 					},
 				],
 			},

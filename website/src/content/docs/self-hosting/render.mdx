@@ -7,99 +7,103 @@ skill: true
 ## Prerequisites
 
 1. A [Render account](https://render.com)
-2. A GitHub repository (you'll add files to it)
+2. A GitHub repository
 
-## Step 1: Create the Blueprint Files
+## Deploy Rivet Engine
 
-Add these three files to the root of your GitHub repository:
+<Steps>
+  <Step title="Create the Blueprint Files">
+    Add these three files to the root of your GitHub repository:
 
-**render.yaml**
+    **render.yaml**
 
-```yaml
-databases:
-  - name: rivet-db
-    plan: basic-256mb
-    databaseName: rivet
-    user: rivet
+    ```yaml
+    databases:
+      - name: rivet-db
+        plan: basic-256mb
+        databaseName: rivet
+        user: rivet
 
-services:
-  - type: web
-    name: rivet-engine
-    runtime: docker
-    dockerfilePath: ./Dockerfile.render
-    plan: starter
-    healthCheckPath: /health
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: rivet-db
-          property: connectionString
-      - key: RIVET__AUTH__ADMIN_TOKEN
-        generateValue: true
-```
+    services:
+      - type: web
+        name: rivet-engine
+        runtime: docker
+        dockerfilePath: ./Dockerfile.render
+        plan: starter
+        healthCheckPath: /health
+        envVars:
+          - key: DATABASE_URL
+            fromDatabase:
+              name: rivet-db
+              property: connectionString
+          - key: RIVET__AUTH__ADMIN_TOKEN
+            generateValue: true
+    ```
 
-**Dockerfile.render**
+    **Dockerfile.render**
 
-```dockerfile
-FROM rivetdev/engine:latest
+    ```dockerfile
+    FROM rivetdev/engine:latest
 
-COPY entrypoint.render.sh /entrypoint.render.sh
-RUN chmod +x /entrypoint.render.sh
+    COPY entrypoint.render.sh /entrypoint.render.sh
+    RUN chmod +x /entrypoint.render.sh
 
-ENTRYPOINT ["/entrypoint.render.sh"]
-```
+    ENTRYPOINT ["/entrypoint.render.sh"]
+    ```
 
-**entrypoint.render.sh**
+    **entrypoint.render.sh**
 
-```bash
-#!/bin/sh
+    ```bash
+    #!/bin/sh
 
-if [ -n "$DATABASE_URL" ]; then
-    export RIVET__POSTGRES__URL="${DATABASE_URL}?sslmode=disable"
-fi
+    if [ -n "$DATABASE_URL" ]; then
+        export RIVET__POSTGRES__URL="${DATABASE_URL}?sslmode=disable"
+    fi
 
-exec /usr/bin/rivet-engine start
-```
+    exec /usr/bin/rivet-engine start
+    ```
 
-Commit and push these files to your repository.
+    Commit and push these files to your repository.
+  </Step>
 
-## Step 2: Deploy to Render
+  <Step title="Deploy to Render">
+    1. Go to the [Render Dashboard](https://dashboard.render.com/)
+    2. Click **Blueprints** in the left sidebar
+    3. Click **New Blueprint Instance**
+    4. Connect your GitHub account if you haven't already
+    5. Select the repository containing the files from the previous step
+    6. Click **Apply**
 
-1. Go to the [Render Dashboard](https://dashboard.render.com/)
-2. Click **Blueprints** in the left sidebar
-3. Click **New Blueprint Instance**
-4. Connect your GitHub account if you haven't already
-5. Select the repository containing the files from Step 1
-6. Click **Apply**
+    Render will automatically create the PostgreSQL database and deploy the Rivet Engine.
+  </Step>
 
-Render will automatically create the PostgreSQL database and deploy the Rivet Engine.
+  <Step title="Get Your Admin Token">
+    1. Once deployed, go to your **rivet-engine** service in the Render Dashboard
+    2. Click the **Environment** tab
+    3. Find `RIVET__AUTH__ADMIN_TOKEN` and click the eye icon to reveal the value
+    4. Copy this token — you'll need it to access the dashboard
+  </Step>
 
-## Step 3: Get Your Admin Token
+  <Step title="Access the Rivet Dashboard">
+    Open your service URL in a browser:
 
-1. Once deployed, go to your **rivet-engine** service in the Render Dashboard
-2. Click the **Environment** tab
-3. Find `RIVET__AUTH__ADMIN_TOKEN` and click the eye icon to reveal the value
-4. Copy this token - you'll need it to access the Inspector
+    ```
+    https://rivet-engine-xxxx.onrender.com/ui/
+    ```
 
-## Step 4: Access the Rivet Inspector
+    Replace `rivet-engine-xxxx` with your actual service name from the Render Dashboard.
 
-Open your service URL in a browser:
-
-```
-https://rivet-engine-xxxx.onrender.com/ui/
-```
-
-Replace `rivet-engine-xxxx` with your actual service name from the Render Dashboard.
-
-Enter the admin token from Step 3 to log in.
+    Enter the admin token from the previous step to log in.
+  </Step>
+</Steps>
 
 ## Connecting Your Application
 
 To connect a RivetKit application to your self-hosted engine, set these environment variables in your app:
 
 ```bash
-RIVET_ENDPOINT=https://rivet-engine-xxxx.onrender.com
-RIVET_PUBLIC_ENDPOINT=https://rivet-engine-xxxx.onrender.com
+RIVET_ENDPOINT=https://<namespace>:<admin-token>@rivet-engine-xxxx.onrender.com
+RIVET_PUBLIC_ENDPOINT=https://<namespace>@rivet-engine-xxxx.onrender.com
 ```
 
-See the [Connect guide](/docs/connect/render) for deploying your RivetKit application to Render.
+See the [Connect guide](/docs/connect/custom) for more details on connecting your application.

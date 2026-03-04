@@ -24458,6 +24458,12 @@
         ]
       },
       {
+        "icon": "faRender",
+        "aliases": [
+          "faRender"
+        ]
+      },
+      {
         "icon": "faRivet",
         "aliases": [
           "faRivet"
