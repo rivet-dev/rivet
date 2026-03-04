@@ -49,7 +49,7 @@ function PostHogInit() {
 		import("posthog-js").then(({ default: posthog }) => {
 			if (!posthog.__loaded) {
 				posthog.init("phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo", {
-					api_host: "https://ph.rivet.dev",
+					api_host: "https://ph.rivet.gg",
 					loaded: (posthog) => {
 						if (process.env.NODE_ENV === "development") posthog.debug();
 					},

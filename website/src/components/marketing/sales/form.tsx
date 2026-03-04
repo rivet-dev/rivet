@@ -1,7 +1,16 @@
 "use client";
 
+import * as Sentry from "@sentry/astro"
 import posthog from "posthog-js";
 import { useState } from "react";
+
+const fields = {
+	firstName: "$survey_response_27cd441e-3b34-4ea3-b2cf-e22b847046d9",
+	lastName: "$survey_response_effaa684-34bb-468e-80fb-29b693d564d5",
+	company: "$survey_response_feaa095f-16a0-47f0-871d-361d2a446c2c",
+	email: "$survey_response_c954c48d-b373-475e-8eb5-0023ed18182b",
+	message: "$survey_response_8974a198-041d-494b-945e-d829d192be2b",
+}
 
 export function SalesForm() {
 	const [isSubmitted, setIsSubmitted] = useState(false);
@@ -21,6 +30,14 @@ export function SalesForm() {
 				$survey_id: "0193928a-4799-0000-8fc4-455382e21359",
 				...data,
 			});
+			Sentry.captureFeedback({
+				message: data[fields.message] as string,
+				name: `${data[fields.firstName]} ${data[fields.lastName]}`,
+				email: data[fields.email] as string,
+				tags: {
+					company: data[fields.company] as string,
+				}
+			})
 			setIsSubmitted(true);
 		} finally {
 			setIsSubmitting(false);
@@ -65,7 +82,7 @@ export function SalesForm() {
 					</label>
 					<input
 						id="first-name"
-						name="$survey_response_27cd441e-3b34-4ea3-b2cf-e22b847046d9"
+						name={fields.firstName}
 						type="text"
 						autoComplete="given-name"
 						className={inputClasses}
@@ -77,7 +94,7 @@ export function SalesForm() {
 					</label>
 					<input
 						id="last-name"
-						name="$survey_response_effaa684-34bb-468e-80fb-29b693d564d5"
+						name={fields.lastName}
 						type="text"
 						autoComplete="family-name"
 						className={inputClasses}
@@ -89,7 +106,7 @@ export function SalesForm() {
 					</label>
 					<input
 						id="company"
-						name="$survey_response_feaa095f-16a0-47f0-871d-361d2a446c2c"
+						name={fields.company}
 						type="text"
 						autoComplete="organization"
 						className={inputClasses}
@@ -101,7 +118,7 @@ export function SalesForm() {
 					</label>
 					<input
 						id="email"
-						name="$survey_response_c954c48d-b373-475e-8eb5-0023ed18182b"
+						name={fields.email}
 						type="email"
 						autoComplete="email"
 						className={inputClasses}
@@ -113,7 +130,7 @@ export function SalesForm() {
 					</label>
 					<textarea
 						id="message"
-						name="$survey_response_8974a198-041d-494b-945e-d829d192be2b"
+						name={fields.message}
 						rows={4}
 						className={inputClasses}
 						placeholder="I would like Rivet to help solve for my company..."

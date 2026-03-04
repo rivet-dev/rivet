@@ -1,7 +1,17 @@
 "use client";
 
 import posthog from "posthog-js";
+import * as Sentry from "@sentry/astro"
 import { useState } from "react";
+
+const fields = {
+	email: '$survey_response_0417ebe5-969d-41a9-8150-f702c42681ff',
+	company: '$survey_response_74c3d31a-880f-4e89-8cac-e03ad3422cce',
+	role: "$survey_response_8bbdb054-6679-4d05-9685-f9f50d7b080b",
+	currentStack: "$survey_response_f585f0b9-f680-4b28-87f7-0d8f08fd0b14",
+	whatToTalkAbout: "$survey_response_3cdc5e4a-81f2-46e5-976b-15f8c2c8986f",
+	whereHeard: "$survey_response_99519796-e67d-4a20-8ad4-ae5b7bb3e16d",
+}
 
 export function TalkToAnEngineerForm() {
 	const [isSubmitted, setIsSubmitted] = useState(false);
@@ -24,6 +34,13 @@ export function TalkToAnEngineerForm() {
 				$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
 				...data,
 			});
+			Sentry.captureFeedback({
+				message: `Role: ${data[fields.role] as string}\nCurrent Stack: ${data[fields.currentStack] as string}\nWhat to Talk About: ${data[fields.whatToTalkAbout] as string}`,
+				email: data[fields.email] as string,
+				tags: {
+					company: data[fields.company] as string,
+				}
+			})
 			setIsSubmitted(true);
 		} finally {
 			setIsSubmitting(false);
@@ -68,7 +85,7 @@ export function TalkToAnEngineerForm() {
 					</label>
 					<input
 						id="email"
-						name="$survey_response_0417ebe5-969d-41a9-8150-f702c42681ff"
+						name={fields.email}
 						type="email"
 						autoComplete="email"
 						required
@@ -81,7 +98,7 @@ export function TalkToAnEngineerForm() {
 					</label>
 					<input
 						id="company"
-						name="$survey_response_74c3d31a-880f-4e89-8cac-e03ad3422cce"
+						name={fields.company}
 						type="text"
 						autoComplete="organization"
 						required
@@ -94,7 +111,7 @@ export function TalkToAnEngineerForm() {
 					</label>
 					<input
 						id="role"
-						name="$survey_response_8bbdb054-6679-4d05-9685-f9f50d7b080b"
+						name={fields.role}
 						type="text"
 						required
 						className={inputClasses}
@@ -107,7 +124,7 @@ export function TalkToAnEngineerForm() {
 					</label>
 					<textarea
 						id="current-stack"
-						name="$survey_response_f585f0b9-f680-4b28-87f7-0d8f08fd0b14"
+						name={fields.currentStack}
 						rows={3}
 						required
 						className={inputClasses}
@@ -120,7 +137,7 @@ export function TalkToAnEngineerForm() {
 					</label>
 					<textarea
 						id="what-to-talk-about"
-						name="$survey_response_3cdc5e4a-81f2-46e5-976b-15f8c2c8986f"
+						name={fields.whatToTalkAbout}
 						rows={4}
 						required
 						className={inputClasses}
@@ -133,7 +150,7 @@ export function TalkToAnEngineerForm() {
 					</label>
 					<input
 						id="where-heard"
-						name="$survey_response_99519796-e67d-4a20-8ad4-ae5b7bb3e16d"
+						name={fields.whereHeard}
 						type="text"
 						className={inputClasses}
 						placeholder="e.g., X, LinkedIn, Google, a colleague, etc."
