@@ -23,13 +23,17 @@ spec:
       terminationGracePeriodSeconds: 25
       containers:
       - name: rivet-engine
-        image: rivet-engine:local
-        imagePullPolicy: Never
+        image: rivetdev/engine:latest
         args:
         - start
         env:
         - name: RIVET_CONFIG_PATH
           value: /etc/rivet/config.jsonc
+        - name: RIVET__AUTH__ADMIN_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: rivet-secrets
+              key: admin-token
         ports:
         - containerPort: 6420
           name: guard

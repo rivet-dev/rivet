@@ -6,6 +6,12 @@ data:
         "url": "postgresql://postgres:postgres@postgres:5432/rivet"
       },
 
+      "nats": {
+        "addresses": [
+          "nats.rivet-engine.svc.cluster.local:4222"
+        ]
+      },
+
       "topology": {
         "datacenter_label": 1,
         "datacenters": [

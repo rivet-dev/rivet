@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nats
+  namespace: rivet-engine
+  labels:
+    app: nats
+spec:
+  serviceName: nats
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nats
+  template:
+    metadata:
+      labels:
+        app: nats
+    spec:
+      containers:
+      - name: nats
+        image: nats:2.10-alpine
+        args:
+        - -c
+        - /etc/nats/nats.conf
+        ports:
+        - containerPort: 4222
+          name: client
+        - containerPort: 6222
+          name: cluster
+        - containerPort: 8222
+          name: monitoring
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nats
+          readOnly: true
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8222
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8222
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 2
+      volumes:
+      - name: config
+        configMap:
+          name: nats-config

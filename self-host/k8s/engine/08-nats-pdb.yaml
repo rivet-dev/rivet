@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nats
+  namespace: rivet-engine
+  labels:
+    app: nats
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nats
