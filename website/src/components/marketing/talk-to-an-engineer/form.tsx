@@ -17,6 +17,11 @@ export function TalkToAnEngineerForm() {
 
 		try {
 			const { default: posthog } = await import("posthog-js");
+			if (!posthog.__loaded) {
+				posthog.init("phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo", {
+					api_host: "https://ph.rivet.dev",
+				});
+			}
 			posthog.capture("survey sent", {
 				$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
 				...data,
