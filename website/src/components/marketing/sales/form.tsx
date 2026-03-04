@@ -1,9 +1,10 @@
 "use client";
 
-import posthog from "posthog-js";
+import { usePostHog } from "posthog-js/react";
 import { useState } from "react";
 
 export function SalesForm() {
+	const posthog = usePostHog();
 	const [isSubmitted, setIsSubmitted] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -17,7 +18,7 @@ export function SalesForm() {
 		const data = Object.fromEntries(formData.entries().toArray());
 
 		try {
-			posthog.capture("survey sent", {
+			posthog?.capture("survey sent", {
 				$survey_id: "0193928a-4799-0000-8fc4-455382e21359",
 				...data,
 			});
