@@ -5,6 +5,7 @@ import {
 	faGift,
 	faHome,
 	faMessageSmile,
+	faRocket,
 	faWallet,
 	Icon,
 } from "@rivet-gg/icons";
@@ -34,7 +35,6 @@ import {
 	ResizablePanelGroup,
 	ScrollArea,
 	Skeleton,
-	WithTooltip,
 } from "@/components";
 import { useDataProvider, useDataProviderCheck } from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
@@ -193,13 +193,22 @@ const Sidebar = ({
 												to: "/orgs/$organization/projects/$project/ns/$namespace",
 												fuzzy: true,
 											}) ? (
-												<HeaderLink
-													to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-													className="font-normal"
-													icon={faCog}
-												>
-													Settings
-												</HeaderLink>
+												<>
+													<HeaderLink
+														to="/orgs/$organization/projects/$project/ns/$namespace/deployments"
+														className="font-normal"
+														icon={faRocket}
+													>
+														Deployments
+													</HeaderLink>
+													<HeaderLink
+														to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+														className="font-normal"
+														icon={faCog}
+													>
+														Settings
+													</HeaderLink>
+												</>
 											) : matchRoute({
 													to: "/orgs/$organization/projects/$project",
 													fuzzy: true,

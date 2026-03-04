@@ -91,6 +91,95 @@ export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
 				},
 			});
 		},
+		managedPoolsQueryOptions(opts: {
+			organization: string;
+			project: string;
+			namespace: string;
+		}) {
+			return queryOptions({
+				queryKey: [opts, "managed-pools"],
+				queryFn: async () => {
+					const response = await client.managedPools.list(
+						opts.project,
+						opts.namespace,
+						{
+							org: opts.organization,
+						},
+					);
+					return response.managedPools;
+				},
+			});
+		},
+		managedPoolQueryOptions(opts: {
+			organization: string;
+			project: string;
+			namespace: string;
+			pool: string;
+		}) {
+			return queryOptions({
+				queryKey: [opts, "managed-pool"],
+				queryFn: async () => {
+					const response = await client.managedPools.get(
+						opts.project,
+						opts.namespace,
+						opts.pool,
+						{
+							org: opts.organization,
+						},
+					);
+
+					return response.managedPool;
+				},
+			});
+		},
+
+		imageRepositoriesQueryOptions(opts: {
+			organization: string;
+			project: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "image-repositories"],
+				queryFn: async ({ pageParam }) => {
+					return await client.docker.listRepositories(opts.project, {
+						limit: 10,
+						cursor: pageParam ?? undefined,
+						org: opts.organization,
+					});
+				},
+				getNextPageParam: (lastPage) => {
+					return lastPage.pagination.cursor;
+				},
+				initialPageParam: undefined as string | undefined,
+				select: (data) =>
+					data.pages.flatMap((page) => page.repositories),
+			});
+		},
+
+		tagsQueryOptions(opts: {
+			repository: string;
+			project: string;
+			organization: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "tags"],
+				queryFn: async ({ pageParam }) => {
+					return await client.docker.listTags(
+						opts.project,
+						opts.repository,
+						{
+							limit: 10,
+							cursor: pageParam ?? undefined,
+							org: opts.organization,
+						},
+					);
+				},
+				getNextPageParam: (lastPage) => {
+					return lastPage.pagination.cursor;
+				},
+				initialPageParam: undefined as string | undefined,
+				select: (data) => data.pages.flatMap((page) => page.tags),
+			});
+		},
 	};
 };
 
@@ -501,6 +590,46 @@ export const createOrganizationContext = ({
 		},
 		archiveProjectMutationOptions,
 		archiveNamespaceMutationOptions,
+		currentOrganizationManagedPoolsQueryOptions(opts: {
+			project: string;
+			namespace: string;
+		}) {
+			return parent.managedPoolsQueryOptions({
+				organization,
+				project: opts.project,
+				namespace: opts.namespace,
+			});
+		},
+		currentOrganizationManagedPoolQueryOptions(opts: {
+			project: string;
+			namespace: string;
+			pool: string;
+		}) {
+			return parent.managedPoolQueryOptions({
+				organization,
+				project: opts.project,
+				namespace: opts.namespace,
+				pool: opts.pool,
+			});
+		},
+		currentOrganizationImageRepositoriesQueryOptions(opts: {
+			project: string;
+		}) {
+			return parent.imageRepositoriesQueryOptions({
+				organization,
+				project: opts.project,
+			});
+		},
+		currentOrganizationTagsQueryOptions(opts: {
+			project: string;
+			repository: string;
+		}) {
+			return parent.tagsQueryOptions({
+				organization,
+				project: opts.project,
+				repository: opts.repository,
+			});
+		},
 	};
 };
 
@@ -728,6 +857,37 @@ export const createProjectContext = ({
 				},
 			});
 		},
+		currentProjectManagedPoolsQueryOptions(opts: { namespace: string }) {
+			return parent.managedPoolsQueryOptions({
+				organization,
+				project,
+				namespace: opts.namespace,
+			});
+		},
+		currentProjectManagedPoolQueryOptions(opts: {
+			namespace: string;
+			pool: string;
+		}) {
+			return parent.managedPoolQueryOptions({
+				organization,
+				project,
+				namespace: opts.namespace,
+				pool: opts.pool,
+			});
+		},
+		currentProjectImageRepositoriesQueryOptions() {
+			return parent.imageRepositoriesQueryOptions({
+				organization,
+				project,
+			});
+		},
+		currentProjectTagsQueryOptions(opts: { repository: string }) {
+			return parent.tagsQueryOptions({
+				organization,
+				project,
+				repository: opts.repository,
+			});
+		},
 	};
 };
 
@@ -870,6 +1030,19 @@ export const createNamespaceContext = ({
 					);
 					return response;
 				},
+			});
+		},
+
+		currentNamespaceManagedPoolsQueryOptions() {
+			return parent.currentProjectManagedPoolsQueryOptions({
+				namespace,
+			});
+		},
+
+		currentNamespaceManagedPoolQueryOptions(opts: { pool: string }) {
+			return parent.currentProjectManagedPoolQueryOptions({
+				namespace,
+				pool: opts.pool,
 			});
 		},
 	};

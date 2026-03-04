@@ -37,6 +37,7 @@ import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRou
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/tokens'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/settings'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/metrics'
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/deployments'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/connect'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/billing'
 
@@ -208,6 +209,15 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute =
         ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
     } as any,
   )
+const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute =
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport.update(
+    {
+      id: '/deployments',
+      path: '/deployments',
+      getParentRoute: () =>
+        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+    } as any,
+  )
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport.update(
     {
@@ -251,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
@@ -276,6 +287,7 @@ export interface FileRoutesByTo {
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
@@ -309,6 +321,7 @@ export interface FileRoutesById {
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
@@ -340,6 +353,7 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace'
     | '/orgs/$organization/projects/$project/ns/$namespace/billing'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
     | '/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
@@ -365,6 +379,7 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project'
     | '/orgs/$organization/projects/$project/ns/$namespace/billing'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
     | '/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
@@ -397,6 +412,7 @@ export interface FileRouteTypes {
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens'
@@ -609,6 +625,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport
       parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
     }
+    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments': {
+      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/deployments'
+      path: '/deployments'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/deployments'
+      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport
+      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
+    }
     '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': {
       id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
       path: '/connect'
@@ -629,6 +652,7 @@ declare module '@tanstack/react-router' {
 interface ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren {
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
@@ -641,6 +665,8 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: Conte
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute,
+    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute:
+      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute:
       ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute,
     ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute:
