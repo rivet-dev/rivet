@@ -37,16 +37,22 @@ k3d image import "${IMAGE_NAME}" -c "${CLUSTER_NAME}"
 
 # Deploy
 echo "Deploying to Kubernetes..."
-cd "${REPO_ROOT}/k8s/engine"
+cd "${REPO_ROOT}/self-host/k8s/engine"
 
 kubectl apply -f 00-namespace.yaml
 kubectl apply -f 01-serviceaccount.yaml
+kubectl apply -f 06-nats-configmap.yaml
+kubectl apply -f 07-nats-statefulset.yaml
+kubectl apply -f 08-nats-pdb.yaml
+kubectl apply -f 09-nats-service.yaml
 kubectl apply -f 10-postgres-configmap.yaml
 kubectl apply -f 11-postgres-secret.yaml
 kubectl apply -f 12-postgres-statefulset.yaml
 kubectl apply -f 13-postgres-service.yaml
 
-# Wait for PostgreSQL to be ready
+# Wait for NATS and PostgreSQL to be ready
+echo "Waiting for NATS to be ready..."
+kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=nats --timeout=300s
 echo "Waiting for PostgreSQL to be ready..."
 kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=postgres --timeout=300s
 
@@ -54,6 +60,11 @@ kubectl apply -f 02-engine-configmap.yaml
 kubectl apply -f 03-rivet-engine-deployment.yaml
 kubectl apply -f 04-rivet-engine-service.yaml
 kubectl apply -f 05-rivet-engine-hpa.yaml
+kubectl apply -f 14-rivet-engine-pdb.yaml
+
+# Override image to use locally built image
+kubectl -n "${NAMESPACE}" set image deployment/rivet-engine rivet-engine="${IMAGE_NAME}"
+kubectl -n "${NAMESPACE}" patch deployment rivet-engine -p '{"spec":{"template":{"spec":{"containers":[{"name":"rivet-engine","imagePullPolicy":"Never"}]}}}}'
 
 # Wait for engine to be ready
 echo "Waiting for engine to be ready..."

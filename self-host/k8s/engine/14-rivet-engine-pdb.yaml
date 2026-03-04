@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rivet-engine
+  namespace: rivet-engine
+  labels:
+    app: rivet-engine
+    component: rivet-engine
+    service: engine
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: rivet-engine

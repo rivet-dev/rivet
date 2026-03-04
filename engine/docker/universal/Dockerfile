@@ -102,7 +102,7 @@ RUN apt-get update -y && \
 # MARK: Engine (Full)
 FROM engine-full-base AS engine-full
 
-LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
+LABEL org.opencontainers.image.source=https://github.com/rivet-dev/rivet
 
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
@@ -112,7 +112,7 @@ CMD ["start"]
 # MARK: Engine (Slim)
 FROM debian:13.1-slim AS engine-slim
 
-LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
+LABEL org.opencontainers.image.source=https://github.com/rivet-dev/rivet
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH

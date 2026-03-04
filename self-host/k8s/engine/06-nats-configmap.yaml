@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+  namespace: rivet-engine
+  labels:
+    app: nats
+data:
+  nats.conf: |
+    # Client port
+    port: 4222
+
+    # HTTP monitoring port
+    http: 8222
+
+    # Clustering configuration
+    cluster {
+      name: rivet-engine
+
+      port: 6222
+
+      routes = [
+        nats://nats-0.nats.rivet-engine.svc.cluster.local:6222
+        nats://nats-1.nats.rivet-engine.svc.cluster.local:6222
+      ]
+
+      connect_retries: 30
+    }
