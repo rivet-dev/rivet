@@ -1,5 +1,9 @@
 # Website CLAUDE.md
 
+## Icons
+
+To add or update icons, see `frontend/packages/icons/CLAUDE.md`.
+
 ## Code Blocks
 
 All TypeScript code blocks in documentation files (`website/src/content/docs/**/*.mdx`) are type-checked before release. If any snippet fails, the website build fails.
