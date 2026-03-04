@@ -1,13 +1,12 @@
 "use client";
 
-import posthog from "posthog-js";
 import { useState } from "react";
 
 export function SalesForm() {
 	const [isSubmitted, setIsSubmitted] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (isSubmitting) return;
 
@@ -17,6 +16,12 @@ export function SalesForm() {
 		const data = Object.fromEntries(formData.entries().toArray());
 
 		try {
+			const { default: posthog } = await import("posthog-js");
+			if (!posthog.__loaded) {
+				posthog.init("phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo", {
+					api_host: "https://ph.rivet.dev",
+				});
+			}
 			posthog.capture("survey sent", {
 				$survey_id: "0193928a-4799-0000-8fc4-455382e21359",
 				...data,

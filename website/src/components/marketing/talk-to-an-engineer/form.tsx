@@ -1,25 +1,27 @@
 "use client";
 
-import posthog from "posthog-js";
 import { useState } from "react";
 
 export function TalkToAnEngineerForm() {
 	const [isSubmitted, setIsSubmitted] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (isSubmitting) return;
 
 		setIsSubmitting(true);
 
 		const formData = new FormData(event.currentTarget);
-
 		const data = Object.fromEntries(formData.entries().toArray());
 
-		console.log(data);
-
 		try {
+			const { default: posthog } = await import("posthog-js");
+			if (!posthog.__loaded) {
+				posthog.init("phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo", {
+					api_host: "https://ph.rivet.dev",
+				});
+			}
 			posthog.capture("survey sent", {
 				$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
 				...data,
