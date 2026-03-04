@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal, ArrowRight, Check } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -205,6 +205,164 @@ const CopyInstallButton = () => {
   );
 };
 
+// Animation timing (ms)
+const TM = {
+  FADE: 300,
+  R_START: 500,
+  R_LOAD: 400,
+  R_ACTION: 400,
+  R_GAP: 200,
+  R_COUNT: 3,
+  A_DELAY: 600,
+  A_LOAD: 400,
+  A_ACTION: 167,
+  A_COUNT: 3,
+  PAUSE: 2500,
+};
+
+const R_CYCLE = TM.R_LOAD + TM.R_ACTION + TM.R_GAP;
+const R_END = TM.R_START + R_CYCLE * TM.R_COUNT;
+const A_START = R_END + TM.A_DELAY;
+const A_LOAD_END = A_START + TM.A_LOAD;
+const A_END = A_LOAD_END + TM.A_ACTION * TM.A_COUNT;
+const CYCLE_TOTAL = A_END + TM.PAUSE;
+
+function bp(now: number, start: number, dur: number) {
+  if (now < start) return 0;
+  if (now >= start + dur) return 1;
+  return (now - start) / dur;
+}
+
+const BW = 40;
+const BH = 36;
+const BG = 4;
+const XW = 20;
+const GG = 20;
+const GS = BW + BG + BW + BG + XW + GG;
+
+const ArchitectureGraphic = () => {
+  const [t, setT] = useState(0);
+  const originRef = useRef(0);
+
+  useEffect(() => {
+    let raf: number;
+    originRef.current = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - originRef.current;
+      if (elapsed >= CYCLE_TOTAL) {
+        originRef.current = now;
+        setT(0);
+      } else {
+        setT(elapsed);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const fade = Math.min(1, t / TM.FADE);
+  const rActive = t >= TM.R_START && t < R_END;
+  const aActive = t >= A_START && t < A_END;
+  const done = t >= A_END;
+
+  const rTime = t < TM.R_START ? 0 : t >= R_END ? (R_END - TM.R_START) / 1000 : (t - TM.R_START) / 1000;
+  const aTime = t < A_START ? 0 : t >= A_END ? (A_END - A_START) / 1000 : (t - A_START) / 1000;
+  const rTimeFinal = (R_END - TM.R_START) / 1000;
+  const aTimeFinal = (A_END - A_START) / 1000;
+
+  return (
+    <div className="w-full">
+      <svg viewBox="0 0 560 280" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg" style={{ opacity: fade }}>
+        {/* Time axis */}
+        <text x="28" y="14" fill="#52525b" fontSize={9} fontWeight={500} letterSpacing={2}>TIME →</text>
+        <line x1="80" y1="11" x2="480" y2="11" stroke="#27272a" strokeWidth={0.5} />
+
+        {/* Top: Request/Response */}
+        <g style={{ opacity: aActive ? 0.3 : 1, transition: 'opacity 0.4s ease' }}>
+          <rect x="12" y="24" width="536" height="106" rx="6"
+            fill={rActive ? 'rgba(255,96,48,0.04)' : 'transparent'}
+            stroke={rActive ? '#ff6030' : '#27272a'}
+            strokeWidth={rActive ? 1.5 : 0.5}
+            style={{ transition: 'all 0.3s ease' }} />
+          <text x="28" y="44" fill="#d4d4d8" fontSize={11} fontWeight={600} letterSpacing={0.5}>REQUEST / RESPONSE</text>
+
+          {Array.from({ length: TM.R_COUNT }, (_, i) => {
+            const gx = 28 + i * GS;
+            const rs = TM.R_START + i * R_CYCLE;
+            return (
+              <g key={i}>
+                <rect x={gx} y={58} width={BW * bp(t, rs, TM.R_LOAD)} height={BH} rx={3} fill="#ff6030" />
+                <rect x={gx + BW + BG} y={58} width={BW * bp(t, rs + TM.R_LOAD, TM.R_ACTION)} height={BH} rx={3} fill="#30A46C" />
+                {t >= rs + TM.R_LOAD + TM.R_ACTION && (
+                  <text x={gx + BW + BG + BW + XW / 2} y={81} textAnchor="middle" fill="#ef4444" fontSize={14} fontWeight={700} opacity={0.7}>×</text>
+                )}
+                <text x={gx + (BW * 2 + BG) / 2} y={110} textAnchor="middle" fill="#52525b" fontSize={9}>req {i + 1}</text>
+              </g>
+            );
+          })}
+
+          <text x="524" y="80" textAnchor="end"
+            fill={rActive ? '#ff6030' : t >= R_END ? '#a1a1aa' : '#3f3f46'}
+            fontSize={18} fontWeight={700} fontFamily="ui-monospace, monospace"
+            style={{ transition: 'fill 0.3s ease' }}>
+            {rTime.toFixed(1)}s
+          </text>
+        </g>
+
+        {/* Divider */}
+        <line x1="28" y1="140" x2="532" y2="140" stroke="#27272a" strokeWidth={0.5} />
+
+        {/* Bottom: Rivet Actors */}
+        <g style={{ opacity: rActive ? 0.3 : 1, transition: 'opacity 0.4s ease' }}>
+          <rect x="12" y="148" width="536" height="106" rx="6"
+            fill={aActive ? 'rgba(48,164,108,0.04)' : 'transparent'}
+            stroke={aActive ? '#30A46C' : '#27272a'}
+            strokeWidth={aActive ? 1.5 : 0.5}
+            style={{ transition: 'all 0.3s ease' }} />
+          <text x="28" y="168" fill="#d4d4d8" fontSize={11} fontWeight={600} letterSpacing={0.5}>RIVET ACTORS</text>
+
+          <rect x={28} y={182} width={BW * bp(t, A_START, TM.A_LOAD)} height={BH} rx={3} fill="#ff6030" />
+          {Array.from({ length: TM.A_COUNT }, (_, j) => (
+            <rect key={j} x={28 + BW + BG + j * (BW + BG)} y={182}
+              width={BW * bp(t, A_LOAD_END + j * TM.A_ACTION, TM.A_ACTION)} height={BH} rx={3} fill="#30A46C" />
+          ))}
+
+          <text x={28 + BW / 2} y={234} textAnchor="middle" fill="#52525b" fontSize={9}>load</text>
+          {t >= A_LOAD_END + TM.A_ACTION && (
+            <text x={28 + BW + BG + (TM.A_COUNT * (BW + BG) - BG) / 2} y={234}
+              textAnchor="middle" fill="#52525b" fontSize={9}>req 1 · req 2 · req 3</text>
+          )}
+
+          <text x="524" y="204" textAnchor="end"
+            fill={aActive ? '#30A46C' : t >= A_END ? '#a1a1aa' : '#3f3f46'}
+            fontSize={18} fontWeight={700} fontFamily="ui-monospace, monospace"
+            style={{ transition: 'fill 0.3s ease' }}>
+            {aTime.toFixed(1)}s
+          </text>
+
+          {done && (
+            <text x="524" y="222" textAnchor="end" fill="#30A46C" fontSize={11} fontWeight={600}
+              opacity={Math.min(1, (t - A_END) / 400)}>
+              {(rTimeFinal / aTimeFinal).toFixed(1)}x faster
+            </text>
+          )}
+        </g>
+
+        {/* Legend */}
+        <g opacity={0.8}>
+          <rect x="28" y="264" width="8" height="8" rx="2" fill="#ff6030" />
+          <text x="42" y="272" fill="#52525b" fontSize={9}>load context</text>
+          <rect x="120" y="264" width="8" height="8" rx="2" fill="#30A46C" />
+          <text x="134" y="272" fill="#52525b" fontSize={9}>perform action</text>
+          <text x="222" y="273" fill="#ef4444" fontSize={12} fontWeight={700}>×</text>
+          <text x="234" y="272" fill="#52525b" fontSize={9}>state lost</text>
+        </g>
+      </svg>
+    </div>
+  );
+};
+
 interface RedesignedHeroProps {
   latestChangelogTitle: string;
   thinkingImages: ThinkingImage[];
@@ -214,8 +372,8 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
   return (
     <section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-20 md:pt-0'>
       <div className='mx-auto w-full max-w-7xl'>
-        <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-32 xl:gap-48 2xl:gap-64'>
-          <div className='max-w-xl'>
+        <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:gap-16 xl:gap-20'>
+          <div className='max-w-md lg:shrink-0'>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -236,10 +394,11 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
+              className='mb-4 text-2xl font-normal leading-[1.2] tracking-tight text-white md:text-[2rem]'
             >
-              The primitive for <br />
-              software that thinks.
+              The web was built for<br />
+              request/response.<br />
+              <span className="text-zinc-500">AI broke that architecture.</span>
             </motion.h1>
 
             <motion.p
@@ -248,7 +407,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Rivet Actors are a serverless primitive for stateful workloads.
+              Rivet Actors are a serverless primitive for stateful backends.
             </motion.p>
 
             <motion.div
@@ -270,22 +429,24 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className='flex-shrink-0 hidden lg:block'
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className='hidden lg:block min-w-0 flex-1'
           >
-            <ThinkingImageCycler images={thinkingImages} />
+            {/* <ThinkingImageCycler images={thinkingImages} /> */}
+            <ArchitectureGraphic />
           </motion.div>
         </div>
 
-        {/* Mobile: Image */}
+        {/* Mobile: Graphic */}
         <div className='lg:hidden mt-12'>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
             className='flex justify-center'
           >
-            <ThinkingImageCycler images={thinkingImages} />
+            {/* <ThinkingImageCycler images={thinkingImages} /> */}
+            <ArchitectureGraphic />
           </motion.div>
         </div>
       </div>
