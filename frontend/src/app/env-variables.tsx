@@ -111,9 +111,21 @@ export const useRivetDsn = ({
 	const dataProvider = useEngineCompatDataProvider();
 	const publishableToken = usePublishableToken();
 	const adminToken = useAdminToken();
-	const token = kind === "publishable" ? publishableToken : adminToken;
+	const namespace = dataProvider.engineNamespace;
 
-	const dsn = `https://${dataProvider.engineNamespace}:${token}@${apiEndpoint
+	let auth: string;
+	if (kind === "secret") {
+		auth = `${namespace}:${adminToken}`;
+	} else if (kind === "publishable") {
+		if (__APP_TYPE__ === "engine") {
+			// Self-hosted engine public endpoint auth only requires namespace.
+			auth = namespace;
+		} else {
+			auth = `${namespace}:${publishableToken}`;
+		}
+	}
+
+	const dsn = `https://${auth}@${apiEndpoint
 		.replace("https://", "")
 		.replace("http://", "")}`;
 
