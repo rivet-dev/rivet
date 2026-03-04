@@ -3,12 +3,14 @@ import mdx from '@astrojs/mdx';
 import react from '@astrojs/react';
 import tailwind from '@astrojs/tailwind';
 import sitemap from '@astrojs/sitemap';
+import sentry from "@sentry/astro";
 
 import { remarkPlugins } from './src/mdx/remark';
 import { rehypePlugins } from './src/mdx/rehype';
 import { generateRoutes } from './src/integrations/generate-routes';
 import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
 import { skillVersion } from './src/integrations/skill-version';
+
 
 export default defineConfig({
 	site: 'https://rivet.dev',
@@ -71,6 +73,11 @@ export default defineConfig({
 		}),
 		sitemap({
 			filter: (page) => !page.includes('/api/') && !page.includes('/internal/'),
+		}),
+		sentry({
+      		project: "website",
+      		org: "rivet-gaming",
+			authToken: process.env.SENTRY_AUTH_TOKEN,
 		}),
 	],
 	vite: {
