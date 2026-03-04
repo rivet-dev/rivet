@@ -41,10 +41,10 @@ cd "${REPO_ROOT}/k8s/engine"
 
 kubectl apply -f 00-namespace.yaml
 kubectl apply -f 01-serviceaccount.yaml
-kubectl apply -f 10-postgres-configmap.yaml
-kubectl apply -f 11-postgres-secret.yaml
-kubectl apply -f 12-postgres-statefulset.yaml
-kubectl apply -f 13-postgres-service.yaml
+kubectl apply -f 06-postgres-configmap.yaml
+kubectl apply -f 07-postgres-secret.yaml
+kubectl apply -f 08-postgres-statefulset.yaml
+kubectl apply -f 09-postgres-service.yaml
 
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL to be ready..."
@@ -54,6 +54,7 @@ kubectl apply -f 02-engine-configmap.yaml
 kubectl apply -f 03-rivet-engine-deployment.yaml
 kubectl apply -f 04-rivet-engine-service.yaml
 kubectl apply -f 05-rivet-engine-hpa.yaml
+kubectl apply -f 10-rivet-engine-pdb.yaml
 
 # Wait for engine to be ready
 echo "Waiting for engine to be ready..."

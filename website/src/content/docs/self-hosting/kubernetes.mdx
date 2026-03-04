@@ -136,11 +136,6 @@ kubectl -n rivet-engine wait --for=condition=ready pod -l app=postgres --timeout
 
 ### 3. Deploy Rivet Engine
 
-The Rivet Engine deployment consists of two components:
-
-- **Main Engine Deployment**: Runs all services except singleton services. Configured with Horizontal Pod Autoscaling (HPA) to automatically scale between 2-10 replicas based on CPU and memory utilization.
-- **Singleton Engine Deployment**: Runs singleton services that must have exactly 1 replica (e.g., schedulers, coordinators).
-
 Save as `rivet-engine.yaml`:
 
 ```yaml
@@ -159,7 +154,7 @@ data:
         "datacenter_label": 1,
         "datacenters": [
           {
-            "name": "local",
+            "name": "default",
             "datacenter_label": 1,
             "is_leader": true,
             "public_url": "http://localhost:6420",
@@ -204,13 +199,12 @@ spec:
       labels:
         app: rivet-engine
     spec:
+      terminationGracePeriodSeconds: 25
       containers:
       - name: rivet-engine
         image: rivetdev/engine:latest
         args:
         - start
-        - --except-services
-        - singleton
         env:
         - name: RIVET_CONFIG_PATH
           value: /etc/rivet/config.jsonc
@@ -226,10 +220,10 @@ spec:
         resources:
           requests:
             cpu: 2000m
-            memory: 4Gi
+            memory: 2Gi
           limits:
-            cpu: 4000m
-            memory: 8Gi
+            cpu: 3000m
+            memory: 4Gi
         startupProbe:
           httpGet:
             path: /health
@@ -249,6 +243,10 @@ spec:
             port: 6421
           periodSeconds: 10
           failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
       volumes:
       - name: config
         configMap:
@@ -280,70 +278,16 @@ spec:
         type: Utilization
         averageUtilization: 80
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
-  name: rivet-engine-singleton
+  name: rivet-engine
   namespace: rivet-engine
 spec:
-  replicas: 1
+  maxUnavailable: 1
   selector:
     matchLabels:
-      app: rivet-engine-singleton
-  template:
-    metadata:
-      labels:
-        app: rivet-engine-singleton
-    spec:
-      containers:
-      - name: rivet-engine
-        image: rivetdev/engine:latest
-        args:
-        - start
-        - --services
-        - singleton
-        - --services
-        - api-peer
-        env:
-        - name: RIVET_CONFIG_PATH
-          value: /etc/rivet/config.jsonc
-        ports:
-        - containerPort: 6421
-          name: api-peer
-        volumeMounts:
-        - name: config
-          mountPath: /etc/rivet
-          readOnly: true
-        resources:
-          requests:
-            cpu: 2000m
-            memory: 4Gi
-          limits:
-            cpu: 4000m
-            memory: 8Gi
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 6421
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          failureThreshold: 30
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 6421
-          periodSeconds: 5
-          failureThreshold: 2
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 6421
-          periodSeconds: 10
-          failureThreshold: 3
-      volumes:
-      - name: config
-        configMap:
-          name: engine-config
+      app: rivet-engine
 ```
 
 Apply and wait for the engine to be ready:
@@ -351,14 +295,13 @@ Apply and wait for the engine to be ready:
 ```bash
 kubectl apply -f rivet-engine.yaml
 kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine --timeout=300s
-kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine-singleton --timeout=300s
 ```
 
 **Note**: The HPA requires a metrics server to be running in your cluster. Most Kubernetes distributions (including k3d, GKE, EKS, AKS) include this by default.
 
 ### 4. Verify Deployment
 
-Check that all pods are running (you should see 2+ engine pods and 1 singleton pod):
+Check that all pods are running (you should see 2+ engine pods):
 
 ```bash
 kubectl -n rivet-engine get pods
@@ -380,7 +323,7 @@ kubectl -n rivet-engine port-forward service/rivet-engine 6420:6420 6421:6421
 Test the health endpoint:
 
 ```bash
-curl http://localhost:6420/health
+curl http://localhost:6421/health
 ```
 
 Expected response:
@@ -487,7 +430,15 @@ kubectl -n rivet-engine get hpa
 kubectl -n rivet-engine describe hpa rivet-engine
 ```
 
+### Updating Configuration
+
+After modifying the `engine-config` ConfigMap, restart the engine pods to pick up the changes:
+
+```bash
+kubectl -n rivet-engine rollout restart deployment/rivet-engine
+```
+
 ## Next Steps
 
 - See [Configuration](/docs/self-hosting/configuration) for all options
-- For advanced multi-datacenter setup, see the [GitHub repository](https://github.com/rivet-gg/rivet/tree/main/k8s)
+- For advanced multi-datacenter setup, see the [GitHub repository](https://github.com/rivet-dev/rivet/tree/main/k8s)
