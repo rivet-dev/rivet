@@ -96,8 +96,8 @@ The `drainOnVersionUpgrade` option controls whether old actors are stopped when 
 
 | Value | Behavior |
 |-------|----------|
-| `false` (default) | Old actors continue running. New actors go to new version. Versions coexist. |
-| `true` | Old actors receive stop signal and have 30s to finish gracefully. |
+| `false` (default in [runner mode](/docs/general/runtime-modes)) | Old actors continue running. New actors go to new version. Versions coexist. |
+| `true` (default in [serverless mode](/docs/general/runtime-modes)) | Old actors receive stop signal and have 30s to finish gracefully. |
 
 ## Advanced
 
@@ -105,13 +105,35 @@ The `drainOnVersionUpgrade` option controls whether old actors are stopped when 
 
 When `drainOnVersionUpgrade` is enabled, Rivet uses two mechanisms to detect version changes:
 
-**New Runner Connection**
+- **New runner connection**: When a runner connects with a newer version number, the engine immediately drains all older runners with the same name. This is the primary mechanism for [runner mode](/docs/general/runtime-modes) deployments.
+- **Metadata polling** (serverless only): In [serverless mode](/docs/general/runtime-modes), runners periodically poll the engine to check for newer versions and self-drain if one is found. This ensures old runners drain even if no new requests trigger a runner connection.
 
-When a runner connects with a newer version number, the engine immediately drains all older runners with the same name. This is the primary mechanism for [runner mode](/docs/general/runtime-modes) deployments. In serverless mode, this also provides faster upgrades if a new request arrives before the next metadata poll interval.
+### SIGTERM Handling
 
-**Metadata Polling** (Serverless Only)
+When a runner process receives SIGTERM, it gracefully stops all actors before exiting:
 
-In [serverless mode](/docs/general/runtime-modes), runners poll the engine's metadata endpoint periodically to check for newer versions. If a newer version is detected, the runner initiates a self-drain. This is necessary because serverless functions may continue handling requests without reconnecting after a new deployment. Polling ensures old runners eventually drain even if no new requests trigger a runner connection.
+- Each actor's `onSleep` hook is called, giving it time to save state
+- Actors are rescheduled to other available runners
+- The runner waits up to **120 seconds** for all actors to finish stopping
+- If the process is force-killed before actors finish (e.g. SIGKILL), actors are rescheduled with a crash backoff penalty instead of a clean handoff
+
+<Note>
+Ensure your platform's shutdown grace period is at least **130 seconds** to give actors time to stop cleanly.
+</Note>
+
+### Shutdown Timeouts
+
+Several timeouts control how long each part of the shutdown process can take:
+
+| Timeout | Default | Description | Configuration |
+|---------|---------|-------------|---------------|
+| `actor_stop_threshold` | 30s | Engine-side limit on how long each actor has to stop before being marked lost | [Engine config](/docs/self-hosting/configuration) (`pegboard.actor_stop_threshold`) |
+| `onSleepTimeout` | 5s | How long the `onSleep` hook can run | [Actor options](/docs/actors/lifecycle#options) |
+| `runStopTimeout` | 15s | How long to wait for the `run` handler to exit | [Actor options](/docs/actors/lifecycle#options) |
+| `waitUntilTimeout` | 15s | How long to wait for background `waitUntil` promises to resolve | [Actor options](/docs/actors/lifecycle#options) |
+| `runner_lost_threshold` | 15s | Fallback detection if the runner dies without graceful shutdown | [Engine config](/docs/self-hosting/configuration) (`pegboard.runner_lost_threshold`) |
+
+The per-actor timeouts (`onSleepTimeout`, `runStopTimeout`, `waitUntilTimeout`) must fit within `actor_stop_threshold`. The runner's 120-second wait is a hard upper bound on the entire shutdown process.
 
 ## Related
 
