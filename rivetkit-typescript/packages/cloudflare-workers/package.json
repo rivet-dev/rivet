@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/cloudflare-workers",
-	"version": "2.1.5",
+	"version": "2.1.6",
 	"description": "Cloudflare Workers adapter for RivetKit actors",
 	"keywords": [
 		"rivetkit",

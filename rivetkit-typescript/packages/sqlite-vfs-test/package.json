@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/sqlite-vfs-test",
-	"version": "2.1.5",
+	"version": "2.1.6",
 	"description": "Vitest wrapper for sqlite-vfs backends",
 	"license": "Apache-2.0",
 	"type": "module",
