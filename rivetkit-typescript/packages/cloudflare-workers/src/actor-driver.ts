@@ -6,7 +6,6 @@ import type {
 	RegistryConfig,
 } from "rivetkit";
 import { lookupInRegistry } from "rivetkit";
-import type { Client } from "rivetkit/client";
 import type {
 	ActorDriver,
 	AnyActorInstance,
@@ -105,13 +104,13 @@ export class ActorGlobalState {
 export class CloudflareActorsActorDriver implements ActorDriver {
 	#registryConfig: RegistryConfig;
 	#managerDriver: ManagerDriver;
-	#inlineClient: Client<any>;
+	#inlineClient: any;
 	#globalState: CloudflareDurableObjectGlobalState;
 
 	constructor(
 		registryConfig: RegistryConfig,
 		managerDriver: ManagerDriver,
-		inlineClient: Client<any>,
+		inlineClient: any,
 		globalState: CloudflareDurableObjectGlobalState,
 	) {
 		this.#registryConfig = registryConfig;
@@ -191,11 +190,12 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		actorState.actorInstance = definition.instantiate();
 
 		// Start actor
-		await actorState.actorInstance.start(
-			this,
-			this.#inlineClient,
-			actorId,
-			name,
+			const actorInstance = actorState.actorInstance as any;
+			await actorInstance.start(
+				this,
+				this.#inlineClient,
+				actorId,
+				name,
 			key,
 			"unknown", // TODO: Support regions in Cloudflare
 		);
@@ -323,7 +323,7 @@ export function createCloudflareActorsActorDriverBuilder(
 	return (
 		config: RegistryConfig,
 		managerDriver: ManagerDriver,
-		inlineClient: Client<any>,
+		inlineClient: any,
 	) => {
 		return new CloudflareActorsActorDriver(
 			config,

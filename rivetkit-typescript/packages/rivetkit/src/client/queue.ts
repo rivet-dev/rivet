@@ -43,9 +43,9 @@ export interface QueueSendNoWaitOptions {
 
 export type QueueSendOptions = QueueSendWaitOptions | QueueSendNoWaitOptions;
 
-export interface QueueSendResult {
+export interface QueueSendResult<TResponse = unknown> {
 	status: "completed" | "timedOut";
-	response?: unknown;
+	response?: TResponse;
 }
 
 interface QueueSenderOptions {

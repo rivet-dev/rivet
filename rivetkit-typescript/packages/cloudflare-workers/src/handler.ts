@@ -91,7 +91,10 @@ export function createInlineClient<R extends Registry<any>>(
 	);
 
 	// Create client using the manager driver
-	const client = createClientWithDriver<R>(managerDriver);
+	// Avoid excessive generic expansion in DTS generation.
+	const client = (createClientWithDriver as any)(
+		managerDriver,
+	) as Client<R>;
 
 	return { client, fetch: router.fetch.bind(router), config, ActorHandler };
 }
@@ -103,14 +106,18 @@ export function createInlineClient<R extends Registry<any>>(
  *
  * This includes a `fetch` handler and `ActorHandler` Durable Object.
  */
-export function createHandler<R extends Registry<any>>(
-	registry: R,
+export function createHandler(
+	registry: Registry<any>,
 	inputConfig?: InputConfig,
 ): HandlerOutput {
-	const { client, fetch, config, ActorHandler } = createInlineClient(
-		registry,
-		inputConfig,
-	);
+	const inline = (createInlineClient as any)(registry, inputConfig);
+	const client = inline.client as any;
+	const fetch = inline.fetch as (
+		request: Request,
+		...args: any
+	) => Response | Promise<Response>;
+	const config = inline.config as Config;
+	const ActorHandler = inline.ActorHandler as DurableObjectConstructor;
 
 	// Create Cloudflare handler
 	const handler = {

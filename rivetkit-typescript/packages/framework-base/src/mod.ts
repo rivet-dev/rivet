@@ -13,7 +13,7 @@ export type AnyActorRegistry = Registry<any>;
 
 export type { ActorConnStatus };
 
-interface ActorStateReference<AD extends AnyActorDefinition> {
+interface ActorStateReference {
 	/**
 	 * The unique identifier for the actor.
 	 * This is a hash generated from the actor's options.
@@ -25,12 +25,12 @@ interface ActorStateReference<AD extends AnyActorDefinition> {
 	 * The state of the actor, derived from the store.
 	 * This includes the actor's connection and handle.
 	 */
-	handle: ActorHandle<AD> | null;
+	handle: ActorHandle<AnyActorDefinition> | null;
 	/**
 	 * The connection to the actor.
 	 * This is used to communicate with the actor in realtime.
 	 */
-	connection: ActorConn<AD> | null;
+	connection: ActorConn<AnyActorDefinition> | null;
 	/**
 	 * The connection status of the actor.
 	 */
@@ -43,7 +43,7 @@ interface ActorStateReference<AD extends AnyActorDefinition> {
 	 * Options for the actor, including its name, key, parameters, and whether it is enabled.
 	 */
 	opts: {
-		name: keyof AD;
+		name: string;
 		/**
 		 * Unique key for the actor instance.
 		 * This can be a string or an array of strings to create multiple instances.
@@ -54,7 +54,7 @@ interface ActorStateReference<AD extends AnyActorDefinition> {
 		 * Parameters for the actor.
 		 * These are additional options that can be passed to the actor.
 		 */
-		params?: Record<string, string>;
+		params?: unknown;
 		/** Region to create the actor in if it doesn't exist. */
 		createInRegion?: string;
 		/** Input data to pass to the actor. */
@@ -73,11 +73,8 @@ interface ActorStateReference<AD extends AnyActorDefinition> {
 	};
 }
 
-interface InternalRivetKitStore<
-	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
-> {
-	actors: Record<string, ActorStateReference<Actors>>;
+interface InternalRivetKitStore {
+	actors: Record<string, ActorStateReference>;
 }
 
 /**
@@ -85,7 +82,7 @@ interface InternalRivetKitStore<
  */
 export interface ActorOptions<
 	Registry extends AnyActorRegistry,
-	ActorName extends keyof ExtractActorsFromRegistry<Registry>,
+	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
 > {
 	/**
 	 * Typesafe name of the actor.
@@ -102,7 +99,7 @@ export interface ActorOptions<
 	/**
 	 * Parameters for the actor.
 	 */
-	params?: Registry[ExtractActorsFromRegistry<Registry>]["params"];
+	params?: ExtractActorsFromRegistry<Registry>[ActorName]["params"];
 	/** Region to create the actor in if it doesn't exist. */
 	createInRegion?: string;
 	/** Input data to pass to the actor. */
@@ -122,13 +119,10 @@ export interface ActorOptions<
 
 export type ActorsStateDerived<
 	Registry extends AnyActorRegistry,
-	WorkerName extends keyof ExtractActorsFromRegistry<Registry>,
+	WorkerName extends keyof ExtractActorsFromRegistry<Registry> & string,
 > = Derived<
 	Omit<
-		InternalRivetKitStore<
-			Registry,
-			ExtractActorsFromRegistry<Registry>
-		>["actors"][string],
+		InternalRivetKitStore["actors"][string],
 		"handle" | "connection"
 	> & {
 		handle: ActorHandle<
@@ -148,21 +142,15 @@ export interface CreateRivetKitOptions<Registry extends AnyActorRegistry> {
 	hashFunction?: (opts: ActorOptions<Registry, any>) => string;
 }
 
-type ComputedActorState<
-	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
-> = InternalRivetKitStore<Registry, Actors>["actors"][string] & {
+type ComputedActorState = InternalRivetKitStore["actors"][string] & {
 	/** @deprecated Use `connStatus === "connected"` instead */
 	isConnected: boolean;
 };
 
-type ActorCache<
-	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
-> = Map<
+type ActorCache = Map<
 	string,
 	{
-		state: Derived<ComputedActorState<Registry, Actors>>;
+		state: Derived<ComputedActorState>;
 		key: string;
 		mount: () => () => void;
 		create: () => void;
@@ -173,34 +161,29 @@ type ActorCache<
 
 export function createRivetKit<
 	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
 >(client: Client<Registry>, createOpts: CreateRivetKitOptions<Registry> = {}) {
-	const store = new Store<InternalRivetKitStore<Registry, Actors>>({
+	const store = new Store<InternalRivetKitStore>({
 		actors: {},
 	});
 
-	const cache: ActorCache<Registry, Actors> = new Map();
+	const cache: ActorCache = new Map();
 
 	return {
-		getOrCreateActor: <ActorName extends keyof Actors>(
+		getOrCreateActor: <
+			ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
+		>(
 			actorOpts: ActorOptions<Registry, ActorName>,
 		) => getOrCreateActor(client, createOpts, store, cache, actorOpts),
 		store,
 	};
 }
 
-type ActorUpdates<
-	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
-> = Partial<InternalRivetKitStore<Registry, Actors>["actors"][string]>;
+type ActorUpdates = Partial<InternalRivetKitStore["actors"][string]>;
 
-function updateActor<
-	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
->(
-	store: Store<InternalRivetKitStore<Registry, Actors>>,
+function updateActor(
+	store: Store<InternalRivetKitStore>,
 	key: string,
-	updates: ActorUpdates<Registry, Actors>,
+	updates: ActorUpdates,
 ) {
 	store.setState((prev) => ({
 		...prev,
@@ -214,13 +197,12 @@ function updateActor<
 // See README.md for lifecycle documentation.
 function getOrCreateActor<
 	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
-	ActorName extends keyof Actors,
+	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
 >(
 	client: Client<Registry>,
 	createOpts: CreateRivetKitOptions<Registry>,
-	store: Store<InternalRivetKitStore<Registry, Actors>>,
-	cache: ActorCache<Registry, Actors>,
+	store: Store<InternalRivetKitStore>,
+	cache: ActorCache,
 	actorOpts: ActorOptions<Registry, ActorName>,
 ) {
 	const hash = createOpts.hashFunction || defaultHashFunction;
@@ -312,15 +294,15 @@ function getOrCreateActor<
 					// Re-check state after microtask in case it changed
 					const currentActor = store.state.actors[key];
 					if (
-						currentActor &&
-						currentActor.connStatus === "idle" &&
-						currentActor.opts.enabled
-					) {
-						create<Registry, Actors, ActorName>(client, store, key);
-					}
-				});
-			}
-		},
+							currentActor &&
+							currentActor.connStatus === "idle" &&
+							currentActor.opts.enabled
+						) {
+							create<Registry, ActorName>(client, store, key);
+						}
+					});
+				}
+			},
 		deps: [derived],
 	});
 
@@ -353,14 +335,14 @@ function getOrCreateActor<
 			// Effect doesn't run immediately on mount, only on state changes.
 			// Trigger initial connection if actor is enabled and idle.
 			const actor = store.state.actors[key];
-			if (
-				actor &&
-				actor.opts.enabled &&
-				actor.connStatus === "idle"
-			) {
-				create<Registry, Actors, ActorName>(client, store, key);
+				if (
+					actor &&
+					actor.opts.enabled &&
+					actor.connStatus === "idle"
+				) {
+					create<Registry, ActorName>(client, store, key);
+				}
 			}
-		}
 
 		return () => {
 			// Decrement ref count
@@ -415,11 +397,10 @@ function getOrCreateActor<
 
 function create<
 	Registry extends AnyActorRegistry,
-	Actors extends ExtractActorsFromRegistry<Registry>,
-	ActorName extends keyof Actors,
+	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
 >(
 	client: Client<Registry>,
-	store: Store<InternalRivetKitStore<Registry, Actors>>,
+	store: Store<InternalRivetKitStore>,
 	key: string,
 ) {
 	const actor = store.state.actors[key];
@@ -459,8 +440,12 @@ function create<
 		// Store connection BEFORE registering callbacks to avoid race condition
 		// where status change fires before connection is stored
 		updateActor(store, key, {
-			handle: handle as ActorHandle<Actors[ActorName]>,
-			connection: connection as ActorConn<Actors[ActorName]>,
+			handle: handle as ActorHandle<
+				ExtractActorsFromRegistry<Registry>[ActorName]
+			>,
+			connection: connection as ActorConn<
+				ExtractActorsFromRegistry<Registry>[ActorName]
+			>,
 		});
 
 		// Subscribe to connection state changes

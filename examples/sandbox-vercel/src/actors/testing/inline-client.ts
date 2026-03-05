@@ -18,7 +18,7 @@ export const inlineClientActor = actor({
 
 		// Action that uses client to get counter state (stateless)
 		getCounterState: async (c) => {
-			const client = c.client();
+			const client = c.client<typeof registry>();
 			const count = await client.counter
 				.getOrCreate(["inline-test"])
 				.getCount();
@@ -28,7 +28,7 @@ export const inlineClientActor = actor({
 
 		// Action that uses client with .connect() for stateful communication
 		connectToCounterAndIncrement: async (c, amount: number) => {
-			const client = c.client();
+			const client = c.client<typeof registry>();
 			const handle = client.counter.getOrCreate(["inline-test-stateful"]);
 			const connection = handle.connect();
 
