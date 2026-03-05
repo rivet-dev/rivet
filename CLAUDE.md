@@ -114,6 +114,12 @@ If you need to add a new `@rivetkit/*` package that isn't already in the root re
 - When adding new docs pages, update `website/src/sitemap/mod.ts` so the page appears in the sidebar.
 - When changing actor/runtime limits or behavior that affects documented limits (for example KV, queue, SQLite, WebSocket, HTTP, or timeouts), update `website/src/content/docs/actors/limits.mdx` in the same change.
 
+## Code Blocks in Docs
+
+- All TypeScript code blocks in docs are typechecked during the website build. They must be valid, compilable TypeScript.
+- Use `<CodeGroup workspace>` only when showing multiple related files together (e.g., `actors.ts` + `client.ts`). For a single file, use a standalone fenced code block.
+- Code blocks are extracted and typechecked via `website/src/integrations/typecheck-code-blocks.ts`. Add `@nocheck` to the code fence to skip typechecking for a block.
+
 ## Content Frontmatter
 
 ### Docs (`website/src/content/docs/**/*.mdx`)

@@ -431,3 +431,65 @@ This means you can run normal code in `run` without worrying about sleep interru
 - Use `c.aborted` and `c.abortSignal` for graceful shutdown and cancellation.
 - Add `timeout` when callers need bounded wait behavior.
 - Use `wait: true` only when the caller actually needs a response.
+
+## Tips
+
+### Message TTL
+
+Every queue message includes a `createdAt` timestamp. Use this to skip or discard stale messages in your run loop:
+
+```ts actors.ts
+import { actor, queue, setup } from "rivetkit";
+
+export const worker = actor({
+  state: {},
+  queues: {
+    jobs: queue<{ task: string }>(),
+  },
+  run: async (c) => {
+    for await (const message of c.queue.iter()) {
+      const ageMs = Date.now() - message.createdAt;
+      if (ageMs > 60_000) {
+        // Message is older than 60 seconds, skip it.
+        continue;
+      }
+      console.log("Processing", message.body.task);
+    }
+  },
+});
+
+export const registry = setup({ use: { worker } });
+```
+
+### Delayed delivery
+
+Use [`c.schedule`](/docs/actors/schedule) to enqueue messages at a future time instead of processing them immediately:
+
+```ts actors.ts
+import { actor, queue, setup } from "rivetkit";
+
+export const reminder = actor({
+  state: {},
+  queues: {
+    notify: queue<{ userId: string }>(),
+  },
+  actions: {
+    scheduleReminder: async (c, userId: string) => {
+      // Enqueue a message in 30 seconds.
+      c.schedule.after(30_000, "enqueueReminder", userId);
+    },
+    enqueueReminder: async (c, userId: string) => {
+      await c.queue.send("notify", { userId });
+    },
+  },
+  run: async (c) => {
+    for await (const message of c.queue.iter()) {
+      console.log("Sending reminder to", message.body.userId);
+    }
+  },
+});
+
+export const registry = setup({ use: { reminder } });
+```
+
+See [Schedule](/docs/actors/schedule) for the full scheduling API.
