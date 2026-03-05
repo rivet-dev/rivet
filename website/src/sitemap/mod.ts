@@ -389,6 +389,10 @@ export const sitemap = [
 						href: "/docs/actors/troubleshooting",
 					},
 					{
+						title: "Production Checklist",
+						href: "/docs/general/production-checklist",
+					},
+					{
 						title: "Configuration",
 						collapsible: true,
 						pages: [
@@ -535,6 +539,10 @@ export const sitemap = [
 						title: "Multi-Region",
 						href: "/docs/self-hosting/multi-region",
 						// icon: faGlobe,
+					},
+					{
+						title: "Production Checklist",
+						href: "/docs/self-hosting/production-checklist",
 					},
 				]
 			},
