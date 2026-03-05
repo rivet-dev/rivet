@@ -198,8 +198,6 @@ export function App() {
 		}
 	};
 
-	// Cursor is automatically removed when connection closes via connState cleanup
-
 	return (
 		<div className="app-container">
 			<div className="controls">

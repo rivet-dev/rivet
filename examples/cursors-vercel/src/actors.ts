@@ -22,6 +22,7 @@ export const cursorRoom = actor({
 	},
 	events: {
 		cursorMoved: event<CursorPosition>(),
+		cursorRemoved: event<CursorPosition>(),
 		textUpdated: event<TextLabel>(),
 		textRemoved: event<string>(),
 	},
@@ -97,6 +98,12 @@ export const cursorRoom = actor({
 				textLabels: c.state.textLabels,
 			};
 		},
+	},
+
+	onDisconnect: (c, conn) => {
+		if (conn.state.cursor) {
+			c.broadcast("cursorRemoved", conn.state.cursor);
+		}
 	},
 });
 

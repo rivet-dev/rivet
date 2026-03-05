@@ -7,7 +7,9 @@ import {
 import { useStore } from "@tanstack/react-store";
 import { useEffect, useRef } from "react";
 import {
+	type ActorConn,
 	type Client,
+	type ClientConfigInput,
 	createClient,
 	type ExtractActorsFromRegistry,
 } from "rivetkit/client";
@@ -16,9 +18,10 @@ export { ActorConnDisposed, createClient } from "rivetkit/client";
 export type { ActorConnStatus } from "@rivetkit/framework-base";
 
 export function createRivetKit<Registry extends AnyActorRegistry>(
-	clientInput: Parameters<typeof createClient>[0] = undefined,
+	clientInput: string | ClientConfigInput | undefined = undefined,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
+	// @ts-ignore Type instantiation can be excessively deep for complex registries.
 	return createRivetKitWithClient<Registry>(
 		createClient<Registry>(clientInput),
 		opts,
@@ -29,10 +32,8 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 	client: Client<Registry>,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
-	const { getOrCreateActor } = createVanillaRivetKit<
-		Registry,
-		ExtractActorsFromRegistry<Registry>
-	>(client, opts);
+	// @ts-ignore Type instantiation can be excessively deep for complex registries.
+	const { getOrCreateActor } = createVanillaRivetKit(client, opts);
 
 	/**
 	 * Hook to connect to a actor and retrieve its state. Using this hook with the same options
@@ -42,7 +43,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 	 * @returns An object containing the actor's state and a method to listen for events.
 	 */
 	function useActor<
-		ActorName extends keyof ExtractActorsFromRegistry<Registry>,
+		ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
 	>(opts: ActorOptions<Registry, ActorName>) {
 		// getOrCreateActor syncs opts to store on every call
 		const { mount, state } = getOrCreateActor<ActorName>(opts);
@@ -51,7 +52,12 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 			return mount();
 		}, [mount]);
 
-		const actorState = useStore(state) || {};
+		const actorState = useStore(state);
+		type UseEvent = (typeof actorState)["connection"] extends ActorConn<
+			infer AD
+		> | null
+			? ActorConn<AD>["on"]
+			: never;
 
 		/**
 		 * Hook to listen for events emitted by the actor.
@@ -62,13 +68,9 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 		 * @param eventName The name of the event to listen for.
 		 * @param handler The function to call when the event is emitted.
 		 */
-		function useEvent(
-			eventName: string,
-			// biome-ignore lint/suspicious/noExplicitAny: strong typing of handler is not supported yet
-			handler: (...args: any[]) => void,
-		) {
+		const useEvent = ((eventName: string, handler: (...args: unknown[]) => void) => {
 			const ref = useRef(handler);
-			const actorState = useStore(state) || {};
+			const actorState = useStore(state);
 
 			useEffect(() => {
 				ref.current = handler;
@@ -76,19 +78,27 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 
 			// biome-ignore lint/correctness/useExhaustiveDependencies: it's okay to not include all dependencies here
 			useEffect(() => {
-				if (!actorState?.connection) return;
+				const connection = actorState.connection as
+					| {
+							on: (
+								eventName: string,
+								callback: (...args: unknown[]) => void,
+							) => () => void;
+					  }
+					| null;
+				if (!connection) return;
 
-				function eventHandler(...args: any[]) {
+				function eventHandler(...args: unknown[]) {
 					ref.current(...args);
 				}
-				return actorState.connection.on(eventName, eventHandler);
+				return connection.on(eventName, eventHandler);
 			}, [
 				actorState.connection,
 				actorState.connStatus,
 				actorState.hash,
 				eventName,
 			]);
-		}
+		}) as UseEvent;
 
 		return {
 			...actorState,

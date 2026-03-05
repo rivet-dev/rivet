@@ -175,7 +175,10 @@ export function createActorDurableObject(
 			const managerDriver = new CloudflareActorsManagerDriver();
 
 			// Create inline client
-			const inlineClient = createClientWithDriver(managerDriver);
+			// Avoid expensive type expansion in downstream DTS generation.
+			const inlineClient: any = (createClientWithDriver as any)(
+				managerDriver,
+			);
 
 			// Create actor driver builder
 			const actorDriverBuilder =

@@ -25,7 +25,11 @@ import {
 import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
 import { getLogMessage } from "@/utils/env-vars";
-import type { ActorDefinitionActions } from "./actor-common";
+import type {
+	ActorDefinitionActions,
+	ActorDefinitionEventSubscriptions,
+	ActorDefinitionQueueSend,
+} from "./actor-common";
 import { checkForSchedulingError, queryActor } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
@@ -419,7 +423,7 @@ export class ActorConnRaw {
 				connId: this.#connId,
 			});
 		});
-		ws.addEventListener("message", async (ev) => {
+		ws.addEventListener("message", async (ev: { data: ConnMessage }) => {
 			try {
 				await this.#handleOnMessage(ev.data);
 			} catch (err) {
@@ -429,7 +433,7 @@ export class ActorConnRaw {
 				});
 			}
 		});
-		ws.addEventListener("close", async (ev) => {
+		ws.addEventListener("close", async (ev: Event | CloseEvent) => {
 			try {
 				await this.#handleOnClose(ev);
 			} catch (err) {
@@ -439,7 +443,7 @@ export class ActorConnRaw {
 				});
 			}
 		});
-		ws.addEventListener("error", (_ev) => {
+		ws.addEventListener("error", () => {
 			try {
 				this.#handleOnError();
 			} catch (err) {
@@ -1258,5 +1262,10 @@ export class ActorConnRaw {
  * @template AD The actor class that this connection is for.
  * @see {@link ActorConnRaw}
  */
-export type ActorConn<AD extends AnyActorDefinition> = ActorConnRaw &
+export type ActorConn<AD extends AnyActorDefinition> = Omit<
+	ActorConnRaw,
+	"send" | "on" | "once"
+> &
+	ActorDefinitionQueueSend<AD> &
+	ActorDefinitionEventSubscriptions<AD> &
 	ActorDefinitionActions<AD>;

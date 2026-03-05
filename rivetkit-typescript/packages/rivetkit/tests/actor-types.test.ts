@@ -2,6 +2,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import { actor, event, queue } from "@/actor/mod";
 import type { ActorContext, ActorContextOf } from "@/actor/contexts";
 import type { ActorDefinition } from "@/actor/definition";
+import type { ActorConn, ActorHandle } from "@/client/mod";
 import type { DatabaseProviderContext } from "@/db/config";
 import { db } from "@/db/mod";
 import type { WorkflowContextOf as WorkflowContextOfFromRoot } from "@/mod";
@@ -178,6 +179,121 @@ describe("ActorDefinition", () => {
 			expectTypeOf<FooBody>().toEqualTypeOf<{ fooBody: string }>();
 			expectTypeOf<BarBody>().toEqualTypeOf<{ barBody: number }>();
 			expectTypeOf<CompletableBody>().toEqualTypeOf<{ input: string }>();
+		});
+	});
+
+	describe("client queue and event type inference", () => {
+		const clientTypedActor = actor({
+			state: {},
+			queues: {
+				tasks: queue<{ value: number }, { ok: number }>(),
+				noReply: queue<{ value: string }>(),
+			},
+			events: {
+				updated: event<{ count: number }>(),
+				pair: event<[number, string]>(),
+			},
+			actions: {},
+		});
+
+		const untypedClientActor = actor({
+			state: {},
+			actions: {},
+		});
+
+		it("types ActorHandle.send and ActorConn.send end-to-end", () => {
+			function assertTypedHandle(handle: ActorHandle<typeof clientTypedActor>) {
+				void handle.send("tasks", { value: 1 });
+				void handle.send("tasks", { value: 1 }, { wait: true, timeout: 10 });
+				void handle.send(
+					"noReply",
+					{ value: "ok" },
+					{ wait: true, timeout: 10 },
+				);
+
+				// @ts-expect-error unknown queue name
+				void handle.send("missing", { value: 1 });
+				// @ts-expect-error invalid queue payload
+				void handle.send("tasks", { value: "nope" });
+			}
+
+			async function assertWaitResult(
+				handle: ActorHandle<typeof clientTypedActor>,
+			) {
+				const result = await handle.send(
+					"tasks",
+					{ value: 1 },
+					{ wait: true, timeout: 10 },
+				);
+				expectTypeOf(result.response).toEqualTypeOf<
+					{ ok: number } | undefined
+				>();
+
+				const noReply = await handle.send(
+					"noReply",
+					{ value: "ok" },
+					{ wait: true, timeout: 10 },
+				);
+				expectTypeOf(noReply.response).toEqualTypeOf<undefined>();
+			}
+
+			function assertTypedConn(conn: ActorConn<typeof clientTypedActor>) {
+				void conn.send("tasks", { value: 1 });
+				void conn.send("tasks", { value: 1 }, { wait: true, timeout: 10 });
+
+				// @ts-expect-error invalid queue payload
+				void conn.send("tasks", { value: "bad" });
+				// @ts-expect-error unknown queue name
+				void conn.send("missing", { value: 1 });
+			}
+
+			function assertUntypedFallback(
+				handle: ActorHandle<typeof untypedClientActor>,
+				conn: ActorConn<typeof untypedClientActor>,
+			) {
+				void handle.send("any-name", { anyBody: true });
+				void conn.send("any-name", { anyBody: true });
+			}
+
+			void assertTypedHandle;
+			void assertWaitResult;
+			void assertTypedConn;
+			void assertUntypedFallback;
+		});
+
+		it("types ActorConn.on and ActorConn.once end-to-end", () => {
+			function assertTypedConn(conn: ActorConn<typeof clientTypedActor>) {
+				conn.on("updated", (payload) => {
+					expectTypeOf(payload).toEqualTypeOf<{ count: number }>();
+				});
+
+				conn.on("pair", (count, label) => {
+					expectTypeOf(count).toEqualTypeOf<number>();
+					expectTypeOf(label).toEqualTypeOf<string>();
+				});
+
+				conn.once("updated", (payload) => {
+					expectTypeOf(payload).toEqualTypeOf<{ count: number }>();
+				});
+
+				// @ts-expect-error invalid callback payload type
+				conn.on("updated", (payload: { count: string }) => {
+					void payload;
+				});
+				// @ts-expect-error unknown event name
+				conn.on("missing", () => {});
+			}
+
+			function assertUntypedFallback(
+				conn: ActorConn<typeof untypedClientActor>,
+			) {
+				conn.on("any-event", (...args) => {
+					expectTypeOf(args).toEqualTypeOf<any[]>();
+				});
+			}
+
+			void assertTypedConn;
+			void assertUntypedFallback;
 		});
 	});
 

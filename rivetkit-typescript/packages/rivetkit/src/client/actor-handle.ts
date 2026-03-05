@@ -23,7 +23,10 @@ import {
 	HttpActionResponseSchema,
 } from "@/schemas/client-protocol-zod/mod";
 import { bufferToArrayBuffer } from "@/utils";
-import type { ActorDefinitionActions } from "./actor-common";
+import type {
+	ActorDefinitionActions,
+	ActorDefinitionQueueSend,
+} from "./actor-common";
 import { type ActorConn, ActorConnRaw } from "./actor-conn";
 import { checkForSchedulingError, queryActor } from "./actor-query";
 import { type ClientRaw, CREATE_ACTOR_CONN_PROXY } from "./client";
@@ -335,10 +338,11 @@ export class ActorHandleRaw {
  */
 export type ActorHandle<AD extends AnyActorDefinition> = Omit<
 	ActorHandleRaw,
-	"connect"
+	"connect" | "send"
 > & {
 	// Add typed version of ActorConn (instead of using AnyActorDefinition)
 	connect(): ActorConn<AD>;
 	// Resolve method returns the actor ID
 	resolve(): Promise<string>;
-} & ActorDefinitionActions<AD>;
+} & ActorDefinitionQueueSend<AD> &
+	ActorDefinitionActions<AD>;

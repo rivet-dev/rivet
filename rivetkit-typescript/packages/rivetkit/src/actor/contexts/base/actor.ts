@@ -245,7 +245,7 @@ export class ActorContext<
 	/**
 	 * Returns the client for the given registry.
 	 */
-	client<R extends Registry<any>>(): Client<R> {
+	client<R extends Registry<any> = Registry<any>>(): Client<R> {
 		return this.#actor.inlineClient as Client<R>;
 	}
 

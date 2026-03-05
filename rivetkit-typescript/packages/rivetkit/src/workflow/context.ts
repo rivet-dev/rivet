@@ -429,7 +429,7 @@ export class ActorWorkflowContext<
 		return this.#runCtx.vars as TVars extends never ? never : TVars;
 	}
 
-	client<R extends Registry<any>>(): Client<R> {
+	client<R extends Registry<any> = Registry<any>>(): Client<R> {
 		this.#ensureActorAccess("client");
 		return this.#runCtx.client<R>();
 	}
