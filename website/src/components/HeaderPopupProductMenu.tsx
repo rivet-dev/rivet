@@ -9,7 +9,7 @@ import type { ComponentProps, ReactNode } from "react";
 export const HeaderPopupProductMenu = () => {
 	return (
 		<div className="grid h-full grid-cols-3 grid-rows-3 gap-4 overflow-hidden pb-2">
-			<a href="/docs" className="col-span-2 row-span-3 ">
+			<a href="/docs/actors" className="col-span-2 row-span-3 ">
 				<Item
 					onMouseEnter={(e) =>
 						e.currentTarget.querySelector("video")?.play()

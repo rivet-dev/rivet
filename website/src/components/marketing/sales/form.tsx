@@ -53,7 +53,7 @@ export function SalesForm() {
 				<p className="text-zinc-400">
 					We will get back to you within the next few days. In the meantime, feel
 					free to explore our{" "}
-					<a href="/docs" className="text-white hover:text-zinc-300 underline underline-offset-2">
+					<a href="/docs/actors" className="text-white hover:text-zinc-300 underline underline-offset-2">
 						documentation
 					</a>{" "}
 					or{" "}

@@ -150,7 +150,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.3 }}
 						className="flex flex-col sm:flex-row items-center gap-3"
 					>
-						<a href="/docs" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
+						<a href="/docs/actors" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
 							Start Building
 							<ArrowRight className="h-4 w-4" />
 						</a>
@@ -570,7 +570,7 @@ export default function WorkflowsPage() {
 							transition={{ duration: 0.5, delay: 0.2 }}
 							className="flex flex-col items-center justify-center gap-3 sm:flex-row"
 						>
-							<a href="/docs" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
+							<a href="/docs/actors" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
 								Start Building
 								<ArrowRight className="h-4 w-4" />
 							</a>

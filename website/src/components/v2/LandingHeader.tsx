@@ -37,7 +37,7 @@ export function LandingHeader() {
 						<span className="font-heading text-xl font-bold" style={{ color: '#FAFAFA' }}>Rivet</span>
 					</a>
 					<nav className="hidden md:flex items-center gap-6">
-						<a href="/docs"
+						<a href="/docs/actors"
 							className="text-sm font-medium transition-colors"
 							style={{ color: '#A0A0A0' }}
 						>

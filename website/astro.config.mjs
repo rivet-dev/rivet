@@ -20,7 +20,6 @@ export default defineConfig({
 	// SEO Redirects - Astro generates HTML redirect files for static builds
 	// These work in dev server and all deployment platforms (Vercel, Netlify, Cloudflare, etc.)
 	redirects: {
-		'/docs': '/docs/actors/',
 		// Documentation restructure
 		'/docs/setup': '/docs/actors/quickstart/',
 		'/docs/actors/queue': '/docs/actors/queues/',

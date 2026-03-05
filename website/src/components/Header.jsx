@@ -228,7 +228,7 @@ export const Header = forwardRef(function Header(
 									</Popover.Panel>
 								</Transition>
 							</Popover>
-							<TopLevelNavItem href="/docs">Documentation</TopLevelNavItem>
+							<TopLevelNavItem href="/docs/actors">Documentation</TopLevelNavItem>
 							<TopLevelNavItem href="/changelog">
 								Changelog
 							</TopLevelNavItem>
