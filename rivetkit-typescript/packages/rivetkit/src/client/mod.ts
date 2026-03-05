@@ -34,6 +34,7 @@ export { ActorHandleRaw } from "./actor-handle";
 export type {
 	ActorAccessor,
 	Client,
+	ClientConfigInput,
 	ClientRaw,
 	CreateOptions,
 	ExtractActorsFromRegistry,
