@@ -1,6 +1,6 @@
 ---
 title: "Debugging"
-description: "Inspect and debug running Rivet Actors using the management and actor inspector HTTP APIs."
+description: "Inspect and debug running Rivet Actors, runners, and provider configs using management, runner, and actor inspector HTTP APIs."
 skill: true
 ---
 
@@ -108,6 +108,128 @@ curl http://localhost:6420/actors/{actor_id}/kv/keys/{base64_key} \
 Returns the value stored at the given key.
 
 See the [OpenAPI spec](https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi) for the full schema of all management endpoints.
+
+## Runner API
+
+Use the runner endpoints to debug scheduler capacity and provider configuration (for example serverless URL, headers, and limits) through the Rivet API.
+
+### Base URL and Auth
+
+Use your local manager URL in development (`http://localhost:6420`) or `https://api.rivet.dev` when using Rivet API.
+
+If auth is enabled, pass a bearer token:
+
+```bash
+export RIVET_API="https://api.rivet.dev"
+export RIVET_NAMESPACE="default"
+export RIVET_TOKEN="YOUR_ADMIN_TOKEN"
+```
+
+### List Runner Names
+
+```bash
+curl "$RIVET_API/runners/names?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+Returns the runner pools available in the namespace:
+
+```json
+{
+  "names": ["default", "gpu-workers"],
+  "pagination": { "cursor": null }
+}
+```
+
+### List Runners in a Pool
+
+```bash
+curl "$RIVET_API/runners?namespace=$RIVET_NAMESPACE&name=default&include_stopped=true&limit=100" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+Useful fields when debugging:
+
+- `remaining_slots` / `total_slots` for capacity.
+- `drain_ts` and `stop_ts` for shutdown behavior.
+- `last_ping_ts` and `last_connected_ts` for connectivity.
+
+### Inspect Provider Config (Runner Config)
+
+```bash
+curl "$RIVET_API/runner-configs?namespace=$RIVET_NAMESPACE&runner_name=default" \
+  -H "Authorization: Bearer $RIVET_TOKEN"
+```
+
+Returns the configured provider settings per datacenter and the latest pool error (if any):
+
+```json
+{
+  "runner_configs": {
+    "default": {
+      "datacenters": {
+        "dc-1": {
+          "serverless": {
+            "url": "https://your-deployment.example.com/rivet",
+            "headers": { "Authorization": "Bearer token" },
+            "request_lifespan": 55,
+            "slots_per_runner": 1,
+            "max_runners": 10
+          },
+          "runner_pool_error": null
+        }
+      }
+    }
+  },
+  "pagination": { "cursor": null }
+}
+```
+
+`runner_pool_error` mirrors actor scheduling errors such as `serverless_http_error`, `serverless_connection_error`, and `serverless_stream_ended_early`.
+
+### Check Serverless Provider Health
+
+Use this to test whether Rivet can reach your serverless provider URL and read runner metadata:
+
+```bash
+curl -X POST "$RIVET_API/runner-configs/serverless-health-check?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-deployment.example.com/rivet",
+    "headers": {
+      "Authorization": "Bearer token"
+    }
+  }'
+```
+
+Possible responses:
+
+```json
+{ "success": { "version": "1.2.3" } }
+```
+
+```json
+{
+  "failure": {
+    "error": {
+      "message": "non-success status from metadata endpoint",
+      "details": "received status 503"
+    }
+  }
+}
+```
+
+### Refresh Provider Metadata
+
+If you deploy new actor code or routes and metadata has not updated yet, force a refresh:
+
+```bash
+curl -X POST "$RIVET_API/runner-configs/default/refresh-metadata?namespace=$RIVET_NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
 
 ## Actor API
 
