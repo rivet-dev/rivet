@@ -432,6 +432,8 @@ This means you can run normal code in `run` without worrying about sleep interru
 - Add `timeout` when callers need bounded wait behavior.
 - Use `wait: true` only when the caller actually needs a response.
 
+## Tips
+
 ### Message TTL
 
 Every queue message includes a `createdAt` timestamp. Use this to skip or discard stale messages in your run loop:
