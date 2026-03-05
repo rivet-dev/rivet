@@ -272,7 +272,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								state.runner_workflow_id,
 							)
 							else {
-								tracing::warn!("actor not allocated, ignoring event");
+								tracing::warn!(?sig, "actor not allocated, ignoring event");
 								continue;
 							};
 
@@ -404,7 +404,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 						// NOTE: This signal is only received when allocated to a mk2 runner
 						Main::Events(sig) => {
 							let Some(runner_id) = state.runner_id else {
-								tracing::warn!("actor not allocated, ignoring events");
+								tracing::warn!(?sig, "actor not allocated, ignoring events");
 								continue;
 							};
 
@@ -1258,11 +1258,13 @@ pub struct Allocate {
 	pub runner_protocol_version: Option<u16>,
 }
 
+#[derive(Debug)]
 #[signal("pegboard_actor_event")]
 pub struct Event {
 	pub inner: protocol::Event,
 }
 
+#[derive(Debug)]
 #[signal("pegboard_actor_events")]
 pub struct Events {
 	pub runner_id: Id,
