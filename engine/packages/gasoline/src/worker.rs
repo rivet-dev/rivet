@@ -189,7 +189,7 @@ impl Worker {
 			let workflow_id = workflow.workflow_id;
 
 			if self.running_workflows.contains_key(&workflow_id) {
-				tracing::error!(?workflow_id, "workflow already running");
+				tracing::error!(?workflow_id, "workflow already running on this worker");
 				continue;
 			}
 
@@ -353,6 +353,10 @@ impl Worker {
 			tracing::info!("all workflows evicted");
 		} else {
 			tracing::warn!(?remaining_workflows, "not all workflows evicted");
+
+			for (workflow_id, handle) in self.running_workflows.iter() {
+				tracing::warn!(?workflow_id, name=?handle.name, "not evicted");
+			}
 		}
 
 		tracing::info!("worker shutdown complete");
