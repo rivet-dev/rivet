@@ -171,9 +171,7 @@ import { Loop } from "@rivetkit/workflow-engine";
 const total = await ctx.loop({
   name: "process-batches",
   state: { cursor: null, count: 0 },  // Initial state
-  commitInterval: 10,                  // Checkpoint every 10 iterations
-  historyEvery: 10,                    // Trim history every 10 iterations
-  historyKeep: 10,                     // Keep last 10 iterations of history
+  checkpointInterval: 10,                  // Checkpoint and compact every 10 iterations
   run: async (ctx, state) => {
     const batch = await ctx.step("fetch", () => fetchBatch(state.cursor));
 
@@ -375,7 +373,7 @@ import {
   DEFAULT_MAX_RETRIES,        // 3
   DEFAULT_RETRY_BACKOFF_BASE, // 100ms
   DEFAULT_RETRY_BACKOFF_MAX,  // 30000ms
-  DEFAULT_LOOP_COMMIT_INTERVAL, // 20 iterations
+  DEFAULT_LOOP_CHECKPOINT_INTERVAL, // 20 iterations
   DEFAULT_STEP_TIMEOUT,       // 30000ms
 } from "@rivetkit/workflow-engine";
 ```

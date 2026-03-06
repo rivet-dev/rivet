@@ -370,9 +370,7 @@ Loops maintain durable state across iterations:
 await ctx.loop({
   name: "process-items",
   state: { cursor: null, processed: 0 },
-  commitInterval: 10,
-  historyEvery: 10,
-  historyKeep: 10,
+  checkpointInterval: 10,
   run: async (ctx, state) => {
     const batch = await ctx.step("fetch", () => fetchBatch(state.cursor));
     if (!batch.items.length) {
@@ -387,16 +385,16 @@ await ctx.loop({
 });
 ```
 
-### Commit Interval
+### Checkpoint Interval
 
-- State is persisted every `commitInterval` iterations
-- On crash, replay resumes from last committed state
+- State is persisted every `checkpointInterval` iterations
+- On crash, replay resumes from last checkpointed state
 
 ### History Retention
 
-Loop history is trimmed every `historyEvery` iterations, keeping the most recent `historyKeep` iterations. Rollback only replays the last retained iteration.
+Loop history is compacted at each checkpoint. Iterations older than `checkpointInterval` are deleted, keeping only the most recent window. Rollback only replays the last retained iteration.
 
-After trimming (historyEvery=10, historyKeep=10):
+After compaction at iteration 20 (checkpointInterval=10):
 
 ```
 Before trim at iteration 20:

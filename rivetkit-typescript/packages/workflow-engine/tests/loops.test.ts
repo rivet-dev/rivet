@@ -145,7 +145,7 @@ for (const mode of modes) {
 				return await ctx.loop({
 					name: "resume-loop",
 					state: { count: 0 },
-					commitInterval: 2,
+					checkpointInterval: 2,
 					run: async (_ctx, state) => {
 						iteration++;
 
@@ -181,14 +181,12 @@ for (const mode of modes) {
 			expect(result.output).toBe(5);
 		});
 
-		it("should forget old iterations on history window", async () => {
+		it("should compact old iterations at each checkpoint", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
 				return await ctx.loop({
 					name: "cleanup-loop",
 					state: { count: 0 },
-					commitInterval: 2,
-					historyEvery: 2,
-					historyKeep: 2,
+					checkpointInterval: 2,
 					run: async (ctx, state) => {
 						await ctx.step(`step-${state.count}`, async () => {});
 						if (state.count >= 4) {
@@ -214,6 +212,181 @@ for (const mode of modes) {
 			expect(minIteration).toBeGreaterThanOrEqual(2);
 		});
 
+		it("should not re-delete already-forgotten iterations", async () => {
+			let deletePrefixCallCount = 0;
+			const originalDeletePrefix = driver.deletePrefix.bind(driver);
+			driver.deletePrefix = async (prefix: Uint8Array) => {
+				deletePrefixCallCount++;
+				return originalDeletePrefix(prefix);
+			};
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop({
+					name: "efficient-cleanup",
+					state: { count: 0 },
+					checkpointInterval: 3,
+					run: async (ctx, state) => {
+						await ctx.step(`step-${state.count}`, async () => {});
+						if (state.count >= 8) {
+							return Loop.break(state.count);
+						}
+						return Loop.continue({ count: state.count + 1 });
+					},
+				});
+			};
+
+			deletePrefixCallCount = 0;
+			await runWorkflow("wf-1", workflow, undefined, driver, { mode })
+				.result;
+
+			// With checkpointInterval=3 and 9 iterations (0-8), checkpoints at
+			// iterations 3 and 6, plus final break at iteration 8.
+			// At checkpoint 3: no compaction (3 - 3 = 0, nothing to delete)
+			// At checkpoint 6: compact iterations 0-2 (3 deletes)
+			// At break (iteration 9): compact iterations 3-5 (3 deletes)
+			// Total: 6 iteration prefix deletes
+			// Without the fix, this would be 0 + 3 + 6 = 9 deletes (re-scanning from 0)
+			// The deletePrefix also gets called for other internal operations,
+			// so we just verify it's less than the naive approach would produce.
+			expect(deletePrefixCallCount).toBeLessThanOrEqual(8);
+		});
+
+		it("should compact history on break even without reaching checkpointInterval", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop({
+					name: "break-compact",
+					state: { count: 0 },
+					checkpointInterval: 3,
+					run: async (ctx, state) => {
+						await ctx.step(`step-${state.count}`, async () => {});
+						if (state.count >= 5) {
+							return Loop.break(state.count);
+						}
+						return Loop.continue({ count: state.count + 1 });
+					},
+				});
+			};
+
+			await runWorkflow("wf-1", workflow, undefined, driver, { mode })
+				.result;
+
+			const storage = await loadStorage(driver);
+			const iterations = [...storage.history.entries.values()]
+				.flatMap((entry) => entry.location)
+				.flatMap((segment) =>
+					isLoopIteration(segment) ? [segment] : [],
+				)
+				.map((segment) => segment.iteration);
+
+			// With checkpointInterval=3 and break at iteration 5 (6 total iterations):
+			// At checkpoint 3: no compaction (3 - 3 = 0)
+			// At break (6 iterations total): compact iterations 0-2
+			// So iterations 3-5 should remain
+			if (iterations.length > 0) {
+				const minIteration = Math.min(...iterations);
+				expect(minIteration).toBeGreaterThanOrEqual(3);
+			}
+		});
+
+		it("should resume from checkpoint after crash in later iteration", async () => {
+			let firstRun = true;
+			let iterationsExecuted: number[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop({
+					name: "deferred-crash",
+					state: { count: 0 },
+					checkpointInterval: 2,
+					run: async (ctx, state) => {
+						iterationsExecuted.push(state.count);
+
+						await ctx.step(
+							`step-${state.count}`,
+							async () => state.count,
+						);
+
+						if (state.count >= 5) {
+							return Loop.break(state.count);
+						}
+
+						// Crash at iteration 3 during first run. Checkpoint
+						// was taken at iteration 2 (deferred) and awaited at
+						// the start of iteration 3, so state should be saved.
+						if (state.count === 3 && firstRun) {
+							throw new Error("Crash after checkpoint");
+						}
+
+						return Loop.continue({ count: state.count + 1 });
+					},
+				});
+			};
+
+			try {
+				await runWorkflow("wf-1", workflow, undefined, driver, { mode })
+					.result;
+			} catch {}
+
+			// Reset tracking for second run
+			firstRun = false;
+			iterationsExecuted = [];
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe(5);
+
+			// Should resume from checkpoint at iteration 2, not from 0
+			expect(iterationsExecuted[0]).toBe(2);
+		});
+
+		it("should handle loop that breaks before first checkpoint", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop({
+					name: "early-break",
+					state: { count: 0 },
+					checkpointInterval: 10,
+					run: async (ctx, state) => {
+						await ctx.step(`step-${state.count}`, async () => {});
+						if (state.count >= 2) {
+							return Loop.break(state.count);
+						}
+						return Loop.continue({ count: state.count + 1 });
+					},
+				});
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe(2);
+
+			// No compaction should occur since we never reached checkpointInterval
+			const storage = await loadStorage(driver);
+			const iterations = [...storage.history.entries.values()]
+				.flatMap((entry) => entry.location)
+				.flatMap((segment) =>
+					isLoopIteration(segment) ? [segment] : [],
+				)
+				.map((segment) => segment.iteration);
+
+			// All iterations should still be present
+			expect(iterations).toContain(0);
+			expect(iterations).toContain(1);
+			expect(iterations).toContain(2);
+		});
+
 		it("should propagate loop errors", async () => {
 			const workflow = async (ctx: WorkflowContextInterface) => {
 				return await ctx.loop({
@@ -229,6 +402,48 @@ for (const mode of modes) {
 				runWorkflow("wf-1", workflow, undefined, driver, { mode })
 					.result,
 			).rejects.toThrow("loop failure");
+		});
+
+		it("should handle checkpointInterval of 1", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop({
+					name: "frequent-commit",
+					state: { count: 0 },
+					checkpointInterval: 1,
+					run: async (ctx, state) => {
+						await ctx.step(`step-${state.count}`, async () => {});
+						if (state.count >= 3) {
+							return Loop.break(state.count);
+						}
+						return Loop.continue({ count: state.count + 1 });
+					},
+				});
+			};
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+
+			expect(result.state).toBe("completed");
+			expect(result.output).toBe(3);
+
+			// With checkpointInterval=1, only the most recent iteration should remain
+			const storage = await loadStorage(driver);
+			const iterations = [...storage.history.entries.values()]
+				.flatMap((entry) => entry.location)
+				.flatMap((segment) =>
+					isLoopIteration(segment) ? [segment] : [],
+				)
+				.map((segment) => segment.iteration);
+
+			if (iterations.length > 0) {
+				const minIteration = Math.min(...iterations);
+				expect(minIteration).toBeGreaterThanOrEqual(2);
+			}
 		});
 	});
 }

@@ -24,12 +24,14 @@ import {
 	registerName,
 } from "./location.js";
 import {
+	collectDeletionsForPrefix,
 	createEntry,
 	deleteEntriesWithPrefix,
 	flush,
 	getOrCreateMetadata,
 	loadMetadata,
 	setEntry,
+	type PendingDeletions,
 } from "./storage.js";
 import type {
 	BranchConfig,
@@ -62,9 +64,7 @@ import { sleep } from "./utils.js";
 export const DEFAULT_MAX_RETRIES = 3;
 export const DEFAULT_RETRY_BACKOFF_BASE = 100;
 export const DEFAULT_RETRY_BACKOFF_MAX = 30000;
-export const DEFAULT_LOOP_COMMIT_INTERVAL = 20;
-export const DEFAULT_LOOP_HISTORY_EVERY = 20;
-export const DEFAULT_LOOP_HISTORY_KEEP = 20;
+export const DEFAULT_LOOP_CHECKPOINT_INTERVAL = 20;
 export const DEFAULT_STEP_TIMEOUT = 30000; // 30 seconds
 
 const QUEUE_HISTORY_MESSAGE_MARKER = "__rivetWorkflowQueueMessage";
@@ -692,20 +692,25 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			metadata.dirty = true;
 		}
 
-		// TODO: Add validation for commitInterval (must be > 0)
-		const commitInterval =
-			config.commitInterval ?? DEFAULT_LOOP_COMMIT_INTERVAL;
-		const historyEvery =
-			config.historyEvery ??
-			config.commitInterval ??
-			DEFAULT_LOOP_HISTORY_EVERY;
-		const historyKeep =
-			config.historyKeep ??
-			config.commitInterval ??
-			DEFAULT_LOOP_HISTORY_KEEP;
+		const checkpointInterval =
+			config.checkpointInterval ?? DEFAULT_LOOP_CHECKPOINT_INTERVAL;
+
+		// Track the last iteration we compacted up to so we only delete
+		// newly-expired iterations instead of re-scanning from 0.
+		let lastForgottenUpTo = 0;
+
+		// Deferred flush promise from the previous checkpoint. Awaited at the
+		// start of the next iteration so the flush runs in parallel with user code.
+		let deferredFlush: Promise<void> | null = null;
 
 		// Execute loop iterations
 		while (true) {
+			// Await any deferred flush from the previous iteration's checkpoint
+			if (deferredFlush) {
+				await deferredFlush;
+				deferredFlush = null;
+			}
+
 			if (rollbackMode && rollbackSingleIteration) {
 				if (rollbackIterationRan) {
 					return rollbackOutput as T;
@@ -752,13 +757,14 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					metadata.dirty = true;
 				}
 
-				await this.flushStorage();
-				await this.forgetOldIterations(
+				// Collect compaction deletions and flush alongside the checkpoint
+				const deletions = this.collectLoopCompaction(
 					location,
 					iteration + 1,
-					historyEvery,
-					historyKeep,
+					checkpointInterval,
+					lastForgottenUpTo,
 				);
+				await this.flushStorageWithDeletions(deletions);
 
 				if (rollbackMode && rollbackSingleIteration) {
 					rollbackOutput = result.value;
@@ -775,72 +781,90 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 			iteration++;
 
-			// Periodic commit
-			if (iteration % commitInterval === 0) {
+			// Periodic checkpoint: update loop state and defer the flush
+			// so it runs in parallel with the next iteration's user code
+			if (iteration % checkpointInterval === 0) {
 				if (entry.kind.type === "loop") {
 					entry.kind.data.state = state;
 					entry.kind.data.iteration = iteration;
 				}
 				entry.dirty = true;
 
-				await this.flushStorage();
-				await this.forgetOldIterations(
+				const deletions = this.collectLoopCompaction(
 					location,
 					iteration,
-					historyEvery,
-					historyKeep,
+					checkpointInterval,
+					lastForgottenUpTo,
 				);
+				lastForgottenUpTo = Math.max(
+					0,
+					iteration - checkpointInterval,
+				);
+
+				// Defer the flush to run in parallel with the next iteration
+				deferredFlush = this.flushStorageWithDeletions(deletions);
 			}
 		}
 	}
 
 	/**
-	 * Delete old loop iteration entries to save storage space.
+	 * Collect pending deletions for loop history compaction.
 	 *
-	 * Loop locations always end with a NameIndex (number) because loops are
-	 * created via appendName(). Even for nested loops, the innermost loop's
-	 * location ends with its name index:
-	 *
-	 *   ctx.loop("outer") → location: [outerIndex]
-	 *     iteration 0    → location: [{ loop: outerIndex, iteration: 0 }]
-	 *       ctx.loop("inner") → location: [{ loop: outerIndex, iteration: 0 }, innerIndex]
-	 *
-	 * This function removes iterations older than (currentIteration - historyKeep)
-	 * every historyEvery iterations.
+	 * Only deletes iterations in the range [fromIteration, keepFrom) where
+	 * keepFrom = currentIteration - checkpointInterval. This avoids re-scanning
+	 * already-deleted iterations.
 	 */
-	private async forgetOldIterations(
+	private collectLoopCompaction(
 		loopLocation: Location,
 		currentIteration: number,
-		historyEvery: number,
-		historyKeep: number,
-	): Promise<void> {
-		if (historyEvery <= 0 || historyKeep <= 0) {
-			return;
+		checkpointInterval: number,
+		fromIteration: number,
+	): PendingDeletions | undefined {
+		if (currentIteration <= checkpointInterval) {
+			return undefined;
 		}
-		if (currentIteration === 0 || currentIteration % historyEvery !== 0) {
-			return;
+
+		const keepFrom = Math.max(0, currentIteration - checkpointInterval);
+		if (fromIteration >= keepFrom) {
+			return undefined;
 		}
-		const keepFrom = Math.max(0, currentIteration - historyKeep);
-		// Get the loop name index from the last segment of loopLocation.
-		// This is always a NameIndex (number) because loop entries are created
-		// via appendName(), not appendLoopIteration().
+
 		const loopSegment = loopLocation[loopLocation.length - 1];
 		if (typeof loopSegment !== "number") {
 			throw new Error("Expected loop location to end with a name index");
 		}
 
-		for (let i = 0; i < keepFrom; i++) {
+		const allDeletions: PendingDeletions = { prefixes: [], keys: [] };
+
+		for (let i = fromIteration; i < keepFrom; i++) {
 			const iterationLocation: Location = [
 				...loopLocation,
 				{ loop: loopSegment, iteration: i },
 			];
-			await deleteEntriesWithPrefix(
+			const deletions = collectDeletionsForPrefix(
 				this.storage,
-				this.driver,
 				iterationLocation,
-				this.historyNotifier,
 			);
+			allDeletions.prefixes.push(...deletions.prefixes);
+			allDeletions.keys.push(...deletions.keys);
 		}
+
+		return allDeletions;
+	}
+
+	/**
+	 * Flush storage with optional pending deletions so compaction
+	 * happens alongside the checkpoint write.
+	 */
+	private async flushStorageWithDeletions(
+		deletions?: PendingDeletions,
+	): Promise<void> {
+		await flush(
+			this.storage,
+			this.driver,
+			this.historyNotifier,
+			deletions,
+		);
 	}
 
 	// === Sleep ===

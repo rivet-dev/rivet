@@ -388,11 +388,8 @@ export interface LoopConfig<S, T> {
 		ctx: WorkflowContextInterface,
 		state: S,
 	) => LoopIterationResult<S, T>;
-	commitInterval?: number;
-	/** Trim loop history every N iterations. Defaults to commitInterval or 20. */
-	historyEvery?: number;
-	/** Retain the last N iterations of history. Defaults to commitInterval or 20. */
-	historyKeep?: number;
+	/** Checkpoint loop state and compact history every N iterations. Default: 20. */
+	checkpointInterval?: number;
 }
 
 /**
