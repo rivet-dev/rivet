@@ -1,6 +1,5 @@
 import { z } from "zod/v4";
 import { ClientConfigSchemaBase, transformClientConfig } from "@/client/config";
-import { getRivetRunnerKey } from "@/utils/env-vars";
 
 /**
  * Base engine config schema without transforms so it can be merged in to other schemas.
@@ -8,11 +7,10 @@ import { getRivetRunnerKey } from "@/utils/env-vars";
  * We include the client config since this includes the common properties like endpoint, namespace, etc.
  */
 export const EngineConfigSchemaBase = ClientConfigSchemaBase.extend({
-	/** Unique key for this runner. Runners connecting a given key will replace any other runner connected with the same key. */
+	/** Deprecated. Unique key for this runner. Runners connecting a given key will replace any other runner connected with the same key. */
 	runnerKey: z
 		.string()
-		.optional()
-		.transform((val) => val ?? getRivetRunnerKey()),
+		.optional(),
 
 	/** How many actors this runner can run. */
 	totalSlots: z.number().default(100_000),
@@ -33,8 +31,5 @@ export function transformEngineConfig(
 	config: z.infer<typeof EngineConfigSchemaBase>,
 	ctx: z.RefinementCtx,
 ) {
-	return {
-		...transformClientConfig(config, ctx),
-		runnerKey: config.runnerKey,
-	};
+	return transformClientConfig(config, ctx);
 }

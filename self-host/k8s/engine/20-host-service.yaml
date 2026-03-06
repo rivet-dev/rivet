@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: host
+  namespace: rivet-engine
+spec:
+  ports:
+  - name: port-5051
+    port: 5051
+    targetPort: 5051
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: host
+  namespace: rivet-engine
+subsets:
+- addresses:
+  # Docker network gateway — the host machine as seen from k3d pods.
+  - ip: 192.168.128.1
+  ports:
+  - name: port-5051
+    port: 5051
+    protocol: TCP

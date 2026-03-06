@@ -21,6 +21,10 @@ spec:
       containers:
       - name: postgres
         image: postgres:17
+        args:
+        - postgres
+        - -c
+        - max_connections=500
         ports:
         - containerPort: 5432
           name: postgres

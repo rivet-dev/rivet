@@ -137,31 +137,6 @@ const registry = setup({
 });
 ```
 
-#### Runner Key
-
-Use `RIVET_RUNNER_KEY` to uniquely identify a runner. If another runner connects with the same key, the previous one is disconnected. This handles zombie runners that weren't shut down gracefully.
-
-```bash
-RIVET_RUNNER_KEY=worker-abc123
-```
-
-```typescript
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-
-const registry = setup({
-  use: { myActor },
-  runner: {
-    runnerKey: "worker-abc123",
-  },
-});
-```
-
-<Tip>
-  Generate a unique runner key using: `uuidgen` or `openssl rand -hex 16`
-</Tip>
-
 ## Comparison
 
 | Mode | Method | Use Case |
