@@ -44,7 +44,19 @@ import {
 	validateKvKeys,
 } from "./kv-limits";
 
+const DEFAULT_LIST_LIMIT = 16_384;
+
 // Actor handler to track running instances
+
+function compareBytes(a: Uint8Array, b: Uint8Array): number {
+	const len = Math.min(a.length, b.length);
+	for (let i = 0; i < len; i++) {
+		if (a[i] !== b[i]) {
+			return a[i] - b[i];
+		}
+	}
+	return a.length - b.length;
+}
 
 enum ActorLifecycleState {
 	NONEXISTENT, // Entry exists but actor not yet created
@@ -1408,11 +1420,43 @@ export class FileSystemGlobalState {
 	}
 
 	/**
+	 * Delete KV entries in the half-open range [start, end).
+	 */
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		await this.loadActor(actorId);
+		await this.#withActorWrite(actorId, async (entry) => {
+			if (!entry.state) {
+				if (this.isActorStopping(actorId)) {
+					return;
+				}
+				throw new Error(`Actor ${actorId} state not loaded`);
+			}
+
+			validateKvKey(start, "start key");
+			validateKvKey(end, "end key");
+			if (compareBytes(start, end) >= 0) {
+				return;
+			}
+
+			const db = this.#getOrCreateActorKvDatabase(actorId);
+			db.run("DELETE FROM kv WHERE key >= ? AND key < ?", [start, end]);
+		});
+	}
+
+	/**
 	 * List KV entries with a given prefix for an actor.
 	 */
 	async kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
 	): Promise<[Uint8Array, Uint8Array][]> {
 		const entry = await this.loadActor(actorId);
 		await this.#waitForPendingWrite(actorId);
@@ -1427,15 +1471,58 @@ export class FileSystemGlobalState {
 
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const upperBound = computePrefixUpperBound(prefix);
+		const direction = options?.reverse ? "DESC" : "ASC";
+		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
 		const rows = upperBound
 			? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-					"SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ASC",
-					[prefix, upperBound],
+					`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+					[prefix, upperBound, limit],
 				)
 			: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-					"SELECT key, value FROM kv WHERE key >= ? ORDER BY key ASC",
-					[prefix],
+					`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
+					[prefix, limit],
 				);
+
+		return rows.map((row) => [
+			ensureUint8Array(row.key, "key"),
+			ensureUint8Array(row.value, "value"),
+		]);
+	}
+
+	/**
+	 * List KV entries in the half-open range [start, end).
+	 */
+	async kvListRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<[Uint8Array, Uint8Array][]> {
+		const entry = await this.loadActor(actorId);
+		await this.#waitForPendingWrite(actorId);
+		if (!entry.state) {
+			if (this.isActorStopping(actorId)) {
+				throw new Error(`Actor ${actorId} is destroying`);
+			} else {
+				throw new Error(`Actor ${actorId} state not loaded`);
+			}
+		}
+		validateKvKey(start, "start key");
+		validateKvKey(end, "end key");
+		if (compareBytes(start, end) >= 0) {
+			return [];
+		}
+
+		const db = this.#getOrCreateActorKvDatabase(actorId);
+		const direction = options?.reverse ? "DESC" : "ASC";
+		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
+		const rows = db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+			[start, end, limit],
+		);
 
 		return rows.map((row) => [
 			ensureUint8Array(row.key, "key"),

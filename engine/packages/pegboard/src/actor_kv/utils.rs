@@ -10,14 +10,7 @@ pub fn validate_list_query(query: &rp::KvListQuery) -> Result<()> {
 	match query {
 		rp::KvListQuery::KvListAllQuery => {}
 		rp::KvListQuery::KvListRangeQuery(range) => {
-			ensure!(
-				KeyWrapper::tuple_len(&range.start) <= MAX_KEY_SIZE,
-				"start key is too long (max 2048 bytes)"
-			);
-			ensure!(
-				KeyWrapper::tuple_len(&range.end) <= MAX_KEY_SIZE,
-				"end key is too long (max 2048 bytes)"
-			);
+			validate_range(&range.start, &range.end)?;
 		}
 		rp::KvListQuery::KvListPrefixQuery(prefix) => {
 			ensure!(
@@ -26,6 +19,19 @@ pub fn validate_list_query(query: &rp::KvListQuery) -> Result<()> {
 			);
 		}
 	}
+
+	Ok(())
+}
+
+pub fn validate_range(start: &rp::KvKey, end: &rp::KvKey) -> Result<()> {
+	ensure!(
+		KeyWrapper::tuple_len(start) <= MAX_KEY_SIZE,
+		"start key is too long (max 2048 bytes)"
+	);
+	ensure!(
+		KeyWrapper::tuple_len(end) <= MAX_KEY_SIZE,
+		"end key is too long (max 2048 bytes)"
+	);
 
 	Ok(())
 }

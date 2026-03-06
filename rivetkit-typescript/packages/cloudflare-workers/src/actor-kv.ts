@@ -1,3 +1,5 @@
+const DEFAULT_LIST_LIMIT = 16_384;
+
 export function kvGet(sql: SqlStorage, key: Uint8Array): Uint8Array | null {
 	const cursor = sql.exec(
 		"SELECT value FROM _rivetkit_kv_storage WHERE key = ?",
@@ -27,27 +29,61 @@ export function kvDelete(sql: SqlStorage, key: Uint8Array): void {
 	sql.exec("DELETE FROM _rivetkit_kv_storage WHERE key = ?", key);
 }
 
+export function kvDeleteRange(
+	sql: SqlStorage,
+	start: Uint8Array,
+	end: Uint8Array,
+): void {
+	sql.exec(
+		"DELETE FROM _rivetkit_kv_storage WHERE key >= ? AND key < ?",
+		start,
+		end,
+	);
+}
+
 export function kvListPrefix(
 	sql: SqlStorage,
 	prefix: Uint8Array,
+	options?: {
+		reverse?: boolean;
+		limit?: number;
+	},
 ): [Uint8Array, Uint8Array][] {
-	const cursor = sql.exec("SELECT key, value FROM _rivetkit_kv_storage");
-	const entries: [Uint8Array, Uint8Array][] = [];
-
-	for (const row of cursor.raw()) {
-		const key = toUint8Array(row[0]);
-		const value = toUint8Array(row[1]);
-
-		// Check if key starts with prefix
-		if (hasPrefix(key, prefix)) {
-			entries.push([key, value]);
-		}
+	const upperBound = computePrefixUpperBound(prefix);
+	if (upperBound) {
+		return kvListRange(sql, prefix, upperBound, options);
 	}
 
-	return entries;
+	const direction = options?.reverse ? "DESC" : "ASC";
+	const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
+	const cursor = sql.exec(
+		`SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
+		prefix,
+		limit,
+	);
+	return readEntries(cursor);
 }
 
-// Helper function to convert SqlStorageValue to Uint8Array
+export function kvListRange(
+	sql: SqlStorage,
+	start: Uint8Array,
+	end: Uint8Array,
+	options?: {
+		reverse?: boolean;
+		limit?: number;
+	},
+): [Uint8Array, Uint8Array][] {
+	const direction = options?.reverse ? "DESC" : "ASC";
+	const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
+	const cursor = sql.exec(
+		`SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+		start,
+		end,
+		limit,
+	);
+	return readEntries(cursor);
+}
+
 function toUint8Array(
 	value: string | number | ArrayBuffer | Uint8Array | null,
 ): Uint8Array {
@@ -62,10 +98,23 @@ function toUint8Array(
 	);
 }
 
-function hasPrefix(arr: Uint8Array, prefix: Uint8Array): boolean {
-	if (prefix.length > arr.length) return false;
-	for (let i = 0; i < prefix.length; i++) {
-		if (arr[i] !== prefix[i]) return false;
+function readEntries(
+	cursor: ReturnType<SqlStorage["exec"]>,
+): [Uint8Array, Uint8Array][] {
+	const entries: [Uint8Array, Uint8Array][] = [];
+	for (const row of cursor.raw()) {
+		entries.push([toUint8Array(row[0]), toUint8Array(row[1])]);
 	}
-	return true;
+	return entries;
+}
+
+function computePrefixUpperBound(prefix: Uint8Array): Uint8Array | null {
+	const upperBound = prefix.slice();
+	for (let i = upperBound.length - 1; i >= 0; i--) {
+		if (upperBound[i] !== 0xff) {
+			upperBound[i]++;
+			return upperBound.slice(0, i + 1);
+		}
+	}
+	return null;
 }

@@ -26,6 +26,32 @@ export const kvActor = actor({
 				value,
 			}));
 		},
+		listTextRange: async (
+			c: ActorContext<any, any, any, any, any, any>,
+			start: string,
+			end: string,
+			options?: {
+				reverse?: boolean;
+				limit?: number;
+			},
+		) => {
+			const results = await c.kv.listRange(start, end, {
+				keyType: "text",
+				...options,
+			});
+			return results.map(([key, value]) => ({
+				key,
+				value,
+			}));
+		},
+		deleteTextRange: async (
+			c: ActorContext<any, any, any, any, any, any>,
+			start: string,
+			end: string,
+		) => {
+			await c.kv.deleteRange(start, end);
+			return true;
+		},
 		roundtripArrayBuffer: async (
 			c: ActorContext<any, any, any, any, any, any>,
 			key: string,

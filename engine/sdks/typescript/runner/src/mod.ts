@@ -18,7 +18,7 @@ export { RunnerActor, type ActorConfig };
 export { idToStr } from "./utils";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 6;
+const PROTOCOL_VERSION: number = 7;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -1551,6 +1551,31 @@ export class Runner {
 		const requestData: protocol.KvRequestData = {
 			tag: "KvDeleteRequest",
 			val: { keys: kvKeys },
+		};
+
+		await this.#sendKvRequest(actorId, requestData);
+	}
+
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		const startKey: protocol.KvKey = start.buffer.slice(
+			start.byteOffset,
+			start.byteOffset + start.byteLength,
+		) as ArrayBuffer;
+		const endKey: protocol.KvKey = end.buffer.slice(
+			end.byteOffset,
+			end.byteOffset + end.byteLength,
+		) as ArrayBuffer;
+
+		const requestData: protocol.KvRequestData = {
+			tag: "KvDeleteRangeRequest",
+			val: {
+				start: startKey,
+				end: endKey,
+			},
 		};
 
 		await this.#sendKvRequest(actorId, requestData);

@@ -78,7 +78,7 @@ These limits apply to the low-level KV storage interface powering Rivet Actors. 
 |------|------------|------------|-------------|
 | Max key size | — | 2 KiB | Maximum size of a single key. |
 | Max value size | — | 128 KiB | Maximum size of a single value. |
-| Max keys per operation | — | 128 | Maximum number of keys in a single get/put/delete operation. |
+| Max keys per operation | — | 128 | Maximum number of keys in a single batch get/put/delete operation. Does not apply to range operations (`listRange`, `deleteRange`). |
 | Max batch put payload size | — | 976 KiB | Maximum total size of all key-value pairs in a single batch put operation. |
 | Max storage size per actor | — | 10 GiB | Maximum total KV storage size for a single actor. |
 | List default limit | — | 16,384 | Default maximum number of keys returned by a list operation. |

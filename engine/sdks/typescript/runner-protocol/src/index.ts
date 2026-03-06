@@ -309,6 +309,23 @@ export function writeKvDeleteRequest(bc: bare.ByteCursor, x: KvDeleteRequest): v
     write0(bc, x.keys)
 }
 
+export type KvDeleteRangeRequest = {
+    readonly start: KvKey
+    readonly end: KvKey
+}
+
+export function readKvDeleteRangeRequest(bc: bare.ByteCursor): KvDeleteRangeRequest {
+    return {
+        start: readKvKey(bc),
+        end: readKvKey(bc),
+    }
+}
+
+export function writeKvDeleteRangeRequest(bc: bare.ByteCursor, x: KvDeleteRangeRequest): void {
+    writeKvKey(bc, x.start)
+    writeKvKey(bc, x.end)
+}
+
 export type KvDropRequest = null
 
 /**
@@ -401,6 +418,7 @@ export type KvRequestData =
     | { readonly tag: "KvListRequest"; readonly val: KvListRequest }
     | { readonly tag: "KvPutRequest"; readonly val: KvPutRequest }
     | { readonly tag: "KvDeleteRequest"; readonly val: KvDeleteRequest }
+    | { readonly tag: "KvDeleteRangeRequest"; readonly val: KvDeleteRangeRequest }
     | { readonly tag: "KvDropRequest"; readonly val: KvDropRequest }
 
 export function readKvRequestData(bc: bare.ByteCursor): KvRequestData {
@@ -416,6 +434,8 @@ export function readKvRequestData(bc: bare.ByteCursor): KvRequestData {
         case 3:
             return { tag: "KvDeleteRequest", val: readKvDeleteRequest(bc) }
         case 4:
+            return { tag: "KvDeleteRangeRequest", val: readKvDeleteRangeRequest(bc) }
+        case 5:
             return { tag: "KvDropRequest", val: null }
         default: {
             bc.offset = offset
@@ -446,8 +466,13 @@ export function writeKvRequestData(bc: bare.ByteCursor, x: KvRequestData): void 
             writeKvDeleteRequest(bc, x.val)
             break
         }
-        case "KvDropRequest": {
+        case "KvDeleteRangeRequest": {
             bare.writeU8(bc, 4)
+            writeKvDeleteRangeRequest(bc, x.val)
+            break
+        }
+        case "KvDropRequest": {
+            bare.writeU8(bc, 5)
             break
         }
     }

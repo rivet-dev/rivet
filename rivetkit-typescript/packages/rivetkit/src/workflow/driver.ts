@@ -15,6 +15,17 @@ function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
 	return prefixed.slice(WORKFLOW_STORAGE_PREFIX.length);
 }
 
+function computeUpperBound(prefix: Uint8Array): Uint8Array | null {
+	const upperBound = prefix.slice();
+	for (let i = upperBound.length - 1; i >= 0; i--) {
+		if (upperBound[i] !== 0xff) {
+			upperBound[i]++;
+			return upperBound.slice(0, i + 1);
+		}
+	}
+	return null;
+}
+
 class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 	#actor: AnyActorInstance;
 	#runCtx: RunContext<any, any, any, any, any, any, any, any>;
@@ -122,21 +133,26 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async deletePrefix(prefix: Uint8Array): Promise<void> {
-		const entries = await this.#runCtx.keepAwake(
-			this.#actor.driver.kvListPrefix(
-				this.#actor.id,
-				makeWorkflowKey(prefix),
-			),
-		);
-		if (entries.length === 0) {
-			return;
+		const start = makeWorkflowKey(prefix);
+		const end = computeUpperBound(start);
+		if (end) {
+			await this.#runCtx.keepAwake(
+				this.#actor.driver.kvDeleteRange(this.#actor.id, start, end),
+			);
+		} else {
+			const entries = await this.#runCtx.keepAwake(
+				this.#actor.driver.kvListPrefix(this.#actor.id, start),
+			);
+			if (entries.length === 0) {
+				return;
+			}
+			await this.#runCtx.keepAwake(
+				this.#actor.driver.kvBatchDelete(
+					this.#actor.id,
+					entries.map(([key]) => key),
+				),
+			);
 		}
-		await this.#runCtx.keepAwake(
-			this.#actor.driver.kvBatchDelete(
-				this.#actor.id,
-				entries.map(([key]) => key),
-			),
-		);
 	}
 
 	async list(prefix: Uint8Array): Promise<KVEntry[]> {

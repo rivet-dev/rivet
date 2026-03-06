@@ -303,6 +303,10 @@ function stringifyKvRequestData(data: protocol.KvRequestData): string {
 			const { keys } = data.val;
 			return `KvDeleteRequest{keys: ${keys.length}}`;
 		}
+		case "KvDeleteRangeRequest": {
+			const { start, end } = data.val;
+			return `KvDeleteRangeRequest{start: ${stringifyArrayBuffer(start)}, end: ${stringifyArrayBuffer(end)}}`;
+		}
 		case "KvDropRequest":
 			return "KvDropRequest";
 	}
