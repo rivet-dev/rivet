@@ -13,14 +13,15 @@ function stripPrefix(prefix: Uint8Array, key: Uint8Array): Uint8Array {
 	return key.slice(prefix.length);
 }
 
-function compareBytes(a: Uint8Array, b: Uint8Array): number {
-	const len = Math.min(a.length, b.length);
-	for (let i = 0; i < len; i++) {
-		if (a[i] !== b[i]) {
-			return a[i] - b[i];
+function computeUpperBound(prefix: Uint8Array): Uint8Array | null {
+	const upperBound = prefix.slice();
+	for (let i = upperBound.length - 1; i >= 0; i--) {
+		if (upperBound[i] !== 0xff) {
+			upperBound[i]++;
+			return upperBound.slice(0, i + 1);
 		}
 	}
-	return a.length - b.length;
+	return null;
 }
 
 export class ActorTracesDriver implements TracesDriver {
@@ -55,17 +56,26 @@ export class ActorTracesDriver implements TracesDriver {
 
 	async deletePrefix(prefix: Uint8Array): Promise<void> {
 		const fullPrefix = concatPrefix(this.#prefix, prefix);
-		const entries = await this.#driver.kvListPrefix(
-			this.#actorId,
-			fullPrefix,
-		);
-		if (entries.length === 0) {
-			return;
+		const fullEnd = computeUpperBound(fullPrefix);
+		if (fullEnd) {
+			await this.#driver.kvDeleteRange(
+				this.#actorId,
+				fullPrefix,
+				fullEnd,
+			);
+		} else {
+			const entries = await this.#driver.kvListPrefix(
+				this.#actorId,
+				fullPrefix,
+			);
+			if (entries.length === 0) {
+				return;
+			}
+			await this.#driver.kvBatchDelete(
+				this.#actorId,
+				entries.map(([key]) => key),
+			);
 		}
-		await this.#driver.kvBatchDelete(
-			this.#actorId,
-			entries.map(([key]) => key),
-		);
 	}
 
 	async list(
@@ -87,27 +97,13 @@ export class ActorTracesDriver implements TracesDriver {
 		end: Uint8Array,
 		options?: { reverse?: boolean; limit?: number },
 	): Promise<Array<{ key: Uint8Array; value: Uint8Array }>> {
-		const fullStart = concatPrefix(this.#prefix, start);
-		const fullEnd = concatPrefix(this.#prefix, end);
-		const entries = await this.#driver.kvListPrefix(
+		const entries = await this.#driver.kvListRange(
 			this.#actorId,
-			this.#prefix,
+			concatPrefix(this.#prefix, start),
+			concatPrefix(this.#prefix, end),
+			options,
 		);
-		const filtered = entries
-			.filter(([key]) => {
-				return (
-					compareBytes(key, fullStart) >= 0 &&
-					compareBytes(key, fullEnd) < 0
-				);
-			})
-			.sort(([keyA], [keyB]) => compareBytes(keyA, keyB));
-		if (options?.reverse) {
-			filtered.reverse();
-		}
-		const limited = options?.limit
-			? filtered.slice(0, options.limit)
-			: filtered;
-		return limited.map(([key, value]) => ({
+		return entries.map(([key, value]) => ({
 			key: stripPrefix(this.#prefix, key),
 			value,
 		}));

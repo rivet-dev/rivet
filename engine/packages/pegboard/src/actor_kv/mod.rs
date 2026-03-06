@@ -5,7 +5,7 @@ use gas::prelude::*;
 use rivet_runner_protocol::mk2 as rp;
 use universaldb::prelude::*;
 use universaldb::tuple::Subspace;
-use utils::{validate_entries, validate_keys};
+use utils::{validate_entries, validate_keys, validate_range};
 
 use crate::keys;
 
@@ -369,6 +369,53 @@ pub async fn delete(
 		}
 	})
 	.custom_instrument(tracing::info_span!("kv_delete_tx"))
+	.await
+	.map_err(Into::into)
+}
+
+/// Deletes all keys in the half-open range [start, end). Cannot be undone.
+#[tracing::instrument(skip_all)]
+pub async fn delete_range(
+	db: &universaldb::Database,
+	recipient: &Recipient,
+	start: rp::KvKey,
+	end: rp::KvKey,
+) -> Result<()> {
+	validate_range(&start, &end)?;
+	if start >= end {
+		return Ok(());
+	}
+
+	db.run(|tx| {
+		let start = start.clone();
+		let end = end.clone();
+		async move {
+			// Total written bytes (rounded up to nearest chunk)
+			let total_size = start.len() + end.len();
+			let total_size_chunked = (total_size as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
+				* util::metric::KV_BILLABLE_CHUNK;
+			namespace::keys::metric::inc(
+				&tx.with_subspace(namespace::keys::subspace()),
+				recipient.namespace_id,
+				namespace::keys::metric::Metric::KvWrite(recipient.name.clone()),
+				total_size_chunked.try_into().unwrap_or_default(),
+			);
+
+			let subspace = keys::actor_kv::subspace(recipient.actor_id);
+			let begin = subspace
+				.subspace(&keys::actor_kv::KeyWrapper(start))
+				.range()
+				.0;
+			let end = subspace
+				.subspace(&keys::actor_kv::KeyWrapper(end))
+				.range()
+				.0;
+			tx.clear_range(&begin, &end);
+
+			Ok(())
+		}
+	})
+	.custom_instrument(tracing::info_span!("kv_delete_range_tx"))
 	.await
 	.map_err(Into::into)
 }

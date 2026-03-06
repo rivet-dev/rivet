@@ -71,11 +71,35 @@ export class FileSystemActorDriver implements ActorDriver {
 		await this.#state.kvBatchDelete(actorId, keys);
 	}
 
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		await this.#state.kvDeleteRange(actorId, start, end);
+	}
+
 	async kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		return await this.#state.kvListPrefix(actorId, prefix);
+		return await this.#state.kvListPrefix(actorId, prefix, options);
+	}
+
+	async kvListRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<[Uint8Array, Uint8Array][]> {
+		return await this.#state.kvListRange(actorId, start, end, options);
 	}
 
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {

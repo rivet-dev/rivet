@@ -257,6 +257,14 @@ export class EngineActorDriver implements ActorDriver {
 		await this.#runner.kvDelete(actorId, keys);
 	}
 
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		await this.#runner.kvDeleteRange(actorId, start, end);
+	}
+
 	async kvList(actorId: string): Promise<Uint8Array[]> {
 		const entries = await this.#runner.kvListPrefix(
 			actorId,
@@ -275,8 +283,12 @@ export class EngineActorDriver implements ActorDriver {
 	async kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const result = await this.#runner.kvListPrefix(actorId, prefix);
+		const result = await this.#runner.kvListPrefix(actorId, prefix, options);
 		logger().info({
 			msg: "kvListPrefix called",
 			actorId,
@@ -285,6 +297,24 @@ export class EngineActorDriver implements ActorDriver {
 			keys: result.map(([key]) => new TextDecoder().decode(key)),
 		});
 		return result;
+	}
+
+	async kvListRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<[Uint8Array, Uint8Array][]> {
+		return await this.#runner.kvListRange(
+			actorId,
+			start,
+			end,
+			true,
+			options,
+		);
 	}
 
 	/** Creates a SQLite VFS instance for creating KV-backed databases */

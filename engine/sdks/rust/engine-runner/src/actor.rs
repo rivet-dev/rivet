@@ -186,6 +186,32 @@ impl ActorConfig {
 		}
 	}
 
+	/// Send a KV delete range request.
+	pub async fn send_kv_delete_range(&self, start: Vec<u8>, end: Vec<u8>) -> Result<()> {
+		let (response_tx, response_rx) = oneshot::channel();
+		let request = KvRequest {
+			actor_id: self.actor_id.clone(),
+			data: rp::KvRequestData::KvDeleteRangeRequest(rp::KvDeleteRangeRequest { start, end }),
+			response_tx,
+		};
+		self.kv_request_tx
+			.send(request)
+			.map_err(|_| anyhow::anyhow!("failed to send KV delete range request"))?;
+		let response: rp::KvResponseData = response_rx
+			.await
+			.map_err(|_| anyhow::anyhow!("KV delete range request response channel closed"))?;
+
+		match response {
+			rp::KvResponseData::KvDeleteResponse => Ok(()),
+			rp::KvResponseData::KvErrorResponse(err) => {
+				Err(anyhow::anyhow!("KV delete range failed: {}", err.message))
+			}
+			_ => Err(anyhow::anyhow!(
+				"unexpected response type for KV delete range"
+			)),
+		}
+	}
+
 	/// Send a KV drop request
 	pub async fn send_kv_drop(&self) -> Result<()> {
 		let (response_tx, response_rx) = oneshot::channel();

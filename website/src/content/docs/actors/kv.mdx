@@ -95,6 +95,29 @@ const example = actor({
 
 If you use binary keys, set `keyType: "binary"` so the returned keys stay as `Uint8Array`.
 
+## Range Operations
+
+Use `listRange(start, end)` or `scan(start, end)` to read an arbitrary half-open range `[start, end)`. Use `deleteRange(start, end)` to clear that same range efficiently.
+
+```typescript
+import { actor } from "rivetkit";
+
+const example = actor({
+  state: {},
+  actions: {
+    pruneAndScan: async (c) => {
+      const active = await c.kv.listRange("job:", "joc:", {
+        keyType: "text",
+      });
+
+      await c.kv.deleteRange("job:old:", "job:old;");
+
+      return active.map(([key, value]) => ({ key, value }));
+    }
+  }
+});
+```
+
 ## Batch Operations
 
 KV supports batch operations for efficiency. Defaults are still `text` for both keys and values.

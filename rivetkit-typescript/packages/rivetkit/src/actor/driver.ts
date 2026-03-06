@@ -39,10 +39,32 @@ export interface ActorDriver {
 	/** Batch delete multiple keys. */
 	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
 
+	/** Delete all keys in the half-open range [start, end). */
+	kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void>;
+
 	/** List all keys with a given prefix. */
 	kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<[Uint8Array, Uint8Array][]>;
+
+	/** List all keys in the half-open range [start, end). */
+	kvListRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
 	): Promise<[Uint8Array, Uint8Array][]>;
 
 	// Schedule

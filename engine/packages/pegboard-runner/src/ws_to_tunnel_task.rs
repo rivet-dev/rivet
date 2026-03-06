@@ -364,6 +364,35 @@ async fn handle_message_mk2(
 						.await
 						.context("failed to send KV delete response to client")?;
 				}
+				protocol::mk2::KvRequestData::KvDeleteRangeRequest(body) => {
+					let res =
+						actor_kv::delete_range(&*ctx.udb()?, &recipient, body.start, body.end)
+							.await;
+
+					let res_msg = versioned::ToClientMk2::wrap_latest(
+						protocol::mk2::ToClient::ToClientKvResponse(
+							protocol::mk2::ToClientKvResponse {
+								request_id: req.request_id,
+								data: match res {
+									Ok(()) => protocol::mk2::KvResponseData::KvDeleteResponse,
+									Err(err) => protocol::mk2::KvResponseData::KvErrorResponse(
+										protocol::mk2::KvErrorResponse {
+											message: err.to_string(),
+										},
+									),
+								},
+							},
+						),
+					);
+
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV delete range response")?;
+					conn.ws_handle
+						.send(Message::Binary(res_msg_serialized.into()))
+						.await
+						.context("failed to send KV delete range response to client")?;
+				}
 				protocol::mk2::KvRequestData::KvDropRequest => {
 					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
 

@@ -28,6 +28,8 @@ type KvListOptions<
 	K extends KvKeyType = "text",
 > = KvValueOptions<T> & {
 	keyType?: K;
+	reverse?: boolean;
+	limit?: number;
 };
 
 const textEncoder = new TextEncoder();
@@ -219,6 +221,17 @@ export class ActorKv {
 	}
 
 	/**
+	 * Delete all keys in the half-open range [start, end).
+	 */
+	async deleteRange(start: KvKey, end: KvKey): Promise<void> {
+		await this.#driver.kvDeleteRange(
+			this.#actorId,
+			makePrefixedKey(encodeKey(start)),
+			makePrefixedKey(encodeKey(end)),
+		);
+	}
+
+	/**
 	 * List all keys with a given prefix.
 	 * Returns key-value pairs where keys have the user prefix removed.
 	 */
@@ -232,10 +245,54 @@ export class ActorKv {
 		const results = await this.#driver.kvListPrefix(
 			this.#actorId,
 			prefixedPrefix,
+			{
+				reverse: options?.reverse,
+				limit: options?.limit,
+			},
 		);
 		return results.map(([key, value]) => [
 			decodeKey<K>(removePrefixFromKey(key), options?.keyType),
 			decodeValue<T>(value, options),
 		]);
+	}
+
+	/**
+	 * List all key-value pairs in the half-open range [start, end).
+	 */
+	async listRange<
+		T extends KvValueType = "text",
+		K extends KvKeyType = "text",
+	>(
+		start: KvKeyTypeMap[K],
+		end: KvKeyTypeMap[K],
+		options?: KvListOptions<T, K>,
+	): Promise<[KvKeyTypeMap[K], KvValueTypeMap[T]][]> {
+		const results = await this.#driver.kvListRange(
+			this.#actorId,
+			makePrefixedKey(encodeKey(start, options?.keyType)),
+			makePrefixedKey(encodeKey(end, options?.keyType)),
+			{
+				reverse: options?.reverse,
+				limit: options?.limit,
+			},
+		);
+		return results.map(([key, value]) => [
+			decodeKey<K>(removePrefixFromKey(key), options?.keyType),
+			decodeValue<T>(value, options),
+		]);
+	}
+
+	/**
+	 * Alias for listRange.
+	 */
+	async scan<
+		T extends KvValueType = "text",
+		K extends KvKeyType = "text",
+	>(
+		start: KvKeyTypeMap[K],
+		end: KvKeyTypeMap[K],
+		options?: KvListOptions<T, K>,
+	): Promise<[KvKeyTypeMap[K], KvValueTypeMap[T]][]> {
+		return await this.listRange(start, end, options);
 	}
 }

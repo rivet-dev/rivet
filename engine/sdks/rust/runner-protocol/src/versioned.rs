@@ -3205,6 +3205,12 @@ fn convert_kv_request_data_v4_to_v6(data: v4::KvRequestData) -> v6::KvRequestDat
 		v4::KvRequestData::KvDeleteRequest(req) => {
 			v6::KvRequestData::KvDeleteRequest(v6::KvDeleteRequest { keys: req.keys })
 		}
+		v4::KvRequestData::KvDeleteRangeRequest(req) => {
+			v6::KvRequestData::KvDeleteRangeRequest(v6::KvDeleteRangeRequest {
+				start: req.start,
+				end: req.end,
+			})
+		}
 		v4::KvRequestData::KvDropRequest => v6::KvRequestData::KvDropRequest,
 	}
 }
@@ -3227,6 +3233,12 @@ fn convert_kv_request_data_v6_to_v4(data: v6::KvRequestData) -> v4::KvRequestDat
 		}),
 		v6::KvRequestData::KvDeleteRequest(req) => {
 			v4::KvRequestData::KvDeleteRequest(v4::KvDeleteRequest { keys: req.keys })
+		}
+		v6::KvRequestData::KvDeleteRangeRequest(req) => {
+			v4::KvRequestData::KvDeleteRangeRequest(v4::KvDeleteRangeRequest {
+				start: req.start,
+				end: req.end,
+			})
 		}
 		v6::KvRequestData::KvDropRequest => v4::KvRequestData::KvDropRequest,
 	}

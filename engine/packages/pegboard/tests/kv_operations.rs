@@ -251,8 +251,22 @@ async fn test_kv_operations() -> Result<()> {
 	assert!(!remaining_keys.contains(&b"key2".to_vec()));
 	tracing::info!("successfully deleted specific keys");
 
-	// Test 10: Delete all keys
-	tracing::info!("test 10: deleting all keys");
+	// Test 10: Delete a half-open range
+	tracing::info!("test 10: deleting a half-open range");
+	kv::delete_range(db, &recipient, b"key3".to_vec(), b"key5".to_vec()).await?;
+
+	let (post_range_keys, _, _) =
+		kv::list(db, &recipient, rp::KvListQuery::KvListAllQuery, false, None).await?;
+	assert_eq!(post_range_keys.len(), 1, "should have 1 key remaining");
+	assert_eq!(
+		post_range_keys[0],
+		b"other".to_vec(),
+		"only other should remain"
+	);
+	tracing::info!("successfully deleted keys in half-open range");
+
+	// Test 11: Delete all keys
+	tracing::info!("test 11: deleting all keys");
 	kv::delete_all(db, &recipient).await?;
 
 	// Verify all keys are deleted
@@ -261,8 +275,8 @@ async fn test_kv_operations() -> Result<()> {
 	assert_eq!(all_keys.len(), 0, "should have no keys remaining");
 	tracing::info!("successfully deleted all keys");
 
-	// Test 11: Test storage size
-	tracing::info!("test 11: testing storage size");
+	// Test 12: Test storage size
+	tracing::info!("test 12: testing storage size");
 	let size = db
 		.run(|tx| async move { kv::estimate_kv_size(&tx, actor_id).await })
 		.await
@@ -270,8 +284,8 @@ async fn test_kv_operations() -> Result<()> {
 	assert_eq!(size, 0, "storage size should be 0 after delete_all");
 	tracing::info!("successfully verified storage size");
 
-	// Test 12: Test large value (chunking)
-	tracing::info!("test 12: testing large value chunking");
+	// Test 13: Test large value (chunking)
+	tracing::info!("test 13: testing large value chunking");
 	let large_value = vec![42u8; 50_000]; // 50 KB, will be split into chunks
 	kv::put(
 		db,
@@ -287,9 +301,9 @@ async fn test_kv_operations() -> Result<()> {
 	assert_eq!(large_values[0], large_value, "large value should match");
 	tracing::info!("successfully stored and retrieved large value");
 
-	// Test 13: Verify storage size increased
+	// Test 14: Verify storage size increased
 	// Note: Storage size estimation may not be accurate on all backends (e.g., FileSystem)
-	tracing::info!("test 13: verifying storage size with data");
+	tracing::info!("test 14: verifying storage size with data");
 	let size_with_data = db
 		.run(|tx| async move { kv::estimate_kv_size(&tx, actor_id).await })
 		.await

@@ -13,7 +13,14 @@ import type {
 } from "rivetkit/driver-helpers";
 import { promiseWithResolvers } from "rivetkit/utils";
 import { logger } from "./log";
-import { kvDelete, kvGet, kvListPrefix, kvPut } from "./actor-kv";
+import {
+	kvDelete,
+	kvDeleteRange,
+	kvGet,
+	kvListPrefix,
+	kvListRange,
+	kvPut,
+} from "./actor-kv";
 import { GLOBAL_KV_KEYS } from "./global-kv";
 import { getCloudflareAmbientEnv } from "./handler";
 import { parseActorId } from "./actor-id";
@@ -256,13 +263,39 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		}
 	}
 
+	async kvDeleteRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+	): Promise<void> {
+		const sql = this.#getDOCtx(actorId).storage.sql;
+		kvDeleteRange(sql, start, end);
+	}
+
 	async kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
 	): Promise<[Uint8Array, Uint8Array][]> {
 		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		return kvListPrefix(sql, prefix);
+		return kvListPrefix(sql, prefix, options);
+	}
+
+	async kvListRange(
+		actorId: string,
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	): Promise<[Uint8Array, Uint8Array][]> {
+		const sql = this.#getDOCtx(actorId).storage.sql;
+		return kvListRange(sql, start, end, options);
 	}
 
 	startDestroy(actorId: string): void {
