@@ -24,7 +24,9 @@ spec:
         args:
         - postgres
         - -c
-        - max_connections=500
+        - max_connections=200
+        - -c
+        - password_encryption=md5
         ports:
         - containerPort: 5432
           name: postgres

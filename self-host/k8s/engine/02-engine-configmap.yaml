@@ -3,7 +3,7 @@ data:
   config.jsonc: |
     {
       "postgres": {
-        "url": "postgresql://postgres:postgres@postgres:5432/rivet"
+        "url": "postgresql://postgres:postgres@pgbouncer:5432/rivet"
       },
 
       "nats": {

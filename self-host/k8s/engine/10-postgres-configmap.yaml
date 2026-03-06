@@ -6,3 +6,5 @@ metadata:
 data:
   POSTGRES_DB: rivet
   POSTGRES_USER: postgres
+  # PgBouncer stores MD5 hashes in userlist.txt and requires MD5 auth to connect.
+  POSTGRES_HOST_AUTH_METHOD: md5

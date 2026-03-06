@@ -49,22 +49,27 @@ kubectl apply -f 10-postgres-configmap.yaml
 kubectl apply -f 11-postgres-secret.yaml
 kubectl apply -f 12-postgres-statefulset.yaml
 kubectl apply -f 13-postgres-service.yaml
+kubectl apply -f 15-pgbouncer-configmap.yaml
+kubectl apply -f 16-pgbouncer-deployment.yaml
+kubectl apply -f 17-pgbouncer-service.yaml
 
 # Wait for NATS and PostgreSQL to be ready
 echo "Waiting for NATS to be ready..."
 kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=nats --timeout=300s
 echo "Waiting for PostgreSQL to be ready..."
 kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=postgres --timeout=300s
+echo "Waiting for PgBouncer to be ready..."
+kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=pgbouncer --timeout=300s
 
 kubectl apply -f 02-engine-configmap.yaml
-kubectl apply -f 03-rivet-engine-deployment.yaml
+# Apply deployment with locally built image and no-pull policy so k8s never tries to fetch from a registry.
+sed "s|image: rivetdev/engine:latest|image: ${IMAGE_NAME}|" 03-rivet-engine-deployment.yaml \
+  | kubectl apply -f -
+kubectl -n "${NAMESPACE}" patch deployment rivet-engine \
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"rivet-engine","imagePullPolicy":"Never"}]}}}}'
 kubectl apply -f 04-rivet-engine-service.yaml
 kubectl apply -f 05-rivet-engine-hpa.yaml
 kubectl apply -f 14-rivet-engine-pdb.yaml
-
-# Override image to use locally built image
-kubectl -n "${NAMESPACE}" set image deployment/rivet-engine rivet-engine="${IMAGE_NAME}"
-kubectl -n "${NAMESPACE}" patch deployment rivet-engine -p '{"spec":{"template":{"spec":{"containers":[{"name":"rivet-engine","imagePullPolicy":"Never"}]}}}}'
 
 # Wait for engine to be ready
 echo "Waiting for engine to be ready..."

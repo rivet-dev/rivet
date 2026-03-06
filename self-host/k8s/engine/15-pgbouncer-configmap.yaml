@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: rivet-engine
+  labels:
+    app: pgbouncer
+    service: engine
+data:
+  # Session pooling is required for compatibility with tokio-postgres prepared statements.
+  POOL_MODE: session
+  # Allow many client connections to queue while server connections are limited.
+  MAX_CLIENT_CONN: "5000"
+  # Limit actual postgres server connections. With 2 pgbouncer replicas, each pod must stay
+  # below max_connections (200) / num_replicas (2) = 100. Use 90 to leave headroom.
+  DEFAULT_POOL_SIZE: "90"
+  MIN_POOL_SIZE: "5"
+  RESERVE_POOL_SIZE: "10"
+  # Release idle server connections after 10 minutes.
+  SERVER_IDLE_TIMEOUT: "600"
+  IGNORE_STARTUP_PARAMETERS: extra_float_digits
+  # trust: passwords are enforced by postgres (SCRAM-SHA-256), not pgbouncer.
+  # PgBouncer uses the plaintext password from DATABASE_URL to authenticate with postgres.
+  # Restrict access with NetworkPolicies if stricter client auth is required.
+  AUTH_TYPE: md5

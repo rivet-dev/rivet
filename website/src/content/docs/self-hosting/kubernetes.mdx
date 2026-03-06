@@ -53,6 +53,7 @@ skill: true
     # Wait for all pods to be ready
     kubectl -n rivet-engine wait --for=condition=ready pod -l app=nats --timeout=300s
     kubectl -n rivet-engine wait --for=condition=ready pod -l app=postgres --timeout=300s
+    kubectl -n rivet-engine wait --for=condition=ready pod -l app=pgbouncer --timeout=300s
     kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine --timeout=300s
 
     # Verify all pods are running
@@ -163,12 +164,17 @@ skill: true
 
 If you prefer to use a managed PostgreSQL service (e.g. Amazon RDS, Cloud SQL, Azure Database) instead of the bundled Postgres deployment:
 
-- Update the `postgres.url` connection string in `02-engine-configmap.yaml` to point to your managed instance
+- Update the `postgres.url` connection string in `02-engine-configmap.yaml` to point to your managed instance (or to PgBouncer if you deploy it separately)
 - Delete the bundled PostgreSQL manifests:
   - `10-postgres-configmap.yaml`
   - `11-postgres-secret.yaml`
   - `12-postgres-statefulset.yaml`
   - `13-postgres-service.yaml`
+  - `15-pgbouncer-configmap.yaml`
+  - `16-pgbouncer-deployment.yaml`
+  - `17-pgbouncer-service.yaml`
+
+  Most managed PostgreSQL services include built-in connection pooling (e.g. RDS Proxy, Cloud SQL connection pooler), so PgBouncer is typically not needed when using a managed service.
 
 ### Applying Configuration Updates
 

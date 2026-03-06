@@ -27,6 +27,9 @@ The `engine/` directory contains Kubernetes manifests:
 - `12-postgres-statefulset.yaml` - PostgreSQL database
 - `13-postgres-service.yaml` - PostgreSQL service
 - `14-rivet-engine-pdb.yaml` - Engine Pod Disruption Budget
+- `15-pgbouncer-configmap.yaml` - PgBouncer connection pooler configuration
+- `16-pgbouncer-deployment.yaml` - PgBouncer deployment (2 replicas)
+- `17-pgbouncer-service.yaml` - PgBouncer service
 
 For production, we recommend using a managed PostgreSQL service (e.g. Amazon RDS, Cloud SQL, Azure Database) instead of the bundled single-replica StatefulSet.
 
