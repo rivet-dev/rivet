@@ -64,7 +64,7 @@ import { sleep } from "./utils.js";
 export const DEFAULT_MAX_RETRIES = 3;
 export const DEFAULT_RETRY_BACKOFF_BASE = 100;
 export const DEFAULT_RETRY_BACKOFF_MAX = 30000;
-export const DEFAULT_LOOP_CHECKPOINT_INTERVAL = 20;
+export const DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL = 20;
 export const DEFAULT_STEP_TIMEOUT = 30000; // 30 seconds
 
 const QUEUE_HISTORY_MESSAGE_MARKER = "__rivetWorkflowQueueMessage";
@@ -692,20 +692,22 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			metadata.dirty = true;
 		}
 
-		const checkpointInterval =
-			config.checkpointInterval ?? DEFAULT_LOOP_CHECKPOINT_INTERVAL;
+		const historyPruneInterval =
+			config.historyPruneInterval ?? DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL;
+		const historySize =
+			config.historySize ?? historyPruneInterval;
 
-		// Track the last iteration we compacted up to so we only delete
+		// Track the last iteration we pruned up to so we only delete
 		// newly-expired iterations instead of re-scanning from 0.
-		let lastForgottenUpTo = 0;
+		let lastPrunedUpTo = 0;
 
-		// Deferred flush promise from the previous checkpoint. Awaited at the
+		// Deferred flush promise from the previous prune cycle. Awaited at the
 		// start of the next iteration so the flush runs in parallel with user code.
 		let deferredFlush: Promise<void> | null = null;
 
 		// Execute loop iterations
 		while (true) {
-			// Await any deferred flush from the previous iteration's checkpoint
+			// Await any deferred flush from the previous prune cycle
 			if (deferredFlush) {
 				await deferredFlush;
 				deferredFlush = null;
@@ -757,12 +759,12 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					metadata.dirty = true;
 				}
 
-				// Collect compaction deletions and flush alongside the checkpoint
-				const deletions = this.collectLoopCompaction(
+				// Collect pruning deletions and flush
+				const deletions = this.collectLoopPruning(
 					location,
 					iteration + 1,
-					checkpointInterval,
-					lastForgottenUpTo,
+					historySize,
+					lastPrunedUpTo,
 				);
 				await this.flushStorageWithDeletions(deletions);
 
@@ -781,24 +783,24 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 			iteration++;
 
-			// Periodic checkpoint: update loop state and defer the flush
+			// Periodic prune: persist loop state and defer the flush
 			// so it runs in parallel with the next iteration's user code
-			if (iteration % checkpointInterval === 0) {
+			if (iteration % historyPruneInterval === 0) {
 				if (entry.kind.type === "loop") {
 					entry.kind.data.state = state;
 					entry.kind.data.iteration = iteration;
 				}
 				entry.dirty = true;
 
-				const deletions = this.collectLoopCompaction(
+				const deletions = this.collectLoopPruning(
 					location,
 					iteration,
-					checkpointInterval,
-					lastForgottenUpTo,
+					historySize,
+					lastPrunedUpTo,
 				);
-				lastForgottenUpTo = Math.max(
+				lastPrunedUpTo = Math.max(
 					0,
-					iteration - checkpointInterval,
+					iteration - historySize,
 				);
 
 				// Defer the flush to run in parallel with the next iteration
@@ -808,23 +810,23 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	}
 
 	/**
-	 * Collect pending deletions for loop history compaction.
+	 * Collect pending deletions for loop history pruning.
 	 *
 	 * Only deletes iterations in the range [fromIteration, keepFrom) where
-	 * keepFrom = currentIteration - checkpointInterval. This avoids re-scanning
+	 * keepFrom = currentIteration - historySize. This avoids re-scanning
 	 * already-deleted iterations.
 	 */
-	private collectLoopCompaction(
+	private collectLoopPruning(
 		loopLocation: Location,
 		currentIteration: number,
-		checkpointInterval: number,
+		historySize: number,
 		fromIteration: number,
 	): PendingDeletions | undefined {
-		if (currentIteration <= checkpointInterval) {
+		if (currentIteration <= historySize) {
 			return undefined;
 		}
 
-		const keepFrom = Math.max(0, currentIteration - checkpointInterval);
+		const keepFrom = Math.max(0, currentIteration - historySize);
 		if (fromIteration >= keepFrom) {
 			return undefined;
 		}
@@ -853,8 +855,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	}
 
 	/**
-	 * Flush storage with optional pending deletions so compaction
-	 * happens alongside the checkpoint write.
+	 * Flush storage with optional pending deletions so pruning
+	 * happens alongside the state write.
 	 */
 	private async flushStorageWithDeletions(
 		deletions?: PendingDeletions,

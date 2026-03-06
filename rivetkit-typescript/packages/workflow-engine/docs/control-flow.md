@@ -19,7 +19,7 @@ async function processBatches(ctx: WorkflowContextInterface) {
   return await ctx.loop({
     name: "process-batches",
     state: { cursor: null as string | null, processed: 0 },
-    checkpointInterval: 10,
+    historyPruneInterval: 20,
     run: async (loopCtx, state) => {
       const batch = await loopCtx.step("fetch", () => fetchBatch(state.cursor));
 
@@ -38,7 +38,7 @@ async function processBatches(ctx: WorkflowContextInterface) {
 }
 ```
 
-Loop state is persisted every `checkpointInterval` iterations. History older than `checkpointInterval` iterations is compacted at each checkpoint, so rollback only replays the last retained iterations.
+Loop state is persisted every `historyPruneInterval` iterations. Old iterations beyond `historySize` (defaults to `historyPruneInterval`) are pruned, so rollback only replays the last retained iterations.
 
 ## Join (Wait for All)
 

@@ -29,7 +29,7 @@ Use ephemeral steps for idempotent work where you want to batch writes. Do not u
 
 - Group short-lived steps between durable checkpoints.
 - Use non-ephemeral steps to ensure important state changes are flushed to storage.
-- Prefer `ctx.loop()` with `checkpointInterval` to control persistence frequency and history retention.
+- Prefer `ctx.loop()` with `historyPruneInterval` and `historySize` to control persistence frequency and history retention.
 
 ## Parallelism Without Extra Workers
 

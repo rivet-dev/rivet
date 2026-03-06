@@ -370,7 +370,7 @@ Loops maintain durable state across iterations:
 await ctx.loop({
   name: "process-items",
   state: { cursor: null, processed: 0 },
-  checkpointInterval: 10,
+  historyPruneInterval: 20,
   run: async (ctx, state) => {
     const batch = await ctx.step("fetch", () => fetchBatch(state.cursor));
     if (!batch.items.length) {
@@ -385,29 +385,29 @@ await ctx.loop({
 });
 ```
 
-### Checkpoint Interval
+### History Prune Interval
 
-- State is persisted every `checkpointInterval` iterations
-- On crash, replay resumes from last checkpointed state
+- State is persisted and old history is pruned every `historyPruneInterval` iterations
+- On crash, replay resumes from last persisted state
 
-### History Retention
+### History Size
 
-Loop history is compacted at each checkpoint. Iterations older than `checkpointInterval` are deleted, keeping only the most recent window. Rollback only replays the last retained iteration.
+By default, `historySize` equals `historyPruneInterval`. You can set `historySize` independently to retain more history than the prune interval (e.g., prune every 20 iterations but keep the last 100). Rollback only replays the last retained iteration.
 
-After compaction at iteration 20 (checkpointInterval=10):
+After pruning at iteration 40 (historyPruneInterval=20, historySize=20):
 
 ```
-Before trim at iteration 20:
+Before pruning at iteration 40:
   process-items/~0/fetch, ~0/process
   process-items/~1/fetch, ~1/process
   ...
-  process-items/~19/fetch, ~19/process
+  process-items/~39/fetch, ~39/process
 
-After trim:
-  process-items/~10/fetch, ~10/process  (kept)
+After pruning:
+  process-items/~20/fetch, ~20/process  (kept)
   ...
-  process-items/~19/fetch, ~19/process  (kept)
-  // Iterations 0-9 deleted
+  process-items/~39/fetch, ~39/process  (kept)
+  // Iterations 0-19 deleted
 ```
 
 ## Dirty Tracking

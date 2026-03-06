@@ -388,8 +388,10 @@ export interface LoopConfig<S, T> {
 		ctx: WorkflowContextInterface,
 		state: S,
 	) => LoopIterationResult<S, T>;
-	/** Checkpoint loop state and compact history every N iterations. Default: 20. */
-	checkpointInterval?: number;
+	/** Prune old loop iterations every N iterations. Default: 20. */
+	historyPruneInterval?: number;
+	/** Number of past iterations to retain when pruning. Defaults to historyPruneInterval. */
+	historySize?: number;
 }
 
 /**

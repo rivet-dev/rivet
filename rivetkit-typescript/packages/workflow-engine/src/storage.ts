@@ -207,8 +207,8 @@ export async function loadMetadata(
 }
 
 /**
- * Pending deletions collected by collectLoopCompaction to be included
- * in the next flush alongside the checkpoint write.
+ * Pending deletions collected by collectLoopPruning to be included
+ * in the next flush alongside the state write.
  */
 export interface PendingDeletions {
 	prefixes: Uint8Array[];
@@ -217,8 +217,8 @@ export interface PendingDeletions {
 
 /**
  * Flush all dirty data to the driver. Optionally includes pending
- * deletions so that history compaction happens alongside the
- * checkpoint write.
+ * deletions so that history pruning happens alongside the
+ * state write.
  */
 export async function flush(
 	storage: Storage,
@@ -306,7 +306,7 @@ export async function flush(
 	}
 
 	// Apply pending deletions after the batch write. These are collected
-	// by collectLoopCompaction so compaction happens alongside the checkpoint.
+	// by collectLoopPruning so pruning happens alongside the state write.
 	if (pendingDeletions) {
 		const deleteOps: Promise<void>[] = [];
 		for (const prefix of pendingDeletions.prefixes) {
