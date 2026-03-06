@@ -44,6 +44,8 @@ import {
 	validateKvKeys,
 } from "./kv-limits";
 
+const DEFAULT_LIST_LIMIT = 16_384;
+
 // Actor handler to track running instances
 
 function compareBytes(a: Uint8Array, b: Uint8Array): number {
@@ -1470,25 +1472,16 @@ export class FileSystemGlobalState {
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const upperBound = computePrefixUpperBound(prefix);
 		const direction = options?.reverse ? "DESC" : "ASC";
+		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
 		const rows = upperBound
-			? options?.limit !== undefined
-				? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-						`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
-						[prefix, upperBound, options.limit],
-					)
-				: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-						`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction}`,
-						[prefix, upperBound],
-					)
-			: options?.limit !== undefined
-				? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-						`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
-						[prefix, options.limit],
-					)
-				: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-						`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction}`,
-						[prefix],
-					);
+			? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+					`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+					[prefix, upperBound, limit],
+				)
+			: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+					`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
+					[prefix, limit],
+				);
 
 		return rows.map((row) => [
 			ensureUint8Array(row.key, "key"),
@@ -1525,20 +1518,11 @@ export class FileSystemGlobalState {
 
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const direction = options?.reverse ? "DESC" : "ASC";
-		const query =
-			options?.limit !== undefined
-				? `SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`
-				: `SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction}`;
-		const rows =
-			options?.limit !== undefined
-				? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-						query,
-						[start, end, options.limit],
-					)
-				: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
-						query,
-						[start, end],
-					);
+		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
+		const rows = db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+			[start, end, limit],
+		);
 
 		return rows.map((row) => [
 			ensureUint8Array(row.key, "key"),

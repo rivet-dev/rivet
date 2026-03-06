@@ -1,3 +1,5 @@
+const DEFAULT_LIST_LIMIT = 16_384;
+
 export function kvGet(sql: SqlStorage, key: Uint8Array): Uint8Array | null {
 	const cursor = sql.exec(
 		"SELECT value FROM _rivetkit_kv_storage WHERE key = ?",
@@ -53,14 +55,12 @@ export function kvListPrefix(
 	}
 
 	const direction = options?.reverse ? "DESC" : "ASC";
-	const query =
-		options?.limit !== undefined
-			? `SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? ORDER BY key ${direction} LIMIT ?`
-			: `SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? ORDER BY key ${direction}`;
-	const cursor =
-		options?.limit !== undefined
-			? sql.exec(query, prefix, options.limit)
-			: sql.exec(query, prefix);
+	const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
+	const cursor = sql.exec(
+		`SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
+		prefix,
+		limit,
+	);
 	return readEntries(cursor);
 }
 
@@ -74,14 +74,13 @@ export function kvListRange(
 	},
 ): [Uint8Array, Uint8Array][] {
 	const direction = options?.reverse ? "DESC" : "ASC";
-	const query =
-		options?.limit !== undefined
-			? `SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`
-			: `SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? AND key < ? ORDER BY key ${direction}`;
-	const cursor =
-		options?.limit !== undefined
-			? sql.exec(query, start, end, options.limit)
-			: sql.exec(query, start, end);
+	const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
+	const cursor = sql.exec(
+		`SELECT key, value FROM _rivetkit_kv_storage WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
+		start,
+		end,
+		limit,
+	);
 	return readEntries(cursor);
 }
 
