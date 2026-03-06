@@ -40,6 +40,7 @@ impl MemoryDriver {
 			subscribers: HashMap::new(),
 		});
 
+		// TODO: Why not use drop impl?
 		// Spawn GC task to clean up closed subscribers
 		let gc_inner = Arc::downgrade(&inner);
 		tokio::spawn(async move {
@@ -59,7 +60,7 @@ impl MemoryDriver {
 							!senders.is_empty()
 						})
 						.await;
-					metrics::MEMORY_SUBSCRIBERS_COUNT.set(inner.subscribers.len() as i64);
+					metrics::MEMORY_SUBSCRIBER_COUNT.set(inner.subscribers.len() as i64);
 				} else {
 					break;
 				}
@@ -85,7 +86,7 @@ impl PubSubDriver for MemoryDriver {
 			.await
 			.or_default()
 			.push(tx);
-		metrics::MEMORY_SUBSCRIBERS_COUNT.set(self.subscribers.len() as i64);
+		metrics::MEMORY_SUBSCRIBER_COUNT.set(self.subscribers.len() as i64);
 
 		Ok(Box::new(MemorySubscriber {
 			subject: subject_with_channel,

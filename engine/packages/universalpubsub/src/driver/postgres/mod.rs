@@ -326,7 +326,7 @@ impl PubSubDriver for PostgresDriver {
 
 				// Register subscription
 				e.insert_entry(subscription.clone());
-				metrics::POSTGRES_SUBSCRIPTIONS_COUNT.set(self.subscriptions.len() as i64);
+				metrics::POSTGRES_SUBSCRIPTION_COUNT.set(self.subscriptions.len() as i64);
 
 				// Execute LISTEN command on the async client (for receiving notifications)
 				// This only needs to be done once per channel
@@ -365,8 +365,7 @@ impl PubSubDriver for PostgresDriver {
 							}
 						}
 						driver.subscriptions.remove_async(&hashed).await;
-						metrics::POSTGRES_SUBSCRIPTIONS_COUNT
-							.set(driver.subscriptions.len() as i64);
+						metrics::POSTGRES_SUBSCRIPTION_COUNT.set(driver.subscriptions.len() as i64);
 					}
 				});
 

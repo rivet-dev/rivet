@@ -72,7 +72,7 @@ impl PubSub {
 						.local_subscribers
 						.retain_async(|_, sender| sender.receiver_count() > 0)
 						.await;
-					metrics::LOCAL_SUBSCRIBERS_COUNT.set(inner.local_subscribers.len() as i64);
+					metrics::LOCAL_SUBSCRIBER_COUNT.set(inner.local_subscribers.len() as i64);
 				} else {
 					break;
 				}
@@ -83,14 +83,18 @@ impl PubSub {
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
-	pub async fn subscribe(&self, subject: impl Subject) -> Result<Subscriber> {
-		let subject = subject.as_cow();
-
+	pub async fn subscribe<T: Subject>(&self, subject: T) -> Result<Subscriber> {
 		// Underlying driver subscription
-		let driver = self.driver.subscribe(&subject).await?;
+		let driver = self.driver.subscribe(&subject.as_cow()).await?;
 
 		if !self.memory_optimization {
-			return Ok(Subscriber::new(driver, self.clone(), None));
+			return Ok(Subscriber::new(
+				driver,
+				self.clone(),
+				false,
+				subject.to_string(),
+				T::root().map(|x| x.to_string()),
+			));
 		}
 
 		// Ensure a local broadcast channel exists for this subject
@@ -101,7 +105,7 @@ impl PubSub {
 				.await
 				.or_insert_with(|| broadcast::channel(1024).0)
 				.subscribe();
-			metrics::LOCAL_SUBSCRIBERS_COUNT.set(self.local_subscribers.len() as i64);
+			metrics::LOCAL_SUBSCRIBER_COUNT.set(self.local_subscribers.len() as i64);
 			rx
 		};
 
@@ -115,7 +119,9 @@ impl PubSub {
 		Ok(Subscriber::new(
 			optimized_driver,
 			self.clone(),
-			self.memory_optimization.then_some(subject.to_string()),
+			true,
+			subject.to_string(),
+			T::root().map(|x| x.to_string()),
 		))
 	}
 
@@ -142,9 +148,9 @@ impl PubSub {
 			.await
 	}
 
-	async fn publish_inner(
+	async fn publish_inner<T: Subject>(
 		&self,
-		subject: impl Subject,
+		subject: T,
 		payload: &[u8],
 		reply_subject: Option<impl Subject>,
 		opts: PublishOpts,
@@ -185,6 +191,19 @@ impl PubSub {
 				self.publish_with_backoff(&subject, &encoded).await?;
 			}
 		}
+
+		let subject_str = T::root();
+		let subject_str = subject_str.as_deref().unwrap_or("unknown");
+		if use_local {
+			metrics::MESSAGE_SEND_COUNT
+				.with_label_values(&["local", subject_str])
+				.inc();
+		} else {
+			metrics::MESSAGE_SEND_COUNT
+				.with_label_values(&["driver", subject_str])
+				.inc();
+		}
+
 		Ok(())
 	}
 
@@ -195,7 +214,9 @@ impl PubSub {
 		let mut backoff = Backoff::default();
 		loop {
 			match self.driver.publish(&subject, encoded).await {
-				Result::Ok(_) => break,
+				Result::Ok(_) => {
+					break;
+				}
 				Err(err) if !backoff.tick().await => {
 					tracing::warn!(?err, "error publishing, cannot retry again");
 					return Err(crate::errors::Ups::PublishFailed.build().into());
@@ -237,7 +258,7 @@ impl PubSub {
 		self.reply_subscribers
 			.upsert_async(reply_subject.clone(), tx)
 			.await;
-		metrics::REPLY_SUBSCRIBERS_COUNT.set(self.reply_subscribers.len() as i64);
+		metrics::REPLY_SUBSCRIBER_COUNT.set(self.reply_subscribers.len() as i64);
 
 		// Subscribe to the reply subject (use local-aware subscribe)
 		let mut reply_subscriber = self.subscribe(&reply_subject).await?;
@@ -261,7 +282,7 @@ impl PubSub {
 						{
 							let _ = tx.send(msg.payload);
 						}
-						metrics::REPLY_SUBSCRIBERS_COUNT.set(inner.reply_subscribers.len() as i64);
+						metrics::REPLY_SUBSCRIBER_COUNT.set(inner.reply_subscribers.len() as i64);
 						break;
 					}
 					std::result::Result::Ok(NextOutput::Unsubscribed)
@@ -276,13 +297,13 @@ impl PubSub {
 			std::result::Result::Ok(std::result::Result::Err(_)) => {
 				// Clean up the reply subscription
 				self.reply_subscribers.remove_async(&reply_subject).await;
-				metrics::REPLY_SUBSCRIBERS_COUNT.set(self.reply_subscribers.len() as i64);
+				metrics::REPLY_SUBSCRIBER_COUNT.set(self.reply_subscribers.len() as i64);
 				return Err(crate::errors::Ups::RequestTimeout.build().into());
 			}
 			std::result::Result::Err(_) => {
 				// Timeout elapsed
 				self.reply_subscribers.remove_async(&reply_subject).await;
-				metrics::REPLY_SUBSCRIBERS_COUNT.set(self.reply_subscribers.len() as i64);
+				metrics::REPLY_SUBSCRIBER_COUNT.set(self.reply_subscribers.len() as i64);
 				return Err(crate::errors::Ups::RequestTimeout.build().into());
 			}
 		};
@@ -322,16 +343,37 @@ impl PubSub {
 pub struct Subscriber {
 	driver: SubscriberDriverHandle,
 	pubsub: PubSub,
-	// Subject for cleanup when memory_optimization is enabled
-	subject: Option<String>,
+	memory_optimization: bool,
+	subject: String,
+	root_subject: Option<String>,
 }
 
 impl Subscriber {
-	fn new(driver: SubscriberDriverHandle, pubsub: PubSub, subject: Option<String>) -> Self {
+	fn new(
+		driver: SubscriberDriverHandle,
+		pubsub: PubSub,
+		memory_optimization: bool,
+		subject: String,
+		root_subject: Option<String>,
+	) -> Self {
+		let subject_str = if let Some(root_subject) = &root_subject {
+			root_subject.as_str()
+		} else {
+			"unknown"
+		};
+		metrics::SUBSCRIBER_COUNT
+			.with_label_values(&[subject_str])
+			.inc();
+		metrics::ACTIVE_SUBSCRIBER_COUNT
+			.with_label_values(&[subject_str])
+			.inc();
+
 		Self {
 			driver,
 			pubsub,
+			memory_optimization,
 			subject,
+			root_subject,
 		}
 	}
 
@@ -347,6 +389,26 @@ impl Subscriber {
 					let mut tracker = self.pubsub.chunk_tracker.lock().unwrap();
 					match tracker.process_chunk(&payload) {
 						std::result::Result::Ok(Some((payload, reply_subject))) => {
+							metrics::MESSAGE_RECV_COUNT
+								.with_label_values(&[
+									if let Some(root_subject) = &self.root_subject {
+										root_subject.as_str()
+									} else {
+										"unknown"
+									},
+								])
+								.inc();
+
+							metrics::BYTES_PER_MESSAGE
+								.with_label_values(&[
+									if let Some(root_subject) = &self.root_subject {
+										root_subject.as_str()
+									} else {
+										"unknown"
+									},
+								])
+								.observe(payload.len() as f64);
+
 							return Ok(NextOutput::Message(Message {
 								pubsub: self.pubsub.clone(),
 								payload,
@@ -368,15 +430,23 @@ impl Subscriber {
 
 impl Drop for Subscriber {
 	fn drop(&mut self) {
+		metrics::ACTIVE_SUBSCRIBER_COUNT
+			.with_label_values(&[if let Some(root_subject) = &self.root_subject {
+				root_subject.as_str()
+			} else {
+				"unknown"
+			}])
+			.dec();
+
 		// Clean up local subscriber entry immediately if memory_optimization was enabled
-		if let Some(subject) = &self.subject {
+		if self.memory_optimization {
 			let pubsub = self.pubsub.clone();
-			let subject = subject.clone();
+			let subject = self.subject.clone();
 			tokio::spawn(async move {
 				if let Some(sender) = pubsub.local_subscribers.get_async(&subject).await {
 					if sender.receiver_count() == 0 {
 						let _ = sender.remove();
-						metrics::LOCAL_SUBSCRIBERS_COUNT.set(pubsub.local_subscribers.len() as i64);
+						metrics::LOCAL_SUBSCRIBER_COUNT.set(pubsub.local_subscribers.len() as i64);
 					}
 				}
 			});
