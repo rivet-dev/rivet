@@ -102,6 +102,8 @@ pub struct Pegboard {
 	pub runner_max_response_payload_body_size: Option<usize>,
 	/// Ping interval for runner updates in milliseconds.
 	pub runner_update_ping_interval_ms: Option<u64>,
+	/// Max time since last pong before the runner connection is terminated. Unit is in milliseconds.
+	pub runner_ping_timeout_ms: Option<i64>,
 	/// GC interval for actor event demuxer in milliseconds.
 	pub runner_event_demuxer_gc_interval_ms: Option<u64>,
 	/// Max time since last seen before actor is considered stale, in milliseconds.
@@ -220,6 +222,10 @@ impl Pegboard {
 
 	pub fn runner_update_ping_interval_ms(&self) -> u64 {
 		self.runner_update_ping_interval_ms.unwrap_or(3_000)
+	}
+
+	pub fn runner_ping_timeout_ms(&self) -> i64 {
+		self.runner_ping_timeout_ms.unwrap_or(15_000)
 	}
 
 	pub fn runner_event_demuxer_gc_interval_ms(&self) -> u64 {

@@ -1,5 +1,8 @@
 use std::{
-	sync::{Arc, atomic::AtomicU32},
+	sync::{
+		Arc,
+		atomic::{AtomicI64, AtomicU32},
+	},
 	time::{Duration, Instant},
 };
 
@@ -27,6 +30,8 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub last_rtt: AtomicU32,
+	/// Timestamp (epoch ms) of the last pong received from the runner.
+	pub last_ping_ts: AtomicI64,
 }
 
 #[tracing::instrument(skip_all)]
@@ -184,6 +189,7 @@ pub async fn init_conn(
 		protocol_version,
 		ws_handle,
 		last_rtt: AtomicU32::new(0),
+		last_ping_ts: AtomicI64::new(util::timestamp::now()),
 	});
 
 	match init {

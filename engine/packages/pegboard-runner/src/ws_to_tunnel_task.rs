@@ -167,6 +167,8 @@ async fn handle_message_mk2(
 			};
 
 			conn.last_rtt.store(rtt, Ordering::Relaxed);
+			conn.last_ping_ts
+				.store(util::timestamp::now(), Ordering::Relaxed);
 		}
 		// Process KV request
 		protocol::mk2::ToServer::ToServerKvRequest(req) => {
