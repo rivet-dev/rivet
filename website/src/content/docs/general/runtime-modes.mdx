@@ -77,6 +77,14 @@ Serverless platforms like Vercel have function timeouts. Rivet handles this auto
 
 Read more about [how we handle timeouts](/blog/2025-10-20-how-we-built-websocket-servers-for-vercel-functions/#timeouts-and-failover).
 
+#### Shutdown Sequence
+
+Each serverless request has a configurable lifespan (`requestLifespan`, default: 15 minutes). Set this to match your platform's function timeout (e.g. `requestLifespan: 300` for Vercel Pro).
+
+When the request nears its lifespan, the engine reserves a grace period (`serverless_drain_grace_period`, default: 10 seconds) at the end to gracefully stop actors. For example, with a 300-second lifespan, actors begin stopping at 290 seconds. After the full lifespan elapses, the connection is forcibly closed and any remaining actors are rescheduled.
+
+See [Limits](/docs/actors/limits#serverless-shutdown) for configuration details.
+
 ## Runners
 
 Runners run actors as long-running background processes without exposing an HTTP endpoint.
