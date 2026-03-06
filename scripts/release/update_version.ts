@@ -1,5 +1,5 @@
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import * as pathModule from "node:path";
 import { $ } from "execa";
 import { glob } from "glob";
 import type { ReleaseOpts } from "./main";
@@ -33,6 +33,12 @@ export async function updateVersion(opts: ReleaseOpts) {
 			find: /"version": ".*"/,
 			replace: `"version": "${opts.version}"`,
 		},
+		{
+			path: "examples/**/package.json",
+			find: /"(@rivetkit\/[^"]+|rivetkit)": "\^?[0-9]+\.[0-9]+\.[0-9]+(?:-[^"]+)?"/g,
+			replace: `"$1": "^${opts.version}"`,
+			required: false,
+		},
 		// TODO: Update docs with pinned version
 		// {
 		// 	path: "site/src/content/docs/cloud/install.mdx",
@@ -52,16 +58,28 @@ export async function updateVersion(opts: ReleaseOpts) {
 	];
 
 	// Substitute all files
-	for (const { path: globPath, find, replace } of findReplace) {
+	for (const { path: globPath, find, replace, required = true } of findReplace) {
 		const paths = await glob(globPath, { cwd: opts.root });
 		assert(paths.length > 0, `no paths matched: ${globPath}`);
-		for (const path of paths) {
-			const file = await fs.readFile(path, "utf-8");
-			assert(find.test(file), `file does not match ${find}: ${path}`);
-			const newFile = file.replace(find, replace);
-			await fs.writeFile(path, newFile);
+		for (const fileRelPath of paths) {
+			const filePath = pathModule.join(opts.root, fileRelPath);
+			const file = await fs.readFile(filePath, "utf-8");
 
-			await $({ cwd: opts.root })`git add ${path}`;
+			find.lastIndex = 0;
+			const hasMatch = find.test(file);
+			if (!hasMatch) {
+				if (required) {
+					assert(false, `file does not match ${find}: ${fileRelPath}`);
+				}
+
+				continue;
+			}
+
+			find.lastIndex = 0;
+			const newFile = file.replace(find, replace);
+			await fs.writeFile(filePath, newFile);
+
+			await $({ cwd: opts.root })`git add ${fileRelPath}`;
 		}
 	}
 }

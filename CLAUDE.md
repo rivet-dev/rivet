@@ -256,6 +256,7 @@ Data structures often include:
 ## Development Warnings
 
 - Do not run ./scripts/cargo/fix.sh. Do not format the code yourself.
+- When adding or changing any version value in the repo, verify `scripts/release/update_version.ts` updates that location so release bumps cannot leave stale versions behind.
 
 ## Testing Guidelines
 - When running tests, always pipe the test to a file in /tmp/ then grep it in a second step. You can grep test logs multiple times to search for different log lines.
