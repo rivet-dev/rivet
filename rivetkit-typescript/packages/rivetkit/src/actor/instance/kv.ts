@@ -282,17 +282,4 @@ export class ActorKv {
 		]);
 	}
 
-	/**
-	 * Alias for listRange.
-	 */
-	async scan<
-		T extends KvValueType = "text",
-		K extends KvKeyType = "text",
-	>(
-		start: KvKeyTypeMap[K],
-		end: KvKeyTypeMap[K],
-		options?: KvListOptions<T, K>,
-	): Promise<[KvKeyTypeMap[K], KvValueTypeMap[T]][]> {
-		return await this.listRange(start, end, options);
-	}
 }
