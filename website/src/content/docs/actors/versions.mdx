@@ -135,10 +135,6 @@ Several timeouts control how long each part of the shutdown process can take:
 
 The per-actor timeouts (`onSleepTimeout`, `runStopTimeout`, `waitUntilTimeout`) must fit within `actor_stop_threshold`. The runner's 120-second wait is a hard upper bound on the entire shutdown process.
 
-<Note>
-In [serverless mode](/docs/general/runtime-modes), shutdown is also triggered when the request reaches its lifespan limit. See [Serverless Shutdown Sequence](/docs/general/runtime-modes#shutdown-sequence) for details on how `requestLifespan` and `serverless_drain_grace_period` control this process.
-</Note>
-
 ## Related
 
 - [Runtime Modes](/docs/general/runtime-modes): Serverless vs runner deployment modes

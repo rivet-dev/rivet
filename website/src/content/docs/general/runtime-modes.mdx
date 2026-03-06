@@ -79,24 +79,11 @@ Read more about [how we handle timeouts](/blog/2025-10-20-how-we-built-websocket
 
 #### Shutdown Sequence
 
-When a serverless request approaches its lifespan limit, Rivet gracefully shuts down actors before the connection is closed:
+Each serverless request has a configurable lifespan (`requestLifespan`, default: 15 minutes). Set this to match your platform's function timeout (e.g. `requestLifespan: 300` for Vercel Pro).
 
-1. The engine tracks how long the serverless request has been running using the `requestLifespan` configuration (default: 15 minutes)
-2. When `requestLifespan - serverless_drain_grace_period` is reached, the engine sends stop commands to all actors on the runner
-3. Actors go through their normal shutdown sequence (`run` handler exits, `waitUntil` promises resolve, `onSleep` runs)
-4. After the full `requestLifespan` has elapsed, the connection is forcibly closed
-5. Any actors that didn't finish stopping are rescheduled on a new runner
+When the request nears its lifespan, the engine reserves a grace period (`serverless_drain_grace_period`, default: 10 seconds) at the end to gracefully stop actors. For example, with a 300-second lifespan, actors begin stopping at 290 seconds. After the full lifespan elapses, the connection is forcibly closed and any remaining actors are rescheduled.
 
-The `serverless_drain_grace_period` (default: 10 seconds) is how much time actors have to stop before the connection is closed. Your per-actor shutdown timeouts (`runStopTimeout`, `waitUntilTimeout`, `onSleepTimeout`) must fit within this window.
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `requestLifespan` | 900s (15 min) | Total lifespan of the serverless request. Configured via [`configureRunnerPool`](/docs/connect/registry-configuration). |
-| `serverless_drain_grace_period` | 10s | Time reserved at the end for actors to stop gracefully. Configured via [engine config](/docs/self-hosting/configuration) (`pegboard.serverless_drain_grace_period`). |
-
-<Note>
-Set `requestLifespan` to match your platform's function timeout. For example, Vercel Pro allows 300 seconds, so set `requestLifespan: 300`. The `serverless_drain_grace_period` is subtracted from this, so actors will begin stopping at 290 seconds.
-</Note>
+See [Limits](/docs/actors/limits#serverless-shutdown) for configuration details.
 
 ## Runners
 
