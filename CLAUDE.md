@@ -13,6 +13,11 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 
 **ALWAYS use `github.com/rivet-dev/rivet` - NEVER use `rivet-dev/rivetkit` or `rivet-gg/*`**
 
+**Never modify an existing published `*.bare` runner protocol version unless explicitly asked to do so.**
+
+- Add a new versioned schema instead, then migrate `versioned.rs` and related compatibility code to bridge old versions forward.
+- When bumping the protocol version, update `PROTOCOL_MK2_VERSION` in `engine/sdks/rust/runner-protocol/src/lib.rs` and `PROTOCOL_VERSION` in `engine/sdks/typescript/runner/src/mod.ts` together. Both must match the latest schema version.
+
 ## Commands
 
 ### Build Commands

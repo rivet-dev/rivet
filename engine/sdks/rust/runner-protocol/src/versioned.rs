@@ -2,24 +2,34 @@ use anyhow::{Ok, Result, bail};
 use vbare::OwnedVersionedData;
 
 use crate::PROTOCOL_MK1_VERSION;
-use crate::generated::{v1, v2, v3, v4, v5, v6};
+use crate::generated::{v1, v2, v3, v4, v5, v6, v7};
 use crate::uuid_compat::{decode_bytes_from_uuid, encode_bytes_to_uuid};
+
+fn convert_wire_compatible<T, U>(value: T) -> Result<U>
+where
+	T: serde::Serialize,
+	U: serde::de::DeserializeOwned,
+{
+	let bytes = serde_bare::to_vec(&value)?;
+	Ok(serde_bare::from_slice(&bytes)?)
+}
 
 pub enum ToClientMk2 {
 	V4(v4::ToClient),
 	V5(v5::ToClient),
 	V6(v6::ToClient),
+	V7(v7::ToClient),
 }
 
 impl OwnedVersionedData for ToClientMk2 {
-	type Latest = v6::ToClient;
+	type Latest = v7::ToClient;
 
-	fn wrap_latest(latest: v6::ToClient) -> Self {
-		ToClientMk2::V6(latest)
+	fn wrap_latest(latest: v7::ToClient) -> Self {
+		ToClientMk2::V7(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		if let ToClientMk2::V6(data) = self {
+		if let ToClientMk2::V7(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -31,6 +41,7 @@ impl OwnedVersionedData for ToClientMk2 {
 			4 => Ok(ToClientMk2::V4(serde_bare::from_slice(payload)?)),
 			5 => Ok(ToClientMk2::V5(serde_bare::from_slice(payload)?)),
 			6 => Ok(ToClientMk2::V6(serde_bare::from_slice(payload)?)),
+			7 => Ok(ToClientMk2::V7(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -40,17 +51,18 @@ impl OwnedVersionedData for ToClientMk2 {
 			ToClientMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToClientMk2::V5(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToClientMk2::V6(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToClientMk2::V7(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Ok, Ok, Ok, Self::v4_to_v5, Self::v5_to_v6]
+		vec![Ok, Ok, Ok, Self::v4_to_v5, Self::v5_to_v6, Self::v6_to_v7]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4
-		vec![Self::v6_to_v5, Self::v5_to_v4, Ok, Ok, Ok]
+		vec![Self::v7_to_v6, Self::v6_to_v5, Self::v5_to_v4, Ok, Ok, Ok]
 	}
 }
 
@@ -398,22 +410,39 @@ impl ToClientMk2 {
 			bail!("unexpected version");
 		}
 	}
+
+	fn v6_to_v7(self) -> Result<Self> {
+		if let ToClientMk2::V6(x) = self {
+			Ok(ToClientMk2::V7(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v7_to_v6(self) -> Result<Self> {
+		if let ToClientMk2::V7(x) = self {
+			Ok(ToClientMk2::V6(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
 }
 
 pub enum ToServerMk2 {
 	V4(v4::ToServer),
 	V6(v6::ToServer),
+	V7(v7::ToServer),
 }
 
 impl OwnedVersionedData for ToServerMk2 {
-	type Latest = v6::ToServer;
+	type Latest = v7::ToServer;
 
-	fn wrap_latest(latest: v6::ToServer) -> Self {
-		ToServerMk2::V6(latest)
+	fn wrap_latest(latest: v7::ToServer) -> Self {
+		ToServerMk2::V7(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		if let ToServerMk2::V6(data) = self {
+		if let ToServerMk2::V7(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -425,6 +454,7 @@ impl OwnedVersionedData for ToServerMk2 {
 			4 => Ok(ToServerMk2::V4(serde_bare::from_slice(payload)?)),
 			// v5 and v6 have the same ToServer binary format
 			5 | 6 => Ok(ToServerMk2::V6(serde_bare::from_slice(payload)?)),
+			7 => Ok(ToServerMk2::V7(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -433,17 +463,18 @@ impl OwnedVersionedData for ToServerMk2 {
 		match self {
 			ToServerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToServerMk2::V6(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToServerMk2::V7(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4, no changes between v5 and v6
-		vec![Ok, Ok, Ok, Self::v4_to_v6, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v6, Ok, Self::v6_to_v7]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4, no changes between v5 and v6
-		vec![Ok, Self::v6_to_v4, Ok, Ok, Ok]
+		vec![Self::v7_to_v6, Ok, Self::v6_to_v4, Ok, Ok, Ok]
 	}
 }
 
@@ -649,22 +680,91 @@ impl ToServerMk2 {
 			bail!("unexpected version");
 		}
 	}
+
+	fn v6_to_v7(self) -> Result<Self> {
+		if let ToServerMk2::V6(x) = self {
+			let inner = match x {
+				v6::ToServer::ToServerInit(init) => {
+					v7::ToServer::ToServerInit(convert_wire_compatible(init)?)
+				}
+				v6::ToServer::ToServerEvents(events) => {
+					v7::ToServer::ToServerEvents(convert_wire_compatible(events)?)
+				}
+				v6::ToServer::ToServerAckCommands(ack) => {
+					v7::ToServer::ToServerAckCommands(convert_wire_compatible(ack)?)
+				}
+				v6::ToServer::ToServerStopping => v7::ToServer::ToServerStopping,
+				v6::ToServer::ToServerPong(pong) => {
+					v7::ToServer::ToServerPong(convert_wire_compatible(pong)?)
+				}
+				v6::ToServer::ToServerKvRequest(req) => {
+					v7::ToServer::ToServerKvRequest(v7::ToServerKvRequest {
+						actor_id: req.actor_id,
+						request_id: req.request_id,
+						data: convert_kv_request_data_v6_to_v7(req.data),
+					})
+				}
+				v6::ToServer::ToServerTunnelMessage(msg) => {
+					v7::ToServer::ToServerTunnelMessage(convert_wire_compatible(msg)?)
+				}
+			};
+
+			Ok(ToServerMk2::V7(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v7_to_v6(self) -> Result<Self> {
+		if let ToServerMk2::V7(x) = self {
+			let inner = match x {
+				v7::ToServer::ToServerInit(init) => {
+					v6::ToServer::ToServerInit(convert_wire_compatible(init)?)
+				}
+				v7::ToServer::ToServerEvents(events) => {
+					v6::ToServer::ToServerEvents(convert_wire_compatible(events)?)
+				}
+				v7::ToServer::ToServerAckCommands(ack) => {
+					v6::ToServer::ToServerAckCommands(convert_wire_compatible(ack)?)
+				}
+				v7::ToServer::ToServerStopping => v6::ToServer::ToServerStopping,
+				v7::ToServer::ToServerPong(pong) => {
+					v6::ToServer::ToServerPong(convert_wire_compatible(pong)?)
+				}
+				v7::ToServer::ToServerKvRequest(req) => {
+					v6::ToServer::ToServerKvRequest(v6::ToServerKvRequest {
+						actor_id: req.actor_id,
+						request_id: req.request_id,
+						data: convert_kv_request_data_v7_to_v6(req.data)?,
+					})
+				}
+				v7::ToServer::ToServerTunnelMessage(msg) => {
+					v6::ToServer::ToServerTunnelMessage(convert_wire_compatible(msg)?)
+				}
+			};
+
+			Ok(ToServerMk2::V6(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
 }
 
 pub enum ToRunnerMk2 {
 	V4(v4::ToRunner),
 	V6(v6::ToRunner),
+	V7(v7::ToRunner),
 }
 
 impl OwnedVersionedData for ToRunnerMk2 {
-	type Latest = v6::ToRunner;
+	type Latest = v7::ToRunner;
 
-	fn wrap_latest(latest: v6::ToRunner) -> Self {
-		ToRunnerMk2::V6(latest)
+	fn wrap_latest(latest: v7::ToRunner) -> Self {
+		ToRunnerMk2::V7(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		if let ToRunnerMk2::V6(data) = self {
+		if let ToRunnerMk2::V7(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -676,6 +776,7 @@ impl OwnedVersionedData for ToRunnerMk2 {
 			4 => Ok(ToRunnerMk2::V4(serde_bare::from_slice(payload)?)),
 			// v5 and v6 have the same ToRunner binary format
 			5 | 6 => Ok(ToRunnerMk2::V6(serde_bare::from_slice(payload)?)),
+			7 => Ok(ToRunnerMk2::V7(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -684,17 +785,18 @@ impl OwnedVersionedData for ToRunnerMk2 {
 		match self {
 			ToRunnerMk2::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToRunnerMk2::V6(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToRunnerMk2::V7(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4, no changes between v5 and v6
-		vec![Ok, Ok, Ok, Self::v4_to_v6, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v6, Ok, Self::v6_to_v7]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4, no changes between v5 and v6
-		vec![Ok, Self::v6_to_v4, Ok, Ok, Ok]
+		vec![Self::v7_to_v6, Ok, Self::v6_to_v4, Ok, Ok, Ok]
 	}
 }
 
@@ -850,6 +952,22 @@ impl ToRunnerMk2 {
 			};
 
 			Ok(ToRunnerMk2::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v6_to_v7(self) -> Result<Self> {
+		if let ToRunnerMk2::V6(x) = self {
+			Ok(ToRunnerMk2::V7(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v7_to_v6(self) -> Result<Self> {
+		if let ToRunnerMk2::V7(x) = self {
+			Ok(ToRunnerMk2::V6(convert_wire_compatible(x)?))
 		} else {
 			bail!("unexpected version");
 		}
@@ -1587,18 +1705,19 @@ impl OwnedVersionedData for ToRunner {
 pub enum ToGateway {
 	V3(v3::ToGateway),
 	V6(v6::ToGateway),
+	V7(v7::ToGateway),
 }
 
 impl OwnedVersionedData for ToGateway {
-	type Latest = v6::ToGateway;
+	type Latest = v7::ToGateway;
 
-	fn wrap_latest(latest: v6::ToGateway) -> Self {
-		ToGateway::V6(latest)
+	fn wrap_latest(latest: v7::ToGateway) -> Self {
+		ToGateway::V7(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let ToGateway::V6(data) = self {
+		if let ToGateway::V7(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -1610,6 +1729,7 @@ impl OwnedVersionedData for ToGateway {
 			1 | 2 | 3 => Ok(ToGateway::V3(serde_bare::from_slice(payload)?)),
 			// v4, v5, and v6 have the same ToGateway binary format
 			4 | 5 | 6 => Ok(ToGateway::V6(serde_bare::from_slice(payload)?)),
+			7 => Ok(ToGateway::V7(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -1618,17 +1738,18 @@ impl OwnedVersionedData for ToGateway {
 		match self {
 			ToGateway::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToGateway::V6(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToGateway::V7(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1-v6 but we need a converter to bridge mk1 to mk2
-		vec![Ok, Ok, Self::v3_to_v6, Ok, Ok]
+		// No changes between v1-v6 but we need a converter to bridge mk1 to mk2.
+		vec![Ok, Ok, Self::v3_to_v6, Ok, Ok, Self::v6_to_v7]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		// No changes between v1-v6 but we need a converter to bridge mk2 to mk1
-		vec![Ok, Ok, Self::v6_to_v3, Ok, Ok]
+		// No changes between v1-v6 but we need a converter to bridge mk2 to mk1.
+		vec![Self::v7_to_v6, Ok, Ok, Self::v6_to_v3, Ok, Ok]
 	}
 }
 
@@ -1690,23 +1811,40 @@ impl ToGateway {
 			bail!("unexpected version");
 		}
 	}
+
+	fn v6_to_v7(self) -> Result<Self> {
+		if let ToGateway::V6(x) = self {
+			Ok(ToGateway::V7(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v7_to_v6(self) -> Result<Self> {
+		if let ToGateway::V7(x) = self {
+			Ok(ToGateway::V6(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
 }
 
 pub enum ToServerlessServer {
 	V3(v3::ToServerlessServer),
 	V6(v6::ToServerlessServer),
+	V7(v7::ToServerlessServer),
 }
 
 impl OwnedVersionedData for ToServerlessServer {
-	type Latest = v6::ToServerlessServer;
+	type Latest = v7::ToServerlessServer;
 
-	fn wrap_latest(latest: v6::ToServerlessServer) -> Self {
-		ToServerlessServer::V6(latest)
+	fn wrap_latest(latest: v7::ToServerlessServer) -> Self {
+		ToServerlessServer::V7(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let ToServerlessServer::V6(data) = self {
+		if let ToServerlessServer::V7(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -1718,6 +1856,7 @@ impl OwnedVersionedData for ToServerlessServer {
 			1 | 2 | 3 => Ok(ToServerlessServer::V3(serde_bare::from_slice(payload)?)),
 			// v4, v5, and v6 have the same ToServerlessServer binary format
 			4 | 5 | 6 => Ok(ToServerlessServer::V6(serde_bare::from_slice(payload)?)),
+			7 => Ok(ToServerlessServer::V7(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -1726,17 +1865,18 @@ impl OwnedVersionedData for ToServerlessServer {
 		match self {
 			ToServerlessServer::V3(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ToServerlessServer::V6(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ToServerlessServer::V7(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1-v3, v4-v6
-		vec![Ok, Ok, Self::v3_to_v6, Ok, Ok]
+		vec![Ok, Ok, Self::v3_to_v6, Ok, Ok, Self::v6_to_v7]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1-v3, v4-v6
-		vec![Ok, Ok, Self::v6_to_v3, Ok, Ok]
+		vec![Self::v7_to_v6, Ok, Ok, Self::v6_to_v3, Ok, Ok]
 	}
 }
 
@@ -1773,22 +1913,39 @@ impl ToServerlessServer {
 			bail!("unexpected version");
 		}
 	}
+
+	fn v6_to_v7(self) -> Result<Self> {
+		if let ToServerlessServer::V6(x) = self {
+			Ok(ToServerlessServer::V7(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v7_to_v6(self) -> Result<Self> {
+		if let ToServerlessServer::V7(x) = self {
+			Ok(ToServerlessServer::V6(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
 }
 
 pub enum ActorCommandKeyData {
 	V4(v4::ActorCommandKeyData),
 	V6(v6::ActorCommandKeyData),
+	V7(v7::ActorCommandKeyData),
 }
 
 impl OwnedVersionedData for ActorCommandKeyData {
-	type Latest = v6::ActorCommandKeyData;
+	type Latest = v7::ActorCommandKeyData;
 
-	fn wrap_latest(latest: v6::ActorCommandKeyData) -> Self {
-		ActorCommandKeyData::V6(latest)
+	fn wrap_latest(latest: v7::ActorCommandKeyData) -> Self {
+		ActorCommandKeyData::V7(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
-		if let ActorCommandKeyData::V6(data) = self {
+		if let ActorCommandKeyData::V7(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -1800,6 +1957,7 @@ impl OwnedVersionedData for ActorCommandKeyData {
 			4 => Ok(ActorCommandKeyData::V4(serde_bare::from_slice(payload)?)),
 			// v5 and v6 have the same ActorCommandKeyData binary format
 			5 | 6 => Ok(ActorCommandKeyData::V6(serde_bare::from_slice(payload)?)),
+			7 => Ok(ActorCommandKeyData::V7(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
@@ -1808,17 +1966,18 @@ impl OwnedVersionedData for ActorCommandKeyData {
 		match self {
 			ActorCommandKeyData::V4(data) => serde_bare::to_vec(&data).map_err(Into::into),
 			ActorCommandKeyData::V6(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			ActorCommandKeyData::V7(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4, no changes between v5 and v6
-		vec![Ok, Ok, Ok, Self::v4_to_v6, Ok]
+		vec![Ok, Ok, Ok, Self::v4_to_v6, Ok, Self::v6_to_v7]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
 		// No changes between v1 and v4, no changes between v5 and v6
-		vec![Ok, Self::v6_to_v4, Ok, Ok, Ok]
+		vec![Self::v7_to_v6, Ok, Self::v6_to_v4, Ok, Ok, Ok]
 	}
 }
 
@@ -1886,6 +2045,22 @@ impl ActorCommandKeyData {
 			};
 
 			Ok(ActorCommandKeyData::V4(inner))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v6_to_v7(self) -> Result<Self> {
+		if let ActorCommandKeyData::V6(x) = self {
+			Ok(ActorCommandKeyData::V7(convert_wire_compatible(x)?))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v7_to_v6(self) -> Result<Self> {
+		if let ActorCommandKeyData::V7(x) = self {
+			Ok(ActorCommandKeyData::V6(convert_wire_compatible(x)?))
 		} else {
 			bail!("unexpected version");
 		}
@@ -3205,12 +3380,6 @@ fn convert_kv_request_data_v4_to_v6(data: v4::KvRequestData) -> v6::KvRequestDat
 		v4::KvRequestData::KvDeleteRequest(req) => {
 			v6::KvRequestData::KvDeleteRequest(v6::KvDeleteRequest { keys: req.keys })
 		}
-		v4::KvRequestData::KvDeleteRangeRequest(req) => {
-			v6::KvRequestData::KvDeleteRangeRequest(v6::KvDeleteRangeRequest {
-				start: req.start,
-				end: req.end,
-			})
-		}
 		v4::KvRequestData::KvDropRequest => v6::KvRequestData::KvDropRequest,
 	}
 }
@@ -3234,13 +3403,64 @@ fn convert_kv_request_data_v6_to_v4(data: v6::KvRequestData) -> v4::KvRequestDat
 		v6::KvRequestData::KvDeleteRequest(req) => {
 			v4::KvRequestData::KvDeleteRequest(v4::KvDeleteRequest { keys: req.keys })
 		}
-		v6::KvRequestData::KvDeleteRangeRequest(req) => {
-			v4::KvRequestData::KvDeleteRangeRequest(v4::KvDeleteRangeRequest {
-				start: req.start,
-				end: req.end,
+		v6::KvRequestData::KvDropRequest => v4::KvRequestData::KvDropRequest,
+	}
+}
+
+// MARK: v6 <-> v7 helpers (KvDeleteRangeRequest was introduced in v7)
+
+fn convert_kv_request_data_v6_to_v7(data: v6::KvRequestData) -> v7::KvRequestData {
+	match data {
+		v6::KvRequestData::KvGetRequest(req) => {
+			v7::KvRequestData::KvGetRequest(v7::KvGetRequest { keys: req.keys })
+		}
+		v6::KvRequestData::KvListRequest(req) => {
+			v7::KvRequestData::KvListRequest(v7::KvListRequest {
+				query: convert_kv_list_query_v6_to_v7(req.query),
+				reverse: req.reverse,
+				limit: req.limit,
 			})
 		}
-		v6::KvRequestData::KvDropRequest => v4::KvRequestData::KvDropRequest,
+		v6::KvRequestData::KvPutRequest(req) => v7::KvRequestData::KvPutRequest(v7::KvPutRequest {
+			keys: req.keys,
+			values: req.values,
+		}),
+		v6::KvRequestData::KvDeleteRequest(req) => {
+			v7::KvRequestData::KvDeleteRequest(v7::KvDeleteRequest { keys: req.keys })
+		}
+		v6::KvRequestData::KvDropRequest => v7::KvRequestData::KvDropRequest,
+	}
+}
+
+fn convert_kv_request_data_v7_to_v6(data: v7::KvRequestData) -> Result<v6::KvRequestData> {
+	match data {
+		v7::KvRequestData::KvGetRequest(req) => {
+			Ok(v6::KvRequestData::KvGetRequest(v6::KvGetRequest {
+				keys: req.keys,
+			}))
+		}
+		v7::KvRequestData::KvListRequest(req) => {
+			Ok(v6::KvRequestData::KvListRequest(v6::KvListRequest {
+				query: convert_kv_list_query_v7_to_v6(req.query),
+				reverse: req.reverse,
+				limit: req.limit,
+			}))
+		}
+		v7::KvRequestData::KvPutRequest(req) => {
+			Ok(v6::KvRequestData::KvPutRequest(v6::KvPutRequest {
+				keys: req.keys,
+				values: req.values,
+			}))
+		}
+		v7::KvRequestData::KvDeleteRequest(req) => {
+			Ok(v6::KvRequestData::KvDeleteRequest(v6::KvDeleteRequest {
+				keys: req.keys,
+			}))
+		}
+		v7::KvRequestData::KvDeleteRangeRequest(_) => {
+			bail!("KvDeleteRangeRequest requires runner protocol v7")
+		}
+		v7::KvRequestData::KvDropRequest => Ok(v6::KvRequestData::KvDropRequest),
 	}
 }
 
@@ -3272,6 +3492,38 @@ fn convert_kv_list_query_v6_to_v4(query: v6::KvListQuery) -> v4::KvListQuery {
 		}
 		v6::KvListQuery::KvListPrefixQuery(prefix) => {
 			v4::KvListQuery::KvListPrefixQuery(v4::KvListPrefixQuery { key: prefix.key })
+		}
+	}
+}
+
+fn convert_kv_list_query_v6_to_v7(query: v6::KvListQuery) -> v7::KvListQuery {
+	match query {
+		v6::KvListQuery::KvListAllQuery => v7::KvListQuery::KvListAllQuery,
+		v6::KvListQuery::KvListRangeQuery(range) => {
+			v7::KvListQuery::KvListRangeQuery(v7::KvListRangeQuery {
+				start: range.start,
+				end: range.end,
+				exclusive: range.exclusive,
+			})
+		}
+		v6::KvListQuery::KvListPrefixQuery(prefix) => {
+			v7::KvListQuery::KvListPrefixQuery(v7::KvListPrefixQuery { key: prefix.key })
+		}
+	}
+}
+
+fn convert_kv_list_query_v7_to_v6(query: v7::KvListQuery) -> v6::KvListQuery {
+	match query {
+		v7::KvListQuery::KvListAllQuery => v6::KvListQuery::KvListAllQuery,
+		v7::KvListQuery::KvListRangeQuery(range) => {
+			v6::KvListQuery::KvListRangeQuery(v6::KvListRangeQuery {
+				start: range.start,
+				end: range.end,
+				exclusive: range.exclusive,
+			})
+		}
+		v7::KvListQuery::KvListPrefixQuery(prefix) => {
+			v6::KvListQuery::KvListPrefixQuery(v6::KvListPrefixQuery { key: prefix.key })
 		}
 	}
 }

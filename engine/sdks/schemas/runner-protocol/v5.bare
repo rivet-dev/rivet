@@ -57,11 +57,6 @@ type KvDeleteRequest struct {
 	keys: list<KvKey>
 }
 
-type KvDeleteRangeRequest struct {
-	start: KvKey
-	end: KvKey
-}
-
 type KvDropRequest void
 
 # Response types
@@ -91,7 +86,6 @@ type KvRequestData union {
 	KvListRequest |
 	KvPutRequest |
 	KvDeleteRequest |
-	KvDeleteRangeRequest |
 	KvDropRequest
 }
 
