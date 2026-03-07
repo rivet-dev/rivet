@@ -271,7 +271,6 @@ function StepperFooter() {
 					</Link>
 				</Button>
 			) : null}
-			<div className="w-full border-t border-dashed" />
 		</div>
 	);
 }
