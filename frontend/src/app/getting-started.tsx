@@ -219,18 +219,21 @@ export function GettingStarted({
 function StepperFooter() {
 	const s = stepper.useStepper();
 	return (
-		<div className="flex items-center justify-center gap-4">
+		<div className="flex flex-col items-center gap-4">
 			{s.current.id === "local" ? (
-				<Button
-					type="button"
-					variant="link"
-					size="xs"
-					className="text-muted-foreground"
-					onClick={() => s.goTo("provider")}
-					endIcon={<Icon icon={faArrowRight} className="ms-1" />}
-				>
-					Already have a project working locally? Skip to deploy
-				</Button>
+				<>
+					<div className="w-full border-t border-dashed" />
+					<Button
+						type="button"
+						variant="link"
+						size="xs"
+						className="text-muted-foreground"
+						onClick={() => s.goTo("provider")}
+						endIcon={<Icon icon={faArrowRight} className="ms-1" />}
+					>
+						Already have a project working locally? Skip to deploy
+					</Button>
+				</>
 			) : null}
 			{s.isLast ? (
 				<Button
