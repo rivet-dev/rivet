@@ -45,6 +45,7 @@ const config = {
 		},
 		extend: {
 			fontFamily: {
+				sans: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
 				"mono-console": [
 					"Consolas",
 					"Lucida Console",
