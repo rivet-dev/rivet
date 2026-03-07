@@ -181,6 +181,7 @@ export function GettingStarted({
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
+							singlePage
 							formId="onboarding"
 							initialStep={
 								provider

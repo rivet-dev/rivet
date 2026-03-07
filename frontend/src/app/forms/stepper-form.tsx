@@ -57,6 +57,7 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 		}) => Promise<void> | void;
 		content: Record<Steps[number]["id"], () => ReactNode>;
 		showAllSteps?: boolean;
+		singlePage?: boolean;
 		initialStep?: Steps[number]["id"];
 		footer?: ReactNode;
 		children?: ReactNode;
@@ -76,7 +77,7 @@ export function StepperForm<const Steps extends Step[]>({
 }: StepperFormProps<Steps>) {
 	const Stepper = props.Stepper;
 	return (
-		<Stepper.Provider variant="vertical" initialStep={props.initialStep}>
+		<Stepper.Provider variant={props.singlePage ? "circle" : "vertical"} initialStep={props.initialStep}>
 			<Content<Steps> {...props} />
 			{children}
 		</Stepper.Provider>
@@ -89,6 +90,7 @@ function Content<const Steps extends Step[]>({
 	useStepper,
 	content,
 	showAllSteps,
+	singlePage,
 	onSubmit,
 	onPartialSubmit,
 	initialStep,
@@ -139,6 +141,42 @@ function Content<const Steps extends Step[]>({
 			keepValues: true,
 		});
 	};
+
+	if (singlePage) {
+		const step = stepper.current;
+		return (
+			<FormProvider {...form}>
+				<form
+					onSubmit={(event) => {
+						event.stopPropagation();
+						return form.handleSubmit(handleSubmit)(event);
+					}}
+					className="space-y-6"
+				>
+					<div className="flex items-center justify-between">
+						<h2 className="text-xl font-semibold">{step.title}</h2>
+						<span className="text-sm text-muted-foreground">
+							Step {stepper.all.indexOf(step) + 1} of {stepper.all.length}
+						</span>
+					</div>
+					{step.assist ? (
+						<div className="flex justify-end">
+							<NeedHelpButton />
+						</div>
+					) : null}
+					<StepPanel<Steps>
+						Stepper={Stepper}
+						stepper={stepper}
+						step={step}
+						content={content}
+						footer={footer}
+						showNext={step.showNext ?? true}
+						showPrevious={step.showPrevious ?? true}
+					/>
+				</form>
+			</FormProvider>
+		);
+	}
 
 	return (
 		<Stepper.Navigation>
