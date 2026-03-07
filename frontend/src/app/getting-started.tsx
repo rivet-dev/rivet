@@ -3,7 +3,6 @@ import {
 	faBookOpen,
 	faClaude,
 	faCursor,
-	faGithub,
 	faVscode,
 	Icon,
 } from "@rivet-gg/icons";
@@ -357,11 +356,6 @@ function ExploreRivet() {
 				icon={faBookOpen}
 				title="Quickstart Guide"
 				href="https://rivet.dev/docs/actors/quickstart/"
-			/>
-			<ExternalLinkCard
-				icon={faGithub}
-				title="Browse Examples"
-				href="https://github.com/rivet-dev/rivet/tree/main/examples"
 			/>
 			<ExternalLinkCard
 				icon={faBookOpen}
