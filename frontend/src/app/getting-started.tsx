@@ -1,7 +1,6 @@
 import {
 	faArrowRight,
 	faBookOpen,
-	faChevronLeft,
 	faClaude,
 	faCursor,
 	faGithub,
@@ -25,9 +24,9 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useId, useMemo } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { match, P } from "ts-pattern";
+import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
@@ -42,7 +41,6 @@ import {
 	ExternalLinkCard,
 	FormField,
 	H1,
-	Label,
 	Ping,
 	Skeleton,
 	Tabs,
@@ -54,7 +52,6 @@ import {
 	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
-import { PathSelection } from "@/components/onboarding/path-selection";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
@@ -65,8 +62,7 @@ import {
 	buildServerlessConfig,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import { DeployToVercelCard } from "./dialogs/connect-quick-vercel-frame";
-import { EnvVariables, useRivetDsn } from "./env-variables";
+import { useRivetDsn } from "./env-variables";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
@@ -106,15 +102,11 @@ const stepper = defineStepper(
 	},
 );
 
-type Flow = "agent" | "manual";
-
 export function GettingStarted({
 	displayOnboarding,
 	displayBackendOnboarding,
-	flow,
 	provider,
 }: {
-	flow?: Flow;
 	provider?: Provider;
 	displayOnboarding?: boolean;
 	displayBackendOnboarding?: boolean;
@@ -135,37 +127,8 @@ export function GettingStarted({
 
 	const navigate = useNavigate();
 
-	if (!flow) {
-		return <PathSelection />;
-	}
-
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
-			<motion.div
-				className="max-w-[32rem] mx-auto w-full mt-14"
-				initial={{ opacity: 0, y: -20 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.5 }}
-			>
-				{displayOnboarding && displayBackendOnboarding ? (
-					<Button
-						className=" text-muted-foreground px-0.5 py-1 h-auto -mx-0.5"
-						startIcon={<Icon icon={faChevronLeft} />}
-						size="xs"
-						variant="link"
-						asChild
-					>
-						<Link
-							to="."
-							search={{
-								flow: undefined,
-							}}
-						>
-							Back
-						</Link>
-					</Button>
-				) : null}
-			</motion.div>
 			<motion.div
 				className="relative mb-8"
 				initial={{ opacity: 0, y: 20 }}
@@ -206,7 +169,7 @@ export function GettingStarted({
 							}}
 							content={{
 								local: () => (
-									<LocalSetup flow={flow} />
+									<LocalSetup />
 								),
 								explore: () => <ExploreRivet />,
 								provider: () => (
@@ -222,9 +185,7 @@ export function GettingStarted({
 											</div>
 										}
 									>
-										<BackendSetup
-											flow={flow}
-										/>
+										<BackendSetup />
 									</Suspense>
 								),
 								frontend: () => <FrontendSetup />,
@@ -359,51 +320,21 @@ function ProviderSetup() {
 	);
 }
 
-const runLocalCode = ({
-	cmd = "npm run",
-	template = "chat-room",
-}: {
-	cmd?: string;
-	template?: string;
-}) => `cd ${template}\n${cmd} dev`;
-
-function LocalSetup({
-	flow,
-	template = "chat-room",
-}: { flow?: Flow; template?: string }) {
-	if (flow === "agent") {
-		return (
-			<div className="flex flex-col gap-10">
-				<McpSetup />
-				<Connector />
-				<SkillsSetup />
-				<Connector />
-				<div className="border rounded-md p-4 space-y-3">
-					<p className="font-medium">Run locally</p>
-					<p className="text-sm text-muted-foreground">
-						Ask your coding agent to create a new project with
-						RivetKit and run it locally. Verify it works before
-						deploying.
-					</p>
-				</div>
-			</div>
-		);
-	}
-
+function LocalSetup() {
 	return (
 		<div className="flex flex-col gap-10">
-			<TemplateSetup template={template} />
+			<McpSetup />
 			<Connector />
-			<PackageManagerCode
-				npx={runLocalCode({ cmd: "npm run", template })}
-				yarn={runLocalCode({ cmd: "yarn", template })}
-				pnpm={runLocalCode({ cmd: "pnpm", template })}
-				bun={runLocalCode({ cmd: "bun run", template })}
-				deno={runLocalCode({ cmd: "deno task", template })}
-				header={
-					<p className="pt-2 pb-4 px-4 border-b">Run locally</p>
-				}
-			/>
+			<SkillsSetup />
+			<Connector />
+			<div className="border rounded-md p-4 space-y-3">
+				<p className="font-medium">Run locally</p>
+				<p className="text-sm text-muted-foreground">
+					Ask your coding agent to create a new project with
+					RivetKit and run it locally. Verify it works before
+					deploying.
+				</p>
+			</div>
 		</div>
 	);
 }
@@ -500,103 +431,33 @@ function AgentInstructions({
 	);
 }
 
-function BackendSetup({ flow }: { flow?: Flow }) {
+function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
-	const providerDetails = deployOptions.find((p) => p.name === provider);
-
-	const endpoint = useEndpoint();
-	const runnerName = useWatch({ name: "runnerName" }) as string;
-
-	const envVars = (
-		<EnvVariables
-			showCopyButton={flow !== "agent"}
-			endpoint={endpoint}
-			runnerName={runnerName}
-		/>
-	);
-
-	let providerSetup: ReactNode = (
-		<>
-			<ExternalLinkCard
-				icon={faBookOpen}
-				title={"Integrate with Quickstart Guide"}
-				href={"https://rivet.dev/docs/actors/quickstart/"}
-			/>
-			<Connector />
-		</>
-	);
-
-	if (flow === "agent") {
-		providerSetup = null;
-	} else if (provider === "vercel") {
-		providerSetup = (
-			<>
-				<DeployToVercelCard />
-				<Connector />
-			</>
-		);
-	} else if (typeof provider === "string") {
-		providerSetup = null;
-	}
 
 	return (
 		<div className="flex flex-col gap-10">
-			{providerSetup}
-
-			{provider !== "vercel" && flow !== "agent" ? (
-				<>
-					<ExternalLinkCard
-						icon={providerDetails?.icon}
-						title={`Deploy with ${providerDetails?.displayName} Guide`}
-						href={`https://rivet.dev${providerDetails?.href || "/docs/getting-started"}`}
-					/>
-					<Connector />
-				</>
-			) : null}
-			{flow === "agent" ? (
-				<>
-					<CodeGroup
-						className="my-0"
-						header={
-							<p className="pt-2 pb-4 px-4 border-b">
-								Ask your Coding Agent to set up Rivet for you.
-							</p>
-						}
-					>
-						{[
-							<AgentInstructions
-								key="agent-instructions"
-								provider={provider}
-								title="Prompt"
-							/>,
-						]}
-					</CodeGroup>
-					<Connector />
-				</>
-			) : null}
-			{flow !== "agent" ? (
-				<>
-					<div className="space-y-2 border rounded-md p-4">
-						<p className="mb-4">
-							Set these environment variables in your deployment.
-						</p>
-						<Label>Environment Variables</Label>
-						{envVars}
-					</div>
-					<Connector />
-				</>
-			) : null}
+			<CodeGroup
+				className="my-0"
+				header={
+					<p className="pt-2 pb-4 px-4 border-b">
+						Ask your Coding Agent to set up Rivet for you.
+					</p>
+				}
+			>
+				{[
+					<AgentInstructions
+						key="agent-instructions"
+						provider={provider}
+						title="Prompt"
+					/>,
+				]}
+			</CodeGroup>
+			<Connector />
 			<div className="space-y-2 border rounded-md p-4">
-				{flow === "agent" ? (
-					<p className="mb-4">
-						Paste the endpoint that your Coding Agent provides after
-						deployment.
-					</p>
-				) : (
-					<p className="mb-4">
-						Deploy your code and paste your deployment's endpoint.
-					</p>
-				)}
+				<p className="mb-4">
+					Paste the endpoint that your Coding Agent provides after
+					deployment.
+				</p>
 				<div>
 					<ConnectServerlessForm.Endpoint
 						placeholder={match(provider)
@@ -616,44 +477,6 @@ function BackendSetup({ flow }: { flow?: Flow }) {
 				<ConnectServerlessForm.ConnectionCheck provider={provider} />
 			</div>
 		</div>
-	);
-}
-
-const code = ({
-	cmd = "npx",
-	lib = "giget@latest",
-	template = "chat-room",
-}: {
-	cmd?: string;
-	lib?: string;
-	template?: string;
-}) =>
-	`${cmd} ${lib} gh:rivet-dev/rivet/examples/${template} ${template} --install`;
-
-const manualCode = ({
-	template = "chat-room",
-}: {
-	template?: string;
-}) => `git clone https://github.com/rivet-dev/rivet.git
-cd rivet/examples/${template}
-pnpm install
-pnpm run dev`;
-
-function TemplateSetup({ template = "chat-room" }: { template?: string }) {
-	return (
-		<PackageManagerCode
-			npx={code({ cmd: "npx", template })}
-			yarn={code({ cmd: "yarn dlx", template })}
-			bun={code({ cmd: "bunx", template })}
-			deno={code({
-				cmd: "deno run -A",
-				lib: "npm:giget@latest",
-				template,
-			})}
-			pnpm={code({ cmd: "pnpx", template })}
-			git={manualCode({ template })}
-			header={<p className="pt-2 pb-4 px-4 border-b">Clone example</p>}
-		/>
 	);
 }
 
