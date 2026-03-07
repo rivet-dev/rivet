@@ -11,7 +11,6 @@ import {
 } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components";
-import { cn } from "@/components/lib/utils";
 import type { defineStepper } from "@/components/ui/stepper";
 import { HelpDropdown } from "../help-dropdown";
 
@@ -157,7 +156,6 @@ function Content<const Steps extends Step[]>({
 				>
 					<div className="flex items-center justify-between">
 						<h2 className="text-xl font-semibold">{step.title}</h2>
-						<StepDots steps={stepper.all} currentStep={step} />
 					</div>
 					{step.assist ? (
 						<div className="flex justify-end">
@@ -293,31 +291,6 @@ function StepPanel<const Steps extends Step[]>({
 	);
 }
 
-function StepDots({ steps, currentStep }: { steps: Step[]; currentStep: Step }) {
-	const currentGroup = currentStep.group;
-	const groupSteps = currentGroup
-		? steps.filter((s) => s.group === currentGroup)
-		: steps;
-	const currentIndex = groupSteps.indexOf(currentStep);
-
-	return (
-		<div className="flex items-center gap-1.5">
-			{groupSteps.map((s, i) => (
-				<div
-					key={s.id}
-					className={cn(
-						"w-2 h-2 rounded-full transition-colors",
-						i === currentIndex
-							? "bg-primary"
-							: i < currentIndex
-								? "bg-primary/40"
-								: "bg-muted-foreground/20",
-					)}
-				/>
-			))}
-		</div>
-	);
-}
 
 function NeedHelpButton() {
 	return (
