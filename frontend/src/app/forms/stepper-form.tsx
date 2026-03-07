@@ -20,6 +20,7 @@ type Step = Stepperize.Step & {
 	schema: z.ZodSchema;
 	next?: string;
 	showNext?: boolean;
+	group?: string;
 };
 
 type StepperProps<Steps extends Step[]> = ReturnType<
@@ -156,21 +157,7 @@ function Content<const Steps extends Step[]>({
 				>
 					<div className="flex items-center justify-between">
 						<h2 className="text-xl font-semibold">{step.title}</h2>
-						<div className="flex items-center gap-1.5">
-							{stepper.all.map((s, i) => (
-								<div
-									key={s.id}
-									className={cn(
-										"w-2 h-2 rounded-full transition-colors",
-										i === stepper.all.indexOf(step)
-											? "bg-primary"
-											: i < stepper.all.indexOf(step)
-												? "bg-primary/40"
-												: "bg-muted-foreground/20",
-									)}
-								/>
-							))}
-						</div>
+						<StepDots steps={stepper.all} currentStep={step} />
 					</div>
 					{step.assist ? (
 						<div className="flex justify-end">
@@ -303,6 +290,32 @@ function StepPanel<const Steps extends Step[]>({
 				</Stepper.Controls>
 			) : null}
 		</Stepper.Panel>
+	);
+}
+
+function StepDots({ steps, currentStep }: { steps: Step[]; currentStep: Step }) {
+	const currentGroup = currentStep.group;
+	const groupSteps = currentGroup
+		? steps.filter((s) => s.group === currentGroup)
+		: steps;
+	const currentIndex = groupSteps.indexOf(currentStep);
+
+	return (
+		<div className="flex items-center gap-1.5">
+			{groupSteps.map((s, i) => (
+				<div
+					key={s.id}
+					className={cn(
+						"w-2 h-2 rounded-full transition-colors",
+						i === currentIndex
+							? "bg-primary"
+							: i < currentIndex
+								? "bg-primary/40"
+								: "bg-muted-foreground/20",
+					)}
+				/>
+			))}
+		</div>
 	);
 }
 

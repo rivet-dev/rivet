@@ -55,22 +55,26 @@ const stepper = defineStepper(
 		id: "local",
 		title: "Set up your project locally",
 		schema: z.object({}),
+		group: "local",
 	},
 	{
 		id: "explore",
 		title: "Explore Rivet",
 		schema: z.object({}),
+		group: "local",
 	},
 	{
 		id: "provider",
 		title: "Ready to deploy?",
 		schema: z.object({ provider: z.string() }),
 		showNext: false,
+		group: "deploy",
 	},
 	{
 		id: "backend",
 		title: "Connect your Backend",
 		assist: true,
+		group: "deploy",
 		schema: z.object({
 			...ConnectServerlessForm.configurationSchema.shape,
 			...ConnectServerlessForm.deploymentSchema.shape,
@@ -80,6 +84,7 @@ const stepper = defineStepper(
 		id: "frontend",
 		title: "Create your first Actor",
 		assist: true,
+		group: "deploy",
 		schema: z.object({}),
 		showNext: false,
 		showPrevious: false,
@@ -221,19 +226,16 @@ function StepperFooter() {
 	return (
 		<div className="flex flex-col items-center gap-4">
 			{s.current.id === "local" ? (
-				<>
-					<div className="w-full border-t border-dashed" />
-					<Button
-						type="button"
-						variant="link"
-						size="xs"
-						className="text-muted-foreground"
-						onClick={() => s.goTo("provider")}
-						endIcon={<Icon icon={faArrowRight} className="ms-1" />}
-					>
-						Already have a project working locally? Skip to deploy
-					</Button>
-				</>
+				<Button
+					type="button"
+					variant="link"
+					size="xs"
+					className="text-muted-foreground"
+					onClick={() => s.goTo("provider")}
+					endIcon={<Icon icon={faArrowRight} className="ms-1" />}
+				>
+					Already have a project working locally? Skip to deploy
+				</Button>
 			) : null}
 			{s.isLast ? (
 				<Button
@@ -247,6 +249,7 @@ function StepperFooter() {
 					</Link>
 				</Button>
 			) : null}
+			<div className="w-full border-t border-dashed" />
 		</div>
 	);
 }
@@ -486,14 +489,6 @@ function ExploreRivet() {
 	);
 }
 
-function Connector() {
-	return (
-		<div className="-my-10 flex justify-center">
-			<div className="h-6 border-l w-px" />
-		</div>
-	);
-}
-
 function AgentInstructions({
 	title: _,
 	provider,
@@ -549,46 +544,47 @@ function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
 
 	return (
-		<div className="flex flex-col gap-10">
-			<CodeGroup
-				className="my-0"
-				header={
-					<p className="pt-2 pb-4 px-4 border-b">
-						Ask your Coding Agent to set up Rivet for you.
-					</p>
-				}
-			>
-				{[
-					<AgentInstructions
-						key="agent-instructions"
-						provider={provider}
-						title="Prompt"
-					/>,
-				]}
-			</CodeGroup>
-			<Connector />
-			<div className="space-y-2 border rounded-md p-4">
-				<p className="mb-4">
-					Paste the endpoint that your Coding Agent provides after
-					deployment.
-				</p>
-				<div>
-					<ConnectServerlessForm.Endpoint
-						placeholder={match(provider)
-							.with(
-								"vercel",
-								() =>
-									"https://your-vercel-deployment.vercel.app",
-							)
-							.with(
-								"railway",
-								() => "https://your-app.up.railway.app",
-							)
-							.otherwise(() => "https://your-deployment.com")}
-					/>
-					<ConfigurationAccordion />
+		<div className="flex flex-col gap-6">
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Copy this prompt into your coding agent</p>
+					<CodeGroup className="my-0">
+						{[
+							<AgentInstructions
+								key="agent-instructions"
+								provider={provider}
+								title="Prompt"
+							/>,
+						]}
+					</CodeGroup>
 				</div>
-				<ConnectServerlessForm.ConnectionCheck provider={provider} />
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Paste your deployment endpoint</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Your coding agent will provide a URL after deployment.
+					</p>
+					<div className="space-y-2">
+						<ConnectServerlessForm.Endpoint
+							placeholder={match(provider)
+								.with(
+									"vercel",
+									() =>
+										"https://your-vercel-deployment.vercel.app",
+								)
+								.with(
+									"railway",
+									() => "https://your-app.up.railway.app",
+								)
+								.otherwise(() => "https://your-deployment.com")}
+						/>
+						<ConfigurationAccordion />
+						<ConnectServerlessForm.ConnectionCheck provider={provider} />
+					</div>
+				</div>
 			</div>
 		</div>
 	);
