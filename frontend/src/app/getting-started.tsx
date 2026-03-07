@@ -210,7 +210,7 @@ function StepperFooter() {
 	const s = stepper.useStepper();
 	return (
 		<div className="flex items-center justify-center gap-4">
-			{s.current.id === "local" || s.current.id === "explore" ? (
+			{s.current.id === "local" ? (
 				<Button
 					type="button"
 					variant="link"
