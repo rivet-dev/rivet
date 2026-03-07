@@ -239,7 +239,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
             >
               The primitive for <br />
-              software that thinks.
+              stateful workloads.
             </motion.h1>
 
             <motion.p
@@ -248,7 +248,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Rivet Actors are a serverless primitive for stateful workloads.
+              Rivet Actors are lightweight, long-running processes.
             </motion.p>
 
             <motion.div
