@@ -248,7 +248,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Rivet Actors are lightweight, long-running processes – built for AI agents, collaborative apps, and durable execution.
+              Rivet Actors are lightweight, long-running processes.<br/>Built for AI agents, collaborative apps, and durable execution.
             </motion.p>
 
             <motion.div
