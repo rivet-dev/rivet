@@ -1,8 +1,4 @@
 import {
-	faBookOpen,
-	faMagnifyingGlass,
-} from "@rivet-gg/icons";
-import {
 	deployOptions,
 	type Provider,
 } from "@rivetkit/shared-data";
@@ -19,7 +15,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match } from "ts-pattern";
 import z from "zod";
@@ -31,7 +27,6 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
-	ExternalLinkCard,
 	FormField,
 	Ping,
 	Skeleton,
@@ -123,7 +118,7 @@ export function GettingStarted({
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="mt-8 w-[32rem]">
+				<div className="mt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -152,26 +147,40 @@ export function GettingStarted({
 							}}
 							content={{
 								local: () => (
-									<LocalSetup />
+									<div className="w-[32rem]">
+										<LocalSetup />
+									</div>
 								),
-								explore: () => <ExploreRivet />,
+								explore: () => (
+									<div className="w-[56rem]">
+										<ExploreRivet />
+									</div>
+								),
 								provider: () => (
-									<ProviderSetup />
+									<div className="w-[32rem]">
+										<ProviderSetup />
+									</div>
 								),
 								backend: () => (
-									<Suspense
-										fallback={
-											<div className="space-y-6">
-												<Skeleton className="w-full h-[180px]" />
-												<Skeleton className="w-full h-[250px]" />
-												<Skeleton className="w-full h-[200px]" />
-											</div>
-										}
-									>
-										<BackendSetup />
-									</Suspense>
+									<div className="w-[32rem]">
+										<Suspense
+											fallback={
+												<div className="space-y-6">
+													<Skeleton className="w-full h-[180px]" />
+													<Skeleton className="w-full h-[250px]" />
+													<Skeleton className="w-full h-[200px]" />
+												</div>
+											}
+										>
+											<BackendSetup />
+										</Suspense>
+									</div>
 								),
-								frontend: () => <FrontendSetup />,
+								frontend: () => (
+									<div className="w-[32rem]">
+										<FrontendSetup />
+									</div>
+								),
 							}}
 							onSubmit={() => {}}
 							onPartialSubmit={async ({ stepper, values }) => {
@@ -368,23 +377,106 @@ function StepNumber({ n }: { n: number }) {
 	);
 }
 
+const exploreFeatures = [
+	{
+		id: "state",
+		label: "State",
+		title: "Real-time State",
+		description:
+			"Each actor has its own isolated state that persists across connections. Inspect live state changes as they happen.",
+		// Replace with actual gif path, e.g. "/onboarding/inspector-state.gif"
+		media: null as string | null,
+	},
+	{
+		id: "rpcs",
+		label: "RPCs",
+		title: "Remote Procedure Calls",
+		description:
+			"Call actor methods directly from your client. The inspector shows every RPC call, its arguments, and response in real-time.",
+		media: null as string | null,
+	},
+	{
+		id: "events",
+		label: "Events",
+		title: "Event Streams",
+		description:
+			"Actors can broadcast events to connected clients. Watch event streams flow through the inspector as they fire.",
+		media: null as string | null,
+	},
+	{
+		id: "persistence",
+		label: "Storage",
+		title: "Built-in Persistence",
+		description:
+			"Actors have built-in KV storage and SQLite. Browse stored data and watch writes happen live in the inspector.",
+		media: null as string | null,
+	},
+];
+
 function ExploreRivet() {
+	const [activeFeature, setActiveFeature] = useState(exploreFeatures[0].id);
+	const feature = exploreFeatures.find((f) => f.id === activeFeature) || exploreFeatures[0];
+
 	return (
-		<div className="flex flex-col gap-4">
-			<p className="text-sm text-muted-foreground">
-				When running locally, check your terminal for the RivetKit Inspector URL to view and debug your actors in real-time.
-			</p>
-			<ExternalLinkCard
-				icon={faMagnifyingGlass}
-				title="Quickstart Guide"
-				href="https://rivet.dev/docs/actors/quickstart/"
-				description="Build your first actor step by step"
-			/>
-			<ExternalLinkCard
-				icon={faBookOpen}
-				title="Documentation"
-				href="https://rivet.dev/docs"
-			/>
+		<div className="flex gap-10">
+			<div className="flex-shrink-0 w-[16rem] flex flex-col gap-6">
+				<div>
+					<h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+					<p className="text-sm text-muted-foreground leading-relaxed">
+						{feature.description}
+					</p>
+				</div>
+				<div className="flex flex-col gap-1">
+					{exploreFeatures.map((f) => (
+						<button
+							key={f.id}
+							type="button"
+							onClick={() => setActiveFeature(f.id)}
+							className={`text-left px-3 py-2 rounded-md text-sm transition-colors ${
+								f.id === activeFeature
+									? "bg-primary/10 text-primary font-medium"
+									: "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+							}`}
+						>
+							{f.label}
+						</button>
+					))}
+				</div>
+				<div className="flex flex-col gap-2 pt-2 border-t">
+					<a
+						href="https://rivet.dev/docs/actors/quickstart/"
+						target="_blank"
+						rel="noreferrer"
+						className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Quickstart Guide &rarr;
+					</a>
+					<a
+						href="https://rivet.dev/docs"
+						target="_blank"
+						rel="noreferrer"
+						className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Documentation &rarr;
+					</a>
+				</div>
+			</div>
+			<div className="flex-1 min-w-0">
+				<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
+					{feature.media ? (
+						<img
+							src={feature.media}
+							alt={`Inspector showing ${feature.label}`}
+							className="w-full h-full object-cover"
+						/>
+					) : (
+						<div className="text-center text-muted-foreground text-sm">
+							<p className="font-medium mb-1">Inspector Preview</p>
+							<p className="text-xs">GIF placeholder for {feature.label}</p>
+						</div>
+					)}
+				</div>
+			</div>
 		</div>
 	);
 }
