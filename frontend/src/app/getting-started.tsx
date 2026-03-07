@@ -312,6 +312,19 @@ function ProviderSetup() {
 function LocalSetup() {
 	return (
 		<div className="flex flex-col gap-10">
+			<PackageManagerCode
+				npx="npm install rivetkit"
+				yarn="yarn add rivetkit"
+				pnpm="pnpm add rivetkit"
+				bun="bun add rivetkit"
+				deno="deno add npm:rivetkit"
+				header={
+					<p className="pt-2 pb-4 px-4 border-b">
+						Install RivetKit
+					</p>
+				}
+			/>
+			<Connector />
 			<SkillsSetup />
 			<Connector />
 			<div className="border rounded-md p-4 space-y-3">
