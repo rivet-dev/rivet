@@ -52,8 +52,20 @@ import { Content } from "./layout";
 
 const stepper = defineStepper(
 	{
-		id: "local",
-		title: "Set up your project locally",
+		id: "install",
+		title: "Install RivetKit",
+		schema: z.object({}),
+		group: "local",
+	},
+	{
+		id: "skills",
+		title: "Install Rivet skills",
+		schema: z.object({}),
+		group: "local",
+	},
+	{
+		id: "run",
+		title: "Run locally",
 		schema: z.object({}),
 		group: "local",
 	},
@@ -152,9 +164,19 @@ export function GettingStarted({
 								),
 							}}
 							content={{
-								local: () => (
+								install: () => (
 									<div className="w-[32rem]">
-										<LocalSetup />
+										<InstallStep />
+									</div>
+								),
+								skills: () => (
+									<div className="w-[32rem]">
+										<SkillsStep />
+									</div>
+								),
+								run: () => (
+									<div className="w-[32rem]">
+										<RunLocallyStep />
 									</div>
 								),
 								explore: () => (
@@ -225,7 +247,7 @@ function StepperFooter() {
 	const s = stepper.useStepper();
 	return (
 		<div className="flex flex-col items-center gap-4">
-			{s.current.id === "local" ? (
+			{s.current.group === "local" && s.current.id !== "explore" ? (
 				<Button
 					type="button"
 					variant="link"
@@ -331,47 +353,73 @@ function ProviderSetup() {
 	);
 }
 
-function LocalSetup() {
+function InstallStep() {
+	return (
+		<div className="flex flex-col gap-4">
+			<p className="text-sm text-muted-foreground">
+				Add RivetKit to your project to get started with Rivet Actors.
+			</p>
+			<PackageManagerCode
+				npx="npm install rivetkit"
+				yarn="yarn add rivetkit"
+				pnpm="pnpm add rivetkit"
+				bun="bun add rivetkit"
+				deno="deno add npm:rivetkit"
+			/>
+		</div>
+	);
+}
+
+function SkillsStep() {
+	return (
+		<div className="flex flex-col gap-4">
+			<p className="text-sm text-muted-foreground">
+				Install the Rivet skill so your coding agent knows how to work with RivetKit.
+			</p>
+			<PackageManagerCode
+				npx={`npx skills add ${skillsPath}`}
+				yarn={`yarn dlx skills add ${skillsPath}`}
+				bun={`bunx skills add ${skillsPath}`}
+				deno={`deno run -A npm:skills add ${skillsPath}`}
+				pnpm={`pnpx skills add ${skillsPath}`}
+				git={`git clone https://github.com/${skillsPath}.git .skills`}
+			/>
+		</div>
+	);
+}
+
+function RunLocallyStep() {
 	return (
 		<div className="flex flex-col gap-6">
-			<div className="flex gap-3">
-				<StepNumber n={1} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Install RivetKit</p>
-					<PackageManagerCode
-						npx="npm install rivetkit"
-						yarn="yarn add rivetkit"
-						pnpm="pnpm add rivetkit"
-						bun="bun add rivetkit"
-						deno="deno add npm:rivetkit"
-					/>
+			<div>
+				<p className="font-medium mb-2">Use your coding agent</p>
+				<p className="text-sm text-muted-foreground mb-3">
+					Copy this prompt into your coding agent to set up and run a Rivet actor project:
+				</p>
+				<div className="rounded-md bg-muted/50 p-3 text-sm font-mono">
+					Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance.
 				</div>
 			</div>
-			<div className="flex gap-3">
-				<StepNumber n={2} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Install RivetKit skills</p>
-					<PackageManagerCode
-						npx={`npx skills add ${skillsPath}`}
-						yarn={`yarn dlx skills add ${skillsPath}`}
-						bun={`bunx skills add ${skillsPath}`}
-						deno={`deno run -A npm:skills add ${skillsPath}`}
-						pnpm={`pnpx skills add ${skillsPath}`}
-						git={`git clone https://github.com/${skillsPath}.git .skills`}
-					/>
-				</div>
+			<div className="relative flex items-center gap-3">
+				<div className="flex-1 border-t border-dashed" />
+				<span className="text-xs text-muted-foreground">or</span>
+				<div className="flex-1 border-t border-dashed" />
 			</div>
-			<div className="flex gap-3">
-				<StepNumber n={3} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Run locally</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Copy this prompt into your coding agent:
-					</p>
-					<div className="rounded-md bg-muted/50 p-3 text-sm font-mono">
-						Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance.
-					</div>
-				</div>
+			<div>
+				<p className="font-medium mb-2">Follow the quickstart guide</p>
+				<p className="text-sm text-muted-foreground mb-3">
+					Set up a Rivet actor project manually step-by-step.
+				</p>
+				<Button variant="outline" asChild>
+					<a
+						href="https://rivet.dev/docs/actors/quickstart/"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						Quickstart Guide
+						<Icon icon={faArrowRight} className="ms-2" />
+					</a>
+				</Button>
 			</div>
 		</div>
 	);
