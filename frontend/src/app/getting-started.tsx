@@ -62,7 +62,7 @@ const stepper = defineStepper(
 	},
 	{
 		id: "provider",
-		title: "Choose Provider",
+		title: "Ready to deploy?",
 		schema: z.object({ provider: z.string() }),
 		showNext: false,
 	},
