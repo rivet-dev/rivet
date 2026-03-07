@@ -4,6 +4,7 @@ import {
 	faChevronLeft,
 	faClaude,
 	faCursor,
+	faGithub,
 	faVscode,
 	Icon,
 } from "@rivet-gg/icons";
@@ -359,11 +360,16 @@ function ProviderSetup() {
 
 const runLocalCode = ({
 	cmd = "npm run",
+	template = "chat-room",
 }: {
 	cmd?: string;
-}) => `cd chat-room\n${cmd} dev`;
+	template?: string;
+}) => `cd ${template}\n${cmd} dev`;
 
-function LocalSetup({ flow }: { flow?: Flow }) {
+function LocalSetup({
+	flow,
+	template = "chat-room",
+}: { flow?: Flow; template?: string }) {
 	if (flow === "agent") {
 		return (
 			<div className="flex flex-col gap-10">
@@ -385,14 +391,14 @@ function LocalSetup({ flow }: { flow?: Flow }) {
 
 	return (
 		<div className="flex flex-col gap-10">
-			<TemplateSetup />
+			<TemplateSetup template={template} />
 			<Connector />
 			<PackageManagerCode
-				npx={runLocalCode({ cmd: "npm run" })}
-				yarn={runLocalCode({ cmd: "yarn" })}
-				pnpm={runLocalCode({ cmd: "pnpm" })}
-				bun={runLocalCode({ cmd: "bun run" })}
-				deno={runLocalCode({ cmd: "deno task" })}
+				npx={runLocalCode({ cmd: "npm run", template })}
+				yarn={runLocalCode({ cmd: "yarn", template })}
+				pnpm={runLocalCode({ cmd: "pnpm", template })}
+				bun={runLocalCode({ cmd: "bun run", template })}
+				deno={runLocalCode({ cmd: "deno task", template })}
 				header={
 					<p className="pt-2 pb-4 px-4 border-b">Run locally</p>
 				}
@@ -421,7 +427,7 @@ function ExploreRivet() {
 				href="https://rivet.dev/docs/actors/quickstart/"
 			/>
 			<ExternalLinkCard
-				icon={faBookOpen}
+				icon={faGithub}
 				title="Browse Examples"
 				href="https://github.com/rivet-dev/rivet/tree/main/examples"
 			/>
