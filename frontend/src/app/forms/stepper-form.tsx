@@ -11,6 +11,7 @@ import {
 } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components";
+import { cn } from "@/components/lib/utils";
 import type { defineStepper } from "@/components/ui/stepper";
 import { HelpDropdown } from "../help-dropdown";
 
@@ -155,9 +156,21 @@ function Content<const Steps extends Step[]>({
 				>
 					<div className="flex items-center justify-between">
 						<h2 className="text-xl font-semibold">{step.title}</h2>
-						<span className="text-sm text-muted-foreground">
-							Step {stepper.all.indexOf(step) + 1} of {stepper.all.length}
-						</span>
+						<div className="flex items-center gap-1.5">
+							{stepper.all.map((s, i) => (
+								<div
+									key={s.id}
+									className={cn(
+										"w-2 h-2 rounded-full transition-colors",
+										i === stepper.all.indexOf(step)
+											? "bg-primary"
+											: i < stepper.all.indexOf(step)
+												? "bg-primary/40"
+												: "bg-muted-foreground/20",
+									)}
+								/>
+							))}
+						</div>
 					</div>
 					{step.assist ? (
 						<div className="flex justify-end">

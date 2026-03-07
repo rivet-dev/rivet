@@ -1,5 +1,8 @@
 import {
 	faBookOpen,
+	faCompass,
+	faMagnifyingGlass,
+	faRocket,
 	Icon,
 } from "@rivet-gg/icons";
 import {
@@ -33,7 +36,6 @@ import {
 	CodePreview,
 	ExternalLinkCard,
 	FormField,
-	H1,
 	Ping,
 	Skeleton,
 } from "@/components";
@@ -124,11 +126,6 @@ export function GettingStarted({
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<H1 className="mt-8 text-center">Get started with Rivet</H1>
-				<p className="text-center text-muted-foreground max-w-2xl mx-auto mt-2">
-					Follow these steps to set up your project quickly and
-					easily.
-				</p>
 				<div className="mt-8 w-[32rem]">
 					<CodeGroupSyncProvider>
 						<StepperForm
@@ -216,6 +213,17 @@ function StepperFooter() {
 	const s = stepper.useStepper();
 	return (
 		<div className="flex items-center justify-center gap-4">
+			{s.current.id === "local" || s.current.id === "explore" ? (
+				<Button
+					type="button"
+					variant="link"
+					size="xs"
+					className="text-muted-foreground"
+					onClick={() => s.goTo("provider")}
+				>
+					Skip to deploy
+				</Button>
+			) : null}
 			{s.isLast ? (
 				<Button
 					asChild
@@ -311,7 +319,7 @@ function ProviderSetup() {
 
 function LocalSetup() {
 	return (
-		<div className="flex flex-col gap-10">
+		<div className="flex flex-col gap-4">
 			<PackageManagerCode
 				npx="npm install rivetkit"
 				yarn="yarn add rivetkit"
@@ -324,16 +332,26 @@ function LocalSetup() {
 					</p>
 				}
 			/>
-			<Connector />
 			<SkillsSetup />
-			<Connector />
 			<div className="border rounded-md p-4 space-y-3">
-				<p className="font-medium">Run locally</p>
+				<div className="flex items-center gap-2">
+					<Icon icon={faRocket} className="text-muted-foreground" />
+					<p className="font-medium">Run locally</p>
+				</div>
 				<p className="text-sm text-muted-foreground">
-					Ask your coding agent to create a new project with
-					RivetKit and run it locally. Verify it works before
-					deploying.
+					Copy this prompt into your coding agent to get started:
 				</p>
+				<CodeFrame
+					language="markdown"
+					code={() => "Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance."}
+					className="m-0"
+				>
+					<CodePreview
+						language="markdown"
+						className="text-left"
+						code="Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance."
+					/>
+				</CodeFrame>
 			</div>
 		</div>
 	);
@@ -341,25 +359,33 @@ function LocalSetup() {
 
 function ExploreRivet() {
 	return (
-		<div className="flex flex-col gap-6">
+		<div className="flex flex-col gap-4">
 			<div className="border rounded-md p-4 space-y-3">
-				<p className="font-medium">RivetKit Inspector</p>
+				<div className="flex items-center gap-2">
+					<Icon icon={faMagnifyingGlass} className="text-muted-foreground" />
+					<p className="font-medium">RivetKit Inspector</p>
+				</div>
 				<p className="text-sm text-muted-foreground">
 					When running locally, the RivetKit Inspector is available in
 					your browser to view and debug your actors in real-time.
 					Check your terminal for the inspector URL.
 				</p>
+				<div className="text-xs text-muted-foreground border-t pt-3 space-y-1">
+					<p className="font-medium">What to look for:</p>
+					<ul className="list-disc list-inside space-y-0.5">
+						<li>Active actors and their current state</li>
+						<li>Real-time logs and event streams</li>
+						<li>RPC calls and connection activity</li>
+					</ul>
+				</div>
 			</div>
-			<p className="text-sm text-muted-foreground">
-				Explore what you can build with Rivet Actors:
-			</p>
 			<ExternalLinkCard
 				icon={faBookOpen}
 				title="Quickstart Guide"
 				href="https://rivet.dev/docs/actors/quickstart/"
 			/>
 			<ExternalLinkCard
-				icon={faBookOpen}
+				icon={faCompass}
 				title="Documentation"
 				href="https://rivet.dev/docs"
 			/>
