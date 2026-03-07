@@ -71,6 +71,16 @@ import { Content } from "./layout";
 
 const stepper = defineStepper(
 	{
+		id: "local",
+		title: "Set up your project",
+		schema: z.object({}),
+	},
+	{
+		id: "explore",
+		title: "Explore Rivet",
+		schema: z.object({}),
+	},
+	{
 		id: "provider",
 		title: "Choose Provider",
 		schema: z.object({ provider: z.string() }),
@@ -193,6 +203,10 @@ export function GettingStarted({
 								),
 							}}
 							content={{
+								local: () => (
+									<LocalSetup flow={flow} />
+								),
+								explore: () => <ExploreRivet />,
 								provider: () => (
 									<ProviderSetup />
 								),
@@ -343,6 +357,83 @@ function ProviderSetup() {
 	);
 }
 
+const runLocalCode = ({
+	cmd = "npm run",
+}: {
+	cmd?: string;
+}) => `cd chat-room\n${cmd} dev`;
+
+function LocalSetup({ flow }: { flow?: Flow }) {
+	if (flow === "agent") {
+		return (
+			<div className="flex flex-col gap-10">
+				<McpSetup />
+				<Connector />
+				<SkillsSetup />
+				<Connector />
+				<div className="border rounded-md p-4 space-y-3">
+					<p className="font-medium">Run locally</p>
+					<p className="text-sm text-muted-foreground">
+						Ask your coding agent to create a new project with
+						RivetKit and run it locally. Verify it works before
+						deploying.
+					</p>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex flex-col gap-10">
+			<TemplateSetup />
+			<Connector />
+			<PackageManagerCode
+				npx={runLocalCode({ cmd: "npm run" })}
+				yarn={runLocalCode({ cmd: "yarn" })}
+				pnpm={runLocalCode({ cmd: "pnpm" })}
+				bun={runLocalCode({ cmd: "bun run" })}
+				deno={runLocalCode({ cmd: "deno task" })}
+				header={
+					<p className="pt-2 pb-4 px-4 border-b">Run locally</p>
+				}
+			/>
+		</div>
+	);
+}
+
+function ExploreRivet() {
+	return (
+		<div className="flex flex-col gap-6">
+			<div className="border rounded-md p-4 space-y-3">
+				<p className="font-medium">RivetKit Inspector</p>
+				<p className="text-sm text-muted-foreground">
+					When running locally, the RivetKit Inspector is available in
+					your browser to view and debug your actors in real-time.
+					Check your terminal for the inspector URL.
+				</p>
+			</div>
+			<p className="text-sm text-muted-foreground">
+				Explore what you can build with Rivet Actors:
+			</p>
+			<ExternalLinkCard
+				icon={faBookOpen}
+				title="Quickstart Guide"
+				href="https://rivet.dev/docs/actors/quickstart/"
+			/>
+			<ExternalLinkCard
+				icon={faBookOpen}
+				title="Browse Examples"
+				href="https://github.com/rivet-dev/rivet/tree/main/examples"
+			/>
+			<ExternalLinkCard
+				icon={faBookOpen}
+				title="Documentation"
+				href="https://rivet.dev/docs"
+			/>
+		</div>
+	);
+}
+
 function Connector() {
 	return (
 		<div className="-my-10 flex justify-center">
@@ -422,7 +513,7 @@ function BackendSetup({ flow }: { flow?: Flow }) {
 			<ExternalLinkCard
 				icon={faBookOpen}
 				title={"Integrate with Quickstart Guide"}
-				href={"https://www.rivet.dev/docs/actors/quickstart/"}
+				href={"https://rivet.dev/docs/actors/quickstart/"}
 			/>
 			<Connector />
 		</>
@@ -438,18 +529,11 @@ function BackendSetup({ flow }: { flow?: Flow }) {
 			</>
 		);
 	} else if (typeof provider === "string") {
-		providerSetup = (
-			<>
-				<TemplateSetup />
-				<Connector />
-			</>
-		);
+		providerSetup = null;
 	}
 
 	return (
 		<div className="flex flex-col gap-10">
-			<SkillsSetup />
-			<Connector />
 			{providerSetup}
 
 			{provider !== "vercel" && flow !== "agent" ? (
@@ -457,7 +541,7 @@ function BackendSetup({ flow }: { flow?: Flow }) {
 					<ExternalLinkCard
 						icon={providerDetails?.icon}
 						title={`Deploy with ${providerDetails?.displayName} Guide`}
-						href={`https://www.rivet.dev${providerDetails?.href || "/docs/getting-started"}`}
+						href={`https://rivet.dev${providerDetails?.href || "/docs/getting-started"}`}
 					/>
 					<Connector />
 				</>
