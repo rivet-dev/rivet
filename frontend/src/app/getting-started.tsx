@@ -25,7 +25,6 @@ import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	Badge,
 	ButtonCard,
 	CodeFrame,
 	type CodeFrameLikeElement,
@@ -475,7 +474,7 @@ function SkillsSetup() {
 			git={`git clone https://github.com/${skillsPath}.git .skills`}
 			header={
 				<p className="pt-2 pb-4 px-4 border-b flex items-center gap-2">
-					Install RivetKit skills <Badge>Recommended</Badge>
+					Install RivetKit skills
 				</p>
 			}
 		/>
