@@ -1,3 +1,4 @@
+import { faArrowRight, Icon } from "@rivet-gg/icons";
 import {
 	deployOptions,
 	type Provider,
@@ -226,8 +227,9 @@ function StepperFooter() {
 					size="xs"
 					className="text-muted-foreground"
 					onClick={() => s.goTo("provider")}
+					endIcon={<Icon icon={faArrowRight} className="ms-1" />}
 				>
-					Already have a project working locally? Skip to deploy.
+					Already have a project working locally? Skip to deploy
 				</Button>
 			) : null}
 			{s.isLast ? (
