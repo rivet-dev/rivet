@@ -1,9 +1,5 @@
 import {
-	faArrowRight,
 	faBookOpen,
-	faClaude,
-	faCursor,
-	faVscode,
 	Icon,
 } from "@rivet-gg/icons";
 import {
@@ -31,7 +27,6 @@ import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-fo
 import {
 	Badge,
 	ButtonCard,
-	Code,
 	CodeFrame,
 	type CodeFrameLikeElement,
 	CodeGroup,
@@ -42,10 +37,6 @@ import {
 	H1,
 	Ping,
 	Skeleton,
-	Tabs,
-	TabsContent,
-	TabsList,
-	TabsTrigger,
 } from "@/components";
 import {
 	useDataProvider,
@@ -322,8 +313,6 @@ function ProviderSetup() {
 function LocalSetup() {
 	return (
 		<div className="flex flex-col gap-10">
-			<McpSetup />
-			<Connector />
 			<SkillsSetup />
 			<Connector />
 			<div className="border rounded-md p-4 space-y-3">
@@ -493,101 +482,7 @@ function SkillsSetup() {
 	);
 }
 
-const MCP_URL = "https://mcp.rivet.dev/mcp";
-const MCP_NAME = "rivet";
 
-const claudeCode = `claude mcp add --transport http ${MCP_NAME} ${MCP_URL}`;
-const cursorCode = JSON.stringify(
-	{
-		mcpServers: {
-			[MCP_NAME]: {
-				url: MCP_URL,
-			},
-		},
-	},
-	null,
-	2,
-);
-
-const installCursorUrl = `cursor://anysphere.cursor-deeplink/mcp/install?name=${MCP_NAME}&config=${encodeURIComponent(JSON.stringify({ url: MCP_URL }))}`;
-
-const installVsCodeUrl = `https://vscode.dev/redirect/mcp/install?name=${encodeURIComponent(MCP_NAME)}&config=${encodeURIComponent(JSON.stringify({ url: MCP_URL }))}`;
-
-const vscodeCode = `code --add-mcp '${JSON.stringify({ name: MCP_NAME, url: MCP_URL })}'`;
-
-// instruct user to set up MCP (Model Context Protocol) if agent flow,
-function McpSetup() {
-	return (
-		<div className="border rounded-md pt-2 space-y-4">
-			<Tabs defaultValue="claude">
-				<TabsList>
-					<TabsTrigger value="claude">
-						<Icon icon={faClaude} className="mr-1" /> Claude Code
-					</TabsTrigger>
-					<TabsTrigger value="cursor">
-						<Icon icon={faCursor} className="mr-1" /> Cursor
-					</TabsTrigger>
-					<TabsTrigger value="vscode">
-						<Icon icon={faVscode} className="mr-1" /> VSCode
-					</TabsTrigger>
-				</TabsList>
-				<TabsContent value="claude" className="px-4 pb-4">
-					<p>Use the Claude Code CLI to add Rivet MCP:</p>
-					<CodeFrame
-						language="bash"
-						code={() => claudeCode}
-						className="m-0 mt-4"
-					>
-						<CodePreview
-							language="bash"
-							className="text-left"
-							code={claudeCode}
-						/>
-					</CodeFrame>
-				</TabsContent>
-				<TabsContent value="cursor" className="px-4 pb-4">
-					<Button className="mb-2" variant="outline" asChild>
-						<a href={installCursorUrl}>Install in Cursor</a>
-					</Button>
-					<p>
-						Or, go to <Code>Cursor Settings</Code>{" "}
-						<Icon icon={faArrowRight} /> <Code>MCP</Code>{" "}
-						<Icon icon={faArrowRight} /> <Code>New MCP Server</Code>
-						, and use configuration below:
-					</p>
-					<CodeFrame
-						language="json"
-						code={() => cursorCode}
-						className="m-0 mt-4"
-					>
-						<CodePreview
-							language="json"
-							className="text-left"
-							code={cursorCode}
-						/>
-					</CodeFrame>
-				</TabsContent>
-				<TabsContent value="vscode" className="px-4 pb-4">
-					<Button className="mb-2" variant="outline" asChild>
-						<a href={installVsCodeUrl}>Install in VSCode</a>
-					</Button>
-					<p>Or, you can install manually using VSCode CLI:</p>
-					<CodeFrame
-						language="bash"
-						code={() => vscodeCode}
-						className="m-0 mt-4"
-					>
-						<CodePreview
-							language="bash"
-							className="text-left"
-							code={vscodeCode}
-						/>
-					</CodeFrame>
-				</TabsContent>
-			</Tabs>
-		</div>
-	);
-}
 
 function FrontendSetup() {
 	const dataProvider = useDataProvider();
