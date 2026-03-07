@@ -419,6 +419,22 @@ const exploreFeatures = [
 			"Actors have built-in KV storage and SQLite. Browse stored data and watch writes happen live in the inspector.",
 		media: null as string | null,
 	},
+	{
+		id: "inspector",
+		label: "Inspector",
+		title: "RivetKit Inspector",
+		description:
+			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
+		media: null as string | null,
+	},
+	{
+		id: "workflows",
+		label: "Workflows",
+		title: "Durable Workflows",
+		description:
+			"Orchestrate multi-step processes that survive crashes and restarts. Visualize workflow execution and step-through history.",
+		media: null as string | null,
+	},
 ];
 
 function ExploreRivet() {
