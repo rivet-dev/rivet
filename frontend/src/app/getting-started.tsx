@@ -60,7 +60,7 @@ import { Content } from "./layout";
 const stepper = defineStepper(
 	{
 		id: "local",
-		title: "Set up your project",
+		title: "Set up your project locally",
 		schema: z.object({}),
 	},
 	{
@@ -221,7 +221,7 @@ function StepperFooter() {
 					className="text-muted-foreground"
 					onClick={() => s.goTo("provider")}
 				>
-					Skip to deploy
+					Already have a project working locally? Skip to deploy.
 				</Button>
 			) : null}
 			{s.isLast ? (
