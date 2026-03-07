@@ -10,6 +10,9 @@ import { HostingSection } from '@/components/marketing/sections/HostingSection';
 import { IntegrationsSection } from '@/components/marketing/sections/IntegrationsSection';
 import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
 import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
+import { BenchmarksSection } from '@/components/marketing/sections/BenchmarksSection';
+import { CombineServicesSection } from '@/components/marketing/sections/CombineServicesSection';
+import { AIAppsSection } from '@/components/marketing/sections/AIAppsSection';
 import { ScrollObserver } from '@/components/ScrollObserver';
 
 // Import thinking images
@@ -94,6 +97,9 @@ const latestChangelogTitle = latest?.data.title ?? '';
 				<RedesignedHero latestChangelogTitle={latestChangelogTitle} thinkingImages={thinkingImages} client:load />
 				<BuiltInFeatures client:visible />
 				<ProblemSection client:visible />
+				<BenchmarksSection client:visible />
+				<CombineServicesSection client:visible />
+				<AIAppsSection client:visible />
 				<CodeWalkthrough client:visible />
 				<IntegrationsSection client:visible />
 				<ObservabilitySection client:visible />
