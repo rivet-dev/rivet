@@ -1,9 +1,6 @@
 import {
 	faBookOpen,
-	faCompass,
 	faMagnifyingGlass,
-	faRocket,
-	Icon,
 } from "@rivet-gg/icons";
 import {
 	deployOptions,
@@ -319,40 +316,54 @@ function ProviderSetup() {
 
 function LocalSetup() {
 	return (
-		<div className="flex flex-col gap-4">
-			<PackageManagerCode
-				npx="npm install rivetkit"
-				yarn="yarn add rivetkit"
-				pnpm="pnpm add rivetkit"
-				bun="bun add rivetkit"
-				deno="deno add npm:rivetkit"
-				header={
-					<p className="pt-2 pb-4 px-4 border-b">
-						Install RivetKit
-					</p>
-				}
-			/>
-			<SkillsSetup />
-			<div className="border rounded-md p-4 space-y-3">
-				<div className="flex items-center gap-2">
-					<Icon icon={faRocket} className="text-muted-foreground" />
-					<p className="font-medium">Run locally</p>
-				</div>
-				<p className="text-sm text-muted-foreground">
-					Copy this prompt into your coding agent to get started:
-				</p>
-				<CodeFrame
-					language="markdown"
-					code={() => "Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance."}
-					className="m-0"
-				>
-					<CodePreview
-						language="markdown"
-						className="text-left"
-						code="Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance."
+		<div className="flex flex-col gap-6">
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Install RivetKit</p>
+					<PackageManagerCode
+						npx="npm install rivetkit"
+						yarn="yarn add rivetkit"
+						pnpm="pnpm add rivetkit"
+						bun="bun add rivetkit"
+						deno="deno add npm:rivetkit"
 					/>
-				</CodeFrame>
+				</div>
 			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Install RivetKit skills</p>
+					<PackageManagerCode
+						npx={`npx skills add ${skillsPath}`}
+						yarn={`yarn dlx skills add ${skillsPath}`}
+						bun={`bunx skills add ${skillsPath}`}
+						deno={`deno run -A npm:skills add ${skillsPath}`}
+						pnpm={`pnpx skills add ${skillsPath}`}
+						git={`git clone https://github.com/${skillsPath}.git .skills`}
+					/>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={3} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Run locally</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Copy this prompt into your coding agent:
+					</p>
+					<div className="rounded-md bg-muted/50 p-3 text-sm font-mono">
+						Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance.
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function StepNumber({ n }: { n: number }) {
+	return (
+		<div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center mt-0.5">
+			{n}
 		</div>
 	);
 }
@@ -360,32 +371,17 @@ function LocalSetup() {
 function ExploreRivet() {
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="border rounded-md p-4 space-y-3">
-				<div className="flex items-center gap-2">
-					<Icon icon={faMagnifyingGlass} className="text-muted-foreground" />
-					<p className="font-medium">RivetKit Inspector</p>
-				</div>
-				<p className="text-sm text-muted-foreground">
-					When running locally, the RivetKit Inspector is available in
-					your browser to view and debug your actors in real-time.
-					Check your terminal for the inspector URL.
-				</p>
-				<div className="text-xs text-muted-foreground border-t pt-3 space-y-1">
-					<p className="font-medium">What to look for:</p>
-					<ul className="list-disc list-inside space-y-0.5">
-						<li>Active actors and their current state</li>
-						<li>Real-time logs and event streams</li>
-						<li>RPC calls and connection activity</li>
-					</ul>
-				</div>
-			</div>
+			<p className="text-sm text-muted-foreground">
+				When running locally, check your terminal for the RivetKit Inspector URL to view and debug your actors in real-time.
+			</p>
 			<ExternalLinkCard
-				icon={faBookOpen}
+				icon={faMagnifyingGlass}
 				title="Quickstart Guide"
 				href="https://rivet.dev/docs/actors/quickstart/"
+				description="Build your first actor step by step"
 			/>
 			<ExternalLinkCard
-				icon={faCompass}
+				icon={faBookOpen}
 				title="Documentation"
 				href="https://rivet.dev/docs"
 			/>
@@ -502,23 +498,6 @@ function BackendSetup() {
 }
 
 const skillsPath = "rivet-dev/skills";
-function SkillsSetup() {
-	return (
-		<PackageManagerCode
-			npx={`npx skills add ${skillsPath}`}
-			yarn={`yarn dlx skills add ${skillsPath}`}
-			bun={`bunx skills add ${skillsPath}`}
-			deno={`deno run -A npm:skills add ${skillsPath}`}
-			pnpm={`pnpx skills add ${skillsPath}`}
-			git={`git clone https://github.com/${skillsPath}.git .skills`}
-			header={
-				<p className="pt-2 pb-4 px-4 border-b flex items-center gap-2">
-					Install RivetKit skills
-				</p>
-			}
-		/>
-	);
-}
 
 
 
