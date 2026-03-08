@@ -25,7 +25,7 @@ private final class ActorCacheRef: ObservableObject {
         unmountHash = nil
     }
 
-    deinit {
+    nonisolated deinit {
         // deinit can be called from any thread, so we must dispatch to MainActor
         // The deferred cleanup in ActorCache handles the case where the view
         // remounts quickly (e.g., SwiftUI strict mode)

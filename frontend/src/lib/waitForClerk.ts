@@ -13,7 +13,7 @@ export function waitForClerk(clerk: Clerk): Promise<void> {
 			Sentry.captureMessage("Can't confirm identity", "warning");
 			reject(new Error("Clerk timeout"));
 		}, 10_000);
-		clerk.on("status", (payload: Clerk["status"]) => {
+		clerk.on("status", (payload) => {
 			if (payload === "ready") {
 				clearTimeout(timeout);
 				if (clerk.user) {

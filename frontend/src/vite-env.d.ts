@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 declare const __APP_BUILD_ID__: string;
-declare const __APP_TYPE__: "engine" | "inspector" | "cloud";
+declare const __APP_TYPE__: "engine" | "cloud";
 declare const Plain: {
 	// This takes the same arguments as Plain.init. It will update the chat widget in-place with the new configuration.
 	// Only top-level fields are updated, nested fields are not merged.

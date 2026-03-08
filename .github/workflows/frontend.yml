@@ -18,17 +18,7 @@ jobs:
       - uses: biomejs/setup-biome@v2
         with:
           version: latest
-      - name: Check changed dashboard files
-        run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          files=()
-          while IFS= read -r file; do
-            files+=("$file")
-          done < <(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- frontend)
-          if [ "${#files[@]}" -eq 0 ]; then
-            exit 0
-          fi
-          biome check --reporter=github "${files[@]}"
+      - run: biome check ./frontend --reporter=github
   rivetkit-quality-check:
     name: RivetKit / Quality Check
     runs-on: ubuntu-latest
@@ -37,17 +27,7 @@ jobs:
       - uses: biomejs/setup-biome@v2
         with:
           version: latest
-      - name: Check changed RivetKit files
-        run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          files=()
-          while IFS= read -r file; do
-            files+=("$file")
-          done < <(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- rivetkit-typescript)
-          if [ "${#files[@]}" -eq 0 ]; then
-            exit 0
-          fi
-          biome check --reporter=github "${files[@]}"
+      - run: biome check ./rivetkit-typescript --reporter=github
   # website-quality-check:
   #   name: Website / Quality Check
   #   runs-on: ubuntu-latest
@@ -73,17 +53,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install
       - run: pnpm build --filter='./frontend'
-      - name: Check changed dashboard TypeScript files
-        run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          files=()
-          while IFS= read -r file; do
-            files+=("$file")
-          done < <(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- frontend | grep -E '^frontend/.*\.tsx?$' | sed 's#^frontend/##' || true)
-          if [ "${#files[@]}" -eq 0 ]; then
-            exit 0
-          fi
-          pnpm dlx tsc-files --noEmit "${files[@]}"
+      - run: pnpm check-types
         working-directory: ./frontend
   rivetkit-type-check:
     name: RivetKit / Type Check

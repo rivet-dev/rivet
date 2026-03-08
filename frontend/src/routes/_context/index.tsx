@@ -10,11 +10,7 @@ export const Route = createFileRoute("/_context/")({
 		match(__APP_TYPE__)
 			.with("cloud", () => <CloudRoute />)
 			.with("engine", () => <EngineRoute />)
-			.otherwise(() => {
-				throw new Error(
-					"Inspector routes are not supported in the dashboard build",
-				);
-			}),
+			.exhaustive(),
 	beforeLoad: async ({ context, search }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async () => {
