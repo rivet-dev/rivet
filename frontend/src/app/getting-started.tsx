@@ -1,10 +1,5 @@
 import {
-	faArrowRight,
 	faBookOpen,
-	faChevronLeft,
-	faClaude,
-	faCursor,
-	faVscode,
 	Icon,
 } from "@rivet-gg/icons";
 import {
@@ -24,15 +19,13 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useId, useMemo } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { match, P } from "ts-pattern";
+import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	Badge,
 	ButtonCard,
-	Code,
 	CodeFrame,
 	type CodeFrameLikeElement,
 	CodeGroup,
@@ -41,19 +34,13 @@ import {
 	ExternalLinkCard,
 	FormField,
 	H1,
-	Label,
 	Ping,
 	Skeleton,
-	Tabs,
-	TabsContent,
-	TabsList,
-	TabsTrigger,
 } from "@/components";
 import {
 	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
-import { PathSelection } from "@/components/onboarding/path-selection";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
@@ -64,12 +51,21 @@ import {
 	buildServerlessConfig,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import { DeployToVercelCard } from "./dialogs/connect-quick-vercel-frame";
-import { EnvVariables, useRivetDsn } from "./env-variables";
+import { useRivetDsn } from "./env-variables";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 
 const stepper = defineStepper(
+	{
+		id: "local",
+		title: "Set up your project",
+		schema: z.object({}),
+	},
+	{
+		id: "explore",
+		title: "Explore Rivet",
+		schema: z.object({}),
+	},
 	{
 		id: "provider",
 		title: "Choose Provider",
@@ -95,15 +91,11 @@ const stepper = defineStepper(
 	},
 );
 
-type Flow = "agent" | "manual";
-
 export function GettingStarted({
 	displayOnboarding,
 	displayBackendOnboarding,
-	flow,
 	provider,
 }: {
-	flow?: Flow;
 	provider?: Provider;
 	displayOnboarding?: boolean;
 	displayBackendOnboarding?: boolean;
@@ -124,37 +116,8 @@ export function GettingStarted({
 
 	const navigate = useNavigate();
 
-	if (!flow) {
-		return <PathSelection />;
-	}
-
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
-			<motion.div
-				className="max-w-[32rem] mx-auto w-full mt-14"
-				initial={{ opacity: 0, y: -20 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.5 }}
-			>
-				{displayOnboarding && displayBackendOnboarding ? (
-					<Button
-						className=" text-muted-foreground px-0.5 py-1 h-auto -mx-0.5"
-						startIcon={<Icon icon={faChevronLeft} />}
-						size="xs"
-						variant="link"
-						asChild
-					>
-						<Link
-							to="."
-							search={{
-								flow: undefined,
-							}}
-						>
-							Back
-						</Link>
-					</Button>
-				) : null}
-			</motion.div>
 			<motion.div
 				className="relative mb-8"
 				initial={{ opacity: 0, y: 20 }}
@@ -170,6 +133,7 @@ export function GettingStarted({
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
+							singlePage
 							formId="onboarding"
 							initialStep={
 								provider
@@ -193,6 +157,10 @@ export function GettingStarted({
 								),
 							}}
 							content={{
+								local: () => (
+									<LocalSetup />
+								),
+								explore: () => <ExploreRivet />,
 								provider: () => (
 									<ProviderSetup />
 								),
@@ -206,9 +174,7 @@ export function GettingStarted({
 											</div>
 										}
 									>
-										<BackendSetup
-											flow={flow}
-										/>
+										<BackendSetup />
 									</Suspense>
 								),
 								frontend: () => <FrontendSetup />,
@@ -343,6 +309,64 @@ function ProviderSetup() {
 	);
 }
 
+function LocalSetup() {
+	return (
+		<div className="flex flex-col gap-10">
+			<PackageManagerCode
+				npx="npm install rivetkit"
+				yarn="yarn add rivetkit"
+				pnpm="pnpm add rivetkit"
+				bun="bun add rivetkit"
+				deno="deno add npm:rivetkit"
+				header={
+					<p className="pt-2 pb-4 px-4 border-b">
+						Install RivetKit
+					</p>
+				}
+			/>
+			<Connector />
+			<SkillsSetup />
+			<Connector />
+			<div className="border rounded-md p-4 space-y-3">
+				<p className="font-medium">Run locally</p>
+				<p className="text-sm text-muted-foreground">
+					Ask your coding agent to create a new project with
+					RivetKit and run it locally. Verify it works before
+					deploying.
+				</p>
+			</div>
+		</div>
+	);
+}
+
+function ExploreRivet() {
+	return (
+		<div className="flex flex-col gap-6">
+			<div className="border rounded-md p-4 space-y-3">
+				<p className="font-medium">RivetKit Inspector</p>
+				<p className="text-sm text-muted-foreground">
+					When running locally, the RivetKit Inspector is available in
+					your browser to view and debug your actors in real-time.
+					Check your terminal for the inspector URL.
+				</p>
+			</div>
+			<p className="text-sm text-muted-foreground">
+				Explore what you can build with Rivet Actors:
+			</p>
+			<ExternalLinkCard
+				icon={faBookOpen}
+				title="Quickstart Guide"
+				href="https://rivet.dev/docs/actors/quickstart/"
+			/>
+			<ExternalLinkCard
+				icon={faBookOpen}
+				title="Documentation"
+				href="https://rivet.dev/docs"
+			/>
+		</div>
+	);
+}
+
 function Connector() {
 	return (
 		<div className="-my-10 flex justify-center">
@@ -402,110 +426,33 @@ function AgentInstructions({
 	);
 }
 
-function BackendSetup({ flow }: { flow?: Flow }) {
+function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
-	const providerDetails = deployOptions.find((p) => p.name === provider);
-
-	const endpoint = useEndpoint();
-	const runnerName = useWatch({ name: "runnerName" }) as string;
-
-	const envVars = (
-		<EnvVariables
-			showCopyButton={flow !== "agent"}
-			endpoint={endpoint}
-			runnerName={runnerName}
-		/>
-	);
-
-	let providerSetup: ReactNode = (
-		<>
-			<ExternalLinkCard
-				icon={faBookOpen}
-				title={"Integrate with Quickstart Guide"}
-				href={"https://www.rivet.dev/docs/actors/quickstart/"}
-			/>
-			<Connector />
-		</>
-	);
-
-	if (flow === "agent") {
-		providerSetup = null;
-	} else if (provider === "vercel") {
-		providerSetup = (
-			<>
-				<DeployToVercelCard />
-				<Connector />
-			</>
-		);
-	} else if (typeof provider === "string") {
-		providerSetup = (
-			<>
-				<TemplateSetup />
-				<Connector />
-			</>
-		);
-	}
 
 	return (
 		<div className="flex flex-col gap-10">
-			<SkillsSetup />
+			<CodeGroup
+				className="my-0"
+				header={
+					<p className="pt-2 pb-4 px-4 border-b">
+						Ask your Coding Agent to set up Rivet for you.
+					</p>
+				}
+			>
+				{[
+					<AgentInstructions
+						key="agent-instructions"
+						provider={provider}
+						title="Prompt"
+					/>,
+				]}
+			</CodeGroup>
 			<Connector />
-			{providerSetup}
-
-			{provider !== "vercel" && flow !== "agent" ? (
-				<>
-					<ExternalLinkCard
-						icon={providerDetails?.icon}
-						title={`Deploy with ${providerDetails?.displayName} Guide`}
-						href={`https://www.rivet.dev${providerDetails?.href || "/docs/getting-started"}`}
-					/>
-					<Connector />
-				</>
-			) : null}
-			{flow === "agent" ? (
-				<>
-					<CodeGroup
-						className="my-0"
-						header={
-							<p className="pt-2 pb-4 px-4 border-b">
-								Ask your Coding Agent to set up Rivet for you.
-							</p>
-						}
-					>
-						{[
-							<AgentInstructions
-								key="agent-instructions"
-								provider={provider}
-								title="Prompt"
-							/>,
-						]}
-					</CodeGroup>
-					<Connector />
-				</>
-			) : null}
-			{flow !== "agent" ? (
-				<>
-					<div className="space-y-2 border rounded-md p-4">
-						<p className="mb-4">
-							Set these environment variables in your deployment.
-						</p>
-						<Label>Environment Variables</Label>
-						{envVars}
-					</div>
-					<Connector />
-				</>
-			) : null}
 			<div className="space-y-2 border rounded-md p-4">
-				{flow === "agent" ? (
-					<p className="mb-4">
-						Paste the endpoint that your Coding Agent provides after
-						deployment.
-					</p>
-				) : (
-					<p className="mb-4">
-						Deploy your code and paste your deployment's endpoint.
-					</p>
-				)}
+				<p className="mb-4">
+					Paste the endpoint that your Coding Agent provides after
+					deployment.
+				</p>
 				<div>
 					<ConnectServerlessForm.Endpoint
 						placeholder={match(provider)
@@ -528,44 +475,6 @@ function BackendSetup({ flow }: { flow?: Flow }) {
 	);
 }
 
-const code = ({
-	cmd = "npx",
-	lib = "giget@latest",
-	template = "chat-room",
-}: {
-	cmd?: string;
-	lib?: string;
-	template?: string;
-}) =>
-	`${cmd} ${lib} gh:rivet-dev/rivet/examples/${template} ${template} --install`;
-
-const manualCode = ({
-	template = "chat-room",
-}: {
-	template?: string;
-}) => `git clone https://github.com/rivet-dev/rivet.git
-cd rivet/examples/${template}
-pnpm install
-pnpm run dev`;
-
-function TemplateSetup({ template = "chat-room" }: { template?: string }) {
-	return (
-		<PackageManagerCode
-			npx={code({ cmd: "npx", template })}
-			yarn={code({ cmd: "yarn dlx", template })}
-			bun={code({ cmd: "bunx", template })}
-			deno={code({
-				cmd: "deno run -A",
-				lib: "npm:giget@latest",
-				template,
-			})}
-			pnpm={code({ cmd: "pnpx", template })}
-			git={manualCode({ template })}
-			header={<p className="pt-2 pb-4 px-4 border-b">Clone example</p>}
-		/>
-	);
-}
-
 const skillsPath = "rivet-dev/skills";
 function SkillsSetup() {
 	return (
@@ -578,108 +487,14 @@ function SkillsSetup() {
 			git={`git clone https://github.com/${skillsPath}.git .skills`}
 			header={
 				<p className="pt-2 pb-4 px-4 border-b flex items-center gap-2">
-					Install RivetKit skills <Badge>Recommended</Badge>
+					Install RivetKit skills
 				</p>
 			}
 		/>
 	);
 }
 
-const MCP_URL = "https://mcp.rivet.dev/mcp";
-const MCP_NAME = "rivet";
 
-const claudeCode = `claude mcp add --transport http ${MCP_NAME} ${MCP_URL}`;
-const cursorCode = JSON.stringify(
-	{
-		mcpServers: {
-			[MCP_NAME]: {
-				url: MCP_URL,
-			},
-		},
-	},
-	null,
-	2,
-);
-
-const installCursorUrl = `cursor://anysphere.cursor-deeplink/mcp/install?name=${MCP_NAME}&config=${encodeURIComponent(JSON.stringify({ url: MCP_URL }))}`;
-
-const installVsCodeUrl = `https://vscode.dev/redirect/mcp/install?name=${encodeURIComponent(MCP_NAME)}&config=${encodeURIComponent(JSON.stringify({ url: MCP_URL }))}`;
-
-const vscodeCode = `code --add-mcp '${JSON.stringify({ name: MCP_NAME, url: MCP_URL })}'`;
-
-// instruct user to set up MCP (Model Context Protocol) if agent flow,
-function McpSetup() {
-	return (
-		<div className="border rounded-md pt-2 space-y-4">
-			<Tabs defaultValue="claude">
-				<TabsList>
-					<TabsTrigger value="claude">
-						<Icon icon={faClaude} className="mr-1" /> Claude Code
-					</TabsTrigger>
-					<TabsTrigger value="cursor">
-						<Icon icon={faCursor} className="mr-1" /> Cursor
-					</TabsTrigger>
-					<TabsTrigger value="vscode">
-						<Icon icon={faVscode} className="mr-1" /> VSCode
-					</TabsTrigger>
-				</TabsList>
-				<TabsContent value="claude" className="px-4 pb-4">
-					<p>Use the Claude Code CLI to add Rivet MCP:</p>
-					<CodeFrame
-						language="bash"
-						code={() => claudeCode}
-						className="m-0 mt-4"
-					>
-						<CodePreview
-							language="bash"
-							className="text-left"
-							code={claudeCode}
-						/>
-					</CodeFrame>
-				</TabsContent>
-				<TabsContent value="cursor" className="px-4 pb-4">
-					<Button className="mb-2" variant="outline" asChild>
-						<a href={installCursorUrl}>Install in Cursor</a>
-					</Button>
-					<p>
-						Or, go to <Code>Cursor Settings</Code>{" "}
-						<Icon icon={faArrowRight} /> <Code>MCP</Code>{" "}
-						<Icon icon={faArrowRight} /> <Code>New MCP Server</Code>
-						, and use configuration below:
-					</p>
-					<CodeFrame
-						language="json"
-						code={() => cursorCode}
-						className="m-0 mt-4"
-					>
-						<CodePreview
-							language="json"
-							className="text-left"
-							code={cursorCode}
-						/>
-					</CodeFrame>
-				</TabsContent>
-				<TabsContent value="vscode" className="px-4 pb-4">
-					<Button className="mb-2" variant="outline" asChild>
-						<a href={installVsCodeUrl}>Install in VSCode</a>
-					</Button>
-					<p>Or, you can install manually using VSCode CLI:</p>
-					<CodeFrame
-						language="bash"
-						code={() => vscodeCode}
-						className="m-0 mt-4"
-					>
-						<CodePreview
-							language="bash"
-							className="text-left"
-							code={vscodeCode}
-						/>
-					</CodeFrame>
-				</TabsContent>
-			</Tabs>
-		</div>
-	);
-}
 
 function FrontendSetup() {
 	const dataProvider = useDataProvider();

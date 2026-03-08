@@ -13,7 +13,7 @@ export function OnboardingFooter() {
 				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
 			>
 				<a
-					href="http://rivet.dev/docs"
+					href="https://rivet.dev/docs"
 					target="_blank"
 					rel="noopener noreferrer"
 				>
@@ -78,7 +78,7 @@ export function OnboardingFooter() {
 				endIcon={<Icon icon={faArrowUpRight} className="ms-1" />}
 			>
 				<a
-					href="http://github.com/rivet-gg/rivet"
+					href="https://github.com/rivet-dev/rivet"
 					target="_blank"
 					rel="noopener noreferrer"
 				>
