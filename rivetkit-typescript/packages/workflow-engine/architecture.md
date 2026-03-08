@@ -59,14 +59,14 @@ This isolation model means:
 
 The `EngineDriver` implementation must satisfy these requirements:
 
-1. **Sorted list results** - `list()` MUST return entries sorted by key in lexicographic byte order. The workflow engine relies on this for:
+1. **Sorted list results** - `list()` and `listRange()` MUST return entries sorted by key in lexicographic byte order. The workflow engine relies on this for:
    - Message FIFO ordering (messages consumed in order received)
    - Name registry reconstruction (names at correct indices)
    - Deterministic replay behavior
 
 2. **Atomic batch writes** - `batch()` SHOULD be atomic (all-or-nothing). If atomicity is not possible, partial writes may cause inconsistent state on crash.
 
-3. **Prefix isolation** - `list(prefix)` and `deletePrefix(prefix)` must only affect keys that start with the exact prefix bytes.
+3. **Range and prefix isolation** - `list(prefix)`, `listRange(start, end)`, `deletePrefix(prefix)`, and `deleteRange(start, end)` must only affect the intended byte ranges.
 
 4. **No concurrent modification** - The driver may assume no other writer modifies the KV during workflow execution (see Isolation Model).
 
@@ -257,7 +257,7 @@ Location segments in keys:
 ```
 
 The fdb-tuple encoding ensures:
-- Proper lexicographic byte ordering for `list()` operations
+- Proper lexicographic byte ordering for `list()` and `listRange()` operations
 - Compact representation for numeric indices
 - Nested tuples for complex segments (loop iterations)
 

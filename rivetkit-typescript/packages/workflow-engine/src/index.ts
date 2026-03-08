@@ -12,7 +12,7 @@ export {
 	WorkflowContextImpl,
 } from "./context.js";
 // Driver
-export type { EngineDriver, KVEntry, KVWrite } from "./driver.js";
+export type { EngineDriver, KVEntry, KVListOptions, KVWrite } from "./driver.js";
 // Errors
 export {
 	CancelledError,
@@ -139,6 +139,7 @@ import {
 } from "./errors.js";
 import {
 	buildEntryMetadataPrefix,
+	computePrefixUpperBound,
 	buildWorkflowErrorKey,
 	buildWorkflowInputKey,
 	buildWorkflowOutputKey,
@@ -594,9 +595,14 @@ export function runWorkflow<TInput, TOutput>(
 				return;
 			}
 
-			const metadataEntries = await driver.list(
-				buildEntryMetadataPrefix(),
-			);
+			const metadataPrefix = buildEntryMetadataPrefix();
+			const metadataEntries = await (() => {
+				const metadataEnd = computePrefixUpperBound(metadataPrefix);
+				if (!metadataEnd) {
+					return driver.list(metadataPrefix);
+				}
+				return driver.listRange(metadataPrefix, metadataEnd);
+			})();
 			const writes: { key: Uint8Array; value: Uint8Array }[] = [];
 
 			for (const entry of metadataEntries) {

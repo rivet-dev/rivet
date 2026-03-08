@@ -280,6 +280,21 @@ export function keyStartsWith(key: Uint8Array, prefix: Uint8Array): boolean {
 }
 
 /**
+ * Compute the smallest exclusive upper bound for all keys with a given prefix.
+ * Returns null if the prefix is all 0xFF bytes.
+ */
+export function computePrefixUpperBound(prefix: Uint8Array): Uint8Array | null {
+	const upperBound = prefix.slice();
+	for (let i = upperBound.length - 1; i >= 0; i--) {
+		if (upperBound[i] !== 0xff) {
+			upperBound[i]++;
+			return upperBound.slice(0, i + 1);
+		}
+	}
+	return null;
+}
+
+/**
  * Compare two keys lexicographically.
  * Returns negative if a < b, 0 if a === b, positive if a > b.
  */

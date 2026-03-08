@@ -103,6 +103,28 @@ for (const mode of modes) {
 				expect(await driver.get(keyC)).toEqual(encode("c"));
 			});
 
+			it("should list only keys within a half-open range", async () => {
+				const keyA = encode("range-0");
+				const keyB = encode("range-1");
+				const keyBChild = encode("range-1-child");
+				const keyC = encode("range-2");
+
+				await driver.set(keyA, encode("a"));
+				await driver.set(keyB, encode("b"));
+				await driver.set(keyBChild, encode("b-child"));
+				await driver.set(keyC, encode("c"));
+
+				const entries = await driver.listRange(keyB, keyC, {
+					reverse: true,
+					limit: 2,
+				});
+
+				expect(entries).toEqual([
+					{ key: keyBChild, value: encode("b-child") },
+					{ key: keyB, value: encode("b") },
+				]);
+			});
+
 			it("should list name keys in sorted order", async () => {
 				await driver.set(buildNameKey(1), encode("two"));
 				await driver.set(buildNameKey(0), encode("one"));

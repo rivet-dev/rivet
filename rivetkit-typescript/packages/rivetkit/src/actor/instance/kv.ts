@@ -23,6 +23,10 @@ type KvValueOptions<T extends KvValueType = "text"> = {
 	type?: T;
 };
 
+type KvKeyOptions<K extends KvKeyType = "text"> = {
+	keyType?: K;
+};
+
 type KvListOptions<
 	T extends KvValueType = "text",
 	K extends KvKeyType = "text",
@@ -223,11 +227,15 @@ export class ActorKv {
 	/**
 	 * Delete all keys in the half-open range [start, end).
 	 */
-	async deleteRange(start: KvKey, end: KvKey): Promise<void> {
+	async deleteRange<K extends KvKeyType = "text">(
+		start: KvKeyTypeMap[K],
+		end: KvKeyTypeMap[K],
+		options?: KvKeyOptions<K>,
+	): Promise<void> {
 		await this.#driver.kvDeleteRange(
 			this.#actorId,
-			makePrefixedKey(encodeKey(start)),
-			makePrefixedKey(encodeKey(end)),
+			makePrefixedKey(encodeKey(start, options?.keyType)),
+			makePrefixedKey(encodeKey(end, options?.keyType)),
 		);
 	}
 

@@ -35,6 +35,31 @@ function createKvStore(): KvVfsOptions {
 				store.delete(keyToString(key));
 			}
 		},
+		deleteRange: async (start, end) => {
+			for (const [encodedKey] of store) {
+				const key = Uint8Array.from(Buffer.from(encodedKey, "hex"));
+				if (Buffer.compare(key, start) >= 0 && Buffer.compare(key, end) < 0) {
+					store.delete(encodedKey);
+				}
+			}
+		},
+		listRange: async (start, end, options) => {
+			const entries: [Uint8Array, Uint8Array][] = [];
+			for (const [encodedKey, value] of store) {
+				const key = Uint8Array.from(Buffer.from(encodedKey, "hex"));
+				if (Buffer.compare(key, start) >= 0 && Buffer.compare(key, end) < 0) {
+					entries.push([key, new Uint8Array(value)]);
+				}
+			}
+			entries.sort(([a], [b]) => Buffer.compare(a, b));
+			if (options?.reverse) {
+				entries.reverse();
+			}
+			if (options?.limit !== undefined) {
+				return entries.slice(0, options.limit);
+			}
+			return entries;
+		},
 	};
 }
 

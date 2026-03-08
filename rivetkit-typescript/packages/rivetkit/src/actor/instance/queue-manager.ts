@@ -358,12 +358,12 @@ export class QueueManager<
 	): Promise<void> {
 		const nameSet =
 			names && names.length > 0 ? new Set(names) : undefined;
-		const existing = await this.#loadQueueMessages();
 		if (nameSet) {
+			const existing = await this.#loadQueueMessages();
 			if (existing.some((message) => nameSet.has(message.name))) {
 				return;
 			}
-		} else if (existing.length > 0) {
+		} else if ((await this.#loadQueueMessages({ limit: 1 })).length > 0) {
 			return;
 		}
 
@@ -422,15 +422,22 @@ export class QueueManager<
 		if (ids.length === 0) {
 			return [];
 		}
-		const idSet = new Set(ids.map((id) => id.toString()));
-		const entries = await this.#loadQueueMessages();
-		const toRemove = entries.filter((entry) =>
-			idSet.has(entry.id.toString()),
+		const idEntries = ids.map((id) => ({
+			id,
+			key: makeQueueMessageKey(id),
+		}));
+		const existing = await this.#driver.kvBatchGet(
+			this.#actor.id,
+			idEntries.map((entry) => entry.key),
 		);
+		const toRemove = idEntries.filter((_, idx) => existing[idx] !== null);
 		if (toRemove.length === 0) {
 			return [];
 		}
-		await this.#removeMessages(toRemove);
+		await this.#deleteMessageKeys(
+			toRemove.map((entry) => entry.key),
+			toRemove.length,
+		);
 		return toRemove.map((entry) => entry.id);
 	}
 
@@ -442,7 +449,9 @@ export class QueueManager<
 		if (this.#metadata.size === 0) {
 			return [];
 		}
-		const entries = await this.#loadQueueMessages();
+		const entries = await this.#loadQueueMessages(
+			nameSet ? undefined : { limit: count },
+		);
 		const matched = nameSet
 			? entries.filter((entry) => nameSet.has(entry.name))
 			: entries;
@@ -466,10 +475,13 @@ export class QueueManager<
 		return selected;
 	}
 
-	async #loadQueueMessages(): Promise<QueueMessage[]> {
+	async #loadQueueMessages(options?: { limit?: number }): Promise<QueueMessage[]> {
 		const entries = await this.#driver.kvListPrefix(
 			this.#actor.id,
 			QUEUE_MESSAGES_PREFIX,
+			{
+				limit: options?.limit,
+			},
 		);
 		const decoded: QueueMessage[] = [];
 		for (const [key, value] of entries) {
@@ -494,7 +506,17 @@ export class QueueManager<
 			}
 		}
 		decoded.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-		if (this.#metadata.size !== decoded.length) {
+		if (
+			options?.limit !== undefined &&
+			entries.length === options.limit &&
+			decoded.length < options.limit
+		) {
+			return await this.#loadQueueMessages();
+		}
+		if (
+			options?.limit === undefined &&
+			this.#metadata.size !== decoded.length
+		) {
 			this.#metadata.size = decoded.length;
 			this.#actor.inspector.updateQueueSize(this.#metadata.size);
 		}
@@ -525,22 +547,10 @@ export class QueueManager<
 		if (messages.length === 0) {
 			return;
 		}
-		const keys = messages.map((message) => makeQueueMessageKey(message.id));
-
-		// Update metadata
-		this.#metadata.size = Math.max(
-			0,
-			this.#metadata.size - messages.length,
+		await this.#deleteMessageKeys(
+			messages.map((message) => makeQueueMessageKey(message.id)),
+			messages.length,
 		);
-
-		// Delete messages and update metadata
-		// Note: kvBatchDelete doesn't support mixed operations, so we do two calls
-		await this.#driver.kvBatchDelete(this.#actor.id, keys);
-		await this.#driver.kvBatchPut(this.#actor.id, [
-			[QUEUE_METADATA_KEY, this.#serializeMetadata()],
-		]);
-
-		this.#actor.inspector.updateQueueSize(this.#metadata.size);
 	}
 
 	async #maybeResolveWaiters() {
@@ -598,6 +608,26 @@ export class QueueManager<
 			},
 			ACTOR_PERSIST_CURRENT_VERSION,
 		);
+	}
+
+	async #deleteMessageKeys(
+		keys: Uint8Array[],
+		deletedCount: number,
+	): Promise<void> {
+		if (keys.length === 0) {
+			return;
+		}
+
+		this.#metadata.size = Math.max(0, this.#metadata.size - deletedCount);
+
+		// Delete messages and update metadata.
+		// Note: kvBatchDelete doesn't support mixed operations, so we do two calls.
+		await this.#driver.kvBatchDelete(this.#actor.id, keys);
+		await this.#driver.kvBatchPut(this.#actor.id, [
+			[QUEUE_METADATA_KEY, this.#serializeMetadata()],
+		]);
+
+		this.#actor.inspector.updateQueueSize(this.#metadata.size);
 	}
 
 }

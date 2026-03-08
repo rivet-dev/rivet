@@ -16,6 +16,11 @@ export interface KVWrite {
 	value: Uint8Array;
 }
 
+export interface KVListOptions {
+	reverse?: boolean;
+	limit?: number;
+}
+
 /**
  * The engine driver provides the KV and scheduling interface.
  * Implementations must provide these methods to integrate with different backends.
@@ -67,6 +72,17 @@ export interface EngineDriver {
 	 * non-deterministic replay behavior.
 	 */
 	list(prefix: Uint8Array): Promise<KVEntry[]>;
+
+	/**
+	 * List all key-value pairs in the half-open range [start, end).
+	 *
+	 * IMPORTANT: Results MUST be sorted by key in lexicographic byte order.
+	 */
+	listRange(
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: KVListOptions,
+	): Promise<KVEntry[]>;
 
 	/**
 	 * Batch write multiple key-value pairs.

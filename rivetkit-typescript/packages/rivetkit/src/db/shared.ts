@@ -56,6 +56,19 @@ export function createActorKvStore(kv: ActorKvOperations): KvVfsOptions {
 		deleteBatch: async (keys: Uint8Array[]) => {
 			await kv.batchDelete(keys);
 		},
+		deleteRange: async (start: Uint8Array, end: Uint8Array) => {
+			await kv.deleteRange(start, end);
+		},
+		listRange: async (
+			start: Uint8Array,
+			end: Uint8Array,
+			options?: {
+				reverse?: boolean;
+				limit?: number;
+			},
+		) => {
+			return await kv.listRange(start, end, options);
+		},
 	};
 }
 

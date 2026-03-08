@@ -1462,6 +1462,10 @@ export class ActorInstance<
 					batchPut: (entries) => this.driver.kvBatchPut(this.#actorId, entries),
 					batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
 					batchDelete: (keys) => this.driver.kvBatchDelete(this.#actorId, keys),
+					deleteRange: (start, end) =>
+						this.driver.kvDeleteRange(this.#actorId, start, end),
+					listRange: (start, end, options) =>
+						this.driver.kvListRange(this.#actorId, start, end, options),
 				},
 				sqliteVfs: this.#sqliteVfs,
 			});
