@@ -22,21 +22,54 @@
 
 Rivet Actors are long-running, lightweight processes designed for stateful workloads. State lives in-memory with automatic persistence. Create one per agent, per session, or per user — with built-in workflows, queues, and scheduling.
 
-```typescript
-import { actor } from "rivetkit";
+**Backend**
 
-export const chatRoom = actor({
-  // In-memory state, persisted automatically
-  state: { messages: [] },
+```typescript
+const agent = actor({
+  // In-memory, persisted state for the actor
+  state: { messages: [] as Message[] },
+
+  // Long-running actor process
+  run: async (c) => {
+    // Wait for incoming messages
+    for await (const msg of c.queue.iter()) {
+      c.state.messages.push({ role: "user", content: msg.body.text });
+
+      const response = streamText({
+        model: openai("gpt-5"),
+        messages: c.state.messages,
+      });
+
+      // Stream realtime events to all clients
+      for await (const delta of response.textStream) {
+        c.broadcast("token", delta);
+      }
+
+      c.state.messages.push({ role: "assistant", content: await response.text });
+    }
+  },
 
   // Type-safe RPC
   actions: {
-    sendMessage: (c, user, text) => {
-      c.state.messages.push({ user, text });
-      c.broadcast("newMessage", { user, text });
-    },
+    getHistory: (c) => c.state.messages,
   },
 });
+```
+
+**Client** (frontend or backend)
+
+```typescript
+// Connect to an actor
+const agent = client.agent.getOrCreate("agent-123").connect();
+
+// Fetch history
+const history = await agent.getHistory();
+
+// Listen for realtime events
+agent.on("token", delta => /* ... */);
+
+// Send message to actor
+await agent.queue.send("how many r's are in the word strawberry");
 ```
 
 ## Features
