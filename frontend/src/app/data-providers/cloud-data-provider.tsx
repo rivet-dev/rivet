@@ -759,7 +759,7 @@ export const createNamespaceContext = ({
 			namespacesQueryOptions() {
 				return parent.currentProjectNamespacesQueryOptions();
 			},
-			namespaceQueryOptions() {
+			namespaceQueryOptions(_name: string | undefined) {
 				return parent.currentProjectNamespaceQueryOptions({
 					namespace,
 				});

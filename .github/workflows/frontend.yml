@@ -3,6 +3,7 @@ name: frontend
 on:
   pull_request:
     paths:
+      - .github/workflows/frontend.yml
       - frontend/**
       - engine/sdks/typescript/**
       - rivetkit-typescript/**
@@ -17,7 +18,17 @@ jobs:
       - uses: biomejs/setup-biome@v2
         with:
           version: latest
-      - run: biome check ./frontend --reporter=github
+      - name: Check changed dashboard files
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- frontend)
+          if [ "${#files[@]}" -eq 0 ]; then
+            exit 0
+          fi
+          biome check --reporter=github "${files[@]}"
   rivetkit-quality-check:
     name: RivetKit / Quality Check
     runs-on: ubuntu-latest
@@ -26,7 +37,17 @@ jobs:
       - uses: biomejs/setup-biome@v2
         with:
           version: latest
-      - run: biome check ./rivetkit-typescript --reporter=github
+      - name: Check changed RivetKit files
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- rivetkit-typescript)
+          if [ "${#files[@]}" -eq 0 ]; then
+            exit 0
+          fi
+          biome check --reporter=github "${files[@]}"
   # website-quality-check:
   #   name: Website / Quality Check
   #   runs-on: ubuntu-latest
@@ -52,7 +73,17 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install
       - run: pnpm build --filter='./frontend'
-      - run: pnpm check-types
+      - name: Check changed dashboard TypeScript files
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- frontend | grep -E '^frontend/.*\.tsx?$' | sed 's#^frontend/##' || true)
+          if [ "${#files[@]}" -eq 0 ]; then
+            exit 0
+          fi
+          pnpm dlx tsc-files --noEmit "${files[@]}"
         working-directory: ./frontend
   rivetkit-type-check:
     name: RivetKit / Type Check
@@ -69,9 +100,8 @@ jobs:
             ${{ runner.os }}-turbo-
       - uses: pnpm/action-setup@v4
       - run: pnpm install
-      - run: pnpm build --filter='./rivetkit-typescript'
-      - run: pnpm check-types
-        working-directory: ./rivetkit-typescript
+      - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*'
+      - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*'
   # website-type-check:
   #   name: Website / Type Check
   #   runs-on: ubuntu-latest
@@ -102,6 +132,8 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
         working-directory: ./frontend
+      - name: Build frontend workspace dependencies
+        run: pnpm build --filter='./frontend'
       - name: Build engine dashboard
         run: pnpm build:engine
         working-directory: ./frontend

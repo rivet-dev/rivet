@@ -106,16 +106,23 @@ actor TestServer {
                     return
                 }
                 bufferBox.data.append(data)
-                if let range = bufferBox.data.firstRange(of: Data([0x0A])) {
+                while let range = bufferBox.data.firstRange(of: Data([0x0A])) {
                     let lineData = bufferBox.data.subdata(in: bufferBox.data.startIndex..<range.lowerBound)
-                    handle.readabilityHandler = { fileHandle in
-                        _ = fileHandle.availableData
+                    bufferBox.data.removeSubrange(bufferBox.data.startIndex...range.lowerBound)
+
+                    guard !lineData.isEmpty else {
+                        continue
                     }
+
                     do {
                         let info = try JSONDecoder().decode(TestServerInfo.self, from: lineData)
+                        handle.readabilityHandler = { fileHandle in
+                            _ = fileHandle.availableData
+                        }
                         continuation.resume(returning: info)
+                        return
                     } catch {
-                        continuation.resume(throwing: error)
+                        continue
                     }
                 }
             }
