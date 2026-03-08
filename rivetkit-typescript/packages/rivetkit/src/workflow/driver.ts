@@ -4,6 +4,7 @@ import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/instance/keys";
 import type {
 	EngineDriver,
 	KVEntry,
+	KVListOptions,
 	KVWrite,
 	Message,
 	WorkflowMessageDriver,
@@ -170,6 +171,25 @@ export class ActorWorkflowDriver implements EngineDriver {
 			this.#actor.driver.kvListPrefix(
 				this.#actor.id,
 				makeWorkflowKey(prefix),
+			),
+		);
+		return entries.map(([key, value]) => ({
+			key: stripWorkflowKey(key),
+			value,
+		}));
+	}
+
+	async listRange(
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: KVListOptions,
+	): Promise<KVEntry[]> {
+		const entries = await this.#runCtx.keepAwake(
+			this.#actor.driver.kvListRange(
+				this.#actor.id,
+				makeWorkflowKey(start),
+				makeWorkflowKey(end),
+				options,
 			),
 		);
 		return entries.map(([key, value]) => ({

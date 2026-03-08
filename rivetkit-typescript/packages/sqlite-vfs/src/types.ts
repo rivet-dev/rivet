@@ -9,4 +9,15 @@ export interface KvVfsOptions {
 	putBatch: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
 	/** Delete multiple keys */
 	deleteBatch: (keys: Uint8Array[]) => Promise<void>;
+	/** Delete all keys in the half-open range [start, end). */
+	deleteRange: (start: Uint8Array, end: Uint8Array) => Promise<void>;
+	/** List keys in the half-open range [start, end). */
+	listRange: (
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: {
+			reverse?: boolean;
+			limit?: number;
+		},
+	) => Promise<[Uint8Array, Uint8Array][]>;
 }

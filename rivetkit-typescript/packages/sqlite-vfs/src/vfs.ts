@@ -909,13 +909,12 @@ class SqliteSystem implements SqliteVfsRegistration {
 		const lastExistingChunk = Math.floor((file.size - 1) / CHUNK_SIZE);
 
 		// Delete chunks beyond the new size
-		const keysToDelete: Uint8Array[] = [];
-		for (let i = lastChunkToKeep + 1; i <= lastExistingChunk; i++) {
-			keysToDelete.push(this.#chunkKey(file, i));
-		}
-
-		if (keysToDelete.length > 0) {
-			await options.deleteBatch(keysToDelete);
+		const firstChunkToDelete = lastChunkToKeep + 1;
+		if (firstChunkToDelete <= lastExistingChunk) {
+			await options.deleteRange(
+				this.#chunkKey(file, firstChunkToDelete),
+				this.#chunkKey(file, lastExistingChunk + 1),
+			);
 		}
 
 		// Truncate the last kept chunk if needed
@@ -983,13 +982,14 @@ class SqliteSystem implements SqliteVfsRegistration {
 		const size = decodeFileMeta(sizeData);
 
 		// Delete all chunks
-		const keysToDelete: Uint8Array[] = [metaKey];
 		const numChunks = Math.ceil(size / CHUNK_SIZE);
-		for (let i = 0; i < numChunks; i++) {
-			keysToDelete.push(getChunkKey(fileTag, i));
+		await options.deleteBatch([metaKey]);
+		if (numChunks > 0) {
+			await options.deleteRange(
+				getChunkKey(fileTag, 0),
+				getChunkKey(fileTag, numChunks),
+			);
 		}
-
-		await options.deleteBatch(keysToDelete);
 	}
 
 	async xAccess(

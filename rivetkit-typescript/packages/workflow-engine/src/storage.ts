@@ -23,7 +23,7 @@ import {
 	buildWorkflowErrorKey,
 	buildWorkflowOutputKey,
 	buildWorkflowStateKey,
-	compareKeys,
+	computePrefixUpperBound,
 	parseNameKey,
 } from "./keys.js";
 import { isLocationPrefix, locationToKey } from "./location.js";
@@ -135,9 +135,8 @@ export async function loadStorage(
 	const storage = createStorage();
 
 	// Load name registry
-	const nameEntries = await driver.list(buildNamePrefix());
-	// Sort by index to ensure correct order
-	nameEntries.sort((a, b) => compareKeys(a.key, b.key));
+	const namePrefix = buildNamePrefix();
+	const nameEntries = await listPrefixRange(driver, namePrefix);
 	for (const entry of nameEntries) {
 		const index = parseNameKey(entry.key);
 		storage.nameRegistry[index] = deserializeName(entry.value);
@@ -146,7 +145,10 @@ export async function loadStorage(
 	storage.flushedNameCount = storage.nameRegistry.length;
 
 	// Load history entries
-	const historyEntries = await driver.list(buildHistoryPrefixAll());
+	const historyEntries = await listPrefixRange(
+		driver,
+		buildHistoryPrefixAll(),
+	);
 	for (const entry of historyEntries) {
 		const parsed = deserializeEntry(entry.value);
 		parsed.dirty = false;
@@ -336,6 +338,17 @@ export async function flush(
 	}
 }
 
+async function listPrefixRange(
+	driver: EngineDriver,
+	prefix: Uint8Array,
+) {
+	const end = computePrefixUpperBound(prefix);
+	if (!end) {
+		return await driver.list(prefix);
+	}
+	return await driver.listRange(prefix, end);
+}
+
 /**
  * Delete entries with a given location prefix (used for loop forgetting).
  * Also cleans up associated metadata from both memory and driver.
@@ -349,10 +362,17 @@ export async function deleteEntriesWithPrefix(
 	const deletions = collectDeletionsForPrefix(storage, prefixLocation);
 
 	// Apply deletions to driver
-	await driver.deletePrefix(deletions.prefixes[0]!);
-	await Promise.all(
-		deletions.keys.map((key) => driver.delete(key)),
-	);
+	const deleteOps: Promise<void>[] = [];
+	for (const prefix of deletions.prefixes) {
+		deleteOps.push(driver.deletePrefix(prefix));
+	}
+	for (const range of deletions.ranges) {
+		deleteOps.push(driver.deleteRange(range.start, range.end));
+	}
+	for (const key of deletions.keys) {
+		deleteOps.push(driver.delete(key));
+	}
+	await Promise.all(deleteOps);
 
 	if (deletions.keys.length > 0 && onHistoryUpdated) {
 		onHistoryUpdated();
@@ -368,10 +388,14 @@ export function collectDeletionsForPrefix(
 	storage: Storage,
 	prefixLocation: Location,
 ): PendingDeletions {
+	const historyPrefix = buildHistoryPrefix(prefixLocation);
+	const historyEnd = computePrefixUpperBound(historyPrefix);
 	const pending: PendingDeletions = {
-		prefixes: [buildHistoryPrefix(prefixLocation)],
+		prefixes: historyEnd ? [] : [historyPrefix],
 		keys: [],
-		ranges: [],
+		ranges: historyEnd
+			? [{ start: historyPrefix, end: historyEnd }]
+			: [],
 	};
 
 	for (const [key, entry] of storage.history.entries) {

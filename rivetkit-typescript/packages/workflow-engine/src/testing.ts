@@ -1,4 +1,4 @@
-import type { EngineDriver, KVEntry, KVWrite } from "./driver.js";
+import type { EngineDriver, KVEntry, KVListOptions, KVWrite } from "./driver.js";
 import { EvictedError } from "./errors.js";
 import { compareKeys, keyStartsWith, keyToHex } from "./keys.js";
 import type { Message, WorkflowMessageDriver } from "./types.js";
@@ -195,6 +195,31 @@ export class InMemoryDriver implements EngineDriver {
 		}
 		// Sort by key lexicographically
 		return results.sort((a, b) => compareKeys(a.key, b.key));
+	}
+
+	async listRange(
+		start: Uint8Array,
+		end: Uint8Array,
+		options?: KVListOptions,
+	): Promise<KVEntry[]> {
+		await sleep(this.latency);
+		const results: KVEntry[] = [];
+		for (const entry of this.kv.values()) {
+			if (
+				compareKeys(entry.key, start) >= 0 &&
+				compareKeys(entry.key, end) < 0
+			) {
+				results.push({ key: entry.key, value: entry.value });
+			}
+		}
+		results.sort((a, b) => compareKeys(a.key, b.key));
+		if (options?.reverse) {
+			results.reverse();
+		}
+		if (options?.limit !== undefined) {
+			return results.slice(0, options.limit);
+		}
+		return results;
 	}
 
 	async batch(writes: KVWrite[]): Promise<void> {

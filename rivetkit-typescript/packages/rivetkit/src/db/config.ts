@@ -32,6 +32,15 @@ export interface DatabaseProviderContext {
 		batchPut: (entries: [Uint8Array, Uint8Array][]) => Promise<void>;
 		batchGet: (keys: Uint8Array[]) => Promise<(Uint8Array | null)[]>;
 		batchDelete: (keys: Uint8Array[]) => Promise<void>;
+		deleteRange: (start: Uint8Array, end: Uint8Array) => Promise<void>;
+		listRange: (
+			start: Uint8Array,
+			end: Uint8Array,
+			options?: {
+				reverse?: boolean;
+				limit?: number;
+			},
+		) => Promise<[Uint8Array, Uint8Array][]>;
 	};
 
 	/**

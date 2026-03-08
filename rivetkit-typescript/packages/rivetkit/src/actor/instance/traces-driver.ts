@@ -82,10 +82,17 @@ export class ActorTracesDriver implements TracesDriver {
 		prefix: Uint8Array,
 	): Promise<Array<{ key: Uint8Array; value: Uint8Array }>> {
 		const fullPrefix = concatPrefix(this.#prefix, prefix);
-		const entries = await this.#driver.kvListPrefix(
-			this.#actorId,
-			fullPrefix,
-		);
+		const fullEnd = computeUpperBound(fullPrefix);
+		const entries = fullEnd
+			? await this.#driver.kvListRange(
+					this.#actorId,
+					fullPrefix,
+					fullEnd,
+				)
+			: await this.#driver.kvListPrefix(
+					this.#actorId,
+					fullPrefix,
+				);
 		return entries.map(([key, value]) => ({
 			key: stripPrefix(this.#prefix, key),
 			value,

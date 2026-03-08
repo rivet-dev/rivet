@@ -1452,6 +1452,8 @@ export class Runner {
 		actorId: string,
 		start: Uint8Array,
 		end: Uint8Array,
+		// Internal-only protocol knob. Public RivetKit APIs use half-open ranges
+		// and should not surface inclusive end semantics as a user-facing option.
 		exclusive?: boolean,
 		options?: KvListOptions,
 	): Promise<[Uint8Array, Uint8Array][]> {
