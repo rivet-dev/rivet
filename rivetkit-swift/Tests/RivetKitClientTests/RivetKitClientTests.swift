@@ -98,7 +98,7 @@ func sleepMilliseconds(_ milliseconds: UInt64) async {
 }
 
 @Suite("RivetKitClient")
-final class RivetKitClientSuite {
+final class RivetKitClientSuite: @unchecked Sendable {
     let server: TestServerInfo
 
     init() async throws {
