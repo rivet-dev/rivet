@@ -4,8 +4,6 @@ import {
 	faCopy,
 	faDatabase,
 	faDiagramProject,
-	faGlobe,
-	faInfinity,
 	faLayerGroup,
 	faMagnifyingGlass,
 	faPlug,
@@ -28,7 +26,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -462,77 +460,129 @@ function StepNumber({ n }: { n: number }) {
 
 const exploreFeatures = [
 	{
+		id: "inspector",
 		icon: faMagnifyingGlass,
-		title: "Inspector",
+		label: "Inspector",
+		title: "RivetKit Inspector",
 		description:
-			"Built-in visual debugger to view actors, monitor connections, and trace interactions.",
+			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
+		docsUrl: "https://rivet.dev/docs/actors/debugging",
+		media: "/onboarding-demo.jpg",
 	},
 	{
+		id: "state",
 		icon: faLayerGroup,
-		title: "In-memory state",
+		label: "In-memory state",
+		title: "In-memory State",
 		description:
-			"Co-located with compute for instant reads and writes. Persist with SQLite or BYO database.",
+			"Each actor has its own isolated state co-located with compute for instant reads and writes. Persist with SQLite or BYO database.",
+		docsUrl: "https://rivet.dev/docs/actors/state",
+		media: null as string | null,
 	},
 	{
+		id: "storage",
 		icon: faDatabase,
-		title: "Storage",
+		label: "Storage",
+		title: "Built-in Storage",
 		description:
-			"Built-in KV storage and SQLite for each actor. Browse stored data live in the inspector.",
+			"Actors have built-in KV storage and SQLite. Browse stored data and watch writes happen live in the inspector.",
+		docsUrl: "https://rivet.dev/docs/actors/storage",
+		media: null as string | null,
 	},
 	{
+		id: "workflows",
 		icon: faDiagramProject,
-		title: "Workflows",
+		label: "Workflows",
+		title: "Durable Workflows",
 		description:
-			"Multi-step operations with automatic retries that survive crashes and restarts.",
+			"Orchestrate multi-step processes that survive crashes and restarts. Automatic retries and step-through history visualization.",
+		docsUrl: "https://rivet.dev/docs/actors/workflows",
+		media: null as string | null,
 	},
 	{
+		id: "events",
 		icon: faBroadcastTower,
-		title: "Events",
+		label: "Events",
+		title: "Event Streams",
 		description:
-			"Broadcast events to connected clients. Real-time bidirectional streaming built in.",
+			"Actors can broadcast events to connected clients. Real-time bidirectional streaming built in.",
+		docsUrl: "https://rivet.dev/docs/actors/events",
+		media: null as string | null,
 	},
 	{
+		id: "rpcs",
 		icon: faPlug,
-		title: "RPCs",
+		label: "RPCs",
+		title: "Remote Procedure Calls",
 		description:
-			"Call actor methods directly from your client with full type safety.",
-	},
-	{
-		icon: faInfinity,
-		title: "Runs indefinitely",
-		description:
-			"Long-lived when active, hibernates when idle. Scales to zero automatically.",
-	},
-	{
-		icon: faGlobe,
-		title: "Global edge network",
-		description:
-			"Deploy close to your users or in specific legal jurisdictions without complexity.",
+			"Call actor methods directly from your client with full type safety. The inspector shows every RPC call, its arguments, and response.",
+		docsUrl: "https://rivet.dev/docs/actors/rpc",
+		media: null as string | null,
 	},
 ];
 
 function ExploreRivet() {
+	const [activeFeature, setActiveFeature] = useState(exploreFeatures[0].id);
+	const feature =
+		exploreFeatures.find((f) => f.id === activeFeature) ||
+		exploreFeatures[0];
+
 	return (
-		<div className="grid grid-cols-4 gap-4">
-			{exploreFeatures.map((feature) => (
-				<div
-					key={feature.title}
-					className="rounded-lg border bg-card/50 p-4 flex flex-col gap-2"
-				>
-					<div className="flex items-center gap-2">
-						<Icon
-							icon={feature.icon}
-							className="w-4 h-4 text-muted-foreground"
-						/>
-						<span className="font-semibold text-sm">
-							{feature.title}
-						</span>
-					</div>
-					<p className="text-xs text-muted-foreground leading-relaxed">
+		<div className="flex gap-10">
+			<div className="flex-shrink-0 w-[16rem] flex flex-col gap-6">
+				<div>
+					<h3 className="text-lg font-semibold mb-2">
+						{feature.title}
+					</h3>
+					<p className="text-sm text-muted-foreground leading-relaxed">
 						{feature.description}
 					</p>
+					<a
+						href={feature.docsUrl}
+						target="_blank"
+						rel="noreferrer"
+						className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-3"
+					>
+						Learn more
+						<Icon icon={faArrowRight} className="w-3 h-3" />
+					</a>
 				</div>
-			))}
+				<div className="flex flex-col gap-1">
+					{exploreFeatures.map((f) => (
+						<button
+							key={f.id}
+							type="button"
+							onClick={() => setActiveFeature(f.id)}
+							className={`text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${
+								f.id === activeFeature
+									? "bg-primary/10 text-primary font-medium"
+									: "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+							}`}
+						>
+							<Icon icon={f.icon} className="w-3.5 h-3.5" />
+							{f.label}
+						</button>
+					))}
+				</div>
+			</div>
+			<div className="flex-1 min-w-0">
+				<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
+					{feature.media ? (
+						<img
+							src={feature.media}
+							alt={feature.title}
+							className="w-full h-full object-cover"
+						/>
+					) : (
+						<div className="text-center text-muted-foreground text-sm">
+							<p className="font-medium mb-1">Preview</p>
+							<p className="text-xs">
+								Coming soon for {feature.label}
+							</p>
+						</div>
+					)}
+				</div>
+			</div>
 		</div>
 	);
 }
