@@ -80,8 +80,7 @@ export function StepperForm<const Steps extends Step[]>({
 	const Stepper = props.Stepper;
 	return (
 		<Stepper.Provider variant={props.singlePage ? "circle" : "vertical"} initialStep={props.initialStep}>
-			<Content<Steps> {...props} />
-			{children}
+			<Content<Steps> {...props} extraChildren={children} />
 		</Stepper.Provider>
 	);
 }
@@ -98,8 +97,9 @@ function Content<const Steps extends Step[]>({
 	initialStep,
 	footer,
 	formId,
+	extraChildren,
 	...formProps
-}: StepperFormProps<Steps>) {
+}: StepperFormProps<Steps> & { extraChildren?: ReactNode }) {
 	const stepper = useStepper({ initialStep });
 
 	const mergedSchema = useMemo(() => {
@@ -204,6 +204,7 @@ function Content<const Steps extends Step[]>({
 									showPrevious={step.showPrevious ?? true}
 								/>
 							</div>
+							{extraChildren}
 						</motion.div>
 					</AnimatePresence>
 				</form>

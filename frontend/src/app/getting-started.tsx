@@ -550,6 +550,8 @@ function ExploreRivet() {
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const animFrameRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
 	const startTimeRef = useRef(Date.now());
+	const gifRef = useRef<HTMLImageElement>(null);
+	const [gifSrc, setGifSrc] = useState(`/onboarding-demo.gif?t=${Date.now()}`);
 
 	const feature = exploreFeatures[activeIndex];
 
@@ -578,6 +580,7 @@ function ExploreRivet() {
 	}, []);
 
 	useEffect(() => {
+		setGifSrc(`/onboarding-demo.gif?t=${Date.now()}`);
 		startTimer(0);
 		return () => {
 			if (intervalRef.current) clearInterval(intervalRef.current);
@@ -593,7 +596,8 @@ function ExploreRivet() {
 		<div className="flex flex-col gap-6">
 			<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
 				<img
-					src="/onboarding-demo.gif"
+					ref={gifRef}
+					src={gifSrc}
 					alt="Rivet Actors demo"
 					className="w-full h-full object-cover"
 				/>
@@ -617,13 +621,7 @@ function ExploreRivet() {
 									width:
 										i === activeIndex
 											? `${progress * 100}%`
-											: i < activeIndex
-												? "100%"
-												: "0%",
-									transition:
-										i === activeIndex
-											? "none"
-											: "width 0.3s ease",
+											: "0%",
 								}}
 							/>
 						</div>
