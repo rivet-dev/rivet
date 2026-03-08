@@ -388,7 +388,7 @@ function SkillsStep() {
 	);
 }
 
-const agentPrompt = `Read through the existing project to understand the codebase. I want to add Rivet Actors to this project. Actors are great for real-time collaboration, AI agents, game servers, per-user backends, and stateful workflows. Ask me what I'd like to build with actors, then set it up using RivetKit and run it locally. Use the RivetKit skill for guidance.`;
+const agentPrompt = `Read through the existing project to understand the codebase. I want to add Rivet Actors to this project. Ask me what I'd like to build with actors, then set it up using RivetKit and run it locally. Use the RivetKit skill for guidance.`;
 
 function RunLocallyStep() {
 	return (
