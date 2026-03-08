@@ -28,7 +28,7 @@ export const IntegrationsSection = () => (
         >
           <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>Runs where you do.</h2>
           <p className='text-base leading-relaxed text-zinc-500'>
-            Rivet Actors integrate with your existing infrastructure, frameworks, runtimes, and tools.
+            Serverless, containers, or your own servers — Rivet Actors work with your existing infrastructure, frameworks, and tools.
           </p>
         </motion.div>
       </div>
