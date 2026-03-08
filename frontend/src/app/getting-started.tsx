@@ -1,4 +1,16 @@
-import { faArrowRight, faCopy, Icon } from "@rivet-gg/icons";
+import {
+	faArrowRight,
+	faBroadcastTower,
+	faCopy,
+	faDatabase,
+	faDiagramProject,
+	faGlobe,
+	faInfinity,
+	faLayerGroup,
+	faMagnifyingGlass,
+	faPlug,
+	Icon,
+} from "@rivet-gg/icons";
 import {
 	deployOptions,
 	type Provider,
@@ -16,7 +28,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -285,6 +297,9 @@ function ProviderSetup() {
 
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
+			<p className="text-sm text-muted-foreground mb-4">
+				Deploy your application to any provider. Rivet Cloud manages the actor orchestration, state, and scaling for you.
+			</p>
 			<FormField
 				control={control}
 				name="provider"
@@ -447,119 +462,77 @@ function StepNumber({ n }: { n: number }) {
 
 const exploreFeatures = [
 	{
-		id: "inspector",
-		label: "Inspector",
-		title: "RivetKit Inspector",
+		icon: faMagnifyingGlass,
+		title: "Inspector",
 		description:
-			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
-		media: null as string | null,
+			"Built-in visual debugger to view actors, monitor connections, and trace interactions.",
 	},
 	{
-		id: "state",
-		label: "State",
-		title: "Real-time State",
+		icon: faLayerGroup,
+		title: "In-memory state",
 		description:
-			"Each actor has its own isolated state that persists across connections. Inspect live state changes as they happen.",
-		media: null as string | null,
+			"Co-located with compute for instant reads and writes. Persist with SQLite or BYO database.",
 	},
 	{
-		id: "persistence",
-		label: "Storage",
-		title: "Built-in Persistence",
+		icon: faDatabase,
+		title: "Storage",
 		description:
-			"Actors have built-in KV storage and SQLite. Browse stored data and watch writes happen live in the inspector.",
-		media: null as string | null,
+			"Built-in KV storage and SQLite for each actor. Browse stored data live in the inspector.",
 	},
 	{
-		id: "workflows",
-		label: "Workflows",
-		title: "Durable Workflows",
+		icon: faDiagramProject,
+		title: "Workflows",
 		description:
-			"Orchestrate multi-step processes that survive crashes and restarts. Visualize workflow execution and step-through history.",
-		media: null as string | null,
+			"Multi-step operations with automatic retries that survive crashes and restarts.",
 	},
 	{
-		id: "events",
-		label: "Events",
-		title: "Event Streams",
+		icon: faBroadcastTower,
+		title: "Events",
 		description:
-			"Actors can broadcast events to connected clients. Watch event streams flow through the inspector as they fire.",
-		media: null as string | null,
+			"Broadcast events to connected clients. Real-time bidirectional streaming built in.",
 	},
 	{
-		id: "rpcs",
-		label: "RPCs",
-		title: "Remote Procedure Calls",
+		icon: faPlug,
+		title: "RPCs",
 		description:
-			"Call actor methods directly from your client. The inspector shows every RPC call, its arguments, and response in real-time.",
-		media: null as string | null,
+			"Call actor methods directly from your client with full type safety.",
+	},
+	{
+		icon: faInfinity,
+		title: "Runs indefinitely",
+		description:
+			"Long-lived when active, hibernates when idle. Scales to zero automatically.",
+	},
+	{
+		icon: faGlobe,
+		title: "Global edge network",
+		description:
+			"Deploy close to your users or in specific legal jurisdictions without complexity.",
 	},
 ];
 
 function ExploreRivet() {
-	const [activeFeature, setActiveFeature] = useState(exploreFeatures[0].id);
-	const feature = exploreFeatures.find((f) => f.id === activeFeature) || exploreFeatures[0];
-
 	return (
-		<div className="flex gap-10">
-			<div className="flex-shrink-0 w-[16rem] flex flex-col gap-6">
-				<div>
-					<h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-					<p className="text-sm text-muted-foreground leading-relaxed">
+		<div className="grid grid-cols-4 gap-4">
+			{exploreFeatures.map((feature) => (
+				<div
+					key={feature.title}
+					className="rounded-lg border bg-card/50 p-4 flex flex-col gap-2"
+				>
+					<div className="flex items-center gap-2">
+						<Icon
+							icon={feature.icon}
+							className="w-4 h-4 text-muted-foreground"
+						/>
+						<span className="font-semibold text-sm">
+							{feature.title}
+						</span>
+					</div>
+					<p className="text-xs text-muted-foreground leading-relaxed">
 						{feature.description}
 					</p>
 				</div>
-				<div className="flex flex-col gap-1">
-					{exploreFeatures.map((f) => (
-						<button
-							key={f.id}
-							type="button"
-							onClick={() => setActiveFeature(f.id)}
-							className={`text-left px-3 py-2 rounded-md text-sm transition-colors ${
-								f.id === activeFeature
-									? "bg-primary/10 text-primary font-medium"
-									: "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-							}`}
-						>
-							{f.label}
-						</button>
-					))}
-				</div>
-				<div className="flex flex-col gap-2 pt-2 border-t">
-					<a
-						href="https://rivet.dev/docs/actors/quickstart/"
-						target="_blank"
-						rel="noreferrer"
-						className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-					>
-						Quickstart Guide &rarr;
-					</a>
-					<a
-						href="https://rivet.dev/docs"
-						target="_blank"
-						rel="noreferrer"
-						className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-					>
-						Documentation &rarr;
-					</a>
-				</div>
-			</div>
-			<div className="flex-1 min-w-0">
-				<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
-					{feature.media ? (
-						<img
-							src={feature.media}
-							alt={`Inspector showing ${feature.label}`}
-							className="w-full h-full object-cover"
-						/>
-					) : (
-						<div className="text-center text-muted-foreground text-sm">
-							<p className="font-medium mb-1">Inspector Preview</p>
-							<p className="text-xs">GIF placeholder for {feature.label}</p>
-						</div>
-					)}
-				</div>
-			</div>
+			))}
 		</div>
 	);
 }
