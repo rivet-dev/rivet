@@ -1,6 +1,9 @@
 "use client";
 import { usePathname } from "@/hooks/usePathname";
 import { ActiveLink } from "@/components/ActiveLink";
+import { Tree } from "@/components/DocsNavigation";
+import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
+import type { SidebarItem } from "@/lib/sitemap";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
 import { cn } from "@rivet-gg/components";
@@ -360,6 +363,7 @@ interface HeaderProps {
 	| "learn";
 	subnav?: ReactNode;
 	mobileSidebar?: ReactNode;
+	sidebarData?: SidebarItem[];
 	variant?: "floating" | "full-width";
 	learnMode?: boolean;
 	showDocsTabs?: boolean;
@@ -369,6 +373,7 @@ export function Header({
 	active,
 	subnav,
 	mobileSidebar,
+	sidebarData,
 	variant = "full-width",
 	learnMode = false,
 	showDocsTabs = false,
@@ -440,7 +445,7 @@ export function Header({
 								</a>
 							</div>
 						}
-						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
+						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} />}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<ProductsDropdown active={active === "product"} />
@@ -521,7 +526,7 @@ export function Header({
 					</a>
 				</div>
 			}
-			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
+			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
 					<ProductsDropdown active={active === "product"} />
@@ -549,7 +554,7 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation({ tree }) {
+function DocsMobileNavigation({ tree, sidebarData }: { tree?: ReactNode; sidebarData?: SidebarItem[] }) {
 	const pathname = usePathname() || "";
 	const isDocsPage = pathname.startsWith("/docs");
 
@@ -700,6 +705,13 @@ function DocsMobileNavigation({ tree }) {
 
 					{/* Tree/sidebar content */}
 					{tree && <div className="mt-1">{tree}</div>}
+					{!tree && sidebarData && (
+						<NavigationStateProvider>
+							<div className="mt-1">
+								<Tree pages={sidebarData} />
+							</div>
+						</NavigationStateProvider>
+					)}
 				</>
 			)}
 

@@ -55,7 +55,7 @@ const solutions: Solution[] = [
 ];
 
 export const SolutionsSection = () => (
-  <section className='border-t border-white/5 py-48'>
+  <section className='border-t border-white/5 py-16 md:py-48'>
     <div className='mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.h2

@@ -17,7 +17,7 @@ export function estimateKvSize(db: SqliteRuntimeDatabase): number {
 
 export function validateKvKey(
 	key: Uint8Array,
-	keyLabel: "key" | "prefix key" = "key",
+	keyLabel: "key" | "prefix key" | "start key" | "end key" = "key",
 ): void {
 	if (key.byteLength + KV_KEY_WRAPPER_OVERHEAD_SIZE > KV_MAX_KEY_SIZE) {
 		throw new Error(`${keyLabel} is too long (max 2048 bytes)`);

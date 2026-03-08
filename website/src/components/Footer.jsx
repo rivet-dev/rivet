@@ -134,9 +134,9 @@ export function PageNextPrevious({ navigation }) {
 function SmallPrint() {
 	return (
 		<div className="mx-auto max-w-7xl w-full py-16 selection:bg-[#FF4500]/30 selection:text-orange-200">
-			<div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
+			<div className="grid grid-cols-1 min-[440px]:grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
 				{/* Brand column */}
-				<div className="col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
+				<div className="col-span-1 min-[440px]:col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
 					<img className="h-8 w-8" src={imgLogo.src} alt="Rivet" />
 					<p className="text-sm text-zinc-500">
 						The primitive for stateful workloads
@@ -228,7 +228,7 @@ function SmallPrint() {
 			</div>
 
 			{/* Investor badges */}
-			<div className="mt-12 flex flex-wrap items-center gap-4">
+			<div className="mt-12 flex flex-col min-[440px]:flex-row flex-wrap items-start min-[440px]:items-center gap-4">
 				<span className="text-xs text-zinc-600">Backed by</span>
 				<div className="flex flex-wrap items-center gap-2">
 					<div className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">

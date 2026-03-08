@@ -16,7 +16,7 @@ const frameworks = [
 ];
 
 export const IntegrationsSection = () => (
-  <section className='relative overflow-hidden border-t border-white/5 py-48'>
+  <section className='relative overflow-hidden border-t border-white/5 py-16 md:py-48'>
     <div className='relative z-10 mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.div

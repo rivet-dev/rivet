@@ -30,7 +30,7 @@ export const ObservabilitySection = () => {
   ];
 
   return (
-    <section className='border-t border-white/10 bg-black py-48'>
+    <section className='border-t border-white/10 bg-black py-16 md:py-48'>
       <div className='mx-auto max-w-7xl px-6'>
         <div className='relative'>
           {/* Screenshot on top */}

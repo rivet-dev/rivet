@@ -83,7 +83,7 @@ const breadcrumbSchema = {
 };
 ---
 
-<DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl}>
+<DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl} sidebar={foundTab?.tab?.sidebar}>
 	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 	<aside class="hidden md:block border-r">
 		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} client:load />}
