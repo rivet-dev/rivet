@@ -79,21 +79,35 @@ const useCases: Record<string, UseCaseConfig> = {
       { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Memory', href: '/docs/actors/persistence' },
       { icon: Clock, label: 'Scheduling', detail: 'Tool calls', href: '/docs/actors/schedule' },
     ],
-    serverCode: `// One actor per agent
-const agent = actor({
-  // State is persisted automatically
-  state: { messages: [], memory: {} },
+    serverCode: `const agent = actor({
+  // In-memory, persisted state for the actor
+  state: { messages: [] },
+
+  // Long-running actor process
+  run: async (c) => {
+    for await (const msg of c.queue.iter()) {
+      c.state.messages.push({ role: "user", content: msg.body.text });
+
+      const response = streamText({
+        model: openai("gpt-5"),
+        messages: c.state.messages,
+      });
+
+      for await (const delta of response.textStream) {
+        c.broadcast("token", delta);
+      }
+
+      c.state.messages.push({ role: "assistant", content: await response.text });
+    }
+  },
+
   actions: {
-    chat: (c, message) => {
-      c.state.messages.push(message);
-      const response = await c.llm.chat(c.state);
-      c.state.memory = response.memory;
-      return response.text;
-    },
+    getHistory: (c) => c.state.messages,
   },
 });`,
-    clientCode: `const agent = client.agent.get("agent-123");
-const reply = await agent.chat("Hello!");`,
+    clientCode: `const agent = client.agent.getOrCreate("agent-123").connect();
+agent.on("token", delta => process.stdout.write(delta));
+await agent.queue.send("hello!");`,
   },
   'Workflows': {
     title: 'Workflows',
