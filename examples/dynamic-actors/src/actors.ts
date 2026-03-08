@@ -35,19 +35,21 @@ const sourceCode = actor({
 	},
 });
 
-const dynamicWorkflow = dynamicActor(async (c: any) => {
-	const sourceState = await c
-		.client()
-		.sourceCode.getOrCreate(["main"])
-		.getSource();
+const dynamicWorkflow = dynamicActor({
+	load: async (c: any) => {
+		const sourceState = await c
+			.client()
+			.sourceCode.getOrCreate(["main"])
+			.getSource();
 
-	return {
-		source: sourceState.source,
-		nodeProcess: {
-			memoryLimit: 256,
-			cpuTimeLimitMs: 10_000,
-		},
-	};
+		return {
+			source: sourceState.source,
+			nodeProcess: {
+				memoryLimit: 256,
+				cpuTimeLimitMs: 10_000,
+			},
+		};
+	},
 });
 
 export const registry = setup({
@@ -62,17 +64,19 @@ export const registry = setup({
 // import { actor, setup } from "rivetkit";
 // import { dynamicActor } from "rivetkit/dynamic";
 //
-// const dynamicWorkflow = dynamicActor(async (c: any) => {
-// 	// Load actor code from external source based on actor key
-// 	const source = await fetch(/* ... */);
+// const dynamicWorkflow = dynamicActor({
+// 	load: async (c: any) => {
+// 		// Load actor code from external source based on actor key.
+// 		const source = await fetch(/* ... */);
 //
-// 	return {
-// 		source: sourceState.source,
-// 		nodeProcess: {
-// 			memoryLimit: 256,
-// 			cpuTimeLimitMs: 10_000,
-// 		},
-// 	};
+// 		return {
+// 			source: sourceState.source,
+// 			nodeProcess: {
+// 				memoryLimit: 256,
+// 				cpuTimeLimitMs: 10_000,
+// 			},
+// 		};
+// 	},
 // });
 //
 // export const registry = setup({
