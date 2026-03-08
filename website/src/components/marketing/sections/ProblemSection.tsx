@@ -87,26 +87,17 @@ const useCases: Record<string, UseCaseConfig> = {
   run: async (c) => {
     for await (const msg of c.queue.iter()) {
       c.state.messages.push({ role: "user", content: msg.body.text });
-
-      const response = streamText({
+      const response = await generateText({
         model: openai("gpt-5"),
         messages: c.state.messages,
       });
-
-      for await (const delta of response.textStream) {
-        c.broadcast("token", delta);
-      }
-
-      c.state.messages.push({ role: "assistant", content: await response.text });
+      c.state.messages.push({ role: "assistant", content: response.text });
+      c.broadcast("response", response.text);
     }
-  },
-
-  actions: {
-    getHistory: (c) => c.state.messages,
   },
 });`,
     clientCode: `const agent = client.agent.getOrCreate("agent-123").connect();
-agent.on("token", delta => process.stdout.write(delta));
+agent.on("response", text => console.log(text));
 await agent.queue.send("hello!");`,
   },
   'Workflows': {
