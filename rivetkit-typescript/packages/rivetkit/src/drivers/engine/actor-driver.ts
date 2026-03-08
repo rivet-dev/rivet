@@ -39,6 +39,7 @@ import {
 	PATH_WEBSOCKET_PREFIX,
 } from "@/common/actor-router-consts";
 import { getLogger } from "@/common/log";
+import { deconstructError } from "@/common/utils";
 import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
@@ -588,6 +589,7 @@ export class EngineActorDriver implements ActorDriver {
 					input,
 					region: "unknown",
 					loader: definition.loader,
+					auth: definition.auth,
 					actorDriver: this,
 					inlineClient: this.#inlineClient,
 				});
@@ -1037,12 +1039,13 @@ export class EngineActorDriver implements ActorDriver {
 				},
 			);
 		} catch (error) {
+			const { group, code } = deconstructError(error, logger(), {}, false);
 			logger().error({
 				msg: "failed to open dynamic websocket",
 				actorId,
 				error: stringifyError(error),
 			});
-			websocket.close(1011, "dynamic.websocket_open_failed");
+			websocket.close(1011, `${group}.${code}`);
 			return;
 		}
 

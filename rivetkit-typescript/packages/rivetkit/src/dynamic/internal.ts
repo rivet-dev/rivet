@@ -31,7 +31,7 @@ export interface DynamicActorLoadResult {
 	nodeProcess?: DynamicNodeProcessConfig;
 }
 
-export class DynamicActorLoaderContext<TInput = unknown> {
+abstract class DynamicActorContextBase<TInput = unknown> {
 	readonly actorId: string;
 	readonly name: string;
 	readonly key: ActorKey;
@@ -60,17 +60,49 @@ export class DynamicActorLoaderContext<TInput = unknown> {
 	}
 }
 
+export class DynamicActorLoaderContext<TInput = unknown> extends DynamicActorContextBase<TInput> {}
+
+export class DynamicActorAuthContext<TInput = unknown> extends DynamicActorContextBase<TInput> {
+	readonly request: Request | undefined;
+
+	constructor(
+		inlineClient: AnyClient,
+		actorId: string,
+		name: string,
+		key: ActorKey,
+		input: TInput,
+		region: string,
+		request: Request | undefined,
+	) {
+		super(inlineClient, actorId, name, key, input, region);
+		this.request = request;
+	}
+}
+
 export type DynamicActorLoader<TInput = unknown> = (
 	context: DynamicActorLoaderContext<TInput>,
 ) => Promise<DynamicActorLoadResult> | DynamicActorLoadResult;
 
-export interface DynamicActorConfigInput {
+export type DynamicActorAuth<TConnParams = unknown, TInput = unknown> = (
+	context: DynamicActorAuthContext<TInput>,
+	params: TConnParams,
+) => Promise<void> | void;
+
+export interface DynamicActorOptionsInput {
 	options?: GlobalActorOptionsInput;
 }
 
-export class DynamicActorDefinition<TInput = unknown>
+export interface DynamicActorConfigInput<
+	TInput = unknown,
+	TConnParams = unknown,
+> extends DynamicActorOptionsInput {
+	load: DynamicActorLoader<TInput>;
+	auth?: DynamicActorAuth<TConnParams, TInput>;
+}
+
+export class DynamicActorDefinition<TInput = unknown, TConnParams = unknown>
 	implements
-		BaseActorDefinition<
+	BaseActorDefinition<
 			any,
 			any,
 			any,
@@ -83,6 +115,7 @@ export class DynamicActorDefinition<TInput = unknown>
 		>
 {
 	#loader: DynamicActorLoader<TInput>;
+	#auth: DynamicActorAuth<TConnParams, TInput> | undefined;
 	#config: ActorConfig<
 		any,
 		any,
@@ -92,13 +125,11 @@ export class DynamicActorDefinition<TInput = unknown>
 		AnyDatabaseProvider,
 		EventSchemaConfig,
 		QueueSchemaConfig
-	>;
+		>;
 
-	constructor(
-		loader: DynamicActorLoader<TInput>,
-		input: DynamicActorConfigInput = {},
-	) {
-		this.#loader = loader;
+	constructor(input: DynamicActorConfigInput<TInput, TConnParams>) {
+		this.#loader = input.load;
+		this.#auth = input.auth;
 		this.#config = ActorConfigSchema.parse({
 			actions: {},
 			options: input.options ?? {},
@@ -118,6 +149,10 @@ export class DynamicActorDefinition<TInput = unknown>
 		return this.#loader;
 	}
 
+	get auth(): DynamicActorAuth<TConnParams, TInput> | undefined {
+		return this.#auth;
+	}
+
 	get config(): ActorConfig<
 		any,
 		any,
@@ -134,7 +169,7 @@ export class DynamicActorDefinition<TInput = unknown>
 
 export function isDynamicActorDefinition(
 	definition: AnyActorDefinition,
-): definition is DynamicActorDefinition<any> {
+): definition is DynamicActorDefinition<any, any> {
 	return definition instanceof DynamicActorDefinition;
 }
 
@@ -153,5 +188,25 @@ export function createDynamicActorLoaderContext<TInput>(
 		key,
 		input,
 		region,
+	);
+}
+
+export function createDynamicActorAuthContext<TInput>(
+	inlineClient: AnyClient,
+	actorId: string,
+	name: string,
+	key: ActorKey,
+	input: TInput,
+	region: string,
+	request: Request | undefined,
+): DynamicActorAuthContext<TInput> {
+	return new DynamicActorAuthContext(
+		inlineClient,
+		actorId,
+		name,
+		key,
+		input,
+		region,
+		request,
 	);
 }

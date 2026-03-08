@@ -134,14 +134,14 @@ export async function loadStaticActors(): Promise<
 export function loadDynamicActors(): Record<string, DynamicActorDefinition> {
 	const actors: Record<string, DynamicActorDefinition> = {};
 	for (const actorFixturePath of listActorFixtureFiles()) {
-		actors[actorNameFromFilePath(actorFixturePath)] = dynamicActor(
-			async () => {
+		actors[actorNameFromFilePath(actorFixturePath)] = dynamicActor({
+			load: async () => {
 				return {
 					source: await bundleActorFixture(actorFixturePath),
-					sourceFormat: "esm-js",
+					sourceFormat: "esm-js" as const,
 				};
 			},
-		);
+		});
 	}
 	return actors;
 }

@@ -1152,6 +1152,7 @@ export class FileSystemGlobalState {
 					input: this.#actorInitialInputs.get(actorId),
 					region: "unknown",
 					loader: definition.loader,
+					auth: definition.auth,
 					actorDriver,
 					inlineClient,
 				});

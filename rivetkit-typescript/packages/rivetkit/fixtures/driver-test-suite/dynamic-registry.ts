@@ -1,4 +1,4 @@
-import { actor, setup } from "rivetkit";
+import { actor, setup, UserError } from "rivetkit";
 import { dynamicActor } from "rivetkit/dynamic";
 
 export const DYNAMIC_SOURCE = `
@@ -18,6 +18,19 @@ export default actor({
 	},
 	onSleep: (c) => {
 		c.state.sleepCount += 1;
+	},
+	onRequest: async (_c, request) => {
+		return new Response(
+			JSON.stringify({
+				method: request.method,
+				token: request.headers.get("x-dynamic-auth"),
+			}),
+			{
+				headers: {
+					"content-type": "application/json",
+				},
+			},
+		);
 	},
 	onWebSocket: (c, websocket) => {
 		websocket.send(
@@ -112,55 +125,99 @@ const sourceCode = actor({
 	},
 });
 
-const dynamicFromUrl = dynamicActor(async () => {
-	const sourceUrl = process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
-	if (!sourceUrl) {
-		throw new Error(
-			"missing RIVETKIT_DYNAMIC_TEST_SOURCE_URL for dynamic actor URL loader",
-		);
-	}
+const dynamicFromUrl = dynamicActor({
+	load: async () => {
+		const sourceUrl = process.env.RIVETKIT_DYNAMIC_TEST_SOURCE_URL;
+		if (!sourceUrl) {
+			throw new Error(
+				"missing RIVETKIT_DYNAMIC_TEST_SOURCE_URL for dynamic actor URL loader",
+			);
+		}
 
-	const response = await fetch(sourceUrl);
-	if (!response.ok) {
-		throw new Error(
-			`dynamic actor URL loader failed with status ${response.status}`,
-		);
-	}
+		const response = await fetch(sourceUrl);
+		if (!response.ok) {
+			throw new Error(
+				`dynamic actor URL loader failed with status ${response.status}`,
+			);
+		}
 
-	return {
-		source: await response.text(),
-		sourceFormat: "esm-js" as const,
-		nodeProcess: {
-			memoryLimit: 256,
-			cpuTimeLimitMs: 10_000,
-		},
-	};
+		return {
+			source: await response.text(),
+			sourceFormat: "esm-js" as const,
+			nodeProcess: {
+				memoryLimit: 256,
+				cpuTimeLimitMs: 10_000,
+			},
+		};
+	},
 });
 
-const dynamicFromActor = dynamicActor(async (c) => {
-	const source = (await c
-		.client<any>()
-		.sourceCode.getOrCreate(["dynamic-source"])
-		.getCode()) as string;
-	return {
-		source,
-		sourceFormat: "esm-js" as const,
-		nodeProcess: {
-			memoryLimit: 256,
-			cpuTimeLimitMs: 10_000,
-		},
-	};
+const dynamicFromActor = dynamicActor({
+	load: async (c) => {
+		const source = (await c
+			.client<any>()
+			.sourceCode.getOrCreate(["dynamic-source"])
+			.getCode()) as string;
+		return {
+			source,
+			sourceFormat: "esm-js" as const,
+			nodeProcess: {
+				memoryLimit: 256,
+				cpuTimeLimitMs: 10_000,
+			},
+		};
+	},
 });
 
-const dynamicLoaderThrows = dynamicActor(async () => {
-	throw new Error("dynamic.loader_failed_for_test");
+const dynamicWithAuth = dynamicActor({
+	load: async (c) => {
+		const source = (await c
+			.client<any>()
+			.sourceCode.getOrCreate(["dynamic-source"])
+			.getCode()) as string;
+		return {
+			source,
+			sourceFormat: "esm-js" as const,
+			nodeProcess: {
+				memoryLimit: 256,
+				cpuTimeLimitMs: 10_000,
+			},
+		};
+	},
+	auth: (c, params: unknown) => {
+		const authHeader = c.request?.headers.get("x-dynamic-auth");
+		const authToken =
+			typeof params === "object" &&
+			params !== null &&
+			"token" in params &&
+			typeof (params as { token?: unknown }).token === "string"
+				? (params as { token: string }).token
+				: undefined;
+		if (authHeader === "allow" || authToken === "allow") {
+			return;
+		}
+		throw new UserError("auth required", {
+			code: "unauthorized",
+			metadata: {
+				hasRequest: c.request !== undefined,
+			},
+		});
+	},
 });
 
-const dynamicInvalidSource = dynamicActor(async () => {
-	return {
-		source: "export default 42;",
-		sourceFormat: "esm-js" as const,
-	};
+const dynamicLoaderThrows = dynamicActor({
+	load: async () => {
+		throw new Error("dynamic.loader_failed_for_test");
+	},
+});
+
+const dynamicInvalidSource = dynamicActor({
+	load: async () => {
+		return {
+			source: "export default 42;",
+			sourceFormat: "esm-js" as const,
+		};
+	},
 });
 
 export const registry = setup({
@@ -168,6 +225,7 @@ export const registry = setup({
 		sourceCode,
 		dynamicFromUrl,
 		dynamicFromActor,
+		dynamicWithAuth,
 		dynamicLoaderThrows,
 		dynamicInvalidSource,
 	},
