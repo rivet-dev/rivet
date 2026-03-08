@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	InMemoryDriver,
+	loadStorage,
+	Loop,
 	RollbackCheckpointError,
 	runWorkflow,
 	type WorkflowContextInterface,
@@ -130,6 +132,63 @@ for (const mode of modes) {
 			).rejects.toThrow("boom");
 
 			expect(rollbacks).toEqual(["third", "second", "first"]);
+		});
+
+		it("should not persist loop progress while replaying rollback", async () => {
+			const rollbacks: string[] = [];
+			let shouldFail = true;
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				await ctx.rollbackCheckpoint("checkpoint");
+				await ctx.step({
+					name: "outside",
+					run: async () => "outside",
+					rollback: async () => {
+						rollbacks.push("outside");
+					},
+				});
+				await ctx.loop({
+					name: "loop",
+					state: 0,
+					run: async (loopCtx, state) => {
+						await loopCtx.step({
+							name: `step-${state}`,
+							run: async () => `step-${state}`,
+							rollback: async () => {
+								rollbacks.push(`loop-${state}`);
+							},
+						});
+
+						if (state === 0) {
+							return Loop.continue(1);
+						}
+
+						if (shouldFail) {
+							shouldFail = false;
+							throw new Error("boom");
+						}
+
+						return Loop.continue(2);
+					},
+				});
+			};
+
+			await expect(
+				runWorkflow("wf-1", workflow, undefined, driver, { mode }).result,
+			).rejects.toThrow("boom");
+
+			const storage = await loadStorage(driver);
+			const loopEntry = [...storage.history.entries.values()].find(
+				(entry) => entry.kind.type === "loop",
+			);
+
+			expect(loopEntry?.kind.type).toBe("loop");
+			if (loopEntry?.kind.type !== "loop") {
+				throw new Error("Expected loop entry");
+			}
+
+			expect(loopEntry.kind.data.iteration).toBe(1);
+			expect(rollbacks).toContain("outside");
 		});
 	});
 }

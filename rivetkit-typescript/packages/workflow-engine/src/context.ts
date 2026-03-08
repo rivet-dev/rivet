@@ -806,15 +806,17 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 			iteration++;
 
-			// Periodic prune: persist loop state and defer the flush
-			// so it runs in parallel with the next iteration's user code
-			if (iteration % historyPruneInterval === 0) {
+			if (!rollbackMode) {
 				if (entry.kind.type === "loop") {
 					entry.kind.data.state = state;
 					entry.kind.data.iteration = iteration;
 				}
 				entry.dirty = true;
+			}
 
+			// Periodically defer the flush so the next iteration can overlap
+			// with loop pruning and any pending dirty state writes.
+			if (iteration % historyPruneInterval === 0) {
 				const deletions = this.collectLoopPruning(
 					location,
 					iteration,

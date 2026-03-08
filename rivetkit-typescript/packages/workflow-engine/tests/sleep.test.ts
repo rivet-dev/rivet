@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	InMemoryDriver,
+	Loop,
 	runWorkflow,
 	type WorkflowContextInterface,
 } from "../src/testing.js";
@@ -201,6 +202,63 @@ for (const mode of modes) {
 			const result = await handle.result;
 			expect(result.state).toBe("completed");
 			expect(driver.getAlarm("wf-1")).toBeUndefined();
+		});
+
+		it("should not replay the previous loop iteration after sleep", async () => {
+			driver.workerPollInterval = 0;
+			const seen: string[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop({
+					name: "drain",
+					state: 0,
+					run: async (loopCtx, state) => {
+						if (state === 0) {
+							seen.push("first");
+							return Loop.continue(1);
+						}
+
+						await loopCtx.sleep("pause", 20);
+						return Loop.break([...seen]);
+					},
+				});
+			};
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(firstRun.state).toBe("sleeping");
+
+				await new Promise((resolve) => setTimeout(resolve, 30));
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual(["first"]);
+				expect(seen).toEqual(["first"]);
+				return;
+			}
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{ mode },
+			).result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual(["first"]);
+			expect(seen).toEqual(["first"]);
 		});
 	});
 }
