@@ -8,784 +8,785 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as SsoCallbackRouteImport } from './routes/sso-callback'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as JoinRouteImport } from './routes/join'
-import { Route as ContextRouteImport } from './routes/_context'
-import { Route as ContextIndexRouteImport } from './routes/_context/index'
-import { Route as OnboardingChooseOrganizationRouteImport } from './routes/onboarding/choose-organization'
-import { Route as OnboardingAcceptInvitationRouteImport } from './routes/onboarding/accept-invitation'
-import { Route as ContextEngineRouteImport } from './routes/_context/_engine'
-import { Route as ContextCloudRouteImport } from './routes/_context/_cloud'
-import { Route as ContextCloudNewIndexRouteImport } from './routes/_context/_cloud/new/index'
-import { Route as ContextEngineNsNamespaceRouteImport } from './routes/_context/_engine/ns.$namespace'
-import { Route as ContextCloudOrgsOrganizationRouteImport } from './routes/_context/_cloud/orgs.$organization'
-import { Route as ContextEngineNsNamespaceIndexRouteImport } from './routes/_context/_engine/ns.$namespace/index'
-import { Route as ContextCloudOrgsOrganizationIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/index'
-import { Route as ContextEngineNsNamespaceConnectRouteImport } from './routes/_context/_engine/ns.$namespace/connect'
-import { Route as ContextCloudOrgsOrganizationProjectsIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.index'
-import { Route as ContextCloudOrgsOrganizationNewIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/new/index'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/index'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectSettingsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/settings'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectMetricsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/metrics'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectBillingRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/billing'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/index'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/tokens'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/settings'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/metrics'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/connect'
-import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/billing'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as SsoCallbackRouteImport } from "./routes/sso-callback";
+import { Route as OnboardingRouteImport } from "./routes/onboarding";
+import { Route as LoginRouteImport } from "./routes/login";
+import { Route as JoinRouteImport } from "./routes/join";
+import { Route as ContextRouteImport } from "./routes/_context";
+import { Route as ContextIndexRouteImport } from "./routes/_context/index";
+import { Route as OnboardingChooseOrganizationRouteImport } from "./routes/onboarding/choose-organization";
+import { Route as OnboardingAcceptInvitationRouteImport } from "./routes/onboarding/accept-invitation";
+import { Route as ContextEngineRouteImport } from "./routes/_context/_engine";
+import { Route as ContextCloudRouteImport } from "./routes/_context/_cloud";
+import { Route as ContextCloudNewIndexRouteImport } from "./routes/_context/_cloud/new/index";
+import { Route as ContextEngineNsNamespaceRouteImport } from "./routes/_context/_engine/ns.$namespace";
+import { Route as ContextCloudOrgsOrganizationRouteImport } from "./routes/_context/_cloud/orgs.$organization";
+import { Route as ContextEngineNsNamespaceIndexRouteImport } from "./routes/_context/_engine/ns.$namespace/index";
+import { Route as ContextCloudOrgsOrganizationIndexRouteImport } from "./routes/_context/_cloud/orgs.$organization/index";
+import { Route as ContextEngineNsNamespaceConnectRouteImport } from "./routes/_context/_engine/ns.$namespace/connect";
+import { Route as ContextCloudOrgsOrganizationProjectsIndexRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.index";
+import { Route as ContextCloudOrgsOrganizationNewIndexRouteImport } from "./routes/_context/_cloud/orgs.$organization/new/index";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/index";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectSettingsRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/settings";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectMetricsRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/metrics";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectBillingRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/billing";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/index";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/tokens";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/settings";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/metrics";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/connect";
+import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport } from "./routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/billing";
 
 const SsoCallbackRoute = SsoCallbackRouteImport.update({
-  id: '/sso-callback',
-  path: '/sso-callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/sso-callback",
+	path: "/sso-callback",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/onboarding",
+	path: "/onboarding",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/login",
+	path: "/login",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const JoinRoute = JoinRouteImport.update({
-  id: '/join',
-  path: '/join',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/join",
+	path: "/join",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const ContextRoute = ContextRouteImport.update({
-  id: '/_context',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/_context",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const ContextIndexRoute = ContextIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ContextRoute,
-} as any)
+	id: "/",
+	path: "/",
+	getParentRoute: () => ContextRoute,
+} as any);
 const OnboardingChooseOrganizationRoute =
-  OnboardingChooseOrganizationRouteImport.update({
-    id: '/choose-organization',
-    path: '/choose-organization',
-    getParentRoute: () => OnboardingRoute,
-  } as any)
+	OnboardingChooseOrganizationRouteImport.update({
+		id: "/choose-organization",
+		path: "/choose-organization",
+		getParentRoute: () => OnboardingRoute,
+	} as any);
 const OnboardingAcceptInvitationRoute =
-  OnboardingAcceptInvitationRouteImport.update({
-    id: '/accept-invitation',
-    path: '/accept-invitation',
-    getParentRoute: () => OnboardingRoute,
-  } as any)
+	OnboardingAcceptInvitationRouteImport.update({
+		id: "/accept-invitation",
+		path: "/accept-invitation",
+		getParentRoute: () => OnboardingRoute,
+	} as any);
 const ContextEngineRoute = ContextEngineRouteImport.update({
-  id: '/_engine',
-  getParentRoute: () => ContextRoute,
-} as any)
+	id: "/_engine",
+	getParentRoute: () => ContextRoute,
+} as any);
 const ContextCloudRoute = ContextCloudRouteImport.update({
-  id: '/_cloud',
-  getParentRoute: () => ContextRoute,
-} as any)
+	id: "/_cloud",
+	getParentRoute: () => ContextRoute,
+} as any);
 const ContextCloudNewIndexRoute = ContextCloudNewIndexRouteImport.update({
-  id: '/new/',
-  path: '/new/',
-  getParentRoute: () => ContextCloudRoute,
-} as any)
+	id: "/new/",
+	path: "/new/",
+	getParentRoute: () => ContextCloudRoute,
+} as any);
 const ContextEngineNsNamespaceRoute =
-  ContextEngineNsNamespaceRouteImport.update({
-    id: '/ns/$namespace',
-    path: '/ns/$namespace',
-    getParentRoute: () => ContextEngineRoute,
-  } as any)
+	ContextEngineNsNamespaceRouteImport.update({
+		id: "/ns/$namespace",
+		path: "/ns/$namespace",
+		getParentRoute: () => ContextEngineRoute,
+	} as any);
 const ContextCloudOrgsOrganizationRoute =
-  ContextCloudOrgsOrganizationRouteImport.update({
-    id: '/orgs/$organization',
-    path: '/orgs/$organization',
-    getParentRoute: () => ContextCloudRoute,
-  } as any)
+	ContextCloudOrgsOrganizationRouteImport.update({
+		id: "/orgs/$organization",
+		path: "/orgs/$organization",
+		getParentRoute: () => ContextCloudRoute,
+	} as any);
 const ContextEngineNsNamespaceIndexRoute =
-  ContextEngineNsNamespaceIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ContextEngineNsNamespaceRoute,
-  } as any)
+	ContextEngineNsNamespaceIndexRouteImport.update({
+		id: "/",
+		path: "/",
+		getParentRoute: () => ContextEngineNsNamespaceRoute,
+	} as any);
 const ContextCloudOrgsOrganizationIndexRoute =
-  ContextCloudOrgsOrganizationIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ContextCloudOrgsOrganizationRoute,
-  } as any)
+	ContextCloudOrgsOrganizationIndexRouteImport.update({
+		id: "/",
+		path: "/",
+		getParentRoute: () => ContextCloudOrgsOrganizationRoute,
+	} as any);
 const ContextEngineNsNamespaceConnectRoute =
-  ContextEngineNsNamespaceConnectRouteImport.update({
-    id: '/connect',
-    path: '/connect',
-    getParentRoute: () => ContextEngineNsNamespaceRoute,
-  } as any)
+	ContextEngineNsNamespaceConnectRouteImport.update({
+		id: "/connect",
+		path: "/connect",
+		getParentRoute: () => ContextEngineNsNamespaceRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsIndexRoute =
-  ContextCloudOrgsOrganizationProjectsIndexRouteImport.update({
-    id: '/projects/',
-    path: '/projects/',
-    getParentRoute: () => ContextCloudOrgsOrganizationRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsIndexRouteImport.update({
+		id: "/projects/",
+		path: "/projects/",
+		getParentRoute: () => ContextCloudOrgsOrganizationRoute,
+	} as any);
 const ContextCloudOrgsOrganizationNewIndexRoute =
-  ContextCloudOrgsOrganizationNewIndexRouteImport.update({
-    id: '/new/',
-    path: '/new/',
-    getParentRoute: () => ContextCloudOrgsOrganizationRoute,
-  } as any)
+	ContextCloudOrgsOrganizationNewIndexRouteImport.update({
+		id: "/new/",
+		path: "/new/",
+		getParentRoute: () => ContextCloudOrgsOrganizationRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectRoute =
-  ContextCloudOrgsOrganizationProjectsProjectRouteImport.update({
-    id: '/projects/$project',
-    path: '/projects/$project',
-    getParentRoute: () => ContextCloudOrgsOrganizationRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsProjectRouteImport.update({
+		id: "/projects/$project",
+		path: "/projects/$project",
+		getParentRoute: () => ContextCloudOrgsOrganizationRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectIndexRoute =
-  ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport.update({
+		id: "/",
+		path: "/",
+		getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectSettingsRoute =
-  ContextCloudOrgsOrganizationProjectsProjectSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsProjectSettingsRouteImport.update({
+		id: "/settings",
+		path: "/settings",
+		getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectMetricsRoute =
-  ContextCloudOrgsOrganizationProjectsProjectMetricsRouteImport.update({
-    id: '/metrics',
-    path: '/metrics',
-    getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsProjectMetricsRouteImport.update({
+		id: "/metrics",
+		path: "/metrics",
+		getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectBillingRoute =
-  ContextCloudOrgsOrganizationProjectsProjectBillingRouteImport.update({
-    id: '/billing',
-    path: '/billing',
-    getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsProjectBillingRouteImport.update({
+		id: "/billing",
+		path: "/billing",
+		getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport.update({
-    id: '/ns/$namespace',
-    path: '/ns/$namespace',
-    getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
-  } as any)
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport.update({
+		id: "/ns/$namespace",
+		path: "/ns/$namespace",
+		getParentRoute: () => ContextCloudOrgsOrganizationProjectsProjectRoute,
+	} as any);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport.update(
-    {
-      id: '/',
-      path: '/',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport.update(
+		{
+			id: "/",
+			path: "/",
+			getParentRoute: () =>
+				ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+		} as any,
+	);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport.update(
-    {
-      id: '/tokens',
-      path: '/tokens',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport.update(
+		{
+			id: "/tokens",
+			path: "/tokens",
+			getParentRoute: () =>
+				ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+		} as any,
+	);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport.update(
-    {
-      id: '/settings',
-      path: '/settings',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport.update(
+		{
+			id: "/settings",
+			path: "/settings",
+			getParentRoute: () =>
+				ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+		} as any,
+	);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport.update(
-    {
-      id: '/metrics',
-      path: '/metrics',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport.update(
+		{
+			id: "/metrics",
+			path: "/metrics",
+			getParentRoute: () =>
+				ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+		} as any,
+	);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport.update(
-    {
-      id: '/connect',
-      path: '/connect',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport.update(
+		{
+			id: "/connect",
+			path: "/connect",
+			getParentRoute: () =>
+				ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+		} as any,
+	);
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport.update(
-    {
-      id: '/billing',
-      path: '/billing',
-      getParentRoute: () =>
-        ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
-    } as any,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport.update(
+		{
+			id: "/billing",
+			path: "/billing",
+			getParentRoute: () =>
+				ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute,
+		} as any,
+	);
 
 export interface FileRoutesByFullPath {
-  '/join': typeof JoinRoute
-  '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
-  '/sso-callback': typeof SsoCallbackRoute
-  '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
-  '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
-  '/': typeof ContextIndexRoute
-  '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
-  '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
-  '/new': typeof ContextCloudNewIndexRoute
-  '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
-  '/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
-  '/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
-  '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
-  '/orgs/$organization/new': typeof ContextCloudOrgsOrganizationNewIndexRoute
-  '/orgs/$organization/projects': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
-  '/orgs/$organization/projects/$project/billing': typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute
-  '/orgs/$organization/projects/$project/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute
-  '/orgs/$organization/projects/$project/settings': typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute
-  '/orgs/$organization/projects/$project/': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
-  '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
-  '/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+	"/join": typeof JoinRoute;
+	"/login": typeof LoginRoute;
+	"/onboarding": typeof OnboardingRouteWithChildren;
+	"/sso-callback": typeof SsoCallbackRoute;
+	"/onboarding/accept-invitation": typeof OnboardingAcceptInvitationRoute;
+	"/onboarding/choose-organization": typeof OnboardingChooseOrganizationRoute;
+	"/": typeof ContextIndexRoute;
+	"/orgs/$organization": typeof ContextCloudOrgsOrganizationRouteWithChildren;
+	"/ns/$namespace": typeof ContextEngineNsNamespaceRouteWithChildren;
+	"/new": typeof ContextCloudNewIndexRoute;
+	"/ns/$namespace/connect": typeof ContextEngineNsNamespaceConnectRoute;
+	"/orgs/$organization/": typeof ContextCloudOrgsOrganizationIndexRoute;
+	"/ns/$namespace/": typeof ContextEngineNsNamespaceIndexRoute;
+	"/orgs/$organization/projects/$project": typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren;
+	"/orgs/$organization/new": typeof ContextCloudOrgsOrganizationNewIndexRoute;
+	"/orgs/$organization/projects": typeof ContextCloudOrgsOrganizationProjectsIndexRoute;
+	"/orgs/$organization/projects/$project/billing": typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute;
+	"/orgs/$organization/projects/$project/metrics": typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute;
+	"/orgs/$organization/projects/$project/settings": typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute;
+	"/orgs/$organization/projects/$project/": typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren;
+	"/orgs/$organization/projects/$project/ns/$namespace/billing": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/connect": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/metrics": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/settings": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/tokens": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/join': typeof JoinRoute
-  '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
-  '/sso-callback': typeof SsoCallbackRoute
-  '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
-  '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
-  '/': typeof ContextIndexRoute
-  '/new': typeof ContextCloudNewIndexRoute
-  '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
-  '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
-  '/ns/$namespace': typeof ContextEngineNsNamespaceIndexRoute
-  '/orgs/$organization/new': typeof ContextCloudOrgsOrganizationNewIndexRoute
-  '/orgs/$organization/projects': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
-  '/orgs/$organization/projects/$project/billing': typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute
-  '/orgs/$organization/projects/$project/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute
-  '/orgs/$organization/projects/$project/settings': typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute
-  '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
-  '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+	"/join": typeof JoinRoute;
+	"/login": typeof LoginRoute;
+	"/onboarding": typeof OnboardingRouteWithChildren;
+	"/sso-callback": typeof SsoCallbackRoute;
+	"/onboarding/accept-invitation": typeof OnboardingAcceptInvitationRoute;
+	"/onboarding/choose-organization": typeof OnboardingChooseOrganizationRoute;
+	"/": typeof ContextIndexRoute;
+	"/new": typeof ContextCloudNewIndexRoute;
+	"/ns/$namespace/connect": typeof ContextEngineNsNamespaceConnectRoute;
+	"/orgs/$organization": typeof ContextCloudOrgsOrganizationIndexRoute;
+	"/ns/$namespace": typeof ContextEngineNsNamespaceIndexRoute;
+	"/orgs/$organization/new": typeof ContextCloudOrgsOrganizationNewIndexRoute;
+	"/orgs/$organization/projects": typeof ContextCloudOrgsOrganizationProjectsIndexRoute;
+	"/orgs/$organization/projects/$project/billing": typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute;
+	"/orgs/$organization/projects/$project/metrics": typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute;
+	"/orgs/$organization/projects/$project/settings": typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute;
+	"/orgs/$organization/projects/$project": typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/billing": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/connect": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/metrics": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/settings": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace/tokens": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute;
+	"/orgs/$organization/projects/$project/ns/$namespace": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/_context': typeof ContextRouteWithChildren
-  '/join': typeof JoinRoute
-  '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
-  '/sso-callback': typeof SsoCallbackRoute
-  '/_context/_cloud': typeof ContextCloudRouteWithChildren
-  '/_context/_engine': typeof ContextEngineRouteWithChildren
-  '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
-  '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
-  '/_context/': typeof ContextIndexRoute
-  '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
-  '/_context/_engine/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
-  '/_context/_cloud/new/': typeof ContextCloudNewIndexRoute
-  '/_context/_engine/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
-  '/_context/_cloud/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
-  '/_context/_engine/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
-  '/_context/_cloud/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
-  '/_context/_cloud/orgs/$organization/new/': typeof ContextCloudOrgsOrganizationNewIndexRoute
-  '/_context/_cloud/orgs/$organization/projects/': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/billing': typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/settings': typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
-  '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+	__root__: typeof rootRouteImport;
+	"/_context": typeof ContextRouteWithChildren;
+	"/join": typeof JoinRoute;
+	"/login": typeof LoginRoute;
+	"/onboarding": typeof OnboardingRouteWithChildren;
+	"/sso-callback": typeof SsoCallbackRoute;
+	"/_context/_cloud": typeof ContextCloudRouteWithChildren;
+	"/_context/_engine": typeof ContextEngineRouteWithChildren;
+	"/onboarding/accept-invitation": typeof OnboardingAcceptInvitationRoute;
+	"/onboarding/choose-organization": typeof OnboardingChooseOrganizationRoute;
+	"/_context/": typeof ContextIndexRoute;
+	"/_context/_cloud/orgs/$organization": typeof ContextCloudOrgsOrganizationRouteWithChildren;
+	"/_context/_engine/ns/$namespace": typeof ContextEngineNsNamespaceRouteWithChildren;
+	"/_context/_cloud/new/": typeof ContextCloudNewIndexRoute;
+	"/_context/_engine/ns/$namespace/connect": typeof ContextEngineNsNamespaceConnectRoute;
+	"/_context/_cloud/orgs/$organization/": typeof ContextCloudOrgsOrganizationIndexRoute;
+	"/_context/_engine/ns/$namespace/": typeof ContextEngineNsNamespaceIndexRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project": typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren;
+	"/_context/_cloud/orgs/$organization/new/": typeof ContextCloudOrgsOrganizationNewIndexRoute;
+	"/_context/_cloud/orgs/$organization/projects/": typeof ContextCloudOrgsOrganizationProjectsIndexRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/billing": typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/metrics": typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/settings": typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/": typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute;
+	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/": typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/join'
-    | '/login'
-    | '/onboarding'
-    | '/sso-callback'
-    | '/onboarding/accept-invitation'
-    | '/onboarding/choose-organization'
-    | '/'
-    | '/orgs/$organization'
-    | '/ns/$namespace'
-    | '/new'
-    | '/ns/$namespace/connect'
-    | '/orgs/$organization/'
-    | '/ns/$namespace/'
-    | '/orgs/$organization/projects/$project'
-    | '/orgs/$organization/new'
-    | '/orgs/$organization/projects'
-    | '/orgs/$organization/projects/$project/billing'
-    | '/orgs/$organization/projects/$project/metrics'
-    | '/orgs/$organization/projects/$project/settings'
-    | '/orgs/$organization/projects/$project/'
-    | '/orgs/$organization/projects/$project/ns/$namespace'
-    | '/orgs/$organization/projects/$project/ns/$namespace/billing'
-    | '/orgs/$organization/projects/$project/ns/$namespace/connect'
-    | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
-    | '/orgs/$organization/projects/$project/ns/$namespace/settings'
-    | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
-    | '/orgs/$organization/projects/$project/ns/$namespace/'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/join'
-    | '/login'
-    | '/onboarding'
-    | '/sso-callback'
-    | '/onboarding/accept-invitation'
-    | '/onboarding/choose-organization'
-    | '/'
-    | '/new'
-    | '/ns/$namespace/connect'
-    | '/orgs/$organization'
-    | '/ns/$namespace'
-    | '/orgs/$organization/new'
-    | '/orgs/$organization/projects'
-    | '/orgs/$organization/projects/$project/billing'
-    | '/orgs/$organization/projects/$project/metrics'
-    | '/orgs/$organization/projects/$project/settings'
-    | '/orgs/$organization/projects/$project'
-    | '/orgs/$organization/projects/$project/ns/$namespace/billing'
-    | '/orgs/$organization/projects/$project/ns/$namespace/connect'
-    | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
-    | '/orgs/$organization/projects/$project/ns/$namespace/settings'
-    | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
-    | '/orgs/$organization/projects/$project/ns/$namespace'
-  id:
-    | '__root__'
-    | '/_context'
-    | '/join'
-    | '/login'
-    | '/onboarding'
-    | '/sso-callback'
-    | '/_context/_cloud'
-    | '/_context/_engine'
-    | '/onboarding/accept-invitation'
-    | '/onboarding/choose-organization'
-    | '/_context/'
-    | '/_context/_cloud/orgs/$organization'
-    | '/_context/_engine/ns/$namespace'
-    | '/_context/_cloud/new/'
-    | '/_context/_engine/ns/$namespace/connect'
-    | '/_context/_cloud/orgs/$organization/'
-    | '/_context/_engine/ns/$namespace/'
-    | '/_context/_cloud/orgs/$organization/projects/$project'
-    | '/_context/_cloud/orgs/$organization/new/'
-    | '/_context/_cloud/orgs/$organization/projects/'
-    | '/_context/_cloud/orgs/$organization/projects/$project/billing'
-    | '/_context/_cloud/orgs/$organization/projects/$project/metrics'
-    | '/_context/_cloud/orgs/$organization/projects/$project/settings'
-    | '/_context/_cloud/orgs/$organization/projects/$project/'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens'
-    | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/'
-  fileRoutesById: FileRoutesById
+	fileRoutesByFullPath: FileRoutesByFullPath;
+	fullPaths:
+		| "/join"
+		| "/login"
+		| "/onboarding"
+		| "/sso-callback"
+		| "/onboarding/accept-invitation"
+		| "/onboarding/choose-organization"
+		| "/"
+		| "/orgs/$organization"
+		| "/ns/$namespace"
+		| "/new"
+		| "/ns/$namespace/connect"
+		| "/orgs/$organization/"
+		| "/ns/$namespace/"
+		| "/orgs/$organization/projects/$project"
+		| "/orgs/$organization/new"
+		| "/orgs/$organization/projects"
+		| "/orgs/$organization/projects/$project/billing"
+		| "/orgs/$organization/projects/$project/metrics"
+		| "/orgs/$organization/projects/$project/settings"
+		| "/orgs/$organization/projects/$project/"
+		| "/orgs/$organization/projects/$project/ns/$namespace"
+		| "/orgs/$organization/projects/$project/ns/$namespace/billing"
+		| "/orgs/$organization/projects/$project/ns/$namespace/connect"
+		| "/orgs/$organization/projects/$project/ns/$namespace/metrics"
+		| "/orgs/$organization/projects/$project/ns/$namespace/settings"
+		| "/orgs/$organization/projects/$project/ns/$namespace/tokens"
+		| "/orgs/$organization/projects/$project/ns/$namespace/";
+	fileRoutesByTo: FileRoutesByTo;
+	to:
+		| "/join"
+		| "/login"
+		| "/onboarding"
+		| "/sso-callback"
+		| "/onboarding/accept-invitation"
+		| "/onboarding/choose-organization"
+		| "/"
+		| "/new"
+		| "/ns/$namespace/connect"
+		| "/orgs/$organization"
+		| "/ns/$namespace"
+		| "/orgs/$organization/new"
+		| "/orgs/$organization/projects"
+		| "/orgs/$organization/projects/$project/billing"
+		| "/orgs/$organization/projects/$project/metrics"
+		| "/orgs/$organization/projects/$project/settings"
+		| "/orgs/$organization/projects/$project"
+		| "/orgs/$organization/projects/$project/ns/$namespace/billing"
+		| "/orgs/$organization/projects/$project/ns/$namespace/connect"
+		| "/orgs/$organization/projects/$project/ns/$namespace/metrics"
+		| "/orgs/$organization/projects/$project/ns/$namespace/settings"
+		| "/orgs/$organization/projects/$project/ns/$namespace/tokens"
+		| "/orgs/$organization/projects/$project/ns/$namespace";
+	id:
+		| "__root__"
+		| "/_context"
+		| "/join"
+		| "/login"
+		| "/onboarding"
+		| "/sso-callback"
+		| "/_context/_cloud"
+		| "/_context/_engine"
+		| "/onboarding/accept-invitation"
+		| "/onboarding/choose-organization"
+		| "/_context/"
+		| "/_context/_cloud/orgs/$organization"
+		| "/_context/_engine/ns/$namespace"
+		| "/_context/_cloud/new/"
+		| "/_context/_engine/ns/$namespace/connect"
+		| "/_context/_cloud/orgs/$organization/"
+		| "/_context/_engine/ns/$namespace/"
+		| "/_context/_cloud/orgs/$organization/projects/$project"
+		| "/_context/_cloud/orgs/$organization/new/"
+		| "/_context/_cloud/orgs/$organization/projects/"
+		| "/_context/_cloud/orgs/$organization/projects/$project/billing"
+		| "/_context/_cloud/orgs/$organization/projects/$project/metrics"
+		| "/_context/_cloud/orgs/$organization/projects/$project/settings"
+		| "/_context/_cloud/orgs/$organization/projects/$project/"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens"
+		| "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/";
+	fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  ContextRoute: typeof ContextRouteWithChildren
-  JoinRoute: typeof JoinRoute
-  LoginRoute: typeof LoginRoute
-  OnboardingRoute: typeof OnboardingRouteWithChildren
-  SsoCallbackRoute: typeof SsoCallbackRoute
+	ContextRoute: typeof ContextRouteWithChildren;
+	JoinRoute: typeof JoinRoute;
+	LoginRoute: typeof LoginRoute;
+	OnboardingRoute: typeof OnboardingRouteWithChildren;
+	SsoCallbackRoute: typeof SsoCallbackRoute;
 }
 
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/sso-callback': {
-      id: '/sso-callback'
-      path: '/sso-callback'
-      fullPath: '/sso-callback'
-      preLoaderRoute: typeof SsoCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/join': {
-      id: '/join'
-      path: '/join'
-      fullPath: '/join'
-      preLoaderRoute: typeof JoinRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_context': {
-      id: '/_context'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof ContextRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_context/': {
-      id: '/_context/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof ContextIndexRouteImport
-      parentRoute: typeof ContextRoute
-    }
-    '/onboarding/choose-organization': {
-      id: '/onboarding/choose-organization'
-      path: '/choose-organization'
-      fullPath: '/onboarding/choose-organization'
-      preLoaderRoute: typeof OnboardingChooseOrganizationRouteImport
-      parentRoute: typeof OnboardingRoute
-    }
-    '/onboarding/accept-invitation': {
-      id: '/onboarding/accept-invitation'
-      path: '/accept-invitation'
-      fullPath: '/onboarding/accept-invitation'
-      preLoaderRoute: typeof OnboardingAcceptInvitationRouteImport
-      parentRoute: typeof OnboardingRoute
-    }
-    '/_context/_engine': {
-      id: '/_context/_engine'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof ContextEngineRouteImport
-      parentRoute: typeof ContextRoute
-    }
-    '/_context/_cloud': {
-      id: '/_context/_cloud'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof ContextCloudRouteImport
-      parentRoute: typeof ContextRoute
-    }
-    '/_context/_cloud/new/': {
-      id: '/_context/_cloud/new/'
-      path: '/new'
-      fullPath: '/new'
-      preLoaderRoute: typeof ContextCloudNewIndexRouteImport
-      parentRoute: typeof ContextCloudRoute
-    }
-    '/_context/_engine/ns/$namespace': {
-      id: '/_context/_engine/ns/$namespace'
-      path: '/ns/$namespace'
-      fullPath: '/ns/$namespace'
-      preLoaderRoute: typeof ContextEngineNsNamespaceRouteImport
-      parentRoute: typeof ContextEngineRoute
-    }
-    '/_context/_cloud/orgs/$organization': {
-      id: '/_context/_cloud/orgs/$organization'
-      path: '/orgs/$organization'
-      fullPath: '/orgs/$organization'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationRouteImport
-      parentRoute: typeof ContextCloudRoute
-    }
-    '/_context/_engine/ns/$namespace/': {
-      id: '/_context/_engine/ns/$namespace/'
-      path: '/'
-      fullPath: '/ns/$namespace/'
-      preLoaderRoute: typeof ContextEngineNsNamespaceIndexRouteImport
-      parentRoute: typeof ContextEngineNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/': {
-      id: '/_context/_cloud/orgs/$organization/'
-      path: '/'
-      fullPath: '/orgs/$organization/'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationIndexRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationRoute
-    }
-    '/_context/_engine/ns/$namespace/connect': {
-      id: '/_context/_engine/ns/$namespace/connect'
-      path: '/connect'
-      fullPath: '/ns/$namespace/connect'
-      preLoaderRoute: typeof ContextEngineNsNamespaceConnectRouteImport
-      parentRoute: typeof ContextEngineNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/': {
-      id: '/_context/_cloud/orgs/$organization/projects/'
-      path: '/projects'
-      fullPath: '/orgs/$organization/projects'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationRoute
-    }
-    '/_context/_cloud/orgs/$organization/new/': {
-      id: '/_context/_cloud/orgs/$organization/new/'
-      path: '/new'
-      fullPath: '/orgs/$organization/new'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationNewIndexRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project'
-      path: '/projects/$project'
-      fullPath: '/orgs/$organization/projects/$project'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/'
-      path: '/'
-      fullPath: '/orgs/$organization/projects/$project/'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/settings': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/settings'
-      path: '/settings'
-      fullPath: '/orgs/$organization/projects/$project/settings'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/metrics': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/metrics'
-      path: '/metrics'
-      fullPath: '/orgs/$organization/projects/$project/metrics'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/billing': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/billing'
-      path: '/billing'
-      fullPath: '/orgs/$organization/projects/$project/billing'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectBillingRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace'
-      path: '/ns/$namespace'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/'
-      path: '/'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens'
-      path: '/tokens'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/tokens'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings'
-      path: '/settings'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/settings'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics'
-      path: '/metrics'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/metrics'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
-      path: '/connect'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/connect'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
-    '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing': {
-      id: '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing'
-      path: '/billing'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/billing'
-      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport
-      parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
-  }
+declare module "@tanstack/react-router" {
+	interface FileRoutesByPath {
+		"/sso-callback": {
+			id: "/sso-callback";
+			path: "/sso-callback";
+			fullPath: "/sso-callback";
+			preLoaderRoute: typeof SsoCallbackRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/onboarding": {
+			id: "/onboarding";
+			path: "/onboarding";
+			fullPath: "/onboarding";
+			preLoaderRoute: typeof OnboardingRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/login": {
+			id: "/login";
+			path: "/login";
+			fullPath: "/login";
+			preLoaderRoute: typeof LoginRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/join": {
+			id: "/join";
+			path: "/join";
+			fullPath: "/join";
+			preLoaderRoute: typeof JoinRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/_context": {
+			id: "/_context";
+			path: "";
+			fullPath: "";
+			preLoaderRoute: typeof ContextRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/_context/": {
+			id: "/_context/";
+			path: "/";
+			fullPath: "/";
+			preLoaderRoute: typeof ContextIndexRouteImport;
+			parentRoute: typeof ContextRoute;
+		};
+		"/onboarding/choose-organization": {
+			id: "/onboarding/choose-organization";
+			path: "/choose-organization";
+			fullPath: "/onboarding/choose-organization";
+			preLoaderRoute: typeof OnboardingChooseOrganizationRouteImport;
+			parentRoute: typeof OnboardingRoute;
+		};
+		"/onboarding/accept-invitation": {
+			id: "/onboarding/accept-invitation";
+			path: "/accept-invitation";
+			fullPath: "/onboarding/accept-invitation";
+			preLoaderRoute: typeof OnboardingAcceptInvitationRouteImport;
+			parentRoute: typeof OnboardingRoute;
+		};
+		"/_context/_engine": {
+			id: "/_context/_engine";
+			path: "";
+			fullPath: "";
+			preLoaderRoute: typeof ContextEngineRouteImport;
+			parentRoute: typeof ContextRoute;
+		};
+		"/_context/_cloud": {
+			id: "/_context/_cloud";
+			path: "";
+			fullPath: "";
+			preLoaderRoute: typeof ContextCloudRouteImport;
+			parentRoute: typeof ContextRoute;
+		};
+		"/_context/_cloud/new/": {
+			id: "/_context/_cloud/new/";
+			path: "/new";
+			fullPath: "/new";
+			preLoaderRoute: typeof ContextCloudNewIndexRouteImport;
+			parentRoute: typeof ContextCloudRoute;
+		};
+		"/_context/_engine/ns/$namespace": {
+			id: "/_context/_engine/ns/$namespace";
+			path: "/ns/$namespace";
+			fullPath: "/ns/$namespace";
+			preLoaderRoute: typeof ContextEngineNsNamespaceRouteImport;
+			parentRoute: typeof ContextEngineRoute;
+		};
+		"/_context/_cloud/orgs/$organization": {
+			id: "/_context/_cloud/orgs/$organization";
+			path: "/orgs/$organization";
+			fullPath: "/orgs/$organization";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationRouteImport;
+			parentRoute: typeof ContextCloudRoute;
+		};
+		"/_context/_engine/ns/$namespace/": {
+			id: "/_context/_engine/ns/$namespace/";
+			path: "/";
+			fullPath: "/ns/$namespace/";
+			preLoaderRoute: typeof ContextEngineNsNamespaceIndexRouteImport;
+			parentRoute: typeof ContextEngineNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/": {
+			id: "/_context/_cloud/orgs/$organization/";
+			path: "/";
+			fullPath: "/orgs/$organization/";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationIndexRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationRoute;
+		};
+		"/_context/_engine/ns/$namespace/connect": {
+			id: "/_context/_engine/ns/$namespace/connect";
+			path: "/connect";
+			fullPath: "/ns/$namespace/connect";
+			preLoaderRoute: typeof ContextEngineNsNamespaceConnectRouteImport;
+			parentRoute: typeof ContextEngineNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/": {
+			id: "/_context/_cloud/orgs/$organization/projects/";
+			path: "/projects";
+			fullPath: "/orgs/$organization/projects";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationRoute;
+		};
+		"/_context/_cloud/orgs/$organization/new/": {
+			id: "/_context/_cloud/orgs/$organization/new/";
+			path: "/new";
+			fullPath: "/orgs/$organization/new";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationNewIndexRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project";
+			path: "/projects/$project";
+			fullPath: "/orgs/$organization/projects/$project";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/";
+			path: "/";
+			fullPath: "/orgs/$organization/projects/$project/";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/settings": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/settings";
+			path: "/settings";
+			fullPath: "/orgs/$organization/projects/$project/settings";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/metrics": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/metrics";
+			path: "/metrics";
+			fullPath: "/orgs/$organization/projects/$project/metrics";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/billing": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/billing";
+			path: "/billing";
+			fullPath: "/orgs/$organization/projects/$project/billing";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectBillingRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace";
+			path: "/ns/$namespace";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/";
+			path: "/";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace/";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/tokens";
+			path: "/tokens";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace/tokens";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/settings";
+			path: "/settings";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace/settings";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/metrics";
+			path: "/metrics";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace/metrics";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect";
+			path: "/connect";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace/connect";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute;
+		};
+		"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing": {
+			id: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/billing";
+			path: "/billing";
+			fullPath: "/orgs/$organization/projects/$project/ns/$namespace/billing";
+			preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRouteImport;
+			parentRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute;
+		};
+	}
 }
 
 interface ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren {
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute;
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute;
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute;
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute;
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute;
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute;
 }
 
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren =
-  {
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute,
-  }
+	{
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceBillingRoute,
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute,
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute,
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute,
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceTokensRoute,
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute,
+	};
 
 const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren =
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute._addFileChildren(
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute._addFileChildren(
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteChildren,
+	);
 
 interface ContextCloudOrgsOrganizationProjectsProjectRouteChildren {
-  ContextCloudOrgsOrganizationProjectsProjectBillingRoute: typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute
-  ContextCloudOrgsOrganizationProjectsProjectMetricsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute
-  ContextCloudOrgsOrganizationProjectsProjectSettingsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute
-  ContextCloudOrgsOrganizationProjectsProjectIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
-  ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
+	ContextCloudOrgsOrganizationProjectsProjectBillingRoute: typeof ContextCloudOrgsOrganizationProjectsProjectBillingRoute;
+	ContextCloudOrgsOrganizationProjectsProjectMetricsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectMetricsRoute;
+	ContextCloudOrgsOrganizationProjectsProjectSettingsRoute: typeof ContextCloudOrgsOrganizationProjectsProjectSettingsRoute;
+	ContextCloudOrgsOrganizationProjectsProjectIndexRoute: typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute;
+	ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute: typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren;
 }
 
 const ContextCloudOrgsOrganizationProjectsProjectRouteChildren: ContextCloudOrgsOrganizationProjectsProjectRouteChildren =
-  {
-    ContextCloudOrgsOrganizationProjectsProjectBillingRoute:
-      ContextCloudOrgsOrganizationProjectsProjectBillingRoute,
-    ContextCloudOrgsOrganizationProjectsProjectMetricsRoute:
-      ContextCloudOrgsOrganizationProjectsProjectMetricsRoute,
-    ContextCloudOrgsOrganizationProjectsProjectSettingsRoute:
-      ContextCloudOrgsOrganizationProjectsProjectSettingsRoute,
-    ContextCloudOrgsOrganizationProjectsProjectIndexRoute:
-      ContextCloudOrgsOrganizationProjectsProjectIndexRoute,
-    ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute:
-      ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren,
-  }
+	{
+		ContextCloudOrgsOrganizationProjectsProjectBillingRoute:
+			ContextCloudOrgsOrganizationProjectsProjectBillingRoute,
+		ContextCloudOrgsOrganizationProjectsProjectMetricsRoute:
+			ContextCloudOrgsOrganizationProjectsProjectMetricsRoute,
+		ContextCloudOrgsOrganizationProjectsProjectSettingsRoute:
+			ContextCloudOrgsOrganizationProjectsProjectSettingsRoute,
+		ContextCloudOrgsOrganizationProjectsProjectIndexRoute:
+			ContextCloudOrgsOrganizationProjectsProjectIndexRoute,
+		ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRoute:
+			ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren,
+	};
 
 const ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren =
-  ContextCloudOrgsOrganizationProjectsProjectRoute._addFileChildren(
-    ContextCloudOrgsOrganizationProjectsProjectRouteChildren,
-  )
+	ContextCloudOrgsOrganizationProjectsProjectRoute._addFileChildren(
+		ContextCloudOrgsOrganizationProjectsProjectRouteChildren,
+	);
 
 interface ContextCloudOrgsOrganizationRouteChildren {
-  ContextCloudOrgsOrganizationIndexRoute: typeof ContextCloudOrgsOrganizationIndexRoute
-  ContextCloudOrgsOrganizationProjectsProjectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
-  ContextCloudOrgsOrganizationNewIndexRoute: typeof ContextCloudOrgsOrganizationNewIndexRoute
-  ContextCloudOrgsOrganizationProjectsIndexRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRoute
+	ContextCloudOrgsOrganizationIndexRoute: typeof ContextCloudOrgsOrganizationIndexRoute;
+	ContextCloudOrgsOrganizationProjectsProjectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren;
+	ContextCloudOrgsOrganizationNewIndexRoute: typeof ContextCloudOrgsOrganizationNewIndexRoute;
+	ContextCloudOrgsOrganizationProjectsIndexRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRoute;
 }
 
 const ContextCloudOrgsOrganizationRouteChildren: ContextCloudOrgsOrganizationRouteChildren =
-  {
-    ContextCloudOrgsOrganizationIndexRoute:
-      ContextCloudOrgsOrganizationIndexRoute,
-    ContextCloudOrgsOrganizationProjectsProjectRoute:
-      ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren,
-    ContextCloudOrgsOrganizationNewIndexRoute:
-      ContextCloudOrgsOrganizationNewIndexRoute,
-    ContextCloudOrgsOrganizationProjectsIndexRoute:
-      ContextCloudOrgsOrganizationProjectsIndexRoute,
-  }
+	{
+		ContextCloudOrgsOrganizationIndexRoute:
+			ContextCloudOrgsOrganizationIndexRoute,
+		ContextCloudOrgsOrganizationProjectsProjectRoute:
+			ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren,
+		ContextCloudOrgsOrganizationNewIndexRoute:
+			ContextCloudOrgsOrganizationNewIndexRoute,
+		ContextCloudOrgsOrganizationProjectsIndexRoute:
+			ContextCloudOrgsOrganizationProjectsIndexRoute,
+	};
 
 const ContextCloudOrgsOrganizationRouteWithChildren =
-  ContextCloudOrgsOrganizationRoute._addFileChildren(
-    ContextCloudOrgsOrganizationRouteChildren,
-  )
+	ContextCloudOrgsOrganizationRoute._addFileChildren(
+		ContextCloudOrgsOrganizationRouteChildren,
+	);
 
 interface ContextCloudRouteChildren {
-  ContextCloudOrgsOrganizationRoute: typeof ContextCloudOrgsOrganizationRouteWithChildren
-  ContextCloudNewIndexRoute: typeof ContextCloudNewIndexRoute
+	ContextCloudOrgsOrganizationRoute: typeof ContextCloudOrgsOrganizationRouteWithChildren;
+	ContextCloudNewIndexRoute: typeof ContextCloudNewIndexRoute;
 }
 
 const ContextCloudRouteChildren: ContextCloudRouteChildren = {
-  ContextCloudOrgsOrganizationRoute:
-    ContextCloudOrgsOrganizationRouteWithChildren,
-  ContextCloudNewIndexRoute: ContextCloudNewIndexRoute,
-}
+	ContextCloudOrgsOrganizationRoute:
+		ContextCloudOrgsOrganizationRouteWithChildren,
+	ContextCloudNewIndexRoute: ContextCloudNewIndexRoute,
+};
 
 const ContextCloudRouteWithChildren = ContextCloudRoute._addFileChildren(
-  ContextCloudRouteChildren,
-)
+	ContextCloudRouteChildren,
+);
 
 interface ContextEngineNsNamespaceRouteChildren {
-  ContextEngineNsNamespaceConnectRoute: typeof ContextEngineNsNamespaceConnectRoute
-  ContextEngineNsNamespaceIndexRoute: typeof ContextEngineNsNamespaceIndexRoute
+	ContextEngineNsNamespaceConnectRoute: typeof ContextEngineNsNamespaceConnectRoute;
+	ContextEngineNsNamespaceIndexRoute: typeof ContextEngineNsNamespaceIndexRoute;
 }
 
 const ContextEngineNsNamespaceRouteChildren: ContextEngineNsNamespaceRouteChildren =
-  {
-    ContextEngineNsNamespaceConnectRoute: ContextEngineNsNamespaceConnectRoute,
-    ContextEngineNsNamespaceIndexRoute: ContextEngineNsNamespaceIndexRoute,
-  }
+	{
+		ContextEngineNsNamespaceConnectRoute:
+			ContextEngineNsNamespaceConnectRoute,
+		ContextEngineNsNamespaceIndexRoute: ContextEngineNsNamespaceIndexRoute,
+	};
 
 const ContextEngineNsNamespaceRouteWithChildren =
-  ContextEngineNsNamespaceRoute._addFileChildren(
-    ContextEngineNsNamespaceRouteChildren,
-  )
+	ContextEngineNsNamespaceRoute._addFileChildren(
+		ContextEngineNsNamespaceRouteChildren,
+	);
 
 interface ContextEngineRouteChildren {
-  ContextEngineNsNamespaceRoute: typeof ContextEngineNsNamespaceRouteWithChildren
+	ContextEngineNsNamespaceRoute: typeof ContextEngineNsNamespaceRouteWithChildren;
 }
 
 const ContextEngineRouteChildren: ContextEngineRouteChildren = {
-  ContextEngineNsNamespaceRoute: ContextEngineNsNamespaceRouteWithChildren,
-}
+	ContextEngineNsNamespaceRoute: ContextEngineNsNamespaceRouteWithChildren,
+};
 
 const ContextEngineRouteWithChildren = ContextEngineRoute._addFileChildren(
-  ContextEngineRouteChildren,
-)
+	ContextEngineRouteChildren,
+);
 
 interface ContextRouteChildren {
-  ContextCloudRoute: typeof ContextCloudRouteWithChildren
-  ContextEngineRoute: typeof ContextEngineRouteWithChildren
-  ContextIndexRoute: typeof ContextIndexRoute
+	ContextCloudRoute: typeof ContextCloudRouteWithChildren;
+	ContextEngineRoute: typeof ContextEngineRouteWithChildren;
+	ContextIndexRoute: typeof ContextIndexRoute;
 }
 
 const ContextRouteChildren: ContextRouteChildren = {
-  ContextCloudRoute: ContextCloudRouteWithChildren,
-  ContextEngineRoute: ContextEngineRouteWithChildren,
-  ContextIndexRoute: ContextIndexRoute,
-}
+	ContextCloudRoute: ContextCloudRouteWithChildren,
+	ContextEngineRoute: ContextEngineRouteWithChildren,
+	ContextIndexRoute: ContextIndexRoute,
+};
 
 const ContextRouteWithChildren =
-  ContextRoute._addFileChildren(ContextRouteChildren)
+	ContextRoute._addFileChildren(ContextRouteChildren);
 
 interface OnboardingRouteChildren {
-  OnboardingAcceptInvitationRoute: typeof OnboardingAcceptInvitationRoute
-  OnboardingChooseOrganizationRoute: typeof OnboardingChooseOrganizationRoute
+	OnboardingAcceptInvitationRoute: typeof OnboardingAcceptInvitationRoute;
+	OnboardingChooseOrganizationRoute: typeof OnboardingChooseOrganizationRoute;
 }
 
 const OnboardingRouteChildren: OnboardingRouteChildren = {
-  OnboardingAcceptInvitationRoute: OnboardingAcceptInvitationRoute,
-  OnboardingChooseOrganizationRoute: OnboardingChooseOrganizationRoute,
-}
+	OnboardingAcceptInvitationRoute: OnboardingAcceptInvitationRoute,
+	OnboardingChooseOrganizationRoute: OnboardingChooseOrganizationRoute,
+};
 
 const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
-  OnboardingRouteChildren,
-)
+	OnboardingRouteChildren,
+);
 
 const rootRouteChildren: RootRouteChildren = {
-  ContextRoute: ContextRouteWithChildren,
-  JoinRoute: JoinRoute,
-  LoginRoute: LoginRoute,
-  OnboardingRoute: OnboardingRouteWithChildren,
-  SsoCallbackRoute: SsoCallbackRoute,
-}
+	ContextRoute: ContextRouteWithChildren,
+	JoinRoute: JoinRoute,
+	LoginRoute: LoginRoute,
+	OnboardingRoute: OnboardingRouteWithChildren,
+	SsoCallbackRoute: SsoCallbackRoute,
+};
 export const routeTree = rootRouteImport
-  ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+	._addFileChildren(rootRouteChildren)
+	._addFileTypes<FileRouteTypes>();
