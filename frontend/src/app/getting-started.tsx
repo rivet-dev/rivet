@@ -1,4 +1,4 @@
-import { faArrowRight, Icon } from "@rivet-gg/icons";
+import { faArrowRight, faCopy, Icon } from "@rivet-gg/icons";
 import {
 	deployOptions,
 	type Provider,
@@ -18,6 +18,7 @@ import {
 import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
+import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
@@ -387,16 +388,28 @@ function SkillsStep() {
 	);
 }
 
+const agentPrompt = `I want to build a Rivet actor project. Ask me what I'd like to build with actors, then set it up using RivetKit and run it locally. Use the RivetKit skill for guidance.`;
+
 function RunLocallyStep() {
 	return (
-		<div className="flex flex-col gap-6">
+		<div className="flex flex-col gap-5">
 			<div>
-				<p className="font-medium mb-2">Use your coding agent</p>
-				<p className="text-sm text-muted-foreground mb-3">
-					Copy this prompt into your coding agent to set up and run a Rivet actor project:
+				<p className="font-medium mb-1.5">Use your coding agent</p>
+				<p className="text-sm text-muted-foreground mb-2">
+					Copy this prompt into your coding agent:
 				</p>
-				<div className="rounded-md bg-muted/50 p-3 text-sm font-mono">
-					Set up a basic Rivet actor project using RivetKit and run it locally. Use the RivetKit skill for guidance.
+				<div className="relative group rounded-md bg-muted/50 p-3 pr-10 text-sm font-mono leading-relaxed">
+					{agentPrompt}
+					<button
+						type="button"
+						className="absolute top-2 right-2 p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition-all"
+						onClick={() => {
+							navigator.clipboard.writeText(agentPrompt);
+							toast.success("Copied to clipboard");
+						}}
+					>
+						<Icon icon={faCopy} className="w-3.5 h-3.5" />
+					</button>
 				</div>
 			</div>
 			<div className="relative flex items-center gap-3">
@@ -405,8 +418,8 @@ function RunLocallyStep() {
 				<div className="flex-1 border-t border-dashed" />
 			</div>
 			<div>
-				<p className="font-medium mb-2">Follow the quickstart guide</p>
-				<p className="text-sm text-muted-foreground mb-3">
+				<p className="font-medium mb-1.5">Follow the quickstart guide</p>
+				<p className="text-sm text-muted-foreground mb-2">
 					Set up a Rivet actor project manually step-by-step.
 				</p>
 				<Button variant="outline" asChild>
