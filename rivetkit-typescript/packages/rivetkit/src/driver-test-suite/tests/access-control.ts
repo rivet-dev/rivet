@@ -14,7 +14,9 @@ export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 
 		test("passes connection id into canPublish context", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.accessControlActor.getOrCreate(["publish-ctx"]);
+			const handle = client.accessControlActor.getOrCreate([
+				"publish-ctx",
+			]);
 
 			await handle.send("allowedQueue", { value: "one" });
 
@@ -104,7 +106,7 @@ export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 			await conn.dispose();
 
 			const blockedConn = handle.connect();
-			blockedConn.on("blockedEvent", () => { });
+			blockedConn.on("blockedEvent", () => {});
 			await expect(
 				blockedConn.allowedAction("blocked-subscribe-ready"),
 			).rejects.toMatchObject({
@@ -120,16 +122,21 @@ export function runAccessControlTests(driverTestConfig: DriverTestConfig) {
 			]);
 			const conn = handle.connect();
 
-			const eventPromise = new Promise<{ value: string }>((resolve, reject) => {
-				const unsubscribeError = conn.onError((error) => {
-					reject(error);
-				});
-				const unsubscribeEvent = conn.on("undefinedEvent", (payload) => {
-					unsubscribeError();
-					unsubscribeEvent();
-					resolve(payload as { value: string });
-				});
-			});
+			const eventPromise = new Promise<{ value: string }>(
+				(resolve, reject) => {
+					const unsubscribeError = conn.onError((error) => {
+						reject(error);
+					});
+					const unsubscribeEvent = conn.on(
+						"undefinedEvent",
+						(payload) => {
+							unsubscribeError();
+							unsubscribeEvent();
+							resolve(payload as { value: string });
+						},
+					);
+				},
+			);
 
 			await conn.allowedAction("undefined-subscribe-ready");
 			await conn.allowedBroadcastUndefinedEvent("wildcard");

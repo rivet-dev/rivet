@@ -1,7 +1,5 @@
 import * as cbor from "cbor-x";
-import type {
-	TransportWorkflowHistory,
-} from "rivetkit/inspector/client";
+import type { TransportWorkflowHistory } from "rivetkit/inspector/client";
 import type {
 	BranchStatus,
 	BranchStatusType,

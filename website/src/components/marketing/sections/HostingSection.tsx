@@ -1,11 +1,11 @@
 'use client';
 
-import { Github, Server, Check, ArrowRight } from 'lucide-react';
+import { Package, Server, Check, ArrowRight, Github } from 'lucide-react';
 import { motion } from 'framer-motion';
 import imgLogo from '@/images/rivet-logos/icon-white.svg';
 
 export const HostingSection = () => (
-  <section className='border-t border-white/10 py-48'>
+  <section className='border-t border-white/10 py-16 md:py-48'>
     <div className='mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.h2
@@ -24,7 +24,7 @@ export const HostingSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='max-w-xl text-base leading-relaxed text-zinc-500'
         >
-          Three options, same API. Pick what works for you.
+          RivetKit is a library. Connect it to Rivet Cloud or self-host when you need scaling, fault tolerance, and observability.
         </motion.p>
       </div>
 
@@ -35,7 +35,32 @@ export const HostingSection = () => (
         transition={{ duration: 0.5 }}
         className='grid grid-cols-1 gap-8 md:grid-cols-3'
       >
-        {/* Card 1: Self-Host */}
+        {/* Card 1: Just a Library */}
+        <div className='flex flex-col border-t border-white/10 pt-6'>
+          <div className='mb-3 text-zinc-500'>
+            <Package className='h-4 w-4' />
+          </div>
+          <h3 className='mb-2 text-base font-normal text-white'>Just a Library</h3>
+          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
+            Install a package and run locally. No servers, no infrastructure. Actors run in your process during development.
+          </p>
+          <div className='mb-6 font-mono text-xs text-zinc-500'>
+            <div className='flex gap-2'>
+              <span className='select-none text-zinc-600'>$</span>
+              <span>npm install rivetkit</span>
+            </div>
+          </div>
+          <div className='mt-auto'>
+            <a
+              href='/docs/actors/quickstart'
+              className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
+            >
+              Get Started
+            </a>
+          </div>
+        </div>
+
+        {/* Card 2: Self-Host */}
         <div className='flex flex-col border-t border-white/10 pt-6'>
           <div className='mb-3 text-zinc-500'>
             <Server className='h-4 w-4' />
@@ -60,7 +85,7 @@ export const HostingSection = () => (
           </div>
         </div>
 
-        {/* Card 2: Rivet Cloud */}
+        {/* Card 3: Rivet Cloud */}
         <div className='flex flex-col border-t border-white/10 pt-6'>
           <div className='mb-3'>
             <img className='h-5 w-5 opacity-50' src={imgLogo.src} alt='Rivet' />
@@ -87,38 +112,31 @@ export const HostingSection = () => (
             </a>
           </div>
         </div>
+      </motion.div>
 
-        {/* Card 3: Open Source */}
-        <div className='flex flex-col border-t border-white/10 pt-6'>
-          <div className='mb-3 text-zinc-500'>
-            <Github className='h-4 w-4' />
-          </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Open Source</h3>
-          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
-            Apache 2.0. Audit the code, contribute features, run it however you want.
-          </p>
-          <div className='mb-6 font-mono text-xs text-zinc-500'>
-            <div className='flex gap-2'>
-              <span className='select-none text-zinc-600'>$</span>
-              <span>git clone https://github.com/rivet-gg/rivet</span>
-            </div>
-            <div className='mt-1 flex gap-2'>
-              <span className='select-none text-zinc-600'>$</span>
-              <span>cd rivet && cargo run -p rivet-engine</span>
-            </div>
-          </div>
-          <div className='mt-auto'>
-            <a
-              href='https://github.com/rivet-gg/rivet'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
-            >
-              <Github className='h-4 w-4' />
-              View on GitHub
-            </a>
-          </div>
-        </div>
+      {/* Open Source callout */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className='mt-24 text-center'
+      >
+        <h3 className='mb-3 text-lg font-normal tracking-tight text-white md:text-xl'>
+          Open source, permissively licensed.
+        </h3>
+        <p className='mx-auto max-w-md text-sm leading-relaxed text-zinc-500'>
+          Self-hosting matters for enterprise deployments, cloud portability, and avoiding vendor lock-in. Licensed Apache 2.0.
+        </p>
+        <a
+          href='https://github.com/rivet-dev/rivet'
+          target='_blank'
+          rel='noopener noreferrer'
+          className='mt-5 inline-flex items-center gap-2 rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
+        >
+          <Github className='h-4 w-4' />
+          View on GitHub
+        </a>
       </motion.div>
     </div>
   </section>

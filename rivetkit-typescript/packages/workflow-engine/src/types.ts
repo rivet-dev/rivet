@@ -225,8 +225,7 @@ export interface WorkflowQueueNextOptions {
  * Options for receiving a batch of queue messages in workflows.
  */
 export interface WorkflowQueueNextBatchOptions
-	extends WorkflowQueueNextOptions
-{
+	extends WorkflowQueueNextOptions {
 	/** Maximum number of messages to receive. Defaults to 1. */
 	count?: number;
 }
@@ -384,15 +383,11 @@ export type LoopIterationResult<S, T> = Promise<
 export interface LoopConfig<S, T> {
 	name: string;
 	state?: S;
-	run: (
-		ctx: WorkflowContextInterface,
-		state: S,
-	) => LoopIterationResult<S, T>;
-	commitInterval?: number;
-	/** Trim loop history every N iterations. Defaults to commitInterval or 20. */
-	historyEvery?: number;
-	/** Retain the last N iterations of history. Defaults to commitInterval or 20. */
-	historyKeep?: number;
+	run: (ctx: WorkflowContextInterface, state: S) => LoopIterationResult<S, T>;
+	/** Prune old loop iterations every N iterations. Default: 20. */
+	historyPruneInterval?: number;
+	/** Number of past iterations to retain when pruning. Defaults to historyPruneInterval. */
+	historySize?: number;
 }
 
 /**

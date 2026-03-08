@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import type {
+	createGlobalContext as createGlobalCloudContext,
 	createNamespaceContext as createNamespaceCloudContext,
 	createOrganizationContext as createOrganizationCloudContext,
 	createProjectContext as createProjectCloudContext,
@@ -16,7 +17,34 @@ import type {
 } from "@/app/data-providers/engine-data-provider";
 import type { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
 
-export const useDataProvider = () => {
+type EngineDataProvider = ReturnType<typeof createNamespaceEngineContext> &
+	ReturnType<typeof createGlobalEngineContext>;
+
+type CloudDataProvider = ReturnType<typeof createNamespaceCloudContext> &
+	ReturnType<typeof createProjectCloudContext> &
+	ReturnType<typeof createOrganizationCloudContext> &
+	ReturnType<typeof createGlobalCloudContext>;
+
+type InspectorDataProvider = ReturnType<typeof createGlobalInspectorContext>;
+
+type RootContext =
+	| {
+			__type: "engine";
+			dataProvider: EngineDataProvider;
+	  }
+	| {
+			__type: "cloud";
+			dataProvider: CloudDataProvider;
+	  }
+	| {
+			__type: "inspector";
+			dataProvider: InspectorDataProvider;
+	  };
+
+export const useDataProvider = ():
+	| EngineDataProvider
+	| CloudDataProvider
+	| InspectorDataProvider => {
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
 			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
@@ -37,14 +65,17 @@ export const useDataProvider = () => {
 				// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
 				useRouteContext({
 					from: "/_context",
-				}),
+				}) as RootContext,
 			)
 				.with({ __type: "inspector" }, (ctx) => ctx.dataProvider)
 				.otherwise(() => {
 					throw new Error("Not in an inspector-like context");
 				});
 		})
-		.exhaustive();
+		.exhaustive() as
+		| EngineDataProvider
+		| CloudDataProvider
+		| InspectorDataProvider;
 };
 
 export const useDataProviderCheck = () => {
@@ -83,7 +114,7 @@ export const useEngineNamespaceDataProvider = () => {
 export const useInspectorDataProvider = () => {
 	const context = useRouteContext({
 		from: "/_context",
-	});
+	}) as RootContext;
 
 	return match(context)
 		.with({ __type: "inspector" }, (c) => c.dataProvider)
@@ -141,13 +172,3 @@ export const useEngineCompatDataProvider = () => {
 		| CloudDataProvider
 		| InspectorDataProvider;
 };
-
-type EngineDataProvider = ReturnType<typeof createNamespaceEngineContext> &
-	ReturnType<typeof createGlobalEngineContext>;
-
-type CloudDataProvider = ReturnType<typeof createNamespaceCloudContext> &
-	ReturnType<typeof createProjectCloudContext> &
-	ReturnType<typeof createOrganizationCloudContext> &
-	ReturnType<typeof createGlobalInspectorContext>;
-
-type InspectorDataProvider = ReturnType<typeof createGlobalInspectorContext>;

@@ -17,7 +17,10 @@ async function main() {
 			return;
 		}
 
-		const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+		const url = new URL(
+			req.url,
+			`http://${req.headers.host ?? "localhost"}`,
+		);
 		if (url.pathname !== mountPath) {
 			res.statusCode = 404;
 			res.end("Not Found");
@@ -40,14 +43,28 @@ async function main() {
 			console.error("MCP request failed", error);
 			if (!res.headersSent) {
 				res.statusCode = 500;
-				res.setHeader("Content-Type", "application/json; charset=utf-8");
-				res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Internal server error" }, id: null }));
+				res.setHeader(
+					"Content-Type",
+					"application/json; charset=utf-8",
+				);
+				res.end(
+					JSON.stringify({
+						jsonrpc: "2.0",
+						error: {
+							code: -32000,
+							message: "Internal server error",
+						},
+						id: null,
+					}),
+				);
 			}
 		}
 	});
 
 	httpServer.listen(port, () => {
-		console.log(`Docs MCP server listening on http://localhost:${port}${mountPath}`);
+		console.log(
+			`Docs MCP server listening on http://localhost:${port}${mountPath}`,
+		);
 	});
 }
 

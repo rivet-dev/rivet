@@ -2,7 +2,10 @@ import type { RunContext } from "@/actor/contexts/run";
 import type { Client } from "@/client/client";
 import type { Registry } from "@/registry";
 import type { ActorDefinition, AnyActorDefinition } from "@/actor/definition";
-import type { AnyDatabaseProvider, InferDatabaseClient } from "@/actor/database";
+import type {
+	AnyDatabaseProvider,
+	InferDatabaseClient,
+} from "@/actor/database";
 import type {
 	QueueFilterName,
 	QueueNextBatchOptions,
@@ -42,9 +45,8 @@ type WorkflowActorQueueNextBatchOptions<
 	TCompletable extends boolean,
 > = Omit<QueueNextBatchOptions<TName, TCompletable>, "signal">;
 
-type WorkflowActorQueueNextBatchOptionsFallback<
-	TCompletable extends boolean,
-> = Omit<QueueNextBatchOptions<string, TCompletable>, "signal">;
+type WorkflowActorQueueNextBatchOptionsFallback<TCompletable extends boolean> =
+	Omit<QueueNextBatchOptions<string, TCompletable>, "signal">;
 
 type ActorWorkflowLoopConfig<
 	S,
@@ -182,7 +184,9 @@ export class ActorWorkflowContext<
 		>(
 			name: string,
 			opts?: WorkflowActorQueueNextBatchOptions<TName, TCompletable>,
-		): Promise<Array<QueueResultMessageForName<TQueues, TName, TCompletable>>>;
+		): Promise<
+			Array<QueueResultMessageForName<TQueues, TName, TCompletable>>
+		>;
 		function nextBatch<const TCompletable extends boolean = false>(
 			name: string,
 			opts?: WorkflowActorQueueNextBatchOptionsFallback<TCompletable>,
@@ -200,7 +204,9 @@ export class ActorWorkflowContext<
 			opts?: WorkflowActorQueueNextBatchOptions<string, boolean>,
 		): Promise<Array<WorkflowQueueMessage<unknown>>> {
 			const messages = await self.#inner.queue.nextBatch(name, opts);
-			return messages.map((message) => self.#toActorQueueMessage(message));
+			return messages.map((message) =>
+				self.#toActorQueueMessage(message),
+			);
 		}
 
 		function send<K extends keyof TQueues & string>(
@@ -232,7 +238,9 @@ export class ActorWorkflowContext<
 				throw new Error("Step run function missing");
 			}
 			return await this.#wrapActive(() =>
-				this.#inner.step(nameOrConfig, () => this.#withActorAccess(run)),
+				this.#inner.step(nameOrConfig, () =>
+					this.#withActorAccess(run),
+				),
 			);
 		}
 		const stepConfig = nameOrConfig as StepConfig<T>;
@@ -471,7 +479,7 @@ export class ActorWorkflowContext<
 		this.#ensureActorAccess("broadcast");
 		this.#runCtx.broadcast(
 			name as never,
-			...((args as unknown[]) as never[]),
+			...(args as unknown[] as never[]),
 		);
 	}
 

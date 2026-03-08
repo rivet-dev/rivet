@@ -1,18 +1,20 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import { Header } from '@/components/v2/Header';
+import type { SidebarItem } from '@/lib/sitemap';
 
 interface Props {
 	title: string;
 	description?: string;
 	canonicalUrl?: string;
+	sidebar?: SidebarItem[];
 }
 
-const { title, description, canonicalUrl } = Astro.props;
+const { title, description, canonicalUrl, sidebar } = Astro.props;
 ---
 
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
-	<Header variant="full-width" showDocsTabs={true} client:load />
+	<Header variant="full-width" showDocsTabs={true} sidebarData={sidebar} client:load />
 	<div class="w-full relative z-10 font-sans">
 		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs" style="--header-height: 6.5rem;">
 			<slot />

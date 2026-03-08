@@ -11,7 +11,7 @@ export function AnimatedCTATitle() {
       transition={{ duration: 0.5 }}
       className='text-2xl font-normal tracking-tight text-white md:text-4xl'
     >
-      Infrastructure for software that thinks.
+      The primitive for stateful workloads.
     </motion.h2>
   );
 }

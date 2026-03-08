@@ -759,10 +759,20 @@ export const createNamespaceContext = ({
 			namespacesQueryOptions() {
 				return parent.currentProjectNamespacesQueryOptions();
 			},
-			namespaceQueryOptions() {
+			namespaceQueryOptions(
+				name: string | undefined,
+			): ReturnType<
+				ReturnType<
+					typeof createEngineNamespaceContext
+				>["namespaceQueryOptions"]
+			> {
 				return parent.currentProjectNamespaceQueryOptions({
-					namespace,
-				});
+					namespace: name ?? namespace,
+				}) as ReturnType<
+					ReturnType<
+						typeof createEngineNamespaceContext
+					>["namespaceQueryOptions"]
+				>;
 			},
 		}),
 		currentNamespaceAccessTokenQueryOptions() {

@@ -286,11 +286,11 @@ type CreateState<
 > =
 	| { state: TState }
 	| {
-		createState: (
-			c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
-			input: TInput,
-		) => TState | Promise<TState>;
-	}
+			createState: (
+				c: CreateContext<TState, TInput, TDatabase, TEvents, TQueues>,
+				input: TInput,
+			) => TState | Promise<TState>;
+	  }
 	| Record<never, never>;
 
 // Creates connection state config
@@ -310,18 +310,18 @@ type CreateConnState<
 > =
 	| { connState: TConnState }
 	| {
-		createConnState: (
-			c: CreateConnStateContext<
-				TState,
-				TVars,
-				TInput,
-				TDatabase,
-				TEvents,
-				TQueues
-			>,
-			params: TConnParams,
-		) => TConnState | Promise<TConnState>;
-	}
+			createConnState: (
+				c: CreateConnStateContext<
+					TState,
+					TVars,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
+				params: TConnParams,
+			) => TConnState | Promise<TConnState>;
+	  }
 	| Record<never, never>;
 
 // Creates vars config
@@ -341,26 +341,26 @@ type CreateVars<
 	TQueues extends QueueSchemaConfig,
 > =
 	| {
-		/**
-		 * @experimental
-		 */
-		vars: TVars;
-	}
+			/**
+			 * @experimental
+			 */
+			vars: TVars;
+	  }
 	| {
-		/**
-		 * @experimental
-		 */
-		createVars: (
-			c: CreateVarsContext<
-				TState,
-				TInput,
-				TDatabase,
-				TEvents,
-				TQueues
-			>,
-			driverCtx: any,
-		) => TVars | Promise<TVars>;
-	}
+			/**
+			 * @experimental
+			 */
+			createVars: (
+				c: CreateVarsContext<
+					TState,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
+				driverCtx: any,
+			) => TVars | Promise<TVars>;
+	  }
 	| Record<never, never>;
 
 export interface Actions<
@@ -513,28 +513,28 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise. If the promise exits, the actor crashes.
 	 */
 	run?:
-	| ((
-		c: RunContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase,
-			TEvents,
-			TQueues
-		>,
-	) => void | Promise<void>)
-	| RunConfig<
-		TState,
-		TConnParams,
-		TConnState,
-		TVars,
-		TInput,
-		TDatabase,
-		TEvents,
-		TQueues
-	>;
+		| ((
+				c: RunContext<
+					TState,
+					TConnParams,
+					TConnState,
+					TVars,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
+		  ) => void | Promise<void>)
+		| RunConfig<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+		  >;
 
 	/**
 	 * Called when the actor's state changes.
@@ -739,11 +739,11 @@ interface BaseActorConfig<
 
 type ActorDatabaseConfig<TDatabase extends AnyDatabaseProvider> =
 	| {
-		/**
-		 * @experimental
-		 */
-		db: TDatabase;
-	}
+			/**
+			 * @experimental
+			 */
+			db: TDatabase;
+	  }
 	| Record<never, never>;
 
 // 1. Infer schema
@@ -1162,22 +1162,22 @@ export const DocActorConfigSchema = z
 			.describe(
 				"Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits or throws, the actor crashes.",
 			),
-			onStateChange: z
-				.unknown()
-				.optional()
-				.describe(
-					"Called when the actor's state changes. State changes within this hook won't trigger recursion.",
-				),
-			onBeforeConnect: z
-				.unknown()
-				.optional()
-				.describe(
-					"Called before a client connects. Throw an error to reject the connection.",
-				),
-			onConnect: z
-				.unknown()
-				.optional()
-				.describe("Called when a client successfully connects."),
+		onStateChange: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when the actor's state changes. State changes within this hook won't trigger recursion.",
+			),
+		onBeforeConnect: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called before a client connects. Throw an error to reject the connection.",
+			),
+		onConnect: z
+			.unknown()
+			.optional()
+			.describe("Called when a client successfully connects."),
 		onDisconnect: z
 			.unknown()
 			.optional()

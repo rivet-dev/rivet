@@ -256,9 +256,14 @@ export class QueueCompletionPayloadInvalid extends ActorError {
 
 export class QueueAlreadyCompleted extends ActorError {
 	constructor() {
-		super("queue", "already_completed", "Queue message was already completed.", {
-			public: true,
-		});
+		super(
+			"queue",
+			"already_completed",
+			"Queue message was already completed.",
+			{
+				public: true,
+			},
+		);
 	}
 }
 

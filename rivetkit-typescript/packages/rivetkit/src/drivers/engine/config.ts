@@ -1,8 +1,5 @@
 import { z } from "zod/v4";
-import {
-	ClientConfigSchemaBase,
-	transformClientConfig,
-} from "@/client/config";
+import { ClientConfigSchemaBase, transformClientConfig } from "@/client/config";
 import { getRivetRunnerKey } from "@/utils/env-vars";
 
 /**

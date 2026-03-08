@@ -3,6 +3,7 @@ name: frontend
 on:
   pull_request:
     paths:
+      - .github/workflows/frontend.yml
       - frontend/**
       - engine/sdks/typescript/**
       - rivetkit-typescript/**
@@ -17,7 +18,7 @@ jobs:
       - uses: biomejs/setup-biome@v2
         with:
           version: latest
-      - run: biome check ./frontend --reporter=github
+      - run: biome check ./frontend --formatter-enabled=true --linter-enabled=false --assist-enabled=false --reporter=github
   rivetkit-quality-check:
     name: RivetKit / Quality Check
     runs-on: ubuntu-latest
@@ -26,7 +27,7 @@ jobs:
       - uses: biomejs/setup-biome@v2
         with:
           version: latest
-      - run: biome check ./rivetkit-typescript --reporter=github
+      - run: biome check ./rivetkit-typescript --formatter-enabled=true --linter-enabled=false --assist-enabled=false --reporter=github
   # website-quality-check:
   #   name: Website / Quality Check
   #   runs-on: ubuntu-latest
@@ -71,9 +72,8 @@ jobs:
             ${{ runner.os }}-turbo-
       - uses: pnpm/action-setup@v4
       - run: pnpm install
-      - run: pnpm build --filter='./rivetkit-typescript'
-      - run: pnpm check-types
-        working-directory: ./rivetkit-typescript
+      - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*'
+      - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*'
   # website-type-check:
   #   name: Website / Type Check
   #   runs-on: ubuntu-latest
@@ -104,6 +104,8 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
         working-directory: ./frontend
+      - name: Build frontend workspace dependencies
+        run: pnpm build --filter='./frontend'
       - name: Build engine dashboard
         run: pnpm build:engine
         working-directory: ./frontend

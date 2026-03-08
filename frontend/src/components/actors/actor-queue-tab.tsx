@@ -16,11 +16,7 @@ export function ActorQueueTab({ actorId }: ActorQueueTabProps) {
 	);
 
 	if (destroyedAt) {
-		return (
-			<Info>
-				Queue data is unavailable for inactive Actors.
-			</Info>
-		);
+		return <Info>Queue data is unavailable for inactive Actors.</Info>;
 	}
 
 	if (!inspector.features.queue.supported) {

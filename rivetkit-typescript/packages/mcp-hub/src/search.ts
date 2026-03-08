@@ -52,7 +52,8 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 		return {
 			section,
 			page,
-			searchField: `${page.title} ${page.description} ${strippedContent}`.toLowerCase(),
+			searchField:
+				`${page.title} ${page.description} ${strippedContent}`.toLowerCase(),
 			titleField: section.title.toLowerCase(),
 			descriptionField: page.description.toLowerCase(),
 			pathField: `${page.slug} ${page.path}`.toLowerCase(),
@@ -73,7 +74,10 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 				return { results: [], modeUsed: options.mode, total: 0 };
 			}
 
-			const tokens = normalizedQuery.toLowerCase().split(/\s+/).filter(Boolean);
+			const tokens = normalizedQuery
+				.toLowerCase()
+				.split(/\s+/)
+				.filter(Boolean);
 			const filter = options.filters;
 
 			const scored = entries
@@ -82,12 +86,18 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 						return null;
 					}
 
-					const { score, why } = scoreEntry(entry, tokens, normalizedQuery.toLowerCase());
+					const { score, why } = scoreEntry(
+						entry,
+						tokens,
+						normalizedQuery.toLowerCase(),
+					);
 					if (score <= 0) {
 						return null;
 					}
 
-					const snippet = entry.section.snippet || entry.section.content.slice(0, 200);
+					const snippet =
+						entry.section.snippet ||
+						entry.section.content.slice(0, 200);
 
 					const result: RankedSection = {
 						resource_uri: entry.section.resource_uri,
@@ -109,10 +119,16 @@ export function createSearchEngine(metadata: Metadata): SearchEngine {
 					if (b.score !== a.score) {
 						return b.score - a.score;
 					}
-					return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+					return (
+						new Date(b.updated_at).getTime() -
+						new Date(a.updated_at).getTime()
+					);
 				});
 
-			const paged = scored.slice(options.offset, options.offset + options.limit);
+			const paged = scored.slice(
+				options.offset,
+				options.offset + options.limit,
+			);
 			return {
 				results: paged,
 				modeUsed: normalizeMode(options.mode),
@@ -154,7 +170,11 @@ function matchesFilters(page: PageRecord, filters: SearchFilters): boolean {
 	return true;
 }
 
-function scoreEntry(entry: SectionEntry, tokens: string[], query: string): { score: number; why: string[] } {
+function scoreEntry(
+	entry: SectionEntry,
+	tokens: string[],
+	query: string,
+): { score: number; why: string[] } {
 	let score = 0;
 	const why = new Set<string>();
 

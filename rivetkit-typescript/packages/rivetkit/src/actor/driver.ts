@@ -4,9 +4,7 @@ import type { ManagerDriver } from "@/manager/driver";
 import { type AnyConn } from "./conn/mod";
 import type { AnyActorInstance } from "./instance/mod";
 import type { RegistryConfig } from "@/registry/config";
-import type {
-	RawDatabaseClient,
-} from "@/db/config";
+import type { RawDatabaseClient } from "@/db/config";
 import type { SqliteVfs } from "@rivetkit/sqlite-vfs";
 import { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 
@@ -88,7 +86,7 @@ export interface ActorDriver {
 	 */
 	overrideDrizzleDatabaseClient?(
 		actorId: string,
-	): Promise<BaseSQLiteDatabase<any,any,any,any> | undefined>;
+	): Promise<BaseSQLiteDatabase<any, any, any, any> | undefined>;
 
 	/**
 	 * Creates a SQLite VFS instance for creating KV-backed databases.

@@ -17,7 +17,8 @@ export type QueueMessageOf<Name extends string, Body> = Omit<
 	body: Body;
 };
 
-export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
+export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues &
+	string;
 export type QueueFilterName<TQueues extends QueueSchemaConfig> =
 	keyof TQueues extends never ? string : QueueName<TQueues>;
 
@@ -49,9 +50,7 @@ type QueueCompletableMessageForName<
 	TQueues extends QueueSchemaConfig,
 	TName extends QueueFilterName<TQueues>,
 > = QueueMessageForName<TQueues, TName> & {
-	complete(
-		...args: QueueCompleteArgsForName<TQueues, TName>
-	): Promise<void>;
+	complete(...args: QueueCompleteArgsForName<TQueues, TName>): Promise<void>;
 };
 
 export type QueueResultMessageForName<
@@ -159,7 +158,9 @@ export class ActorQueue<
 		const TCompletable extends boolean = false,
 	>(
 		opts?: QueueNextOptions<TName, TCompletable>,
-	): Promise<QueueResultMessageForName<TQueues, TName, TCompletable> | undefined> {
+	): Promise<
+		QueueResultMessageForName<TQueues, TName, TCompletable> | undefined
+	> {
 		const resolvedOpts = (opts ?? {}) as QueueNextOptions<
 			TName,
 			TCompletable
@@ -194,20 +195,16 @@ export class ActorQueue<
 			resolvedOpts.signal,
 		);
 		const messages = await this.#queueManager
-			.receive(
-				names,
-				count,
-				resolvedOpts.timeout,
-				signal,
-				completable,
-			)
+			.receive(names, count, resolvedOpts.timeout, signal, completable)
 			.finally(cleanup);
 		if (!completable) {
 			return messages as Array<
 				QueueResultMessageForName<TQueues, TName, TCompletable>
 			>;
 		}
-		return messages.map((message) => this.#makeCompletableMessage(message)) as unknown as Array<
+		return messages.map((message) =>
+			this.#makeCompletableMessage(message),
+		) as unknown as Array<
 			QueueResultMessageForName<TQueues, TName, TCompletable>
 		>;
 	}
@@ -217,7 +214,9 @@ export class ActorQueue<
 		const TCompletable extends boolean = false,
 	>(
 		opts?: QueueTryNextOptions<TName, TCompletable>,
-	): Promise<QueueResultMessageForName<TQueues, TName, TCompletable> | undefined> {
+	): Promise<
+		QueueResultMessageForName<TQueues, TName, TCompletable> | undefined
+	> {
 		const resolvedOpts = (opts ?? {}) as QueueTryNextOptions<
 			TName,
 			TCompletable
@@ -245,7 +244,9 @@ export class ActorQueue<
 				count: resolvedOpts.count,
 				timeout: 0,
 				completable: true,
-			})) as Array<QueueResultMessageForName<TQueues, TName, TCompletable>>;
+			})) as Array<
+				QueueResultMessageForName<TQueues, TName, TCompletable>
+			>;
 		}
 		return (await this.nextBatch<TName, false>({
 			names: resolvedOpts.names,
@@ -268,16 +269,17 @@ export class ActorQueue<
 		>;
 		while (!this.#abortSignal.aborted) {
 			try {
-				const message = resolvedOpts.completable === true
-					? await this.next<TName, true>({
-							names: resolvedOpts.names,
-							signal: resolvedOpts.signal,
-							completable: true,
-						})
-					: await this.next<TName, false>({
-							names: resolvedOpts.names,
-							signal: resolvedOpts.signal,
-						});
+				const message =
+					resolvedOpts.completable === true
+						? await this.next<TName, true>({
+								names: resolvedOpts.names,
+								signal: resolvedOpts.signal,
+								completable: true,
+							})
+						: await this.next<TName, false>({
+								names: resolvedOpts.names,
+								signal: resolvedOpts.signal,
+							});
 				if (!message) {
 					continue;
 				}
@@ -308,16 +310,16 @@ export class ActorQueue<
 		return await this.#queueManager.enqueue(name, body);
 	}
 
-	#normalizeNames(names: readonly string[] | undefined): string[] | undefined {
+	#normalizeNames(
+		names: readonly string[] | undefined,
+	): string[] | undefined {
 		if (!names || names.length === 0) {
 			return undefined;
 		}
 		return [...new Set(names)];
 	}
 
-	#makeCompletableMessage(
-		message: QueueMessage,
-	): QueueMessage & {
+	#makeCompletableMessage(message: QueueMessage): QueueMessage & {
 		complete: (response?: unknown) => Promise<void>;
 	} {
 		const messageId = message.id.toString();

@@ -129,9 +129,7 @@ export function getOrCreateMetadata(
 /**
  * Load storage from the driver.
  */
-export async function loadStorage(
-	driver: EngineDriver,
-): Promise<Storage> {
+export async function loadStorage(driver: EngineDriver): Promise<Storage> {
 	const storage = createStorage();
 
 	// Load name registry
@@ -207,12 +205,25 @@ export async function loadMetadata(
 }
 
 /**
- * Flush all dirty data to the driver.
+ * Pending deletions collected by collectLoopPruning to be included
+ * in the next flush alongside the state write.
+ */
+export interface PendingDeletions {
+	prefixes: Uint8Array[];
+	keys: Uint8Array[];
+	ranges: { start: Uint8Array; end: Uint8Array }[];
+}
+
+/**
+ * Flush all dirty data to the driver. Optionally includes pending
+ * deletions so that history pruning happens alongside the
+ * state write.
  */
 export async function flush(
 	storage: Storage,
 	driver: EngineDriver,
 	onHistoryUpdated?: () => void,
+	pendingDeletions?: PendingDeletions,
 ): Promise<void> {
 	const writes: KVWrite[] = [];
 	let historyUpdated = false;
@@ -293,6 +304,25 @@ export async function flush(
 		await driver.batch(writes);
 	}
 
+	// Apply pending deletions after the batch write. These are collected
+	// by collectLoopPruning so pruning happens alongside the state write.
+	if (pendingDeletions) {
+		const deleteOps: Promise<void>[] = [];
+		for (const prefix of pendingDeletions.prefixes) {
+			deleteOps.push(driver.deletePrefix(prefix));
+		}
+		for (const range of pendingDeletions.ranges) {
+			deleteOps.push(driver.deleteRange(range.start, range.end));
+		}
+		for (const key of pendingDeletions.keys) {
+			deleteOps.push(driver.delete(key));
+		}
+		if (deleteOps.length > 0) {
+			await Promise.all(deleteOps);
+			historyUpdated = true;
+		}
+	}
+
 	// Update flushed tracking after successful write
 	storage.flushedNameCount = storage.nameRegistry.length;
 	storage.flushedState = storage.state;
@@ -314,30 +344,41 @@ export async function deleteEntriesWithPrefix(
 	prefixLocation: Location,
 	onHistoryUpdated?: () => void,
 ): Promise<void> {
-	// Collect entry IDs for metadata cleanup
-	const entryIds: string[] = [];
+	const deletions = collectDeletionsForPrefix(storage, prefixLocation);
 
-	// Collect entries to delete and their IDs
+	// Apply deletions to driver
+	await driver.deletePrefix(deletions.prefixes[0]!);
+	await Promise.all(deletions.keys.map((key) => driver.delete(key)));
+
+	if (deletions.keys.length > 0 && onHistoryUpdated) {
+		onHistoryUpdated();
+	}
+}
+
+/**
+ * Remove entries matching a location prefix from memory and collect
+ * the driver-level deletion operations. The returned PendingDeletions
+ * can be applied immediately or batched with a flush.
+ */
+export function collectDeletionsForPrefix(
+	storage: Storage,
+	prefixLocation: Location,
+): PendingDeletions {
+	const pending: PendingDeletions = {
+		prefixes: [buildHistoryPrefix(prefixLocation)],
+		keys: [],
+		ranges: [],
+	};
+
 	for (const [key, entry] of storage.history.entries) {
-		// Check if the entry's location starts with the prefix location
 		if (isLocationPrefix(prefixLocation, entry.location)) {
-			entryIds.push(entry.id);
+			pending.keys.push(buildEntryMetadataKey(entry.id));
 			storage.entryMetadata.delete(entry.id);
 			storage.history.entries.delete(key);
 		}
 	}
 
-	// Delete entries from driver using binary prefix
-	await driver.deletePrefix(buildHistoryPrefix(prefixLocation));
-
-	// Delete metadata from driver in parallel
-	await Promise.all(
-		entryIds.map((id) => driver.delete(buildEntryMetadataKey(id))),
-	);
-
-	if (entryIds.length > 0 && onHistoryUpdated) {
-		onHistoryUpdated();
-	}
+	return pending;
 }
 
 /**

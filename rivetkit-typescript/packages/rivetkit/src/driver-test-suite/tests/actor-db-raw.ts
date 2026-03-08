@@ -25,12 +25,16 @@ export function runActorDbRawTests(driverTestConfig: DriverTestConfig) {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				// First instance adds items
-				const instance1 = client.dbActorRaw.getOrCreate(["test-persistence"]);
+				const instance1 = client.dbActorRaw.getOrCreate([
+					"test-persistence",
+				]);
 				await instance1.insertValue("Item 1");
 				await instance1.insertValue("Item 2");
 
 				// Second instance (same actor) should see persisted data
-				const instance2 = client.dbActorRaw.getOrCreate(["test-persistence"]);
+				const instance2 = client.dbActorRaw.getOrCreate([
+					"test-persistence",
+				]);
 				const count = await instance2.getCount();
 				expect(count).toBe(2);
 			});

@@ -71,7 +71,10 @@ export function createNoopTraces(): Traces<OtlpExportTraceServiceRequestJson> {
 			return {
 				startTimeMs: BigInt(options.startMs),
 				endTimeMs: BigInt(options.endMs),
-				limit: Math.max(0, Math.min(U32_MAX, Math.floor(options.limit))),
+				limit: Math.max(
+					0,
+					Math.min(U32_MAX, Math.floor(options.limit)),
+				),
 				clamped: false,
 				baseChunks: [],
 				chunks: [],

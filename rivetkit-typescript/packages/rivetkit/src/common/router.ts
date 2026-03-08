@@ -5,10 +5,7 @@ import {
 	getRequestEncoding,
 	getRequestExposeInternalError,
 } from "@/actor/router-endpoints";
-import {
-	buildActorNames,
-	type RegistryConfig,
-} from "@/registry/config";
+import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,

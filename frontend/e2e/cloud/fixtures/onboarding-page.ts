@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import { TEST_IDS } from "../../../src/utils/test-ids";
 
 export class OnboardingPage {
-	constructor(private page: import("@playwright/test").Page) { }
+	constructor(private page: import("@playwright/test").Page) {}
 	async selectAgentPath() {
 		await this.page
 			.getByTestId(TEST_IDS.Onboarding.PathSelectionAgent)

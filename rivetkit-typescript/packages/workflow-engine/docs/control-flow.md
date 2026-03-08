@@ -19,9 +19,7 @@ async function processBatches(ctx: WorkflowContextInterface) {
   return await ctx.loop({
     name: "process-batches",
     state: { cursor: null as string | null, processed: 0 },
-    commitInterval: 10,
-    historyEvery: 10,
-    historyKeep: 10,
+    historyPruneInterval: 20,
     run: async (loopCtx, state) => {
       const batch = await loopCtx.step("fetch", () => fetchBatch(state.cursor));
 
@@ -40,7 +38,7 @@ async function processBatches(ctx: WorkflowContextInterface) {
 }
 ```
 
-Loop state is persisted every `commitInterval` iterations. Loop history is trimmed every `historyEvery` iterations, keeping only the most recent `historyKeep` iterations, so rollback only replays the last retained iteration.
+Loop state is persisted every `historyPruneInterval` iterations. Old iterations beyond `historySize` (defaults to `historyPruneInterval`) are pruned, so rollback only replays the last retained iterations.
 
 ## Join (Wait for All)
 

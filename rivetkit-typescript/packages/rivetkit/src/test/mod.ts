@@ -23,10 +23,9 @@ export async function setupTest<A extends Registry<any>>(
 	registry.config.test = { ...registry.config.test, enabled: true };
 
 	// Create driver
-	const driver = createFileSystemOrMemoryDriver(
-		true,
-		{ path: `/tmp/rivetkit-test-${crypto.randomUUID()}` },
-	);
+	const driver = createFileSystemOrMemoryDriver(true, {
+		path: `/tmp/rivetkit-test-${crypto.randomUUID()}`,
+	});
 
 	// Build driver config
 	// biome-ignore lint/style/useConst: Assigned later

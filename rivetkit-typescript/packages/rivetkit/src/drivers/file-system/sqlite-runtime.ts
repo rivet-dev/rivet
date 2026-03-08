@@ -110,7 +110,10 @@ export function loadSqliteRuntime(): SqliteRuntime {
 					const rawDb = new BunDatabase(path);
 					configureSqliteRuntimeDatabase(rawDb, path);
 					const query = rawDb.query?.bind(rawDb);
-					if (!query) throw new Error("bun:sqlite database missing query method");
+					if (!query)
+						throw new Error(
+							"bun:sqlite database missing query method",
+						);
 					return createPreparedDatabaseAdapter(rawDb, query);
 				},
 			};
@@ -120,7 +123,9 @@ export function loadSqliteRuntime(): SqliteRuntime {
 	}
 
 	try {
-		const nodeSqlite = requireFn(/* webpackIgnore: true */ "node:sqlite") as {
+		const nodeSqlite = requireFn(
+			/* webpackIgnore: true */ "node:sqlite",
+		) as {
 			DatabaseSync?: SqliteDatabaseCtor;
 		};
 		const NodeDatabaseSync = nodeSqlite.DatabaseSync;
@@ -132,7 +137,9 @@ export function loadSqliteRuntime(): SqliteRuntime {
 					configureSqliteRuntimeDatabase(rawDb, path);
 					const prepare = rawDb.prepare?.bind(rawDb);
 					if (!prepare) {
-						throw new Error("node:sqlite DatabaseSync missing prepare method");
+						throw new Error(
+							"node:sqlite DatabaseSync missing prepare method",
+						);
 					}
 					return createPreparedDatabaseAdapter(rawDb, prepare);
 				},
@@ -158,7 +165,9 @@ export function loadSqliteRuntime(): SqliteRuntime {
 					configureSqliteRuntimeDatabase(rawDb, path);
 					const prepare = rawDb.prepare?.bind(rawDb);
 					if (!prepare) {
-						throw new Error("better-sqlite3 database missing prepare method");
+						throw new Error(
+							"better-sqlite3 database missing prepare method",
+						);
 					}
 					return createPreparedDatabaseAdapter(rawDb, prepare);
 				},

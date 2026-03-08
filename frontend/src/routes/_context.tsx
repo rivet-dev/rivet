@@ -27,6 +27,8 @@ const searchSchema = z
 		actorId: z.string().optional(),
 		tab: z.string().optional(),
 		n: z.array(z.string()).optional(),
+		u: z.string().optional(),
+		t: z.string().optional(),
 		// clerk related
 		__clerk_ticket: z.string().optional(),
 		__clerk_status: z.string().optional(),
@@ -48,7 +50,11 @@ export const Route = createFileRoute("/_context")({
 				dataProvider: context.getOrCreateCloudContext(context.clerk),
 				__type: "cloud" as const,
 			}))
-			.exhaustive();
+			.otherwise(() => {
+				throw new Error(
+					"Inspector routes are not supported in the dashboard build",
+				);
+			});
 	},
 	beforeLoad: async (route) => {
 		return await match(route.context)

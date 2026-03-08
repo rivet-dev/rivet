@@ -63,18 +63,26 @@ function assertBytesEqual(actual: Uint8Array, expected: Uint8Array): void {
 	expect(actual.length).toBe(expected.length);
 	for (let i = 0; i < expected.length; i++) {
 		if (actual[i] !== expected[i]) {
-			throw new Error(`byte mismatch at offset ${i}: ${actual[i]} != ${expected[i]}`);
+			throw new Error(
+				`byte mismatch at offset ${i}: ${actual[i]} != ${expected[i]}`,
+			);
 		}
 	}
 }
 
-function applyPatch(base: Uint8Array, offset: number, patch: Uint8Array): Uint8Array {
+function applyPatch(
+	base: Uint8Array,
+	offset: number,
+	patch: Uint8Array,
+): Uint8Array {
 	const next = new Uint8Array(base);
 	next.set(patch, offset);
 	return next;
 }
 
-async function createBlobTable(db: { exec: (sql: string) => Promise<void> }): Promise<void> {
+async function createBlobTable(db: {
+	exec: (sql: string) => Promise<void>;
+}): Promise<void> {
 	await db.exec(`
 		CREATE TABLE IF NOT EXISTS blob_data (
 			id INTEGER PRIMARY KEY,
@@ -160,14 +168,21 @@ describe("sqlite-vfs", () => {
 			await createBlobTable(db);
 
 			const initial = createPattern(3 * CHUNK_SIZE + 211, 23);
-			await db.run("INSERT INTO blob_data (id, payload) VALUES (?, ?)", [1, initial]);
+			await db.run("INSERT INTO blob_data (id, payload) VALUES (?, ?)", [
+				1,
+				initial,
+			]);
 
 			const patchOffset = CHUNK_SIZE - 137;
 			const patch = createPattern(CHUNK_SIZE + 503, 91);
 			const expected = applyPatch(initial, patchOffset, patch);
-			await db.run("UPDATE blob_data SET payload = ? WHERE id = 1", [expected]);
+			await db.run("UPDATE blob_data SET payload = ? WHERE id = 1", [
+				expected,
+			]);
 
-			const result = await db.query("SELECT payload FROM blob_data WHERE id = 1");
+			const result = await db.query(
+				"SELECT payload FROM blob_data WHERE id = 1",
+			);
 			expect(result.rows.length).toBe(1);
 			const readBack = toBlobValue(result.rows[0]?.[0]);
 			assertBytesEqual(readBack, expected);
@@ -233,18 +248,26 @@ describe("sqlite-vfs", () => {
 				"INSERT INTO blob_data (id, payload) VALUES (1, zeroblob(?))",
 				[totalSize],
 			);
-			const zeroBlobResult = await db.query("SELECT payload FROM blob_data WHERE id = 1");
+			const zeroBlobResult = await db.query(
+				"SELECT payload FROM blob_data WHERE id = 1",
+			);
 			const baseBlob = toBlobValue(zeroBlobResult.rows[0]?.[0]);
 			const expected = applyPatch(baseBlob, patchOffset, patch);
-			await db.run("UPDATE blob_data SET payload = ? WHERE id = 1", [expected]);
+			await db.run("UPDATE blob_data SET payload = ? WHERE id = 1", [
+				expected,
+			]);
 
-			const result = await db.query("SELECT payload FROM blob_data WHERE id = 1");
+			const result = await db.query(
+				"SELECT payload FROM blob_data WHERE id = 1",
+			);
 			const blob = toBlobValue(result.rows[0]?.[0]);
 			expect(blob.length).toBe(totalSize);
 
 			for (let i = 0; i < patchOffset; i++) {
 				if (blob[i] !== 0) {
-					throw new Error(`expected zero at offset ${i}, got ${blob[i]}`);
+					throw new Error(
+						`expected zero at offset ${i}, got ${blob[i]}`,
+					);
 				}
 			}
 			for (let i = 0; i < patch.length; i++) {
@@ -265,7 +288,10 @@ describe("sqlite-vfs", () => {
 				"CREATE TABLE IF NOT EXISTS kv_like (id INTEGER PRIMARY KEY, value TEXT NOT NULL)",
 			);
 			for (let i = 1; i <= 10; i++) {
-				await db.run("INSERT INTO kv_like (id, value) VALUES (?, ?)", [i, "init"]);
+				await db.run("INSERT INTO kv_like (id, value) VALUES (?, ?)", [
+					i,
+					"init",
+				]);
 			}
 
 			for (let i = 0; i < 500; i++) {
@@ -276,7 +302,9 @@ describe("sqlite-vfs", () => {
 				]);
 			}
 
-			const results = await db.query("SELECT id, value FROM kv_like ORDER BY id");
+			const results = await db.query(
+				"SELECT id, value FROM kv_like ORDER BY id",
+			);
 			expect(results.rows.length).toBe(10);
 			for (let i = 0; i < results.rows.length; i++) {
 				const row = results.rows[i];
@@ -300,13 +328,19 @@ describe("sqlite-vfs", () => {
 			for (let i = 0; i < 150; i++) {
 				await db.run(
 					"INSERT OR REPLACE INTO integrity_data (id, value, payload) VALUES (?, ?, ?)",
-					[i + 1, `seed-${i}`, createPattern(2048 + (i % 7) * 97, i + 5)],
+					[
+						i + 1,
+						`seed-${i}`,
+						createPattern(2048 + (i % 7) * 97, i + 5),
+					],
 				);
 			}
 			for (let i = 0; i < 200; i++) {
 				const id = (i % 150) + 1;
 				if (i % 9 === 0) {
-					await db.run("DELETE FROM integrity_data WHERE id = ?", [id]);
+					await db.run("DELETE FROM integrity_data WHERE id = ?", [
+						id,
+					]);
 				} else {
 					await db.run(
 						"INSERT OR REPLACE INTO integrity_data (id, value, payload) VALUES (?, ?, ?)",
@@ -320,7 +354,9 @@ describe("sqlite-vfs", () => {
 			}
 
 			const integrityBefore = await db.query("PRAGMA integrity_check");
-			expect(String(integrityBefore.rows[0]?.[0]).toLowerCase()).toBe("ok");
+			expect(String(integrityBefore.rows[0]?.[0]).toLowerCase()).toBe(
+				"ok",
+			);
 		} finally {
 			await db.close();
 		}
@@ -328,8 +364,12 @@ describe("sqlite-vfs", () => {
 		const vfsReloaded = await createSqliteVfs();
 		const dbReloaded = await vfsReloaded.open("actor-integrity", kvStore);
 		try {
-			const integrityAfter = await dbReloaded.query("PRAGMA integrity_check");
-			expect(String(integrityAfter.rows[0]?.[0]).toLowerCase()).toBe("ok");
+			const integrityAfter = await dbReloaded.query(
+				"PRAGMA integrity_check",
+			);
+			expect(String(integrityAfter.rows[0]?.[0]).toLowerCase()).toBe(
+				"ok",
+			);
 		} finally {
 			await dbReloaded.close();
 		}

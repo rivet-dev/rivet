@@ -111,7 +111,10 @@ export class InlineWebSocketAdapter {
 		try {
 			this.#handler.onError(err, this.#wsContext);
 		} catch (handlerErr) {
-			logger().error({ msg: "error in onError handler", error: handlerErr });
+			logger().error({
+				msg: "error in onError handler",
+				error: handlerErr,
+			});
 		}
 
 		// Fire error event to both sides
@@ -129,7 +132,10 @@ export class InlineWebSocketAdapter {
 		this.#readyState = 2; // CLOSING
 
 		try {
-			this.#handler.onClose({ code, reason, wasClean: true }, this.#wsContext);
+			this.#handler.onClose(
+				{ code, reason, wasClean: true },
+				this.#wsContext,
+			);
 		} catch (err) {
 			logger().error({ msg: "error closing websocket", error: err });
 		} finally {

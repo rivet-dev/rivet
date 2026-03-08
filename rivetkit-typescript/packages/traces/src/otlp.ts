@@ -91,7 +91,15 @@ export function hexFromBytes(bytes: Uint8Array): string {
 }
 
 export function base64FromBytes(bytes: Uint8Array): string {
-	const bufferCtor = (globalThis as { Buffer?: { from: (data: Uint8Array) => { toString: (encoding: string) => string } } }).Buffer;
+	const bufferCtor = (
+		globalThis as {
+			Buffer?: {
+				from: (data: Uint8Array) => {
+					toString: (encoding: string) => string;
+				};
+			};
+		}
+	).Buffer;
 	if (bufferCtor) {
 		return bufferCtor.from(bytes).toString("base64");
 	}

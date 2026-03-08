@@ -515,14 +515,20 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				// Each item is roughly 60 bytes, so 800 items ≈ 48KB
 				const items: string[] = [];
 				for (let i = 0; i < 800; i++) {
-					items.push(`Item ${i} with some additional text to increase size`);
+					items.push(
+						`Item ${i} with some additional text to increase size`,
+					);
 				}
 
 				const result = await connection.processLargeRequest({ items });
 
 				expect(result.itemCount).toBe(800);
-				expect(result.firstItem).toBe("Item 0 with some additional text to increase size");
-				expect(result.lastItem).toBe("Item 799 with some additional text to increase size");
+				expect(result.firstItem).toBe(
+					"Item 0 with some additional text to increase size",
+				);
+				expect(result.lastItem).toBe(
+					"Item 799 with some additional text to increase size",
+				);
 
 				// Verify connection state was updated
 				const lastRequestSize = await connection.getLastRequestSize();
@@ -544,11 +550,13 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
 				const items: string[] = [];
 				for (let i = 0; i < 1500; i++) {
-					items.push(`Item ${i} with some additional text to increase size`);
+					items.push(
+						`Item ${i} with some additional text to increase size`,
+					);
 				}
 
 				await expect(
-					connection.processLargeRequest({ items })
+					connection.processLargeRequest({ items }),
 				).rejects.toThrow();
 
 				// Clean up
@@ -567,8 +575,12 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				const result = await connection.getLargeResponse(800);
 
 				expect(result.items).toHaveLength(800);
-				expect(result.items[0]).toBe("Item 0 with some additional text to increase size");
-				expect(result.items[799]).toBe("Item 799 with some additional text to increase size");
+				expect(result.items[0]).toBe(
+					"Item 0 with some additional text to increase size",
+				);
+				expect(result.items[799]).toBe(
+					"Item 799 with some additional text to increase size",
+				);
 
 				// Clean up
 				await connection.dispose();
@@ -585,7 +597,7 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				// Request a response that exceeds the default 1MB limit
 				// Each item is roughly 60 bytes, so 20000 items ≈ 1.2MB
 				await expect(
-					connection.getLargeResponse(20000)
+					connection.getLargeResponse(20000),
 				).rejects.toThrow();
 
 				// Clean up

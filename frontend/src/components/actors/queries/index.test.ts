@@ -40,9 +40,9 @@ describe("getActorStatus", () => {
 	});
 
 	it("returns 'pending' when pendingAllocationTs is set", () => {
-		expect(
-			getActorStatus({ ...base, pendingAllocationTs: 2000 }),
-		).toBe("pending");
+		expect(getActorStatus({ ...base, pendingAllocationTs: 2000 })).toBe(
+			"pending",
+		);
 	});
 
 	it("returns 'crash-loop' when rescheduleTs is set", () => {
@@ -81,7 +81,7 @@ describe("getActorStatus", () => {
 			getActorStatus({
 				...base,
 				createTs: undefined,
-			}),
+			} as unknown as Parameters<typeof getActorStatus>[0]),
 		).toBe("unknown");
 	});
 });

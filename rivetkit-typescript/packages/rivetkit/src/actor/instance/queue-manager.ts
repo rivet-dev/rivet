@@ -259,8 +259,7 @@ export class QueueManager<
 	): Promise<QueueMessage[]> {
 		this.#actor.assertReady();
 		const limitedCount = Math.max(1, count);
-		const nameSet =
-			names && names.length > 0 ? new Set(names) : undefined;
+		const nameSet = names && names.length > 0 ? new Set(names) : undefined;
 
 		const immediate = await this.#drainMessages(
 			nameSet,
@@ -356,8 +355,7 @@ export class QueueManager<
 		names: readonly string[] | undefined,
 		abortSignal?: AbortSignal,
 	): Promise<void> {
-		const nameSet =
-			names && names.length > 0 ? new Set(names) : undefined;
+		const nameSet = names && names.length > 0 ? new Set(names) : undefined;
 		const existing = await this.#loadQueueMessages();
 		if (nameSet) {
 			if (existing.some((message) => nameSet.has(message.name))) {
@@ -599,5 +597,4 @@ export class QueueManager<
 			ACTOR_PERSIST_CURRENT_VERSION,
 		);
 	}
-
 }

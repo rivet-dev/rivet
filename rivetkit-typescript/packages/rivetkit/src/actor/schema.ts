@@ -11,11 +11,7 @@ export interface EventTypeToken<T, TContext = any> {
 	readonly schema?: PrimitiveSchema;
 }
 
-export interface QueueTypeToken<
-	TMessage,
-	TComplete = never,
-	TContext = any,
-> {
+export interface QueueTypeToken<TMessage, TComplete = never, TContext = any> {
 	readonly _queueMessage?: TMessage;
 	readonly _queueComplete?: TComplete;
 	readonly canPublish?: SchemaHook<TContext>;
@@ -45,11 +41,7 @@ export function event<T, TContext = any>(
 
 export function queue<TMessage, TComplete = never, TContext = any>(
 	options?: QueueOptions<TContext>,
-): QueueTypeToken<
-	TMessage,
-	TComplete,
-	TContext
-> {
+): QueueTypeToken<TMessage, TComplete, TContext> {
 	return (options ?? {}) as QueueTypeToken<TMessage, TComplete, TContext>;
 }
 
@@ -87,16 +79,16 @@ export type SchemaConfig = QueueSchemaConfig;
 
 export type InferSchema<T> =
 	T extends QueueSchemaDefinition<any>
-			? InferSchema<T["message"]>
-			: T extends QueueTypeToken<infer M, unknown, any>
+		? InferSchema<T["message"]>
+		: T extends QueueTypeToken<infer M, unknown, any>
 			? M
 			: T extends EventSchemaDefinition<any>
-			? InferSchema<T["schema"]>
-			: T extends StandardSchemaV1<any, infer O>
-			? O
-			: T extends EventTypeToken<infer R, any>
-				? R
-				: never;
+				? InferSchema<T["schema"]>
+				: T extends StandardSchemaV1<any, infer O>
+					? O
+					: T extends EventTypeToken<infer R, any>
+						? R
+						: never;
 
 export type InferSchemaMap<T extends Record<string, unknown>> = {
 	[K in keyof T]: InferSchema<T[K]>;
@@ -104,10 +96,10 @@ export type InferSchemaMap<T extends Record<string, unknown>> = {
 
 export type InferQueueComplete<T> =
 	T extends QueueTypeToken<unknown, infer C, any>
-			? [C] extends [never]
-				? never
-				: C
-			: T extends QueueSchemaDefinition<any>
+		? [C] extends [never]
+			? never
+			: C
+		: T extends QueueSchemaDefinition<any>
 			? T["complete"] extends PrimitiveSchema
 				? InferSchema<T["complete"]>
 				: never

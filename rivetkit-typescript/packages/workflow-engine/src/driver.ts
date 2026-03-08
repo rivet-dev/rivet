@@ -54,6 +54,11 @@ export interface EngineDriver {
 	deletePrefix(prefix: Uint8Array): Promise<void>;
 
 	/**
+	 * Delete all keys in the half-open range [start, end).
+	 */
+	deleteRange(start: Uint8Array, end: Uint8Array): Promise<void>;
+
+	/**
 	 * List all key-value pairs with a given prefix.
 	 *
 	 * IMPORTANT: Results MUST be sorted by key in lexicographic byte order.

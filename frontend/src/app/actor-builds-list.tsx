@@ -29,7 +29,9 @@ function toPascalCase(str: string): string {
 
 function lookupFaIcon(iconName: string): IconProp | null {
 	const pascalName = `fa${toPascalCase(iconName)}`;
-	const iconDef = (allIcons as Record<string, IconProp>)[pascalName];
+	const iconDef = (allIcons as unknown as Record<string, IconProp>)[
+		pascalName
+	];
 	return iconDef ?? null;
 }
 

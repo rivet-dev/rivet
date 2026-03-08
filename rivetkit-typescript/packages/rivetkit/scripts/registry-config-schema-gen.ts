@@ -11,7 +11,8 @@ async function main() {
 
 	// Add metadata
 	schema.title = "RivetKit Registry Configuration";
-	schema.description = "Configuration schema for RivetKit registry. This is typically passed to the setup() function.";
+	schema.description =
+		"Configuration schema for RivetKit registry. This is typically passed to the setup() function.";
 
 	// Create output directory
 	const outputDir = resolve(

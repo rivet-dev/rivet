@@ -484,7 +484,11 @@ export function runRawWebSocketTests(driverTestConfig: DriverTestConfig) {
 				ws.addEventListener("open", () => resolve(), { once: true });
 				ws.addEventListener("error", reject);
 				ws.addEventListener("close", (evt: any) => {
-					reject(new Error(`WebSocket closed: code=${evt.code} reason=${evt.reason}`));
+					reject(
+						new Error(
+							`WebSocket closed: code=${evt.code} reason=${evt.reason}`,
+						),
+					);
 				});
 			});
 

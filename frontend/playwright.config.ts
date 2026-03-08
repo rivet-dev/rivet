@@ -43,15 +43,18 @@ export default defineConfig({
 			testDir: "./e2e/engine",
 		},
 	],
-	webServer: [{
-		name: "Cloud",
-		command: "pnpm dev:cloud",
-		url: "http://localhost:43710",
-		reuseExistingServer: !process.env.CI,
-	}, {
-		name: "Engine",
-		command: "pnpm dev:engine",
-		url: "http://localhost:43708",
-		reuseExistingServer: !process.env.CI,
-	}],
+	webServer: [
+		{
+			name: "Cloud",
+			command: "pnpm dev:cloud",
+			url: "http://localhost:43710",
+			reuseExistingServer: !process.env.CI,
+		},
+		{
+			name: "Engine",
+			command: "pnpm dev:engine",
+			url: "http://localhost:43708",
+			reuseExistingServer: !process.env.CI,
+		},
+	],
 });

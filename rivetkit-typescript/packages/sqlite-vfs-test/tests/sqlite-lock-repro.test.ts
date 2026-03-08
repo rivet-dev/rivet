@@ -10,7 +10,8 @@ interface SqliteLockError extends Error {
 }
 
 const nodeMajorVersion = Number(process.versions.node.split(".")[0] ?? "0");
-const supportsNodeSqlite = Number.isFinite(nodeMajorVersion) && nodeMajorVersion >= 22;
+const supportsNodeSqlite =
+	Number.isFinite(nodeMajorVersion) && nodeMajorVersion >= 22;
 const lockReproTest = supportsNodeSqlite ? it : it.skip;
 
 describe("sqlite lock repro", () => {
@@ -39,7 +40,9 @@ describe("sqlite lock repro", () => {
 					"CREATE TABLE IF NOT EXISTS kv (key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)",
 				);
 				writer
-					.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)")
+					.prepare(
+						"INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)",
+					)
 					.run(new Uint8Array([1]), new Uint8Array([2]));
 
 				// Prepare the statement before the lock to match the failing runtime stack.
@@ -49,7 +52,9 @@ describe("sqlite lock repro", () => {
 
 				writer.exec("BEGIN EXCLUSIVE");
 				writer
-					.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)")
+					.prepare(
+						"INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)",
+					)
 					.run(new Uint8Array([3]), new Uint8Array([4]));
 
 				let thrown: unknown;

@@ -179,7 +179,7 @@ const Sidebar = ({
 								</>
 							))
 							.with("cloud", () => <CloudSidebar />)
-							.exhaustive()}
+							.otherwise(() => null)}
 					</div>
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />

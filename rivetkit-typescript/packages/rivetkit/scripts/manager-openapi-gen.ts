@@ -402,7 +402,9 @@ function injectActorRouter(openApiDoc: any) {
 											properties: {
 												id: { type: "string" },
 												name: { type: "string" },
-												createdAtMs: { type: "integer" },
+												createdAtMs: {
+													type: "integer",
+												},
 											},
 										},
 									},

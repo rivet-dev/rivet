@@ -48,7 +48,9 @@ export const Route = createFileRoute("/_context")({
 	beforeLoad: async (route) => {
 		if (route.search.u) {
 			try {
-				const realUrl = await getInspectorClientEndpoint(route.search.u);
+				const realUrl = await getInspectorClientEndpoint(
+					route.search.u,
+				);
 				if (realUrl !== route.search.u) {
 					throw redirect({
 						to: route.location.pathname,

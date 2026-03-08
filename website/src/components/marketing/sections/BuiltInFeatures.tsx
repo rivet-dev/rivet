@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, HardDrive, GitBranch, Clock, Wifi, ListOrdered, Infinity, Layers, ArrowRight } from 'lucide-react';
+import { Database, Globe, GitBranch, Clock, Wifi, ListOrdered, Infinity, Layers, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const RivetActorIcon = ({ className }: { className?: string }) => (
@@ -41,14 +41,8 @@ const features = [
   {
     icon: Database,
     title: 'In-memory state',
-    description: 'Co-located with compute for instant reads and writes.',
+    description: 'Co-located with compute for instant reads and writes. Persist with SQLite or BYO database.',
     href: '/docs/actors/state',
-  },
-  {
-    icon: HardDrive,
-    title: 'SQLite or BYO database',
-    description: 'Persistent storage that survives restarts and deploys.',
-    href: '/docs/actors/persistence',
   },
   {
     icon: Infinity,
@@ -61,6 +55,12 @@ const features = [
     title: 'Scales infinitely, scales to zero',
     description: 'Supports bursty workloads and is cost-efficient.',
     href: '/docs/actors/design-patterns',
+  },
+  {
+    icon: Globe,
+    title: 'Global edge network',
+    description: 'Deploy close to your users or in specific legal jurisdictions without complexity.',
+    href: '/docs/actors/edge',
   },
   {
     icon: Wifi,
@@ -99,20 +99,15 @@ export const BuiltInFeatures = () => {
           transition={{ duration: 0.5 }}
           className='mb-10'
         >
-          <h2 className='mb-2 text-2xl font-normal tracking-tight text-zinc-400 md:text-4xl'>
-            <span>The </span>
-            <span className='ml-1 whitespace-nowrap text-white'>
-              <RivetActorIcon className='mr-2 inline-block h-6 w-6 align-[-0.15em] md:h-8 md:w-8' />
-              Rivet Actor
-            </span>
-            <span> is built for modern stateful workloads.</span>
+          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+            A lightweight primitive with powerful capabilities.
           </h2>
           <p className='text-base leading-relaxed text-zinc-500'>
-            One Actor per agent, per session, per user — each with everything it needs built in.
+            One Actor per agent, per session, per user — state, storage, and networking included.
           </p>
         </motion.div>
 
-        <div className='grid grid-cols-1 gap-x-8 gap-y-6 min-[440px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'>
+        <div className='grid grid-cols-1 gap-x-8 gap-y-6 min-[440px]:grid-cols-2 lg:grid-cols-4'>
           {features.map((feature, idx) => {
             const Icon = feature.icon;
             return (

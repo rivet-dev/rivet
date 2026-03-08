@@ -9,10 +9,7 @@ import {
 	faPlug,
 	Icon,
 } from "@rivet-gg/icons";
-import {
-	deployOptions,
-	type Provider,
-} from "@rivetkit/shared-data";
+import { deployOptions, type Provider } from "@rivetkit/shared-data";
 import {
 	useInfiniteQuery,
 	useMutation,

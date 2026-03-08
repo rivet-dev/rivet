@@ -54,7 +54,9 @@ interface QueueSenderOptions {
 	customFetch: (request: Request) => Promise<Response>;
 }
 
-export function createQueueSender(senderOptions: QueueSenderOptions): QueueSender {
+export function createQueueSender(
+	senderOptions: QueueSenderOptions,
+): QueueSender {
 	async function send(
 		name: string,
 		body: unknown,
@@ -100,8 +102,7 @@ export function createQueueSender(senderOptions: QueueSenderOptions): QueueSende
 			requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
 			requestVersionedDataHandler: HTTP_QUEUE_SEND_REQUEST_VERSIONED,
 			responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
-			responseVersionedDataHandler:
-				HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
+			responseVersionedDataHandler: HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
 			requestZodSchema: HttpQueueSendRequestSchema,
 			responseZodSchema: HttpQueueSendResponseSchema,
 			requestToJson: (value): HttpQueueSendRequestJson => ({
@@ -112,7 +113,8 @@ export function createQueueSender(senderOptions: QueueSenderOptions): QueueSende
 				name: value.name ?? name,
 				body: bufferToArrayBuffer(cbor.encode(value.body)),
 				wait: value.wait ?? false,
-				timeout: value.timeout !== undefined ? BigInt(value.timeout) : null,
+				timeout:
+					value.timeout !== undefined ? BigInt(value.timeout) : null,
 			}),
 			responseFromJson: (json): QueueSendResult => {
 				if (json.response === undefined) {

@@ -1,25 +1,24 @@
 'use client';
 
-import { Eye, Activity, Terminal, Wifi, ArrowRight } from 'lucide-react';
+import { Database, GitBranch, Activity, Terminal, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import imgInspector from '../images/screenshots/inspector-6.png';
 
 export const ObservabilitySection = () => {
   const features = [
     {
-      title: 'Live State Inspection',
-      description: 'View and edit your actor state in real-time as messages are sent and processed',
-      icon: <Eye className='h-4 w-4' />
+      title: 'SQLite Viewer',
+      description: 'Browse and query your actor\'s SQLite database in real-time',
+      icon: <Database className='h-4 w-4' />
     },
     {
-      title: 'Network Inspector',
-      description: 'Monitor active connections with state and parameters for each client',
-      icon: <Wifi className='h-4 w-4' />
+      title: 'Workflow State',
+      description: 'Inspect workflow progress, steps, and retries as they execute',
+      icon: <GitBranch className='h-4 w-4' />
     },
     {
       title: 'Event Monitoring',
-      description:
-        'See all events happening in your actor in real-time and track every state change and action as it happens',
+      description: 'See all events happening in your actor in real-time and track every state change and action as it happens',
       icon: <Activity className='h-4 w-4' />
     },
     {
@@ -31,7 +30,7 @@ export const ObservabilitySection = () => {
   ];
 
   return (
-    <section className='border-t border-white/10 bg-black py-48'>
+    <section className='border-t border-white/10 bg-black py-16 md:py-48'>
       <div className='mx-auto max-w-7xl px-6'>
         <div className='relative'>
           {/* Screenshot on top */}

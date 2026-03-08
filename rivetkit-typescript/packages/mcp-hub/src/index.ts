@@ -54,7 +54,9 @@ function loadDocsMetadata(): DocsMetadata {
 	// Check for a custom metadata path (for Docker/production deployments)
 	const customPath = process.env.DOCS_METADATA_PATH;
 	if (customPath) {
-		const absolutePath = path.isAbsolute(customPath) ? customPath : path.resolve(process.cwd(), customPath);
+		const absolutePath = path.isAbsolute(customPath)
+			? customPath
+			: path.resolve(process.cwd(), customPath);
 		const content = fs.readFileSync(absolutePath, "utf-8");
 		return JSON.parse(content) as DocsMetadata;
 	}
@@ -114,9 +116,7 @@ const listToolSchema = z.object({
 	prefix: z.string().optional(),
 });
 
-export function createDocsMcpServer(
-	options: DocsServerOptions = {},
-): {
+export function createDocsMcpServer(options: DocsServerOptions = {}): {
 	server: McpServer;
 	metadata: DocsMetadata;
 } {
@@ -131,7 +131,9 @@ export function createDocsMcpServer(
 	);
 
 	const searchEngine = createSearchEngine(metadata);
-	const pageMap = new Map<string, PageRecord>(metadata.pages.map((page) => [page.resource_uri, page]));
+	const pageMap = new Map<string, PageRecord>(
+		metadata.pages.map((page) => [page.resource_uri, page]),
+	);
 	const sectionMap = new Map<string, SectionRecord>(
 		metadata.sections.map((section) => [section.resource_uri, section]),
 	);
@@ -174,8 +176,15 @@ function registerSearchTool(server: McpServer, searchEngine: SearchEngine) {
 			});
 
 			const nextOffset = offset + results.results.length;
-			const nextCursor = nextOffset < results.total ? encodeCursor(nextOffset) : undefined;
-			const text = formatSearchResults(parsed.query, results.results, nextCursor);
+			const nextCursor =
+				nextOffset < results.total
+					? encodeCursor(nextOffset)
+					: undefined;
+			const text = formatSearchResults(
+				parsed.query,
+				results.results,
+				nextCursor,
+			);
 
 			return {
 				content: [
@@ -211,9 +220,17 @@ function registerGetTool(
 		},
 		async (input: unknown) => {
 			const parsed = getToolSchema.parse(input);
-			const resolved = resolveResource(parsed, pageMap, sectionMap, searchEngine);
+			const resolved = resolveResource(
+				parsed,
+				pageMap,
+				sectionMap,
+				searchEngine,
+			);
 
-			let content = parsed.format === "plain_text" ? stripMarkdown(resolved.text) : resolved.text;
+			let content =
+				parsed.format === "plain_text"
+					? stripMarkdown(resolved.text)
+					: resolved.text;
 			if (parsed.max_tokens) {
 				content = truncateByTokens(content, parsed.max_tokens);
 			}
@@ -238,7 +255,9 @@ function registerGetTool(
 }
 
 function registerListTool(server: McpServer, metadata: DocsMetadata) {
-	const pages = [...metadata.pages].sort((a, b) => a.path.localeCompare(b.path));
+	const pages = [...metadata.pages].sort((a, b) =>
+		a.path.localeCompare(b.path),
+	);
 
 	server.registerTool(
 		"docs.list",
@@ -265,12 +284,18 @@ function registerListTool(server: McpServer, metadata: DocsMetadata) {
 
 			const slice = filtered.slice(offset, offset + limit);
 			const nextOffset = offset + slice.length;
-			const nextCursor = nextOffset < filtered.length ? encodeCursor(nextOffset) : undefined;
+			const nextCursor =
+				nextOffset < filtered.length
+					? encodeCursor(nextOffset)
+					: undefined;
 			const listText =
 				slice.length === 0
 					? "No docs matched your filters."
 					: slice
-							.map((page, idx) => `${offset + idx + 1}. ${page.title} — ${page.path}`)
+							.map(
+								(page, idx) =>
+									`${offset + idx + 1}. ${page.title} — ${page.path}`,
+							)
 							.join("\n");
 
 			const contentLines = [listText];
@@ -301,7 +326,11 @@ function registerListTool(server: McpServer, metadata: DocsMetadata) {
 	);
 }
 
-function registerResources(server: McpServer, metadata: DocsMetadata, pageMap: Map<string, PageRecord>) {
+function registerResources(
+	server: McpServer,
+	metadata: DocsMetadata,
+	pageMap: Map<string, PageRecord>,
+) {
 	for (const page of metadata.pages) {
 		const name = `docs.page.${safeResourceName(page.slug || "home")}`;
 		server.registerResource(
@@ -337,7 +366,9 @@ function registerResources(server: McpServer, metadata: DocsMetadata, pageMap: M
 
 	for (const section of metadata.sections) {
 		const parent = pageMap.get(section.parent_uri);
-		const sectionTitle = parent ? `${parent.title} › ${section.title}` : section.title;
+		const sectionTitle = parent
+			? `${parent.title} › ${section.title}`
+			: section.title;
 		const name = `docs.section.${safeResourceName(section.resource_uri)}`;
 		server.registerResource(
 			name,
@@ -378,14 +409,22 @@ function registerPrompts(server: McpServer) {
 		"docs.answer_with_citations",
 		{
 			title: "Answer with Rivet docs citations",
-			description: "Guides the model to consult docs.search/docs.get before responding.",
+			description:
+				"Guides the model to consult docs.search/docs.get before responding.",
 			argsSchema: {
 				question: z.string(),
 				context: z.string().optional(),
 			},
 		},
-		async ({ question, context }: { question: string; context?: string }) => ({
-			description: "Use docs.search first, then docs.get, and cite canonical URLs with anchors.",
+		async ({
+			question,
+			context,
+		}: {
+			question: string;
+			context?: string;
+		}) => ({
+			description:
+				"Use docs.search first, then docs.get, and cite canonical URLs with anchors.",
 			messages: [
 				{
 					role: "user",
@@ -398,7 +437,9 @@ function registerPrompts(server: McpServer) {
 								"2. For each relevant hit, call docs.get with the returned resource_uri (and range) to keep tokens low.",
 								"3. Answer with concise language and cite canonical_url#section plus any provided line numbers.",
 								`Question: ${question}`,
-								context ? `Additional context: ${context}` : undefined,
+								context
+									? `Additional context: ${context}`
+									: undefined,
 							]
 								.filter(Boolean)
 								.join("\n\n"),
@@ -413,7 +454,8 @@ function registerPrompts(server: McpServer) {
 		"docs.troubleshoot",
 		{
 			title: "Troubleshoot an issue",
-			description: "Helps the model investigate symptoms and recommend fixes with citations.",
+			description:
+				"Helps the model investigate symptoms and recommend fixes with citations.",
 			argsSchema: {
 				symptom: z.string(),
 				environment: z.string().optional(),
@@ -429,7 +471,8 @@ function registerPrompts(server: McpServer) {
 			environment?: string;
 			recent_changes?: string;
 		}) => ({
-			description: "Plan a troubleshooting workflow that leans on the docs.",
+			description:
+				"Plan a troubleshooting workflow that leans on the docs.",
 			messages: [
 				{
 					role: "user",
@@ -443,8 +486,12 @@ function registerPrompts(server: McpServer) {
 								"• Use docs.get to quote the smallest relevant sections and include citations.",
 								"• Summarize next actions and any guardrails.",
 								`Symptom: ${symptom}`,
-								environment ? `Environment: ${environment}` : undefined,
-								recent_changes ? `Recent changes: ${recent_changes}` : undefined,
+								environment
+									? `Environment: ${environment}`
+									: undefined,
+								recent_changes
+									? `Recent changes: ${recent_changes}`
+									: undefined,
 							]
 								.filter(Boolean)
 								.join("\n\n"),
@@ -466,7 +513,8 @@ function registerPrompts(server: McpServer) {
 			},
 		},
 		async ({ topic, audience }: { topic: string; audience?: string }) => ({
-			description: "Produce an outline referencing the best docs sections.",
+			description:
+				"Produce an outline referencing the best docs sections.",
 			messages: [
 				{
 					role: "user",
@@ -516,7 +564,9 @@ function resolveResource(
 	}
 
 	if (input.range?.section_anchor) {
-		const anchorSection = sectionMap.get(`${pageUri}#section=${input.range.section_anchor}`);
+		const anchorSection = sectionMap.get(
+			`${pageUri}#section=${input.range.section_anchor}`,
+		);
 		if (anchorSection) {
 			return buildSectionResponse(anchorSection, sections, input.range);
 		}
@@ -558,7 +608,9 @@ function buildSectionResponse(
 		};
 	}
 
-	const index = pageSections.findIndex((candidate) => candidate.resource_uri === section.resource_uri);
+	const index = pageSections.findIndex(
+		(candidate) => candidate.resource_uri === section.resource_uri,
+	);
 	if (index === -1) {
 		return {
 			text: section.content,
@@ -576,7 +628,10 @@ function buildSectionResponse(
 	}
 
 	const startIndex = Math.max(0, range.before ? index - range.before : index);
-	const endIndex = Math.min(pageSections.length - 1, range.after ? index + range.after : index);
+	const endIndex = Math.min(
+		pageSections.length - 1,
+		range.after ? index + range.after : index,
+	);
 	const included = pageSections.slice(startIndex, endIndex + 1);
 	const text = included.map((entry) => entry.content.trim()).join("\n\n");
 	const first = included[0];
@@ -597,7 +652,8 @@ function buildSectionResponse(
 }
 
 function matchesFilters(page: PageRecord, filters: SearchFilters) {
-	if (filters.product_area && page.product_area !== filters.product_area) return false;
+	if (filters.product_area && page.product_area !== filters.product_area)
+		return false;
 	if (filters.version && page.version !== filters.version) return false;
 	if (filters.lang && page.lang !== filters.lang) return false;
 	const filterTags = filters.tags ?? [];
@@ -609,15 +665,27 @@ function matchesFilters(page: PageRecord, filters: SearchFilters) {
 	return true;
 }
 
-function formatSearchResults(query: string, results: RankedSection[], nextCursor?: string) {
+function formatSearchResults(
+	query: string,
+	results: RankedSection[],
+	nextCursor?: string,
+) {
 	if (results.length === 0) {
 		return `No documentation matches for "${query}". Try different keywords or loosen filters.`;
 	}
 
 	const lines = results.map((result, idx) => {
-		const sectionLabel = result.section_title ? ` › ${result.section_title}` : "";
-		const reasons = result.why_matched ? `why: ${result.why_matched}` : null;
-		const meta = [result.canonical_url, `score=${result.score.toFixed(1)}`, reasons]
+		const sectionLabel = result.section_title
+			? ` › ${result.section_title}`
+			: "";
+		const reasons = result.why_matched
+			? `why: ${result.why_matched}`
+			: null;
+		const meta = [
+			result.canonical_url,
+			`score=${result.score.toFixed(1)}`,
+			reasons,
+		]
 			.filter(Boolean)
 			.join(" • ");
 		return `${idx + 1}. ${result.title}${sectionLabel}\n   ${meta}\n   ${result.snippet}`;

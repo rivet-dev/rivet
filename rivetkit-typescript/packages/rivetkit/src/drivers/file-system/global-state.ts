@@ -575,36 +575,36 @@ export class FileSystemGlobalState {
 				entry.generation = crypto.randomUUID();
 			}
 
-				// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
-				const initialKvState = getInitialActorKvState(input);
+			// Initialize storage (runtime KV is stored in SQLite; state.kvStorage is legacy-only)
+			const initialKvState = getInitialActorKvState(input);
 
-				await this.#withActorWrite(actorId, async (lockedEntry) => {
-					lockedEntry.state = {
+			await this.#withActorWrite(actorId, async (lockedEntry) => {
+				lockedEntry.state = {
+					actorId,
+					name,
+					key: key as readonly string[],
+					createdAt: BigInt(Date.now()),
+					kvStorage: [],
+					startTs: null,
+					connectableTs: null,
+					sleepTs: null,
+					destroyTs: null,
+				};
+				if (this.#persist) {
+					await this.#performWrite(
 						actorId,
-						name,
-						key: key as readonly string[],
-						createdAt: BigInt(Date.now()),
-						kvStorage: [],
-						startTs: null,
-						connectableTs: null,
-						sleepTs: null,
-						destroyTs: null,
-					};
-					if (this.#persist) {
-						await this.#performWrite(
-							actorId,
-							lockedEntry.generation,
-							lockedEntry.state,
-						);
-					}
-					if (initialKvState.length > 0) {
-						const db = this.#getOrCreateActorKvDatabase(actorId);
-						this.#putKvEntriesInDb(db, initialKvState);
-					}
-				});
-			}
-			return entry;
+						lockedEntry.generation,
+						lockedEntry.state,
+					);
+				}
+				if (initialKvState.length > 0) {
+					const db = this.#getOrCreateActorKvDatabase(actorId);
+					this.#putKvEntriesInDb(db, initialKvState);
+				}
+			});
 		}
+		return entry;
+	}
 
 	async sleepActor(actorId: string) {
 		invariant(
@@ -621,7 +621,12 @@ export class FileSystemGlobalState {
 			return;
 		}
 		actor.lifecycleState = ActorLifecycleState.STARTING_SLEEP;
-		actor.stopPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor sleep stop promise rejection", reason }));
+		actor.stopPromise = promiseWithResolvers((reason) =>
+			logger().warn({
+				msg: "unhandled actor sleep stop promise rejection",
+				reason,
+			}),
+		);
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -652,12 +657,12 @@ export class FileSystemGlobalState {
 			// Stop actor
 			invariant(actor.actor, "actor should be loaded");
 			await actor.actor.onStop("sleep");
-			} finally {
-				// Ensure any pending KV writes finish before removing the entry.
-				await this.#withActorWrite(actorId, async () => {});
-				this.#closeActorKvDatabase(actorId);
-				actor.stopPromise?.resolve();
-				actor.stopPromise = undefined;
+		} finally {
+			// Ensure any pending KV writes finish before removing the entry.
+			await this.#withActorWrite(actorId, async () => {});
+			this.#closeActorKvDatabase(actorId);
+			actor.stopPromise?.resolve();
+			actor.stopPromise = undefined;
 
 			// Remove from map after stop is complete
 			this.#actors.delete(actorId);
@@ -674,7 +679,12 @@ export class FileSystemGlobalState {
 			return;
 		}
 		actor.lifecycleState = ActorLifecycleState.STARTING_DESTROY;
-		actor.stopPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor destroy stop promise rejection", reason }));
+		actor.stopPromise = promiseWithResolvers((reason) =>
+			logger().warn({
+				msg: "unhandled actor destroy stop promise rejection",
+				reason,
+			}),
+		);
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -707,9 +717,9 @@ export class FileSystemGlobalState {
 				await actor.actor.onStop("destroy");
 			}
 
-				// Ensure any pending KV writes finish before deleting files.
-				await this.#withActorWrite(actorId, async () => {});
-				this.#closeActorKvDatabase(actorId);
+			// Ensure any pending KV writes finish before deleting files.
+			await this.#withActorWrite(actorId, async () => {});
+			this.#closeActorKvDatabase(actorId);
 
 			// Clear alarm timeout if exists
 			if (actor.alarmTimeout) {
@@ -847,7 +857,12 @@ export class FileSystemGlobalState {
 		invariant(entry, "actor entry does not exist");
 
 		const previousWrite = entry.pendingWriteResolver;
-		const currentWrite = promiseWithResolvers<void>((reason) => logger().warn({ msg: "unhandled kv write promise rejection", reason }));
+		const currentWrite = promiseWithResolvers<void>((reason) =>
+			logger().warn({
+				msg: "unhandled kv write promise rejection",
+				reason,
+			}),
+		);
 		entry.pendingWriteResolver = currentWrite;
 
 		if (previousWrite) {
@@ -1084,7 +1099,12 @@ export class FileSystemGlobalState {
 		}
 
 		// Create start promise
-		entry.startPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor start promise rejection", reason }));
+		entry.startPromise = promiseWithResolvers((reason) =>
+			logger().warn({
+				msg: "unhandled actor start promise rejection",
+				reason,
+			}),
+		);
 
 		try {
 			// Create actor
@@ -1117,25 +1137,25 @@ export class FileSystemGlobalState {
 					connectableTs: now,
 					sleepTs: null, // Clear sleep timestamp when actor wakes up
 				};
-					if (this.#persist) {
-						await this.#performWrite(
-							actorId,
-							lockedEntry.generation,
-							lockedEntry.state,
-						);
-					}
-				});
+				if (this.#persist) {
+					await this.#performWrite(
+						actorId,
+						lockedEntry.generation,
+						lockedEntry.state,
+					);
+				}
+			});
 
 			// Finish
 			entry.startPromise.resolve();
 			entry.startPromise = undefined;
 
 			return entry.actor;
-			} catch (innerError) {
-				const error = new Error(
-					`Failed to start actor ${actorId}: ${innerError}`,
-					{ cause: innerError },
-				);
+		} catch (innerError) {
+			const error = new Error(
+				`Failed to start actor ${actorId}: ${innerError}`,
+				{ cause: innerError },
+			);
 			entry.startPromise?.reject(error);
 			entry.startPromise = undefined;
 			throw error;
@@ -1474,11 +1494,17 @@ export class FileSystemGlobalState {
 		const direction = options?.reverse ? "DESC" : "ASC";
 		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
 		const rows = upperBound
-			? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			? db.all<{
+					key: Uint8Array | ArrayBuffer;
+					value: Uint8Array | ArrayBuffer;
+				}>(
 					`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
 					[prefix, upperBound, limit],
 				)
-			: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			: db.all<{
+					key: Uint8Array | ArrayBuffer;
+					value: Uint8Array | ArrayBuffer;
+				}>(
 					`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
 					[prefix, limit],
 				);
@@ -1519,7 +1545,10 @@ export class FileSystemGlobalState {
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const direction = options?.reverse ? "DESC" : "ASC";
 		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
-		const rows = db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+		const rows = db.all<{
+			key: Uint8Array | ArrayBuffer;
+			value: Uint8Array | ArrayBuffer;
+		}>(
 			`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
 			[start, end, limit],
 		);

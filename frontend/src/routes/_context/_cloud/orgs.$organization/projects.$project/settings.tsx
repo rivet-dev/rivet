@@ -72,9 +72,9 @@ function DangerZone() {
 					Archive project '{project?.displayName}'
 				</H4>
 				<p className=" mb-4">
-					Archiving this project will permanently remove all associated
-					namespaces, Rivet Actors, Runners, and configurations. This
-					action cannot be undone.
+					Archiving this project will permanently remove all
+					associated namespaces, Rivet Actors, Runners, and
+					configurations. This action cannot be undone.
 				</p>
 				<Button
 					variant="destructive"

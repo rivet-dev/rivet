@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
 	generateId,
 	InMemoryDriver,
+	Loop,
 	runWorkflow,
 	type Message,
 	type WorkflowContextInterface,
@@ -110,9 +111,15 @@ for (const mode of modes) {
 				return message.body;
 			};
 
-			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			}).result;
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
 
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("hello");
@@ -138,8 +145,13 @@ for (const mode of modes) {
 						opts.names && opts.names.length > 0
 							? new Set(opts.names)
 							: undefined;
-					const selected: Array<{ message: Message; index: number }> = [];
-					for (let i = 0; i < pending.length && selected.length < opts.count; i++) {
+					const selected: Array<{ message: Message; index: number }> =
+						[];
+					for (
+						let i = 0;
+						i < pending.length && selected.length < opts.count;
+						i++
+					) {
 						const message = pending[i];
 						if (nameSet && !nameSet.has(message.name)) {
 							continue;
@@ -158,7 +170,9 @@ for (const mode of modes) {
 							...message,
 							complete: async (response?: unknown) => {
 								completions.push({ id: message.id, response });
-								const index = pending.findIndex((m) => m.id === message.id);
+								const index = pending.findIndex(
+									(m) => m.id === message.id,
+								);
 								if (index !== -1) {
 									pending.splice(index, 1);
 								}
@@ -168,7 +182,9 @@ for (const mode of modes) {
 				},
 				async completeMessage(messageId, response) {
 					completions.push({ id: messageId, response });
-					const index = pending.findIndex((message) => message.id === messageId);
+					const index = pending.findIndex(
+						(message) => message.id === messageId,
+					);
 					if (index !== -1) {
 						pending.splice(index, 1);
 					}
@@ -188,13 +204,21 @@ for (const mode of modes) {
 				return message.body;
 			};
 
-			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			}).result;
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
 
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("hello");
-			expect(completions).toEqual([{ id: "msg-1", response: { ok: true } }]);
+			expect(completions).toEqual([
+				{ id: "msg-1", response: { ok: true } },
+			]);
 		});
 
 		it("replay should not block the next completable queue.next", async () => {
@@ -298,9 +322,15 @@ for (const mode of modes) {
 
 			await new Promise((resolve) => setTimeout(resolve, 140));
 
-			const secondRunHandle = runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			});
+			const secondRunHandle = runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			);
 			await expect(secondRunHandle.result).rejects.toThrow(
 				"Previous completable queue message is not completed.",
 			);
@@ -321,16 +351,25 @@ for (const mode of modes) {
 			await queueMessage(driver, "batch", "b", "2");
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				const messages = await ctx.queue.nextBatch<string>("batch-wait", {
-					names: ["batch"],
-					count: 2,
-				});
+				const messages = await ctx.queue.nextBatch<string>(
+					"batch-wait",
+					{
+						names: ["batch"],
+						count: 2,
+					},
+				);
 				return messages.map((message) => message.body);
 			};
 
-			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			}).result;
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
 
 			expect(result.state).toBe("completed");
 			expect(result.output).toEqual(["a", "b"]);
@@ -369,9 +408,15 @@ for (const mode of modes) {
 				return;
 			}
 
-			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			}).result;
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
 			expect(result.state).toBe("completed");
 			expect(result.output).toBeNull();
 		});
@@ -387,9 +432,15 @@ for (const mode of modes) {
 				return messages[0]?.body ?? null;
 			};
 
-			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			}).result;
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
 
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("data");
@@ -447,9 +498,15 @@ for (const mode of modes) {
 				return messages.map((message) => message.body);
 			};
 
-			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
-				mode,
-			}).result;
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
 
 			expect(result.state).toBe("completed");
 			expect(result.output).toEqual(["first", "second"]);
@@ -490,6 +547,127 @@ for (const mode of modes) {
 			const result = await handle.result;
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("value");
+		});
+
+		it("should not replay the previous loop message after queue.next timeout", async () => {
+			await queueMessage(driver, "loop", "first", "msg-1");
+			const seen: string[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("drain", async (loopCtx) => {
+					const messages = await loopCtx.queue.nextBatch<string>(
+						"wait",
+						{
+							names: ["loop"],
+							timeout: 50,
+						},
+					);
+					const message = messages[0];
+					if (!message) {
+						return Loop.break([...seen]);
+					}
+					seen.push(message.body);
+					return Loop.continue(undefined);
+				});
+			};
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(firstRun.state).toBe("sleeping");
+
+				await new Promise((resolve) => setTimeout(resolve, 80));
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual(["first"]);
+				expect(seen).toEqual(["first"]);
+				return;
+			}
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual(["first"]);
+			expect(seen).toEqual(["first"]);
+		});
+
+		it("should not reproduce the timeout replay issue without a loop", async () => {
+			await queueMessage(driver, "plain", "first", "msg-1");
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const first = await ctx.queue.next<string>("first", {
+					names: ["plain"],
+				});
+				const timed = await ctx.queue.nextBatch<string>("second", {
+					names: ["plain"],
+					timeout: 50,
+				});
+				return {
+					first: first.body,
+					second: timed[0]?.body ?? null,
+				};
+			};
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(firstRun.state).toBe("sleeping");
+
+				await new Promise((resolve) => setTimeout(resolve, 80));
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual({
+					first: "first",
+					second: null,
+				});
+				return;
+			}
+
+			const result = await runWorkflow(
+				"wf-1",
+				workflow,
+				undefined,
+				driver,
+				{
+					mode,
+				},
+			).result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual({
+				first: "first",
+				second: null,
+			});
 		});
 	});
 }

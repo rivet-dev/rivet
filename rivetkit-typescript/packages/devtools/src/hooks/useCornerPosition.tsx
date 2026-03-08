@@ -46,7 +46,14 @@ interface CornerButtonStyleOptions {
 export function getCornerButtonStyle(
 	options: CornerButtonStyleOptions,
 ): React.CSSProperties {
-	const { isBottom, isRightSide, isDragging, padding = 20, paddingVertical, paddingHorizontal } = options;
+	const {
+		isBottom,
+		isRightSide,
+		isDragging,
+		padding = 20,
+		paddingVertical,
+		paddingHorizontal,
+	} = options;
 
 	const verticalPadding = paddingVertical ?? padding;
 	const horizontalPadding = paddingHorizontal ?? padding;
@@ -54,7 +61,9 @@ export function getCornerButtonStyle(
 	return {
 		position: "fixed",
 		...(isBottom ? { bottom: verticalPadding } : { top: verticalPadding }),
-		...(isRightSide ? { right: horizontalPadding } : { left: horizontalPadding }),
+		...(isRightSide
+			? { right: horizontalPadding }
+			: { left: horizontalPadding }),
 		transform: isDragging
 			? "translate(var(--drag-x, 0px), var(--drag-y, 0px))"
 			: undefined,

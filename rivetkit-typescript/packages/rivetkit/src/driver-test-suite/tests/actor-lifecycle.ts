@@ -45,9 +45,7 @@ export function runActorLifecycleTests(driverTestConfig: DriverTestConfig) {
 
 			// Create multiple actors rapidly to increase chance of race
 			const actors = Array.from({ length: 5 }, (_, i) =>
-				client.startStopRaceActor.getOrCreate([
-					`${actorKey}-${i}`,
-				]),
+				client.startStopRaceActor.getOrCreate([`${actorKey}-${i}`]),
 			);
 
 			// Resolve all actor IDs (this triggers start)
@@ -66,9 +64,7 @@ export function runActorLifecycleTests(driverTestConfig: DriverTestConfig) {
 					expect(err.group).toBe("actor");
 					expect(err.code).toBe("not_found");
 				}
-				expect(destroyed, `actor ${id} should be destroyed`).toBe(
-					true,
-				);
+				expect(destroyed, `actor ${id} should be destroyed`).toBe(true);
 			}
 		});
 
@@ -98,9 +94,7 @@ export function runActorLifecycleTests(driverTestConfig: DriverTestConfig) {
 			// Perform multiple rapid create/destroy cycles
 			for (let i = 0; i < 10; i++) {
 				const actorKey = `test-rapid-cycle-${Date.now()}-${i}`;
-				const actor = client.startStopRaceActor.getOrCreate([
-					actorKey,
-				]);
+				const actor = client.startStopRaceActor.getOrCreate([actorKey]);
 
 				// Trigger start
 				const resolvePromise = actor.resolve();
@@ -127,9 +121,7 @@ export function runActorLifecycleTests(driverTestConfig: DriverTestConfig) {
 			await actor.destroy();
 
 			// Try to recreate with same key - should work without issues
-			const newActor = client.startStopRaceActor.getOrCreate([
-				actorKey,
-			]);
+			const newActor = client.startStopRaceActor.getOrCreate([actorKey]);
 			const result = await newActor.ping();
 			expect(result).toBe("pong");
 

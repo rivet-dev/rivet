@@ -87,7 +87,9 @@ describe("tryParseEndpoint", () => {
 			});
 			expect(result).toBeUndefined();
 			expect(issues).toHaveLength(1);
-			expect(issues[0]?.message).toBe("endpoint cannot contain a query string");
+			expect(issues[0]?.message).toBe(
+				"endpoint cannot contain a query string",
+			);
 		});
 
 		test("adds issue for fragment", () => {
@@ -97,7 +99,9 @@ describe("tryParseEndpoint", () => {
 			});
 			expect(result).toBeUndefined();
 			expect(issues).toHaveLength(1);
-			expect(issues[0]?.message).toBe("endpoint cannot contain a fragment");
+			expect(issues[0]?.message).toBe(
+				"endpoint cannot contain a fragment",
+			);
 		});
 
 		test("adds issue for token without namespace", () => {
