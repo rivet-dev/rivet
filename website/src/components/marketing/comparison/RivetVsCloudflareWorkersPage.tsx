@@ -986,7 +986,7 @@ const CTASection = () => {
 					transition={{ duration: 0.5 }}
 					className="mb-6 text-2xl font-normal tracking-tight text-white md:text-4xl"
 				>
-					Infrastructure for software that thinks.
+					The primitive for stateful workloads.
 				</motion.h2>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}

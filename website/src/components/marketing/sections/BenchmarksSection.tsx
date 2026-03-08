@@ -1,15 +1,18 @@
 'use client';
 
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ArrowDown, ArrowUp, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface BarEntry {
 	label: string;
 	value: string;
-	/** Width as percentage (0-100). */
-	width: number;
+	/** Numeric value used to compute bar width proportionally. */
+	rawValue: number;
 	highlight?: boolean;
 	infinite?: boolean;
+	/** Hover note explaining the benchmark context. */
+	note?: string;
 }
 
 interface BenchmarkCard {
@@ -17,8 +20,71 @@ interface BenchmarkCard {
 	subtitle: string;
 	direction: 'lower is better' | 'higher is better';
 	bars: BarEntry[];
+	/** Hide bar charts and show only labels and values. */
+	noBars?: boolean;
+	/** Use a logarithmic scale for bar widths. */
+	logarithmic?: boolean;
 }
 
+function Tooltip({ note }: { note: string }) {
+	const [visible, setVisible] = useState(false);
+	const [position, setPosition] = useState<'above' | 'below'>('above');
+	const tooltipRef = useRef<HTMLDivElement>(null);
+	const iconRef = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => {
+		if (visible && iconRef.current) {
+			const rect = iconRef.current.getBoundingClientRect();
+			// Show below if too close to the top of the viewport
+			setPosition(rect.top < 80 ? 'below' : 'above');
+		}
+	}, [visible]);
+
+	return (
+		<span className='relative inline-flex'>
+			<button
+				ref={iconRef}
+				type='button'
+				className='ml-1 inline-flex items-center text-zinc-600 transition-colors hover:text-zinc-400'
+				onMouseEnter={() => setVisible(true)}
+				onMouseLeave={() => setVisible(false)}
+				onClick={() => setVisible((v) => !v)}
+				aria-label='More info'
+			>
+				<Info className='h-3 w-3' />
+			</button>
+			{visible && (
+				<div
+					ref={tooltipRef}
+					className={`absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-zinc-300 shadow-xl ${
+						position === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
+					}`}
+				>
+					{note}
+				</div>
+			)}
+		</span>
+	);
+}
+
+/** Compute bar widths as percentages from raw values, with a minimum of 2%. */
+function computeBarWidths(bars: BarEntry[], logarithmic?: boolean): number[] {
+	const finiteValues = bars.filter((b) => !b.infinite).map((b) => b.rawValue);
+	const maxValue = Math.max(...finiteValues);
+	if (logarithmic) {
+		const logMax = Math.log10(Math.max(maxValue, 1));
+		return bars.map((bar) => {
+			if (bar.infinite) return 100;
+			if (bar.rawValue <= 0) return 2;
+			return Math.max((Math.log10(bar.rawValue) / logMax) * 100, 2);
+		});
+	}
+	return bars.map((bar) => {
+		if (bar.infinite) return 100;
+		if (maxValue === 0) return 2;
+		return Math.max((bar.rawValue / maxValue) * 100, 2);
+	});
+}
 
 const benchmarks: BenchmarkCard[] = [
 	{
@@ -26,10 +92,25 @@ const benchmarks: BenchmarkCard[] = [
 		subtitle: 'Time to first request',
 		direction: 'lower is better',
 		bars: [
-			{ label: 'Rivet Actor', value: '~5ms', width: 1, highlight: true },
-			{ label: 'Firecracker microVM', value: '~125ms', width: 3 },
-			{ label: 'Kubernetes Pod', value: '~5s', width: 17 },
-			{ label: 'EC2 Instance', value: '~30s', width: 100 },
+			{
+			label: 'Rivet Actor',
+			value: '~20ms',
+			rawValue: 20,
+			highlight: true,
+			note: 'Includes durable state init, not just a process spawn. No actor key, so no cross-region locking. Measured with Node.js and FoundationDB.',
+		},
+			{
+				label: 'Kubernetes Pod',
+				value: '~6s',
+				rawValue: 6000,
+				note: 'Node.js 24 Alpine image (56MB compressed) on AWS EKS with a pre-provisioned m5.large node. Breakdown: ~1s image pull and extraction, ~3-4s scheduling and container runtime setup, ~1s container start.',
+			},
+			{
+				label: 'Virtual Machine',
+				value: '~30s',
+				rawValue: 30000,
+				note: 'AWS EC2 t3.nano instance from launch to SSH-ready, using an Amazon Linux 2 AMI. t3.nano is the smallest available EC2 instance (512MB RAM).',
+			},
 		],
 	},
 	{
@@ -37,38 +118,51 @@ const benchmarks: BenchmarkCard[] = [
 		subtitle: 'Overhead per instance',
 		direction: 'lower is better',
 		bars: [
-			{ label: 'Rivet Actor', value: '~2MB', width: 2, highlight: true },
-			{ label: 'Firecracker microVM', value: '~128MB', width: 25 },
-			{ label: 'EC2 Instance', value: '~512MB+', width: 100 },
+			{
+				label: 'Rivet Actor',
+				value: '~0.6KB',
+				rawValue: 0.6,
+				highlight: true,
+				note: 'RSS (resident set size) delta divided by actor count, measured by spawning 10,000 actors in Node.js v24 on Linux x86.',
+			},
+			{
+				label: 'Kubernetes Pod',
+				value: '~50MB',
+				rawValue: 50,
+				note: 'Minimum idle Node.js container on Linux x86: Node.js v24 runtime (~43MB RSS), containerd-shim (~3MB), pause container (~1MB), and kubelet per-pod tracking (~2MB).',
+			},
+			{
+				label: 'Virtual Machine',
+				value: '~512MB',
+				rawValue: 512,
+				note: 'AWS EC2 t3.nano, the smallest available EC2 instance with 512MB allocated memory.',
+			},
 		],
 	},
 	{
 		title: 'Read Latency',
-		subtitle: 'State access time',
+		subtitle: 'State read latency',
 		direction: 'lower is better',
 		bars: [
-			{ label: 'Rivet Actor', value: '0ms', width: 1, highlight: true },
-			{ label: 'Redis', value: '~1ms', width: 20 },
-			{ label: 'Postgres', value: '~5ms', width: 100 },
-		],
-	},
-	{
-		title: 'Horizontal Scale',
-		subtitle: 'Maximum capacity',
-		direction: 'higher is better',
-		bars: [
-			{ label: 'Rivet Actors', value: '∞', width: 100, highlight: true, infinite: true },
-			{ label: 'Kubernetes', value: '~5k nodes', width: 40 },
-			{ label: 'Postgres', value: '1 primary', width: 8 },
-		],
-	},
-	{
-		title: 'Edge Latency',
-		subtitle: 'Latency to your users on the edge',
-		direction: 'lower is better',
-		bars: [
-			{ label: 'Rivet Cloud Edge Network', value: '~50ms', width: 25, highlight: true },
-			{ label: 'Single Region', value: '~200ms+', width: 100 },
+			{
+				label: 'Rivet Actor',
+				value: '0ms',
+				rawValue: 0.01,
+				highlight: true,
+				note: 'State is read from co-located SQLite/KV storage on the same machine as the actor, with no network round-trip.',
+			},
+			{
+				label: 'Redis',
+				value: '~1ms',
+				rawValue: 1,
+				note: 'AWS ElastiCache Redis (cache.t3.micro) in the same availability zone as the application.',
+			},
+			{
+				label: 'Postgres',
+				value: '~5ms',
+				rawValue: 5,
+				note: 'AWS RDS PostgreSQL (db.t3.micro) in the same availability zone as the application.',
+			},
 		],
 	},
 	{
@@ -76,9 +170,67 @@ const benchmarks: BenchmarkCard[] = [
 		subtitle: 'Cost when not in use',
 		direction: 'lower is better',
 		bars: [
-			{ label: 'Rivet Actor', value: '$0', width: 1, highlight: true },
-			{ label: 'Kubernetes Cluster', value: '~$70/mo', width: 70 },
-			{ label: 'EC2 Instance', value: '~$100/mo', width: 100 },
+			{
+				label: 'Rivet Actor',
+				value: '$0',
+				rawValue: 0.01,
+				highlight: true,
+				note: 'Assumes Rivet Actors running on a serverless platform. Actors scale to zero with no idle infrastructure costs. Traditional container deployments may incur idle costs.',
+			},
+			{
+				label: 'Virtual Machine',
+				value: '~$5/mo',
+				rawValue: 5,
+				note: 'AWS EC2 t3.nano ($0.0052/hr compute + $1.60/mo for 20GB gp3 storage) running 24/7. t3.nano is the smallest available EC2 instance (512MB RAM).',
+			},
+			{
+				label: 'Kubernetes Cluster',
+				value: '~$85/mo',
+				rawValue: 85,
+				note: 'AWS EKS control plane ($73/mo) plus a single t3.nano worker node with 20GB gp3 storage, running 24/7. t3.nano is the smallest available EC2 instance (512MB RAM).',
+			},
+		],
+	},
+	{
+		title: 'Horizontal Scale',
+		subtitle: 'Maximum capacity',
+		direction: 'higher is better',
+		noBars: true,
+		bars: [
+			{
+				label: 'Rivet Actors',
+				value: 'Infinite',
+				rawValue: 0,
+				highlight: true,
+				note: 'Rivet Actors scale linearly by adding nodes with no single cluster size limit.',
+			},
+			{
+				label: 'Kubernetes',
+				value: '~5k nodes',
+				rawValue: 5000,
+				note: 'Kubernetes officially supports clusters of up to 5,000 nodes per the Kubernetes scalability documentation.',
+			},
+			{ label: 'Postgres', value: '1 primary', rawValue: 1 },
+		],
+	},
+	{
+		title: 'Multi-Region',
+		subtitle: 'Deploy actors close to your users',
+		direction: 'lower is better',
+		noBars: true,
+		bars: [
+			{
+				label: 'Rivet',
+				value: 'Global edge network',
+				rawValue: 0,
+				highlight: true,
+				note: 'Rivet automatically spawns actors near your users and handles routing across regions for a seamless edge network.',
+			},
+			{
+				label: 'Traditional Deployment',
+				value: '1 region',
+				rawValue: 0,
+			},
 		],
 	},
 ];
@@ -95,16 +247,16 @@ export const BenchmarksSection = () => {
 					className='mb-10'
 				>
 					<h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
-						Benchmarks
+						How Actors Compare
 					</h2>
 					<p className='text-base leading-relaxed text-zinc-500'>
-						How Rivet Actors compare to traditional infrastructure.
+						Rivet Actors vs. traditional infrastructure.
 					</p>
 				</motion.div>
 
 				<div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
 					{benchmarks.map((card, idx) => {
-						const bars = card.bars;
+						const widths = computeBarWidths(card.bars, card.logarithmic);
 						return (
 						<motion.div
 							key={card.title}
@@ -130,16 +282,18 @@ export const BenchmarksSection = () => {
 							</div>
 
 							<div className='flex flex-col gap-3'>
-								{bars.map((bar) => (
+								{card.bars.map((bar, barIdx) => (
 									<div key={bar.label} className='flex flex-col gap-1'>
 										<div className='flex items-center justify-between text-xs'>
-											<span className={bar.highlight ? 'text-white' : 'text-zinc-500'}>
+											<span className={`inline-flex items-center ${bar.highlight ? 'text-white' : 'text-zinc-500'}`}>
 												{bar.label}
+												{bar.note && <Tooltip note={bar.note} />}
 											</span>
 											<span className={bar.highlight ? 'font-medium text-[#FF4500]' : 'text-zinc-500'}>
 												{bar.value}
 											</span>
 										</div>
+										{!card.noBars && (
 										<div className={`w-full ${bar.infinite ? 'relative' : ''}`}>
 											{bar.infinite ? (
 												<>
@@ -162,13 +316,14 @@ export const BenchmarksSection = () => {
 													<motion.div
 														className={`h-full rounded-full ${bar.highlight ? 'bg-[#FF4500]' : 'bg-zinc-600'}`}
 														initial={{ width: 0 }}
-														whileInView={{ width: `${Math.max(bar.width, 2)}%` }}
+														whileInView={{ width: `${widths[barIdx]}%` }}
 														viewport={{ once: true }}
 														transition={{ duration: 0.6, delay: 0.2 }}
 													/>
 												</div>
 											)}
 										</div>
+										)}
 									</div>
 								))}
 							</div>
