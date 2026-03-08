@@ -7,7 +7,7 @@
   </a>
   <br/>
   <br/>
-  <h3>The primitive for stateful workloads.</h3>
+  <h3>Rivet Actors are the primitive for stateful workloads.</h3>
   <p>Built for AI agents, collaborative apps, and durable execution.</p>
   <p>
     <a href="https://www.rivet.dev/docs">Quickstart</a> •
