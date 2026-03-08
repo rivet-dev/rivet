@@ -2180,7 +2180,7 @@ impl ActorCommandKeyData {
 
 	fn v7_to_v4(self) -> Result<Self> {
 		if let ActorCommandKeyData::V7(x) = self {
-			// Since v4 commands have generation but v6 doesn't, use generation 0 as a placeholder
+			// Since v4 commands have generation but v7 doesn't, use generation 0 as a placeholder
 			let inner = match x {
 				v7::ActorCommandKeyData::CommandStartActor(start) => {
 					v4::ActorCommandKeyData::CommandStartActor(v4::CommandStartActor {
