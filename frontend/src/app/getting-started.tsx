@@ -26,7 +26,15 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import {
+	type ReactNode,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -467,7 +475,6 @@ const exploreFeatures = [
 		description:
 			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
 		docsUrl: "https://rivet.dev/docs/actors/debugging",
-		media: "/onboarding-demo.jpg",
 	},
 	{
 		id: "state",
@@ -477,7 +484,6 @@ const exploreFeatures = [
 		description:
 			"Each actor has its own isolated state co-located with compute for instant reads and writes. Persist with SQLite or BYO database.",
 		docsUrl: "https://rivet.dev/docs/actors/state",
-		media: null as string | null,
 	},
 	{
 		id: "storage",
@@ -487,7 +493,6 @@ const exploreFeatures = [
 		description:
 			"Actors have built-in KV storage and SQLite. Browse stored data and watch writes happen live in the inspector.",
 		docsUrl: "https://rivet.dev/docs/actors/storage",
-		media: null as string | null,
 	},
 	{
 		id: "workflows",
@@ -497,7 +502,6 @@ const exploreFeatures = [
 		description:
 			"Orchestrate multi-step processes that survive crashes and restarts. Automatic retries and step-through history visualization.",
 		docsUrl: "https://rivet.dev/docs/actors/workflows",
-		media: null as string | null,
 	},
 	{
 		id: "events",
@@ -507,7 +511,6 @@ const exploreFeatures = [
 		description:
 			"Actors can broadcast events to connected clients. Real-time bidirectional streaming built in.",
 		docsUrl: "https://rivet.dev/docs/actors/events",
-		media: null as string | null,
 	},
 	{
 		id: "rpcs",
@@ -517,71 +520,122 @@ const exploreFeatures = [
 		description:
 			"Call actor methods directly from your client with full type safety. The inspector shows every RPC call, its arguments, and response.",
 		docsUrl: "https://rivet.dev/docs/actors/rpc",
-		media: null as string | null,
 	},
 ];
 
+const CAROUSEL_INTERVAL = 5000;
+
 function ExploreRivet() {
-	const [activeFeature, setActiveFeature] = useState(exploreFeatures[0].id);
-	const feature =
-		exploreFeatures.find((f) => f.id === activeFeature) ||
-		exploreFeatures[0];
+	const [activeIndex, setActiveIndex] = useState(0);
+	const [progress, setProgress] = useState(0);
+	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const animFrameRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
+	const startTimeRef = useRef(Date.now());
+
+	const feature = exploreFeatures[activeIndex];
+
+	const startTimer = useCallback((index: number) => {
+		if (intervalRef.current) clearInterval(intervalRef.current);
+		if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+
+		setActiveIndex(index);
+		setProgress(0);
+		startTimeRef.current = Date.now();
+
+		const animate = () => {
+			const elapsed = Date.now() - startTimeRef.current;
+			const pct = Math.min(elapsed / CAROUSEL_INTERVAL, 1);
+			setProgress(pct);
+			if (pct < 1) {
+				animFrameRef.current = requestAnimationFrame(animate);
+			}
+		};
+		animFrameRef.current = requestAnimationFrame(animate);
+
+		intervalRef.current = setInterval(() => {
+			const next = (index + 1) % exploreFeatures.length;
+			startTimer(next);
+		}, CAROUSEL_INTERVAL);
+	}, []);
+
+	useEffect(() => {
+		startTimer(0);
+		return () => {
+			if (intervalRef.current) clearInterval(intervalRef.current);
+			if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+		};
+	}, [startTimer]);
+
+	const handleClick = (index: number) => {
+		startTimer(index);
+	};
 
 	return (
-		<div className="flex gap-10">
-			<div className="flex-shrink-0 w-[16rem] flex flex-col gap-6">
-				<div>
-					<h3 className="text-lg font-semibold mb-2">
-						{feature.title}
-					</h3>
-					<p className="text-sm text-muted-foreground leading-relaxed">
-						{feature.description}
-					</p>
+		<div className="flex flex-col gap-6">
+			<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
+				<img
+					src="/onboarding-demo.jpg"
+					alt="Rivet Actors demo"
+					className="w-full h-full object-cover"
+				/>
+			</div>
+			<div className="flex gap-0">
+				{exploreFeatures.map((f, i) => (
+					<button
+						key={f.id}
+						type="button"
+						onClick={() => handleClick(i)}
+						className={`flex-1 text-left px-3 pt-3 pb-2 transition-colors relative ${
+							i === activeIndex
+								? "text-foreground"
+								: "text-muted-foreground hover:text-foreground"
+						}`}
+					>
+						<div className="absolute top-0 left-0 right-0 h-0.5 bg-muted overflow-hidden rounded-full">
+							<div
+								className="h-full bg-primary rounded-full"
+								style={{
+									width:
+										i === activeIndex
+											? `${progress * 100}%`
+											: i < activeIndex
+												? "100%"
+												: "0%",
+									transition:
+										i === activeIndex
+											? "none"
+											: "width 0.3s ease",
+								}}
+							/>
+						</div>
+						<div className="flex items-center gap-1.5 mb-1">
+							<Icon
+								icon={f.icon}
+								className="w-3 h-3 flex-shrink-0"
+							/>
+							<span className="text-xs font-semibold truncate">
+								{f.label}
+							</span>
+						</div>
+					</button>
+				))}
+			</div>
+			<div className="min-h-[4.5rem]">
+				<h3 className="text-base font-semibold mb-1">
+					{feature.title}
+				</h3>
+				<p className="text-sm text-muted-foreground leading-relaxed">
+					{feature.description}{" "}
 					<a
 						href={feature.docsUrl}
 						target="_blank"
 						rel="noreferrer"
-						className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-3"
+						className="inline-flex items-center gap-1 text-primary hover:underline"
 					>
 						Learn more
 						<Icon icon={faArrowRight} className="w-3 h-3" />
 					</a>
-				</div>
-				<div className="flex flex-col gap-1">
-					{exploreFeatures.map((f) => (
-						<button
-							key={f.id}
-							type="button"
-							onClick={() => setActiveFeature(f.id)}
-							className={`text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${
-								f.id === activeFeature
-									? "bg-primary/10 text-primary font-medium"
-									: "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-							}`}
-						>
-							<Icon icon={f.icon} className="w-3.5 h-3.5" />
-							{f.label}
-						</button>
-					))}
-				</div>
-			</div>
-			<div className="flex-1 min-w-0">
-				<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
-					{feature.media ? (
-						<img
-							src={feature.media}
-							alt={feature.title}
-							className="w-full h-full object-cover"
-						/>
-					) : (
-						<div className="text-center text-muted-foreground text-sm">
-							<p className="font-medium mb-1">Preview</p>
-							<p className="text-xs">
-								Coming soon for {feature.label}
-							</p>
-						</div>
-					)}
-				</div>
+				</p>
 			</div>
 		</div>
 	);
