@@ -1,10 +1,8 @@
 "use client";
 
-import { usePathname } from "@/hooks/usePathname";
 import type { SidebarItem, SidebarSection } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
 import { Icon, faChevronDown } from "@rivet-gg/icons";
-import { motion } from "framer-motion";
 import { type ReactNode, useMemo, useEffect, useState, useRef } from "react";
 import { normalizePath } from "@/lib/normalizePath";
 import { useNavigationState } from "@/providers/NavigationStateProvider";
@@ -14,6 +12,7 @@ interface CollapsibleSidebarItemProps {
 	children?: ReactNode;
 	level?: number;
 	parentPath?: string;
+	pathname?: string;
 }
 
 export function CollapsibleSidebarItem({
@@ -21,8 +20,8 @@ export function CollapsibleSidebarItem({
 	children,
 	level = 0,
 	parentPath = "",
+	pathname = "",
 }: CollapsibleSidebarItemProps) {
-	const pathname = usePathname() || "";
 	const { isOpen, setIsOpen, toggleOpen } = useNavigationState();
 	const hasActiveChild = findActiveItem(item.pages, pathname) !== null;
 	const isCurrent = false; // Never highlight collapsible sections themselves
@@ -113,33 +112,19 @@ export function CollapsibleSidebarItem({
 						</span>
 					) : null}
 				</div>
-				<motion.span
-					variants={{
-						open: { rotateZ: 0 },
-						closed: { rotateZ: "-90deg" },
-					}}
-					initial={false}
-					animate={isItemOpen ? "open" : "closed"}
-					transition={{ duration: hasInteracted.current ? 0.2 : 0 }}
+				<span
+					style={{ display: "inline-block", transform: isItemOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: hasInteracted.current ? "transform 0.2s" : "none" }}
 					className="ml-2 inline-block flex-shrink-0 opacity-70"
 				>
 					<Icon icon={faChevronDown} className="w-3 h-3" />
-				</motion.span>
+				</span>
 			</button>
-			<motion.div
+			<div
 				className="overflow-hidden"
-				variants={{
-					open: { height: "auto", opacity: 1 },
-					closed: { height: 0, opacity: 0 },
-				}}
-				initial={false}
-				animate={isItemOpen ? "open" : "closed"}
-				transition={{
-					duration: hasInteracted.current ? 0.2 : 0,
-				}}
+				style={isItemOpen ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
 			>
 				{children}
-			</motion.div>
+			</div>
 		</div>
 	);
 }

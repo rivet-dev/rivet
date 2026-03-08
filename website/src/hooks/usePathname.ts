@@ -9,7 +9,11 @@ export function usePathname(): string {
 	const [pathname, setPathname] = useState("");
 
 	useEffect(() => {
-		setPathname(window.location.pathname);
+		const update = () => setPathname(window.location.pathname);
+		update();
+
+		document.addEventListener("astro:after-swap", update);
+		return () => document.removeEventListener("astro:after-swap", update);
 	}, []);
 
 	return pathname;

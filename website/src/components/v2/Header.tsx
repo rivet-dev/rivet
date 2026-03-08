@@ -363,6 +363,7 @@ interface HeaderProps {
 	variant?: "floating" | "full-width";
 	learnMode?: boolean;
 	showDocsTabs?: boolean;
+	pathname?: string;
 }
 
 export function Header({
@@ -372,11 +373,11 @@ export function Header({
 	variant = "full-width",
 	learnMode = false,
 	showDocsTabs = false,
+	pathname = "",
 }: HeaderProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
 
-	// Use DocsTabs as subnav if showDocsTabs is true
-	const effectiveSubnav = showDocsTabs ? <DocsTabs /> : subnav;
+	const effectiveSubnav = showDocsTabs ? <DocsTabs pathname={pathname} /> : subnav;
 
 	useEffect(() => {
 		if (variant === "floating") {
@@ -440,7 +441,7 @@ export function Header({
 								</a>
 							</div>
 						}
-						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
+						mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} pathname={pathname} />}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<ProductsDropdown active={active === "product"} />
@@ -521,7 +522,7 @@ export function Header({
 					</a>
 				</div>
 			}
-			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
+			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} pathname={pathname} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
 					<ProductsDropdown active={active === "product"} />
@@ -549,8 +550,9 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation({ tree }) {
-	const pathname = usePathname() || "";
+function DocsMobileNavigation({ tree, pathname: initialPathname = "" }) {
+	const dynamicPathname = usePathname();
+	const pathname = dynamicPathname || initialPathname;
 	const isDocsPage = pathname.startsWith("/docs");
 
 	// Determine current section based on pathname

@@ -13,9 +13,10 @@ interface TreeItemProps {
 	item: SidebarItem;
 	level?: number;
 	parentPath?: string;
+	pathname?: string;
 }
 
-function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
+function TreeItem({ index, item, level = 0, parentPath = "", pathname = "" }: TreeItemProps) {
 	if (
 		"collapsible" in item &&
 		"title" in item &&
@@ -30,11 +31,13 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 				item={item}
 				level={level}
 				parentPath={parentPath}
+				pathname={pathname}
 			>
 				<Tree
 					pages={item.pages}
 					level={level + 1}
 					parentPath={itemPath}
+					pathname={pathname}
 				/>
 			</CollapsibleSidebarItem>
 		);
@@ -66,13 +69,14 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 					pages={item.pages}
 					level={level + 1}
 					parentPath={itemPath}
+					pathname={pathname}
 				/>
 			</div>
 		);
 	}
 
 	return (
-		<NavLink href={item.href} external={item.external} level={level}>
+		<NavLink href={item.href} external={item.external} level={level} pathname={pathname}>
 			<span className="flex items-center truncate gap-2">
 				{item.icon && "prefix" in item.icon ? (
 					<Icon icon={item.icon} className="size-3.5 flex-shrink-0" />
@@ -104,6 +108,7 @@ interface TreeProps {
 	className?: string;
 	level?: number;
 	parentPath?: string;
+	pathname?: string;
 }
 
 export function Tree({
@@ -111,6 +116,7 @@ export function Tree({
 	className,
 	level = 0,
 	parentPath = "",
+	pathname = "",
 }: TreeProps) {
 	return (
 		<ul className={cn(className)}>
@@ -124,6 +130,7 @@ export function Tree({
 						item={item}
 						level={level}
 						parentPath={parentPath}
+						pathname={pathname}
 					/>
 				</li>
 			))}
@@ -137,12 +144,14 @@ export function NavLink({
 	children,
 	className,
 	level = 0,
+	pathname = "",
 }: PropsWithChildren<{
 	href: string;
 	external?: boolean;
 	children: ReactNode;
 	className?: string;
 	level?: number;
+	pathname?: string;
 }>) {
 	const getPaddingClass = (level: number) => {
 		switch (level) {
@@ -161,6 +170,7 @@ export function NavLink({
 		<ActiveLink
 			strict
 			href={href}
+			pathname={pathname}
 			target={external && "_blank"}
 			className={cn(
 				"group flex w-full items-center border-l-2 border-l-border py-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 aria-current-page:text-foreground aria-current-page:border-l-orange-500",
@@ -173,11 +183,11 @@ export function NavLink({
 	);
 }
 
-export function DocsNavigation({ sidebar }: { sidebar: SidebarItem[] }) {
+export function DocsNavigation({ sidebar, pathname = "" }: { sidebar: SidebarItem[]; pathname?: string }) {
 	return (
 		<NavigationStateProvider>
 			<div className="sticky top-header max-h-content text-white pl-8 pr-6 py-6 overflow-y-auto">
-				<Tree pages={sidebar} />
+				<Tree pages={sidebar} pathname={pathname} />
 			</div>
 		</NavigationStateProvider>
 	);
