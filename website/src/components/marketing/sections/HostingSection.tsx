@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import imgLogo from '@/images/rivet-logos/icon-white.svg';
 
 export const HostingSection = () => (
-  <section className='border-t border-white/10 py-48'>
+  <section className='border-t border-white/10 py-16 md:py-48'>
     <div className='mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.h2

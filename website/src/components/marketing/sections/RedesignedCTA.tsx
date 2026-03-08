@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { AnimatedCTATitle } from '../components/AnimatedCTATitle';
 
 export const RedesignedCTA = () => (
-  <section className='border-t border-white/10 px-6 py-48 text-center'>
+  <section className='border-t border-white/10 px-6 py-16 md:py-48 text-center'>
     <div className='mx-auto max-w-3xl'>
       <div className='mb-6'>
         <AnimatedCTATitle />
