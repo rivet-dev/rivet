@@ -300,7 +300,11 @@ export class EngineActorDriver implements ActorDriver {
 			limit?: number;
 		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const result = await this.#runner.kvListPrefix(actorId, prefix, options);
+		const result = await this.#runner.kvListPrefix(
+			actorId,
+			prefix,
+			options,
+		);
 		logger().info({
 			msg: "kvListPrefix called",
 			actorId,

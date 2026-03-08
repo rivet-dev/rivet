@@ -1494,11 +1494,17 @@ export class FileSystemGlobalState {
 		const direction = options?.reverse ? "DESC" : "ASC";
 		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
 		const rows = upperBound
-			? db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			? db.all<{
+				key: Uint8Array | ArrayBuffer;
+				value: Uint8Array | ArrayBuffer;
+			}>(
 				`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
 				[prefix, upperBound, limit],
 			)
-			: db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+			: db.all<{
+				key: Uint8Array | ArrayBuffer;
+				value: Uint8Array | ArrayBuffer;
+			}>(
 				`SELECT key, value FROM kv WHERE key >= ? ORDER BY key ${direction} LIMIT ?`,
 				[prefix, limit],
 			);
@@ -1539,7 +1545,10 @@ export class FileSystemGlobalState {
 		const db = this.#getOrCreateActorKvDatabase(actorId);
 		const direction = options?.reverse ? "DESC" : "ASC";
 		const limit = options?.limit ?? DEFAULT_LIST_LIMIT;
-		const rows = db.all<{ key: Uint8Array | ArrayBuffer; value: Uint8Array | ArrayBuffer }>(
+		const rows = db.all<{
+			key: Uint8Array | ArrayBuffer;
+			value: Uint8Array | ArrayBuffer;
+		}>(
 			`SELECT key, value FROM kv WHERE key >= ? AND key < ? ORDER BY key ${direction} LIMIT ?`,
 			[start, end, limit],
 		);
