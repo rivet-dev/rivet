@@ -155,6 +155,16 @@ export class ActorWorkflowDriver implements EngineDriver {
 		}
 	}
 
+	async deleteRange(start: Uint8Array, end: Uint8Array): Promise<void> {
+		await this.#runCtx.keepAwake(
+			this.#actor.driver.kvDeleteRange(
+				this.#actor.id,
+				makeWorkflowKey(start),
+				makeWorkflowKey(end),
+			),
+		);
+	}
+
 	async list(prefix: Uint8Array): Promise<KVEntry[]> {
 		const entries = await this.#runCtx.keepAwake(
 			this.#actor.driver.kvListPrefix(

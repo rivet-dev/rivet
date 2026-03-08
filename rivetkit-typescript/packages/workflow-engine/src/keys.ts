@@ -143,6 +143,32 @@ export function buildHistoryPrefix(location: Location): Uint8Array {
 }
 
 /**
+ * Build a key range for loop iteration history entries.
+ * Range: [2, ...locationSegments, [loopSegment, fromIteration]] to
+ *        [2, ...locationSegments, [loopSegment, toIteration]])
+ */
+export function buildLoopIterationRange(
+	loopLocation: Location,
+	loopSegment: number,
+	fromIteration: number,
+	toIteration: number,
+): { start: Uint8Array; end: Uint8Array } {
+	const loopLocationSegments = locationToTupleElements(loopLocation);
+	return {
+		start: pack([
+			KEY_PREFIX.HISTORY,
+			...loopLocationSegments,
+			[loopSegment, fromIteration],
+		]),
+		end: pack([
+			KEY_PREFIX.HISTORY,
+			...loopLocationSegments,
+			[loopSegment, toIteration],
+		]),
+	};
+}
+
+/**
  * Build a prefix for listing all history entries.
  * Prefix: [2]
  */

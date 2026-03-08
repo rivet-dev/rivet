@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
 	generateId,
 	InMemoryDriver,
+	Loop,
 	runWorkflow,
 	type Message,
 	type WorkflowContextInterface,
@@ -490,6 +491,112 @@ for (const mode of modes) {
 			const result = await handle.result;
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("value");
+		});
+
+		it("should not replay the previous loop message after queue.next timeout", async () => {
+			await queueMessage(driver, "loop", "first", "msg-1");
+			const seen: string[] = [];
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.loop("drain", async (loopCtx) => {
+					const messages = await loopCtx.queue.nextBatch<string>("wait", {
+						names: ["loop"],
+						timeout: 50,
+					});
+					const message = messages[0];
+					if (!message) {
+						return Loop.break([...seen]);
+					}
+					seen.push(message.body);
+					return Loop.continue(undefined);
+				});
+			};
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(firstRun.state).toBe("sleeping");
+
+				await new Promise((resolve) => setTimeout(resolve, 80));
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual(["first"]);
+				expect(seen).toEqual(["first"]);
+				return;
+			}
+
+			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
+				mode,
+			}).result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual(["first"]);
+			expect(seen).toEqual(["first"]);
+		});
+
+		it("should not reproduce the timeout replay issue without a loop", async () => {
+			await queueMessage(driver, "plain", "first", "msg-1");
+
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				const first = await ctx.queue.next<string>("first", {
+					names: ["plain"],
+				});
+				const timed = await ctx.queue.nextBatch<string>("second", {
+					names: ["plain"],
+					timeout: 50,
+				});
+				return {
+					first: first.body,
+					second: timed[0]?.body ?? null,
+				};
+			};
+
+			if (mode === "yield") {
+				const firstRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(firstRun.state).toBe("sleeping");
+
+				await new Promise((resolve) => setTimeout(resolve, 80));
+
+				const secondRun = await runWorkflow(
+					"wf-1",
+					workflow,
+					undefined,
+					driver,
+					{ mode },
+				).result;
+				expect(secondRun.state).toBe("completed");
+				expect(secondRun.output).toEqual({
+					first: "first",
+					second: null,
+				});
+				return;
+			}
+
+			const result = await runWorkflow("wf-1", workflow, undefined, driver, {
+				mode,
+			}).result;
+			expect(result.state).toBe("completed");
+			expect(result.output).toEqual({
+				first: "first",
+				second: null,
+			});
 		});
 	});
 }

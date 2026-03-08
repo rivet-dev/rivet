@@ -6,7 +6,7 @@ This document covers advanced behavior that impacts long-term workflow operation
 
 Workflow history grows as entries are added. The engine provides a few built-in mechanisms to limit growth:
 
-- Loop iterations are compacted using `historyEvery` and `historyKeep`. Older iterations are deleted after each retention window, so rollback only replays the last retained iteration.
+- Loop iterations are pruned every `historyPruneInterval` iterations. Iterations older than `historySize` (defaults to `historyPruneInterval`) are deleted, so rollback only replays the last retained iterations.
 - `ctx.race()` removes history for losing branches after a winner is chosen.
 - `ctx.removed()` lets you keep history compatible while removing old entries.
 

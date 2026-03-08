@@ -17,9 +17,14 @@ import {
 	StepFailedError,
 } from "./errors.js";
 import {
+	buildLoopIterationRange,
+	buildEntryMetadataKey,
+} from "./keys.js";
+import {
 	appendLoopIteration,
 	appendName,
 	emptyLocation,
+	isLocationPrefix,
 	locationToKey,
 	registerName,
 } from "./location.js";
@@ -30,6 +35,7 @@ import {
 	getOrCreateMetadata,
 	loadMetadata,
 	setEntry,
+	type PendingDeletions,
 } from "./storage.js";
 import type {
 	BranchConfig,
@@ -62,9 +68,7 @@ import { sleep } from "./utils.js";
 export const DEFAULT_MAX_RETRIES = 3;
 export const DEFAULT_RETRY_BACKOFF_BASE = 100;
 export const DEFAULT_RETRY_BACKOFF_MAX = 30000;
-export const DEFAULT_LOOP_COMMIT_INTERVAL = 20;
-export const DEFAULT_LOOP_HISTORY_EVERY = 20;
-export const DEFAULT_LOOP_HISTORY_KEEP = 20;
+export const DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL = 20;
 export const DEFAULT_STEP_TIMEOUT = 30000; // 30 seconds
 
 const QUEUE_HISTORY_MESSAGE_MARKER = "__rivetWorkflowQueueMessage";
@@ -692,20 +696,27 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			metadata.dirty = true;
 		}
 
-		// TODO: Add validation for commitInterval (must be > 0)
-		const commitInterval =
-			config.commitInterval ?? DEFAULT_LOOP_COMMIT_INTERVAL;
-		const historyEvery =
-			config.historyEvery ??
-			config.commitInterval ??
-			DEFAULT_LOOP_HISTORY_EVERY;
-		const historyKeep =
-			config.historyKeep ??
-			config.commitInterval ??
-			DEFAULT_LOOP_HISTORY_KEEP;
+		const historyPruneInterval =
+			config.historyPruneInterval ?? DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL;
+		const historySize =
+			config.historySize ?? historyPruneInterval;
+
+		// Track the last iteration we pruned up to so we only delete
+		// newly-expired iterations instead of re-scanning from 0.
+		let lastPrunedUpTo = 0;
+
+		// Deferred flush promise from the previous prune cycle. Awaited at the
+		// start of the next iteration so the flush runs in parallel with user code.
+		let deferredFlush: Promise<void> | null = null;
 
 		// Execute loop iterations
 		while (true) {
+			// Await any deferred flush from the previous prune cycle
+			if (deferredFlush) {
+				await deferredFlush;
+				deferredFlush = null;
+			}
+
 			if (rollbackMode && rollbackSingleIteration) {
 				if (rollbackIterationRan) {
 					return rollbackOutput as T;
@@ -752,13 +763,14 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					metadata.dirty = true;
 				}
 
-				await this.flushStorage();
-				await this.forgetOldIterations(
+				// Collect pruning deletions and flush
+				const deletions = this.collectLoopPruning(
 					location,
 					iteration + 1,
-					historyEvery,
-					historyKeep,
+					historySize,
+					lastPrunedUpTo,
 				);
+				await this.flushStorageWithDeletions(deletions);
 
 				if (rollbackMode && rollbackSingleIteration) {
 					rollbackOutput = result.value;
@@ -775,72 +787,108 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 			iteration++;
 
-			// Periodic commit
-			if (iteration % commitInterval === 0) {
+			// Periodic prune: persist loop state and defer the flush
+			// so it runs in parallel with the next iteration's user code
+			if (iteration % historyPruneInterval === 0) {
 				if (entry.kind.type === "loop") {
 					entry.kind.data.state = state;
 					entry.kind.data.iteration = iteration;
 				}
 				entry.dirty = true;
 
-				await this.flushStorage();
-				await this.forgetOldIterations(
+				const deletions = this.collectLoopPruning(
 					location,
 					iteration,
-					historyEvery,
-					historyKeep,
+					historySize,
+					lastPrunedUpTo,
 				);
+				lastPrunedUpTo = Math.max(
+					0,
+					iteration - historySize,
+				);
+
+				// Defer the flush to run in parallel with the next iteration
+				deferredFlush = this.flushStorageWithDeletions(deletions);
 			}
 		}
 	}
 
 	/**
-	 * Delete old loop iteration entries to save storage space.
+	 * Collect pending deletions for loop history pruning.
 	 *
-	 * Loop locations always end with a NameIndex (number) because loops are
-	 * created via appendName(). Even for nested loops, the innermost loop's
-	 * location ends with its name index:
-	 *
-	 *   ctx.loop("outer") → location: [outerIndex]
-	 *     iteration 0    → location: [{ loop: outerIndex, iteration: 0 }]
-	 *       ctx.loop("inner") → location: [{ loop: outerIndex, iteration: 0 }, innerIndex]
-	 *
-	 * This function removes iterations older than (currentIteration - historyKeep)
-	 * every historyEvery iterations.
+	 * Only deletes iterations in the range [fromIteration, keepFrom) where
+	 * keepFrom = currentIteration - historySize. This avoids re-scanning
+	 * already-deleted iterations.
 	 */
-	private async forgetOldIterations(
+	private collectLoopPruning(
 		loopLocation: Location,
 		currentIteration: number,
-		historyEvery: number,
-		historyKeep: number,
-	): Promise<void> {
-		if (historyEvery <= 0 || historyKeep <= 0) {
-			return;
+		historySize: number,
+		fromIteration: number,
+	): PendingDeletions | undefined {
+		if (currentIteration <= historySize) {
+			return undefined;
 		}
-		if (currentIteration === 0 || currentIteration % historyEvery !== 0) {
-			return;
+
+		const keepFrom = Math.max(0, currentIteration - historySize);
+		if (fromIteration >= keepFrom) {
+			return undefined;
 		}
-		const keepFrom = Math.max(0, currentIteration - historyKeep);
-		// Get the loop name index from the last segment of loopLocation.
-		// This is always a NameIndex (number) because loop entries are created
-		// via appendName(), not appendLoopIteration().
+
 		const loopSegment = loopLocation[loopLocation.length - 1];
 		if (typeof loopSegment !== "number") {
 			throw new Error("Expected loop location to end with a name index");
 		}
 
-		for (let i = 0; i < keepFrom; i++) {
-			const iterationLocation: Location = [
-				...loopLocation,
-				{ loop: loopSegment, iteration: i },
-			];
-			await deleteEntriesWithPrefix(
-				this.storage,
-				this.driver,
-				iterationLocation,
-				this.historyNotifier,
-			);
+		const range = buildLoopIterationRange(
+			loopLocation,
+			loopSegment,
+			fromIteration,
+			keepFrom,
+		);
+		const metadataKeys: Uint8Array[] = [];
+
+		for (const [key, entry] of this.storage.history.entries) {
+			if (!isLocationPrefix(loopLocation, entry.location)) {
+				continue;
+			}
+
+			const iterationSegment = entry.location[loopLocation.length];
+			if (
+				!iterationSegment ||
+				typeof iterationSegment === "number" ||
+				iterationSegment.loop !== loopSegment ||
+				iterationSegment.iteration < fromIteration ||
+				iterationSegment.iteration >= keepFrom
+			) {
+				continue;
+			}
+
+			metadataKeys.push(buildEntryMetadataKey(entry.id));
+			this.storage.entryMetadata.delete(entry.id);
+			this.storage.history.entries.delete(key);
 		}
+
+		return {
+			prefixes: [],
+			keys: metadataKeys,
+			ranges: [range],
+		};
+	}
+
+	/**
+	 * Flush storage with optional pending deletions so pruning
+	 * happens alongside the state write.
+	 */
+	private async flushStorageWithDeletions(
+		deletions?: PendingDeletions,
+	): Promise<void> {
+		await flush(
+			this.storage,
+			this.driver,
+			this.historyNotifier,
+			deletions,
+		);
 	}
 
 	// === Sleep ===

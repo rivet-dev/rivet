@@ -24,7 +24,7 @@ This allows workflows to pause for hours or days without tying up worker memory.
 
 ## Checkpointing Loop State
 
-`ctx.loop()` persists loop state every `commitInterval` iterations. Loop history is trimmed every `historyEvery` iterations, keeping the most recent `historyKeep` iterations. Rollback only replays the last retained iteration, and long-running loops do not accumulate unbounded history.
+`ctx.loop()` persists loop state every `historyPruneInterval` iterations. Old iterations beyond `historySize` (defaults to `historyPruneInterval`) are pruned, so rollback only replays the last retained iterations and long-running loops do not accumulate unbounded history.
 
 ## Handling Eviction
 
