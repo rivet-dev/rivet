@@ -4,8 +4,8 @@
 
 Dynamic actors let a registry entry resolve actor source code at actor start time.
 
-Dynamic actors are represented by `dynamicActor(loader, config)` and still
-participate in normal registry routing and actor lifecycle.
+Dynamic actors are represented by `dynamicActor({ load, auth?, options? })`
+and still participate in normal registry routing and actor lifecycle.
 
 Driver parity is verified by running the same driver test suites against two
 fixture registries:
@@ -45,6 +45,13 @@ actor behavior consistent between static and dynamic execution.
 6. Runtime builds a locked down sandbox driver and creates `NodeProcess`.
 7. Runtime injects host bridge refs and bootstrap config into isolate globals.
 8. Runtime loads bootstrap module and captures exported envelope refs.
+
+Before HTTP and WebSocket traffic is forwarded into the isolate, the host
+runtime may run an optional dynamic auth hook. The auth hook receives dynamic
+actor metadata, the incoming `Request`, and decoded connection params. Throwing
+from auth rejects the request before actor dispatch. HTTP requests return
+standard RivetKit error responses and WebSockets close with the derived
+`group.code` reason.
 
 Note: isolate bootstrap does not construct `Registry` at runtime. Constructing
 `Registry` would auto-start runtime preparation on next tick in non-test mode

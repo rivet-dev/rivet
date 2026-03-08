@@ -6,14 +6,32 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import * as cbor from "cbor-x";
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
+import * as errors from "@/actor/errors";
 import type { ActorDriver } from "@/actor/driver";
 import type { ActorKey } from "@/actor/mod";
 import type { Encoding } from "@/actor/protocol/serde";
+import {
+	HEADER_CONN_PARAMS,
+	HEADER_ENCODING,
+} from "@/common/actor-router-consts";
 import { getLogger } from "@/common/log";
-import { stringifyError } from "@/common/utils";
+import { deconstructError, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { AnyClient } from "@/client/client";
+import type { RegistryConfig } from "@/registry/config";
+import type * as protocol from "@/schemas/client-protocol/mod";
+import {
+	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
+	HTTP_RESPONSE_ERROR_VERSIONED,
+} from "@/schemas/client-protocol/versioned";
+import {
+	type HttpResponseError as HttpResponseErrorJson,
+	HttpResponseErrorSchema,
+} from "@/schemas/client-protocol-zod/mod";
+import { contentTypeForEncoding, serializeWithEncoding } from "@/serde";
+import { bufferToArrayBuffer, getEnvUniversal } from "@/utils";
 import {
 	DYNAMIC_BOOTSTRAP_CONFIG_GLOBAL_KEY,
 	DYNAMIC_HOST_BRIDGE_GLOBAL_KEYS,
@@ -30,7 +48,9 @@ import {
 	type WebSocketSendEnvelopeInput,
 } from "./runtime-bridge";
 import {
+	createDynamicActorAuthContext,
 	createDynamicActorLoaderContext,
+	type DynamicActorAuth,
 	type DynamicActorLoader,
 	type DynamicActorLoadResult,
 } from "./internal";
@@ -49,6 +69,99 @@ let isolatedVmModulePromise: Promise<IsolatedVmModule> | undefined;
 
 function logger() {
 	return getLogger("dynamic-actor");
+}
+
+function getRequestEncoding(request: Request): Encoding {
+	const encodingParam = request.headers.get(HEADER_ENCODING);
+	if (!encodingParam) {
+		return "json";
+	}
+
+	switch (encodingParam) {
+		case "json":
+		case "cbor":
+		case "bare":
+			return encodingParam;
+		default:
+			throw new errors.InvalidEncoding(encodingParam);
+	}
+}
+
+function getRequestConnParams(request: Request): unknown {
+	const paramsParam = request.headers.get(HEADER_CONN_PARAMS);
+	if (!paramsParam) {
+		return null;
+	}
+
+	try {
+		return JSON.parse(paramsParam);
+	} catch (error) {
+		throw new errors.InvalidParams(
+			`Invalid params JSON: ${stringifyError(error)}`,
+		);
+	}
+}
+
+function getRequestExposeInternalError(): boolean {
+	return (
+		getEnvUniversal("RIVET_EXPOSE_ERRORS") === "1" ||
+		getEnvUniversal("NODE_ENV") === "development"
+	);
+}
+
+function buildErrorResponse(request: Request, error: unknown): Response {
+	const { statusCode, group, code, message, metadata } = deconstructError(
+		error,
+		logger(),
+		{
+			method: request.method,
+			path: new URL(request.url).pathname,
+		},
+		getRequestExposeInternalError(),
+	);
+	let encoding: Encoding;
+	try {
+		encoding = getRequestEncoding(request);
+	} catch {
+		encoding = "json";
+	}
+	const output = serializeWithEncoding(
+		encoding,
+		{ group, code, message, metadata },
+		HTTP_RESPONSE_ERROR_VERSIONED,
+		CLIENT_PROTOCOL_CURRENT_VERSION,
+		HttpResponseErrorSchema,
+		(value): HttpResponseErrorJson => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata: value.metadata,
+		}),
+		(value): protocol.HttpResponseError => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata: value.metadata
+				? bufferToArrayBuffer(cbor.encode(value.metadata))
+				: null,
+		}),
+	);
+
+	return new Response(output, {
+		status: statusCode,
+		headers: {
+			"Content-Type": contentTypeForEncoding(encoding),
+		},
+	});
+}
+
+function normalizeRequestUrl(pathValue: string): string {
+	if (pathValue.startsWith("http://") || pathValue.startsWith("https://")) {
+		return pathValue;
+	}
+	return pathValue.startsWith("/")
+		? `http://actor${pathValue}`
+		: `http://actor/${pathValue}`;
 }
 
 interface SecureExecModule {
@@ -142,6 +255,7 @@ interface DynamicActorIsolateRuntimeConfig {
 	input: unknown;
 	region: string;
 	loader: DynamicActorLoader;
+	auth?: DynamicActorAuth;
 	actorDriver: ActorDriver;
 	inlineClient: AnyClient;
 }
@@ -342,6 +456,12 @@ export class DynamicActorIsolateRuntime {
 	}
 
 	async fetch(request: Request): Promise<Response> {
+		try {
+			await this.#authorizeRequest(request, getRequestConnParams(request));
+		} catch (error) {
+			return buildErrorResponse(request, error);
+		}
+
 		const refs = this.#runtimeRefs;
 		const input = await requestToEnvelope(request);
 		const envelope = (await refs.fetch.apply(undefined, [input], {
@@ -362,6 +482,12 @@ export class DynamicActorIsolateRuntime {
 		params: unknown,
 		options: DynamicWebSocketOpenOptions = {},
 	): Promise<UniversalWebSocket> {
+		const request = new Request(normalizeRequestUrl(pathValue), {
+			method: "GET",
+			headers: options.headers,
+		});
+		await this.#authorizeRequest(request, params);
+
 		const refs = this.#runtimeRefs;
 
 		const sessionId = this.#nextWebSocketSessionId;
@@ -593,6 +719,27 @@ export class DynamicActorIsolateRuntime {
 				result: { copy: true, promise: true },
 			},
 		);
+	}
+
+	async #authorizeRequest(
+		request: Request | undefined,
+		params: unknown,
+	): Promise<void> {
+		const auth = this.#config.auth;
+		if (!auth) {
+			return;
+		}
+
+		const context = createDynamicActorAuthContext(
+			this.#config.inlineClient,
+			this.#config.actorId,
+			this.#config.actorName,
+			this.#config.actorKey,
+			this.#config.input,
+			this.#config.region,
+			request,
+		);
+		await auth(context, params);
 	}
 
 	async #setIsolateBridge(
