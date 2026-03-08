@@ -5,15 +5,6 @@ use crate::PROTOCOL_MK1_VERSION;
 use crate::generated::{v1, v2, v3, v4, v5, v6, v7};
 use crate::uuid_compat::{decode_bytes_from_uuid, encode_bytes_to_uuid};
 
-fn convert_wire_compatible<T, U>(value: T) -> Result<U>
-where
-	T: serde::Serialize,
-	U: serde::de::DeserializeOwned,
-{
-	let bytes = serde_bare::to_vec(&value)?;
-	Ok(serde_bare::from_slice(&bytes)?)
-}
-
 pub enum ToClientMk2 {
 	V4(v4::ToClient),
 	V5(v5::ToClient),
@@ -401,22 +392,6 @@ impl ToClientMk2 {
 			};
 
 			Ok(ToClientMk2::V5(inner))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v6_to_v7(self) -> Result<Self> {
-		if let ToClientMk2::V6(x) = self {
-			Ok(ToClientMk2::V7(convert_wire_compatible(x)?))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v7_to_v6(self) -> Result<Self> {
-		if let ToClientMk2::V7(x) = self {
-			Ok(ToClientMk2::V6(convert_wire_compatible(x)?))
 		} else {
 			bail!("unexpected version");
 		}
@@ -1207,22 +1182,6 @@ impl ToRunnerMk2 {
 			};
 
 			Ok(ToRunnerMk2::V4(inner))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v6_to_v7(self) -> Result<Self> {
-		if let ToRunnerMk2::V6(x) = self {
-			Ok(ToRunnerMk2::V7(convert_wire_compatible(x)?))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v7_to_v6(self) -> Result<Self> {
-		if let ToRunnerMk2::V7(x) = self {
-			Ok(ToRunnerMk2::V6(convert_wire_compatible(x)?))
 		} else {
 			bail!("unexpected version");
 		}
@@ -2060,22 +2019,6 @@ impl ToGateway {
 			bail!("unexpected version");
 		}
 	}
-
-	fn v6_to_v7(self) -> Result<Self> {
-		if let ToGateway::V6(x) = self {
-			Ok(ToGateway::V7(convert_wire_compatible(x)?))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v7_to_v6(self) -> Result<Self> {
-		if let ToGateway::V7(x) = self {
-			Ok(ToGateway::V6(convert_wire_compatible(x)?))
-		} else {
-			bail!("unexpected version");
-		}
-	}
 }
 
 pub enum ToServerlessServer {
@@ -2152,22 +2095,6 @@ impl ToServerlessServer {
 			};
 
 			Ok(ToServerlessServer::V3(inner))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v6_to_v7(self) -> Result<Self> {
-		if let ToServerlessServer::V6(x) = self {
-			Ok(ToServerlessServer::V7(convert_wire_compatible(x)?))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v7_to_v6(self) -> Result<Self> {
-		if let ToServerlessServer::V7(x) = self {
-			Ok(ToServerlessServer::V6(convert_wire_compatible(x)?))
 		} else {
 			bail!("unexpected version");
 		}
@@ -2282,22 +2209,6 @@ impl ActorCommandKeyData {
 			};
 
 			Ok(ActorCommandKeyData::V4(inner))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v6_to_v7(self) -> Result<Self> {
-		if let ActorCommandKeyData::V6(x) = self {
-			Ok(ActorCommandKeyData::V7(convert_wire_compatible(x)?))
-		} else {
-			bail!("unexpected version");
-		}
-	}
-
-	fn v7_to_v6(self) -> Result<Self> {
-		if let ActorCommandKeyData::V7(x) = self {
-			Ok(ActorCommandKeyData::V6(convert_wire_compatible(x)?))
 		} else {
 			bail!("unexpected version");
 		}
