@@ -246,7 +246,7 @@ export function GettingStarted({
 function StepperFooter() {
 	const s = stepper.useStepper();
 	return (
-		<div className="flex flex-col items-center gap-4">
+		<div className="flex flex-col items-center gap-4 mt-6">
 			{s.current.group === "local" && s.current.id !== "explore" ? (
 				<Button
 					type="button"
