@@ -31,11 +31,17 @@ const agent = actor({
 
   // Long-running actor process
   run: async (c) => {
+    // Process incoming messages from the queue
     for await (const msg of c.queue.iter()) {
       c.state.messages.push({ role: "user", content: msg.body.text });
-      const response = await generateText({ model: openai("gpt-5"), messages: c.state.messages });
-      c.state.messages.push({ role: "assistant", content: response.text });
-      c.broadcast("response", response.text);
+      const response = streamText({ model: openai("gpt-5"), messages: c.state.messages });
+
+      // Stream realtime events to all connected clients
+      for await (const delta of response.textStream) {
+        c.broadcast("token", delta);
+      }
+
+      c.state.messages.push({ role: "assistant", content: await response.text });
     }
   },
 });
@@ -47,8 +53,8 @@ const agent = actor({
 // Connect to an actor
 const agent = client.agent.getOrCreate("agent-123").connect();
 
-// Listen for responses
-agent.on("response", text => console.log(text));
+// Listen for realtime events
+agent.on("token", delta => process.stdout.write(delta));
 
 // Send message to actor
 await agent.queue.send("how many r's in strawberry?");
