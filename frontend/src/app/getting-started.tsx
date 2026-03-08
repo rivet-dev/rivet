@@ -593,7 +593,7 @@ function ExploreRivet() {
 		<div className="flex flex-col gap-6">
 			<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
 				<img
-					src="/onboarding-demo.jpg"
+					src="/onboarding-demo.gif"
 					alt="Rivet Actors demo"
 					className="w-full h-full object-cover"
 				/>
