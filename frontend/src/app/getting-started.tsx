@@ -184,32 +184,32 @@ export function GettingStarted({
 							}}
 							content={{
 								install: () => (
-									<div className="w-[32rem]">
+									<StepContent>
 										<InstallStep />
-									</div>
+									</StepContent>
 								),
 								skills: () => (
-									<div className="w-[32rem]">
+									<StepContent>
 										<SkillsStep />
-									</div>
+									</StepContent>
 								),
 								run: () => (
-									<div className="w-[32rem]">
+									<StepContent>
 										<RunLocallyStep />
-									</div>
+									</StepContent>
 								),
 								explore: () => (
-									<div className="w-[56rem]">
+									<StepContent wide>
 										<ExploreRivet />
-									</div>
+									</StepContent>
 								),
 								provider: () => (
-									<div className="w-[32rem]">
+									<StepContent>
 										<ProviderSetup />
-									</div>
+									</StepContent>
 								),
 								backend: () => (
-									<div className="w-[32rem]">
+									<StepContent>
 										<Suspense
 											fallback={
 												<div className="space-y-6">
@@ -221,12 +221,12 @@ export function GettingStarted({
 										>
 											<BackendSetup />
 										</Suspense>
-									</div>
+									</StepContent>
 								),
 								frontend: () => (
-									<div className="w-[32rem]">
+									<StepContent>
 										<FrontendSetup />
-									</div>
+									</StepContent>
 								),
 							}}
 							onSubmit={() => {}}
@@ -259,6 +259,25 @@ export function GettingStarted({
 				</div>
 			</motion.div>
 		</Content>
+	);
+}
+
+function StepContent({
+	children,
+	wide,
+}: {
+	children: ReactNode;
+	wide?: boolean;
+}) {
+	return (
+		<motion.div
+			className="mx-auto"
+			animate={{ width: wide ? "56rem" : "32rem" }}
+			transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+			style={{ width: wide ? "56rem" : "32rem" }}
+		>
+			{children}
+		</motion.div>
 	);
 }
 

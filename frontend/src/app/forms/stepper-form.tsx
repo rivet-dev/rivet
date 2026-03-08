@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { posthog } from "posthog-js";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -122,6 +123,22 @@ function Content<const Steps extends Step[]>({
 	});
 
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
+	const prevStepIndexRef = useRef(
+		stepper.all.findIndex((s) => s.id === stepper.current.id),
+	);
+	const [direction, setDirection] = useState(0);
+
+	const currentStepIndex = stepper.all.findIndex(
+		(s) => s.id === stepper.current.id,
+	);
+
+	useEffect(() => {
+		const prev = prevStepIndexRef.current;
+		if (currentStepIndex !== prev) {
+			setDirection(currentStepIndex > prev ? 1 : -1);
+			prevStepIndexRef.current = currentStepIndex;
+		}
+	}, [currentStepIndex]);
 
 	const handleSubmit = async (values: z.infer<JoinStepSchemas<Steps>>) => {
 		ref.current = { ...ref.current, ...values };
@@ -154,23 +171,41 @@ function Content<const Steps extends Step[]>({
 					}}
 					className="space-y-6"
 				>
-					<div className="flex items-center justify-between">
-						<h2 className="text-xl font-semibold">{step.title}</h2>
-					</div>
-					{step.assist ? (
-						<div className="flex justify-end">
-							<NeedHelpButton />
-						</div>
-					) : null}
-					<StepPanel<Steps>
-						Stepper={Stepper}
-						stepper={stepper}
-						step={step}
-						content={content}
-						footer={footer}
-						showNext={step.showNext ?? true}
-						showPrevious={step.showPrevious ?? true}
-					/>
+					<AnimatePresence mode="wait" custom={direction}>
+						<motion.div
+							key={step.id}
+							custom={direction}
+							initial={{ opacity: 0, x: direction * 30 }}
+							animate={{ opacity: 1, x: 0 }}
+							exit={{ opacity: 0, x: direction * -30 }}
+							transition={{
+								duration: 0.25,
+								ease: [0.4, 0, 0.2, 1],
+							}}
+						>
+							<div className="flex items-center justify-between">
+								<h2 className="text-xl font-semibold">
+									{step.title}
+								</h2>
+							</div>
+							{step.assist ? (
+								<div className="flex justify-end mt-6">
+									<NeedHelpButton />
+								</div>
+							) : null}
+							<div className="mt-6">
+								<StepPanel<Steps>
+									Stepper={Stepper}
+									stepper={stepper}
+									step={step}
+									content={content}
+									footer={footer}
+									showNext={step.showNext ?? true}
+									showPrevious={step.showPrevious ?? true}
+								/>
+							</div>
+						</motion.div>
+					</AnimatePresence>
 				</form>
 			</FormProvider>
 		);
