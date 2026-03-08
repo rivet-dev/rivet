@@ -299,10 +299,7 @@ export function deconstructError(
 
 export function stringifyError(error: unknown): string {
 	if (error instanceof Error) {
-		if (
-			typeof process !== "undefined" &&
-			getLogErrorStack()
-		) {
+		if (typeof process !== "undefined" && getLogErrorStack()) {
 			return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
 		} else {
 			return `${error.name}: ${error.message}`;
@@ -335,5 +332,5 @@ function getErrorMessage(err: unknown): string {
 
 /** Generates a `Next` handler to pass to middleware in order to be able to call arbitrary middleware. */
 export function noopNext(): Next {
-	return async () => { };
+	return async () => {};
 }

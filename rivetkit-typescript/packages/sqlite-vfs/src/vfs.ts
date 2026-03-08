@@ -43,7 +43,9 @@ import {
 import type { FileMeta } from "../schemas/file-meta/mod";
 import type { KvVfsOptions } from "./types";
 
-type SqliteEsmFactory = (config?: { wasmBinary?: ArrayBuffer | Uint8Array }) => Promise<unknown>;
+type SqliteEsmFactory = (config?: {
+	wasmBinary?: ArrayBuffer | Uint8Array;
+}) => Promise<unknown>;
 type SQLite3Api = ReturnType<typeof Factory>;
 type SqliteBindings = Parameters<SQLite3Api["bind_collection"]>[1];
 type SqliteVfsRegistration = Parameters<SQLite3Api["vfs_register"]>[0];
@@ -102,7 +104,6 @@ function isSQLiteModule(value: unknown): value is SQLiteModule {
 	);
 }
 
-
 /**
  * Lazily load and instantiate the async SQLite module for this VFS instance.
  * We do this on first open so actors that do not use SQLite do not pay module
@@ -115,7 +116,9 @@ async function loadSqliteRuntime(): Promise<LoadedSqliteRuntime> {
 	// Uses Array.join() instead of string concatenation to prevent esbuild/tsup
 	// from constant-folding the expression at build time, which would allow
 	// Turbopack to trace into the WASM package.
-	const specifier = ["@rivetkit/sqlite", "dist", "wa-sqlite-async.mjs"].join("/");
+	const specifier = ["@rivetkit/sqlite", "dist", "wa-sqlite-async.mjs"].join(
+		"/",
+	);
 	const sqliteModule = await import(specifier);
 	if (!isSqliteEsmFactory(sqliteModule.default)) {
 		throw new Error("Invalid SQLite ESM factory export");
@@ -180,7 +183,9 @@ function decodeFileMeta(data: Uint8Array): number {
 }
 
 function isValidFileSize(size: number): boolean {
-	return Number.isSafeInteger(size) && size >= 0 && size <= MAX_FILE_SIZE_BYTES;
+	return (
+		Number.isSafeInteger(size) && size >= 0 && size <= MAX_FILE_SIZE_BYTES
+	);
 }
 
 /**
@@ -245,7 +250,10 @@ export class Database {
 	 * @param sql - SQL statement to execute
 	 * @param callback - Called for each result row with (row, columns)
 	 */
-	async exec(sql: string, callback?: (row: unknown[], columns: string[]) => void): Promise<void> {
+	async exec(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): Promise<void> {
 		await this.#sqliteMutex.run(async () => {
 			await this.#sqlite3.exec(this.#handle, sql, callback);
 		});
@@ -258,7 +266,10 @@ export class Database {
 	 */
 	async run(sql: string, params?: SqliteBindings): Promise<void> {
 		await this.#sqliteMutex.run(async () => {
-			for await (const stmt of this.#sqlite3.statements(this.#handle, sql)) {
+			for await (const stmt of this.#sqlite3.statements(
+				this.#handle,
+				sql,
+			)) {
 				if (params) {
 					this.#sqlite3.bind_collection(stmt, params);
 				}
@@ -275,11 +286,17 @@ export class Database {
 	 * @param params - Parameter values to bind
 	 * @returns Object with rows (array of arrays) and columns (column names)
 	 */
-	async query(sql: string, params?: SqliteBindings): Promise<{ rows: unknown[][]; columns: string[] }> {
+	async query(
+		sql: string,
+		params?: SqliteBindings,
+	): Promise<{ rows: unknown[][]; columns: string[] }> {
 		return this.#sqliteMutex.run(async () => {
 			const rows: unknown[][] = [];
 			let columns: string[] = [];
-			for await (const stmt of this.#sqlite3.statements(this.#handle, sql)) {
+			for await (const stmt of this.#sqlite3.statements(
+				this.#handle,
+				sql,
+			)) {
 				if (params) {
 					this.#sqlite3.bind_collection(stmt, params);
 				}
@@ -338,7 +355,7 @@ export class SqliteVfs {
 
 	constructor() {
 		// Generate unique instance ID for VFS name
-		this.#instanceId = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+		this.#instanceId = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 	}
 
 	/**
@@ -387,10 +404,7 @@ export class SqliteVfs {
 	 * @param options - KV storage operations for this database
 	 * @returns A Database instance
 	 */
-	async open(
-		fileName: string,
-		options: KvVfsOptions,
-	): Promise<Database> {
+	async open(fileName: string, options: KvVfsOptions): Promise<Database> {
 		if (this.#destroyed) {
 			throw new Error("SqliteVfs is closed");
 		}
@@ -559,7 +573,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 			return { options: this.#mainFileOptions, fileTag: FILE_TAG_MAIN };
 		}
 		if (path === `${this.#mainFileName}-journal`) {
-			return { options: this.#mainFileOptions, fileTag: FILE_TAG_JOURNAL };
+			return {
+				options: this.#mainFileOptions,
+				fileTag: FILE_TAG_JOURNAL,
+			};
 		}
 		if (path === `${this.#mainFileName}-wal`) {
 			return { options: this.#mainFileOptions, fileTag: FILE_TAG_WAL };
@@ -700,7 +717,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 
 		// Calculate which chunks we need to read
 		const startChunk = Math.floor(iOffset / CHUNK_SIZE);
-		const endChunk = Math.floor((iOffset + requestedLength - 1) / CHUNK_SIZE);
+		const endChunk = Math.floor(
+			(iOffset + requestedLength - 1) / CHUNK_SIZE,
+		);
 
 		// Fetch all needed chunks
 		const chunkKeys: Uint8Array[] = [];
@@ -729,7 +748,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 				const destStart = chunkOffset + readStart - iOffset;
 
 				if (sourceEnd > sourceStart) {
-					data.set(chunkData.subarray(sourceStart, sourceEnd), destStart);
+					data.set(
+						chunkData.subarray(sourceStart, sourceEnd),
+						destStart,
+					);
 				}
 
 				// Zero-fill if chunk is smaller than expected
@@ -810,7 +832,8 @@ class SqliteSystem implements SqliteVfsRegistration {
 				0,
 				Math.min(CHUNK_SIZE, file.size - chunkOffset),
 			);
-			const needsExisting = writeStart > 0 || existingBytesInChunk > writeEnd;
+			const needsExisting =
+				writeStart > 0 || existingBytesInChunk > writeEnd;
 			const chunkKey = this.#chunkKey(file, i);
 			let existingChunkIndex = -1;
 			if (needsExisting) {
@@ -826,9 +849,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 			});
 		}
 
-		const existingChunks = chunkKeysToFetch.length > 0
-			? await options.getBatch(chunkKeysToFetch)
-			: [];
+		const existingChunks =
+			chunkKeysToFetch.length > 0
+				? await options.getBatch(chunkKeysToFetch)
+				: [];
 
 		// Prepare new chunk data
 		const entriesToWrite: [Uint8Array, Uint8Array][] = [];
@@ -841,7 +865,9 @@ class SqliteSystem implements SqliteVfsRegistration {
 			// Create new chunk data
 			let newChunk: Uint8Array;
 			if (existingChunk) {
-				newChunk = new Uint8Array(Math.max(existingChunk.length, plan.writeEnd));
+				newChunk = new Uint8Array(
+					Math.max(existingChunk.length, plan.writeEnd),
+				);
 				newChunk.set(existingChunk);
 			} else {
 				newChunk = new Uint8Array(plan.writeEnd);
@@ -850,7 +876,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 			// Copy data from input buffer to chunk
 			const sourceStart = plan.chunkOffset + plan.writeStart - iOffset;
 			const sourceEnd = sourceStart + (plan.writeEnd - plan.writeStart);
-			newChunk.set(data.subarray(sourceStart, sourceEnd), plan.writeStart);
+			newChunk.set(
+				data.subarray(sourceStart, sourceEnd),
+				plan.writeStart,
+			);
 
 			entriesToWrite.push([plan.chunkKey, newChunk]);
 		}
@@ -924,7 +953,10 @@ class SqliteSystem implements SqliteVfsRegistration {
 			const lastChunkData = await options.get(lastChunkKey);
 
 			if (lastChunkData && lastChunkData.length > size % CHUNK_SIZE) {
-				const truncatedChunk = lastChunkData.subarray(0, size % CHUNK_SIZE);
+				const truncatedChunk = lastChunkData.subarray(
+					0,
+					size % CHUNK_SIZE,
+				);
 				await options.put(lastChunkKey, truncatedChunk);
 			}
 		}
@@ -960,7 +992,11 @@ class SqliteSystem implements SqliteVfsRegistration {
 		return VFS.SQLITE_OK;
 	}
 
-	async xDelete(_pVfs: number, zName: number, _syncDir: number): Promise<number> {
+	async xDelete(
+		_pVfs: number,
+		zName: number,
+		_syncDir: number,
+	): Promise<number> {
 		await this.#delete(this.#module.UTF8ToString(zName));
 		return VFS.SQLITE_OK;
 	}
@@ -1040,7 +1076,12 @@ class SqliteSystem implements SqliteVfsRegistration {
 		return 0;
 	}
 
-	xFullPathname(_pVfs: number, zName: number, nOut: number, zOut: number): number {
+	xFullPathname(
+		_pVfs: number,
+		zName: number,
+		nOut: number,
+		zOut: number,
+	): number {
 		const path = this.#module.UTF8ToString(zName);
 		const bytes = TEXT_ENCODER.encode(path);
 		const out = this.#module.HEAPU8.subarray(zOut, zOut + nOut);
@@ -1127,5 +1168,5 @@ function delegalize(lo32: number, hi32: number): number {
 	if (hi === MAX_FILE_SIZE_HI32 && lo > MAX_FILE_SIZE_LO32) {
 		return -1;
 	}
-	return (hi * UINT32_SIZE) + lo;
+	return hi * UINT32_SIZE + lo;
 }

@@ -95,9 +95,9 @@ export function buildManagerRouter(
 
 				const actorIdsParsed = actor_ids
 					? actor_ids
-						.split(",")
-						.map((id) => id.trim())
-						.filter((id) => id.length > 0)
+							.split(",")
+							.map((id) => id.trim())
+							.filter((id) => id.length > 0)
 					: undefined;
 
 				const actors: ActorOutput[] = [];

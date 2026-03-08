@@ -3,6 +3,6 @@ export * from "../schemas/actor-inspector/mod";
 export * from "../schemas/actor-inspector/versioned";
 export type { WorkflowHistory as TransportWorkflowHistory } from "../schemas/transport/mod";
 export {
-    decodeWorkflowHistoryTransport,
-    encodeWorkflowHistoryTransport,
+	decodeWorkflowHistoryTransport,
+	encodeWorkflowHistoryTransport,
 } from "./transport";

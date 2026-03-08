@@ -92,9 +92,7 @@ export function createInlineClient<R extends Registry<any>>(
 
 	// Create client using the manager driver
 	// Avoid excessive generic expansion in DTS generation.
-	const client = (createClientWithDriver as any)(
-		managerDriver,
-	) as Client<R>;
+	const client = (createClientWithDriver as any)(managerDriver) as Client<R>;
 
 	return { client, fetch: router.fetch.bind(router), config, ActorHandler };
 }

@@ -25,11 +25,7 @@ export function createEngineDriver(): DriverConfig {
 			managerDriver: ManagerDriver,
 			inlineClient: Client<any>,
 		) => {
-			return new EngineActorDriver(
-				config,
-				managerDriver,
-				inlineClient,
-			);
+			return new EngineActorDriver(config, managerDriver, inlineClient);
 		},
 		autoStartActorDriver: true,
 	};

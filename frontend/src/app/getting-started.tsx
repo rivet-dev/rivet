@@ -7,10 +7,7 @@ import {
 	faVscode,
 	Icon,
 } from "@rivet-gg/icons";
-import {
-	deployOptions,
-	type Provider,
-} from "@rivetkit/shared-data";
+import { deployOptions, type Provider } from "@rivetkit/shared-data";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -193,9 +190,7 @@ export function GettingStarted({
 								),
 							}}
 							content={{
-								provider: () => (
-									<ProviderSetup />
-								),
+								provider: () => <ProviderSetup />,
 								backend: () => (
 									<Suspense
 										fallback={
@@ -206,9 +201,7 @@ export function GettingStarted({
 											</div>
 										}
 									>
-										<BackendSetup
-											flow={flow}
-										/>
+										<BackendSetup flow={flow} />
 									</Suspense>
 								),
 								frontend: () => <FrontendSetup />,

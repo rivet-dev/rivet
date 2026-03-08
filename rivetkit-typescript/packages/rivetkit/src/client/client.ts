@@ -554,5 +554,5 @@ function createActorProxy<AD extends AnyActorDefinition>(
 			}
 			return undefined;
 		},
-		}) as unknown as ActorHandle<AD> | ActorConn<AD>;
+	}) as unknown as ActorHandle<AD> | ActorConn<AD>;
 }

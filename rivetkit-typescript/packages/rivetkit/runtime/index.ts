@@ -14,10 +14,7 @@ import {
 	type RegistryConfig,
 } from "@/registry/config";
 import { logger } from "../src/registry/log";
-import {
-	crossPlatformServe,
-	findFreePort,
-} from "@/utils/serve";
+import { crossPlatformServe, findFreePort } from "@/utils/serve";
 import { ManagerDriver } from "@/manager/driver";
 import { buildServerlessRouter } from "@/serverless/router";
 import type { Registry } from "@/registry";

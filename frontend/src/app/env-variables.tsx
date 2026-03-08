@@ -113,17 +113,12 @@ export const useRivetDsn = ({
 	const adminToken = useAdminToken();
 	const namespace = dataProvider.engineNamespace;
 
-	let auth: string;
-	if (kind === "secret") {
-		auth = `${namespace}:${adminToken}`;
-	} else if (kind === "publishable") {
-		if (__APP_TYPE__ === "engine") {
-			// Self-hosted engine public endpoint auth only requires namespace.
-			auth = namespace;
-		} else {
-			auth = `${namespace}:${publishableToken}`;
-		}
-	}
+	const auth =
+		kind === "secret"
+			? `${namespace}:${adminToken}`
+			: __APP_TYPE__ === "engine"
+				? namespace
+				: `${namespace}:${publishableToken}`;
 
 	const dsn = `https://${auth}@${apiEndpoint
 		.replace("https://", "")

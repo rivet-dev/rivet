@@ -3,11 +3,10 @@ import type { ActorConn } from "rivetkit/client";
 import { createClient, createRivetKit, createRivetKitWithClient } from "./mod";
 
 type Assert<T extends true> = T;
-type IsEqual<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B
-	? 1
-	: 2
-	? true
-	: false;
+type IsEqual<A, B> =
+	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+		? true
+		: false;
 
 const counterActor = actor({
 	state: {},

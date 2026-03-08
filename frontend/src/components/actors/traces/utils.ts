@@ -41,8 +41,9 @@ export function buildSpanTree(spans: SpanNode[]): SpanNode[] {
 	// Second pass: build tree
 	spans.forEach((span) => {
 		const node = spanMap.get(span.spanId)!;
-		if (span.parentSpanId && spanMap.has(span.parentSpanId)) {
-			spanMap.get(span.parentSpanId)!.children.push(node);
+		const parentSpanId = span.span.parentSpanId;
+		if (parentSpanId && spanMap.has(parentSpanId)) {
+			spanMap.get(parentSpanId)!.children.push(node);
 		} else {
 			roots.push(node);
 		}

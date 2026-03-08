@@ -16,11 +16,7 @@ export function ActorTracesTab({ actorId }: ActorTracesTabProps) {
 	);
 
 	if (destroyedAt) {
-		return (
-			<Info>
-				Traces are unavailable for inactive Actors.
-			</Info>
-		);
+		return <Info>Traces are unavailable for inactive Actors.</Info>;
 	}
 
 	if (!inspector.features.traces.supported) {

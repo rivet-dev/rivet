@@ -62,7 +62,8 @@ export function createWebSocketDriver(
 
 				// Check outgoing message size
 				const messageSize =
-					(serialized as any).byteLength || (serialized as any).length;
+					(serialized as any).byteLength ||
+					(serialized as any).length;
 				if (messageSize > config.maxOutgoingMessageSize) {
 					actor.rLog.error({
 						msg: "outgoing message exceeds maxOutgoingMessageSize",

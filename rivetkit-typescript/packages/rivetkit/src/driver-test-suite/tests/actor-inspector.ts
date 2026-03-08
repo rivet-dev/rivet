@@ -22,26 +22,21 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 		test("PATCH /inspector/state updates actor state", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate([
-				"inspector-set-state",
-			]);
+			const handle = client.counter.getOrCreate(["inspector-set-state"]);
 
 			await handle.increment(5);
 
 			const gatewayUrl = await handle.getGatewayUrl();
 
 			// Replace state
-			const patchResponse = await fetch(
-				`${gatewayUrl}/inspector/state`,
-				{
-					method: "PATCH",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: "Bearer token",
-					},
-					body: JSON.stringify({ state: { count: 42 } }),
+			const patchResponse = await fetch(`${gatewayUrl}/inspector/state`, {
+				method: "PATCH",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: "Bearer token",
 				},
-			);
+				body: JSON.stringify({ state: { count: 42 } }),
+			});
 			expect(patchResponse.status).toBe(200);
 			const patchData = await patchResponse.json();
 			expect(patchData).toEqual({ ok: true });
@@ -96,9 +91,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 		test("POST /inspector/action/:name executes an action", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate([
-				"inspector-action",
-			]);
+			const handle = client.counter.getOrCreate(["inspector-action"]);
 
 			await handle.increment(10);
 
@@ -156,9 +149,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 		test("GET /inspector/traces returns trace data", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate([
-				"inspector-traces",
-			]);
+			const handle = client.counter.getOrCreate(["inspector-traces"]);
 
 			// Perform an action to generate traces
 			await handle.increment(1);
@@ -182,9 +173,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 		test("GET /inspector/workflow-history returns workflow status", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate([
-				"inspector-workflow",
-			]);
+			const handle = client.counter.getOrCreate(["inspector-workflow"]);
 
 			// Ensure actor exists
 			await handle.increment(0);
@@ -210,19 +199,14 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 		test("GET /inspector/summary returns full actor snapshot", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate([
-				"inspector-summary",
-			]);
+			const handle = client.counter.getOrCreate(["inspector-summary"]);
 
 			await handle.increment(7);
 
 			const gatewayUrl = await handle.getGatewayUrl();
-			const response = await fetch(
-				`${gatewayUrl}/inspector/summary`,
-				{
-					headers: { Authorization: "Bearer token" },
-				},
-			);
+			const response = await fetch(`${gatewayUrl}/inspector/summary`, {
+				headers: { Authorization: "Bearer token" },
+			});
 			expect(response.status).toBe(200);
 			const data = (await response.json()) as {
 				state: { count: number };
@@ -246,9 +230,7 @@ export function runActorInspectorTests(driverTestConfig: DriverTestConfig) {
 
 		test("inspector endpoints require auth in non-dev mode", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.counter.getOrCreate([
-				"inspector-auth",
-			]);
+			const handle = client.counter.getOrCreate(["inspector-auth"]);
 
 			await handle.increment(0);
 

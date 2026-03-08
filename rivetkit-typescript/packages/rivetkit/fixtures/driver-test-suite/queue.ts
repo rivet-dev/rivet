@@ -23,11 +23,7 @@ export const queueActor = actor({
 	state: {},
 	queues: queueSchemas,
 	actions: {
-		receiveOne: async (
-			c,
-			name: QueueName,
-			opts?: { timeout?: number },
-		) => {
+		receiveOne: async (c, name: QueueName, opts?: { timeout?: number }) => {
 			const message = await c.queue.next({
 				names: [name],
 				timeout: opts?.timeout,

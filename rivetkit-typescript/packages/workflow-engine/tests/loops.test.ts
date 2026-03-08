@@ -82,13 +82,16 @@ for (const mode of modes) {
 			let iteration = 0;
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.loop("stateless-implicit-continue", async () => {
-					iteration += 1;
-					if (iteration >= 3) {
-						return Loop.break("done");
-					}
-					return undefined;
-				});
+				return await ctx.loop(
+					"stateless-implicit-continue",
+					async () => {
+						iteration += 1;
+						if (iteration >= 3) {
+							return Loop.break("done");
+						}
+						return undefined;
+					},
+				);
 			};
 
 			const result = await runWorkflow(

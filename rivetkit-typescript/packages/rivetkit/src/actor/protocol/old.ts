@@ -273,18 +273,15 @@ export async function processMessage<
 				subscribe,
 			});
 
-				if (subscribe) {
-					await actor.assertCanSubscribe(
-						new ActionContext<S, CP, CS, V, I, DB, E, Q>(
-							actor,
-							conn,
-						),
-						eventName,
-					);
-					await handler.onSubscribe(eventName, conn);
-				} else {
-					await handler.onUnsubscribe(eventName, conn);
-				}
+			if (subscribe) {
+				await actor.assertCanSubscribe(
+					new ActionContext<S, CP, CS, V, I, DB, E, Q>(actor, conn),
+					eventName,
+				);
+				await handler.onSubscribe(eventName, conn);
+			} else {
+				await handler.onUnsubscribe(eventName, conn);
+			}
 
 			actor.rLog.debug({
 				msg: "subscription request completed",

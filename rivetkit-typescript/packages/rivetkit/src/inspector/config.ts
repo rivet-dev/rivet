@@ -16,10 +16,7 @@ const defaultTokenFn = () => {
 };
 
 const defaultEnabled = () => {
-	return (
-		isDev() ||
-		!getRivetkitInspectorDisable()
-	);
+	return isDev() || !getRivetkitInspectorDisable();
 };
 
 export const InspectorConfigSchema = z

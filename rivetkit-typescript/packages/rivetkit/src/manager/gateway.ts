@@ -122,7 +122,6 @@ export async function actorGateway(
 	c: HonoContext,
 	next: Next,
 ) {
-
 	// Skip test routes - let them be handled by their specific handlers
 	if (c.req.path.startsWith("/.test/")) {
 		return next();
@@ -425,7 +424,12 @@ export async function createTestWebSocketProxy(
 		promise: clientToProxyWsPromise,
 		resolve: clientToProxyWsResolve,
 		reject: clientToProxyWsReject,
-	} = promiseWithResolvers<WSContext>((reason) => logger().warn({ msg: "unhandled client websocket promise rejection", reason }));
+	} = promiseWithResolvers<WSContext>((reason) =>
+		logger().warn({
+			msg: "unhandled client websocket promise rejection",
+			reason,
+		}),
+	);
 	try {
 		// Resolve the client WebSocket promise
 		logger().debug({ msg: "awaiting client websocket promise" });

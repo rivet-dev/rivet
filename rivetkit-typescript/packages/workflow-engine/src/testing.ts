@@ -33,7 +33,11 @@ class InMemoryWorkflowMessageDriver implements WorkflowMessageDriver {
 				: undefined;
 		const selected: Array<{ message: Message; index: number }> = [];
 
-		for (let i = 0; i < this.#messages.length && selected.length < limitedCount; i++) {
+		for (
+			let i = 0;
+			i < this.#messages.length && selected.length < limitedCount;
+			i++
+		) {
 			const message = this.#messages[i];
 			if (nameSet && !nameSet.has(message.name)) {
 				continue;
@@ -64,7 +68,9 @@ class InMemoryWorkflowMessageDriver implements WorkflowMessageDriver {
 	}
 
 	async completeMessage(messageId: string): Promise<void> {
-		const index = this.#messages.findIndex((message) => message.id === messageId);
+		const index = this.#messages.findIndex(
+			(message) => message.id === messageId,
+		);
 		if (index !== -1) {
 			this.#messages.splice(index, 1);
 		}
@@ -78,7 +84,8 @@ class InMemoryWorkflowMessageDriver implements WorkflowMessageDriver {
 			throw new EvictedError();
 		}
 
-		const nameSet = messageNames.length > 0 ? new Set(messageNames) : undefined;
+		const nameSet =
+			messageNames.length > 0 ? new Set(messageNames) : undefined;
 		if (
 			this.#messages.some((message) =>
 				nameSet ? nameSet.has(message.name) : true,
@@ -103,7 +110,9 @@ class InMemoryWorkflowMessageDriver implements WorkflowMessageDriver {
 					waiter.reject(new EvictedError());
 				},
 			};
-			abortSignal.addEventListener("abort", waiter.onAbort, { once: true });
+			abortSignal.addEventListener("abort", waiter.onAbort, {
+				once: true,
+			});
 			this.#waiters.add(waiter);
 		});
 	}

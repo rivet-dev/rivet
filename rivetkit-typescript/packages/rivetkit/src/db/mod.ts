@@ -21,7 +21,10 @@ export function db({
 				// Use the override
 				return {
 					execute: async <
-						TRow extends Record<string, unknown> = Record<string, unknown>,
+						TRow extends Record<string, unknown> = Record<
+							string,
+							unknown
+						>,
 					>(
 						query: string,
 						...args: unknown[]
@@ -36,7 +39,9 @@ export function db({
 
 			// Construct KV-backed client using actor driver's KV operations
 			if (!ctx.sqliteVfs) {
-				throw new Error("SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.");
+				throw new Error(
+					"SqliteVfs instance not provided in context. The driver must provide a sqliteVfs instance.",
+				);
 			}
 
 			const kvStore = createActorKvStore(ctx.kv);
@@ -51,7 +56,10 @@ export function db({
 
 			return {
 				execute: async <
-					TRow extends Record<string, unknown> = Record<string, unknown>,
+					TRow extends Record<string, unknown> = Record<
+						string,
+						unknown
+					>,
 				>(
 					query: string,
 					...args: unknown[]
@@ -66,14 +74,20 @@ export function db({
 						// supports multi-statement migrations.
 						if (args.length > 0) {
 							const bindings = toSqliteBindings(args);
-							const token = query.trimStart().slice(0, 16).toUpperCase();
+							const token = query
+								.trimStart()
+								.slice(0, 16)
+								.toUpperCase();
 							const returnsRows =
 								token.startsWith("SELECT") ||
 								token.startsWith("PRAGMA") ||
 								token.startsWith("WITH");
 
 							if (returnsRows) {
-								const { rows, columns } = await db.query(query, bindings);
+								const { rows, columns } = await db.query(
+									query,
+									bindings,
+								);
 								return rows.map((row: unknown[]) => {
 									const rowObj: Record<string, unknown> = {};
 									for (let i = 0; i < columns.length; i++) {
@@ -89,16 +103,19 @@ export function db({
 
 						const results: Record<string, unknown>[] = [];
 						let columnNames: string[] | null = null;
-						await db.exec(query, (row: unknown[], columns: string[]) => {
-							if (!columnNames) {
-								columnNames = columns;
-							}
-							const rowObj: Record<string, unknown> = {};
-							for (let i = 0; i < row.length; i++) {
-								rowObj[columnNames[i]] = row[i];
-							}
-							results.push(rowObj);
-						});
+						await db.exec(
+							query,
+							(row: unknown[], columns: string[]) => {
+								if (!columnNames) {
+									columnNames = columns;
+								}
+								const rowObj: Record<string, unknown> = {};
+								for (let i = 0; i < row.length; i++) {
+									rowObj[columnNames[i]] = row[i];
+								}
+								results.push(rowObj);
+							},
+						);
 						return results as TRow[];
 					});
 				},

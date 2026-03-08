@@ -5,7 +5,9 @@ export interface TracesDriver {
 	set(key: Uint8Array, value: Uint8Array): Promise<void>;
 	delete(key: Uint8Array): Promise<void>;
 	deletePrefix(prefix: Uint8Array): Promise<void>;
-	list(prefix: Uint8Array): Promise<Array<{ key: Uint8Array; value: Uint8Array }>>;
+	list(
+		prefix: Uint8Array,
+	): Promise<Array<{ key: Uint8Array; value: Uint8Array }>>;
 	listRange(
 		start: Uint8Array,
 		end: Uint8Array,
@@ -82,7 +84,10 @@ export interface TracesOptions<TResource> {
 export interface Traces<TExport> {
 	startSpan(name: string, options?: StartSpanOptions): SpanHandle;
 	updateSpan(handle: SpanHandle, options: UpdateSpanOptions): void;
-	setAttributes(handle: SpanHandle, attributes: Record<string, unknown>): void;
+	setAttributes(
+		handle: SpanHandle,
+		attributes: Record<string, unknown>,
+	): void;
 	setStatus(handle: SpanHandle, status: SpanStatusInput): void;
 	endSpan(handle: SpanHandle, options?: EndSpanOptions): void;
 	emitEvent(handle: SpanHandle, name: string, options?: EventOptions): void;

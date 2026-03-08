@@ -62,9 +62,7 @@ function toU64(value: number): bigint {
 	return BigInt(Math.max(0, Math.floor(value)));
 }
 
-function toWorkflowLocation(
-	location: Location,
-): transport.WorkflowLocation {
+function toWorkflowLocation(location: Location): transport.WorkflowLocation {
 	return location.map((segment) => {
 		if (typeof segment === "number") {
 			return { tag: "WorkflowNameIndex", val: segment };
@@ -79,9 +77,7 @@ function toWorkflowLocation(
 	});
 }
 
-function toWorkflowEntryKind(
-	kind: EntryKind,
-): transport.WorkflowEntryKind {
+function toWorkflowEntryKind(kind: EntryKind): transport.WorkflowEntryKind {
 	switch (kind.type) {
 		case "step":
 			return {
@@ -124,7 +120,9 @@ function toWorkflowEntryKind(
 		case "join":
 			return {
 				tag: "WorkflowJoinEntry",
-				val: { branches: toWorkflowBranchStatusMap(kind.data.branches) },
+				val: {
+					branches: toWorkflowBranchStatusMap(kind.data.branches),
+				},
 			};
 		case "race":
 			return {
@@ -147,9 +145,7 @@ function toWorkflowEntryKind(
 	}
 }
 
-function toWorkflowEntry(
-	entry: WorkflowHistoryEntry,
-): transport.WorkflowEntry {
+function toWorkflowEntry(entry: WorkflowHistoryEntry): transport.WorkflowEntry {
 	return {
 		id: entry.id,
 		location: toWorkflowLocation(entry.location),
@@ -176,9 +172,7 @@ function toWorkflowEntryStatus(
 	}
 }
 
-function toWorkflowSleepState(
-	state: SleepState,
-): transport.WorkflowSleepState {
+function toWorkflowSleepState(state: SleepState): transport.WorkflowSleepState {
 	switch (state) {
 		case "pending":
 			return transport.WorkflowSleepState.PENDING;

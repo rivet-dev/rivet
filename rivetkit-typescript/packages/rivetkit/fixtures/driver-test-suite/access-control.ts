@@ -50,7 +50,10 @@ export const accessControlActor = actor({
 	events: accessControlEvents,
 	queues: accessControlQueues,
 	onBeforeConnect: (_c, params: AccessControlConnParams) => {
-		if (params?.allowRequest === false || params?.allowWebSocket === false) {
+		if (
+			params?.allowRequest === false ||
+			params?.allowWebSocket === false
+		) {
 			throw new Forbidden();
 		}
 	},

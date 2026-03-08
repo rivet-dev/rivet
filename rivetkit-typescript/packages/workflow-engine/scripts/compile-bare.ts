@@ -83,7 +83,8 @@ export async function compileSchema(options: CompileOptions): Promise<void> {
 	await fs.writeFile(outputPath, result);
 }
 
-const POST_PROCESS_MARKER = "// @generated - post-processed by compile-bare.ts\n";
+const POST_PROCESS_MARKER =
+	"// @generated - post-processed by compile-bare.ts\n";
 
 const ASSERT_FUNCTION = `
 function assert(condition: boolean, message?: string): asserts condition {

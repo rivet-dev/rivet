@@ -26,9 +26,7 @@ function isSqliteBindingValue(value: unknown): boolean {
 export function toSqliteBindings(args: unknown[]): SqliteBindings {
 	for (const value of args) {
 		if (!isSqliteBindingValue(value)) {
-			throw new Error(
-				`unsupported sqlite binding type: ${typeof value}`,
-			);
+			throw new Error(`unsupported sqlite binding type: ${typeof value}`);
 		}
 	}
 

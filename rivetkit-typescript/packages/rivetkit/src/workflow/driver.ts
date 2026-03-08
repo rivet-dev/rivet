@@ -51,7 +51,9 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 	}): Promise<Message[]> {
 		const messages = await this.#runCtx.keepAwake(
 			this.#actor.queueManager.receive(
-				opts.names && opts.names.length > 0 ? [...opts.names] : undefined,
+				opts.names && opts.names.length > 0
+					? [...opts.names]
+					: undefined,
 				opts.count,
 				0,
 				undefined,
@@ -78,7 +80,10 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 		}));
 	}
 
-	async completeMessage(messageId: string, response?: unknown): Promise<void> {
+	async completeMessage(
+		messageId: string,
+		response?: unknown,
+	): Promise<void> {
 		let parsedId: bigint;
 		try {
 			parsedId = BigInt(messageId);
@@ -187,7 +192,10 @@ export class ActorWorkflowDriver implements EngineDriver {
 			Promise.all([
 				this.#actor.driver.kvBatchPut(
 					this.#actor.id,
-					writes.map(({ key, value }) => [makeWorkflowKey(key), value]),
+					writes.map(({ key, value }) => [
+						makeWorkflowKey(key),
+						value,
+					]),
 				),
 				this.#actor.stateManager.saveState({
 					immediate: true,

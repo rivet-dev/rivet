@@ -7,9 +7,7 @@ import { DriverConfig, RegistryConfig } from "@/registry/config";
 /**
  * Chooses the appropriate driver based on the run configuration.
  */
-export function chooseDefaultDriver(
-	config: RegistryConfig,
-): DriverConfig {
+export function chooseDefaultDriver(config: RegistryConfig): DriverConfig {
 	if (config.endpoint && config.driver) {
 		throw new UserError(
 			"Cannot specify both 'endpoint' and 'driver' in configuration",

@@ -16,10 +16,7 @@ import {
 	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
-import {
-	buildLoopIterationRange,
-	buildEntryMetadataKey,
-} from "./keys.js";
+import { buildLoopIterationRange, buildEntryMetadataKey } from "./keys.js";
 import {
 	appendLoopIteration,
 	appendName,
@@ -151,7 +148,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	get queue(): WorkflowQueue {
 		return {
 			next: async (name, opts) => await this.queueNext(name, opts),
-			nextBatch: async (name, opts) => await this.queueNextBatch(name, opts),
+			nextBatch: async (name, opts) =>
+				await this.queueNextBatch(name, opts),
 			send: async (name, body) => await this.queueSend(name, body),
 		};
 	}
@@ -201,7 +199,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	/**
 	 * Log a debug message using the configured logger.
 	 */
-	private log(level: "debug" | "info" | "warn" | "error", data: Record<string, unknown>): void {
+	private log(
+		level: "debug" | "info" | "warn" | "error",
+		data: Record<string, unknown>,
+	): void {
 		if (!this.logger) return;
 		this.logger[level](data);
 	}
@@ -220,12 +221,12 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private checkDuplicateName(name: string): void {
 		const fullKey =
 			locationToKey(this.storage, this.currentLocation) + "/" + name;
-			if (this.usedNamesInExecution.has(fullKey)) {
-				throw new HistoryDivergedError(
-					`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
-						`Each step/loop/sleep/queue.next/join/race must have a unique name within its scope.`,
-				);
-			}
+		if (this.usedNamesInExecution.has(fullKey)) {
+			throw new HistoryDivergedError(
+				`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
+					`Each step/loop/sleep/queue.next/join/race must have a unique name within its scope.`,
+			);
+		}
 		this.usedNamesInExecution.add(fullKey);
 	}
 
@@ -395,7 +396,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			);
 
 			// Replay successful result (including void steps).
-			if (metadata.status === "completed" || stepData.output !== undefined) {
+			if (
+				metadata.status === "completed" ||
+				stepData.output !== undefined
+			) {
 				return stepData.output as T;
 			}
 
@@ -431,7 +435,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			existing ?? createEntry(location, { type: "step", data: {} });
 		if (!existing) {
 			// New entry - register name
-			this.log("debug", { msg: "executing new step", step: config.name, key });
+			this.log("debug", {
+				msg: "executing new step",
+				step: config.name,
+				key,
+			});
 			const nameIndex = registerName(this.storage, config.name);
 			entry.location = [...location];
 			entry.location[entry.location.length - 1] = nameIndex;
@@ -457,63 +465,71 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				config.name,
 			);
 
-				if (entry.kind.type === "step") {
-					entry.kind.data.output = output;
-				}
-				entry.dirty = true;
-				metadata.status = "completed";
-				metadata.error = undefined;
-				metadata.completedAt = Date.now();
+			if (entry.kind.type === "step") {
+				entry.kind.data.output = output;
+			}
+			entry.dirty = true;
+			metadata.status = "completed";
+			metadata.error = undefined;
+			metadata.completedAt = Date.now();
 
-				// Ephemeral steps don't trigger an immediate flush. This avoids the
+			// Ephemeral steps don't trigger an immediate flush. This avoids the
 			// synchronous write overhead for transient operations. Note that the
 			// step's entry is still marked dirty and WILL be persisted on the
 			// next flush from a non-ephemeral operation. The purpose of ephemeral
 			// is to batch writes, not to avoid persistence entirely.
 			if (!config.ephemeral) {
-				this.log("debug", { msg: "flushing step", step: config.name, key });
+				this.log("debug", {
+					msg: "flushing step",
+					step: config.name,
+					key,
+				});
 				await this.flushStorage();
 			}
 
-			this.log("debug", { msg: "step completed", step: config.name, key });
+			this.log("debug", {
+				msg: "step completed",
+				step: config.name,
+				key,
+			});
 			return output;
 		} catch (error) {
-				// Timeout errors are treated as critical (no retry)
-				if (error instanceof StepTimeoutError) {
-					if (entry.kind.type === "step") {
-						entry.kind.data.error = String(error);
-					}
-					entry.dirty = true;
-					metadata.status = "exhausted";
-					metadata.error = String(error);
-					await this.flushStorage();
-					throw new CriticalError(error.message);
-				}
-
-			if (
-				error instanceof CriticalError ||
-				error instanceof RollbackError
-				) {
-					if (entry.kind.type === "step") {
-						entry.kind.data.error = String(error);
-					}
-					entry.dirty = true;
-					metadata.status = "exhausted";
-					metadata.error = String(error);
-					await this.flushStorage();
-					throw error;
-				}
-
+			// Timeout errors are treated as critical (no retry)
+			if (error instanceof StepTimeoutError) {
 				if (entry.kind.type === "step") {
 					entry.kind.data.error = String(error);
 				}
 				entry.dirty = true;
-				metadata.status = "failed";
+				metadata.status = "exhausted";
 				metadata.error = String(error);
-
 				await this.flushStorage();
+				throw new CriticalError(error.message);
+			}
 
-				throw new StepFailedError(config.name, error, metadata.attempts);
+			if (
+				error instanceof CriticalError ||
+				error instanceof RollbackError
+			) {
+				if (entry.kind.type === "step") {
+					entry.kind.data.error = String(error);
+				}
+				entry.dirty = true;
+				metadata.status = "exhausted";
+				metadata.error = String(error);
+				await this.flushStorage();
+				throw error;
+			}
+
+			if (entry.kind.type === "step") {
+				entry.kind.data.error = String(error);
+			}
+			entry.dirty = true;
+			metadata.status = "failed";
+			metadata.error = String(error);
+
+			await this.flushStorage();
+
+			throw new StepFailedError(config.name, error, metadata.attempts);
 		}
 	}
 
@@ -648,7 +664,11 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 
 			const loopData = existing.kind.data;
-			metadata = await loadMetadata(this.storage, this.driver, existing.id);
+			metadata = await loadMetadata(
+				this.storage,
+				this.driver,
+				existing.id,
+			);
 
 			if (rollbackMode) {
 				if (loopData.output !== undefined) {
@@ -698,8 +718,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		const historyPruneInterval =
 			config.historyPruneInterval ?? DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL;
-		const historySize =
-			config.historySize ?? historyPruneInterval;
+		const historySize = config.historySize ?? historyPruneInterval;
 
 		// Track the last iteration we pruned up to so we only delete
 		// newly-expired iterations instead of re-scanning from 0.
@@ -802,10 +821,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					historySize,
 					lastPrunedUpTo,
 				);
-				lastPrunedUpTo = Math.max(
-					0,
-					iteration - historySize,
-				);
+				lastPrunedUpTo = Math.max(0, iteration - historySize);
 
 				// Defer the flush to run in parallel with the next iteration
 				deferredFlush = this.flushStorageWithDeletions(deletions);
@@ -883,12 +899,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private async flushStorageWithDeletions(
 		deletions?: PendingDeletions,
 	): Promise<void> {
-		await flush(
-			this.storage,
-			this.driver,
-			this.historyNotifier,
-			deletions,
-		);
+		await flush(this.storage, this.driver, this.historyNotifier, deletions);
 	}
 
 	// === Sleep ===
@@ -1294,7 +1305,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			);
 			const messageKey = locationToKey(this.storage, messageLocation);
 			this.markVisited(messageKey);
-			const existingMessage = this.storage.history.entries.get(messageKey);
+			const existingMessage =
+				this.storage.history.entries.get(messageKey);
 			if (!existingMessage || existingMessage.kind.type !== "message") {
 				throw new HistoryDivergedError(
 					`Expected queue message "${name}:${i}" in history`,
@@ -1315,7 +1327,9 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		return results;
 	}
 
-	private toWorkflowQueueMessage<T>(message: Message): WorkflowQueueMessage<T> {
+	private toWorkflowQueueMessage<T>(
+		message: Message,
+	): WorkflowQueueMessage<T> {
 		return {
 			id: message.id,
 			name: message.name,
@@ -1425,15 +1439,17 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		if (
 			typeof value === "object" &&
 			value !== null &&
-			(value as Record<string, unknown>)[QUEUE_HISTORY_MESSAGE_MARKER] === 1
+			(value as Record<string, unknown>)[QUEUE_HISTORY_MESSAGE_MARKER] ===
+				1
 		) {
 			const serialized = value as Record<string, unknown>;
-			const id =
-				typeof serialized.id === "string" ? serialized.id : "";
+			const id = typeof serialized.id === "string" ? serialized.id : "";
 			const serializedName =
 				typeof serialized.name === "string" ? serialized.name : name;
 			const createdAt =
-				typeof serialized.createdAt === "number" ? serialized.createdAt : 0;
+				typeof serialized.createdAt === "number"
+					? serialized.createdAt
+					: 0;
 			const completed =
 				typeof serialized.completed === "boolean"
 					? serialized.completed
@@ -1782,7 +1798,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 					}
 					if (error instanceof MessageWaitError) {
 						// Track message wait errors, prefer sleep errors with deadlines
-						if (!yieldError || !(yieldError instanceof SleepError)) {
+						if (
+							!yieldError ||
+							!(yieldError instanceof SleepError)
+						) {
 							if (!yieldError) {
 								yieldError = error;
 							} else if (yieldError instanceof MessageWaitError) {

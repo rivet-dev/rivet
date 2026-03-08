@@ -39,7 +39,11 @@ describe("file-system driver legacy KV startup migration", () => {
 		importNodeDependencies();
 		const storageRoot = makeStorageFromFixtures();
 		try {
-			const actorOneStatePath = join(storageRoot, "state", "legacy-actor-one");
+			const actorOneStatePath = join(
+				storageRoot,
+				"state",
+				"legacy-actor-one",
+			);
 			const actorOneStateBefore = readFileSync(actorOneStatePath);
 
 			const state = new FileSystemGlobalState({
@@ -64,21 +68,23 @@ describe("file-system driver legacy KV startup migration", () => {
 			const actorTwoDb = sqliteRuntime.open(
 				join(storageRoot, "databases", "legacy-actor-two.db"),
 			);
-			const actorTwoRow = actorTwoDb.get<{ value: Uint8Array | ArrayBuffer }>(
-				"SELECT value FROM kv WHERE key = ?",
-				[encoder.encode("beta")],
-			);
+			const actorTwoRow = actorTwoDb.get<{
+				value: Uint8Array | ArrayBuffer;
+			}>("SELECT value FROM kv WHERE key = ?", [encoder.encode("beta")]);
 			expect(actorTwoRow).toBeDefined();
 			expect(
 				decoder.decode(
-					(actorTwoRow?.value as Uint8Array | ArrayBuffer) ?? new Uint8Array(),
+					(actorTwoRow?.value as Uint8Array | ArrayBuffer) ??
+						new Uint8Array(),
 				),
 			).toBe("two");
 			actorTwoDb.close();
 
 			// Migration must not mutate legacy state files.
 			const actorOneStateAfter = readFileSync(actorOneStatePath);
-			expect(Buffer.compare(actorOneStateBefore, actorOneStateAfter)).toBe(0);
+			expect(
+				Buffer.compare(actorOneStateBefore, actorOneStateAfter),
+			).toBe(0);
 		} finally {
 			rmSync(storageRoot, { recursive: true, force: true });
 		}
@@ -89,7 +95,11 @@ describe("file-system driver legacy KV startup migration", () => {
 		const storageRoot = makeStorageFromFixtures();
 		try {
 			const sqliteRuntime = loadSqliteRuntime();
-			const actorDbPath = join(storageRoot, "databases", "legacy-actor-one.db");
+			const actorDbPath = join(
+				storageRoot,
+				"databases",
+				"legacy-actor-one.db",
+			);
 			const db = sqliteRuntime.open(actorDbPath);
 			db.exec(`
 				CREATE TABLE IF NOT EXISTS kv (
@@ -117,7 +127,8 @@ describe("file-system driver legacy KV startup migration", () => {
 			expect(alpha).toBeDefined();
 			expect(
 				decoder.decode(
-					(alpha?.value as Uint8Array | ArrayBuffer) ?? new Uint8Array(),
+					(alpha?.value as Uint8Array | ArrayBuffer) ??
+						new Uint8Array(),
 				),
 			).toBe("existing");
 			checkDb.close();

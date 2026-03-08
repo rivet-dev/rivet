@@ -44,9 +44,9 @@ export default function ConfirmDeleteProjectContent({
 					<div>Confirm archival of '{displayName}' project</div>
 				</Frame.Title>
 				<Frame.Description>
-					Archiving this project will permanently remove all associated
-					namespaces, Rivet Actors, Runners, and configurations. This
-					action cannot be undone.
+					Archiving this project will permanently remove all
+					associated namespaces, Rivet Actors, Runners, and
+					configurations. This action cannot be undone.
 				</Frame.Description>
 			</Frame.Header>
 			<Frame.Content>

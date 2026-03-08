@@ -370,7 +370,9 @@ export class ConnectionManager<
 			if (conn.isHibernatable) {
 				const key = makeConnKey(conn.id);
 				try {
-					await this.#actor.driver.kvBatchDelete(this.#actor.id, [key]);
+					await this.#actor.driver.kvBatchDelete(this.#actor.id, [
+						key,
+					]);
 					this.#actor.rLog.debug({
 						msg: "removed connection from KV",
 						connId: conn.id,
@@ -396,8 +398,7 @@ export class ConnectionManager<
 	): Promise<number> {
 		const staleConnections = Array.from(this.#connections.values()).filter(
 			(conn) =>
-				conn.isHibernatable &&
-				conn[CONN_DRIVER_SYMBOL] === undefined,
+				conn.isHibernatable && conn[CONN_DRIVER_SYMBOL] === undefined,
 		);
 		if (staleConnections.length === 0) {
 			return 0;

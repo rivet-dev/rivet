@@ -12,9 +12,7 @@ const ConfigSchemaBase = z.object({
 	noWelcome: z.boolean().optional().default(false),
 
 	fetch: z
-		.custom<
-			ExportedHandlerFetchHandler<{ RIVET: Client<any> }, unknown>
-		>()
+		.custom<ExportedHandlerFetchHandler<{ RIVET: Client<any> }, unknown>>()
 		.optional(),
 });
 export const ConfigSchema = ConfigSchemaBase.default(() =>

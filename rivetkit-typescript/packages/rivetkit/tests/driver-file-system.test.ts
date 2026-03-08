@@ -17,10 +17,9 @@ runDriverTests({
 			join(__dirname, "../fixtures/driver-test-suite/registry.ts"),
 			async () => {
 				return {
-					driver: createFileSystemOrMemoryDriver(
-						true,
-						{ path: `/tmp/test-${crypto.randomUUID()}` },
-					),
+					driver: createFileSystemOrMemoryDriver(true, {
+						path: `/tmp/test-${crypto.randomUUID()}`,
+					}),
 				};
 			},
 		);
@@ -58,9 +57,10 @@ describe("file-system websocket hibernation cleanup", () => {
 			// cycle completed before validating disconnect cleanup.
 			await vi.waitFor(
 				async () => {
-					const counts = await client.fileSystemHibernationCleanupActor
-						.getOrCreate()
-						.getCounts();
+					const counts =
+						await client.fileSystemHibernationCleanupActor
+							.getOrCreate()
+							.getCounts();
 					expect(counts.sleepCount).toBeGreaterThanOrEqual(1);
 					expect(counts.wakeCount).toBeGreaterThanOrEqual(2);
 				},

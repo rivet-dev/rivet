@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest } from "../utils";
 
-export function runConnErrorSerializationTests(driverTestConfig: DriverTestConfig) {
+export function runConnErrorSerializationTests(
+	driverTestConfig: DriverTestConfig,
+) {
 	describe("Connection Error Serialization Tests", () => {
 		test("error thrown in createConnState preserves group and code through WebSocket serialization", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

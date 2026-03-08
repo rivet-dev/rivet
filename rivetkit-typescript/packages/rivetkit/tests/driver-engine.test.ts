@@ -17,7 +17,8 @@ runDriverTests({
 			join(__dirname, "../fixtures/driver-test-suite/registry.ts"),
 			async (registry) => {
 				// Get configuration from environment or use defaults.
-				const endpoint = process.env.RIVET_ENDPOINT || "http://127.0.0.1:6420";
+				const endpoint =
+					process.env.RIVET_ENDPOINT || "http://127.0.0.1:6420";
 				const namespaceEndpoint =
 					process.env.RIVET_NAMESPACE_ENDPOINT ||
 					process.env.RIVET_API_ENDPOINT ||
@@ -27,17 +28,20 @@ runDriverTests({
 				const token = "dev";
 
 				// Create namespace.
-				const response = await fetch(`${namespaceEndpoint}/namespaces`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: "Bearer dev",
+				const response = await fetch(
+					`${namespaceEndpoint}/namespaces`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: "Bearer dev",
+						},
+						body: JSON.stringify({
+							name: namespace,
+							display_name: namespace,
+						}),
 					},
-					body: JSON.stringify({
-						name: namespace,
-						display_name: namespace,
-					}),
-				});
+				);
 				if (!response.ok) {
 					const errorBody = await response.text().catch(() => "");
 					throw new Error(
@@ -78,7 +82,9 @@ runDriverTests({
 
 				// Wait for runner registration so tests do not race actor creation
 				// against asynchronous runner connect.
-				const runnersUrl = new URL(`${endpoint.replace(/\/$/, "")}/runners`);
+				const runnersUrl = new URL(
+					`${endpoint.replace(/\/$/, "")}/runners`,
+				);
 				runnersUrl.searchParams.set("namespace", namespace);
 				runnersUrl.searchParams.set("name", runnerName);
 				let probeError: unknown;
@@ -91,14 +97,17 @@ runDriverTests({
 							},
 						});
 						if (!runnerResponse.ok) {
-							const errorBody = await runnerResponse.text().catch(() => "");
+							const errorBody = await runnerResponse
+								.text()
+								.catch(() => "");
 							probeError = new Error(
 								`List runners failed: ${runnerResponse.status} ${runnerResponse.statusText} ${errorBody}`,
 							);
 						} else {
-							const responseJson = (await runnerResponse.json()) as {
-								runners?: Array<{ name?: string }>;
-							};
+							const responseJson =
+								(await runnerResponse.json()) as {
+									runners?: Array<{ name?: string }>;
+								};
 							const hasRunner = !!responseJson.runners?.some(
 								(runner) => runner.name === runnerName,
 							);
@@ -114,7 +123,9 @@ runDriverTests({
 						probeError = err;
 					}
 					if (attempt < 119) {
-						await new Promise((resolve) => setTimeout(resolve, 100));
+						await new Promise((resolve) =>
+							setTimeout(resolve, 100),
+						);
 					}
 				}
 				if (probeError) {
