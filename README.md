@@ -31,27 +31,18 @@ const agent = actor({
 
   // Long-running actor process
   run: async (c) => {
-    // Wait for incoming messages
+    // Process incoming messages from the queue
     for await (const msg of c.queue.iter()) {
       c.state.messages.push({ role: "user", content: msg.body.text });
+      const response = streamText({ model: openai("gpt-5"), messages: c.state.messages });
 
-      const response = streamText({
-        model: openai("gpt-5"),
-        messages: c.state.messages,
-      });
-
-      // Stream realtime events to all clients
+      // Stream realtime events to all connected clients
       for await (const delta of response.textStream) {
         c.broadcast("token", delta);
       }
 
       c.state.messages.push({ role: "assistant", content: await response.text });
     }
-  },
-
-  // Type-safe RPC
-  actions: {
-    getHistory: (c) => c.state.messages,
   },
 });
 ```
@@ -62,14 +53,11 @@ const agent = actor({
 // Connect to an actor
 const agent = client.agent.getOrCreate("agent-123").connect();
 
-// Fetch history
-const history = await agent.getHistory();
-
 // Listen for realtime events
-agent.on("token", delta => /* ... */);
+agent.on("token", delta => process.stdout.write(delta));
 
 // Send message to actor
-await agent.queue.send("how many r's are in the word strawberry");
+await agent.queue.send("how many r's in strawberry?");
 ```
 
 ## Features
