@@ -17,14 +17,18 @@ import {
 	StepFailedError,
 } from "./errors.js";
 import {
+	buildLoopIterationRange,
+	buildEntryMetadataKey,
+} from "./keys.js";
+import {
 	appendLoopIteration,
 	appendName,
 	emptyLocation,
+	isLocationPrefix,
 	locationToKey,
 	registerName,
 } from "./location.js";
 import {
-	collectDeletionsForPrefix,
 	createEntry,
 	deleteEntriesWithPrefix,
 	flush,
@@ -836,22 +840,40 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			throw new Error("Expected loop location to end with a name index");
 		}
 
-		const allDeletions: PendingDeletions = { prefixes: [], keys: [] };
+		const range = buildLoopIterationRange(
+			loopLocation,
+			loopSegment,
+			fromIteration,
+			keepFrom,
+		);
+		const metadataKeys: Uint8Array[] = [];
 
-		for (let i = fromIteration; i < keepFrom; i++) {
-			const iterationLocation: Location = [
-				...loopLocation,
-				{ loop: loopSegment, iteration: i },
-			];
-			const deletions = collectDeletionsForPrefix(
-				this.storage,
-				iterationLocation,
-			);
-			allDeletions.prefixes.push(...deletions.prefixes);
-			allDeletions.keys.push(...deletions.keys);
+		for (const [key, entry] of this.storage.history.entries) {
+			if (!isLocationPrefix(loopLocation, entry.location)) {
+				continue;
+			}
+
+			const iterationSegment = entry.location[loopLocation.length];
+			if (
+				!iterationSegment ||
+				typeof iterationSegment === "number" ||
+				iterationSegment.loop !== loopSegment ||
+				iterationSegment.iteration < fromIteration ||
+				iterationSegment.iteration >= keepFrom
+			) {
+				continue;
+			}
+
+			metadataKeys.push(buildEntryMetadataKey(entry.id));
+			this.storage.entryMetadata.delete(entry.id);
+			this.storage.history.entries.delete(key);
 		}
 
-		return allDeletions;
+		return {
+			prefixes: [],
+			keys: metadataKeys,
+			ranges: [range],
+		};
 	}
 
 	/**

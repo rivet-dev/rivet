@@ -213,6 +213,7 @@ export async function loadMetadata(
 export interface PendingDeletions {
 	prefixes: Uint8Array[];
 	keys: Uint8Array[];
+	ranges: { start: Uint8Array; end: Uint8Array }[];
 }
 
 /**
@@ -312,6 +313,9 @@ export async function flush(
 		for (const prefix of pendingDeletions.prefixes) {
 			deleteOps.push(driver.deletePrefix(prefix));
 		}
+		for (const range of pendingDeletions.ranges) {
+			deleteOps.push(driver.deleteRange(range.start, range.end));
+		}
 		for (const key of pendingDeletions.keys) {
 			deleteOps.push(driver.delete(key));
 		}
@@ -367,6 +371,7 @@ export function collectDeletionsForPrefix(
 	const pending: PendingDeletions = {
 		prefixes: [buildHistoryPrefix(prefixLocation)],
 		keys: [],
+		ranges: [],
 	};
 
 	for (const [key, entry] of storage.history.entries) {

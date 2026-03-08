@@ -63,6 +63,7 @@ interface EngineDriver {
   set(key: Uint8Array, value: Uint8Array): Promise<void>;
   delete(key: Uint8Array): Promise<void>;
   deletePrefix(prefix: Uint8Array): Promise<void>;
+  deleteRange(start: Uint8Array, end: Uint8Array): Promise<void>;
   list(prefix: Uint8Array): Promise<KVEntry[]>;  // MUST be sorted
   batch(writes: KVWrite[]): Promise<void>;       // Should be atomic
 

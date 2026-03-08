@@ -173,6 +173,18 @@ export class InMemoryDriver implements EngineDriver {
 		}
 	}
 
+	async deleteRange(start: Uint8Array, end: Uint8Array): Promise<void> {
+		await sleep(this.latency);
+		for (const [hexKey, entry] of this.kv) {
+			if (
+				compareKeys(entry.key, start) >= 0 &&
+				compareKeys(entry.key, end) < 0
+			) {
+				this.kv.delete(hexKey);
+			}
+		}
+	}
+
 	async list(prefix: Uint8Array): Promise<KVEntry[]> {
 		await sleep(this.latency);
 		const results: KVEntry[] = [];

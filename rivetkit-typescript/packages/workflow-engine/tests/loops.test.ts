@@ -213,11 +213,11 @@ for (const mode of modes) {
 		});
 
 		it("should not re-delete already-pruned iterations", async () => {
-			let deletePrefixCallCount = 0;
-			const originalDeletePrefix = driver.deletePrefix.bind(driver);
-			driver.deletePrefix = async (prefix: Uint8Array) => {
-				deletePrefixCallCount++;
-				return originalDeletePrefix(prefix);
+			let deleteRangeCallCount = 0;
+			const originalDeleteRange = driver.deleteRange.bind(driver);
+			driver.deleteRange = async (start: Uint8Array, end: Uint8Array) => {
+				deleteRangeCallCount++;
+				return originalDeleteRange(start, end);
 			};
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
@@ -235,20 +235,16 @@ for (const mode of modes) {
 				});
 			};
 
-			deletePrefixCallCount = 0;
+			deleteRangeCallCount = 0;
 			await runWorkflow("wf-1", workflow, undefined, driver, { mode })
 				.result;
 
 			// With historyPruneInterval=3 and 9 iterations (0-8), prune runs at
 			// iterations 3 and 6, plus final break at iteration 8.
 			// At prune 3: no deletions (3 - 3 = 0, nothing to delete)
-			// At prune 6: prune iterations 0-2 (3 deletes)
-			// At break (iteration 9): prune iterations 3-5 (3 deletes)
-			// Total: 6 iteration prefix deletes
-			// Without the fix, this would be 0 + 3 + 6 = 9 deletes (re-scanning from 0)
-			// The deletePrefix also gets called for other internal operations,
-			// so we just verify it's less than the naive approach would produce.
-			expect(deletePrefixCallCount).toBeLessThanOrEqual(8);
+			// At prune 6: one range delete for iterations 0-2
+			// At break (iteration 9): one range delete for iterations 3-5
+			expect(deleteRangeCallCount).toBe(2);
 		});
 
 		it("should prune history on break even without reaching historyPruneInterval", async () => {
