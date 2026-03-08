@@ -85,8 +85,20 @@ export class EngineActorDriver implements ActorDriver {
 	#actors: Map<string, ActorHandler> = new Map();
 	#actorRouter: ActorRouter;
 
-	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled runner started promise rejection", reason }));
-	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled runner stopped promise rejection", reason }));
+	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers(
+		(reason) =>
+			logger().warn({
+				msg: "unhandled runner started promise rejection",
+				reason,
+			}),
+	);
+	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers(
+		(reason) =>
+			logger().warn({
+				msg: "unhandled runner stopped promise rejection",
+				reason,
+			}),
+	);
 	#isRunnerStopped: boolean = false;
 
 	// HACK: Track actor stop intent locally since the runner protocol doesn't
@@ -156,7 +168,7 @@ export class EngineActorDriver implements ActorDriver {
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (_code, _reason) => { },
+			onDisconnected: (_code, _reason) => {},
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
@@ -288,7 +300,11 @@ export class EngineActorDriver implements ActorDriver {
 			limit?: number;
 		},
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const result = await this.#runner.kvListPrefix(actorId, prefix, options);
+		const result = await this.#runner.kvListPrefix(
+			actorId,
+			prefix,
+			options,
+		);
 		logger().info({
 			msg: "kvListPrefix called",
 			actorId,
@@ -397,8 +413,11 @@ export class EngineActorDriver implements ActorDriver {
 		try {
 			await this.#runner.shutdown(immediate);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			if (message.includes("WebSocket connection closed during shutdown")) {
+			const message =
+				error instanceof Error ? error.message : String(error);
+			if (
+				message.includes("WebSocket connection closed during shutdown")
+			) {
 				logger().debug({
 					msg: "ignoring shutdown websocket close race",
 					error: message,
@@ -425,7 +444,7 @@ export class EngineActorDriver implements ActorDriver {
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
 		return streamSSE(c, async (stream) => {
 			// NOTE: onAbort does not work reliably
-			stream.onAbort(() => { });
+			stream.onAbort(() => {});
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
 
@@ -495,7 +514,12 @@ export class EngineActorDriver implements ActorDriver {
 			// async operations to avoid race conditions where multiple calls might try to
 			// create the same handler simultaneously.
 			handler = {
-				actorStartPromise: promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor start promise rejection", reason })),
+				actorStartPromise: promiseWithResolvers((reason) =>
+					logger().warn({
+						msg: "unhandled actor start promise rejection",
+						reason,
+					}),
+				),
 			};
 			this.#actors.set(actorId, handler);
 		}
@@ -538,12 +562,19 @@ export class EngineActorDriver implements ActorDriver {
 					protocolMetadata,
 				});
 
-				const stopThresholdMax = Math.max(Number(protocolMetadata.actorStopThreshold) - 1000, 0);
+				const stopThresholdMax = Math.max(
+					Number(protocolMetadata.actorStopThreshold) - 1000,
+					0,
+				);
 				handler.actor.overrides.onSleepTimeout = stopThresholdMax;
 				handler.actor.overrides.onDestroyTimeout = stopThresholdMax;
 
 				if (protocolMetadata.serverlessDrainGracePeriod) {
-					const drainMax = Math.max(Number(protocolMetadata.serverlessDrainGracePeriod) - 1000, 0);
+					const drainMax = Math.max(
+						Number(protocolMetadata.serverlessDrainGracePeriod) -
+							1000,
+						0,
+					);
 					handler.actor.overrides.runStopTimeout = drainMax;
 					handler.actor.overrides.waitUntilTimeout = drainMax;
 				}
@@ -564,10 +595,12 @@ export class EngineActorDriver implements ActorDriver {
 			const error =
 				innerError instanceof Error
 					? new Error(
-						`Failed to start actor ${actorId}: ${innerError.message}`,
-						{ cause: innerError },
-					)
-					: new Error(`Failed to start actor ${actorId}: ${String(innerError)}`);
+							`Failed to start actor ${actorId}: ${innerError.message}`,
+							{ cause: innerError },
+						)
+					: new Error(
+							`Failed to start actor ${actorId}: ${String(innerError)}`,
+						);
 			handler.actor = undefined;
 			handler.actorStartError = error;
 			handler.actorStartPromise?.reject(error);
@@ -610,13 +643,21 @@ export class EngineActorDriver implements ActorDriver {
 
 		const handler = this.#actors.get(actorId);
 		if (!handler) {
-			logger().debug({ msg: "no runner actor handler to stop", actorId, reason });
+			logger().debug({
+				msg: "no runner actor handler to stop",
+				actorId,
+				reason,
+			});
 			return;
 		}
 
 		if (handler.actorStartPromise) {
 			try {
-				logger().debug({ msg: "runner actor stopping before it started, waiting", actorId, generation });
+				logger().debug({
+					msg: "runner actor stopping before it started, waiting",
+					actorId,
+					generation,
+				});
 				await handler.actorStartPromise.promise;
 			} catch (err) {
 				// Start failed, but we still want to clean up the handler

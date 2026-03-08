@@ -11,7 +11,8 @@ async function main() {
 
 	// Add metadata
 	schema.title = "RivetKit Actor Configuration";
-	schema.description = "Configuration schema for RivetKit actors. This is passed to the actor() function.";
+	schema.description =
+		"Configuration schema for RivetKit actors. This is passed to the actor() function.";
 
 	// Create output directory
 	const outputDir = resolve(

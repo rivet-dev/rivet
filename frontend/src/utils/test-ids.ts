@@ -1,4 +1,3 @@
-
 export const TEST_IDS = {
 	Onboarding: {
 		PathSelection: "onboarding-path-selection",
@@ -25,6 +24,5 @@ export const TEST_IDS = {
 
 	Actors: {
 		DetailsPanel: "actors-details-panel",
-	}
-
+	},
 };

@@ -226,7 +226,8 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 				onSelect={() => {
 					clerk.openCreateOrganization({
 						hideSlug: true,
-						afterCreateOrganizationUrl: (org) => `/orgs/${org.id}`,
+						afterCreateOrganizationUrl: (org: { id: string }) =>
+							`/orgs/${org.id}`,
 					});
 				}}
 				indicator={<Icon icon={faPlus} className="size-4" />}

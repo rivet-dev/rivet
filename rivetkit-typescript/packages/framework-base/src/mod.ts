@@ -121,10 +121,7 @@ export type ActorsStateDerived<
 	Registry extends AnyActorRegistry,
 	WorkerName extends keyof ExtractActorsFromRegistry<Registry> & string,
 > = Derived<
-	Omit<
-		InternalRivetKitStore["actors"][string],
-		"handle" | "connection"
-	> & {
+	Omit<InternalRivetKitStore["actors"][string], "handle" | "connection"> & {
 		handle: ActorHandle<
 			ExtractActorsFromRegistry<Registry>[WorkerName]
 		> | null;
@@ -159,9 +156,10 @@ type ActorCache = Map<
 	}
 >;
 
-export function createRivetKit<
-	Registry extends AnyActorRegistry,
->(client: Client<Registry>, createOpts: CreateRivetKitOptions<Registry> = {}) {
+export function createRivetKit<Registry extends AnyActorRegistry>(
+	client: Client<Registry>,
+	createOpts: CreateRivetKitOptions<Registry> = {},
+) {
 	const store = new Store<InternalRivetKitStore>({
 		actors: {},
 	});
@@ -170,7 +168,8 @@ export function createRivetKit<
 
 	return {
 		getOrCreateActor: <
-			ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
+			ActorName extends keyof ExtractActorsFromRegistry<Registry> &
+				string,
 		>(
 			actorOpts: ActorOptions<Registry, ActorName>,
 		) => getOrCreateActor(client, createOpts, store, cache, actorOpts),
@@ -286,23 +285,20 @@ function getOrCreateActor<
 
 			// Reconnect when re-enabled after being disabled
 			// Defer to avoid "Cannot update a component while rendering" React error
-			if (
-				actor.connStatus === "idle" &&
-				actor.opts.enabled
-			) {
+			if (actor.connStatus === "idle" && actor.opts.enabled) {
 				queueMicrotask(() => {
 					// Re-check state after microtask in case it changed
 					const currentActor = store.state.actors[key];
 					if (
-							currentActor &&
-							currentActor.connStatus === "idle" &&
-							currentActor.opts.enabled
-						) {
-							create<Registry, ActorName>(client, store, key);
-						}
-					});
-				}
-			},
+						currentActor &&
+						currentActor.connStatus === "idle" &&
+						currentActor.opts.enabled
+					) {
+						create<Registry, ActorName>(client, store, key);
+					}
+				});
+			}
+		},
 		deps: [derived],
 	});
 
@@ -335,14 +331,10 @@ function getOrCreateActor<
 			// Effect doesn't run immediately on mount, only on state changes.
 			// Trigger initial connection if actor is enabled and idle.
 			const actor = store.state.actors[key];
-				if (
-					actor &&
-					actor.opts.enabled &&
-					actor.connStatus === "idle"
-				) {
-					create<Registry, ActorName>(client, store, key);
-				}
+			if (actor && actor.opts.enabled && actor.connStatus === "idle") {
+				create<Registry, ActorName>(client, store, key);
 			}
+		}
 
 		return () => {
 			// Decrement ref count
@@ -398,11 +390,7 @@ function getOrCreateActor<
 function create<
 	Registry extends AnyActorRegistry,
 	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
->(
-	client: Client<Registry>,
-	store: Store<InternalRivetKitStore>,
-	key: string,
-) {
+>(client: Client<Registry>, store: Store<InternalRivetKitStore>, key: string) {
 	const actor = store.state.actors[key];
 	if (!actor) {
 		throw new Error(
@@ -418,22 +406,14 @@ function create<
 
 	try {
 		const handle = actor.opts.noCreate
-			? client.get(
-					actor.opts.name as string,
-					actor.opts.key,
-					{
-						params: actor.opts.params,
-					},
-				)
-			: client.getOrCreate(
-					actor.opts.name as string,
-					actor.opts.key,
-					{
-						params: actor.opts.params,
-						createInRegion: actor.opts.createInRegion,
-						createWithInput: actor.opts.createWithInput,
-					},
-				);
+			? client.get(actor.opts.name as string, actor.opts.key, {
+					params: actor.opts.params,
+				})
+			: client.getOrCreate(actor.opts.name as string, actor.opts.key, {
+					params: actor.opts.params,
+					createInRegion: actor.opts.createInRegion,
+					createWithInput: actor.opts.createWithInput,
+				});
 
 		const connection = handle.connect();
 
@@ -452,7 +432,8 @@ function create<
 		connection.onStatusChange((status) => {
 			store.setState((prev) => {
 				// Only update if this is still the active connection
-				const isActiveConnection = prev.actors[key]?.connection === connection;
+				const isActiveConnection =
+					prev.actors[key]?.connection === connection;
 				if (!isActiveConnection) return prev;
 				return {
 					...prev,
@@ -462,9 +443,7 @@ function create<
 							...prev.actors[key],
 							connStatus: status,
 							// Only clear error when successfully connected
-							...(status === "connected"
-								? { error: null }
-								: {}),
+							...(status === "connected" ? { error: null } : {}),
 						},
 					},
 				};

@@ -182,16 +182,17 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			}
 		});
 
-			test("wait send returns completion response", async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
-				const handle = client.queueActor.getOrCreate(["wait-complete"]);
-				const waitTimeout = driverTestConfig.useRealTimers ? 5_000 : 1_000;
+		test("wait send returns completion response", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate(["wait-complete"]);
+			const waitTimeout = driverTestConfig.useRealTimers ? 5_000 : 1_000;
 
-				const actionPromise = handle.receiveAndComplete("tasks");
-				const result = await handle.send("tasks", 
-					{ value: 123 },
-					{ wait: true, timeout: waitTimeout },
-				);
+			const actionPromise = handle.receiveAndComplete("tasks");
+			const result = await handle.send(
+				"tasks",
+				{ value: 123 },
+				{ wait: true, timeout: waitTimeout },
+			);
 
 			await actionPromise;
 			expect(result).toEqual({
@@ -204,7 +205,8 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["wait-timeout"]);
 
-			const resultPromise = handle.send("timeout", 
+			const resultPromise = handle.send(
+				"timeout",
 				{ value: 456 },
 				{ wait: true, timeout: 50 },
 			);
@@ -225,7 +227,9 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			const first = await handle.receiveWithoutComplete("tasks");
 			expect(first).toEqual({ name: "tasks", body: { value: 789 } });
 
-			const retried = await handle.receiveOne("tasks", { timeout: 1_000 });
+			const retried = await handle.receiveOne("tasks", {
+				timeout: 1_000,
+			});
 			expect(retried).toEqual({ name: "tasks", body: { value: 789 } });
 		});
 
@@ -236,9 +240,8 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 			]);
 
 			await handle.send("tasks", { value: 111 });
-			const result = await handle.receiveManualThenNextWithoutComplete(
-				"tasks",
-			);
+			const result =
+				await handle.receiveManualThenNextWithoutComplete("tasks");
 			expect(result).toEqual({
 				group: "queue",
 				code: "previous_message_not_completed",
@@ -275,9 +278,7 @@ export function runActorQueueTests(driverTestConfig: DriverTestConfig) {
 
 		test("complete throws when called twice", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate([
-				"complete-twice",
-			]);
+			const handle = client.queueActor.getOrCreate(["complete-twice"]);
 
 			await handle.send("twice", { value: "test" });
 			const result = await handle.receiveAndCompleteTwice("twice");

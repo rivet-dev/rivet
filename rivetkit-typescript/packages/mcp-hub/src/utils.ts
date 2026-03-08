@@ -11,7 +11,10 @@ export function truncateByTokens(text: string, maxTokens: number): string {
 	}
 
 	const tokens = text.split(/\s+/).filter(Boolean);
-	const trimmed = tokens.slice(0, Math.max(1, Math.floor(maxTokens / TOKEN_RATIO)));
+	const trimmed = tokens.slice(
+		0,
+		Math.max(1, Math.floor(maxTokens / TOKEN_RATIO)),
+	);
 	return trimmed.join(" ") + " …";
 }
 
@@ -37,7 +40,9 @@ export function decodeCursor(cursor?: string | null): number {
 	if (!cursor) return 0;
 	try {
 		const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString());
-		return typeof decoded.offset === "number" && decoded.offset >= 0 ? decoded.offset : 0;
+		return typeof decoded.offset === "number" && decoded.offset >= 0
+			? decoded.offset
+			: 0;
 	} catch {
 		return 0;
 	}
@@ -55,5 +60,8 @@ export function parseResourceUri(resourceUri: string): {
 }
 
 export function safeResourceName(input: string): string {
-	return input.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "docs-resource";
+	return (
+		input.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") ||
+		"docs-resource"
+	);
 }

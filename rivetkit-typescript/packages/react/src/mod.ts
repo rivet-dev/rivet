@@ -68,7 +68,10 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 		 * @param eventName The name of the event to listen for.
 		 * @param handler The function to call when the event is emitted.
 		 */
-		const useEvent = ((eventName: string, handler: (...args: unknown[]) => void) => {
+		const useEvent = ((
+			eventName: string,
+			handler: (...args: unknown[]) => void,
+		) => {
 			const ref = useRef(handler);
 			const actorState = useStore(state);
 
@@ -78,14 +81,12 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 
 			// biome-ignore lint/correctness/useExhaustiveDependencies: it's okay to not include all dependencies here
 			useEffect(() => {
-				const connection = actorState.connection as
-					| {
-							on: (
-								eventName: string,
-								callback: (...args: unknown[]) => void,
-							) => () => void;
-					  }
-					| null;
+				const connection = actorState.connection as {
+					on: (
+						eventName: string,
+						callback: (...args: unknown[]) => void,
+					) => () => void;
+				} | null;
 				if (!connection) return;
 
 				function eventHandler(...args: unknown[]) {

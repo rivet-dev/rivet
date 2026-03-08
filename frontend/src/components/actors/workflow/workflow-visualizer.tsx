@@ -237,9 +237,10 @@ export function WorkflowVisualizer({
 					</div>
 
 					{/* Data + Error row */}
-					{(selectedNode.rawData || selectedNode.error) && (
+					{(selectedNode.rawData !== undefined ||
+						selectedNode.error !== undefined) && (
 						<div className="mt-3 grid grid-cols-1 gap-4">
-							{selectedNode.rawData && (
+							{selectedNode.rawData !== undefined && (
 								<div className="min-w-0">
 									<div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
 										Data
@@ -252,7 +253,7 @@ export function WorkflowVisualizer({
 								</div>
 							)}
 
-							{selectedNode.error && (
+							{selectedNode.error !== undefined && (
 								<div className="min-w-0">
 									<div className="mb-1 text-xs font-medium uppercase text-destructive">
 										Error

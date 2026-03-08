@@ -166,7 +166,11 @@ export async function ensureEngineProcess(
 				issues: "https://github.com/rivet-dev/rivetkit/issues",
 				support: "https://rivet.dev/discord",
 			});
-		} else if (stderrOutput.includes("Rivet Engine has been rolled back to a previous version")) {
+		} else if (
+			stderrOutput.includes(
+				"Rivet Engine has been rolled back to a previous version",
+			)
+		) {
 			logger().error({
 				msg: "rivet engine version downgrade detected",
 				hint: `You attempted to downgrade the RivetKit version in development. To fix this, nuke the database by running: '${binaryPath}' database nuke --yes`,

@@ -15,19 +15,19 @@ export const workflowCounterActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("counter", async (loopCtx) => {
-				try {
-					// Accessing state outside a step should throw.
-					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					loopCtx.state;
-				} catch {}
+			try {
+				// Accessing state outside a step should throw.
+				// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
+				loopCtx.state;
+			} catch {}
 
-				await loopCtx.step("increment", async () => {
-					incrementWorkflowCounter(loopCtx);
-				});
-
-				await loopCtx.sleep("idle", 25);
-				return Loop.continue(undefined);
+			await loopCtx.step("increment", async () => {
+				incrementWorkflowCounter(loopCtx);
 			});
+
+			await loopCtx.sleep("idle", 25);
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getState: async (c) => {
@@ -52,30 +52,33 @@ export const workflowQueueActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue", async (loopCtx) => {
-				const message = await loopCtx.queue.next("queue-wait", {
-					names: [WORKFLOW_QUEUE_NAME],
-					completable: true,
-				});
-				if (!message.complete) {
-					return Loop.continue(undefined);
-				}
-				const complete = message.complete;
-				await loopCtx.step("store-message", async () => {
-					await storeWorkflowQueueMessage(loopCtx, message.body, complete);
-				});
-				return Loop.continue(undefined);
+			const message = await loopCtx.queue.next("queue-wait", {
+				names: [WORKFLOW_QUEUE_NAME],
+				completable: true,
 			});
+			if (!message.complete) {
+				return Loop.continue(undefined);
+			}
+			const complete = message.complete;
+			await loopCtx.step("store-message", async () => {
+				await storeWorkflowQueueMessage(
+					loopCtx,
+					message.body,
+					complete,
+				);
+			});
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getMessages: (c) => c.state.received,
 		sendAndWait: async (c, payload: unknown) => {
 			const client = c.client<typeof registry>();
 			const handle = client.workflowQueueActor.getForId(c.actorId);
-			return await handle.send(
-				WORKFLOW_QUEUE_NAME,
-				payload,
-				{ wait: true, timeout: 1_000 },
-			);
+			return await handle.send(WORKFLOW_QUEUE_NAME, payload, {
+				wait: true,
+				timeout: 1_000,
+			});
 		},
 	},
 });
@@ -99,36 +102,36 @@ export const workflowAccessActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("access", async (loopCtx) => {
-				let outsideDbError: string | null = null;
-				let outsideClientError: string | null = null;
+			let outsideDbError: string | null = null;
+			let outsideClientError: string | null = null;
 
-				try {
-					// Accessing db outside a step should throw.
-					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					loopCtx.db;
-				} catch (error) {
-					outsideDbError =
-						error instanceof Error ? error.message : String(error);
-				}
+			try {
+				// Accessing db outside a step should throw.
+				// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
+				loopCtx.db;
+			} catch (error) {
+				outsideDbError =
+					error instanceof Error ? error.message : String(error);
+			}
 
-				try {
-					loopCtx.client<typeof registry>();
-				} catch (error) {
-					outsideClientError =
-						error instanceof Error ? error.message : String(error);
-				}
+			try {
+				loopCtx.client<typeof registry>();
+			} catch (error) {
+				outsideClientError =
+					error instanceof Error ? error.message : String(error);
+			}
 
-				await loopCtx.step("access-step", async () => {
-					await updateWorkflowAccessState(
-						loopCtx,
-						outsideDbError,
-						outsideClientError,
-					);
-				});
-
-				await loopCtx.sleep("idle", 25);
-				return Loop.continue(undefined);
+			await loopCtx.step("access-step", async () => {
+				await updateWorkflowAccessState(
+					loopCtx,
+					outsideDbError,
+					outsideClientError,
+				);
 			});
+
+			await loopCtx.sleep("idle", 25);
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getState: (c) => c.state,
@@ -141,12 +144,12 @@ export const workflowSleepActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("sleep", async (loopCtx) => {
-				await loopCtx.step("tick", async () => {
-					incrementWorkflowSleepTick(loopCtx);
-				});
-				await loopCtx.sleep("delay", 40);
-				return Loop.continue(undefined);
+			await loopCtx.step("tick", async () => {
+				incrementWorkflowSleepTick(loopCtx);
 			});
+			await loopCtx.sleep("delay", 40);
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getState: (c) => c.state,
@@ -172,11 +175,11 @@ export const workflowStopTeardownActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("wait-forever", async (loopCtx) => {
-				await loopCtx.queue.next("wait-for-never", {
-					names: ["never"],
-				});
-				return Loop.continue(undefined);
+			await loopCtx.queue.next("wait-for-never", {
+				names: ["never"],
 			});
+			return Loop.continue(undefined);
+		});
 	}),
 	actions: {
 		getTimeline: (c) => ({

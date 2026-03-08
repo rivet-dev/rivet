@@ -39,7 +39,12 @@ export function tryParseEndpoint(
 	ctx: z.RefinementCtx,
 	options: TryParseEndpointOptions,
 ): ParsedEndpoint | undefined {
-	const { endpoint, path = ["endpoint"], namespace: configNamespace, token: configToken } = options;
+	const {
+		endpoint,
+		path = ["endpoint"],
+		namespace: configNamespace,
+		token: configToken,
+	} = options;
 	// Parse the URL
 	let url: URL;
 	try {
@@ -121,4 +126,3 @@ export function tryParseEndpoint(
 		token,
 	};
 }
-

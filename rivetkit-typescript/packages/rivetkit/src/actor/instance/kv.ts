@@ -94,12 +94,16 @@ function encodeValue<T extends KvValueType = KvValueType>(
 			return textEncoder.encode(value);
 		case "arrayBuffer":
 			if (!(value instanceof ArrayBuffer)) {
-				throw new TypeError("Expected an ArrayBuffer when type is arrayBuffer");
+				throw new TypeError(
+					"Expected an ArrayBuffer when type is arrayBuffer",
+				);
 			}
 			return new Uint8Array(value);
 		case "binary":
 			if (!(value instanceof Uint8Array)) {
-				throw new TypeError("Expected a Uint8Array when type is binary");
+				throw new TypeError(
+					"Expected a Uint8Array when type is binary",
+				);
 			}
 			return value;
 		default:
@@ -160,9 +164,7 @@ export class ActorKv {
 		keys: KvKey[],
 		options?: KvValueOptions<T>,
 	): Promise<(KvValueTypeMap[T] | null)[]> {
-		const prefixedKeys = keys.map((key) =>
-			makePrefixedKey(encodeKey(key)),
-		);
+		const prefixedKeys = keys.map((key) => makePrefixedKey(encodeKey(key)));
 		const results = await this.#driver.kvBatchGet(
 			this.#actorId,
 			prefixedKeys,
@@ -214,9 +216,7 @@ export class ActorKv {
 	 * Delete multiple keys.
 	 */
 	async deleteBatch(keys: KvKey[]): Promise<void> {
-		const prefixedKeys = keys.map((key) =>
-			makePrefixedKey(encodeKey(key)),
-		);
+		const prefixedKeys = keys.map((key) => makePrefixedKey(encodeKey(key)));
 		await this.#driver.kvBatchDelete(this.#actorId, prefixedKeys);
 	}
 
@@ -281,5 +281,4 @@ export class ActorKv {
 			decodeValue<T>(value, options),
 		]);
 	}
-
 }

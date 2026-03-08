@@ -149,7 +149,12 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		// Create new actor state if it doesn't exist
 		if (!actorState) {
 			actorState = new ActorGlobalState();
-			actorState.actorPromise = promiseWithResolvers((reason) => logger().warn({ msg: "unhandled actor promise rejection", reason }));
+			actorState.actorPromise = promiseWithResolvers((reason) =>
+				logger().warn({
+					msg: "unhandled actor promise rejection",
+					reason,
+				}),
+			);
 			this.#globalState.setActorState(doState.ctx, actorState);
 		} else if (actorState.actorPromise) {
 			// Another request is already loading this actor, wait for it
@@ -197,12 +202,12 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		actorState.actorInstance = definition.instantiate();
 
 		// Start actor
-			const actorInstance = actorState.actorInstance as any;
-			await actorInstance.start(
-				this,
-				this.#inlineClient,
-				actorId,
-				name,
+		const actorInstance = actorState.actorInstance as any;
+		await actorInstance.start(
+			this,
+			this.#inlineClient,
+			actorId,
+			name,
 			key,
 			"unknown", // TODO: Support regions in Cloudflare
 		);

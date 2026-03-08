@@ -269,7 +269,10 @@ export async function createTestRuntime(
 		);
 		nodeWebSocket.injectWebSocket(server);
 		const address = server.address();
-		invariant(address && typeof address !== "string", "missing server address");
+		invariant(
+			address && typeof address !== "string",
+			"missing server address",
+		);
 		const port = address.port;
 		const serverEndpoint = `http://127.0.0.1:${port}`;
 

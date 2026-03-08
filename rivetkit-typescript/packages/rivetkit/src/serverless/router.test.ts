@@ -78,9 +78,9 @@ describe("normalizeEndpointUrl", () => {
 
 	describe("regional endpoint normalization", () => {
 		test("normalizes api-us-west-1.rivet.dev to api.rivet.dev", () => {
-			expect(normalizeEndpointUrl("https://api-us-west-1.rivet.dev")).toBe(
-				"https://api.rivet.dev/",
-			);
+			expect(
+				normalizeEndpointUrl("https://api-us-west-1.rivet.dev"),
+			).toBe("https://api.rivet.dev/");
 		});
 
 		test("normalizes api-lax.staging.rivet.dev to api.staging.rivet.dev", () => {
@@ -102,14 +102,16 @@ describe("normalizeEndpointUrl", () => {
 		});
 
 		test("does not normalize non-rivet.dev domains", () => {
-			expect(normalizeEndpointUrl("https://api-us-west-1.example.com")).toBe(
-				"https://api-us-west-1.example.com/",
-			);
+			expect(
+				normalizeEndpointUrl("https://api-us-west-1.example.com"),
+			).toBe("https://api-us-west-1.example.com/");
 		});
 
 		test("preserves path when normalizing regional endpoint", () => {
 			expect(
-				normalizeEndpointUrl("https://api-us-west-1.rivet.dev/v1/actors"),
+				normalizeEndpointUrl(
+					"https://api-us-west-1.rivet.dev/v1/actors",
+				),
 			).toBe("https://api.rivet.dev/v1/actors");
 		});
 
@@ -136,7 +138,10 @@ describe("endpointsMatch", () => {
 
 	test("matches URLs with paths ignoring trailing slash", () => {
 		expect(
-			endpointsMatch("http://example.com/api/v1", "http://example.com/api/v1/"),
+			endpointsMatch(
+				"http://example.com/api/v1",
+				"http://example.com/api/v1/",
+			),
 		).toBe(true);
 	});
 
@@ -178,7 +183,10 @@ describe("endpointsMatch", () => {
 
 	test("does not match different paths", () => {
 		expect(
-			endpointsMatch("http://example.com/api/v1", "http://example.com/api/v2"),
+			endpointsMatch(
+				"http://example.com/api/v1",
+				"http://example.com/api/v2",
+			),
 		).toBe(false);
 	});
 

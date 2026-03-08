@@ -26,7 +26,8 @@ function createMockMetadata(
 	}));
 
 	const fullSections: SectionRecord[] = sections.map((s, i) => ({
-		resource_uri: s.resource_uri ?? `docs://page/page-0#section=section-${i}`,
+		resource_uri:
+			s.resource_uri ?? `docs://page/page-0#section=section-${i}`,
 		parent_uri: s.parent_uri ?? "docs://page/page-0",
 		title: s.title ?? `Section ${i}`,
 		anchor: s.anchor ?? `section-${i}`,
@@ -87,7 +88,11 @@ describe("SearchEngine.search", () => {
 			],
 		);
 		const engine = createSearchEngine(metadata);
-		const results = engine.search("", { limit: 10, mode: "hybrid", offset: 0 });
+		const results = engine.search("", {
+			limit: 10,
+			mode: "hybrid",
+			offset: 0,
+		});
 		expect(results.results).toHaveLength(0);
 		expect(results.total).toBe(0);
 	});
@@ -283,7 +288,9 @@ describe("SearchEngine.search", () => {
 			mode: "hybrid",
 			offset: 1,
 		});
-		expect(offsetResults.results.length).toBe(fullResults.results.length - 1);
+		expect(offsetResults.results.length).toBe(
+			fullResults.results.length - 1,
+		);
 	});
 
 	test("filters by product_area", () => {
@@ -409,7 +416,13 @@ describe("SearchEngine.search", () => {
 	test("normalizes semantic mode to hybrid", () => {
 		const metadata = createMockMetadata(
 			[{ resource_uri: "docs://page/test", title: "Test" }],
-			[{ parent_uri: "docs://page/test", title: "Section", content: "test" }],
+			[
+				{
+					parent_uri: "docs://page/test",
+					title: "Section",
+					content: "test",
+				},
+			],
 		);
 		const engine = createSearchEngine(metadata);
 		const results = engine.search("test", {

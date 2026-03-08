@@ -272,7 +272,12 @@ export class SinglePromiseQueue {
 
 		// Ensure a shared resolver exists for all callers in this cycle
 		if (!this.#pending) {
-			this.#pending = promiseWithResolvers<void>((reason) => logger().warn({ msg: "unhandled single promise queue rejection", reason }));
+			this.#pending = promiseWithResolvers<void>((reason) =>
+				logger().warn({
+					msg: "unhandled single promise queue rejection",
+					reason,
+				}),
+			);
 		}
 
 		const waitForThisCycle = this.#pending.promise;

@@ -1,6 +1,4 @@
-export {
-	createTraces,
-} from "./traces.js";
+export { createTraces } from "./traces.js";
 export { createNoopTraces } from "./noop.js";
 export type {
 	EndSpanOptions,

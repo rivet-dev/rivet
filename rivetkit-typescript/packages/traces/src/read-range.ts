@@ -196,11 +196,7 @@ function buildSpansFromRecords(
 				);
 			}
 			if (!span) {
-				span = initSpanFromRecord(
-					body,
-					entry.absNs,
-					entry.strings,
-				);
+				span = initSpanFromRecord(body, entry.absNs, entry.strings);
 			}
 			if (!span) {
 				continue;
@@ -324,10 +320,7 @@ function applyRecord(
 			span.kind = body.val.kind;
 			span.traceState = body.val.traceState;
 			span.flags = body.val.flags;
-			span.attributes = decodeAttributeList(
-				body.val.attributes,
-				strings,
-			);
+			span.attributes = decodeAttributeList(body.val.attributes, strings);
 			span.droppedAttributesCount = body.val.droppedAttributesCount;
 			span.links = decodeLinks(body.val.links, strings);
 			span.droppedLinksCount = body.val.droppedLinksCount;
@@ -345,10 +338,7 @@ function applyRecord(
 			span.events.push({
 				name: strings[body.val.name] ?? "",
 				timeUnixNs: absNs,
-				attributes: decodeAttributeList(
-					body.val.attributes,
-					strings,
-				),
+				attributes: decodeAttributeList(body.val.attributes, strings),
 				droppedAttributesCount: body.val.droppedAttributesCount,
 			});
 			return;

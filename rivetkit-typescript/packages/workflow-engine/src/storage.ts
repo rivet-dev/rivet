@@ -129,9 +129,7 @@ export function getOrCreateMetadata(
 /**
  * Load storage from the driver.
  */
-export async function loadStorage(
-	driver: EngineDriver,
-): Promise<Storage> {
+export async function loadStorage(driver: EngineDriver): Promise<Storage> {
 	const storage = createStorage();
 
 	// Load name registry
@@ -350,9 +348,7 @@ export async function deleteEntriesWithPrefix(
 
 	// Apply deletions to driver
 	await driver.deletePrefix(deletions.prefixes[0]!);
-	await Promise.all(
-		deletions.keys.map((key) => driver.delete(key)),
-	);
+	await Promise.all(deletions.keys.map((key) => driver.delete(key)));
 
 	if (deletions.keys.length > 0 && onHistoryUpdated) {
 		onHistoryUpdated();

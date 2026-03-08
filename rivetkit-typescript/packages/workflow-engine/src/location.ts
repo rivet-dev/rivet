@@ -107,7 +107,10 @@ export function isLocationPrefix(
 		const prefixSegment = prefix[i];
 		const locationSegment = location[i];
 
-		if (typeof prefixSegment === "number" && typeof locationSegment === "number") {
+		if (
+			typeof prefixSegment === "number" &&
+			typeof locationSegment === "number"
+		) {
 			if (prefixSegment !== locationSegment) {
 				return false;
 			}

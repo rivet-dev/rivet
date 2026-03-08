@@ -23,7 +23,6 @@ export type Connection = Omit<schema.Connection, "details"> & {
 	details: unknown;
 };
 
-
 /**
  * Provides a unified interface for inspecting actor external and internal state.
  */
@@ -57,9 +56,7 @@ export class ActorInspector {
 		const maxSize = this.actor.config.options.maxQueueSize;
 		const safeLimit = Math.max(0, Math.floor(limit));
 		const messages = await this.actor.queueManager.getMessages();
-		const sorted = messages.sort(
-			(a, b) => a.createdAt - b.createdAt,
-		);
+		const sorted = messages.sort((a, b) => a.createdAt - b.createdAt);
 		const limited = safeLimit > 0 ? sorted.slice(0, safeLimit) : [];
 		return {
 			size: BigInt(this.#lastQueueSize),
@@ -111,25 +108,23 @@ export class ActorInspector {
 		const db = this.actor.db;
 
 		// Get table list from sqlite_master, excluding internal tables.
-		const tables = await db.execute(
+		const tables = (await db.execute(
 			"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'",
-		) as { name: string; type: string }[];
+		)) as { name: string; type: string }[];
 
 		// Serialize all queries to avoid concurrent @rivetkit/sqlite access
 		// which can cause "file is not a database" errors.
 		const tableInfos = [];
 		for (const table of tables) {
 			const quoted = `"${escapeDoubleQuotes(table.name)}"`;
-			const sample = await db.execute(
+			const sample = (await db.execute(
 				`SELECT * FROM ${quoted} LIMIT 1`,
-			) as Record<string, unknown>[];
-			const countResult = await db.execute(
+			)) as Record<string, unknown>[];
+			const countResult = (await db.execute(
 				`SELECT COUNT(*) as count FROM ${quoted}`,
-			) as { count: number }[];
+			)) as { count: number }[];
 
-			const columnNames = sample?.[0]
-				? Object.keys(sample[0])
-				: [];
+			const columnNames = sample?.[0] ? Object.keys(sample[0]) : [];
 
 			tableInfos.push({
 				table: { schema: "main", name: table.name, type: table.type },
@@ -314,7 +309,10 @@ export class ActorInspector {
 		return result;
 	}
 
-	getWorkflowHistoryJson(): { history: unknown | null; isWorkflowEnabled: boolean } {
+	getWorkflowHistoryJson(): {
+		history: unknown | null;
+		isWorkflowEnabled: boolean;
+	} {
 		const bigIntReplacer = (_key: string, value: unknown) =>
 			typeof value === "bigint" ? Number(value) : value;
 		const history = this.getWorkflowHistory();
@@ -349,4 +347,3 @@ export class ActorInspector {
 function escapeDoubleQuotes(value: string): string {
 	return value.replace(/"/g, '""');
 }
-

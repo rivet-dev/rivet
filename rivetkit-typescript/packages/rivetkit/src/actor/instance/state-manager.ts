@@ -219,7 +219,13 @@ export class StateManager<
 			} else {
 				// Create promise for waiting
 				if (!this.#onPersistSavedPromise) {
-					this.#onPersistSavedPromise = promiseWithResolvers((reason) => loggerWithoutContext().warn({ msg: "unhandled persist saved promise rejection", reason }));
+					this.#onPersistSavedPromise = promiseWithResolvers(
+						(reason) =>
+							loggerWithoutContext().warn({
+								msg: "unhandled persist saved promise rejection",
+								reason,
+							}),
+					);
 				}
 
 				// Save throttled

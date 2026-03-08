@@ -21,10 +21,7 @@ import {
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
-import {
-	type ActorConfig,
-	getRunFunction,
-} from "../config";
+import { type ActorConfig, getRunFunction } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
@@ -505,10 +502,17 @@ export class ActorInstance<
 			// is intentional and safe.
 			try {
 				this.#abortController.abort();
-			} catch { }
+			} catch {}
 
 			// Wait for run handler to complete
-			await this.#waitForRunHandler(this.overrides.runStopTimeout !== undefined ? Math.min(this.#config.options.runStopTimeout, this.overrides.runStopTimeout) : this.#config.options.runStopTimeout);
+			await this.#waitForRunHandler(
+				this.overrides.runStopTimeout !== undefined
+					? Math.min(
+							this.#config.options.runStopTimeout,
+							this.overrides.runStopTimeout,
+						)
+					: this.#config.options.runStopTimeout,
+			);
 
 			// Call onStop lifecycle
 			if (mode === "sleep") {
@@ -524,7 +528,12 @@ export class ActorInstance<
 
 			// Wait for background tasks
 			await this.#waitBackgroundPromises(
-				this.overrides.waitUntilTimeout !== undefined ? Math.min(this.#config.options.waitUntilTimeout, this.overrides.waitUntilTimeout) : this.#config.options.waitUntilTimeout,
+				this.overrides.waitUntilTimeout !== undefined
+					? Math.min(
+							this.#config.options.waitUntilTimeout,
+							this.overrides.waitUntilTimeout,
+						)
+					: this.#config.options.waitUntilTimeout,
 			);
 
 			// Clear timeouts and save state
@@ -633,14 +642,14 @@ export class ActorInstance<
 	async processMessage(
 		message: {
 			body:
-			| {
-				tag: "ActionRequest";
-				val: { id: bigint; name: string; args: unknown };
-			}
-			| {
-				tag: "SubscriptionRequest";
-				val: { eventName: string; subscribe: boolean };
-			};
+				| {
+						tag: "ActionRequest";
+						val: { id: bigint; name: string; args: unknown };
+				  }
+				| {
+						tag: "SubscriptionRequest";
+						val: { eventName: string; subscribe: boolean };
+				  };
 		},
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
 	) {
@@ -661,7 +670,10 @@ export class ActorInstance<
 		ctx: ActionContext<S, CP, CS, V, I, DB, E, Q>,
 		eventName: string,
 	): Promise<void> {
-		const canSubscribe = getEventCanSubscribe(this.#config.events, eventName);
+		const canSubscribe = getEventCanSubscribe(
+			this.#config.events,
+			eventName,
+		);
 		if (!canSubscribe) {
 			return;
 		}
@@ -834,33 +846,33 @@ export class ActorInstance<
 		}
 		const onRequest = this.#config.onRequest;
 
-			return await this.runInTraceSpan(
-				"actor.onRequest",
-				{
-					"http.method": request.method,
-					"http.url": request.url,
-					"rivet.conn.id": conn.id,
-				},
-				async () => {
-					const ctx = new RequestContext(this, conn, request);
-					try {
-						const response = await onRequest(ctx, request);
-						if (!response) {
-							throw new errors.InvalidRequestHandlerResponse();
-						}
-						return response;
-					} catch (error) {
-						this.#rLog.error({
-							msg: "onRequest error",
-							error: stringifyError(error),
-						});
-						throw error;
-					} finally {
-						this.stateManager.savePersistThrottled();
+		return await this.runInTraceSpan(
+			"actor.onRequest",
+			{
+				"http.method": request.method,
+				"http.url": request.url,
+				"rivet.conn.id": conn.id,
+			},
+			async () => {
+				const ctx = new RequestContext(this, conn, request);
+				try {
+					const response = await onRequest(ctx, request);
+					if (!response) {
+						throw new errors.InvalidRequestHandlerResponse();
 					}
-				},
-			);
-		}
+					return response;
+				} catch (error) {
+					this.#rLog.error({
+						msg: "onRequest error",
+						error: stringifyError(error),
+					});
+					throw error;
+				} finally {
+					this.stateManager.savePersistThrottled();
+				}
+			},
+		);
+	}
 
 	handleRawWebSocket(
 		conn: Conn<S, CP, CS, V, I, DB, E, Q>,
@@ -1278,7 +1290,12 @@ export class ActorInstance<
 						if (result instanceof Promise) {
 							await deadline(
 								result,
-								this.overrides.onSleepTimeout !== undefined ? Math.min(this.#config.options.onSleepTimeout, this.overrides.onSleepTimeout) : this.#config.options.onSleepTimeout,
+								this.overrides.onSleepTimeout !== undefined
+									? Math.min(
+											this.#config.options.onSleepTimeout,
+											this.overrides.onSleepTimeout,
+										)
+									: this.#config.options.onSleepTimeout,
 							);
 						}
 					},
@@ -1310,7 +1327,13 @@ export class ActorInstance<
 						if (result instanceof Promise) {
 							await deadline(
 								result,
-								this.overrides.onDestroyTimeout !== undefined ? Math.min(this.#config.options.onDestroyTimeout, this.overrides.onDestroyTimeout) : this.#config.options.onDestroyTimeout,
+								this.overrides.onDestroyTimeout !== undefined
+									? Math.min(
+											this.#config.options
+												.onDestroyTimeout,
+											this.overrides.onDestroyTimeout,
+										)
+									: this.#config.options.onDestroyTimeout,
 							);
 						}
 					},
@@ -1453,15 +1476,25 @@ export class ActorInstance<
 			client = await this.#config.db.createClient({
 				actorId: this.#actorId,
 				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
-					? () => this.driver.overrideRawDatabaseClient!(this.#actorId)
+					? () =>
+							this.driver.overrideRawDatabaseClient!(
+								this.#actorId,
+							)
 					: undefined,
-				overrideDrizzleDatabaseClient: this.driver.overrideDrizzleDatabaseClient
-					? () => this.driver.overrideDrizzleDatabaseClient!(this.#actorId)
+				overrideDrizzleDatabaseClient: this.driver
+					.overrideDrizzleDatabaseClient
+					? () =>
+							this.driver.overrideDrizzleDatabaseClient!(
+								this.#actorId,
+							)
 					: undefined,
 				kv: {
-					batchPut: (entries) => this.driver.kvBatchPut(this.#actorId, entries),
-					batchGet: (keys) => this.driver.kvBatchGet(this.#actorId, keys),
-					batchDelete: (keys) => this.driver.kvBatchDelete(this.#actorId, keys),
+					batchPut: (entries) =>
+						this.driver.kvBatchPut(this.#actorId, entries),
+					batchGet: (keys) =>
+						this.driver.kvBatchGet(this.#actorId, keys),
+					batchDelete: (keys) =>
+						this.driver.kvBatchDelete(this.#actorId, keys),
 				},
 				sqliteVfs: this.#sqliteVfs,
 			});
@@ -1498,7 +1531,9 @@ export class ActorInstance<
 				});
 				throw error;
 			}
-			const wrappedError = new Error(`Database setup failed: ${String(error)}`);
+			const wrappedError = new Error(
+				`Database setup failed: ${String(error)}`,
+			);
 			this.#rLog.error({
 				msg: "database setup failed with non-Error object",
 				error: String(error),

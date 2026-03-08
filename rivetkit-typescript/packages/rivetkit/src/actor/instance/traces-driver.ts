@@ -109,7 +109,9 @@ export class ActorTracesDriver implements TracesDriver {
 		}));
 	}
 
-	async batch(writes: Array<{ key: Uint8Array; value: Uint8Array }>): Promise<void> {
+	async batch(
+		writes: Array<{ key: Uint8Array; value: Uint8Array }>,
+	): Promise<void> {
 		if (writes.length === 0) {
 			return;
 		}

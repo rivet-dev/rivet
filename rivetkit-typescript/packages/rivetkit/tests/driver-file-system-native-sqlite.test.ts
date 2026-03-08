@@ -14,12 +14,9 @@ runDriverTests({
 			join(__dirname, "../fixtures/driver-test-suite/registry.ts"),
 			async () => {
 				return {
-						driver: createFileSystemOrMemoryDriver(
-							true,
-							{
-								path: `/tmp/test-${crypto.randomUUID()}`,
-							},
-						),
+					driver: createFileSystemOrMemoryDriver(true, {
+						path: `/tmp/test-${crypto.randomUUID()}`,
+					}),
 				};
 			},
 		);

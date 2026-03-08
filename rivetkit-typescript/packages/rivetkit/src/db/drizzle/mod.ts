@@ -157,7 +157,10 @@ export function db<
 
 			return Object.assign(client, {
 				execute: async <
-					TRow extends Record<string, unknown> = Record<string, unknown>,
+					TRow extends Record<string, unknown> = Record<
+						string,
+						unknown
+					>,
 				>(
 					query: string,
 					...args: unknown[]
@@ -172,7 +175,11 @@ export function db<
 							);
 							return result.rows.map((row: unknown[]) => {
 								const obj: Record<string, unknown> = {};
-								for (let i = 0; i < result.columns.length; i++) {
+								for (
+									let i = 0;
+									i < result.columns.length;
+									i++
+								) {
 									obj[result.columns[i]] = row[i];
 								}
 								return obj;

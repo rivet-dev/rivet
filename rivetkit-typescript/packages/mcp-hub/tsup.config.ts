@@ -16,10 +16,11 @@ export default defineConfig({
 	target: "node20",
 	alias: {
 		"@modelcontextprotocol/sdk": path.join(sdkBase, "index.js"),
-		"@modelcontextprotocol/sdk/server/streamableHttp.js": path.join(sdkBase, "server/streamableHttp.js"),
-		"@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js": path.join(
+		"@modelcontextprotocol/sdk/server/streamableHttp.js": path.join(
 			sdkBase,
-			"server/webStandardStreamableHttp.js",
+			"server/streamableHttp.js",
 		),
+		"@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js":
+			path.join(sdkBase, "server/webStandardStreamableHttp.js"),
 	},
 });

@@ -1,7 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-	WORKFLOW_QUEUE_NAME,
-} from "../../../fixtures/driver-test-suite/workflow";
+import { WORKFLOW_QUEUE_NAME } from "../../../fixtures/driver-test-suite/workflow";
 import type { DriverTestConfig } from "../mod";
 import { setupDriverTest, waitFor } from "../utils";
 
@@ -32,7 +30,9 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 		test("consumes queue messages via workflow queue.next", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const actor = client.workflowQueueActor.getOrCreate(["workflow-queue"]);
+			const actor = client.workflowQueueActor.getOrCreate([
+				"workflow-queue",
+			]);
 
 			await actor.send(WORKFLOW_QUEUE_NAME, {
 				hello: "world",
@@ -80,7 +80,9 @@ export function runActorWorkflowTests(driverTestConfig: DriverTestConfig) {
 
 		test("sleeps and resumes between ticks", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const actor = client.workflowSleepActor.getOrCreate(["workflow-sleep"]);
+			const actor = client.workflowSleepActor.getOrCreate([
+				"workflow-sleep",
+			]);
 
 			const initial = await actor.getState();
 			await waitFor(driverTestConfig, 200);

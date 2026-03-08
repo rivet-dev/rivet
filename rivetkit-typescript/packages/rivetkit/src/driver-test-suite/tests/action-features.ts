@@ -147,14 +147,20 @@ export function runActionFeaturesTests(driverTestConfig: DriverTestConfig) {
 				// Each item is roughly 60 bytes, so 800 items ≈ 48KB
 				const items: string[] = [];
 				for (let i = 0; i < 800; i++) {
-					items.push(`Item ${i} with some additional text to increase size`);
+					items.push(
+						`Item ${i} with some additional text to increase size`,
+					);
 				}
 
 				const result = await instance.processLargeRequest({ items });
 
 				expect(result.itemCount).toBe(800);
-				expect(result.firstItem).toBe("Item 0 with some additional text to increase size");
-				expect(result.lastItem).toBe("Item 799 with some additional text to increase size");
+				expect(result.firstItem).toBe(
+					"Item 0 with some additional text to increase size",
+				);
+				expect(result.lastItem).toBe(
+					"Item 799 with some additional text to increase size",
+				);
 			});
 
 			test("should reject request exceeding maxIncomingMessageSize", async (c) => {
@@ -166,11 +172,13 @@ export function runActionFeaturesTests(driverTestConfig: DriverTestConfig) {
 				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
 				const items: string[] = [];
 				for (let i = 0; i < 1500; i++) {
-					items.push(`Item ${i} with some additional text to increase size`);
+					items.push(
+						`Item ${i} with some additional text to increase size`,
+					);
 				}
 
 				await expect(
-					instance.processLargeRequest({ items })
+					instance.processLargeRequest({ items }),
 				).rejects.toThrow();
 			});
 
@@ -183,8 +191,12 @@ export function runActionFeaturesTests(driverTestConfig: DriverTestConfig) {
 				const result = await instance.getLargeResponse(800);
 
 				expect(result.items).toHaveLength(800);
-				expect(result.items[0]).toBe("Item 0 with some additional text to increase size");
-				expect(result.items[799]).toBe("Item 799 with some additional text to increase size");
+				expect(result.items[0]).toBe(
+					"Item 0 with some additional text to increase size",
+				);
+				expect(result.items[799]).toBe(
+					"Item 799 with some additional text to increase size",
+				);
 			});
 
 			test("should reject response exceeding maxOutgoingMessageSize", async (c) => {
@@ -195,7 +207,7 @@ export function runActionFeaturesTests(driverTestConfig: DriverTestConfig) {
 				// Request a response that exceeds the default 1MB limit
 				// Each item is roughly 60 bytes, so 20000 items ≈ 1.2MB
 				await expect(
-					instance.getLargeResponse(20000)
+					instance.getLargeResponse(20000),
 				).rejects.toThrow();
 			});
 		});

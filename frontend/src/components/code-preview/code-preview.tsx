@@ -64,6 +64,10 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 	const [highlighter, setHighlighter] = useState<HighlighterCore | null>(
 		null,
 	);
+	const notationTransformer =
+		transformerNotationHighlight() as unknown as NonNullable<
+			Parameters<HighlighterCore["codeToHtml"]>[1]["transformers"]
+		>[number];
 
 	useEffect(() => {
 		let cancelled = false;
@@ -85,9 +89,9 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 				: (highlighter.codeToHtml(code, {
 						lang: language,
 						theme: theme.name,
-						transformers: [transformerNotationHighlight()],
+						transformers: [notationTransformer],
 					}) as TrustedHTML),
-		[isLoading, highlighter, code, language],
+		[isLoading, highlighter, code, language, notationTransformer],
 	);
 
 	if (isLoading) {

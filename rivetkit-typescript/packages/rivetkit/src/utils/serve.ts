@@ -9,8 +9,9 @@ import getPort from "get-port";
 const DEFAULT_PORT = 6420;
 export type ServeStatic =
 	typeof import("@hono/node-server/serve-static").serveStatic;
-const serveStaticLoaderPromises: Partial<Record<Runtime, Promise<ServeStatic>>> =
-	{};
+const serveStaticLoaderPromises: Partial<
+	Record<Runtime, Promise<ServeStatic>>
+> = {};
 
 /**
  * Finds a free port starting from the given port.

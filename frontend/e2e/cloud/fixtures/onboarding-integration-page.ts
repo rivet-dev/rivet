@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { TEST_IDS } from "../../../src/utils/test-ids";
 
 export class OnboardingIntegrationPage {
-	constructor(private page: Page) { }
+	constructor(private page: Page) {}
 
 	async selectProvider(providerName: string) {
 		const providerOption = this.page.getByTestId(

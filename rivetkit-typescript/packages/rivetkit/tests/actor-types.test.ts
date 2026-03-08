@@ -52,7 +52,9 @@ describe("ActorDefinition", () => {
 			}
 
 			interface TestDatabase {
-				createClient: (ctx: DatabaseProviderContext) => Promise<{ execute: (query: string) => any }>;
+				createClient: (
+					ctx: DatabaseProviderContext,
+				) => Promise<{ execute: (query: string) => any }>;
 				onMigrate: () => void;
 			}
 
@@ -144,7 +146,9 @@ describe("ActorDefinition", () => {
 		}
 
 		it("narrows message body by queue name", () => {
-			type ReceivedFooBar = Awaited<ReturnType<typeof receiveFooBar>>[number];
+			type ReceivedFooBar = Awaited<
+				ReturnType<typeof receiveFooBar>
+			>[number];
 			type FooBody = Extract<ReceivedFooBar, { name: "foo" }>["body"];
 			type BarBody = Extract<ReceivedFooBar, { name: "bar" }>["body"];
 
@@ -202,9 +206,15 @@ describe("ActorDefinition", () => {
 		});
 
 		it("types ActorHandle.send and ActorConn.send end-to-end", () => {
-			function assertTypedHandle(handle: ActorHandle<typeof clientTypedActor>) {
+			function assertTypedHandle(
+				handle: ActorHandle<typeof clientTypedActor>,
+			) {
 				void handle.send("tasks", { value: 1 });
-				void handle.send("tasks", { value: 1 }, { wait: true, timeout: 10 });
+				void handle.send(
+					"tasks",
+					{ value: 1 },
+					{ wait: true, timeout: 10 },
+				);
 				void handle.send(
 					"noReply",
 					{ value: "ok" },
@@ -239,7 +249,11 @@ describe("ActorDefinition", () => {
 
 			function assertTypedConn(conn: ActorConn<typeof clientTypedActor>) {
 				void conn.send("tasks", { value: 1 });
-				void conn.send("tasks", { value: 1 }, { wait: true, timeout: 10 });
+				void conn.send(
+					"tasks",
+					{ value: 1 },
+					{ wait: true, timeout: 10 },
+				);
 
 				// @ts-expect-error invalid queue payload
 				void conn.send("tasks", { value: "bad" });
@@ -358,7 +372,9 @@ describe("ActorDefinition", () => {
 						completable: true,
 					});
 					if (message.name === "completable") {
-						expectTypeOf(message.body).toEqualTypeOf<{ input: string }>();
+						expectTypeOf(message.body).toEqualTypeOf<{
+							input: string;
+						}>();
 						type CompleteArgs = Parameters<typeof message.complete>;
 						expectTypeOf<CompleteArgs>().toEqualTypeOf<
 							[response: { output: string }]
@@ -370,10 +386,20 @@ describe("ActorDefinition", () => {
 						count: 2,
 					});
 					type BatchMessage = (typeof batch)[number];
-					type FooBody = Extract<BatchMessage, { name: "foo" }>["body"];
-					type BarBody = Extract<BatchMessage, { name: "bar" }>["body"];
-					expectTypeOf<FooBody>().toEqualTypeOf<{ fooBody: string }>();
-					expectTypeOf<BarBody>().toEqualTypeOf<{ barBody: number }>();
+					type FooBody = Extract<
+						BatchMessage,
+						{ name: "foo" }
+					>["body"];
+					type BarBody = Extract<
+						BatchMessage,
+						{ name: "bar" }
+					>["body"];
+					expectTypeOf<FooBody>().toEqualTypeOf<{
+						fooBody: string;
+					}>();
+					expectTypeOf<BarBody>().toEqualTypeOf<{
+						barBody: number;
+					}>();
 				}),
 				actions: {},
 			});
@@ -420,9 +446,12 @@ describe("ActorDefinition", () => {
 						await loopCtx.join("branch-helper", {
 							one: {
 								run: async (branchCtx) => {
-									await branchCtx.step("apply-branch", async () => {
-										applyBranchHelper(branchCtx);
-									});
+									await branchCtx.step(
+										"apply-branch",
+										async () => {
+											applyBranchHelper(branchCtx);
+										},
+									);
 									return 1;
 								},
 							},
@@ -436,7 +465,9 @@ describe("ActorDefinition", () => {
 				actions: {},
 			});
 
-			function applyRootHelper(c: WorkflowContextOf<typeof workflowHelperActor>): void {
+			function applyRootHelper(
+				c: WorkflowContextOf<typeof workflowHelperActor>,
+			): void {
 				expectTypeOf(c.state.count).toEqualTypeOf<number>();
 			}
 
@@ -484,7 +515,9 @@ describe("ActorDefinition", () => {
 						const rows = await c.db.execute<{ foo: string }>(
 							"SELECT foo FROM bar",
 						);
-						expectTypeOf(rows).toEqualTypeOf<Array<{ foo: string }>>();
+						expectTypeOf(rows).toEqualTypeOf<
+							Array<{ foo: string }>
+						>();
 					},
 				},
 			});

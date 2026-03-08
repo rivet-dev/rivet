@@ -10,4 +10,9 @@ export type InferDatabaseClient<DBProvider extends AnyDatabaseProvider> =
 		? Awaited<ReturnType<DBProvider["createClient"]>>
 		: never;
 
-export type { AnyDatabaseProvider, DatabaseProvider, RawDatabaseClient, DrizzleDatabaseClient };
+export type {
+	AnyDatabaseProvider,
+	DatabaseProvider,
+	RawDatabaseClient,
+	DrizzleDatabaseClient,
+};

@@ -30,7 +30,10 @@ const QUERY_COUNT = 100;
 
 type Client = Awaited<ReturnType<typeof registry.start>>["client"];
 
-async function runBenchmark(client: Client, name: string): Promise<BenchmarkResult> {
+async function runBenchmark(
+	client: Client,
+	name: string,
+): Promise<BenchmarkResult> {
 	const results: BenchmarkResult = {
 		name,
 		insert: { batch: 0, nonBatch: 0 },
@@ -41,7 +44,9 @@ async function runBenchmark(client: Client, name: string): Promise<BenchmarkResu
 	// --- INSERT ---
 	// Non-batch
 	{
-		const handle = await client.dbActorRaw.getOrCreate([`bench-nonbatch-${Date.now()}`]);
+		const handle = await client.dbActorRaw.getOrCreate([
+			`bench-nonbatch-${Date.now()}`,
+		]);
 		const start = performance.now();
 		for (let i = 0; i < ROW_COUNT; i++) {
 			await handle.insertValue(`User ${i}`);
@@ -51,14 +56,18 @@ async function runBenchmark(client: Client, name: string): Promise<BenchmarkResu
 
 	// Batch
 	{
-		const handle = await client.dbActorRaw.getOrCreate([`bench-batch-${Date.now()}`]);
+		const handle = await client.dbActorRaw.getOrCreate([
+			`bench-batch-${Date.now()}`,
+		]);
 		const start = performance.now();
 		await handle.insertMany(ROW_COUNT);
 		results.insert.batch = performance.now() - start;
 	}
 
 	// --- SELECT ---
-	const handle = await client.dbActorRaw.getOrCreate([`bench-select-${Date.now()}`]);
+	const handle = await client.dbActorRaw.getOrCreate([
+		`bench-select-${Date.now()}`,
+	]);
 	await handle.insertMany(ROW_COUNT);
 
 	// Batch (single query)
@@ -168,7 +177,13 @@ function printResults(results: BenchmarkResult[]): void {
 	const baseline = results[0];
 	if (baseline && results.length > 1) {
 		const compTable = new Table({
-			head: ["Driver", "Insert (batch)", "vs Baseline", "Select (batch)", "vs Baseline"],
+			head: [
+				"Driver",
+				"Insert (batch)",
+				"vs Baseline",
+				"Select (batch)",
+				"vs Baseline",
+			],
 		});
 		for (const r of results) {
 			compTable.push([

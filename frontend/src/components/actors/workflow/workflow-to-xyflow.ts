@@ -51,6 +51,21 @@ export interface LayoutResult {
 	edges: Edge[];
 }
 
+type WorkflowNodeInput = {
+	label?: string;
+	summary?: string;
+	entryType: EntryKindType | "input" | "output";
+	status: EntryStatus;
+	duration?: number;
+	retryCount?: number;
+	error?: string;
+	nodeKey?: string;
+	startedAt?: number;
+	completedAt?: number;
+	rawData?: unknown;
+	name?: string;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────
 
 function getDisplayName(key: string): string {
@@ -157,16 +172,7 @@ function makeNode(
 	id: string,
 	x: number,
 	y: number,
-	data: Omit<
-		WorkflowNodeData,
-		"label" | "summary" | "entryType" | "status"
-	> & {
-		label?: string;
-		summary?: string;
-		entryType: EntryKindType | "input" | "output";
-		status: EntryStatus;
-		name?: string;
-	},
+	data: WorkflowNodeInput,
 ): XYNode {
 	return {
 		id,
@@ -239,8 +245,8 @@ export function workflowHistoryToXYFlow(
 		if (prevNodeId) {
 			const gap =
 				prevCompletedAt &&
-					targetStartedAt &&
-					targetStartedAt > prevCompletedAt
+				targetStartedAt &&
+				targetStartedAt > prevCompletedAt
 					? formatDuration(targetStartedAt - prevCompletedAt)
 					: undefined;
 			edges.push({

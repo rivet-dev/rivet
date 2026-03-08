@@ -46,7 +46,9 @@ const baseProvider = db({
 });
 
 const lifecycleProvider = {
-	createClient: async (ctx: Parameters<typeof baseProvider.createClient>[0]) => {
+	createClient: async (
+		ctx: Parameters<typeof baseProvider.createClient>[0],
+	) => {
 		const client = await baseProvider.createClient(ctx);
 		clientActorIds.set(client as object, ctx.actorId);
 		increment(createCounts, ctx.actorId);
@@ -59,17 +61,21 @@ const lifecycleProvider = {
 		}
 		await baseProvider.onMigrate(client);
 	},
-	onDestroy: async (client: Parameters<NonNullable<typeof baseProvider.onDestroy>>[0]) => {
+	onDestroy: async (
+		client: Parameters<NonNullable<typeof baseProvider.onDestroy>>[0],
+	) => {
 		const actorId = clientActorIds.get(client as object);
 		if (actorId) {
 			increment(cleanupCounts, actorId);
 		}
-			await baseProvider.onDestroy?.(client);
-		},
-	};
+		await baseProvider.onDestroy?.(client);
+	},
+};
 
 const failingLifecycleProvider = {
-	createClient: async (ctx: Parameters<typeof baseProvider.createClient>[0]) => {
+	createClient: async (
+		ctx: Parameters<typeof baseProvider.createClient>[0],
+	) => {
 		const client = await baseProvider.createClient(ctx);
 		clientActorIds.set(client as object, ctx.actorId);
 		increment(createCounts, ctx.actorId);
@@ -82,7 +88,9 @@ const failingLifecycleProvider = {
 		}
 		throw new Error("forced migrate failure");
 	},
-	onDestroy: async (client: Parameters<NonNullable<typeof baseProvider.onDestroy>>[0]) => {
+	onDestroy: async (
+		client: Parameters<NonNullable<typeof baseProvider.onDestroy>>[0],
+	) => {
 		const actorId = clientActorIds.get(client as object);
 		if (actorId) {
 			increment(cleanupCounts, actorId);

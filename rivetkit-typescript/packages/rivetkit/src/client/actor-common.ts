@@ -79,17 +79,7 @@ type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
 
 export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends ActorDefinition<
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		infer Q,
-		any
-	>
+	AD extends ActorDefinition<any, any, any, any, any, any, any, infer Q, any>
 		? Q extends QueueSchemaConfig
 			? { send: ActorQueueSend<Q> }
 			: never
@@ -97,17 +87,7 @@ export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 
 export type ActorDefinitionEventSubscriptions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends ActorDefinition<
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		infer E,
-		any,
-		any
-	>
+	AD extends ActorDefinition<any, any, any, any, any, any, infer E, any, any>
 		? E extends EventSchemaConfig
 			? {
 					on: ActorEventSubscribe<E>;

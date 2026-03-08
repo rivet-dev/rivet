@@ -9,7 +9,7 @@ export interface FlattenedSpan {
 
 export type SpanNode = {
 	timeUnixNano: bigint;
-	spanId: string | null;
+	spanId: string;
 	endTimeUnixNano: any;
 	startTimeUnixNano: any;
 	name: ReactNode;
