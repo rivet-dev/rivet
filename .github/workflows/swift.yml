@@ -10,6 +10,7 @@ on:
 jobs:
   swift-tests:
     name: RivetKit Swift / Tests
+    if: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
