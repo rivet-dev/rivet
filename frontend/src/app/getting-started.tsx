@@ -72,7 +72,7 @@ const stepper = defineStepper(
 	},
 	{
 		id: "explore",
-		title: "Explore Rivet",
+		title: "Explore Rivet Actors",
 		schema: z.object({}),
 		group: "local",
 	},
@@ -447,28 +447,19 @@ function StepNumber({ n }: { n: number }) {
 
 const exploreFeatures = [
 	{
+		id: "inspector",
+		label: "Inspector",
+		title: "RivetKit Inspector",
+		description:
+			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
+		media: null as string | null,
+	},
+	{
 		id: "state",
 		label: "State",
 		title: "Real-time State",
 		description:
 			"Each actor has its own isolated state that persists across connections. Inspect live state changes as they happen.",
-		// Replace with actual gif path, e.g. "/onboarding/inspector-state.gif"
-		media: null as string | null,
-	},
-	{
-		id: "rpcs",
-		label: "RPCs",
-		title: "Remote Procedure Calls",
-		description:
-			"Call actor methods directly from your client. The inspector shows every RPC call, its arguments, and response in real-time.",
-		media: null as string | null,
-	},
-	{
-		id: "events",
-		label: "Events",
-		title: "Event Streams",
-		description:
-			"Actors can broadcast events to connected clients. Watch event streams flow through the inspector as they fire.",
 		media: null as string | null,
 	},
 	{
@@ -480,19 +471,27 @@ const exploreFeatures = [
 		media: null as string | null,
 	},
 	{
-		id: "inspector",
-		label: "Inspector",
-		title: "RivetKit Inspector",
-		description:
-			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
-		media: null as string | null,
-	},
-	{
 		id: "workflows",
 		label: "Workflows",
 		title: "Durable Workflows",
 		description:
 			"Orchestrate multi-step processes that survive crashes and restarts. Visualize workflow execution and step-through history.",
+		media: null as string | null,
+	},
+	{
+		id: "events",
+		label: "Events",
+		title: "Event Streams",
+		description:
+			"Actors can broadcast events to connected clients. Watch event streams flow through the inspector as they fire.",
+		media: null as string | null,
+	},
+	{
+		id: "rpcs",
+		label: "RPCs",
+		title: "Remote Procedure Calls",
+		description:
+			"Call actor methods directly from your client. The inspector shows every RPC call, its arguments, and response in real-time.",
 		media: null as string | null,
 	},
 ];
