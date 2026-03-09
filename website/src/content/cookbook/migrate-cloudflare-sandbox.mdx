@@ -1,0 +1,713 @@
+---
+title: "Migrate Cloudflare Sandbox to Rivet"
+icon: "cloudflare"
+description: "Before-and-after migration guide for moving Cloudflare Sandbox capabilities to Rivet, with code for every supported migration path and explicit unsupported gaps."
+---
+
+Cloudflare Sandbox (`@cloudflare/sandbox`) provides container-based code execution backed by Durable Objects. Rivet Actors are not a container runtime. The migration pattern is to use Rivet Actors as the durable orchestration, routing, state, auth, and realtime control plane while keeping actual sandbox/container execution on an external provider (E2B, Fly Machines, Modal, or similar). Every "After (Rivet)" snippet below assumes a `SandboxController` actor that manages an external sandbox process.
+
+## Status Summary
+
+**Status legend:**
+- `native` = Rivet has a direct, built-in equivalent
+- `pattern` = achievable with a documented Rivet pattern or small wrapper
+- `external` = requires a third-party service (no specific vendor recommended)
+- `vendor` = Cloudflare-proprietary service replaced by a recommended third-party SDK or provider
+- `out-of-scope` = not a feature-parity concern
+- `unsupported` = no current Rivet surface
+
+| Feature | Status | Rivet path |
+|---------|--------|------------|
+| Sandbox Creation and Identity | pattern | [Actor Keys](https://rivet.dev/docs/actors/keys), [Lifecycle](https://rivet.dev/docs/actors/lifecycle) |
+| Sandbox Lifecycle Management | pattern | [Lifecycle](https://rivet.dev/docs/actors/lifecycle), [Destroy](https://rivet.dev/docs/actors/destroy) |
+| Ephemeral State Model | pattern | [State](https://rivet.dev/docs/actors/state), [Ephemeral Variables](https://rivet.dev/docs/actors/ephemeral-variables) |
+| Transport Modes (HTTP/WebSocket) | native | [HTTP Handler](https://rivet.dev/docs/actors/request-handler), [WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) |
+| Logging Configuration | native | [Debugging](https://rivet.dev/docs/actors/debugging) |
+| Environment Variables | pattern | [Authentication](https://rivet.dev/docs/actors/authentication) |
+| Sandbox Options (Timeouts) | pattern | [Lifecycle](https://rivet.dev/docs/actors/lifecycle), [Limits](https://rivet.dev/docs/actors/limits) |
+| Security Model | pattern | [Authentication](https://rivet.dev/docs/actors/authentication), [Connections](https://rivet.dev/docs/actors/connections) |
+| Preview URLs (HTTP Proxy) | pattern | [HTTP Handler](https://rivet.dev/docs/actors/request-handler) |
+| Terminal Connections (WebSocket Proxy) | pattern | [WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) |
+| WebSocket Proxy to Sandbox Services | pattern | [WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) |
+| Streaming Output Fanout | pattern | [Events](https://rivet.dev/docs/actors/events), [Connections](https://rivet.dev/docs/actors/connections) |
+| Wrangler Configuration | pattern | [Connect](https://rivet.dev/docs/connect) |
+| Version Compatibility | pattern | [Versions](https://rivet.dev/docs/actors/versions) |
+| Request Routing and Geography | pattern | [Metadata](https://rivet.dev/docs/actors/metadata) |
+| Local Development | native | [Testing](https://rivet.dev/docs/actors/testing) |
+| Integration with Platform | native | [Connect](https://rivet.dev/docs/connect) |
+| Production Deployment (Custom Domains) | native | [Connect](https://rivet.dev/docs/connect) |
+| Command Execution (`exec`) | vendor | E2B, Fly Machines, or Modal for sandbox execution |
+| Streaming Command Execution (`execStream`) | vendor | E2B, Fly Machines, or Modal for streaming execution |
+| Background Processes (`startProcess`) | vendor | E2B, Fly Machines, or Modal for process management |
+| File System Access | vendor | E2B, Fly Machines, or Modal for filesystem operations |
+| Code Interpreter | vendor | E2B or Modal for interpreter runtime |
+| Sessions (Shell Contexts) | vendor | E2B, Fly Machines, or Modal for shell sessions |
+| Backup and Restore | external | Requires external storage/snapshot system |
+| Storage (S3 Bucket Mounting) | external | Requires external storage provider |
+| Dockerfile Configuration | vendor | Fly Machines, AWS Fargate, or similar container runtime |
+| Git Workflows | external | Requires external execution environment |
+| Three-Layer Architecture | out-of-scope | Rivet covers orchestration, not the full container stack |
+| File Watching | unsupported | No filesystem watcher in Rivet Actors |
+| Container Runtime Details | unsupported | No container runtime exists in Rivet |
+| Docker-in-Docker | unsupported | No native container execution surface |
+| Instance Types and Resource Limits | unsupported | Actor limits are not VM SKU selection |
+| Pricing | out-of-scope | Commercial comparison, not feature parity |
+| Wrangler CLI Commands | out-of-scope | See [Connect docs](https://rivet.dev/docs/connect) for deployment options |
+
+## Sandbox Creation and Identity
+
+Cloudflare uses `getSandbox()` with a string ID to lazily create containers. In Rivet, the same deterministic identity maps to actor keys. The actor does not provision a container natively; it becomes the controller for an external sandbox.
+
+### Before (Cloudflare)
+
+[Sandbox](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+declare const env: Env;
+declare const userId: string;
+
+// Get or create a sandbox by user ID
+const sandbox = getSandbox(env.Sandbox, `user-${userId}`);
+const result = await sandbox.exec("echo hello");
+```
+
+### After (Rivet)
+
+[Actor Keys](https://rivet.dev/docs/actors/keys)
+
+```ts
+import { actor, setup } from "rivetkit";
+import { createClient } from "rivetkit/client";
+
+// External sandbox provider stub (E2B, Fly Machines, Modal, or similar)
+declare function execOnExternal(command: string): Promise<{ stdout: string }>;
+declare const userId: string;
+
+const sandboxController = actor({
+  state: {},
+  actions: {
+    exec: async (c, { command }: { command: string }) => {
+      return await execOnExternal(command);
+    },
+  },
+});
+
+const registry = setup({ use: { sandboxController } });
+
+// Client: get or create a controller actor keyed by user ID
+const client = createClient<typeof registry>("http://localhost:6420");
+const controller = client.sandboxController.getOrCreate([`user-${userId}`]);
+const result = await controller.exec({ command: "echo hello" });
+```
+
+### Behavioral Delta
+
+- Rivet provides deterministic actor identity, not native container provisioning.
+- The actor must call an external sandbox API (E2B, Fly, Modal) to start the actual container.
+
+## Sandbox Lifecycle Management
+
+Cloudflare sandboxes have four states: creation, active, idle/sleep, and destruction. Rivet actors have a similar lifecycle with sleep and destroy, but this applies to the orchestration actor, not a container process.
+
+### Before (Cloudflare)
+
+[Sandbox](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+declare const env: Env;
+
+const sandbox = getSandbox(env.Sandbox, "my-sandbox", {
+  sleepAfter: "10m",
+  keepAlive: true,
+});
+
+// Later: destroy explicitly
+await sandbox.destroy();
+```
+
+### After (Rivet)
+
+[Lifecycle](https://rivet.dev/docs/actors/lifecycle)
+
+```ts
+import { actor } from "rivetkit";
+
+// External sandbox provider stubs
+declare function provisionExternal(): Promise<string>;
+declare function destroyExternal(id: string): Promise<void>;
+
+const sandboxController = actor({
+  state: { externalSandboxId: null as string | null, status: "idle" as string },
+
+  onCreate: async (c) => {
+    // Provision external sandbox on first creation
+    c.state.externalSandboxId = await provisionExternal();
+    c.state.status = "active";
+  },
+
+  onDestroy: async (c) => {
+    // Tear down external sandbox before actor destroys
+    if (c.state.externalSandboxId) {
+      await destroyExternal(c.state.externalSandboxId);
+    }
+  },
+
+  actions: {},
+});
+```
+
+### Behavioral Delta
+
+- Rivet actor sleep/wake manages the orchestration layer. External sandbox lifecycle must be managed explicitly in `onCreate`/`onDestroy`.
+- There is no built-in `keepAlive` heartbeat. Use `c.schedule.after(...)` for periodic heartbeats if needed.
+
+## Ephemeral State Model
+
+Cloudflare sandbox state resets on sleep. In Rivet, use `state` for durable control data that survives sleep and `vars` for transient handles (like an external sandbox process reference) that reset on wake.
+
+### Before (Cloudflare)
+
+[Sandbox](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+declare const env: Env;
+declare const data: Record<string, unknown>;
+
+// All in-container state is ephemeral
+// Files, processes, shell state reset on sleep
+const sandbox = getSandbox(env.Sandbox, "session-1");
+await sandbox.writeFile("/workspace/data.json", JSON.stringify(data));
+// After sleep, /workspace/data.json is gone
+```
+
+### After (Rivet)
+
+[State](https://rivet.dev/docs/actors/state), [Ephemeral Variables](https://rivet.dev/docs/actors/ephemeral-variables)
+
+```ts
+import { actor } from "rivetkit";
+
+// External sandbox handle type
+interface ExternalSandboxHandle {
+  exec(command: string): Promise<{ stdout: string; exitCode: number }>;
+}
+
+declare function connectExternal(config: Record<string, unknown>): Promise<ExternalSandboxHandle>;
+
+const sandboxController = actor({
+  // Durable: survives sleep
+  state: { config: {} as Record<string, unknown>, lastOutput: "" },
+
+  // Transient: resets on sleep/wake
+  vars: { externalHandle: null as ExternalSandboxHandle | null },
+
+  createVars: async (c) => {
+    // Reconnect to external sandbox on every wake
+    const handle = await connectExternal(c.state.config);
+    return { externalHandle: handle as ExternalSandboxHandle | null };
+  },
+
+  actions: {
+    runCommand: async (c, { command }: { command: string }) => {
+      if (!c.vars.externalHandle) {
+        throw new Error("Sandbox not connected");
+      }
+      const result = await c.vars.externalHandle.exec(command);
+      c.state.lastOutput = result.stdout;
+      return result;
+    },
+  },
+});
+```
+
+## Transport Modes
+
+Cloudflare offers HTTP and WebSocket transport between the SDK and the container. Rivet natively supports both HTTP and WebSocket communication to actors. This is a strong fit.
+
+### Before (Cloudflare)
+
+[Sandbox](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+declare const env: Env;
+declare const config: string;
+
+// Configure WebSocket transport via env var
+// SANDBOX_TRANSPORT=websocket
+
+// Then use SDK normally (transport is transparent)
+const sandbox = getSandbox(env.Sandbox, "my-sandbox");
+await sandbox.exec("python setup.py");
+await sandbox.writeFile("/app/config.json", config);
+```
+
+### After (Rivet)
+
+[HTTP Handler](https://rivet.dev/docs/actors/request-handler), [WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler)
+
+```ts
+import { actor } from "rivetkit";
+
+// External sandbox handle type
+interface ExternalSandboxHandle {
+  exec(command: string): Promise<{ stdout: string; exitCode: number }>;
+}
+
+declare function getExternalHandle(): ExternalSandboxHandle;
+
+// Rivet actors natively handle both HTTP and WebSocket
+const sandboxController = actor({
+  state: {},
+
+  actions: {
+    exec: async (c, { command }: { command: string }) => {
+      // RPC over HTTP or WebSocket (automatic)
+      const handle = getExternalHandle();
+      return await handle.exec(command);
+    },
+  },
+
+  // Direct WebSocket support for streaming use cases
+  onWebSocket: (c, websocket) => {
+    websocket.addEventListener("open", () => {
+      websocket.send(JSON.stringify({ type: "connected" }));
+    });
+  },
+});
+```
+
+## Environment Variables and Config Handoff
+
+Cloudflare supports sandbox-level, session-level, and per-command environment variables. In Rivet, pass configuration as actor state or action parameters and forward to the external sandbox.
+
+### Before (Cloudflare)
+
+[Environment Variables](https://developers.cloudflare.com/workers/configuration/environment-variables/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+  API_KEY: string;
+}
+
+declare const env: Env;
+
+const sandbox = getSandbox(env.Sandbox, "my-sandbox");
+
+// Sandbox-level env vars
+await sandbox.setEnvVars({
+  NODE_ENV: "production",
+  API_KEY: env.API_KEY,
+});
+
+// Per-command env vars
+const result = await sandbox.exec("node app.js", {
+  env: { DEBUG: "true" },
+});
+```
+
+### After (Rivet)
+
+[State](https://rivet.dev/docs/actors/state)
+
+```ts
+import { actor } from "rivetkit";
+
+// External sandbox handle type
+interface ExternalSandboxHandle {
+  exec(command: string, opts?: { env?: Record<string, string> }): Promise<{ stdout: string; exitCode: number }>;
+  setEnv(vars: Record<string, string>): Promise<void>;
+}
+
+declare function getExternalHandle(): ExternalSandboxHandle;
+
+const sandboxController = actor({
+  state: { envVars: {} as Record<string, string> },
+
+  actions: {
+    setEnvVars: async (c, { vars }: { vars: Record<string, string> }) => {
+      c.state.envVars = { ...c.state.envVars, ...vars };
+      // Forward to external sandbox
+      const handle = getExternalHandle();
+      await handle.setEnv(c.state.envVars);
+    },
+
+    exec: async (c, { command, env }: { command: string; env?: Record<string, string> }) => {
+      const merged = { ...c.state.envVars, ...env };
+      const handle = getExternalHandle();
+      return await handle.exec(command, { env: merged });
+    },
+  },
+});
+```
+
+## HTTP Proxy (Preview URLs)
+
+Cloudflare preview URLs expose sandbox ports as public HTTPS endpoints. In Rivet, use `onRequest` to proxy HTTP traffic from the actor to the external sandbox service.
+
+### Before (Cloudflare)
+
+[Workers Fetch Handler](https://developers.cloudflare.com/workers/runtime-apis/handlers/fetch/)
+
+```ts @nocheck
+import { getSandbox, proxyToSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Handle preview URL routing
+    const proxyResponse = await proxyToSandbox(request, env);
+    if (proxyResponse) return proxyResponse;
+
+    const sandbox = getSandbox(env.Sandbox, "my-sandbox");
+    const exposed = await sandbox.exposePort(8080, {
+      hostname: "example.com",
+      token: "api-v1",
+    });
+    return new Response(exposed.url);
+  },
+};
+```
+
+### After (Rivet)
+
+[Request Handler](https://rivet.dev/docs/actors/request-handler)
+
+```ts
+import { actor } from "rivetkit";
+
+const sandboxController = actor({
+  state: { externalHost: null as string | null },
+
+  onRequest: async (c, request) => {
+    if (!c.state.externalHost) {
+      return new Response("Sandbox not ready", { status: 503 });
+    }
+    // Proxy the request to the external sandbox service
+    const url = new URL(request.url);
+    url.host = c.state.externalHost;
+    return await fetch(new Request(url.toString(), request));
+  },
+
+  actions: {},
+});
+```
+
+### Behavioral Delta
+
+- Rivet does not generate per-port preview URLs as a primitive. The actor itself becomes the proxy endpoint.
+- Wildcard subdomain routing (e.g., `8080-sandbox-id-token.example.com`) is not built-in. Use your own DNS and edge routing if needed.
+
+## WebSocket Proxy
+
+Cloudflare provides `wsConnect()` and `terminal()` for proxying WebSocket connections to sandbox services. In Rivet, use `onWebSocket` to relay frames between the client and the external sandbox.
+
+### Before (Cloudflare)
+
+[Sandbox](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+declare const env: Env;
+declare const request: Request;
+
+const sandbox = getSandbox(env.Sandbox, "my-sandbox");
+
+// Terminal proxy
+const terminalResponse = await sandbox.terminal(request, { cols: 120, rows: 30 });
+
+// WebSocket proxy to a service on port 8080
+const wsResponse = await sandbox.wsConnect(request, 8080);
+```
+
+### After (Rivet)
+
+[WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler)
+
+```ts
+import { actor } from "rivetkit";
+
+const sandboxController = actor({
+  state: { externalHost: "sandbox.example.com" as string, port: 8080 as number },
+
+  onWebSocket: (c, websocket) => {
+    // Open a WebSocket to the external sandbox on connection open
+    websocket.addEventListener("open", () => {
+      const upstream = new WebSocket(
+        `ws://${c.state.externalHost}:${c.state.port}`,
+      );
+
+      // Relay frames both directions
+      websocket.addEventListener("message", (e) => upstream.send(e.data as string));
+      upstream.addEventListener("message", (e) => websocket.send(e.data as string));
+
+      upstream.addEventListener("close", () => websocket.close());
+      websocket.addEventListener("close", () => upstream.close());
+    });
+  },
+
+  actions: {},
+});
+```
+
+### Behavioral Delta
+
+- Terminal emulation (PTY allocation, resize control messages) must be handled by the external sandbox. The Rivet actor is a transparent relay.
+- Reconnection buffering (ring buffer replay on reconnect) must be implemented in application code or the external provider.
+
+## Streaming Output Fanout
+
+Cloudflare streams command output via SSE events from `execStream` and `streamProcessLogs`. In Rivet, the actor can receive structured output from an external runtime and fan it out to connected clients.
+
+### Before (Cloudflare)
+
+[Sandbox](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { parseSSEStream, getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+interface SSEEvent {
+  type: string;
+  data: string;
+  exitCode?: number;
+}
+
+declare const env: Env;
+
+const sandbox = getSandbox(env.Sandbox, "my-sandbox");
+const stream: ReadableStream = await sandbox.execStream("npm run build");
+for await (const event of parseSSEStream(stream) as AsyncIterable<SSEEvent>) {
+  if (event.type === "stdout") console.log(event.data);
+  if (event.type === "complete") console.log("exit:", event.exitCode);
+}
+```
+
+### After (Rivet)
+
+[Events](https://rivet.dev/docs/actors/events)
+
+```ts
+import { actor, event } from "rivetkit";
+
+// External sandbox streaming type
+interface StreamChunk {
+  type: string;
+  data: string;
+  exitCode?: number;
+}
+
+interface ExternalSandboxHandle {
+  execStream(command: string): AsyncIterable<StreamChunk>;
+}
+
+declare function getExternalHandle(): ExternalSandboxHandle;
+
+const sandboxController = actor({
+  state: {},
+
+  events: {
+    output: event<StreamChunk>(),
+  },
+
+  actions: {
+    execStream: async (c, { command }: { command: string }) => {
+      // Start command on external sandbox
+      const handle = getExternalHandle();
+      const stream = handle.execStream(command);
+
+      // Fan out to all connected clients
+      for await (const chunk of stream) {
+        c.broadcast("output", chunk);
+      }
+    },
+  },
+});
+```
+
+### Behavioral Delta
+
+- Rivet does not emit SSE natively from actors. Use `c.broadcast(...)` over WebSocket connections or return a streaming `Response` from `onRequest`.
+- The external sandbox provider must support streaming; Rivet handles the fanout.
+
+## Security Model
+
+Cloudflare provides VM-level isolation between sandboxes. Rivet provides auth and routing controls at the actor level. Combine Rivet auth with the external provider's isolation model.
+
+### Before (Cloudflare)
+
+[Workers](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+import { getSandbox } from "@cloudflare/sandbox";
+
+interface Env {
+  Sandbox: DurableObjectNamespace;
+}
+
+declare const env: Env;
+declare const userId: string;
+
+// Cloudflare handles VM isolation automatically
+// Developer implements auth in the Worker
+const sandbox = getSandbox(env.Sandbox, `user-${userId}`);
+```
+
+### After (Rivet)
+
+[Authentication](https://rivet.dev/docs/actors/authentication)
+
+```ts
+import { actor } from "rivetkit";
+
+// External auth verification stub
+declare function verifyToken(token: string): Promise<{ id: string } | null>;
+
+interface AuthParams {
+  token: string;
+}
+
+const sandboxController = actor({
+  state: {},
+
+  // Guard access with connection-level auth
+  onBeforeConnect: async (c, params: AuthParams) => {
+    const user = await verifyToken(params.token);
+    if (!user) throw new Error("Unauthorized");
+  },
+
+  createConnState: (c, params: AuthParams) => {
+    return { token: params.token };
+  },
+
+  onConnect: (c, conn) => {
+    console.log("Authenticated connection:", conn.id);
+  },
+
+  actions: {},
+});
+```
+
+### Behavioral Delta
+
+- Rivet enforces auth and routing isolation, not VM-level process/filesystem isolation.
+- The external sandbox provider is responsible for container-level isolation between users.
+- Combine both: Rivet for identity and access control, external provider for runtime isolation.
+
+## Logging Configuration
+
+Cloudflare sandboxes support configurable log levels and formats via environment variables. Rivet actors have built-in structured logging and an inspector for debugging.
+
+### Before (Cloudflare)
+
+[Workers Logging](https://developers.cloudflare.com/workers/)
+
+```ts @nocheck
+// Set via wrangler.jsonc vars
+// SANDBOX_LOG_LEVEL: "debug"
+// SANDBOX_LOG_FORMAT: "json"
+
+// Logs are captured from the container stdout/stderr
+// and forwarded to Cloudflare's logging pipeline
+const logLevel: string = "debug";
+const logFormat: string = "json";
+console.log(`Log config: level=${logLevel}, format=${logFormat}`);
+```
+
+### After (Rivet)
+
+[Debugging](https://rivet.dev/docs/actors/debugging)
+
+```ts
+import { actor } from "rivetkit";
+
+// External sandbox handle type
+interface ExternalSandboxHandle {
+  exec(command: string): Promise<{ stdout: string; exitCode: number }>;
+}
+
+declare function getExternalHandle(): ExternalSandboxHandle;
+
+const sandboxController = actor({
+  state: {},
+
+  actions: {
+    exec: async (c, command: string) => {
+      c.log.info({ msg: "executing command", command });
+      const handle = getExternalHandle();
+      const result = await handle.exec(command);
+      c.log.debug({ msg: "command result", exitCode: result.exitCode });
+      return result;
+    },
+  },
+});
+
+// View logs in the Rivet dashboard or via the inspector API
+// https://rivet.dev/docs/actors/debugging
+```
+
+## Unsupported, External, and Vendor Features
+
+- **File Watching** (unsupported) -- No filesystem watcher surface exists in Rivet Actors. Keep this in the external sandbox runtime.
+- **Container Runtime Details** (unsupported) -- No container runtime exists in Rivet. Network capabilities, kernel modules, and reserved ports are external sandbox concerns.
+- **Docker-in-Docker** (unsupported) -- No native container execution surface. Use a dedicated container runtime (Fly Machines, AWS Fargate) if needed.
+- **Instance Types and Resource Limits** (unsupported) -- Actor limits are not VM SKU selection. Resource allocation (CPU, memory, disk) stays with the external provider.
+- **Command Execution / `exec`** (vendor) -- Use E2B, Fly Machines, or Modal for sandbox execution. Rivet can orchestrate and route, not execute shell commands.
+- **Streaming Execution / `execStream`** (vendor) -- Use E2B, Fly Machines, or Modal for streaming execution. Rivet can fan out the resulting stream to clients.
+- **Background Processes / `startProcess`** (vendor) -- Use E2B, Fly Machines, or Modal for process management. Rivet can track metadata and status, not run the process itself.
+- **File System Access** (vendor) -- `c.kv` is key-value storage, not a mounted POSIX filesystem. Use E2B, Fly Machines, or Modal for file operations.
+- **Code Interpreter** (vendor) -- Use E2B or Modal for interpreter runtime. Persist orchestration state in Rivet.
+- **Sessions / Shell Contexts** (vendor) -- Use E2B, Fly Machines, or Modal for shell sessions. Model session metadata as actor state plus an external runtime session ID.
+- **Backup and Restore** (external) -- Squashfs snapshots and FUSE overlays require an external snapshot/storage system.
+- **Storage / S3 Bucket Mounting** (external) -- Rivet offers KV and SQLite, not filesystem mounts. Keep bucket mounts in the external provider.
+- **Dockerfile Configuration** (vendor) -- Image build and runtime configuration stays with Fly Machines, AWS Fargate, or a similar container runtime.
+- **Git Workflows** (external) -- Requires an external execution environment and filesystem for clone, checkout, and commit operations.
+
+## Validation Checklist
+
+| Test item | Expected result | Proof |
+|-----------|----------------|-------|
+| Durable controller identity exists | One actor key maps to one sandbox controller record | [actor-handle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-handle.ts) |
+| Orchestration lifecycle is durable | Controller actor can sleep, wake, and destroy cleanly | [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts) |
+| HTTP proxy surface works | Actor proxies sandbox control traffic over HTTP | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) |
+| WebSocket proxy surface works | Actor relays WebSocket frames to external sandbox | [raw-websocket.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-websocket.ts) |
+| Auth guards actor access | Only authenticated users reach the controller | [access-control.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/access-control.ts) |
+| External sandbox provider is chosen | Migration plan names the non-Rivet sandbox provider | Manual: choose E2B, Fly Machines, Modal, or similar |
+| Filesystem/snapshot needs are covered | External storage/runtime path is documented | Manual: confirm external provider handles files, backups, mounts |

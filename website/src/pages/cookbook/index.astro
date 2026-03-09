@@ -32,6 +32,7 @@ const pages: CookbookPageListItem[] = cookbook
 		return {
 			title: entry.data.title,
 			description: entry.data.description,
+			icon: entry.data.icon,
 			href,
 			primaryTemplate: primary
 				? { name: primary.name, displayName: primary.displayName, noFrontend: primary.noFrontend }

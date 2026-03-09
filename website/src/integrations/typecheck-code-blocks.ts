@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STAGING_DIR = join(__dirname, "../../scripts/typecheck-staging");
 const SNIPPETS_DIR = join(STAGING_DIR, "snippets");
-const DOCS_DIR = join(__dirname, "../content/docs");
+const CONTENT_DIR = join(__dirname, "../content");
+const DOCS_DIR = join(CONTENT_DIR, "docs");
+const COOKBOOK_DIR = join(CONTENT_DIR, "cookbook");
 const MONOREPO_ROOT = join(__dirname, "../../..");
 
 // Track if rivetkit has been built this session
@@ -265,7 +267,7 @@ function generateSnippetFilename(
 	language: string
 ): string {
 	// Convert source file path to a safe filename
-	const relativePath = relative(DOCS_DIR, sourceFile);
+	const relativePath = relative(CONTENT_DIR, sourceFile);
 	const safeName = relativePath.replace(/[/\\]/g, "_").replace(/\.mdx?$/, "");
 	const ext = language === "tsx" ? "tsx" : "ts";
 	return `${safeName}_L${lineNumber}.${ext}`;
@@ -275,7 +277,7 @@ function generateSnippetFilename(
  * Generate a directory name for a workspace group
  */
 function generateWorkspaceDir(sourceFile: string, lineNumber: number): string {
-	const relativePath = relative(DOCS_DIR, sourceFile);
+	const relativePath = relative(CONTENT_DIR, sourceFile);
 	const safeName = relativePath.replace(/[/\\]/g, "_").replace(/\.mdx?$/, "");
 	return `${safeName}_L${lineNumber}`;
 }
@@ -354,7 +356,7 @@ export function typecheckCodeBlocks(): AstroIntegration {
 				mkdirSync(SNIPPETS_DIR, { recursive: true });
 
 				// Find all MDX files
-				const mdxFiles = findMdxFiles(DOCS_DIR);
+				const mdxFiles = [...findMdxFiles(DOCS_DIR), ...findMdxFiles(COOKBOOK_DIR)];
 				logger.info(`Found ${mdxFiles.length} documentation files`);
 
 				// Extract code blocks from all files
