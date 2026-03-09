@@ -85,6 +85,25 @@ export function StepperForm<const Steps extends Step[]>({
 	);
 }
 
+function useStepperDirection(stepper: {
+	all: { id: string }[];
+	current: { id: string };
+}) {
+	const currentStepIndex = stepper.all.findIndex(
+		(s) => s.id === stepper.current.id,
+	);
+	const prevStepIndexRef = useRef(currentStepIndex);
+	const directionRef = useRef(0);
+
+	if (currentStepIndex !== prevStepIndexRef.current) {
+		directionRef.current =
+			currentStepIndex > prevStepIndexRef.current ? 1 : -1;
+		prevStepIndexRef.current = currentStepIndex;
+	}
+
+	return directionRef.current;
+}
+
 function Content<const Steps extends Step[]>({
 	defaultValues,
 	Stepper,
@@ -123,22 +142,7 @@ function Content<const Steps extends Step[]>({
 	});
 
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
-	const prevStepIndexRef = useRef(
-		stepper.all.findIndex((s) => s.id === stepper.current.id),
-	);
-	const directionRef = useRef(0);
-
-	const currentStepIndex = stepper.all.findIndex(
-		(s) => s.id === stepper.current.id,
-	);
-
-	if (currentStepIndex !== prevStepIndexRef.current) {
-		directionRef.current =
-			currentStepIndex > prevStepIndexRef.current ? 1 : -1;
-		prevStepIndexRef.current = currentStepIndex;
-	}
-
-	const direction = directionRef.current;
+	const direction = useStepperDirection(stepper);
 
 	const handleSubmit = async (values: z.infer<JoinStepSchemas<Steps>>) => {
 		ref.current = { ...ref.current, ...values };

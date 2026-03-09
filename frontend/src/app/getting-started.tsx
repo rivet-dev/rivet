@@ -26,10 +26,8 @@ import { motion } from "framer-motion";
 import {
 	type ReactNode,
 	Suspense,
-	useCallback,
 	useEffect,
 	useMemo,
-	useRef,
 	useState,
 } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -541,60 +539,24 @@ const exploreFeatures = [
 
 const CAROUSEL_INTERVAL = 5000;
 
+const GIF_SRC = `/onboarding-demo.gif?t=${Date.now()}`;
+
 function ExploreRivet() {
 	const [activeIndex, setActiveIndex] = useState(0);
-	const [progress, setProgress] = useState(0);
-	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const animFrameRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
-	const startTimeRef = useRef(Date.now());
-	const gifRef = useRef<HTMLImageElement>(null);
-	const [gifSrc, setGifSrc] = useState(`/onboarding-demo.gif?t=${Date.now()}`);
-
 	const feature = exploreFeatures[activeIndex];
 
-	const startTimer = useCallback((index: number) => {
-		if (intervalRef.current) clearInterval(intervalRef.current);
-		if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-
-		setActiveIndex(index);
-		setProgress(0);
-		startTimeRef.current = Date.now();
-
-		const animate = () => {
-			const elapsed = Date.now() - startTimeRef.current;
-			const pct = Math.min(elapsed / CAROUSEL_INTERVAL, 1);
-			setProgress(pct);
-			if (pct < 1) {
-				animFrameRef.current = requestAnimationFrame(animate);
-			}
-		};
-		animFrameRef.current = requestAnimationFrame(animate);
-
-		intervalRef.current = setInterval(() => {
-			const next = (index + 1) % exploreFeatures.length;
-			startTimer(next);
-		}, CAROUSEL_INTERVAL);
-	}, []);
-
 	useEffect(() => {
-		setGifSrc(`/onboarding-demo.gif?t=${Date.now()}`);
-		startTimer(0);
-		return () => {
-			if (intervalRef.current) clearInterval(intervalRef.current);
-			if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-		};
-	}, [startTimer]);
-
-	const handleClick = (index: number) => {
-		startTimer(index);
-	};
+		const timer = setInterval(() => {
+			setActiveIndex((prev) => (prev + 1) % exploreFeatures.length);
+		}, CAROUSEL_INTERVAL);
+		return () => clearInterval(timer);
+	}, []);
 
 	return (
 		<div className="flex flex-col gap-6">
 			<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
 				<img
-					ref={gifRef}
-					src={gifSrc}
+					src={GIF_SRC}
 					alt="Rivet Actors demo"
 					className="w-full h-full object-cover"
 				/>
@@ -604,7 +566,7 @@ function ExploreRivet() {
 					<button
 						key={f.id}
 						type="button"
-						onClick={() => handleClick(i)}
+						onClick={() => setActiveIndex(i)}
 						className={`flex-1 text-left px-3 pt-3 pb-2 transition-colors relative ${
 							i === activeIndex
 								? "text-foreground"
@@ -615,10 +577,11 @@ function ExploreRivet() {
 							<div
 								className="h-full bg-primary rounded-full"
 								style={{
-									width:
+									width: i === activeIndex ? "100%" : "0%",
+									transition:
 										i === activeIndex
-											? `${progress * 100}%`
-											: "0%",
+											? `width ${CAROUSEL_INTERVAL}ms linear`
+											: "none",
 								}}
 							/>
 						</div>
