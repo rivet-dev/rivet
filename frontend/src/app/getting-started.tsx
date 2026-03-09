@@ -23,13 +23,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import {
-	type ReactNode,
-	Suspense,
-	useEffect,
-	useMemo,
-	useState,
-} from "react";
+import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -45,6 +39,7 @@ import {
 	FormField,
 	Ping,
 	Skeleton,
+	useInterval,
 } from "@/components";
 import {
 	useDataProvider,
@@ -61,7 +56,7 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { useRivetDsn } from "./env-variables";
-import { StepperForm } from "./forms/stepper-form";
+import { StepperForm, useStepperFormSubmit } from "./forms/stepper-form";
 import { Content } from "./layout";
 
 const stepper = defineStepper(
@@ -145,12 +140,12 @@ export function GettingStarted({
 	return (
 		<Content className="flex flex-col items-center justify-safe-center">
 			<motion.div
-				className="relative mb-8"
+				className="relative mb-8 min-w-0 overflow-hidden w-full"
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				<div className="mt-8">
+				<div className="mt-8 w-full flex items-center justify-center [&_[data-component='stepper']]:w-auto px-4">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -171,7 +166,7 @@ export function GettingStarted({
 								minRunners: 1,
 								runnerMargin: 0,
 								headers: [],
-								success: false,
+
 								requestLifespan: 900,
 								datacenters: Object.fromEntries(
 									datacenters.map((dc) => [dc.name, true]),
@@ -208,9 +203,9 @@ export function GettingStarted({
 										<Suspense
 											fallback={
 												<div className="space-y-6">
-													<Skeleton className="w-full h-[180px]" />
-													<Skeleton className="w-full h-[250px]" />
-													<Skeleton className="w-full h-[200px]" />
+													<Skeleton className="w-96 h-[180px]" />
+													<Skeleton className="w-96 h-[250px]" />
+													<Skeleton className="w-96 h-[200px]" />
 												</div>
 											}
 										>
@@ -226,7 +221,11 @@ export function GettingStarted({
 							}}
 							onSubmit={() => {}}
 							onPartialSubmit={async ({ stepper, values }) => {
-								if (stepper.current.id === "backend") {
+								if (
+									stepper.current.id === "backend" &&
+									values.endpoint &&
+									values.success
+								) {
 									const config = await buildServerlessConfig(
 										dataProvider,
 										values,
@@ -267,9 +266,9 @@ function StepContent({
 	return (
 		<motion.div
 			className="mx-auto"
-			animate={{ width: wide ? "56rem" : "32rem" }}
+			animate={{ maxWidth: wide ? "56rem" : "32rem", width: "100%" }}
 			transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-			style={{ width: wide ? "56rem" : "32rem" }}
+			style={{ maxWidth: wide ? "56rem" : "32rem" }}
 		>
 			{children}
 		</motion.div>
@@ -318,7 +317,8 @@ function ProviderSetup() {
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
 			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to any provider. Rivet Cloud manages the actor orchestration, state, and scaling for you.
+				Deploy your application to any provider. Rivet Cloud manages the
+				actor orchestration, state, and scaling for you.
 			</p>
 			<FormField
 				control={control}
@@ -338,6 +338,7 @@ function ProviderSetup() {
 									data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
 										option.name,
 									)}
+									type="button"
 									onClick={() => {
 										field.onChange(option.name);
 										s.next();
@@ -409,7 +410,8 @@ function SkillsStep() {
 	return (
 		<div className="flex flex-col gap-4">
 			<p className="text-sm text-muted-foreground">
-				Install the Rivet skill so your coding agent knows how to work with RivetKit.
+				Install the Rivet skill so your coding agent knows how to work
+				with RivetKit.
 			</p>
 			<PackageManagerCode
 				npx={`npx skills add ${skillsPath}`}
@@ -453,7 +455,9 @@ function RunLocallyStep() {
 				<div className="flex-1 border-t border-dashed" />
 			</div>
 			<div>
-				<p className="font-medium mb-1.5">Follow the quickstart guide</p>
+				<p className="font-medium mb-1.5">
+					Follow the quickstart guide
+				</p>
 				<p className="text-sm text-muted-foreground mb-2">
 					Set up a Rivet actor project manually step-by-step.
 				</p>
@@ -545,12 +549,9 @@ function ExploreRivet() {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const feature = exploreFeatures[activeIndex];
 
-	useEffect(() => {
-		const timer = setInterval(() => {
-			setActiveIndex((prev) => (prev + 1) % exploreFeatures.length);
-		}, CAROUSEL_INTERVAL);
-		return () => clearInterval(timer);
-	}, []);
+	const { reset } = useInterval(() => {
+		setActiveIndex((prev) => (prev + 1) % exploreFeatures.length);
+	}, CAROUSEL_INTERVAL);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -566,7 +567,10 @@ function ExploreRivet() {
 					<button
 						key={f.id}
 						type="button"
-						onClick={() => setActiveIndex(i)}
+						onClick={() => {
+							setActiveIndex(i);
+							reset();
+						}}
 						className={`flex-1 text-left px-3 pt-3 pb-2 transition-colors relative ${
 							i === activeIndex
 								? "text-foreground"
@@ -677,7 +681,9 @@ function BackendSetup() {
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Copy this prompt into your coding agent</p>
+					<p className="font-medium mb-2">
+						Copy this prompt into your coding agent
+					</p>
 					<CodeGroup className="my-0">
 						{[
 							<AgentInstructions
@@ -692,7 +698,9 @@ function BackendSetup() {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Paste your deployment endpoint</p>
+					<p className="font-medium mb-2">
+						Paste your deployment endpoint
+					</p>
 					<p className="text-sm text-muted-foreground mb-3">
 						Your coding agent will provide a URL after deployment.
 					</p>
@@ -711,7 +719,9 @@ function BackendSetup() {
 								.otherwise(() => "https://your-deployment.com")}
 						/>
 						<ConfigurationAccordion />
-						<ConnectServerlessForm.ConnectionCheck provider={provider} />
+						<ConnectServerlessForm.ConnectionCheck
+							provider={provider}
+						/>
 					</div>
 				</div>
 			</div>
@@ -720,8 +730,6 @@ function BackendSetup() {
 }
 
 const skillsPath = "rivet-dev/skills";
-
-
 
 function FrontendSetup() {
 	const dataProvider = useDataProvider();
@@ -785,7 +793,7 @@ function FrontendSetup() {
 	return (
 		<div className="space-y-2">
 			<div className="border rounded-md py-10">
-				<div className="flex gap-2 justify-center items-center">
+				<div className="flex gap-2 justify-center items-center py-2 px-8">
 					<div className="relative mr-4">
 						<Ping variant="pending" className="relative" />
 					</div>

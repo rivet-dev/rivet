@@ -102,10 +102,7 @@ export function CodeGroup({
 
 	return (
 		<div
-			className={cn(
-				"code-group group my-4 rounded-lg border pt-2",
-				className,
-			)}
+			className={cn("code-group group my-4 rounded-lg border", className)}
 		>
 			{header}
 			<Tabs
@@ -196,7 +193,7 @@ export const CodeFrame = ({
 			)}
 		>
 			<div className="bg-background text-wrap text-sm">
-				<ScrollArea className="w-full px-1 py-4 [&_.shiki_.line:first-child]:max-w-">
+				<ScrollArea className="w-full [&_[data-radix-scroll-area-viewport]]:px-4 [&_[data-radix-scroll-area-viewport]]:py-4">
 					<CopyTrigger value={code || ""}>
 						<Button
 							variant="ghost"

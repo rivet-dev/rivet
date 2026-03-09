@@ -112,7 +112,6 @@ function FormStepper({
 				maxRunners: 10_000,
 				runnerMargin: 0,
 				headers: [],
-				success: false,
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),
 				),

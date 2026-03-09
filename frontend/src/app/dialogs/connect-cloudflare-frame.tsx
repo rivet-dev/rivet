@@ -174,8 +174,6 @@ function FormStepper({
 				runnerMargin: 0,
 				requestLifespan: 25,
 				headers: [],
-				success: false,
-				endpoint: "",
 				datacenters: {},
 			}}
 			footer={footer}
