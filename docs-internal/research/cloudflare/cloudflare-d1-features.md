@@ -1,43 +1,73 @@
 # Cloudflare D1 Feature Reference
 
-## Feature Surface Area
+> **As of:** 2026-03-06
+>
+> **Cloudflare basis:** Official D1 docs accessed 2026-03-06. D1 is documented as a live platform surface rather than a semver'd SDK.
+>
+> **Rivet basis:** RivetKit 2.1.5, repo `ba46891b1`, canonical docs under `https://rivet.dev/docs/...`.
+>
+> **Migration framing:** D1 is a shared managed SQLite service. Rivet's native SQLite is **per actor instance**, so the first migration decision is whether each D1 database becomes one actor, one actor shard, or an external shared SQL service such as PostgreSQL.
+>
+> **Status legend:** `native` = first-class Rivet feature, `partial` = supported with material semantic gaps, `pattern` = implemented as an application pattern on top of Rivet, `external` = requires a non-Rivet dependency/service, `unsupported` = no acceptable Rivet equivalent today, `out-of-scope` = operational/platform concern outside the Rivet Actor runtime.
 
-| Feature | Description | Rivet Actors Migration Feature |
-|---------|-------------|--------------------------------|
-| Database Creation and Management | Create, list, delete, and inspect D1 databases via CLI or REST API | External SQL provider provisioning (outside Rivet Actor runtime) |
-| Bindings and Configuration | Connect D1 databases to Workers via Wrangler binding declarations | External SQL config via env vars + actor `external-sql` pattern |
-| Worker Binding API: D1Database Methods | prepare, batch, exec, dump, and session methods on the D1Database object | External SQL drivers/ORM methods inside actor actions |
-| Prepared Statement Methods | bind, run, raw, and first methods for parameterized query execution | Prepared statements via external SQL drivers/ORM |
-| Return Objects | D1Result and D1ExecResult structures with metadata and query results | Result objects from external SQL client libraries |
-| SQL Query Execution via Wrangler | Execute SQL commands or files directly against databases via CLI | not possible atm |
-| Complete Worker Example | Full JavaScript and TypeScript Worker examples querying D1 | Actor `actions`/`onRequest` + external SQL integration |
-| Migrations | Versioned SQL migration files with create, list, and apply workflows | External SQL migration tooling (e.g. Drizzle/Prisma) |
-| Time Travel (Point-in-Time Recovery) | Restore databases to any minute within the last 30 days | not possible atm |
-| Legacy Backups | Snapshot-based backups for alpha databases, being deprecated | not possible atm |
-| Import and Export | Import SQL files and export databases as full, schema-only, or data-only | not possible atm |
-| Indexes and Performance | Create, drop, and optimize indexes for query performance | External SQL engine index features |
-| SQL Statements and SQLite Compatibility | Supported SQL syntax, PRAGMA statements, and SQLite extensions | External SQL engine SQL dialect compatibility |
-| JSON Querying | Built-in JSON functions for extracting, modifying, and querying JSON data | External SQL engine JSON query features |
-| Foreign Keys | Referential integrity constraints with CASCADE, RESTRICT, and SET NULL actions | External SQL engine foreign-key support |
-| Generated Columns | Virtual and stored columns derived from expressions or JSON extraction | External SQL engine generated columns |
-| Read Replication | Global read replicas with Sessions API for reduced latency | External SQL provider-level replication |
-| REST API | HTTP endpoints for database management, queries, import/export, and time travel | `onRequest` low-level HTTP handler for DB APIs |
-| Environments | Staging and production environment configurations with separate databases | Namespaces + env-specific endpoints/DB credentials |
-| Data Location and Jurisdiction | Jurisdiction constraints and location hints for regulatory compliance | Edge region selection options + `c.region` |
-| Local Development | Fully-featured local D1 via Wrangler with persistent state | Local RivetKit runtime + local external DB |
-| Remote Development | Browser-based development via Cloudflare dashboard playground | not possible atm |
-| Retry Logic | Automatic read query retries and recommended write retry patterns | Custom retries in actor actions |
-| Observability and Metrics | Seven key metrics with 31-day retention via dashboard and GraphQL API | `c.log` structured logging (no built-in SQL metrics layer) |
-| Billing and Usage | Usage tracking for rows read, rows written, and storage | not possible atm |
-| Audit Logs | Account-level change tracking for database operations | not possible atm |
-| Debugging and Error Handling | Error prefixes, retryable scenarios, and debugging tools | `UserError` + structured logging |
-| Data Security | AES-256 encryption at rest and TLS encryption in transit | Auth hooks + provider-managed DB security |
-| Pricing | Row-based and storage-based pricing with free and paid tiers | not possible atm |
-| Limits | Database size, query, throughput, and account-level constraints | Rivet Actor limits documentation |
-| Full-Text Search (FTS5) | FTS5 module for efficient text searching across datasets | External SQL engine FTS support |
-| Type Conversion | Automatic JavaScript to SQLite type conversion rules | SQL driver/ORM type mapping |
-| Wrangler Commands Reference | CLI commands for database management, migrations, and time travel | not possible atm |
-| Horizontal Scaling Model | Scale-out design across multiple smaller databases with sharding | Actor sharding design pattern |
+## Migration Matrix
+
+| Feature | Description | Status | Confidence | Rivet source | Validation proof | Risk | Notes |
+|---------|-------------|--------|------------|--------------|------------------|------|-------|
+| Database Creation and Management | Create, list, delete, and inspect D1 databases via CLI or REST API | pattern | medium | [SQLite](https://rivet.dev/docs/actors/sqlite), [Actor Keys](https://rivet.dev/docs/actors/keys) | [examples/sqlite-raw/src/registry.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/sqlite-raw/src/registry.ts) | High | Actor creation can stand in for database creation, but this is a topology redesign, not an operational match. |
+| Bindings and Configuration | Connect D1 databases to Workers via Wrangler binding declarations | partial | high | [SQLite](https://rivet.dev/docs/actors/sqlite), [PostgreSQL](https://rivet.dev/docs/actors/postgres) | [examples/cloudflare-workers/wrangler.json](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/wrangler.json) | Medium | Native actor SQLite needs no binding. Shared external SQL uses normal env/config, not a D1 binding primitive. |
+| Worker Binding API: D1Database Methods | `prepare`, `batch`, `exec`, `dump`, and session methods on the D1Database object | partial | medium | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Medium | `c.db.execute(...)` and Drizzle cover common query paths, but `dump()` and session bookmarks do not exist. |
+| Prepared Statement Methods | `bind`, `run`, `raw`, and `first` methods for parameterized query execution | partial | high | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Low | Parameterized SQL is native; the exact API shape differs. |
+| Return Objects | `D1Result` and `D1ExecResult` structures with metadata and query results | partial | medium | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Low | Rivet returns row arrays rather than D1's metadata envelope by default. |
+| SQL Query Execution via Wrangler | Execute SQL commands or files directly against databases via CLI | out-of-scope | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | Gap | Low | Rivet does not provide a D1-style SQL CLI for actor-local SQLite. Use app-defined admin actions or external DB tooling. |
+| Complete Worker Example | Full JavaScript and TypeScript Worker examples querying D1 | native | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers), [SQLite](https://rivet.dev/docs/actors/sqlite) | [examples/cloudflare-workers](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/cloudflare-workers), [examples/sqlite-raw](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/sqlite-raw) | Medium | End-to-end examples exist for Workers plus actor-local SQLite. |
+| Migrations | Versioned SQL migration files with create, list, and apply workflows | native | high | [SQLite](https://rivet.dev/docs/actors/sqlite), [SQLite + Drizzle](https://rivet.dev/docs/actors/sqlite-drizzle) | [examples/sqlite-drizzle](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/sqlite-drizzle) | Medium | Use `db({ onMigrate })` or Drizzle migrations inside the actor. |
+| Time Travel (Point-in-Time Recovery) | Restore databases to any minute within the last 30 days | unsupported | high | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | High | No documented PITR equivalent for actor-local SQLite. |
+| Legacy Backups | Snapshot-based backups for alpha databases, being deprecated | unsupported | high | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | Medium | No actor-local backup API is documented. |
+| Import and Export | Import SQL files and export databases as full, schema-only, or data-only | pattern | medium | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler), [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | Medium | Possible via custom admin actions or request handlers, but not a built-in product surface. |
+| Indexes and Performance | Create, drop, and optimize indexes for query performance | native | medium | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Medium | Standard SQLite indexing is available, but high-scale performance characteristics must be re-benchmarked on per-actor storage. |
+| SQL Statements and SQLite Compatibility | Supported SQL syntax, PRAGMA statements, and SQLite extensions | partial | medium | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Medium | Core SQLite works. Extension/PRAGMA parity is not fully documented, so validate anything beyond mainstream SQLite syntax. |
+| JSON Querying | Built-in JSON functions for extracting, modifying, and querying JSON data | partial | low | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | Medium | Likely available through SQLite itself, but there is no Rivet-specific validation coverage yet. |
+| Foreign Keys | Referential integrity constraints with CASCADE, RESTRICT, and SET NULL actions | partial | low | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | Medium | Expected from SQLite, but not explicitly covered by repo tests today. |
+| Generated Columns | Virtual and stored columns derived from expressions or JSON extraction | partial | low | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | Medium | Treat as a migration spike item until validated on Rivet actor-local SQLite. |
+| Read Replication | Global read replicas with Sessions API for reduced latency | unsupported | high | [Metadata](https://rivet.dev/docs/actors/metadata) | Gap | High | Rivet has no D1 Sessions or bookmark-consistent read-replica model. |
+| REST API | HTTP endpoints for database management, queries, import/export, and time travel | pattern | high | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler) | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) | Medium | Build actor-scoped DB APIs with `onRequest`; management surface is application-defined. |
+| Environments | Staging and production environment configurations with separate databases | native | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [examples/cloudflare-workers/README.md](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/README.md) | Low | Use namespaces/env vars or separate deployments. |
+| Data Location and Jurisdiction | Jurisdiction constraints and location hints for regulatory compliance | partial | medium | [Metadata](https://rivet.dev/docs/actors/metadata), [Multi-Region](https://rivet.dev/docs/self-hosting/multi-region) | Docs-only | High | Rivet exposes region awareness but not D1-style jurisdiction pinning in the actor API. |
+| Local Development | Fully-featured local D1 via Wrangler with persistent state | native | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers), [Testing](https://rivet.dev/docs/actors/testing) | [examples/cloudflare-workers](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/cloudflare-workers), [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Low | Local development for actor-local SQLite is well-covered. |
+| Remote Development | Browser-based development via Cloudflare dashboard playground | out-of-scope | high | [Debugging](https://rivet.dev/docs/actors/debugging) | Gap | Low | Rivet does not expose a D1-style hosted playground. |
+| Retry Logic | Automatic read query retries and recommended write retry patterns | pattern | medium | [Workflows](https://rivet.dev/docs/actors/workflows), [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-workflow.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-workflow.ts) | Medium | Retries are app-defined in workflows/queues rather than automatic at the SQL client layer. |
+| Observability and Metrics | Seven key metrics with 31-day retention via dashboard and GraphQL API | partial | high | [Debugging](https://rivet.dev/docs/actors/debugging) | [actor-inspector.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts) | Medium | Inspector and logs exist, but no D1-equivalent managed metrics layer is documented. |
+| Billing and Usage | Usage tracking for rows read, rows written, and storage | out-of-scope | high | [Limits](https://rivet.dev/docs/actors/limits) | Docs-only | Low | Rivet does not expose D1-style row metering. |
+| Audit Logs | Account-level change tracking for database operations | out-of-scope | high | [Debugging](https://rivet.dev/docs/actors/debugging) | Gap | Medium | No actor-local audit-log surface is documented. |
+| Debugging and Error Handling | Error prefixes, retryable scenarios, and debugging tools | partial | high | [Debugging](https://rivet.dev/docs/actors/debugging), [Errors](https://rivet.dev/docs/actors/errors) | [actor-inspector.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts) | Low | Rich debugging exists, but not the same D1-specific error taxonomy. |
+| Data Security | AES-256 encryption at rest and TLS encryption in transit | partial | medium | [Authentication](https://rivet.dev/docs/actors/authentication) | Docs-only | Medium | App/auth surfaces are documented, but storage-at-rest claims for actor-local SQLite are not expressed the same way as D1. |
+| Pricing | Row-based and storage-based pricing with free and paid tiers | out-of-scope | high | [Actors Index](https://rivet.dev/docs/actors) | Docs-only | Low | Pricing is a platform/commercial comparison, not a runtime feature. |
+| Limits | Database size, query, throughput, and account-level constraints | partial | high | [Limits](https://rivet.dev/docs/actors/limits) | Docs-only | High | Rivet actor-local storage limits are materially different from D1 limits. |
+| Full-Text Search (FTS5) | FTS5 module for efficient text searching across datasets | partial | low | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | Medium | Likely depends on underlying SQLite build; validate before committing to migration. |
+| Type Conversion | Automatic JavaScript to SQLite type conversion rules | partial | medium | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Low | Conversion exists, but result envelopes and nullability behavior should be compared case-by-case. |
+| Wrangler Commands Reference | CLI commands for database management, migrations, and time travel | out-of-scope | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | Gap | Low | Rivet has no D1-equivalent admin CLI surface. |
+| Horizontal Scaling Model | Scale-out design across multiple smaller databases with sharding | pattern | high | [Design Patterns](https://rivet.dev/docs/actors/design-patterns), [Scaling](https://rivet.dev/docs/actors/scaling) | Docs-only | Medium | Actor sharding is a strong fit, but shard keys and routing become app responsibilities. |
+
+## High-Risk Behavioral Deltas
+
+- **D1 is shared; Rivet SQLite is actor-local.** This is the most important migration gap. If the D1 database is shared across many logical entities, you must decide whether to collapse it into one actor, shard it across many actors, or move that workload to external PostgreSQL.
+- **Cross-entity transactions do not become magically distributed.** SQLite transactions are native inside one actor, but there is no D1 Sessions/bookmark model and no cross-actor ACID story.
+- **Managed durability tooling is missing.** PITR, import/export, and backup flows are not documented for actor-local SQLite today.
+- **Read-replica consistency semantics do not map.** If the Cloudflare design relies on D1 session bookmarks or replica reads, keep that part external or redesign around actor ownership.
+- **Capacity planning must be redone.** D1 limits and billing units do not map to Rivet Actor limits or cost structure.
+
+## Validation Checklist
+
+| Test case | Expected result | Pass/fail evidence link |
+|-----------|-----------------|-------------------------|
+| Actor-local SQLite bootstraps schema | Migration/init runs on actor startup | Pass: [examples/sqlite-drizzle](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/sqlite-drizzle) |
+| CRUD and transactions work | Inserts, updates, deletes, and rollback semantics hold | Pass: [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) |
+| SQLite persists through sleep/wake | Data remains after actor sleep cycles | Pass: [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) |
+| Shared-DB topology is explicit | Migration doc says whether each D1 DB maps to one actor, many actors, or external Postgres | Gap: review [Scaling](https://rivet.dev/docs/actors/scaling) and [Design Patterns](https://rivet.dev/docs/actors/design-patterns) in the migration design |
+| Foreign keys and generated columns behave as expected | Schema-level SQLite features work on the target actor | Gap: only generic [SQLite docs](https://rivet.dev/docs/actors/sqlite) exist today; add a migration spike proof |
+| FTS and JSON functions are proven | Any advanced SQLite extension usage is tested on Rivet | Gap: only generic [SQLite docs](https://rivet.dev/docs/actors/sqlite) exist today; add a migration spike proof |
+| PITR/backups replacement exists | Ops runbook covers recovery and export paths | Fail: [SQLite docs](https://rivet.dev/docs/actors/sqlite) do not document built-in PITR/backup/export features |
 
 ---
 

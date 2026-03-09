@@ -1,51 +1,81 @@
 # Cloudflare Durable Objects: Comprehensive Feature Reference
 
-## Feature Surface Area
+> **As of:** 2026-03-06
+>
+> **Cloudflare basis:** Official Durable Objects docs accessed 2026-03-06. Relevant Cloudflare version marker: RPC guidance depends on Workers compatibility date `>= 2024-04-03`.
+>
+> **Rivet basis:** RivetKit 2.1.5, repo `ba46891b1`, canonical docs under `https://rivet.dev/docs/...`.
+>
+> **Migration framing:** Durable Objects are the closest Cloudflare primitive to Rivet Actors, but the biggest semantic gap is concurrency. Cloudflare serializes DO event handling by default; Rivet actions run in parallel by default and must use queues/workflows when you need serialized mutation paths.
+>
+> **Status legend:** `native` = first-class Rivet feature, `partial` = supported with material semantic gaps, `pattern` = implemented as an application pattern on top of Rivet, `external` = requires a non-Rivet dependency/service, `unsupported` = no acceptable Rivet equivalent today, `out-of-scope` = operational/platform concern outside the Rivet Actor runtime.
 
-| Feature | Description | Rivet Actors Migration Feature |
-|---------|-------------|--------------------------------|
-| Defining a Durable Object Class | Extend DurableObject base class to define stateful objects | `actor({...})` definitions |
-| Durable Object Namespace (DurableObjectNamespace) | ID generation, stubs, jurisdictions | Actor keys (`get`/`getOrCreate`/`create`) |
-| Durable Object ID (DurableObjectId) | Unique identifiers via newUniqueId, idFromName, idFromString | `c.actorId` metadata + actor keys |
-| Durable Object Stub (DurableObjectStub) | Proxy for communicating with a Durable Object instance | Actor handles from `createClient()` |
-| RPC (Remote Procedure Calls) | Public methods auto-exposed as remote endpoints | Actor `actions` |
-| Fetch Handler (HTTP Request/Response) | HTTP Request/Response interface | `onRequest` low-level HTTP handler |
-| Durable Object State (DurableObjectState / ctx) | Access to storage, ID, blockConcurrencyWhile, and acceptWebSocket | Actor context (`c.state`, `c.kv`, `c.actorId`, `c.schedule`, `c.conns`) |
-| SQLite Storage API | Embedded per-object relational database | not possible atm |
-| Synchronous KV API (SQLite-backed only) | Sync key-value on SQLite backend | not possible atm |
-| Asynchronous KV API | Async key-value on both backends | Low-level KV storage (`c.kv`) |
-| Transactional Storage | Atomic transactions (sync and async) | not possible atm |
-| Point In Time Recovery (PITR) | Restore to any point in last 30 days | not possible atm |
-| Alarms API | Schedule future execution, at-least-once | `c.schedule.after()` / `c.schedule.at()` |
-| WebSocket Support (Standard API) | Bidirectional real-time connections | `connect()` events or low-level `onWebSocket` |
-| WebSocket Hibernation API | Connections survive object sleep | not possible atm |
-| In-Memory State | Fast instance-local caching | `state` + `vars` |
-| Durable Object Lifecycle | Creation, caching, eviction behavior | Lifecycle hooks (`onCreate`, `onWake`, `onSleep`, `onDestroy`) |
-| Input/Output Gates and Concurrency | Automatic concurrency safety | Actor isolation + serialized action execution model |
-| Configuration (wrangler.toml / wrangler.jsonc) | Binding, migration, and class configuration | `setup()` registry config + actor options |
-| Migrations (Create, Rename, Delete, Transfer) | Create/rename/delete/transfer classes | Versions/upgrades + actor-managed migration logic |
-| Data Location (Jurisdictions and Location Hints) | Restrict data to EU/FedRAMP, influence initial placement | Edge region selection + `c.region` (no jurisdiction pinning API) |
-| Environments | Staging/production isolation | Namespaces + environment variables |
-| Error Handling | Custom error responses and exception patterns | `UserError` + actor error handling |
-| TTL (Time To Live) Pattern | Auto-delete via alarms for ephemeral data | `c.schedule` + `c.destroy()` |
-| Counter Example (Read-Modify-Write) | Atomic read-modify-write pattern | Read-modify-write inside a single actor action |
-| ReadableStream Support | Stream large responses from Durable Objects | not possible atm |
-| Container API | Start/stop/interact with containers | not possible atm |
-| WebGPU API | GPU compute (local dev only) | not possible atm |
-| Testing | Isolated test support via Vitest | `rivetkit/test` (`setupTest`) |
-| Observability (Metrics and Analytics) | Dashboard + GraphQL API | `c.log` structured logging |
-| Data Security | AES-256 at rest, TLS in transit | Auth hooks + tokenized endpoints |
-| Pricing | Per-request, duration, and storage billing | not possible atm |
-| Limits | Object size, request size, and rate limits | Rivet Actor limits documentation |
-| Gradual Deployments | Incremental code rollout | Versions & upgrades (`RIVET_RUNNER_VERSION`, drain) |
-| Troubleshooting | Common errors and debugging guidance | not possible atm |
-| Known Issues | Platform-level known issues and workarounds | not possible atm |
-| Sharding and Design Patterns | Fan-out and coordination patterns | Actor design patterns (sharding, coordinator/data actors) |
-| RpcTarget Class for Durable Object Metadata | Return metadata via RpcTarget stubs | Metadata API (`c.actorId`, `c.name`, `c.key`, `c.region`) |
-| REST API | Programmatic management | `onRequest` + actor gateway HTTP endpoints |
-| Legacy KV Storage Backend | Original key-value backend (deprecated) | not possible atm |
-| Rust API (workers-rs) | Rust bindings for Durable Objects | not possible atm |
-| Storage Options Summary | Comparison of SQLite vs KV backends | `state` + `c.kv` + external SQL |
+## Migration Matrix
+
+| Feature | Description | Status | Confidence | Rivet source | Validation proof | Risk | Notes |
+|---------|-------------|--------|------------|--------------|------------------|------|-------|
+| Defining a Durable Object Class | Extend `DurableObject` base class to define stateful objects | native | high | [Actors Index](https://rivet.dev/docs/actors), [Lifecycle](https://rivet.dev/docs/actors/lifecycle) | [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts) | Low | `actor({...})` is the direct analog. |
+| Durable Object Namespace (`DurableObjectNamespace`) | ID generation, stubs, jurisdictions | partial | high | [Actor Keys](https://rivet.dev/docs/actors/keys), [Metadata](https://rivet.dev/docs/actors/metadata) | [actor-handle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-handle.ts) | Medium | Deterministic addressing maps well via keys. Jurisdiction subnamespaces do not. |
+| Durable Object ID (`DurableObjectId`) | Unique identifiers via `newUniqueId`, `idFromName`, `idFromString` | partial | high | [Metadata](https://rivet.dev/docs/actors/metadata), [Actor Keys](https://rivet.dev/docs/actors/keys) | [actor-metadata.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-metadata.ts) | Medium | Rivet exposes `actorId`, but ID-generation APIs are not a 1:1 match. Prefer keys for stable addressing. |
+| Durable Object Stub (`DurableObjectStub`) | Proxy for communicating with a Durable Object instance | native | high | [JavaScript Client](https://rivet.dev/docs/clients/javascript) | [actor-handle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-handle.ts) | Low | Actor handles from `createClient()` are the equivalent. |
+| RPC (Remote Procedure Calls) | Public methods auto-exposed as remote endpoints | native | high | [Actions](https://rivet.dev/docs/actors/actions) | [examples/cloudflare-workers/src/actors.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/src/actors.ts) | Low | DO RPC methods map to actor actions. |
+| Fetch Handler (HTTP Request/Response) | HTTP `Request`/`Response` interface | native | high | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler) | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) | Low | `onRequest` is a direct match for low-level HTTP handling. |
+| Durable Object State (`DurableObjectState` / `ctx`) | Access to storage, ID, `blockConcurrencyWhile`, and `acceptWebSocket` | partial | high | [Lifecycle](https://rivet.dev/docs/actors/lifecycle), [Metadata](https://rivet.dev/docs/actors/metadata), [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) | [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts) | High | Most fields map, but `blockConcurrencyWhile` has no direct equivalent. Use lifecycle/setup plus queues/workflows for serialization. |
+| SQLite Storage API | Embedded per-object relational database | native | high | [SQLite](https://rivet.dev/docs/actors/sqlite) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | Low | Strong direct fit. |
+| Synchronous KV API (SQLite-backed only) | Sync key-value on SQLite backend | partial | medium | [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | [actor-kv.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-kv.ts) | Medium | Rivet KV is async; there is no sync KV API. |
+| Asynchronous KV API | Async key-value on both backends | native | high | [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | [actor-kv.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-kv.ts) | Low | Direct fit. |
+| Transactional Storage | Atomic transactions (sync and async) | partial | high | [SQLite](https://rivet.dev/docs/actors/sqlite), [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts) | High | SQLite transactions are native. KV/state transactions are not a 1:1 DO storage transaction surface. |
+| Point In Time Recovery (PITR) | Restore to any point in last 30 days | unsupported | high | [SQLite](https://rivet.dev/docs/actors/sqlite) | Gap | High | No PITR equivalent is documented for actor-local storage. |
+| Alarms API | Schedule future execution, at-least-once | native | high | [Actor Scheduling](https://rivet.dev/docs/actors/schedule) | [actor-schedule.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-schedule.ts) | Medium | Good fit; validate exact delivery semantics when alarm idempotency matters. |
+| WebSocket Support (Standard API) | Bidirectional real-time connections | native | high | [Connections](https://rivet.dev/docs/actors/connections), [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) | [raw-websocket.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-websocket.ts) | Low | Both high-level and raw paths exist. |
+| WebSocket Hibernation API | Connections survive object sleep | partial | high | [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler), [Limits](https://rivet.dev/docs/actors/limits) | [actor-conn-hibernation.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-conn-hibernation.ts) | High | Rivet supports hibernation, but low-level raw WebSocket hibernation is documented as experimental. |
+| In-Memory State | Fast instance-local caching | native | high | [State](https://rivet.dev/docs/actors/state), [Ephemeral Variables](https://rivet.dev/docs/actors/ephemeral-variables) | [actor-vars.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-vars.ts) | Low | Use `state` for persisted data and `vars` for ephemeral data. |
+| Durable Object Lifecycle | Creation, caching, eviction behavior | native | high | [Lifecycle](https://rivet.dev/docs/actors/lifecycle) | [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts), [actor-sleep.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-sleep.ts) | Medium | Strong conceptual fit. |
+| Input/Output Gates and Concurrency | Automatic concurrency safety | partial | high | [Actions](https://rivet.dev/docs/actors/actions), [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Workflows](https://rivet.dev/docs/actors/workflows) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Rivet actions run in parallel by default. Port write-heavy DO code to queues/workflows if it depended on DO serialization. |
+| Configuration (`wrangler.toml` / `wrangler.jsonc`) | Binding, migration, and class configuration | pattern | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [examples/cloudflare-workers/wrangler.json](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/wrangler.json) | Low | When running on Cloudflare, Wrangler config still exists, but it configures the Rivet driver rather than DO classes directly. |
+| Migrations (Create, Rename, Delete, Transfer) | Create/rename/delete/transfer classes | pattern | medium | [Versions](https://rivet.dev/docs/actors/versions), [Destroy](https://rivet.dev/docs/actors/destroy) | Docs-only | Medium | Code/version rollout exists, but DO-class migration primitives do not have a direct analogue. |
+| Data Location (Jurisdictions and Location Hints) | Restrict data to EU/FedRAMP, influence initial placement | partial | medium | [Metadata](https://rivet.dev/docs/actors/metadata), [Multi-Region](https://rivet.dev/docs/self-hosting/multi-region) | Docs-only | High | Region awareness exists, jurisdiction-restricted namespaces do not. |
+| Environments | Staging/production isolation | native | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [examples/cloudflare-workers](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/cloudflare-workers) | Low | Use separate namespaces/deployments. |
+| Error Handling | Custom error responses and exception patterns | native | high | [Errors](https://rivet.dev/docs/actors/errors), [Actions](https://rivet.dev/docs/actors/actions) | [actor-error-handling.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-error-handling.ts) | Low | `UserError` and custom error handling cover the main cases. |
+| TTL (Time To Live) Pattern | Auto-delete via alarms for ephemeral data | native | high | [Actor Scheduling](https://rivet.dev/docs/actors/schedule), [Destroy](https://rivet.dev/docs/actors/destroy) | [actor-destroy.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-destroy.ts) | Low | `c.schedule` plus `c.destroy()` fits well. |
+| Counter Example (Read-Modify-Write) | Atomic read-modify-write pattern | pattern | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Workflows](https://rivet.dev/docs/actors/workflows) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Do not port write logic directly into parallel actions if DO serialization mattered. |
+| ReadableStream Support | Stream large responses from Durable Objects | unsupported | high | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler) | [request-handler.mdx](https://github.com/rivet-dev/rivet/blob/ba46891b1/website/src/content/docs/actors/request-handler.mdx) | High | Streaming responses and SSE are explicitly unsupported today. |
+| Container API | Start/stop/interact with containers | unsupported | high | [Actors Index](https://rivet.dev/docs/actors) | Gap | High | No container runtime equivalent in Rivet Actors. |
+| WebGPU API | GPU compute (local dev only) | unsupported | high | [Actors Index](https://rivet.dev/docs/actors) | Gap | High | No WebGPU equivalent in Rivet Actor docs/runtime. |
+| Testing | Isolated test support via Vitest | native | high | [Testing](https://rivet.dev/docs/actors/testing) | [rivetkit test suite](https://github.com/rivet-dev/rivet/tree/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests) | Low | Strong test coverage exists. |
+| Observability (Metrics and Analytics) | Dashboard + GraphQL API | partial | high | [Debugging](https://rivet.dev/docs/actors/debugging) | [actor-inspector.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts) | Medium | Inspector/logging are solid, but not the same managed metrics surface. |
+| Data Security | AES-256 at rest, TLS in transit | partial | medium | [Authentication](https://rivet.dev/docs/actors/authentication) | Docs-only | Medium | App-facing auth is documented; storage/compliance details differ from Cloudflare's platform claims. |
+| Pricing | Per-request, duration, and storage billing | out-of-scope | high | [Actors Index](https://rivet.dev/docs/actors) | Docs-only | Low | Commercial comparison, not runtime parity. |
+| Limits | Object size, request size, and rate limits | partial | high | [Limits](https://rivet.dev/docs/actors/limits) | Docs-only | Medium | Limits differ materially and must be re-audited. |
+| Gradual Deployments | Incremental code rollout | partial | medium | [Versions](https://rivet.dev/docs/actors/versions) | Docs-only | Medium | Versioning exists, but not the same Cloudflare progressive rollout surface. |
+| Troubleshooting | Common errors and debugging guidance | partial | high | [Troubleshooting](https://rivet.dev/docs/actors/troubleshooting), [Debugging](https://rivet.dev/docs/actors/debugging) | Docs-only | Low | Rivet has troubleshooting and debugging docs. |
+| Known Issues | Platform-level known issues and workarounds | partial | low | [Troubleshooting](https://rivet.dev/docs/actors/troubleshooting) | Gap | Low | No centralized "known issues" page equivalent was found. |
+| Sharding and Design Patterns | Fan-out and coordination patterns | native | high | [Design Patterns](https://rivet.dev/docs/actors/design-patterns), [Scaling](https://rivet.dev/docs/actors/scaling) | Docs-only | Low | Strong fit. |
+| `RpcTarget` Class for Durable Object Metadata | Return metadata via `RpcTarget` stubs | native | high | [Metadata](https://rivet.dev/docs/actors/metadata) | [actor-metadata.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-metadata.ts) | Low | Metadata API maps cleanly. |
+| REST API | Programmatic management | partial | high | [Debugging](https://rivet.dev/docs/actors/debugging), [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler) | [actor-inspector.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts), [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) | Medium | Management and gateway APIs exist, but they are not the same DO management API. |
+| Legacy KV Storage Backend | Original key-value backend (deprecated) | out-of-scope | high | [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | Docs-only | Low | No equivalent legacy mode matters for migration planning. |
+| Rust API (`workers-rs`) | Rust bindings for Durable Objects | unsupported | high | [Actors Index](https://rivet.dev/docs/actors) | Gap | Medium | This migration guide is for Rivet Actors/RivetKit, not a Rust DO-compatible runtime. |
+| Storage Options Summary | Comparison of SQLite vs KV backends | native | high | [Persistence](https://rivet.dev/docs/actors/persistence), [SQLite](https://rivet.dev/docs/actors/sqlite), [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts), [actor-kv.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-kv.ts) | Low | Rivet explicitly offers state, KV, and SQLite as separate storage layers. |
+
+## High-Risk Behavioral Deltas
+
+- **Concurrency is the main migration hazard.** Durable Objects serialize requests/events for one object. Rivet actions run in parallel unless you funnel mutations through queues or workflows.
+- **Storage semantics split across layers.** DO `ctx.storage` combines addressing and durability. Rivet splits small persisted state, KV, and SQLite into separate tools. Choose intentionally.
+- **Raw WebSocket hibernation needs targeted validation.** Rivet supports hibernation, but if your DO used the hibernation API heavily with raw sockets, validate that path because Rivet marks `canHibernateWebSocket` as experimental.
+- **Readable streaming is a real gap.** Large streaming HTTP responses and SSE are explicitly unsupported today.
+- **Jurisdiction and platform ops are not 1:1.** Data-placement controls, class migrations, and DO operational tooling need separate redesign decisions.
+
+## Validation Checklist
+
+| Test case | Expected result | Pass/fail evidence link |
+|-----------|-----------------|-------------------------|
+| Actor/DO lifecycle ports cleanly | Create, wake, sleep, destroy hooks behave predictably | Pass: [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts), [actor-sleep.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-sleep.ts) |
+| SQLite and KV replace DO storage correctly | CRUD and persistence work for the chosen storage layer | Pass: [actor-db.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-db.ts), [actor-kv.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-kv.ts) |
+| Serialized mutation path is explicit | Any read-modify-write code that relied on DO serialization is moved to queues/workflows | Gap: review [Queues & Run Loops](https://rivet.dev/docs/actors/queues) and [Workflows](https://rivet.dev/docs/actors/workflows) for each migrated mutation path |
+| WebSocket hibernation preserves logical sessions | Connections survive sleep with expected hook behavior | Pass: [actor-conn-hibernation.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-conn-hibernation.ts) |
+| HTTP handler parity exists | `fetch()`-style request handling ports to `onRequest` | Pass: [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) |
+| Streaming response dependence is removed or replaced | No migrated path requires SSE/streaming HTTP | Fail: [request-handler.mdx](https://github.com/rivet-dev/rivet/blob/ba46891b1/website/src/content/docs/actors/request-handler.mdx) documents streaming as unsupported |
+| Jurisdiction and rollout assumptions are documented | Migration plan covers region placement and upgrade strategy explicitly | Gap: review [Multi-Region](https://rivet.dev/docs/self-hosting/multi-region) and [Versions](https://rivet.dev/docs/actors/versions) during ops planning |
 
 ---
 
@@ -1784,4 +1814,3 @@ Two storage backends:
 
 1. **SQLite** (recommended for all new projects) - SQL API, Sync KV API, Async KV API, PITR, Alarms. Free + Paid plans. 10 GB per object.
 2. **KV** (legacy) - Async KV API, Alarms only. Paid plan only. 128 KiB value limit.
-
