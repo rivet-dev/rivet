@@ -1756,6 +1756,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "gasoline-load-test"
+version = "2.1.6"
+dependencies = [
+ "anyhow",
+ "clap",
+ "futures-util",
+ "gasoline",
+ "rand 0.8.5",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-env",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-test-deps",
+ "rivet-test-deps-docker",
+ "rivet-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "gasoline-macros"
 version = "2.1.6"
 dependencies = [
