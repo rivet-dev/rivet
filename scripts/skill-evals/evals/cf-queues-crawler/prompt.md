@@ -1,0 +1,1 @@
+Clone https://github.com/cloudflare/queues-web-crawler/tree/7d9bd009881e26e852ae850d739a70837df0dd67 and migrate it from Cloudflare Queues to RivetKit. Replace Cloudflare Browser Rendering with Browserbase, Browserless, or Playwright.

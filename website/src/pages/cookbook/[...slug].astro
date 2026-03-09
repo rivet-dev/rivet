@@ -3,6 +3,8 @@ import MarketingLayout from "@/layouts/MarketingLayout.astro";
 import { getCollection, render } from "astro:content";
 import { templates as allTemplates, type Template } from "@/data/templates/shared";
 import * as mdxComponents from "@/components/mdx";
+import { Icon } from "@rivet-gg/icons";
+import { getCookbookIcon } from "@/components/cookbook/icons";
 
 export async function getStaticPaths() {
 	const cookbook = await getCollection("cookbook");
@@ -23,11 +25,13 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
 
-const { title, description, templates } = entry.data as {
+const { title, description, icon, templates } = entry.data as {
 	title: string;
 	description: string;
+	icon?: string;
 	templates?: string[];
 };
+const cookbookIcon = getCookbookIcon(icon);
 
 // Build table of contents from headings (same pattern as docs)
 const tableOfContents = headings
@@ -86,6 +90,11 @@ const resolvedTemplates = resolveTemplates(templates);
 					<a href="/cookbook" class="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors mb-6">
 						← Back to Cookbooks
 					</a>
+					{cookbookIcon && (
+						<div class="mb-6 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-orange-300">
+							<Icon icon={cookbookIcon} className="h-5 w-5" />
+						</div>
+					)}
 					<h1 class="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
 						{title}
 					</h1>

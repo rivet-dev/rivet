@@ -1,0 +1,1 @@
+Clone https://github.com/cloudflare/agents/tree/aba7432d5d395505df88e09b06e1cdd10f5bdad3/examples/github-webhook and migrate it from the Cloudflare Agents SDK to RivetKit.

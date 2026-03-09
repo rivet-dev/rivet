@@ -1,39 +1,69 @@
 # Cloudflare Queues: Comprehensive Feature Reference
 
-## Feature Surface Area
+> **As of:** 2026-03-06
+>
+> **Cloudflare basis:** Official Queues docs accessed 2026-03-06. Relevant Cloudflare version marker: default content type semantics changed after Workers compatibility date `2024-03-18`.
+>
+> **Rivet basis:** RivetKit 2.1.5, repo `ba46891b1`, canonical docs under `https://rivet.dev/docs/...`.
+>
+> **Migration framing:** Cloudflare Queues is a managed, shared queue service. Rivet queues are **actor-local durable mailboxes**. That makes Rivet a strong fit for per-entity serialized work, but not a drop-in replacement for a global broker without an actor sharding design.
+>
+> **Status legend:** `native` = first-class Rivet feature, `partial` = supported with material semantic gaps, `pattern` = implemented as an application pattern on top of Rivet, `external` = requires a non-Rivet dependency/service, `unsupported` = no acceptable Rivet equivalent today, `out-of-scope` = operational/platform concern outside the Rivet Actor runtime.
 
-| Feature | Description | Rivet Actors Migration Feature |
-|---------|-------------|--------------------------------|
-| Queue Creation and Management | Create, update, delete, list, and inspect queues via CLI or dashboard | Actor keys + `client.<actor>.getOrCreate()` for queue actor instances |
-| Producer Bindings (Wrangler Configuration) | Configure Workers as queue producers via Wrangler binding declarations | `createClient()`/server-side actor handles (no Wrangler binding system) |
-| Producing Messages (send / sendBatch) | Send single or batched messages with delay and content type options | Actor `actions` (`enqueue`, `enqueueBatch`) writing to actor `state`/`c.kv` |
-| Content Types | Four supported message formats: JSON, text, bytes, and V8 serialization | Actor `state` + low-level `c.kv` (`text`/`binary`) |
-| Consumer Bindings (Wrangler Configuration) | Configure consumer Workers with batch size, retries, and dead letter settings | `onRequest`/connections configured in app code (no Wrangler consumer bindings) |
-| Consuming Messages (Push-Based / Worker Consumer) | Automatic Worker invocation via queue handler when messages are available | Actor `actions` + `c.schedule` polling/dispatch pattern (custom) |
-| Message Batching | Configurable batch size and timeout to reduce invocation frequency | Batch payloads in a single actor action |
-| Explicit Acknowledgment and Retries | Per-message and batch-level ack/retry with precedence rules | Custom ack/retry state machine in actor `state` + `c.schedule` |
-| Message Delays | Configurable delivery delays up to 12 hours on send or retry | `c.schedule.after()` / `c.schedule.at()` |
-| Dead Letter Queues | Route failed messages to a separate queue after retry exhaustion | Dedicated dead-letter actor + actor-to-actor calls (`c.client()`) |
-| Consumer Concurrency (Autoscaling) | Automatic horizontal scaling of consumer Workers based on backlog | Sharded queue actors (design patterns) |
-| Pull-Based Consumers (HTTP Pull) | Retrieve messages via HTTP from any language or infrastructure | `onRequest` low-level HTTP handler |
-| Publishing via HTTP (REST API) | Publish messages to queues directly via Cloudflare REST API | `onRequest` publish endpoint |
-| Publishing via Workers | Send messages from Worker fetch handlers with error handling | Server-side `createClient()` calls to actor actions |
-| Queues with Durable Objects | Publish messages from within Durable Object instances | Actor-to-actor communication (`c.client()`) |
-| Queues with R2 (Batch Error Storage) | Pattern for batching errors and storing them in R2 object storage | not possible atm |
-| R2 Event Notifications (Event Subscriptions) | Trigger queue messages on R2 bucket object create or delete events | not possible atm |
-| Delivery Guarantees | At-least-once delivery with idempotency key recommendations | not possible atm |
-| Pause and Resume Delivery | Halt or restart message delivery to consumers via CLI | Queue state flag + scheduled-action guards (custom) |
-| Purge Queue | Remove all messages from a queue with a single CLI command | Queue actor action that clears `state`/`c.kv` |
-| Consumer Management (CLI) | Add and remove Worker and HTTP pull consumers via Wrangler | not possible atm |
-| Local Development | Local queue simulation via Wrangler and Miniflare | RivetKit local development runtime |
-| Metrics and Observability | Backlog, concurrency, and message operation metrics via GraphQL API | `c.log` structured logging (no built-in queue metrics) |
-| Error Codes | Client, rate limit, and server error codes with descriptions | `UserError` + actor error handling |
-| Limits | Message size, throughput, retention, and concurrency constraints | Rivet Actor limits documentation |
-| Pricing | Operation-based pricing with free and paid tiers | not possible atm |
-| Rate Limit Handling Pattern | Queue-based pattern for respecting external API rate limits | Rate limiter actor pattern + `c.schedule` |
-| How Queues Works (Architecture) | Core concepts, architectural properties, and consumer types | Actor design patterns (coordinator/data actors, sharding) |
-| Dashboard Operations | UI for fetching, acknowledging, and sending messages | not possible atm |
-| Wrangler Global Flags | Global CLI flags available for all wrangler queues commands | not possible atm |
+## Migration Matrix
+
+| Feature | Description | Status | Confidence | Rivet source | Validation proof | Risk | Notes |
+|---------|-------------|--------|------------|--------------|------------------|------|-------|
+| Queue Creation and Management | Create, update, delete, list, and inspect queues via CLI or dashboard | pattern | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Actor Keys](https://rivet.dev/docs/actors/keys) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Queue identity is usually an actor key or actor type, not a separate managed queue resource. |
+| Producer Bindings (Wrangler Configuration) | Configure Workers as queue producers via Wrangler binding declarations | pattern | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers), [JavaScript Client](https://rivet.dev/docs/clients/javascript) | [examples/cloudflare-workers/src/index.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/src/index.ts) | Medium | Producers call actors via `createClient()` or server-side handles; there is no separate producer binding primitive. |
+| Producing Messages (`send` / `sendBatch`) | Send single or batched messages with delay and content type options | native | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | Medium | `handle.send(...)`, `c.queue.send(...)`, `nextBatch`, and `iter()` cover the core flow. |
+| Content Types | Four supported message formats: JSON, text, bytes, and V8 serialization | partial | medium | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | Medium | JSON-style payloads fit well. Treat binary/engine-specific formats as a migration spike. |
+| Consumer Bindings (Wrangler Configuration) | Configure consumer Workers with batch size, retries, and dead letter settings | pattern | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Workflows](https://rivet.dev/docs/actors/workflows) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Consumer behavior lives in actor code and actor options, not in a separate binding block. |
+| Consuming Messages (Push-Based / Worker Consumer) | Automatic Worker invocation via queue handler when messages are available | partial | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Rivet run loops are naturally push-like for a live actor, but the queue is still local to that actor rather than a platform-wide service. |
+| Message Batching | Configurable batch size and timeout to reduce invocation frequency | native | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | Low | `nextBatch` and `tryNextBatch` provide batching. |
+| Explicit Acknowledgment and Retries | Per-message and batch-level ack/retry with precedence rules | partial | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Completion-based retries are native, but retry counts/backoff policies are not Cloudflare-Queues-shaped primitives. |
+| Message Delays | Configurable delivery delays up to 12 hours on send or retry | pattern | high | [Actor Scheduling](https://rivet.dev/docs/actors/schedule), [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-schedule.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-schedule.ts) | Medium | Delay by scheduling a future enqueue or a future action. |
+| Dead Letter Queues | Route failed messages to a separate queue after retry exhaustion | pattern | medium | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Design Patterns](https://rivet.dev/docs/actors/design-patterns) | Gap | High | Build an explicit dead-letter actor or persistent failure table. |
+| Consumer Concurrency (Autoscaling) | Automatic horizontal scaling of consumer Workers based on backlog | pattern | high | [Scaling](https://rivet.dev/docs/actors/scaling), [Design Patterns](https://rivet.dev/docs/actors/design-patterns) | Docs-only | High | Scale by sharding queue ownership across actors. |
+| Pull-Based Consumers (HTTP Pull) | Retrieve messages via HTTP from any language or infrastructure | pattern | high | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler), [Debugging](https://rivet.dev/docs/actors/debugging) | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) | Medium | Expose a custom pull endpoint if needed. |
+| Publishing via HTTP (REST API) | Publish messages to queues directly via Cloudflare REST API | pattern | high | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler) | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) | Medium | Straightforward with `onRequest` or your gateway layer. |
+| Publishing via Workers | Send messages from Worker fetch handlers with error handling | native | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers), [JavaScript Client](https://rivet.dev/docs/clients/javascript) | [examples/cloudflare-workers/src/index.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/src/index.ts) | Low | Good fit for Cloudflare-hosted Rivet backends. |
+| Queues with Durable Objects | Publish messages from within Durable Object instances | native | medium | [Communicating Between Actors](https://rivet.dev/docs/actors/communicating-between-actors), [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | Low | Actor-to-actor queueing is native. |
+| Queues with R2 (Batch Error Storage) | Pattern for batching errors and storing them in R2 object storage | external | low | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | Gap | Medium | Use external object storage if this pattern is required. |
+| R2 Event Notifications (Event Subscriptions) | Trigger queue messages on R2 bucket object create or delete events | external | low | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler) | Gap | Medium | Requires external object-storage eventing. |
+| Delivery Guarantees | At-least-once delivery with idempotency key recommendations | partial | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | High | Rivet durable queues retry uncompleted messages, but guarantees are actor-local and completion-based, not a managed broker SLA. |
+| Pause and Resume Delivery | Halt or restart message delivery to consumers via CLI | pattern | medium | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [State](https://rivet.dev/docs/actors/state) | Gap | Medium | Implement as an application-level paused flag plus guarded consumers. |
+| Purge Queue | Remove all messages from a queue with a single CLI command | pattern | medium | [Queues & Run Loops](https://rivet.dev/docs/actors/queues) | Gap | Medium | Possible via custom admin logic, not a built-in control-plane command. |
+| Consumer Management (CLI) | Add and remove Worker and HTTP pull consumers via Wrangler | out-of-scope | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | Gap | Low | No equivalent managed consumer CLI exists. |
+| Local Development | Local queue simulation via Wrangler and Miniflare | native | high | [Testing](https://rivet.dev/docs/actors/testing), [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) | Low | Strong local coverage exists. |
+| Metrics and Observability | Backlog, concurrency, and message operation metrics via GraphQL API | partial | high | [Debugging](https://rivet.dev/docs/actors/debugging) | [actor-inspector.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts) | Medium | Inspector/logging exist, but not Cloudflare Queues metrics. |
+| Error Codes | Client, rate limit, and server error codes with descriptions | native | high | [Errors](https://rivet.dev/docs/actors/errors) | [actor-error-handling.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-error-handling.ts) | Low | Error handling is well covered. |
+| Limits | Message size, throughput, retention, and concurrency constraints | partial | high | [Limits](https://rivet.dev/docs/actors/limits) | Docs-only | High | Limits differ substantially and must be re-planned. |
+| Pricing | Operation-based pricing with free and paid tiers | out-of-scope | high | [Actors Index](https://rivet.dev/docs/actors) | Docs-only | Low | Commercial comparison, not a runtime feature. |
+| Rate Limit Handling Pattern | Queue-based pattern for respecting external API rate limits | native | high | [Design Patterns](https://rivet.dev/docs/actors/design-patterns), [Actor Scheduling](https://rivet.dev/docs/actors/schedule) | Docs-only | Low | Actor-local queues plus timers are a strong fit. |
+| How Queues Works (Architecture) | Core concepts, architectural properties, and consumer types | partial | high | [Queues & Run Loops](https://rivet.dev/docs/actors/queues), [Scaling](https://rivet.dev/docs/actors/scaling) | Docs-only | Medium | Architectural concepts map, but only after accounting for actor-local ownership. |
+| Dashboard Operations | UI for fetching, acknowledging, and sending messages | out-of-scope | high | [Debugging](https://rivet.dev/docs/actors/debugging) | Gap | Low | No Cloudflare Queues-style dashboard ops surface is documented. |
+| Wrangler Global Flags | Global CLI flags available for all Wrangler queues commands | out-of-scope | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | Gap | Low | No equivalent control-plane CLI. |
+
+## High-Risk Behavioral Deltas
+
+- **This is not a global broker-to-broker migration.** Cloudflare Queues is a managed shared service; Rivet queues are local to an actor instance.
+- **Ordering is per actor queue, not cross-shard.** If the current system relies on one global FIFO, redesign around ownership or introduce an external queue.
+- **Retry semantics are completion-based.** Rivet retries durable messages that are not completed, but retry policy, backoff, DLQ routing, and operational controls are application patterns.
+- **Delays and scheduling are separate concerns.** Cloudflare puts delay on the queue send itself. In Rivet, delayed enqueue is usually implemented with `c.schedule`.
+- **Autoscaling becomes a sharding problem.** To increase consumer concurrency, distribute work across more actor keys or actor types.
+
+## Validation Checklist
+
+| Test case | Expected result | Pass/fail evidence link |
+|-----------|-----------------|-------------------------|
+| Queue send/receive works | Actor queue can durably accept and consume messages | Pass: [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) |
+| Completable/wait send paths are acceptable | Sender can wait for completion and receive timeout/completed status | Pass: [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) |
+| Retry behavior is explicit | Uncompleted messages retry and app code is idempotent | Pass: [actor-queue.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-queue.ts) |
+| Delay scheduling works | Delayed tasks fire in timestamp order | Pass: [actor-schedule.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-schedule.ts) |
+| Global queue topology is redesigned | Migration plan states shard key and actor ownership model | Gap: review [Scaling](https://rivet.dev/docs/actors/scaling) and [Design Patterns](https://rivet.dev/docs/actors/design-patterns) during migration design |
+| DLQ path is defined | Failure routing exists after retry exhaustion | Gap: build on [Queues & Run Loops](https://rivet.dev/docs/actors/queues); no first-class DLQ proof exists today |
+| Ops observability is sufficient | Team has alternative dashboards/alerts for queue backlog and failures | Gap: [Debugging](https://rivet.dev/docs/actors/debugging) exists, but no Cloudflare Queues-style backlog metrics surface is documented |
 
 ---
 

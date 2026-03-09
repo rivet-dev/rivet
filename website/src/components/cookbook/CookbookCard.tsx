@@ -1,9 +1,11 @@
 import { Icon, faArrowRight } from "@rivet-gg/icons";
+import { getCookbookIcon } from "./icons";
 
 export interface CookbookPageCardData {
 	title: string;
 	description: string;
 	href: string;
+	icon?: string;
 	primaryTemplate?: {
 		name: string;
 		displayName: string;
@@ -16,14 +18,22 @@ export interface CookbookPageCardData {
 }
 
 export function CookbookCard({ page }: { page: CookbookPageCardData }) {
+	const icon = getCookbookIcon(page.icon);
+
 	return (
 		<a href={page.href} className="group block">
 			<div className="rounded-lg border border-white/10 bg-black p-5 transition-all duration-200 group-hover:border-white/20 group-hover:bg-white/[0.02]">
+				{icon && (
+					<div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-orange-300 transition-colors duration-200 group-hover:border-orange-400/20 group-hover:bg-orange-400/5">
+						<Icon icon={icon} className="text-base" />
+					</div>
+				)}
+
 				<div className="flex items-start justify-between gap-3 mb-2">
-					<h3 className="text-sm font-medium text-white">{page.title}</h3>
+					<h3 className="text-sm font-medium text-white min-w-0">{page.title}</h3>
 					<Icon
 						icon={faArrowRight}
-						className="text-zinc-600 group-hover:text-white transition-all duration-200 text-xs flex-shrink-0 mt-0.5"
+						className="text-zinc-600 group-hover:text-white transition-all duration-200 text-xs flex-shrink-0 mt-0.5 group-hover:translate-x-0.5"
 					/>
 				</div>
 

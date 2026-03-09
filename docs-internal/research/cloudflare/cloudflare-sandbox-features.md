@@ -1,44 +1,74 @@
 # Cloudflare Sandbox SDK -- Complete Feature Reference
 
-## Feature Surface Area
+> **As of:** 2026-03-06
+>
+> **Cloudflare basis:** Official Sandbox docs accessed 2026-03-06. Cloudflare labels Sandbox SDK as beta in the docs and documents the package as `@cloudflare/sandbox`.
+>
+> **Rivet basis:** RivetKit 2.1.5, repo `ba46891b1`, canonical docs under `https://rivet.dev/docs/...`.
+>
+> **Migration framing:** Rivet Actors are **not** a container or process sandbox runtime. The best-fit migration is to keep sandbox/container execution on an external system and use Rivet Actors as the durable orchestration, routing, state, auth, and realtime control plane.
+>
+> **Status legend:** `native` = first-class Rivet feature, `partial` = supported with material semantic gaps, `pattern` = implemented as an application pattern on top of Rivet, `external` = requires a non-Rivet dependency/service, `unsupported` = no acceptable Rivet equivalent today, `out-of-scope` = operational/platform concern outside the Rivet Actor runtime.
 
-| Feature | Description | Rivet Actors Migration Feature |
-|---------|-------------|--------------------------------|
-| Sandbox Creation and Identity (getSandbox) | Create or retrieve sandboxes by unique string ID with lazy container start | Actor keys + `getOrCreate()` for deterministic instance identity |
-| Sandbox Lifecycle Management | Four lifecycle states: creation, active, idle/sleep, and destruction | Lifecycle hooks (`onCreate`, `onWake`, `onSleep`, `onDestroy`) |
-| Ephemeral State Model | State persists only during active container periods, resets on sleep | Durable `state` + ephemeral `vars` |
-| Three-Layer Architecture | Client SDK, Durable Object, and Container Runtime layered design | not possible atm |
-| Command Execution (exec) | Execute shell commands capturing stdout, stderr, and exit codes | not possible atm |
-| Streaming Command Execution (execStream) | Real-time SSE streams for command stdout, stderr, and completion events | not possible atm |
-| Background Processes (startProcess) | Start and manage long-running processes like servers and services | not possible atm |
-| File System Access | Read, write, delete, rename, and manage files and directories | not possible atm |
-| File Watching | Real-time filesystem monitoring using Linux inotify with filtering | not possible atm |
-| Code Interpreter | Execute Python, JavaScript, and TypeScript with persistent state contexts | not possible atm |
-| Sessions (Shell Execution Contexts) | Isolated bash shell contexts with independent environment and working directory | not possible atm |
-| Preview URLs (Port Exposure) | Public HTTPS access to sandbox services via exposed ports | `onRequest` endpoints + deployment routing (no per-port preview URL primitive) |
-| Terminal Connections (Interactive Shells) | WebSocket-based interactive terminal sessions with xterm.js integration | `onWebSocket` low-level handler (not terminal emulation) |
-| Backup and Restore | Point-in-time squashfs snapshots stored in R2 with FUSE overlay restore | not possible atm |
-| Storage (S3-Compatible Bucket Mounting) | Mount R2, S3, or GCS buckets as local filesystems via s3fs-fuse | not possible atm |
-| Transport Modes | HTTP or WebSocket communication between SDK and container | `onRequest` (HTTP) + `connect()`/`onWebSocket` (WebSocket) |
-| Dockerfile Configuration (Container Images) | Base image variants and custom Dockerfile support for container setup | not possible atm |
-| Wrangler Configuration | Minimal wrangler config for containers, Durable Objects, and migrations | `setup()`/registry runtime config (no Wrangler equivalent) |
-| Environment Variables | SDK config vars and three methods for setting container env vars | Rivet environment variables (`RIVET_ENDPOINT`, `RIVET_TOKEN`, etc.) |
-| Sandbox Options (Container Timeouts) | Configurable provisioning and port readiness timeouts with ID normalization | Actor `options.actionTimeout` (no container timeout controls) |
-| Security Model | VM-level isolation between sandboxes with developer auth responsibilities | `onBeforeConnect` + authentication hooks |
-| Container Runtime Details | Network capabilities, limitations, and reserved ports | not possible atm |
-| Git Workflows | Clone repos, checkout branches, and commit changes within sandboxes | not possible atm |
-| Docker-in-Docker | Run Docker commands within sandbox containers using rootless mode | not possible atm |
-| WebSocket Connections to Sandbox Services | Connect to WebSocket servers via preview URLs or wsConnect proxy | `onWebSocket` low-level handler |
-| Streaming Output | Real-time output from commands via execStream and streamProcessLogs | `c.broadcast` / `conn.send` event streams (custom app-level output) |
-| Production Deployment (Custom Domains) | Custom domain setup with wildcard DNS and TLS for exposed ports | Connect deployment guides + actor HTTP/WebSocket endpoints |
-| Logging Configuration | Configurable log level and format via environment variables | `c.log` structured logging |
-| Instance Types and Resource Limits | Six predefined instance types from lite to standard-4 with custom options | not possible atm |
-| Pricing | Per-10ms billing for memory, CPU, disk, and network egress | not possible atm |
-| Version Compatibility | SDK npm package version must match Docker container image version | Versions & upgrades (`RIVET_RUNNER_VERSION`) |
-| Request Routing and Geography | First request determines location, subsequent requests route to same region | Edge networking + `c.region` |
-| Integration with Workers (Minimal Example) | Minimal Worker example executing commands and managing files | `registry.serve()` / `registry.handler()` integration |
-| Local Development | Docker-based local dev via wrangler dev with EXPOSE port declarations | RivetKit local development runtime |
-| Wrangler CLI Commands | Project creation, local development, and deployment CLI commands | not possible atm |
+## Migration Matrix
+
+| Feature | Description | Status | Confidence | Rivet source | Validation proof | Risk | Notes |
+|---------|-------------|--------|------------|--------------|------------------|------|-------|
+| Sandbox Creation and Identity (`getSandbox`) | Create or retrieve sandboxes by unique string ID with lazy container start | partial | high | [Actor Keys](https://rivet.dev/docs/actors/keys), [Lifecycle](https://rivet.dev/docs/actors/lifecycle) | [actor-handle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-handle.ts) | Medium | Rivet can provide deterministic controller identity, but not native container provisioning. |
+| Sandbox Lifecycle Management | Four lifecycle states: creation, active, idle/sleep, and destruction | partial | high | [Lifecycle](https://rivet.dev/docs/actors/lifecycle), [Destroy](https://rivet.dev/docs/actors/destroy) | [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts), [actor-destroy.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-destroy.ts) | High | Lifecycle works for the orchestration actor, not for a native sandbox container. |
+| Ephemeral State Model | State persists only during active container periods, resets on sleep | pattern | high | [State](https://rivet.dev/docs/actors/state), [Ephemeral Variables](https://rivet.dev/docs/actors/ephemeral-variables) | [actor-vars.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-vars.ts), [actor-sleep.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-sleep.ts) | Medium | Model durable control state in `state` and transient process handles in `vars`. |
+| Three-Layer Architecture | Client SDK, Durable Object, and Container Runtime layered design | out-of-scope | high | [Actors Index](https://rivet.dev/docs/actors) | Docs-only | Medium | Rivet covers the orchestration layer, not the full container-runtime stack. |
+| Command Execution (`exec`) | Execute shell commands capturing stdout, stderr, and exit codes | external | high | [Workflows](https://rivet.dev/docs/actors/workflows), [AI and User-Generated Rivet Actors](https://rivet.dev/docs/actors/ai-and-user-generated-actors) | Gap | High | Requires an external sandbox/worker/container service. |
+| Streaming Command Execution (`execStream`) | Real-time SSE streams for command stdout, stderr, and completion events | external | high | [Realtime](https://rivet.dev/docs/actors/events), [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) | Gap | High | You can proxy stream output through Rivet after an external runtime emits it. |
+| Background Processes (`startProcess`) | Start and manage long-running processes like servers and services | external | high | [Workflows](https://rivet.dev/docs/actors/workflows) | Gap | High | Rivet can supervise metadata and routing, not run the process itself. |
+| File System Access | Read, write, delete, rename, and manage files and directories | external | high | [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | Gap | High | `c.kv` is not a mounted POSIX filesystem. |
+| File Watching | Real-time filesystem monitoring using Linux inotify with filtering | unsupported | high | [Actors Index](https://rivet.dev/docs/actors) | Gap | High | No filesystem watcher surface exists in Rivet Actors. |
+| Code Interpreter | Execute Python, JavaScript, and TypeScript with persistent state contexts | external | high | [Workflows](https://rivet.dev/docs/actors/workflows) | Gap | High | Use an external interpreter runtime and persist orchestration state in Rivet. |
+| Sessions (Shell Execution Contexts) | Isolated bash shell contexts with independent environment and working directory | external | high | [Connections](https://rivet.dev/docs/actors/connections), [Realtime](https://rivet.dev/docs/actors/events) | Gap | High | Model sessions as actor state plus an external runtime session ID. |
+| Preview URLs (Port Exposure) | Public HTTPS access to sandbox services via exposed ports | pattern | medium | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler), [Deploying to Cloudflare Workers](https://rivet.dev/docs/connect/cloudflare-workers) | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts) | High | Rivet can proxy or route to sandbox services, but has no native per-port preview URL primitive. |
+| Terminal Connections (Interactive Shells) | WebSocket-based interactive terminal sessions with xterm.js integration | pattern | medium | [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) | [raw-websocket.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-websocket.ts) | High | Rivet can proxy a terminal stream over WebSockets, but does not provide shell emulation itself. |
+| Backup and Restore | Point-in-time squashfs snapshots stored in R2 with FUSE overlay restore | external | high | [Workflows](https://rivet.dev/docs/actors/workflows) | Gap | High | Requires an external snapshot/storage system. |
+| Storage (S3-Compatible Bucket Mounting) | Mount R2, S3, or GCS buckets as local filesystems via `s3fs-fuse` | external | high | [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) | Gap | High | Rivet offers KV and SQLite, not filesystem mounts. |
+| Transport Modes | HTTP or WebSocket communication between SDK and container | native | high | [Low-Level HTTP Request Handler](https://rivet.dev/docs/actors/request-handler), [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) | [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts), [raw-websocket.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-websocket.ts) | Low | Good fit for the orchestration/control plane. |
+| Dockerfile Configuration (Container Images) | Base image variants and custom Dockerfile support for container setup | external | high | [AI and User-Generated Rivet Actors](https://rivet.dev/docs/actors/ai-and-user-generated-actors) | Gap | High | Keep image build/runtime configuration in the external sandbox provider. |
+| Wrangler Configuration | Minimal wrangler config for containers, Durable Objects, and migrations | pattern | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [examples/cloudflare-workers/wrangler.json](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/wrangler.json) | Low | Relevant only if you host the Rivet entrypoint on Cloudflare Workers. |
+| Environment Variables | SDK config vars and three methods for setting container env vars | partial | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers), [Authentication](https://rivet.dev/docs/actors/authentication) | [examples/cloudflare-workers/src/index.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/src/index.ts) | Medium | Rivet supports normal app env vars, but not native per-process env injection for a sandbox runtime. |
+| Sandbox Options (Container Timeouts) | Configurable provisioning and port readiness timeouts with ID normalization | partial | medium | [Lifecycle](https://rivet.dev/docs/actors/lifecycle), [Limits](https://rivet.dev/docs/actors/limits) | Docs-only | Medium | Rivet has action/lifecycle timeouts, not container boot/readiness controls. |
+| Security Model | VM-level isolation between sandboxes with developer auth responsibilities | partial | medium | [Authentication](https://rivet.dev/docs/actors/authentication), [Connections](https://rivet.dev/docs/actors/connections) | [access-control.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/access-control.ts) | High | Rivet can enforce auth and routing, but does not provide VM-level sandbox isolation. |
+| Container Runtime Details | Network capabilities, limitations, and reserved ports | unsupported | high | [Actors Index](https://rivet.dev/docs/actors) | Gap | High | No container runtime exists to compare. |
+| Git Workflows | Clone repos, checkout branches, and commit changes within sandboxes | external | high | [Workflows](https://rivet.dev/docs/actors/workflows) | Gap | High | Requires external execution environment and filesystem. |
+| Docker-in-Docker | Run Docker commands within sandbox containers using rootless mode | unsupported | high | [Actors Index](https://rivet.dev/docs/actors) | Gap | High | No native container execution surface. |
+| WebSocket Connections to Sandbox Services | Connect to WebSocket servers via preview URLs or `wsConnect` proxy | pattern | medium | [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) | [raw-websocket.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-websocket.ts) | Medium | Can be proxied through Rivet or your edge app. |
+| Streaming Output | Real-time output from commands via `execStream` and `streamProcessLogs` | pattern | medium | [Realtime](https://rivet.dev/docs/actors/events), [Connections](https://rivet.dev/docs/actors/connections) | [examples/sandbox/src/actors/http/raw-websocket-chat-room.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/sandbox/src/actors/http/raw-websocket-chat-room.ts) | Medium | Works well once an external runtime emits structured output. |
+| Production Deployment (Custom Domains) | Custom domain setup with wildcard DNS and TLS for exposed ports | partial | medium | [Deploying to Cloudflare Workers](https://rivet.dev/docs/connect/cloudflare-workers) | [examples/cloudflare-workers/README.md](https://github.com/rivet-dev/rivet/blob/ba46891b1/examples/cloudflare-workers/README.md) | Medium | Rivet supports normal app deployment, but not wildcard per-sandbox port routing as a primitive. |
+| Logging Configuration | Configurable log level and format via environment variables | native | high | [Debugging](https://rivet.dev/docs/actors/debugging) | [actor-inspector.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-inspector.ts) | Low | Strong fit for orchestration logs. |
+| Instance Types and Resource Limits | Six predefined instance types from lite to standard-4 with custom options | unsupported | high | [Limits](https://rivet.dev/docs/actors/limits) | Docs-only | High | Rivet exposes actor/runtime limits, not sandbox VM SKU selection. |
+| Pricing | Per-10ms billing for memory, CPU, disk, and network egress | out-of-scope | high | [Actors Index](https://rivet.dev/docs/actors) | Docs-only | Low | Commercial comparison, not feature parity. |
+| Version Compatibility | SDK npm package version must match Docker container image version | pattern | medium | [Versions](https://rivet.dev/docs/actors/versions) | Docs-only | Medium | Rivet versioning exists for actor code/runtime, but external sandbox image compatibility remains outside Rivet. |
+| Request Routing and Geography | First request determines location, subsequent requests route to same region | partial | medium | [Metadata](https://rivet.dev/docs/actors/metadata), [Multi-Region](https://rivet.dev/docs/self-hosting/multi-region) | Docs-only | Medium | Region-aware routing exists, but not Cloudflare Sandbox's exact placement model. |
+| Integration with Workers (Minimal Example) | Minimal Worker example executing commands and managing files | partial | medium | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [examples/cloudflare-workers](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/cloudflare-workers) | High | Rivet integrates with Workers, but not for native command/file execution. |
+| Local Development | Docker-based local dev via wrangler dev with `EXPOSE` port declarations | partial | medium | [Testing](https://rivet.dev/docs/actors/testing), [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | [examples/cloudflare-workers](https://github.com/rivet-dev/rivet/tree/ba46891b1/examples/cloudflare-workers) | Medium | Local development exists for the orchestration layer only. |
+| Wrangler CLI Commands | Project creation, local development, and deployment CLI commands | out-of-scope | high | [Cloudflare Workers Quickstart](https://rivet.dev/docs/actors/quickstart/cloudflare-workers) | Gap | Low | No equivalent sandbox control-plane CLI exists in Rivet. |
+
+## High-Risk Behavioral Deltas
+
+- **Rivet is the control plane, not the sandbox runtime.** If the Cloudflare design depends on native process execution, filesystem semantics, port exposure, or container images, keep that layer external.
+- **Auth and realtime map well; execution does not.** Rivet is strong for identity, orchestration, workflow state, WebSocket fanout, and durable control logic around a sandbox fleet.
+- **Preview URLs and terminal access are proxy patterns.** They can be built through `onRequest` and `onWebSocket`, but they are not first-class primitives.
+- **Resource model and cost model do not map.** Actor limits are not VM SKU selection. Do not treat Rivet limits as a substitute for sandbox resource isolation controls.
+- **Recovery and storage tooling remain an external concern.** Snapshotting, mounted buckets, Docker-in-Docker, and Git/file workflows all stay outside the Rivet Actor runtime.
+
+## Validation Checklist
+
+| Test case | Expected result | Pass/fail evidence link |
+|-----------|-----------------|-------------------------|
+| Durable controller identity exists | One actor key maps to one sandbox controller record | Pass: [actor-handle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-handle.ts) |
+| Orchestration lifecycle is durable | Controller actor can sleep, wake, and destroy cleanly | Pass: [actor-lifecycle.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-lifecycle.ts), [actor-destroy.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-destroy.ts) |
+| HTTP/WS proxy surface works | Actor can proxy sandbox control traffic over HTTP/WebSocket | Pass: [raw-http.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-http.ts), [raw-websocket.ts](https://github.com/rivet-dev/rivet/blob/ba46891b1/rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/raw-websocket.ts) |
+| External exec runtime is chosen | Migration plan names the non-Rivet sandbox/container provider | Gap: use [AI and User-Generated Rivet Actors](https://rivet.dev/docs/actors/ai-and-user-generated-actors) only as orchestration guidance; choose an external sandbox provider separately |
+| File system and snapshot requirements are replaced | External storage/runtime path is documented for files, backups, and mounts | Gap: [Low-Level KV Storage](https://rivet.dev/docs/actors/kv) is not a filesystem; choose an external storage/runtime path |
+| Terminal UX is proven | Terminal protocol and browser client work end-to-end through the chosen proxy pattern | Gap: only [Low-Level WebSocket Handler](https://rivet.dev/docs/actors/websocket-handler) primitives are documented; add end-to-end proxy proof |
+| Security boundary is acceptable | Team signs off that auth/routing plus external sandbox isolation meets requirements | Gap: combine [Authentication](https://rivet.dev/docs/actors/authentication) with the external sandbox provider's isolation model in a design review |
 
 ---
 
