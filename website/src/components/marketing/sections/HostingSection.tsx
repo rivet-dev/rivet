@@ -67,7 +67,7 @@ export const HostingSection = () => (
           </div>
           <h3 className='mb-2 text-base font-normal text-white'>Self-Host</h3>
           <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
-            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB. Full dashboard included.
+            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB (enterprise). Full dashboard included.
           </p>
           <div className='mb-6 font-mono text-xs text-zinc-500'>
             <div className='flex gap-2'>
