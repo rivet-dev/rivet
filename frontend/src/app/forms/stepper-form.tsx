@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { posthog } from "posthog-js";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef } from "react";
 import {
 	FormProvider,
 	type UseFormProps,
@@ -126,19 +126,19 @@ function Content<const Steps extends Step[]>({
 	const prevStepIndexRef = useRef(
 		stepper.all.findIndex((s) => s.id === stepper.current.id),
 	);
-	const [direction, setDirection] = useState(0);
+	const directionRef = useRef(0);
 
 	const currentStepIndex = stepper.all.findIndex(
 		(s) => s.id === stepper.current.id,
 	);
 
-	useEffect(() => {
-		const prev = prevStepIndexRef.current;
-		if (currentStepIndex !== prev) {
-			setDirection(currentStepIndex > prev ? 1 : -1);
-			prevStepIndexRef.current = currentStepIndex;
-		}
-	}, [currentStepIndex]);
+	if (currentStepIndex !== prevStepIndexRef.current) {
+		directionRef.current =
+			currentStepIndex > prevStepIndexRef.current ? 1 : -1;
+		prevStepIndexRef.current = currentStepIndex;
+	}
+
+	const direction = directionRef.current;
 
 	const handleSubmit = async (values: z.infer<JoinStepSchemas<Steps>>) => {
 		ref.current = { ...ref.current, ...values };
