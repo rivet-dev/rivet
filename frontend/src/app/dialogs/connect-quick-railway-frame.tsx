@@ -111,7 +111,6 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 				runnerMargin: 0,
 				requestLifespan: 55,
 				headers: [],
-				success: false,
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),
 				),

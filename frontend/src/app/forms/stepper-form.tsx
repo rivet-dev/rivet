@@ -1,7 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { posthog } from "posthog-js";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, type ReactNode, useContext, useRef } from "react";
 import {
 	FormProvider,
 	type UseFormProps,
@@ -9,7 +10,7 @@ import {
 	useForm,
 	useFormContext,
 } from "react-hook-form";
-import * as z from "zod";
+import type * as z from "zod";
 import { Button } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
 import { HelpDropdown } from "../help-dropdown";
@@ -19,11 +20,25 @@ type Step = Stepperize.Step & {
 	schema: z.ZodSchema;
 	next?: string;
 	showNext?: boolean;
+	group?: string;
 };
 
 type StepperProps<Steps extends Step[]> = ReturnType<
 	typeof defineStepper<Steps>
 >;
+
+type StepperFormContextType = {
+	submitForm: (() => void) | null;
+};
+
+const StepperFormContext = createContext<StepperFormContextType>({
+	submitForm: null,
+});
+
+export const useStepperFormSubmit = () => {
+	const context = useContext(StepperFormContext);
+	return context.submitForm;
+};
 
 export type JoinStepSchemas<T extends Step[]> = T extends [
 	infer First,
@@ -57,6 +72,7 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 		}) => Promise<void> | void;
 		content: Record<Steps[number]["id"], () => ReactNode>;
 		showAllSteps?: boolean;
+		singlePage?: boolean;
 		initialStep?: Steps[number]["id"];
 		footer?: ReactNode;
 		children?: ReactNode;
@@ -76,11 +92,32 @@ export function StepperForm<const Steps extends Step[]>({
 }: StepperFormProps<Steps>) {
 	const Stepper = props.Stepper;
 	return (
-		<Stepper.Provider variant="vertical" initialStep={props.initialStep}>
-			<Content<Steps> {...props} />
-			{children}
+		<Stepper.Provider
+			variant={props.singlePage ? "circle" : "vertical"}
+			initialStep={props.initialStep}
+		>
+			<Content<Steps> {...props} extraChildren={children} />
 		</Stepper.Provider>
 	);
+}
+
+function useStepperDirection(stepper: {
+	all: { id: string }[];
+	current: { id: string };
+}) {
+	const currentStepIndex = stepper.all.findIndex(
+		(s) => s.id === stepper.current.id,
+	);
+	const prevStepIndexRef = useRef(currentStepIndex);
+	const directionRef = useRef(0);
+
+	if (currentStepIndex !== prevStepIndexRef.current) {
+		directionRef.current =
+			currentStepIndex > prevStepIndexRef.current ? 1 : -1;
+		prevStepIndexRef.current = currentStepIndex;
+	}
+
+	return directionRef.current;
 }
 
 function Content<const Steps extends Step[]>({
@@ -89,36 +126,36 @@ function Content<const Steps extends Step[]>({
 	useStepper,
 	content,
 	showAllSteps,
+	singlePage,
 	onSubmit,
 	onPartialSubmit,
 	initialStep,
 	footer,
 	formId,
+	extraChildren,
 	...formProps
-}: StepperFormProps<Steps>) {
+}: StepperFormProps<Steps> & { extraChildren?: ReactNode }) {
 	const stepper = useStepper({ initialStep });
-
-	const mergedSchema = useMemo(() => {
-		const schemas = stepper.all.map((step) => step.schema);
-		if (schemas.length === 0) return null;
-		return schemas
-			.slice(1)
-			.reduce(
-				(acc, schema) => z.intersection(acc, schema),
-				schemas[0] as z.ZodTypeAny,
-			);
-	}, [stepper.all]);
-
-	const resolverSchema =
-		showAllSteps && mergedSchema ? mergedSchema : stepper.current.schema;
 
 	const form = useForm<z.infer<JoinStepSchemas<Steps>>>({
 		defaultValues,
-		resolver: zodResolver(resolverSchema),
+		mode: "onChange",
+		reValidateMode: "onChange",
+		shouldFocusError: false,
 		...formProps,
+		...(stepper.current.schema
+			? {
+					resolver: zodResolver(
+						// @ts-expect-error - we know this is correct based on the definition of Step
+						stepper.current.schema,
+					),
+				}
+			: {}),
 	});
 
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
+	const direction = useStepperDirection(stepper);
+	const formRef = useRef<HTMLFormElement>(null);
 
 	const handleSubmit = async (values: z.infer<JoinStepSchemas<Steps>>) => {
 		ref.current = { ...ref.current, ...values };
@@ -126,6 +163,7 @@ function Content<const Steps extends Step[]>({
 		if (formId) {
 			posthog.capture(formId, {
 				step: stepper.current.id,
+				group: stepper.current.group,
 				values: ref.current,
 			});
 		}
@@ -137,64 +175,131 @@ function Content<const Steps extends Step[]>({
 		form.reset(undefined, {
 			keepErrors: false,
 			keepValues: true,
+			keepDirty: false,
 		});
+		form.clearErrors();
 	};
+
+	if (singlePage) {
+		const step = stepper.current;
+		return (
+			<StepperFormContext.Provider
+				value={{ submitForm: () => formRef.current?.requestSubmit() }}
+			>
+				<FormProvider {...form}>
+					<form
+						ref={formRef}
+						onSubmit={(event) => {
+							event.stopPropagation();
+							return form.handleSubmit(handleSubmit)(event);
+						}}
+						className="space-y-6"
+					>
+						<AnimatePresence mode="wait" custom={direction}>
+							<motion.div
+								key={step.id}
+								custom={direction}
+								initial={{ opacity: 0, x: direction * 30 }}
+								animate={{ opacity: 1, x: 0 }}
+								exit={{ opacity: 0, x: direction * -30 }}
+								transition={{
+									duration: 0.25,
+									ease: [0.4, 0, 0.2, 1],
+								}}
+							>
+								<div className="flex items-center justify-between">
+									<h2 className="text-xl font-semibold">
+										{step.title}
+									</h2>
+								</div>
+								{step.assist ? (
+									<div className="flex justify-end mt-6">
+										<NeedHelpButton />
+									</div>
+								) : null}
+								<div className="mt-6">
+									<StepPanel<Steps>
+										Stepper={Stepper}
+										stepper={stepper}
+										step={step}
+										content={content}
+										footer={footer}
+										showNext={step.showNext ?? true}
+										showPrevious={step.showPrevious ?? true}
+									/>
+								</div>
+								{extraChildren}
+							</motion.div>
+						</AnimatePresence>
+					</form>
+				</FormProvider>
+			</StepperFormContext.Provider>
+		);
+	}
 
 	return (
 		<Stepper.Navigation>
-			<FormProvider {...form}>
-				<form
-					onSubmit={(event) => {
-						event.stopPropagation();
-						return form.handleSubmit(handleSubmit)(event);
-					}}
-				>
-					{stepper.all.map((step, index, steps) => (
-						<Stepper.Step
-							key={step.id}
-							className="min-w-0 w-full"
-							of={step.id}
-						>
-							<Stepper.Title>{step.title}</Stepper.Title>
-							{step.assist && stepper.current.id === step.id ? (
-								<Stepper.Helper>
-									<NeedHelpButton />
-								</Stepper.Helper>
-							) : null}
+			<StepperFormContext.Provider
+				value={{ submitForm: () => formRef.current?.requestSubmit() }}
+			>
+				<FormProvider {...form}>
+					<form
+						ref={formRef}
+						onSubmit={(event) => {
+							event.stopPropagation();
+							return form.handleSubmit(handleSubmit)(event);
+						}}
+					>
+						{stepper.all.map((step, index, steps) => (
+							<Stepper.Step
+								key={step.id}
+								className="min-w-0 w-full"
+								of={step.id}
+							>
+								<Stepper.Title>{step.title}</Stepper.Title>
+								{step.assist &&
+								stepper.current.id === step.id ? (
+									<Stepper.Helper>
+										<NeedHelpButton />
+									</Stepper.Helper>
+								) : null}
 
-							{showAllSteps ? (
-								<StepPanel<Steps>
-									key={step.id}
-									Stepper={Stepper}
-									stepper={stepper}
-									step={step}
-									content={content}
-									showNext={false}
-									showPrevious={false}
-									showControls={steps.length - 1 === index}
-									footer={footer}
-								/>
-							) : (
-								stepper.when(step.id, (step) => {
-									return (
-										<StepPanel<Steps>
-											Stepper={Stepper}
-											stepper={stepper}
-											step={step}
-											content={content}
-											footer={footer}
-											showNext={step.showNext ?? true}
-											showPrevious={
-												step.showPrevious ?? true
-											}
-										/>
-									);
-								})
-							)}
-						</Stepper.Step>
-					))}
-				</form>
-			</FormProvider>
+								{showAllSteps ? (
+									<StepPanel<Steps>
+										key={step.id}
+										Stepper={Stepper}
+										stepper={stepper}
+										step={step}
+										content={content}
+										showNext={false}
+										showPrevious={false}
+										showControls={
+											steps.length - 1 === index
+										}
+										footer={footer}
+									/>
+								) : (
+									stepper.when(step.id, (step) => {
+										return (
+											<StepPanel<Steps>
+												Stepper={Stepper}
+												stepper={stepper}
+												step={step}
+												content={content}
+												footer={footer}
+												showNext={step.showNext ?? true}
+												showPrevious={
+													step.showPrevious ?? true
+												}
+											/>
+										);
+									})
+								)}
+							</Stepper.Step>
+						))}
+					</form>
+				</FormProvider>
+			</StepperFormContext.Provider>
 		</Stepper.Navigation>
 	);
 }

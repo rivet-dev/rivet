@@ -142,7 +142,6 @@ function FormStepper({
 			}}
 			defaultValues={{
 				runnerName: "default",
-				success: false,
 				datacenter: defaultDatacenter,
 			}}
 			content={{

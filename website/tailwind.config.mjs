@@ -39,8 +39,8 @@ export default {
 				'code-comment': '#737373',
 			},
 			fontFamily: {
-				sans: ["Open Sans", ...defaultTheme.fontFamily.sans],
-				'heading': ['Satoshi', 'sans-serif'],
+				sans: ["Manrope", ...defaultTheme.fontFamily.sans],
+				'heading': ['Manrope', 'sans-serif'],
 				'mono': ['"JetBrains Mono"', 'monospace'],
 			},
 			animation: {

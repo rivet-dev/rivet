@@ -122,7 +122,6 @@ function FormStepper({
 				minRunners: 1,
 				runnerMargin: 0,
 				headers: [],
-				success: false,
 				requestLifespan: 900,
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),

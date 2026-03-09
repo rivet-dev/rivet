@@ -53,6 +53,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install
       - run: pnpm build --filter='./frontend'
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
       - run: pnpm check-types
         working-directory: ./frontend
   rivetkit-type-check:
@@ -107,6 +109,8 @@ jobs:
       - name: Build engine dashboard
         run: pnpm build:engine
         working-directory: ./frontend
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
       - name: Run Playwright tests
         run: pnpm exec playwright test --project=engine --reporter=list
         working-directory: ./frontend
