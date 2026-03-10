@@ -101,7 +101,9 @@ export default actor({
 			return values.map(([key, value]) => ({ key, value }));
 		},
 		triggerSleep: (c) => {
-			c.sleep();
+			globalThis.setTimeout(() => {
+				c.sleep();
+			}, 0);
 			return true;
 		},
 		scheduleAlarm: async (c, duration) => {

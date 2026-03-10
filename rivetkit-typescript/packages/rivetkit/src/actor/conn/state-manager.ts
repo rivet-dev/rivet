@@ -162,12 +162,6 @@ export class StateManager<CP, CS> {
 			}
 		}
 
-		this.#conn[CONN_ACTOR_SYMBOL].rLog.debug({
-			msg: "conn onChange triggered",
-			connId: this.#conn.id,
-			path,
-		});
-
 		// Notify actor that this connection has changed
 		this.#conn[
 			CONN_ACTOR_SYMBOL

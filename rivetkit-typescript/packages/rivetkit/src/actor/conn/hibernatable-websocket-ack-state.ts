@@ -5,6 +5,13 @@ interface HibernatableWebSocketAckStateEntry {
 	pendingAckFromBufferSize: boolean;
 }
 
+// Message ack deadline is 30s on the gateway, but we persist sooner to keep
+// the pending buffer small and leave margin before the timeout.
+export const HIBERNATABLE_WEBSOCKET_ACK_DEADLINE = 5_000;
+
+// Force persistence once buffered inbound message bytes reach 0.5 MB.
+export const HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
+
 export class HibernatableWebSocketAckState {
 	#entries = new Map<string, HibernatableWebSocketAckStateEntry>();
 
@@ -57,7 +64,10 @@ export class HibernatableWebSocketAckState {
 		const entry = this.#entries.get(connId);
 		if (!entry) return undefined;
 
-		if (!entry.pendingAckFromMessageIndex && !entry.pendingAckFromBufferSize) {
+		if (
+			!entry.pendingAckFromMessageIndex &&
+			!entry.pendingAckFromBufferSize
+		) {
 			return undefined;
 		}
 
@@ -67,4 +77,50 @@ export class HibernatableWebSocketAckState {
 
 		return entry.serverMessageIndex;
 	}
+}
+
+interface InboundHibernatableWebSocketMessageInput {
+	connId: string;
+	hibernatable: {
+		serverMessageIndex: number;
+	};
+	messageLength: number;
+	rivetMessageIndex: number;
+	ackState: HibernatableWebSocketAckState;
+	saveState: (opts: { immediate?: boolean; maxWait?: number }) => void;
+}
+
+/**
+ * Updates hibernatable connection durability state for an inbound indexed
+ * websocket message and schedules persistence so the index can be acked after
+ * a durable write.
+ */
+export function handleInboundHibernatableWebSocketMessage(
+	input: InboundHibernatableWebSocketMessageInput,
+): void {
+	const {
+		connId,
+		hibernatable,
+		messageLength,
+		rivetMessageIndex,
+		ackState,
+		saveState,
+	} = input;
+	hibernatable.serverMessageIndex = rivetMessageIndex;
+
+	if (ackState.hasConnEntry(connId)) {
+		const shouldPersistImmediately = ackState.recordBufferedMessage(
+			connId,
+			messageLength,
+			HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD,
+		);
+		if (shouldPersistImmediately) {
+			saveState({ immediate: true });
+		} else {
+			saveState({ maxWait: HIBERNATABLE_WEBSOCKET_ACK_DEADLINE });
+		}
+		return;
+	}
+
+	saveState({ maxWait: HIBERNATABLE_WEBSOCKET_ACK_DEADLINE });
 }

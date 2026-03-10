@@ -31,8 +31,13 @@ import {
 import type { ConnDriver } from "../conn/driver";
 import { createHttpDriver } from "../conn/drivers/http";
 import {
+	HibernatableWebSocketAckState,
+	handleInboundHibernatableWebSocketMessage as applyInboundHibernatableWebSocketMessage,
+} from "../conn/hibernatable-websocket-ack-state";
+import {
 	CONN_DRIVER_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
+	type AnyConn,
 	type Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -52,7 +57,8 @@ import { ActorDefinition } from "../definition";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
-import { processMessage } from "../protocol/old";
+import { getValueLength, processMessage } from "../protocol/old";
+import type { InputData } from "../protocol/serde";
 import { Schedule } from "../schedule";
 import {
 	type EventSchemaConfig,
@@ -175,6 +181,15 @@ export interface BaseActorInstance<
 	readonly isStopping: boolean;
 	onStop(mode: "sleep" | "destroy"): Promise<void>;
 	onAlarm(): Promise<void>;
+	cleanupPersistedConnections?(reason?: string): Promise<number>;
+	getHibernatingWebSocketMetadata?(): Array<{
+		gatewayId: ArrayBuffer;
+		requestId: ArrayBuffer;
+		serverMessageIndex: number;
+		clientMessageIndex: number;
+		path: string;
+		headers: Record<string, string>;
+	}>;
 }
 
 /** Actor type alias with all `any` types. */
@@ -223,44 +238,17 @@ export function isStaticActorInstance(
 }
 
 export type ExtractActorState<A extends AnyActorInstance> =
-	A extends ActorInstance<
-		infer State,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any
-	>
-	? State
+	A extends ActorInstance<infer State, any, any, any, any, any, any, any>
+		? State
 		: never;
 
 export type ExtractActorConnParams<A extends AnyActorInstance> =
-	A extends ActorInstance<
-		any,
-		infer ConnParams,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any
-	>
-	? ConnParams
+	A extends ActorInstance<any, infer ConnParams, any, any, any, any, any, any>
+		? ConnParams
 		: never;
 
 export type ExtractActorConnState<A extends AnyActorInstance> =
-	A extends ActorInstance<
-		any,
-		any,
-		infer ConnState,
-		any,
-		any,
-		any,
-		any,
-		any
-	>
+	A extends ActorInstance<any, any, infer ConnState, any, any, any, any, any>
 		? ConnState
 		: never;
 
@@ -274,7 +262,8 @@ export class ActorInstance<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-> implements BaseActorInstance<S, CP, CS, V, I, DB, E, Q> {
+> implements BaseActorInstance<S, CP, CS, V, I, DB, E, Q>
+{
 	// MARK: - Core Properties
 	actorContext: ActorContext<S, CP, CS, V, I, DB, E, Q>;
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
@@ -337,6 +326,9 @@ export class ActorInstance<
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
+
+	// MARK: - Hibernatable WebSocket State
+	#hibernatableWebSocketAckState = new HibernatableWebSocketAckState();
 
 	// MARK: - Inspector
 	#inspectorToken?: string;
@@ -472,6 +464,114 @@ export class ActorInstance<
 
 	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB, E, Q>> {
 		return this.connectionManager.connections;
+	}
+
+	/**
+	 * Records delivery of an inbound indexed hibernatable websocket message and
+	 * schedules persistence so the index is only acked after a durable write.
+	 */
+	handleInboundHibernatableWebSocketMessage(
+		conn: AnyConn | undefined,
+		payload: InputData,
+		rivetMessageIndex: number | undefined,
+	): void {
+		if (!conn?.isHibernatable) {
+			return;
+		}
+
+		const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+		const hibernatable = connStateManager.hibernatableData;
+		if (!hibernatable) {
+			return;
+		}
+
+		invariant(
+			typeof rivetMessageIndex === "number",
+			"missing rivetMessageIndex for hibernatable websocket message",
+		);
+
+		applyInboundHibernatableWebSocketMessage({
+			connId: conn.id,
+			hibernatable,
+			messageLength: getValueLength(payload),
+			rivetMessageIndex,
+			ackState: this.#hibernatableWebSocketAckState,
+			saveState: (opts) => {
+				void this.stateManager.saveState(opts).catch((error) => {
+					this.#rLog.error({
+						msg: "failed to schedule hibernatable websocket persistence",
+						connId: conn.id,
+						error: stringifyError(error),
+					});
+				});
+			},
+		});
+	}
+
+	onCreateHibernatableConn(conn: AnyConn): void {
+		const hibernatable = conn[CONN_STATE_MANAGER_SYMBOL].hibernatableData;
+		if (!hibernatable) {
+			return;
+		}
+
+		this.#hibernatableWebSocketAckState.createConnEntry(
+			conn.id,
+			hibernatable.serverMessageIndex,
+		);
+	}
+
+	onDestroyHibernatableConn(conn: AnyConn): void {
+		this.#hibernatableWebSocketAckState.deleteConnEntry(conn.id);
+	}
+
+	onBeforePersistHibernatableConn(conn: AnyConn): void {
+		const hibernatable =
+			conn[CONN_STATE_MANAGER_SYMBOL].hibernatableDataOrError();
+		this.#hibernatableWebSocketAckState.onBeforePersist(
+			conn.id,
+			hibernatable.serverMessageIndex,
+		);
+	}
+
+	onAfterPersistHibernatableConn(conn: AnyConn): void {
+		const hibernatable =
+			conn[CONN_STATE_MANAGER_SYMBOL].hibernatableDataOrError();
+		const ackServerMessageIndex =
+			this.#hibernatableWebSocketAckState.consumeAck(conn.id);
+		if (ackServerMessageIndex === undefined) {
+			return;
+		}
+
+		this.driver.ackHibernatableWebSocketMessage?.(
+			hibernatable.gatewayId,
+			hibernatable.requestId,
+			ackServerMessageIndex,
+		);
+	}
+
+	getHibernatingWebSocketMetadata(): Array<{
+		gatewayId: ArrayBuffer;
+		requestId: ArrayBuffer;
+		serverMessageIndex: number;
+		clientMessageIndex: number;
+		path: string;
+		headers: Record<string, string>;
+	}> {
+		return Array.from(this.conns.values(), (conn) => {
+			const hibernatable =
+				conn[CONN_STATE_MANAGER_SYMBOL].hibernatableData;
+			if (!hibernatable) {
+				return undefined;
+			}
+			return {
+				gatewayId: hibernatable.gatewayId.slice(0),
+				requestId: hibernatable.requestId.slice(0),
+				serverMessageIndex: hibernatable.serverMessageIndex,
+				clientMessageIndex: hibernatable.clientMessageIndex,
+				path: hibernatable.requestPath,
+				headers: { ...hibernatable.requestHeaders },
+			};
+		}).filter((entry) => entry !== undefined);
 	}
 
 	get schedule(): Schedule {
@@ -1626,7 +1726,7 @@ export class ActorInstance<
 				this.#sqliteVfs = await this.driver.createSqliteVfs();
 			}
 
-				client = await this.#config.db.createClient({
+			client = await this.#config.db.createClient({
 				actorId: this.#actorId,
 				overrideRawDatabaseClient: this.driver.overrideRawDatabaseClient
 					? () =>

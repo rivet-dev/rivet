@@ -135,6 +135,7 @@ impl SharedState {
 		protocol_version: u16,
 		request_id: protocol::mk2::RequestId,
 	) -> InFlightRequestHandle {
+		let receiver_subject_for_log = receiver_subject.clone();
 		let (msg_tx, msg_rx) = mpsc::channel(128);
 		let (drop_tx, drop_rx) = watch::channel(None);
 
@@ -156,6 +157,7 @@ impl SharedState {
 			}
 			// If the entry already exists it means we transition from hibernating to active
 			Entry::Occupied(mut entry) => {
+				// Preserve per-request message bookkeeping when a hibernated request reconnects.
 				entry.receiver_subject = receiver_subject;
 				entry.msg_tx = msg_tx;
 				entry.drop_tx = drop_tx;
@@ -170,6 +172,14 @@ impl SharedState {
 				false
 			}
 		};
+
+		tracing::debug!(
+			request_id = %protocol::util::id_to_string(&request_id),
+			new,
+			receiver_subject = receiver_subject_for_log,
+			protocol_version,
+			"started in-flight request"
+		);
 
 		InFlightRequestHandle {
 			msg_rx,
@@ -354,6 +364,12 @@ impl SharedState {
 				}
 				Ok(protocol::mk2::ToGateway::ToServerTunnelMessage(msg)) => {
 					let message_id = msg.message_id;
+					tracing::trace!(
+						request_id = %protocol::util::id_to_string(&message_id.request_id),
+						message_index = message_id.message_index,
+						kind = ?msg.message_kind,
+						"pegboard-gateway received tunnel message from runner"
+					);
 
 					let Some(in_flight) = self
 						.in_flight_requests

@@ -146,9 +146,12 @@ export class ScheduleManager<
 	 */
 	async initializeAlarms(): Promise<void> {
 		if (this.#persist?.scheduledEvents?.length > 0) {
-			await this.#queueSetAlarm(
-				this.#persist.scheduledEvents[0].timestamp,
-			);
+			const nextTimestamp = this.#persist.scheduledEvents[0].timestamp;
+			// Startup always calls onAlarm() after the actor is ready, so only
+			// future alarms need a host-side wake timer here.
+			if (nextTimestamp > Date.now()) {
+				await this.#queueSetAlarm(nextTimestamp);
+			}
 		}
 	}
 
